@@ -180,6 +180,7 @@ impl ToolChoice {
     const OPENAI_STYLE_PROVIDERS: &'static [&'static str] = &[
         "openai",
         "deepseek",
+        "huggingface",
         "openrouter",
         "xai",
         "zai",

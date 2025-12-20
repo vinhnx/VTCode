@@ -314,7 +314,7 @@ pub async fn run_turn_loop(
             };
 
         // Execute the LLM request
-        let (response, _response_streamed) = execute_llm_request(
+        let (response, response_streamed) = match execute_llm_request(
             &mut turn_processing_ctx,
             step_count,
             &config.model,
@@ -322,7 +322,20 @@ pub async fn run_turn_loop(
             None, // parallel_cfg_opt
             provider_client.as_ref(),
         )
-        .await?;
+        .await
+        {
+            Ok(val) => val,
+            Err(err) => {
+                ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+                ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!("LLM request failed: {}", err),
+                )?;
+                working_history.push(uni::Message::assistant(format!("Request failed: {}", err)));
+                result = TurnLoopResult::Aborted;
+                break;
+            }
+        };
 
         // Process the LLM response
         let processing_result =
@@ -334,6 +347,16 @@ pub async fn run_turn_loop(
                 assistant_text,
                 reasoning,
             } => {
+                if !response_streamed {
+                    if !assistant_text.trim().is_empty() {
+                        ctx.renderer.line(MessageStyle::Response, &assistant_text)?;
+                    }
+                    if let Some(reasoning_text) = reasoning.as_ref()
+                        && !reasoning_text.trim().is_empty()
+                    {
+                        ctx.renderer.line(MessageStyle::Info, &format!("Reasoning: {}", reasoning_text))?;
+                    }
+                }
                 // Note: reasoning already rendered during streaming; don't fabricate announcements
                 // Add assistant message if there's any text content, and attach reasoning if present
                 if !assistant_text.trim().is_empty() {
@@ -488,6 +511,16 @@ pub async fn run_turn_loop(
                 }
             }
             TurnProcessingResult::TextResponse { text, reasoning } => {
+                if !response_streamed {
+                    if !text.trim().is_empty() {
+                        ctx.renderer.line(MessageStyle::Response, &text)?;
+                    }
+                    if let Some(reasoning_text) = reasoning.as_ref()
+                        && !reasoning_text.trim().is_empty()
+                    {
+                        ctx.renderer.line(MessageStyle::Info, &format!("Reasoning: {}", reasoning_text))?;
+                    }
+                }
                 // Note: reasoning already rendered during streaming; don't fabricate announcements
                 // Check if the text response contains textual tool calls to execute
                 if let Some((tool_name, args)) =

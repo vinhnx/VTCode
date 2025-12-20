@@ -9,6 +9,7 @@ use ratatui::{
 
 use super::terminal_capabilities;
 use crate::config::constants::ui;
+use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
 use super::{
@@ -327,6 +328,112 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
     true
 }
 
+pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
+    let input_content = session.input_manager.content();
+    let cursor_pos = session.input_manager.cursor();
+
+    let Some(range) = command_range(input_content, cursor_pos) else {
+        return false;
+    };
+
+    let prefix_text = command_prefix(input_content, cursor_pos).unwrap_or_default();
+
+    if prefix_text.is_empty() {
+        return false;
+    }
+
+    let suggestions = session.slash_palette.suggestions();
+    if suggestions.is_empty() {
+        return false;
+    }
+
+    // Find the best fuzzy match from all suggestions
+    let mut best_match: Option<(usize, u32, String)> = None;
+
+    for (idx, suggestion) in suggestions.iter().enumerate() {
+        let command_name = match suggestion {
+            slash_palette::SlashPaletteSuggestion::Static(cmd) => cmd.name.to_string(),
+            slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
+                format!("{}:{}", PROMPT_COMMAND_NAME, prompt.name)
+            }
+        };
+
+        if let Some(score) = fuzzy_score(&prefix_text, &command_name) {
+            if let Some((_, best_score, _)) = &best_match {
+                if score > *best_score {
+                    best_match = Some((idx, score, command_name));
+                }
+            } else {
+                best_match = Some((idx, score, command_name));
+            }
+        }
+    }
+
+    let Some((_, _, best_command)) = best_match else {
+        return false;
+    };
+
+    // Check if it's a custom prompt (contains ':')
+    if best_command.contains(':') {
+        let prompt_name = best_command.split(':').nth(1).unwrap_or("").to_string();
+        let suffix = &input_content[range.end..];
+
+        let mut new_input = String::from(PROMPT_COMMAND_PREFIX);
+        new_input.push_str(&prompt_name);
+
+        if !suffix.is_empty() {
+            if !suffix.chars().next().is_some_and(char::is_whitespace) {
+                new_input.push(' ');
+            }
+            new_input.push_str(suffix);
+        } else {
+            new_input.push(' ');
+        }
+
+        let cursor_position = new_input.len();
+
+        session.input_manager.set_content(new_input);
+        session.input_manager.set_cursor(cursor_position);
+        clear_slash_suggestions(session);
+        session.mark_dirty();
+        return true;
+    }
+
+    // Handle static command
+    let suffix = &input_content[range.end..];
+    let mut new_input = format!("/{}", best_command);
+
+    let cursor_position = if suffix.is_empty() {
+        new_input.push(' ');
+        new_input.len()
+    } else {
+        if !suffix.chars().next().is_some_and(char::is_whitespace) {
+            new_input.push(' ');
+        }
+        let position = new_input.len();
+        new_input.push_str(&suffix);
+        position
+    };
+
+    session.input_manager.set_content(new_input);
+    session.input_manager.set_cursor(cursor_position);
+
+    let deferred_files = best_command == "files";
+    let deferred_prompts =
+        best_command == PROMPT_COMMAND_NAME || best_command == LEGACY_PROMPT_COMMAND_NAME;
+
+    clear_slash_suggestions(session);
+
+    if deferred_files {
+        session.deferred_file_browser_trigger = true;
+    } else if deferred_prompts {
+        session.deferred_prompt_browser_trigger = true;
+    }
+
+    session.mark_dirty();
+    true
+}
+
 pub(super) fn try_handle_slash_navigation(
     session: &mut Session,
     key: &KeyEvent,
@@ -355,7 +462,7 @@ pub(super) fn try_handle_slash_navigation(
         }
         KeyCode::PageUp => page_up_slash_suggestion(session),
         KeyCode::PageDown => page_down_slash_suggestion(session),
-        KeyCode::Tab => move_slash_selection_down(session),
+        KeyCode::Tab => autocomplete_slash_suggestion(session),
         KeyCode::BackTab => move_slash_selection_up(session),
         KeyCode::Enter => apply_selected_slash_suggestion(session),
         _ => return false,

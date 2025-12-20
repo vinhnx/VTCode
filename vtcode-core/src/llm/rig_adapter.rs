@@ -42,6 +42,9 @@ pub fn verify_model_with_rig(
             let client = deepseek::Client::new(api_key);
             let _ = client.completion_model(model);
         }
+        Provider::HuggingFace => {
+            // Hugging Face exposes an OpenAI-compatible router; rig does not ship a dedicated client.
+        }
         Provider::OpenRouter => {
             let client = openrouter::Client::new(api_key);
             let _ = client.completion_model(model);
@@ -109,6 +112,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 .ok()
                 .map(|value| json!({ "thinking_config": value }))
         }
+        Provider::HuggingFace => None,
         Provider::Moonshot => {
             // Moonshot Kimi-K2-Thinking supports enhanced reasoning configuration
             let reasoning_config = match effort {

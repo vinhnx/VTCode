@@ -63,6 +63,25 @@ pub(super) fn render_step_one_inline(
             search_value: Some(provider.label().to_string()),
         });
 
+        if provider == Provider::HuggingFace {
+            items.push(InlineListItem {
+                title: "Hugging Face Inference Providers".to_string(),
+                subtitle: Some("OpenAI-compatible router. Docs: https://huggingface.co/docs/inference-providers".to_string()),
+                badge: Some("Docs".to_string()),
+                indent: 2,
+                selection: None,
+                search_value: Some("huggingface inference providers".to_string()),
+            });
+            items.push(InlineListItem {
+                title: "Custom Hugging Face model".to_string(),
+                subtitle: Some("Enter any HF model id (e.g., huggingface <org>/<model>)".to_string()),
+                badge: Some("Custom".to_string()),
+                indent: 2,
+                selection: Some(InlineListSelection::CustomModel),
+                search_value: Some("huggingface custom".to_string()),
+            });
+        }
+
         for (idx, option) in &provider_models {
             let badge = option
                 .supports_reasoning
@@ -128,6 +147,26 @@ pub(super) fn render_step_one_inline(
                     search_value: Some(format!("{} setup", provider.label().to_ascii_lowercase())),
                 });
             }
+        } else if provider == Provider::HuggingFace {
+            items.push(InlineListItem {
+                title: "Hugging Face Inference Providers".to_string(),
+                subtitle: Some(
+                    "OpenAI-compatible router. Docs: https://huggingface.co/docs/inference-providers"
+                        .to_string(),
+                ),
+                badge: Some("Docs".to_string()),
+                indent: 2,
+                selection: None,
+                search_value: Some("huggingface docs".to_string()),
+            });
+            items.push(InlineListItem {
+                title: "Set HF_TOKEN in environment".to_string(),
+                subtitle: Some("Required for Hugging Face router authentication".to_string()),
+                badge: Some("Tip".to_string()),
+                indent: 2,
+                selection: None,
+                search_value: Some("huggingface hf_token".to_string()),
+            });
         }
     }
 
@@ -285,6 +324,30 @@ pub(super) fn render_step_one_plain(
                         renderer
                             .line(MessageStyle::Info, "      Locally available Ollama model")?;
                     }
+                }
+            }
+        } else if provider == Provider::HuggingFace {
+            if !first_section {
+                renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
+            }
+            first_section = false;
+            renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
+            renderer.line(
+                MessageStyle::Info,
+                "      Docs: https://huggingface.co/docs/inference-providers",
+            )?;
+            if let Some(list) = grouped.get(&provider) {
+                for option in list {
+                    let reasoning_marker = if option.supports_reasoning {
+                        " [reasoning]"
+                    } else {
+                        ""
+                    };
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
+                    )?;
+                    renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
                 }
             }
         } else {
@@ -502,6 +565,13 @@ pub(super) fn prompt_api_key_plain(
             "The key will be stored in your workspace .env file.",
         )?;
     }
+
+    if matches!(selection.provider_enum, Some(Provider::HuggingFace)) {
+        renderer.line(
+            MessageStyle::Info,
+            "Optional: override base URL with HUGGINGFACE_BASE_URL (default https://router.huggingface.co/v1).",
+        )?;
+    }
     renderer.line(
         MessageStyle::Info,
         "Paste the API key now or type 'skip' to reuse a stored credential.",
@@ -537,7 +607,7 @@ pub(super) fn show_secure_api_modal(
 pub(super) fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
-        "Enter a provider and model identifier (examples: 'openai gpt-5-nano', 'ollama qwen3:1.7b').",
+        "Enter a provider and model identifier (examples: 'openai gpt-5-nano', 'huggingface meta-llama/Meta-Llama-3-70B-Instruct', 'ollama qwen3:1.7b').",
     )?;
     renderer.line(
         MessageStyle::Info,

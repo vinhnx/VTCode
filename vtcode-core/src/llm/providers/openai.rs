@@ -24,6 +24,7 @@ use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
 use serde_json::{Value, json};
+use tokio::task::spawn_blocking;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -342,10 +343,18 @@ pub struct OpenAIProvider {
     responses_api_modes: Mutex<HashMap<String, ResponsesApiState>>,
     prompt_cache_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
+    /// Use strict tool schema (only type/function) for providers that reject extra fields (e.g., Hugging Face router).
+    strict_tool_schema: bool,
+    /// Disable OpenAI fallback model rewrites for providers that expect exact IDs (e.g., Hugging Face router).
+    disable_model_fallback: bool,
+    /// Disable Harmony inference pathway when the provider base URL is not the Harmony server (e.g., HF router).
+    disable_harmony: bool,
+    /// Capability flag indicating the Hugging Face router (chat-only surface).
+    is_huggingface_router: bool,
 }
 
 impl OpenAIProvider {
-    fn serialize_tools(tools: &[provider::ToolDefinition]) -> Option<Value> {
+    fn serialize_tools(&self, tools: &[provider::ToolDefinition]) -> Option<Value> {
         if tools.is_empty() {
             return None;
         }
@@ -371,17 +380,28 @@ impl OpenAIProvider {
                         let description = &func.description;
                         let parameters = &func.parameters;
 
-                        json!({
-                            "type": &tool.tool_type,
-                            "name": name,
-                            "description": description,
-                            "parameters": parameters,
-                            "function": {
+                        if self.strict_tool_schema {
+                            json!({
+                                "type": "function",
+                                "function": {
+                                    "name": name,
+                                    "description": description,
+                                    "parameters": parameters,
+                                }
+                            })
+                        } else {
+                            json!({
+                                "type": &tool.tool_type,
                                 "name": name,
                                 "description": description,
                                 "parameters": parameters,
-                            }
-                        })
+                                "function": {
+                                    "name": name,
+                                    "description": description,
+                                    "parameters": parameters,
+                                }
+                            })
+                        }
                     }
                     "apply_patch" | "shell" | "custom" | "grammar" => {
                         // For GPT-5.1 native tool types and GPT-5 features, use direct serialization
@@ -775,8 +795,25 @@ impl OpenAIProvider {
             |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
         );
 
+        let resolved_base_url = override_base_url(
+            urls::OPENAI_API_BASE,
+            base_url,
+            Some(env_vars::OPENAI_BASE_URL),
+        );
+
         let mut responses_api_modes = HashMap::new();
-        responses_api_modes.insert(model.clone(), Self::default_responses_state(&model));
+        let default_state = Self::default_responses_state(&model);
+        // Hugging Face router only supports the Chat Completions-compatible surface; disable Responses API.
+        let initial_state = if resolved_base_url.contains("huggingface.co") {
+            ResponsesApiState::Disabled
+        } else {
+            default_state
+        };
+        responses_api_modes.insert(model.clone(), initial_state);
+        let is_huggingface = resolved_base_url.contains("huggingface.co");
+        let is_huggingface_router = is_huggingface;
+        let strict_tool_schema = is_huggingface;
+
 
         Self {
             api_key: Arc::from(api_key.as_str()),
@@ -784,18 +821,15 @@ impl OpenAIProvider {
                 .timeout(Duration::from_secs(120))
                 .build()
                 .unwrap_or_else(|_| HttpClient::new()),
-            base_url: Arc::from(
-                override_base_url(
-                    urls::OPENAI_API_BASE,
-                    base_url,
-                    Some(env_vars::OPENAI_BASE_URL),
-                )
-                .as_str(),
-            ),
+            base_url: Arc::from(resolved_base_url.as_str()),
             model: Arc::from(model.as_str()),
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
             prompt_cache_settings,
+            disable_model_fallback: is_huggingface,
+            strict_tool_schema,
+            disable_harmony: is_huggingface,
+            is_huggingface_router,
         }
     }
 
@@ -1161,7 +1195,7 @@ impl OpenAIProvider {
 
         if self.supports_tools(&request.model) {
             if let Some(tools) = &request.tools
-                && let Some(serialized) = Self::serialize_tools(tools)
+                && let Some(serialized) = self.serialize_tools(tools)
             {
                 openai_request["tools"] = serialized;
 
@@ -1215,8 +1249,10 @@ impl OpenAIProvider {
         };
 
         if responses_payload.input.is_empty() {
-            let formatted_error =
-                error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                "No messages provided for Responses API",
+            );
             return Err(provider::LLMError::InvalidRequest {
                 message: formatted_error,
                 metadata: None,
@@ -1527,17 +1563,29 @@ impl OpenAIProvider {
         &self,
         request: provider::LLMRequest,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
-        // Load harmony encoding
-        let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss).map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                &format!("Failed to load harmony encoding: {}", e),
-            );
-            provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
+        // Load harmony encoding off the async runtime to avoid blocking drop panics
+        let encoding = spawn_blocking(|| load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss))
+            .await
+            .map_err(|join_err| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("Failed to load harmony encoding (task join): {}", join_err),
+                );
+                provider::LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                }
+            })?
+            .map_err(|e| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("Failed to load harmony encoding: {}", e),
+                );
+                provider::LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                }
+            })?;
 
         // Convert to harmony conversation
         let conversation = self.convert_to_harmony_conversation(&request)?;
@@ -1972,7 +2020,8 @@ mod tests {
     #[test]
     fn serialize_tools_wraps_function_definition() {
         let tools = vec![sample_tool()];
-        let serialized = OpenAIProvider::serialize_tools(&tools).expect("tools should serialize");
+        let provider = OpenAIProvider::new(String::new());
+        let serialized = provider.serialize_tools(&tools).expect("tools should serialize");
         let serialized_tools = serialized
             .as_array()
             .expect("serialized tools should be an array");
@@ -2069,8 +2118,10 @@ mod tests {
             json!({"type": "object"}),
         );
         let tools = vec![sample_tool(), duplicate];
-        let serialized =
-            OpenAIProvider::serialize_tools(&tools).expect("tools should serialize cleanly");
+        let provider = OpenAIProvider::new(String::new());
+        let serialized = provider
+            .serialize_tools(&tools)
+            .expect("tools should serialize cleanly");
         let arr = serialized.as_array().expect("array");
         assert_eq!(arr.len(), 1, "duplicate names should be dropped");
     }
@@ -2135,6 +2186,35 @@ mod tests {
 
         assert!(!OpenAIProvider::uses_harmony("gpt-5"));
         assert!(!OpenAIProvider::uses_harmony("gpt-oss:20b"));
+    }
+
+    #[test]
+    fn responses_api_state_respects_huggingface_router() {
+        let hf_provider = OpenAIProvider::from_config(
+            Some("key".to_string()),
+            Some(models::openai::DEFAULT_MODEL.to_string()),
+            Some("https://router.huggingface.co/v1".to_string()),
+            None,
+            None,
+            None,
+        );
+        assert_eq!(
+            hf_provider.responses_api_state(models::openai::DEFAULT_MODEL),
+            ResponsesApiState::Disabled
+        );
+
+        let openai_provider = OpenAIProvider::from_config(
+            Some("key".to_string()),
+            Some(models::openai::DEFAULT_MODEL.to_string()),
+            Some("https://api.openai.com/v1".to_string()),
+            None,
+            None,
+            None,
+        );
+        assert_eq!(
+            openai_provider.responses_api_state(models::openai::DEFAULT_MODEL),
+            ResponsesApiState::Required
+        );
     }
 
     #[test]
@@ -2759,6 +2839,21 @@ impl provider::LLMProvider for OpenAIProvider {
             }
 
             if is_model_not_found(status, &error_text) {
+                if self.disable_model_fallback {
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        &format!(
+                            "Model '{}' not found on provider {}. Ensure the Hugging Face Inference Providers model id is correct and available for text-generation/chat (e.g., https://huggingface.co/models?pipeline_tag=text-generation&inference_provider=all&other=conversational).",
+                            request.model,
+                            self.base_url
+                        ),
+                    );
+                    return Err(provider::LLMError::Provider {
+                        message: formatted_error,
+                        metadata: None,
+                    });
+                }
+
                 if let Some(fallback_model) = fallback_model_if_not_found(&request.model)
                     && fallback_model != request.model
                 {
@@ -3002,6 +3097,27 @@ impl provider::LLMProvider for OpenAIProvider {
         request: provider::LLMRequest,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let mut request = request;
+        let is_huggingface = self.is_huggingface_router;
+        let is_glm = request.model.to_ascii_lowercase().contains("glm");
+
+        // Normalize Hugging Face model ids that include a trailing provider suffix (e.g., "zai-org/GLM-4.6:zai-org").
+        if is_huggingface {
+            if let Some((base, _)) = request.model.split_once(':') {
+                request.model = base.to_string();
+            }
+
+            // Fail fast for models we explicitly do not support on HF router (e.g., MiniMax M2) with a clear message.
+            let lower_model = request.model.to_ascii_lowercase();
+            if lower_model.contains("minimax-m2") {
+                return Err(provider::LLMError::Provider {
+                    message: error_display::format_llm_error(
+                        "HuggingFace",
+                        "Model 'MiniMax-M2' is not supported on the Hugging Face router in this client.",
+                    ),
+                    metadata: None,
+                });
+            }
+        }
         if request.model.trim().is_empty() {
             request.model = self.model.to_string();
         }
@@ -3010,8 +3126,16 @@ impl provider::LLMProvider for OpenAIProvider {
             request.parallel_tool_config = None;
         }
 
-        // Check if this is a harmony model (GPT-OSS)
-        if Self::uses_harmony(&request.model) {
+        // Some Hugging Face GLM routes reject OpenAI tool payloads; disable tools for those models to avoid 400 errors.
+        if is_huggingface && is_glm {
+            request.tools = None;
+            request.tool_choice = None;
+            request.parallel_tool_calls = None;
+            request.parallel_tool_config = None;
+        }
+
+        // Check if this is a harmony model (GPT-OSS). Skip Harmony path when provider base URL is not the Harmony server (e.g., HF router).
+        if Self::uses_harmony(&request.model) && !self.disable_harmony {
             return self.generate_with_harmony(request).await;
         }
 
@@ -3075,6 +3199,21 @@ impl provider::LLMProvider for OpenAIProvider {
                 {
                     return Err(provider::LLMError::RateLimit { metadata: None });
                 } else if is_model_not_found(status, &error_text) {
+                    if self.disable_model_fallback {
+                        let formatted_error = error_display::format_llm_error(
+                            "OpenAI",
+                            &format!(
+                                "Model '{}' not found on provider {}. Ensure the Hugging Face Inference Providers model id is correct and available for text-generation/chat (https://huggingface.co/models?pipeline_tag=text-generation&inference_provider=all&other=conversational).",
+                                request.model,
+                                self.base_url
+                            ),
+                        );
+                        return Err(provider::LLMError::Provider {
+                            message: formatted_error,
+                            metadata: None,
+                        });
+                    }
+
                     if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
                         if fallback_model != request.model {
                             #[cfg(debug_assertions)]

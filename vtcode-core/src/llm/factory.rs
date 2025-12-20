@@ -1,6 +1,7 @@
 use super::providers::{
-    AnthropicProvider, DeepSeekProvider, GeminiProvider, LmStudioProvider, MinimaxProvider,
-    MoonshotProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
+    AnthropicProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider, LmStudioProvider,
+    MinimaxProvider, MoonshotProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider,
+    XAIProvider, ZAIProvider,
 };
 use crate::config::TimeoutsConfig;
 use crate::config::core::{AnthropicConfig, PromptCachingConfig};
@@ -50,6 +51,7 @@ impl LLMFactory {
             factory,
             "gemini" => GeminiProvider,
             "openai" => OpenAIProvider,
+            "huggingface" => HuggingFaceProvider,
             "anthropic" => AnthropicProvider,
             "minimax" => MinimaxProvider,
             "deepseek" => DeepSeekProvider,
@@ -131,6 +133,14 @@ impl LLMFactory {
             Some("lmstudio".to_owned())
         } else if m.starts_with("moonshot-") || m.starts_with("kimi-") {
             Some("moonshot".to_owned())
+        } else if m.starts_with("deepseek-ai/")
+            || m.starts_with("openai/gpt-oss-")
+            || m.starts_with("zai-org/")
+            || m.starts_with("moonshotai/")
+            || m.starts_with("minimaxai/")
+            || m.starts_with("qwen/")
+        {
+            Some("huggingface".to_owned())
         } else if m.starts_with("mistral-")
             || m.starts_with("mixtral-")
             || m.starts_with("qwen-")
@@ -310,6 +320,7 @@ impl BuiltinProvider for AnthropicProvider {
 impl_builtin_provider!(
     GeminiProvider,
     OpenAIProvider,
+    HuggingFaceProvider,
     // AnthropicProvider is manually implemented above
     MinimaxProvider,
     DeepSeekProvider,

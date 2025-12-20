@@ -413,12 +413,20 @@ const MAX_REASONING_DISPLAY_CHARS: usize = 500;
 fn is_giving_up_reasoning(reasoning: &str) -> bool {
     let lower = reasoning.to_lowercase();
     // Check for patterns indicating the agent wants to give up
-    lower.contains("complex") && lower.contains("stop")
-        || lower.contains("probably stop")
-        || lower.contains("give up")
-        || lower.contains("can't continue")
-        || lower.contains("unable to continue")
-        || lower.contains("too complex") && lower.contains("stop")
+    const PATTERNS: &[&str] = &[
+        "probably stop",
+        "let's stop",
+        "stop here",
+        "give up",
+        "can't continue",
+        "cannot continue",
+        "unable to continue",
+        "too complex to continue",
+        "too complex, stopping",
+        "not making progress",
+        "we should stop",
+    ];
+    PATTERNS.iter().any(|p| lower.contains(p))
 }
 
 /// Replace giving-up reasoning with constructive, action-oriented reasoning

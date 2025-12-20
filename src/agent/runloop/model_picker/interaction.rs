@@ -174,6 +174,16 @@ pub(super) fn select_model_with_ratatui_list(
                     outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
                 });
             }
+
+            if provider == Provider::HuggingFace {
+                choices.push(ModelSelectionChoice {
+                    entry: SelectionEntry::new(
+                        "Hugging Face • Custom model",
+                        Some("Enter any HF model id (e.g., huggingface <org>/<model>).".to_string()),
+                    ),
+                    outcome: ModelSelectionChoiceOutcome::Manual,
+                });
+            }
         }
     }
 
