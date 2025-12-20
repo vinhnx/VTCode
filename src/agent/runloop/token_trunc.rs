@@ -124,9 +124,10 @@ fn yamlify_value(v: &Value) -> String {
         serde_yaml::to_string(v).unwrap_or_else(|_| v.to_string())
     } else if let Some(s) = v.as_str() {
         if let Ok(inner_v) = serde_json::from_str::<Value>(s)
-            && (inner_v.is_array() || inner_v.is_object()) {
-                return serde_yaml::to_string(&inner_v).unwrap_or_else(|_| s.to_string());
-            }
+            && (inner_v.is_array() || inner_v.is_object())
+        {
+            return serde_yaml::to_string(&inner_v).unwrap_or_else(|_| s.to_string());
+        }
         s.to_string()
     } else {
         v.to_string()

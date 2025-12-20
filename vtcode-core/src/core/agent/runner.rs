@@ -206,6 +206,7 @@ impl AgentRunner {
         self.config.as_ref()
     }
 
+    #[allow(dead_code)]
     fn core_agent_config(&self) -> CoreAgentConfig {
         let cfg = self.config();
         let checkpoint_dir = cfg
@@ -513,8 +514,6 @@ impl AgentRunner {
     fn get_selected_model(&self) -> String {
         self.model.clone()
     }
-
-
 
     /// Record a tool call for loop detection and check if a hard limit has been exceeded.
     /// Returns true if execution should halt due to a loop.
@@ -1308,7 +1307,7 @@ impl AgentRunner {
                 );
 
                 let turn_model = self.get_selected_model();
-                let mut turn_reasoning = self.reasoning_effort;
+                let turn_reasoning = self.reasoning_effort;
 
                 // Context compaction before the request
                 self.summarize_conversation_if_needed(

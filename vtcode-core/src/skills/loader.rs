@@ -931,8 +931,8 @@ mod tests {
                 when_to_use: None,
                 requires_container: None,
                 disallow_container: None,
-            compatibility: None,
-            metadata: None,
+                compatibility: None,
+                metadata: None,
             },
             SkillManifest {
                 name: "spreadsheet-generator".to_string(),
@@ -948,8 +948,8 @@ mod tests {
                 when_to_use: None,
                 requires_container: None,
                 disallow_container: None,
-            compatibility: None,
-            metadata: None,
+                compatibility: None,
+                metadata: None,
             },
         ];
 

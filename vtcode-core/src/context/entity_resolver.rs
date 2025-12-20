@@ -113,10 +113,8 @@ impl EntityIndex {
 
     /// Record an entity mention for recency tracking
     pub fn record_mention(&mut self, entity: &str) {
-        self.last_mentioned.insert(
-            entity.to_lowercase(),
-            Self::current_timestamp(),
-        );
+        self.last_mentioned
+            .insert(entity.to_lowercase(), Self::current_timestamp());
     }
 
     /// Record a recent edit
@@ -150,6 +148,7 @@ pub struct EntityResolver {
     index: EntityIndex,
 
     /// Workspace root for path resolution
+    #[allow(dead_code)]
     workspace_root: PathBuf,
 
     /// Cache file path
@@ -177,15 +176,15 @@ impl EntityResolver {
 
     /// Load index from cache file
     pub async fn load_cache(&mut self) -> Result<()> {
-        if let Some(cache_path) = &self.cache_path {
-            if cache_path.exists() {
-                let content = tokio::fs::read_to_string(cache_path)
-                    .await
-                    .with_context(|| format!("Failed to read entity cache at {:?}", cache_path))?;
+        if let Some(cache_path) = &self.cache_path
+            && cache_path.exists()
+        {
+            let content = tokio::fs::read_to_string(cache_path)
+                .await
+                .with_context(|| format!("Failed to read entity cache at {:?}", cache_path))?;
 
-                self.index = serde_json::from_str(&content)
-                    .with_context(|| "Failed to deserialize entity cache")?;
-            }
+            self.index = serde_json::from_str(&content)
+                .with_context(|| "Failed to deserialize entity cache")?;
         }
         Ok(())
     }
@@ -216,7 +215,9 @@ impl EntityResolver {
 
         // Return best match if any
         matches.into_iter().max_by(|a, b| {
-            a.total_score().partial_cmp(&b.total_score()).unwrap_or(std::cmp::Ordering::Equal)
+            a.total_score()
+                .partial_cmp(&b.total_score())
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
     }
 
@@ -236,7 +237,9 @@ impl EntityResolver {
 
         // Sort by total score and limit
         matches.sort_by(|a, b| {
-            b.total_score().partial_cmp(&a.total_score()).unwrap_or(std::cmp::Ordering::Equal)
+            b.total_score()
+                .partial_cmp(&a.total_score())
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         matches.truncate(MAX_ENTITY_MATCHES);
 
@@ -283,7 +286,8 @@ impl EntityResolver {
             // Fuzzy match using Levenshtein distance
             let distance = levenshtein_distance(term, &entity_lower);
             if distance <= 2 {
-                let confidence = 1.0 - (distance as f32 / term.len().max(entity_lower.len()) as f32);
+                let confidence =
+                    1.0 - (distance as f32 / term.len().max(entity_lower.len()) as f32);
                 matches.push(EntityMatch {
                     entity: entity.clone(),
                     locations: locations.clone(),
@@ -301,7 +305,13 @@ impl EntityResolver {
         let now = EntityIndex::current_timestamp();
 
         // Check if entity was recently edited (within 5 minutes)
-        if let Some(edit) = self.index.recent_edits.iter().rev().find(|e| e.entity.to_lowercase() == entity) {
+        if let Some(edit) = self
+            .index
+            .recent_edits
+            .iter()
+            .rev()
+            .find(|e| e.entity.to_lowercase() == entity)
+        {
             let age_seconds = now.saturating_sub(edit.timestamp);
             if age_seconds < 300 {
                 // Score decays over 5 minutes
@@ -362,11 +372,11 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 
     let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
 
-    for i in 0..=a_len {
-        matrix[i][0] = i;
+    for (i, row) in matrix.iter_mut().enumerate().take(a_len + 1) {
+        row[0] = i;
     }
-    for j in 0..=b_len {
-        matrix[0][j] = j;
+    for (j, col) in matrix[0].iter_mut().enumerate().take(b_len + 1) {
+        *col = j;
     }
 
     let a_chars: Vec<char> = a.chars().collect();

@@ -786,3 +786,4 @@ TODO2.md
 .vtcode/checkpoints/
 .vtcode/
 vtcode.toml
+.claude/

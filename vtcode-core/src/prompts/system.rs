@@ -210,8 +210,14 @@ pub async fn compose_system_instruction_text(
 
     let base_len = DEFAULT_SYSTEM_PROMPT.len();
     let config_overhead = vtcode_config.map_or(0, |_| 1024);
-    let instruction_hierarchy_size = instruction_bundle.as_ref()
-        .map(|b| b.segments.iter().map(|s| s.contents.len() + 200).sum::<usize>())
+    let instruction_hierarchy_size = instruction_bundle
+        .as_ref()
+        .map(|b| {
+            b.segments
+                .iter()
+                .map(|s| s.contents.len() + 200)
+                .sum::<usize>()
+        })
         .unwrap_or(0);
 
     let estimated_capacity = base_len + config_overhead + instruction_hierarchy_size + 512;

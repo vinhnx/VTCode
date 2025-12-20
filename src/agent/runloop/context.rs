@@ -79,7 +79,6 @@ pub(crate) enum TrimPhase {
     WindowEnforced,
 }
 
-
 /// Result of a context trimming operation
 #[derive(Default, Clone, Copy, Debug)]
 #[allow(dead_code)]

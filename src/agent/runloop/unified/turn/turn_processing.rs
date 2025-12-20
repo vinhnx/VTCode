@@ -72,7 +72,10 @@ pub(crate) async fn execute_llm_request(
     }
 
     // HP-9: Lazy context window enforcement - only when needed
-    if ctx.context_manager.should_enforce_context(ctx.working_history) {
+    if ctx
+        .context_manager
+        .should_enforce_context(ctx.working_history)
+    {
         let _ = ctx
             .context_manager
             .enforce_context_window(ctx.working_history);
@@ -211,23 +214,24 @@ pub(crate) async fn execute_llm_request(
     // Prevent agent from giving up with "Complex. Probably stop." or similar
     if let Ok((response, _)) = &mut llm_result
         && let Some(reasoning) = &response.reasoning
-            && is_giving_up_reasoning(reasoning) {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "Detected giving-up reasoning '{}', replacing with constructive reasoning",
-                    reasoning
-                );
+        && is_giving_up_reasoning(reasoning)
+    {
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "Detected giving-up reasoning '{}', replacing with constructive reasoning",
+            reasoning
+        );
 
-                // Log the original reasoning for debugging
-                tracing::warn!(
-                    target = "vtcode::agent::reasoning",
-                    original_reasoning = %reasoning,
-                    "Agent attempted to give up, replacing with constructive reasoning"
-                );
+        // Log the original reasoning for debugging
+        tracing::warn!(
+            target = "vtcode::agent::reasoning",
+            original_reasoning = %reasoning,
+            "Agent attempted to give up, replacing with constructive reasoning"
+        );
 
-                // Replace with constructive reasoning that encourages continuation
-                response.reasoning = Some(get_constructive_reasoning(reasoning));
-            }
+        // Replace with constructive reasoning that encourages continuation
+        response.reasoning = Some(get_constructive_reasoning(reasoning));
+    }
 
     #[cfg(debug_assertions)]
     {

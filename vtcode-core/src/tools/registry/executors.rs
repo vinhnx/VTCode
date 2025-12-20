@@ -2553,7 +2553,10 @@ This skill generates files. After execution, file locations will be automaticall
             Value::Bool(input.append_newline),
         );
         if let Some(output) = output {
-            response.insert("output".to_string(), Value::String(filter_pty_output(&strip_ansi(&output))));
+            response.insert(
+                "output".to_string(),
+                Value::String(filter_pty_output(&strip_ansi(&output))),
+            );
         }
 
         // Add the input that was sent as stdin (if it's valid UTF-8)

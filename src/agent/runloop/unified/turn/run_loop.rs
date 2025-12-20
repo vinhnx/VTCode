@@ -47,7 +47,7 @@ fn should_trigger_turn_balancer(
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
-use crate::agent::runloop::prompt::{refine_and_enrich_prompt, refine_user_prompt_if_enabled};
+use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::slash_commands::handle_slash_command;
 use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
 use crate::agent::runloop::tool_output::render_code_fence_blocks;
@@ -1666,8 +1666,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         match part {
                             uni::ContentPart::Text { text } => {
                                 let refined_text =
-                                    refine_and_enrich_prompt(text, &config, vt_cfg.as_ref())
-                                        .await;
+                                    refine_and_enrich_prompt(text, &config, vt_cfg.as_ref()).await;
                                 refined_parts.push(uni::ContentPart::text(refined_text));
                             }
                             _ => refined_parts.push(part.clone()),
@@ -1968,8 +1967,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 Ok(None)
             }
 
-
-
             let turn_result = 'outer: loop {
                 if let Some(res) = run_turn_preamble(
                     &ctrl_c_state,
@@ -1989,29 +1986,30 @@ pub(crate) async fn run_single_agent_loop_unified(
                 if let Ok(outcome) = context_manager
                     .adaptive_trim(working_history, None, step_count)
                     .await
-                    && outcome.is_trimmed() {
-                        let note = format!(
-                            "Context trimmed ({:?}, removed {}).",
-                            outcome.phase, outcome.removed_messages
-                        );
-                        working_history.push(uni::Message::system(note.clone()));
-                        let mut ledger = decision_ledger.write().await;
-                        let decision_id = ledger.record_decision(
-                            "Context compaction for budget".to_string(),
-                            DTAction::Response {
-                                content: note,
-                                response_type: ResponseType::ContextSummary,
-                            },
-                            None,
-                        );
-                        ledger.record_outcome(
-                            &decision_id,
-                            DecisionOutcome::Success {
-                                result: "trimmed".to_string(),
-                                metrics: Default::default(),
-                            },
-                        );
-                    }
+                    && outcome.is_trimmed()
+                {
+                    let note = format!(
+                        "Context trimmed ({:?}, removed {}).",
+                        outcome.phase, outcome.removed_messages
+                    );
+                    working_history.push(uni::Message::system(note.clone()));
+                    let mut ledger = decision_ledger.write().await;
+                    let decision_id = ledger.record_decision(
+                        "Context compaction for budget".to_string(),
+                        DTAction::Response {
+                            content: note,
+                            response_type: ResponseType::ContextSummary,
+                        },
+                        None,
+                    );
+                    ledger.record_outcome(
+                        &decision_id,
+                        DecisionOutcome::Success {
+                            result: "trimmed".to_string(),
+                            metrics: Default::default(),
+                        },
+                    );
+                }
 
                 // Turn balancer: cap low-signal churn and request compaction if looping
                 if should_trigger_turn_balancer(
@@ -2186,15 +2184,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                     Ok(system_prompt)
                 }
 
-                let system_prompt =
-                    run_turn_build_system_prompt(
-                        &mut context_manager,
-                        working_history,
-                        step_count,
-                        &tool_registry,
-                        full_auto,
-                    )
-                    .await?;
+                let system_prompt = run_turn_build_system_prompt(
+                    &mut context_manager,
+                    working_history,
+                    step_count,
+                    &tool_registry,
+                    full_auto,
+                )
+                .await?;
 
                 let use_streaming = provider_client.supports_streaming();
                 let reasoning_effort = vt_cfg.as_ref().and_then(|cfg| {

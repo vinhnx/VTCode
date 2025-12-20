@@ -247,9 +247,10 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
                 println!("When to use: {}", when_to_use);
             }
             if let Some(allowed_tools) = &skill.manifest.allowed_tools
-                && !allowed_tools.is_empty() {
-                    println!("Allowed tools: {}", allowed_tools);
-                }
+                && !allowed_tools.is_empty()
+            {
+                println!("Allowed tools: {}", allowed_tools);
+            }
             if let Some(disable) = skill.manifest.disable_model_invocation {
                 println!("Disable model invocation: {}", disable);
             }
@@ -345,21 +346,34 @@ pub async fn handle_skills_create(skill_path: &PathBuf) -> Result<()> {
 /// Validate SKILL.md
 pub async fn handle_skills_validate(skill_path: &Path) -> Result<()> {
     use vtcode_core::skills::manifest::parse_skill_file;
+    use vtcode_core::skills::enhanced_validator::ComprehensiveSkillValidator;
 
-    println!("Validating skill at: {}", skill_path.display());
+    println!("Validating skill at: {}\n", skill_path.display());
 
-    let (manifest, _instructions) = parse_skill_file(skill_path)?;
+    let (manifest, instructions) = parse_skill_file(skill_path)?;
 
+    // Run basic validation first
     manifest.validate()?;
 
-    println!("SKILL.md is valid");
-    println!("  Name: {}", manifest.name);
-    println!("  Description: {}", manifest.description);
-    if let Some(version) = &manifest.version {
-        println!("  Version: {}", version);
+    // Run comprehensive validation with detailed report
+    let validator = ComprehensiveSkillValidator::new();
+    let mut report = validator.validate_manifest(&manifest, skill_path);
+    
+    // Also validate file references if we have instructions
+    if !instructions.is_empty() {
+        validator.validate_file_references(&manifest, skill_path, &instructions, &mut report);
     }
+    
+    report.finalize();
 
-    Ok(())
+    // Print detailed report
+    println!("{}", report.generate_summary());
+
+    if report.is_valid {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("Skill validation failed with {} errors", report.stats.error_count))
+    }
 }
 
 /// Show skill configuration

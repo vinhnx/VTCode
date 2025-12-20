@@ -35,9 +35,9 @@
 //! rate‑limiting mechanism for all external tool invocations (PTY, web fetch,
 //! filesystem, etc.).
 
+use anyhow::{Result, anyhow};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
-use anyhow::{anyhow, Result};
 
 /// Configuration for the limiter.
 #[derive(Debug, Clone, Copy)]
@@ -119,7 +119,8 @@ impl RateLimiterInner {
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-pub static GLOBAL_RATE_LIMITER: Lazy<Mutex<RateLimiterInner>> = Lazy::new(|| Mutex::new(RateLimiterInner::new()));
+pub static GLOBAL_RATE_LIMITER: Lazy<Mutex<RateLimiterInner>> =
+    Lazy::new(|| Mutex::new(RateLimiterInner::new()));
 
 /// Per-tool rate limiter for finer-grained control.
 /// Each tool gets its own token bucket, allowing different rate limits per tool.
@@ -148,13 +149,14 @@ impl PerToolRateLimiter {
     /// Try to acquire a token for a specific tool.
     /// Returns `Ok(())` if allowed, `Err` if rate limited.
     pub fn try_acquire_for(&mut self, tool_name: &str) -> Result<()> {
-        let bucket = self.buckets.entry(tool_name.to_owned()).or_insert_with(|| {
-            RateLimiterInner {
+        let bucket = self
+            .buckets
+            .entry(tool_name.to_owned())
+            .or_insert_with(|| RateLimiterInner {
                 config: self.default_config,
                 tokens: self.default_config.burst,
                 last_refill: Instant::now(),
-            }
-        });
+            });
         bucket.try_acquire()
     }
 
@@ -178,20 +180,25 @@ impl PerToolRateLimiter {
 }
 
 /// Global per-tool rate limiter instance.
-pub static PER_TOOL_RATE_LIMITER: Lazy<Mutex<PerToolRateLimiter>> = Lazy::new(|| Mutex::new(PerToolRateLimiter::new()));
+pub static PER_TOOL_RATE_LIMITER: Lazy<Mutex<PerToolRateLimiter>> =
+    Lazy::new(|| Mutex::new(PerToolRateLimiter::new()));
 
 /// Public API – try to acquire permission for a tool call.
 ///
 /// Returns `Ok(())` when the call is allowed, otherwise an error.
 pub fn try_acquire() -> Result<()> {
-    let mut guard: MutexGuard<'_, RateLimiterInner> = GLOBAL_RATE_LIMITER.lock().map_err(|e| anyhow!("rate limiter poisoned: {}", e))?;
+    let mut guard: MutexGuard<'_, RateLimiterInner> = GLOBAL_RATE_LIMITER
+        .lock()
+        .map_err(|e| anyhow!("rate limiter poisoned: {}", e))?;
     guard.try_acquire()
 }
 
 /// Try to acquire permission for a specific tool.
 /// Uses per-tool rate limiting for finer-grained control.
 pub fn try_acquire_for(tool_name: &str) -> Result<()> {
-    let mut guard = PER_TOOL_RATE_LIMITER.lock().map_err(|e| anyhow!("per-tool rate limiter poisoned: {}", e))?;
+    let mut guard = PER_TOOL_RATE_LIMITER
+        .lock()
+        .map_err(|e| anyhow!("per-tool rate limiter poisoned: {}", e))?;
     guard.try_acquire_for(tool_name)
 }
 

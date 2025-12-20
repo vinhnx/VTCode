@@ -999,196 +999,201 @@ impl PtyManager {
         let extra_paths = self.extra_paths.lock().clone();
         let max_tokens = request.max_tokens; // Get max_tokens from request
 
-        let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
-            let timeout_duration = Duration::from_millis(timeout);
+        let result =
+            tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
+                let timeout_duration = Duration::from_millis(timeout);
 
-            // Use login shell for command execution to ensure user's PATH and environment
-            // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc).
-            // However, we avoid double-wrapping if the command is already a shell invocation.
-            let (exec_program, exec_args, display_program, _use_shell_wrapper) =
-                if is_shell_program(&program) && args.iter().any(|arg| arg == "-c" || arg == "/C") {
-                    // Already a shell command, don't wrap again
-                    (program.clone(), args.clone(), program.clone(), false)
-                } else {
-                    let shell = resolve_fallback_shell();
-                    let full_command =
-                        join(std::iter::once(program.clone()).chain(args.iter().cloned()));
-                    (
-                        shell.clone(),
-                        vec!["-lc".to_owned(), full_command.clone()],
-                        program.clone(),
-                        true,
-                    )
+                // Use login shell for command execution to ensure user's PATH and environment
+                // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc).
+                // However, we avoid double-wrapping if the command is already a shell invocation.
+                let (exec_program, exec_args, display_program, _use_shell_wrapper) =
+                    if is_shell_program(&program)
+                        && args.iter().any(|arg| arg == "-c" || arg == "/C")
+                    {
+                        // Already a shell command, don't wrap again
+                        (program.clone(), args.clone(), program.clone(), false)
+                    } else {
+                        let shell = resolve_fallback_shell();
+                        let full_command =
+                            join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+                        (
+                            shell.clone(),
+                            vec!["-lc".to_owned(), full_command.clone()],
+                            program.clone(),
+                            true,
+                        )
+                    };
+
+                let mut builder = CommandBuilder::new(exec_program.clone());
+                for arg in &exec_args {
+                    builder.arg(arg);
+                }
+                builder.cwd(&work_dir);
+                set_command_environment(
+                    &mut builder,
+                    &display_program,
+                    size,
+                    &workspace_root,
+                    &extra_paths,
+                );
+
+                let pty_system = native_pty_system();
+                let pair = pty_system
+                    .openpty(size)
+                    .context("failed to allocate PTY pair")?;
+
+                let mut child = pair
+                    .slave
+                    .spawn_command(builder)
+                    .with_context(|| format!("failed to spawn PTY command '{display_program}'"))?;
+                let mut killer = child.clone_killer();
+                drop(pair.slave);
+
+                let reader = pair
+                    .master
+                    .try_clone_reader()
+                    .context("failed to clone PTY reader")?;
+
+                let (wait_tx, wait_rx) = mpsc::channel();
+                let wait_thread = thread::spawn(move || {
+                    let status = child.wait();
+                    let _ = wait_tx.send(());
+                    status
+                });
+
+                let reader_thread = thread::spawn(move || -> Result<Vec<u8>> {
+                    let mut reader = reader;
+                    let mut buffer = [0u8; 4096];
+                    let mut collected = Vec::new();
+
+                    loop {
+                        match reader.read(&mut buffer) {
+                            Ok(0) => break,
+                            Ok(bytes_read) => {
+                                collected.extend_from_slice(&buffer[..bytes_read]);
+                            }
+                            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+                                continue;
+                            }
+                            Err(error) => {
+                                return Err(error).context("failed to read PTY command output");
+                            }
+                        }
+                    }
+
+                    Ok(collected)
+                });
+
+                let wait_result = match wait_rx.recv_timeout(timeout_duration) {
+                    Ok(()) => wait_thread.join().map_err(|panic| {
+                        anyhow!("PTY command wait thread panicked: {:?}", panic)
+                    })?,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        killer
+                            .kill()
+                            .context("failed to terminate PTY command after timeout")?;
+
+                        let join_result = wait_thread.join().map_err(|panic| {
+                            anyhow!("PTY command wait thread panicked: {:?}", panic)
+                        })?;
+                        if let Err(error) = join_result {
+                            return Err(error)
+                                .context("failed to wait for PTY command to exit after timeout");
+                        }
+
+                        reader_thread
+                            .join()
+                            .map_err(|panic| {
+                                anyhow!("PTY command reader thread panicked: {:?}", panic)
+                            })?
+                            .context("failed to read PTY command output")?;
+
+                        return Err(anyhow!(
+                            "PTY command timed out after {} milliseconds",
+                            timeout
+                        ));
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        let join_result = wait_thread.join().map_err(|panic| {
+                            anyhow!("PTY command wait thread panicked: {:?}", panic)
+                        })?;
+                        if let Err(error) = join_result {
+                            return Err(error).context(
+                                "failed to wait for PTY command after wait channel disconnected",
+                            );
+                        }
+
+                        reader_thread
+                            .join()
+                            .map_err(|panic| {
+                                anyhow!("PTY command reader thread panicked: {:?}", panic)
+                            })?
+                            .context("failed to read PTY command output")?;
+
+                        return Err(anyhow!(
+                            "PTY command wait channel disconnected unexpectedly"
+                        ));
+                    }
                 };
 
-            let mut builder = CommandBuilder::new(exec_program.clone());
-            for arg in &exec_args {
-                builder.arg(arg);
-            }
-            builder.cwd(&work_dir);
-            set_command_environment(
-                &mut builder,
-                &display_program,
-                size,
-                &workspace_root,
-                &extra_paths,
-            );
+                let status = wait_result.context("failed to wait for PTY command to exit")?;
 
-            let pty_system = native_pty_system();
-            let pair = pty_system
-                .openpty(size)
-                .context("failed to allocate PTY pair")?;
-
-            let mut child = pair
-                .slave
-                .spawn_command(builder)
-                .with_context(|| format!("failed to spawn PTY command '{display_program}'"))?;
-            let mut killer = child.clone_killer();
-            drop(pair.slave);
-
-            let reader = pair
-                .master
-                .try_clone_reader()
-                .context("failed to clone PTY reader")?;
-
-            let (wait_tx, wait_rx) = mpsc::channel();
-            let wait_thread = thread::spawn(move || {
-                let status = child.wait();
-                let _ = wait_tx.send(());
-                status
-            });
-
-            let reader_thread = thread::spawn(move || -> Result<Vec<u8>> {
-                let mut reader = reader;
-                let mut buffer = [0u8; 4096];
-                let mut collected = Vec::new();
-
-                loop {
-                    match reader.read(&mut buffer) {
-                        Ok(0) => break,
-                        Ok(bytes_read) => {
-                            collected.extend_from_slice(&buffer[..bytes_read]);
-                        }
-                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
-                        Err(error) => {
-                            return Err(error).context("failed to read PTY command output");
-                        }
-                    }
-                }
-
-                Ok(collected)
-            });
-
-            let wait_result = match wait_rx.recv_timeout(timeout_duration) {
-                Ok(()) => wait_thread
+                let output_bytes = reader_thread
                     .join()
-                    .map_err(|panic| anyhow!("PTY command wait thread panicked: {:?}", panic))?,
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    killer
-                        .kill()
-                        .context("failed to terminate PTY command after timeout")?;
+                    .map_err(|panic| anyhow!("PTY command reader thread panicked: {:?}", panic))?
+                    .context("failed to read PTY command output")?;
+                let mut output = String::from_utf8_lossy(&output_bytes).into_owned();
+                let exit_code = exit_status_code(status);
 
-                    let join_result = wait_thread.join().map_err(|panic| {
-                        anyhow!("PTY command wait thread panicked: {:?}", panic)
-                    })?;
-                    if let Err(error) = join_result {
-                        return Err(error)
-                            .context("failed to wait for PTY command to exit after timeout");
-                    }
+                // Apply max_tokens truncation if specified
+                let output_clone = output.clone();
+                if let Some(max_tokens) = max_tokens {
+                    if max_tokens > 0 {
+                        use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
+                        use crate::core::token_budget::TokenBudgetManager;
 
-                    reader_thread
-                        .join()
-                        .map_err(|panic| {
-                            anyhow!("PTY command reader thread panicked: {:?}", panic)
-                        })?
-                        .context("failed to read PTY command output")?;
+                        let rt = tokio::runtime::Handle::current();
+                        let token_budget = TokenBudgetManager::default();
 
-                    return Err(anyhow!(
-                        "PTY command timed out after {} milliseconds",
-                        timeout
-                    ));
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    let join_result = wait_thread.join().map_err(|panic| {
-                        anyhow!("PTY command wait thread panicked: {:?}", panic)
-                    })?;
-                    if let Err(error) = join_result {
-                        return Err(error).context(
-                            "failed to wait for PTY command after wait channel disconnected",
-                        );
-                    }
+                        // Count tokens in the output
+                        let output_tokens = rt
+                            .block_on(async { token_budget.count_tokens(&output_clone).await })
+                            .unwrap_or(
+                                (output_clone.len() as f64
+                                    / crate::core::token_constants::TOKENS_PER_CHARACTER)
+                                    as usize,
+                            );
 
-                    reader_thread
-                        .join()
-                        .map_err(|panic| {
-                            anyhow!("PTY command reader thread panicked: {:?}", panic)
-                        })?
-                        .context("failed to read PTY command output")?;
-
-                    return Err(anyhow!(
-                        "PTY command wait channel disconnected unexpectedly"
-                    ));
-                }
-            };
-
-            let status = wait_result.context("failed to wait for PTY command to exit")?;
-
-            let output_bytes = reader_thread
-                .join()
-                .map_err(|panic| anyhow!("PTY command reader thread panicked: {:?}", panic))?
-                .context("failed to read PTY command output")?;
-            let mut output = String::from_utf8_lossy(&output_bytes).into_owned();
-            let exit_code = exit_status_code(status);
-
-            // Apply max_tokens truncation if specified
-            let output_clone = output.clone();
-            if let Some(max_tokens) = max_tokens {
-                if max_tokens > 0 {
-                    use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
-                    use crate::core::token_budget::TokenBudgetManager;
-
-                    let rt = tokio::runtime::Handle::current();
-                    let token_budget = TokenBudgetManager::default();
-
-                    // Count tokens in the output
-                    let output_tokens = rt
-                        .block_on(async { token_budget.count_tokens(&output_clone).await })
-                        .unwrap_or(
-                            (output_clone.len() as f64
-                                / crate::core::token_constants::TOKENS_PER_CHARACTER)
-                                as usize,
-                        );
-
-                    if output_tokens > max_tokens {
-                        // Use the same head+tail truncation as file_ops
-                        let (truncated_output, _) = rt.block_on(async {
-                            truncate_content_by_tokens(&output_clone, max_tokens, &token_budget)
-                                .await
-                        });
-                        output = format!(
-                            "{}\n[... truncated by max_tokens: {} ...]",
-                            truncated_output, max_tokens
-                        );
+                        if output_tokens > max_tokens {
+                            // Use the same head+tail truncation as file_ops
+                            let (truncated_output, _) = rt.block_on(async {
+                                truncate_content_by_tokens(&output_clone, max_tokens, &token_budget)
+                                    .await
+                            });
+                            output = format!(
+                                "{}\n[... truncated by max_tokens: {} ...]",
+                                truncated_output, max_tokens
+                            );
+                        } else {
+                            output = output_clone; // Keep original if no truncation needed
+                        }
                     } else {
-                        output = output_clone; // Keep original if no truncation needed
+                        output = output_clone; // Keep original if max_tokens is not valid
                     }
                 } else {
-                    output = output_clone; // Keep original if max_tokens is not valid
+                    output = output_clone; // Keep original if max_tokens is None
                 }
-            } else {
-                output = output_clone; // Keep original if max_tokens is None
-            }
 
-            Ok(PtyCommandResult {
-                exit_code,
-                output,
-                duration: start.elapsed(),
-                size,
-                applied_max_tokens: max_tokens,
+                Ok(PtyCommandResult {
+                    exit_code,
+                    output,
+                    duration: start.elapsed(),
+                    size,
+                    applied_max_tokens: max_tokens,
+                })
             })
-        })
-        .await
-        .context("failed to join PTY command task")??;
+            .await
+            .context("failed to join PTY command task")??;
 
         Ok(result)
     }
@@ -1255,30 +1260,30 @@ impl PtyManager {
         // Use login shell for command execution to ensure user's PATH and environment
         // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc).
         // However, we avoid double-wrapping if the command is already a shell invocation.
-        let (exec_program, exec_args, display_program) =
-            if is_shell_program(&program) && args.iter().any(|arg| arg == "-c" || arg == "/C") {
-                // Already a shell command, don't wrap again
-                (program.clone(), args.clone(), program.clone())
-            } else {
-                let shell = resolve_fallback_shell();
-                let full_command =
-                    join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+        let (exec_program, exec_args, display_program) = if is_shell_program(&program)
+            && args.iter().any(|arg| arg == "-c" || arg == "/C")
+        {
+            // Already a shell command, don't wrap again
+            (program.clone(), args.clone(), program.clone())
+        } else {
+            let shell = resolve_fallback_shell();
+            let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
 
-                // Verify we have a valid command string
-                if full_command.is_empty() {
-                    return Err(anyhow!(
-                        "Failed to construct command string from program '{}' and args {:?}",
-                        program,
-                        args
-                    ));
-                }
+            // Verify we have a valid command string
+            if full_command.is_empty() {
+                return Err(anyhow!(
+                    "Failed to construct command string from program '{}' and args {:?}",
+                    program,
+                    args
+                ));
+            }
 
-                (
-                    shell.clone(),
-                    vec!["-lc".to_owned(), full_command.clone()],
-                    program.clone(),
-                )
-            };
+            (
+                shell.clone(),
+                vec!["-lc".to_owned(), full_command.clone()],
+                program.clone(),
+            )
+        };
 
         let pty_system = native_pty_system();
         let pair = pty_system

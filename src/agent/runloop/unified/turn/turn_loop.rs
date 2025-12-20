@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 
-use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::progress::ProgressReporter;
+use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -234,18 +234,19 @@ pub async fn run_turn_loop(
         if step_count == 1 {
             let plan = ctx.tool_registry.current_plan();
             if plan.summary.total_steps > 0
-                && let Some(step) = plan.current_step() {
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        &format!("[plan] Working on step {}/{}: {}",
-                            plan.summary.completed_steps + 1,
-                            plan.summary.total_steps,
-                            step.step
-                        ),
-                    )?;
-                }
+                && let Some(step) = plan.current_step()
+            {
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "[plan] Working on step {}/{}: {}",
+                        plan.summary.completed_steps + 1,
+                        plan.summary.total_steps,
+                        step.step
+                    ),
+                )?;
+            }
         }
-
 
         // Check if we've reached the maximum number of tool loops
         if step_count > max_tool_loops {
@@ -649,7 +650,9 @@ pub async fn run_turn_loop(
                         "i need the output of",
                     ];
 
-                    if lazy_patterns.iter().any(|p| lower_text.contains(p)) && step_count < max_tool_loops {
+                    if lazy_patterns.iter().any(|p| lower_text.contains(p))
+                        && step_count < max_tool_loops
+                    {
                         consecutive_thinking_steps += 1;
                         working_history.push(uni::Message::user(
                             "You have the tools to run these commands yourself. Please execute the necessary commands and continue with the task autonomously. Do not ask me to run verification commands or provide output that you can generate yourself.".to_string()
@@ -660,7 +663,9 @@ pub async fn run_turn_loop(
                     // Nudging Strategy: if response is very short and we are in autonomous mode, nudge
                     if text.trim().len() < 50 && step_count < max_tool_loops {
                         consecutive_thinking_steps += 1;
-                        working_history.push(uni::Message::user("Please continue with the next step.".to_string()));
+                        working_history.push(uni::Message::user(
+                            "Please continue with the next step.".to_string(),
+                        ));
                         continue;
                     }
 

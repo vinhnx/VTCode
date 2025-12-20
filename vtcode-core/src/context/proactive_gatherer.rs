@@ -17,6 +17,7 @@ use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
 const MAX_CONTEXT_FILES: usize = 3;
 
 /// Maximum snippets per file
+#[allow(dead_code)]
 const MAX_SNIPPETS_PER_FILE: usize = 20;
 
 /// Maximum tokens to gather
@@ -76,10 +77,7 @@ impl GatheredContext {
         // Estimate tokens (rough: 4 chars per token)
         self.estimated_tokens += snippet.content.len() / 4;
 
-        self.snippets
-            .entry(file.clone())
-            .or_insert_with(Vec::new)
-            .push(snippet);
+        self.snippets.entry(file.clone()).or_default().push(snippet);
     }
 
     /// Add search results

@@ -891,23 +891,24 @@ pub(crate) async fn stream_and_render_response(
 
     // Prevent agent from giving up with "Complex. Probably stop." or similar
     if let Some(reasoning) = &response.reasoning
-        && is_giving_up_reasoning(reasoning) {
-            #[cfg(debug_assertions)]
-            eprintln!(
-                "Detected giving-up reasoning '{}', replacing with constructive reasoning",
-                reasoning
-            );
+        && is_giving_up_reasoning(reasoning)
+    {
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "Detected giving-up reasoning '{}', replacing with constructive reasoning",
+            reasoning
+        );
 
-            // Log the original reasoning for debugging
-            tracing::warn!(
-                target = "vtcode::agent::reasoning",
-                original_reasoning = %reasoning,
-                "Agent attempted to give up, replacing with constructive reasoning"
-            );
+        // Log the original reasoning for debugging
+        tracing::warn!(
+            target = "vtcode::agent::reasoning",
+            original_reasoning = %reasoning,
+            "Agent attempted to give up, replacing with constructive reasoning"
+        );
 
-            // Replace with constructive reasoning that provides specific solutions
-            response.reasoning = Some(get_constructive_reasoning(reasoning));
-        }
+        // Replace with constructive reasoning that provides specific solutions
+        response.reasoning = Some(get_constructive_reasoning(reasoning));
+    }
 
     // Also ensure response content doesn't contain giving-up messages
     if let Some(content) = &response.content {

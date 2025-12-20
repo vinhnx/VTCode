@@ -59,8 +59,8 @@ pub struct CircuitBreakerConfig {
 impl Default for CircuitBreakerConfig {
     fn default() -> Self {
         Self {
-            failure_threshold: 3,      // Open after 3 consecutive failures
-            success_threshold: 2,       // Close after 2 consecutive successes
+            failure_threshold: 3, // Open after 3 consecutive failures
+            success_threshold: 2, // Close after 2 consecutive successes
             base_timeout: Duration::from_secs(10),
             max_timeout: Duration::from_secs(60),
         }
@@ -171,12 +171,14 @@ impl McpCircuitBreaker {
                 let failures = self.consecutive_failures.fetch_add(1, Ordering::AcqRel) + 1;
                 if failures >= self.config.failure_threshold {
                     // Too many failures, open the circuit
-                    self.state.store(CircuitState::Open as u8, Ordering::Release);
+                    self.state
+                        .store(CircuitState::Open as u8, Ordering::Release);
                 }
             }
             CircuitState::HalfOpen => {
                 // Failure in half-open, go back to open
-                self.state.store(CircuitState::Open as u8, Ordering::Release);
+                self.state
+                    .store(CircuitState::Open as u8, Ordering::Release);
                 self.consecutive_failures.fetch_add(1, Ordering::AcqRel);
                 self.half_open_successes.store(0, Ordering::Relaxed);
             }

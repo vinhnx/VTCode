@@ -94,10 +94,6 @@ impl<'a> InlineEventContext<'a> {
                 // Ctrl+E pressed: submit /edit command
                 self.input_processor().submit("/edit".to_string())
             }
-            InlineEvent::WizardModalSubmit(_) 
-            | InlineEvent::WizardModalStepComplete { .. }
-            | InlineEvent::WizardModalBack { .. }
-            | InlineEvent::WizardModalCancel => self.input_processor().passive(),
 
             InlineEvent::ScrollLineUp
             | InlineEvent::ScrollLineDown

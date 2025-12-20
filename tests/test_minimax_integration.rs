@@ -66,6 +66,7 @@ mod minimax_integration_tests {
             None,
             None,
             None,
+            None,
         );
 
         let supported = provider.supported_models();

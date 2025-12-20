@@ -109,7 +109,9 @@ pub mod context_manager;
 pub mod discovery;
 pub mod document_processor;
 pub mod enhanced_harness;
+pub mod enhanced_validator;
 pub mod executor;
+pub mod file_references;
 pub mod loader;
 pub mod locations;
 pub mod manifest;
@@ -119,6 +121,7 @@ pub mod streaming;
 pub mod templates;
 pub mod types;
 pub mod validation;
+pub mod validation_report;
 
 pub use authoring::{
     SkillAuthor, SkillFrontmatter, ValidationReport as AuthoringValidationReport,
@@ -139,7 +142,9 @@ pub use discovery::{
 pub use document_processor::{
     DocumentMetadata, DocumentProcessor, DocumentProcessorConfig, DocumentType, ProcessedDocument,
 };
+pub use enhanced_validator::ComprehensiveSkillValidator;
 pub use executor::execute_skill_with_sub_llm;
+pub use file_references::FileReferenceValidator;
 pub use loader::{
     EnhancedDiscoveryResult, EnhancedDiscoveryStats, EnhancedSkill, EnhancedSkillLoader,
     LegacySkillLoader, SearchPathType,
@@ -161,3 +166,4 @@ pub use types::{
     SkillResource, SkillScope,
 };
 pub use validation::{SkillValidator, ValidationConfig, ValidationReport, ValidationStatus};
+pub use validation_report::{SkillValidationReport, ValidationIssue, ValidationLevel};

@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn test_context_status() {
         assert_eq!(ContextStatus::from_ratio(0.5), ContextStatus::Normal);
-        assert_eq!(ContextStatus::from_ratio(0.8), ContextStatus::Normal);  // below 0.85
+        assert_eq!(ContextStatus::from_ratio(0.8), ContextStatus::Normal); // below 0.85
         assert_eq!(ContextStatus::from_ratio(0.86), ContextStatus::Warning); // between 0.85-0.90
         assert_eq!(ContextStatus::from_ratio(0.91), ContextStatus::Critical); // >= 0.90
     }

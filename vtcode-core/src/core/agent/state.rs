@@ -282,12 +282,7 @@ impl TaskRunState {
 
     /// Push a tool error to both conversation (for Gemini) and conversation_messages.
     #[inline]
-    pub fn push_tool_error(
-        &mut self,
-        call_id: String,
-        error_msg: String,
-        is_gemini: bool,
-    ) {
+    pub fn push_tool_error(&mut self, call_id: String, error_msg: String, is_gemini: bool) {
         if is_gemini {
             self.conversation.push(Content {
                 role: "user".to_string(),
