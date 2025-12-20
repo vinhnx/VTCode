@@ -516,6 +516,20 @@ publish_npm_package() {
         return 0
     fi
 
+    # Ensure npm package has required bin directory structure
+    if [[ ! -f "npm/bin/vtcode" ]]; then
+        print_warning "npm/bin/vtcode stub not found, creating placeholder..."
+        mkdir -p npm/bin
+        cat > "npm/bin/vtcode" << 'EOF'
+#!/usr/bin/env node
+console.error('VT Code binary not downloaded yet. Please run: npm install');
+console.error('If you see this after installation, reinstall with: npm uninstall -g @vinhnx/vtcode && npm install -g @vinhnx/vtcode');
+process.exit(1);
+EOF
+        chmod +x npm/bin/vtcode
+        print_success "Created npm/bin/vtcode stub for publish validation"
+    fi
+
     local npm_publish_success=0
     local github_publish_success=0
 
