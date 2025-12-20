@@ -38,7 +38,7 @@ Layered defaults are defined in the Rust sources so the application can generate
 
 -   **Global configuration defaults** live in `vtcode-core/src/config/defaults/`
 -   **Syntax highlighting defaults** are centralized in `syntax_highlighting.rs` and reused by the loader and serde
--   **Context, router, and tooling defaults** remain close to their owning modules but consume the shared constants exported by the defaults module
+-   **Context and tooling defaults** remain close to their owning modules but consume the shared constants exported by the defaults module
 
 The CLI uses these defaults when generating sample configs (`vtcode init`) and when no user configuration is present.
 

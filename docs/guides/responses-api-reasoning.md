@@ -22,7 +22,7 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
 3. **Preserve reasoning items across API calls**: When VT Code issues function calls, the Responses API automatically keeps the `output` payload (which includes reasoning items), and we append it back into the context before reissuing the request. This mirrors the guidance to pass `previous_response_id` or to reinsert reasoning components so that subsequent calls continue where the model left off.
 
-4. **Use encrypted reasoning for ZDR-style compliance**: If you are restricted from storing model state, add the following flags when calling OpenAI via `vtcode.toml` overrides or CLI hacks (managed through `[router]` overrides if necessary):
+4. **Use encrypted reasoning for ZDR-style compliance**: If you are restricted from storing model state, add the following flags when calling OpenAI via `vtcode.toml` overrides or CLI hacks:
 
     ```json
     "include": ["reasoning.encrypted_content"],

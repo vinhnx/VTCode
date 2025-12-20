@@ -595,14 +595,7 @@ fn default_model_for_provider(provider: Provider) -> &'static str {
 
 fn apply_selection(config: &mut VTCodeConfig, provider_key: &str, model: &str) {
     config.agent.provider = provider_key.to_owned();
-    // Create the model String once and reuse to avoid repeated allocations
-    let model_s = model.to_owned();
-    config.agent.default_model = model_s.clone();
-    config.router.models.simple = model_s.clone();
-    config.router.models.standard = model_s.clone();
-    config.router.models.complex = model_s.clone();
-    config.router.models.codegen_heavy = model_s.clone();
-    config.router.models.retrieval_heavy = model_s;
+    config.agent.default_model = model.to_owned();
 }
 
 fn trust_label(level: WorkspaceTrustLevel) -> &'static str {

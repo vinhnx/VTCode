@@ -19,7 +19,6 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome, ResponseType};
-use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::core::token_constants::{
     THRESHOLD_ALERT, THRESHOLD_COMPACT, THRESHOLD_EMERGENCY, THRESHOLD_WARNING,
 };
@@ -1969,17 +1968,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 Ok(None)
             }
 
-            async fn run_turn_decision(
-                vt_cfg: Option<&VTCodeConfig>,
-                config: &CoreAgentConfig,
-                input: &str,
-            ) -> vtcode_core::core::router::RouteDecision {
-                if let Some(cfg) = vt_cfg.filter(|cfg| cfg.router.enabled) {
-                    Router::route_async(cfg, config, &config.api_key, input).await
-                } else {
-                    Router::route(&VTCodeConfig::default(), config, input)
-                }
-            }
+
 
             let turn_result = 'outer: loop {
                 if let Some(res) = run_turn_preamble(
@@ -2109,42 +2098,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                 }
 
-                let decision = run_turn_decision(vt_cfg.as_ref(), &config, input).await;
+                let active_model = config.model.clone();
                 traj.log_route(
                     working_history.len(),
-                    &decision.selected_model,
-                    match decision.class {
-                        TaskClass::Simple => "simple",
-                        TaskClass::Standard => "standard",
-                        TaskClass::Complex => "complex",
-                        TaskClass::CodegenHeavy => "codegen_heavy",
-                        TaskClass::RetrievalHeavy => "retrieval_heavy",
-                    },
+                    &active_model,
+                    "standard",
                     &input.chars().take(120).collect::<String>(),
                 );
 
-                let active_model = decision.selected_model;
-                let (max_tokens_opt, parallel_cfg_opt) = if let Some(vt) = vt_cfg.as_ref() {
-                    let key = match decision.class {
-                        TaskClass::Simple => "simple",
-                        TaskClass::Standard => "standard",
-                        TaskClass::Complex => "complex",
-                        TaskClass::CodegenHeavy => "codegen_heavy",
-                        TaskClass::RetrievalHeavy => "retrieval_heavy",
-                    };
-                    let budget = vt.router.budgets.get(key);
-                    let max_tokens = budget.and_then(|b| b.max_tokens).map(|value| value as u32);
-                    let parallel = budget.and_then(|b| b.max_parallel_tools).map(|value| {
-                        vtcode_core::llm::provider::ParallelToolConfig {
-                            disable_parallel_tool_use: value <= 1,
-                            max_parallel_tools: Some(value),
-                            encourage_parallel: value > 1,
-                        }
-                    });
-                    (max_tokens, parallel)
-                } else {
-                    (None, None)
-                };
+                let (max_tokens_opt, parallel_cfg_opt) = (None, None);
 
                 async fn run_turn_ledger(
                     decision_ledger: &Arc<

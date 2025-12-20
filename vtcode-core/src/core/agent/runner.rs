@@ -18,7 +18,6 @@ pub use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::core::agent::types::AgentType;
 use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
-use crate::core::router::{RouteDecision, Router, TaskClass};
 use crate::exec::events::{CommandExecutionStatus, ThreadEvent};
 use crate::gemini::{Content, Part, Tool};
 use crate::llm::factory::create_provider_for_model;
@@ -510,129 +509,12 @@ impl AgentRunner {
         Ok(tools)
     }
 
-    /// Determine the model and task class for the current turn based on task context and router configuration.
-    fn determine_route(&self, task: &Task, task_state: &TaskRunState) -> RouteDecision {
-        let latest_user = task_state
-            .conversation
-            .iter()
-            .rev()
-            .find(|c| c.role == ROLE_USER)
-            .and_then(|c| {
-                c.parts.iter().find_map(|p| match p {
-                    Part::Text { text, .. } => Some(text.as_str()),
-                    _ => None,
-                })
-            })
-            .unwrap_or("");
-        let trimmed_user: String = latest_user.chars().take(1000).collect();
-        let instruction_text = task.instructions.as_deref().unwrap_or_default();
-        let route_input = format!(
-            "Task: {}\nDescription: {}\nInstructions: {}\nLatest user: {}",
-            task.title, task.description, instruction_text, trimmed_user
-        );
-        let cfg = self.config();
-        let core_agent_cfg = self.core_agent_config();
-        let mut route_decision: RouteDecision = if cfg.router.enabled {
-            Router::route(cfg, &core_agent_cfg, &route_input)
-        } else {
-            RouteDecision {
-                class: TaskClass::Standard,
-                selected_model: self.model.clone(),
-            }
-        };
-
-        self.apply_routing_heuristics(&trimmed_user, task_state, &mut route_decision);
-
-        route_decision
+    /// Get the selected model for the current turn.
+    fn get_selected_model(&self) -> String {
+        self.model.clone()
     }
 
-    /// Apply heuristics to adjust the routing decision based on recent activity and user input.
-    fn apply_routing_heuristics(
-        &self,
-        trimmed_user: &str,
-        task_state: &TaskRunState,
-        route_decision: &mut RouteDecision,
-    ) {
-        // Heuristic bias: prefer fast models for read/search-oriented turns
-        let user_lower = trimmed_user.to_lowercase();
-        let fast_hint = user_lower.contains("read")
-            || user_lower.contains("grep")
-            || user_lower.contains("search")
-            || user_lower.contains("list");
 
-        if fast_hint
-            && matches!(
-                route_decision.class,
-                TaskClass::Standard | TaskClass::Complex
-            )
-        {
-            route_decision.class = TaskClass::RetrievalHeavy;
-        }
-
-        if let Some(last_tool) = task_state.executed_commands.last() {
-            let lower = last_tool.to_lowercase();
-            let is_read_like =
-                lower.contains("read") || lower.contains("list") || lower.contains("grep");
-            let is_write_like =
-                lower.contains("write") || lower.contains("edit") || lower.contains("patch");
-
-            if is_read_like && !matches!(route_decision.class, TaskClass::RetrievalHeavy) {
-                route_decision.class = TaskClass::RetrievalHeavy;
-            } else if is_write_like
-                && matches!(
-                    route_decision.class,
-                    TaskClass::Standard | TaskClass::RetrievalHeavy
-                )
-            {
-                route_decision.class = TaskClass::CodegenHeavy;
-            }
-        }
-
-        let (read_count, write_count) =
-            task_state
-                .executed_commands
-                .iter()
-                .rev()
-                .take(3)
-                .fold((0f64, 0f64), |mut acc, cmd| {
-                    let lower = cmd.to_lowercase();
-                    let weight = if acc.0 + acc.1 == 0.0 {
-                        3.0
-                    } else if acc.0 + acc.1 < 2.0 {
-                        2.0
-                    } else {
-                        1.0
-                    };
-                    if lower.contains("read") || lower.contains("list") || lower.contains("grep") {
-                        acc.0 += weight;
-                    }
-                    if lower.contains("write") || lower.contains("edit") || lower.contains("patch")
-                    {
-                        acc.1 += weight;
-                    }
-                    acc
-                });
-
-        let user_len = trimmed_user.len();
-        let mut read_score = read_count;
-        let mut write_score = write_count;
-        if user_len < 200 {
-            read_score *= 1.5;
-        } else if user_len > 400 {
-            write_score *= 1.25;
-        }
-
-        if read_score > write_score && !matches!(route_decision.class, TaskClass::RetrievalHeavy) {
-            route_decision.class = TaskClass::RetrievalHeavy;
-        } else if write_score > read_score
-            && matches!(
-                route_decision.class,
-                TaskClass::Standard | TaskClass::RetrievalHeavy
-            )
-        {
-            route_decision.class = TaskClass::CodegenHeavy;
-        }
-    }
 
     /// Record a tool call for loop detection and check if a hard limit has been exceeded.
     /// Returns true if execution should halt due to a loop.
@@ -1425,18 +1307,8 @@ impl AgentRunner {
                     turn + 1
                 );
 
-                let route_decision = self.determine_route(task, &task_state);
-                let turn_model = route_decision.selected_model.clone();
+                let turn_model = self.get_selected_model();
                 let mut turn_reasoning = self.reasoning_effort;
-                match route_decision.class {
-                    TaskClass::Simple | TaskClass::RetrievalHeavy => {
-                        turn_reasoning = Some(ReasoningEffortLevel::Low);
-                    }
-                    TaskClass::Complex | TaskClass::CodegenHeavy => {
-                        turn_reasoning = Some(turn_reasoning.unwrap_or(ReasoningEffortLevel::High));
-                    }
-                    TaskClass::Standard => {}
-                }
 
                 // Context compaction before the request
                 self.summarize_conversation_if_needed(
@@ -1446,10 +1318,7 @@ impl AgentRunner {
                     utilization,
                 );
 
-                let parallel_tool_config = if matches!(
-                    route_decision.class,
-                    TaskClass::Simple | TaskClass::RetrievalHeavy
-                ) {
+                let parallel_tool_config = if self.model.len() < 20 {
                     None
                 } else if self
                     .provider_client

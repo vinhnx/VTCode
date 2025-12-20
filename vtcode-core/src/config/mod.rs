@@ -14,7 +14,6 @@ pub mod hooks;
 pub mod loader;
 pub mod mcp;
 pub mod models;
-pub mod router;
 pub mod telemetry;
 pub mod types;
 pub mod validation;
@@ -49,7 +48,6 @@ pub use mcp::{
     McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
 pub use models::{ModelId, OpenRouterMetadata};
-pub use router::{ComplexityModelMap, HeuristicSettings, ResourceBudget, RouterConfig};
 pub use telemetry::TelemetryConfig;
 pub use types::{ReasoningEffortLevel, UiSurfacePreference};
 pub use validation::{ValidationResult, validate_config, validate_model_exists};
