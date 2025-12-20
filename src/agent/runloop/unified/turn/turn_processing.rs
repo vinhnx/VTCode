@@ -49,6 +49,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub context_manager: &'a mut ContextManager,
     pub last_forced_redraw: &'a mut Instant,
     pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
+    pub full_auto: bool,
 }
 
 /// Execute an LLM request and return the response
@@ -87,7 +88,7 @@ pub(crate) async fn execute_llm_request(
 
     let system_prompt = ctx
         .context_manager
-        .build_system_prompt(ctx.working_history, step_count, plan_opt)
+        .build_system_prompt(ctx.working_history, step_count, plan_opt, ctx.full_auto)
         .await?;
 
     let use_streaming = provider_client.supports_streaming();

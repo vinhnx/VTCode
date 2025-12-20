@@ -197,6 +197,7 @@ pub async fn run_turn_loop(
     provider_client: &mut Box<dyn uni::LLMProvider>,
     traj: &TrajectoryLogger,
     _skip_confirmations: bool,
+    full_auto: bool,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
     use crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout_ref;
@@ -232,8 +233,8 @@ pub async fn run_turn_loop(
         // Display plan status at the start of the turn if a plan exists
         if step_count == 1 {
             let plan = ctx.tool_registry.current_plan();
-            if plan.summary.total_steps > 0 {
-                if let Some(step) = plan.current_step() {
+            if plan.summary.total_steps > 0
+                && let Some(step) = plan.current_step() {
                     ctx.renderer.line(
                         MessageStyle::Info,
                         &format!("[plan] Working on step {}/{}: {}",
@@ -243,8 +244,8 @@ pub async fn run_turn_loop(
                         ),
                     )?;
                 }
-            }
         }
+
 
         // Check if we've reached the maximum number of tool loops
         if step_count > max_tool_loops {
@@ -308,6 +309,7 @@ pub async fn run_turn_loop(
                 context_manager: ctx.context_manager,
                 last_forced_redraw: ctx.last_forced_redraw,
                 input_status_state: ctx.input_status_state,
+                full_auto,
             };
 
         // Execute the LLM request
@@ -677,6 +679,9 @@ pub async fn run_turn_loop(
                             "You have an active plan with remaining steps. Please continue with the next step in your plan autonomously. Do not stop until the plan is complete or you are blocked.".to_string()
                         };
                         working_history.push(uni::Message::user(nudge_msg));
+
+                        // If we are in full-auto mode, we should continue immediately
+                        // without waiting for user input in the session loop.
                         continue;
                     }
 

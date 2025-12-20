@@ -155,6 +155,12 @@ impl IncrementalSystemPrompt {
                 "- token_usage: {:.2}%",
                 context.token_usage_ratio * 100.0
             );
+            let _ = writeln!(prompt, "- full_auto: {}", context.full_auto);
+
+            if context.full_auto {
+                let _ = writeln!(prompt, "\n# FULL-AUTO MODE ENABLED");
+                let _ = writeln!(prompt, "You are running in autonomous mode. You are expected to complete the task without asking for permission or help unless you are completely blocked by something only a human can provide. Continue executing steps until the goal is reached.");
+            }
 
             if let Some(plan) = &context.current_plan {
                 let _ = writeln!(prompt, "\n## CURRENT TASK PLAN (v{})", plan.version);
@@ -237,6 +243,7 @@ pub struct SystemPromptContext {
     pub error_count: usize,
     pub token_usage_ratio: f64,
     pub current_plan: Option<vtcode_core::tools::TaskPlan>,
+    pub full_auto: bool,
 }
 
 impl SystemPromptContext {
@@ -253,6 +260,7 @@ impl SystemPromptContext {
             plan.version.hash(&mut hasher);
             plan.summary.completed_steps.hash(&mut hasher);
         }
+        self.full_auto.hash(&mut hasher);
         hasher.finish()
     }
 }
@@ -271,6 +279,7 @@ mod tests {
             error_count: 0,
             token_usage_ratio: 0.1,
             current_plan: None,
+            full_auto: false,
         };
 
         // First call - should build from scratch
@@ -299,7 +308,10 @@ mod tests {
             conversation_length: 1,
             tool_usage_count: 0,
             error_count: 0,
-            token_usage_ratio: 0.0,            current_plan: None,        };
+            token_usage_ratio: 0.0,
+            current_plan: None,
+            full_auto: false,
+        };
 
         // Build initial prompt
         let _ = prompt_builder
