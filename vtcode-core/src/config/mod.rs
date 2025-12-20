@@ -26,11 +26,10 @@ pub use acp::{
 };
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
-pub use core::{ActorCriticConfig, BanditConfig, RewardShapingConfig, RlStrategy};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
     FullAutoConfig, ModelConfig, PermissionsConfig, PromptCachingConfig,
-    ProviderPromptCachingConfig, ReinforcementLearningConfig, SecurityConfig, ToolPolicy,
+    ProviderPromptCachingConfig, SecurityConfig, ToolPolicy,
     ToolsConfig,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};
