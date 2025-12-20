@@ -139,6 +139,10 @@ impl TaskRunState {
     }
 
     pub fn mark_tool_loop_limit_hit(&mut self) {
+        // Idempotent: skip if already marked
+        if self.tool_loop_limit_hit {
+            return;
+        }
         self.tool_loop_limit_hit = true;
         self.completion_outcome =
             TaskOutcome::tool_loop_limit_reached(self.max_tool_loops, self.consecutive_tool_loops);
