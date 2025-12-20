@@ -143,10 +143,11 @@ pub async fn handle_exec_command(
         instructions: Some(EXEC_TASK_INSTRUCTIONS.into()),
     };
 
+    let max_retries = vt_cfg.agent.max_task_retries;
     let result = runner
-        .execute_task(&task, &[] as &[ContextItem])
+        .execute_task_with_retry(&task, &[] as &[ContextItem], max_retries)
         .await
-        .context("Failed to execute autonomous task")?;
+        .context("Failed to execute autonomous task after retries")?;
 
     // OPTIMIZATION: Pre-allocate with capacity hint
     let mut event_lines = Vec::with_capacity(result.thread_events.len());
