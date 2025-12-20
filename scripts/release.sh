@@ -1034,17 +1034,6 @@ main() {
 
     # Wait for background docs.rs process if it was started
     if [[ -n "$pid_docs" ]]; then
-    if [[ $binaries_completed == true ]]; then
-        wait "$pid_binaries" || print_error "Binary build failed"
-        # Zed extension checksum update removed
-        print_info "Zed extension checksum update functionality has been removed from this release"
-    fi
-
-    # Update extension versions to match main project version
-    update_extensions_version "$released_version"
-
-    # Wait for background docs.rs process if it was started
-    if [[ -n "$pid_docs" ]]; then
         print_info 'Waiting for docs.rs rebuild trigger to complete...'
         if wait "$pid_docs"; then
             print_success 'docs.rs rebuild triggered'
@@ -1052,6 +1041,12 @@ main() {
             print_warning 'docs.rs rebuild trigger may have failed'
         fi
     fi
+
+    # Update extension versions to match main project version
+    update_extensions_version "$released_version"
+
+    # Zed extension checksum update removed
+    print_info "Zed extension checksum update functionality has been removed from this release"
 
     print_info 'VSCode extension publishing skipped'
     print_info 'To release the VSCode extension separately, use: cd vscode-extension && ./release.sh'
