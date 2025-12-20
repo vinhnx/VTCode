@@ -248,8 +248,18 @@ install_with_cargo() {
             error "Cargo installation failed"
             return 1
         fi
+    else
+        error "Cargo (Rust package manager) is not installed"
+        error ""
+        error "To install Rust and Cargo:"
+        error "  1. Visit: https://rustup.rs/"
+        error "  2. Install rustup (Rust toolchain installer)"
+        error "  3. Run: cargo install vtcode --version ${VERSION}"
+        error ""
+        error "Alternatively, check for pre-built binaries at:"
+        error "  https://github.com/${GITHUB_REPO}/releases/tag/v${VERSION}"
+        return 1
     fi
-    return 1
 }
 
 # Main logic
@@ -277,20 +287,34 @@ main() {
     # Check if release has assets before proceeding
     if ! check_release_assets "$VERSION" "$PLATFORM"; then
         warn "Missing pre-built binaries for v${VERSION} on $PLATFORM"
-        warn "This is likely because:"
-        warn "  1. The release workflow is disabled in GitHub Actions"
-        warn "  2. The build is still in progress"
-        warn "  3. This platform is not supported for this version"
+        warn ""
+        warn "This could mean:"
+        warn "  1. Linux binaries are not yet available for this version"
+        warn "  2. The release workflow is disabled in GitHub Actions"
+        warn "  3. The build is still in progress"
+        warn "  4. This platform is not supported"
         echo ""
         
-        # Try cargo fallback
+        # Try cargo fallback (best option for Linux users)
+        log "Attempting to build from source with cargo (this may take 5-15 minutes)..."
         if install_with_cargo; then
             exit 0
         fi
         
-        error "Installation failed. Available alternatives:"
-        error "  1. Build from source: cargo install vtcode"
-        error "  2. Download manually: https://github.com/$GITHUB_REPO/releases"
+        error ""
+        error "Installation failed. Please try one of these alternatives:"
+        error ""
+        error "Option 1: Install Rust and build from source (recommended for Linux)"
+        error "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+        error "  source ~/.cargo/env"
+        error "  cargo install vtcode --version $VERSION"
+        error ""
+        error "Option 2: Download pre-built binaries (if available)"
+        error "  Visit: https://github.com/$GITHUB_REPO/releases/tag/v$VERSION"
+        error ""
+        error "Option 3: Use a different installation method"
+        error "  Cargo: cargo install vtcode"
+        error "  GitHub: Check releases page for your platform"
         exit 1
     fi
     
@@ -378,9 +402,14 @@ main() {
     
     echo ""
     echo "Distribution Channels:"
-    echo "  Cargo: cargo install vtcode"
-    echo "  Brew:  brew install vinhnx/tap/vtcode"
+    if [[ "$PLATFORM" == *"linux"* ]]; then
+        echo "  Cargo (recommended for Linux): cargo install vtcode"
+    else
+        echo "  Cargo: cargo install vtcode"
+        echo "  Brew:  brew install vinhnx/tap/vtcode"
+    fi
     echo "  NPM:   npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com"
+    echo "  GitHub: https://github.com/$GITHUB_REPO/releases"
     echo ""
     success "Installation complete!"
 }

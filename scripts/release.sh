@@ -62,7 +62,6 @@ Options:
   --dry-run           Run cargo-release in dry-run mode
   --skip-crates       Skip publishing crates to crates.io (pass --no-publish)
   --skip-npm          Skip npm publish step
-  --skip-github-packages  Skip publishing to GitHub Packages (pass --no-publish)
   --skip-binaries     Skip building and uploading binaries
   --skip-docs         Skip docs.rs rebuild trigger
   --trusted-publishers-info  Show information about trusted publishers setup
@@ -79,7 +78,7 @@ show_trusted_publishers_info() {
     cat <<'INFO'
 Trusted Publishers Setup Information:
 
-Trusted publishing allows secure publishing from CI/CD workflows using OpenID Connect (OIDC),
+Trusted publishing allows secure publishing from CI/CD workflows to npmjs.com using OpenID Connect (OIDC),
 eliminating the need for long-lived npm tokens.
 
 To configure trusted publishers for this project:
@@ -89,17 +88,14 @@ To configure trusted publishers for this project:
    - Set up trusted publishing for your CI/CD provider (GitHub Actions or GitLab CI/CD)
    - Provide your GitHub/GitLab organization, repository, and workflow filename
 
-2. For GitHub Packages:
-   - Configure your CI/CD workflow with the required permissions
-
-3. For GitHub Actions, add this to your workflow:
+2. For GitHub Actions, add this to your workflow:
    ```yaml
    permissions:
      id-token: write  # Required for trusted publishing
      contents: read
    ```
 
-4. Your CI/CD workflow should use npm CLI version 11.5.1 or later
+3. Your CI/CD workflow should use npm CLI version 11.5.1 or later
 
 Learn more: https://docs.npmjs.com/trusted-publishers
 INFO
@@ -291,7 +287,6 @@ check_clean_tree() {
 # Run all authentication checks (with trusted publishers info)
 check_all_auth() {
     local skip_npm=$1
-    local skip_github_packages=$2
 
     # Check cargo auth
     if command -v cargo >/dev/null 2>&1; then
@@ -325,45 +320,8 @@ check_all_auth() {
             else
                 print_info 'npm is logged in locally - authentication check passed'
             fi
-
-            if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-                local token_config
-                token_config=$(npm config get //npm.pkg.github.com/:_authToken 2>/dev/null || echo "")
-
-                if [[ -n "$token_config" && "$token_config" != "null" ]]; then
-                    print_info 'GitHub Packages token is configured (used as fallback if trusted publishing not available)'
-                else
-                    print_info 'GitHub Packages token not configured - relying on trusted publishing for GitHub Packages'
-                fi
-            else
-                print_info 'GITHUB_TOKEN not set - relying on trusted publishing for GitHub Packages'
-            fi
         else
             print_warning 'npm is not available (required for npm publishing)'
-        fi
-    fi
-
-    if [[ "$skip_github_packages" == 'false' ]]; then
-        # GitHub Packages authentication still requires npm but we'll provide info
-        if command -v npm >/dev/null 2>&1; then
-            print_info 'GitHub Packages publishing - since you have trusted publishing configured, no token required in CI/CD'
-            print_info 'Trusted publishing uses OIDC tokens provided by the CI/CD environment'
-            print_info 'Ensure your CI/CD workflow is configured for trusted publishing: https://docs.npmjs.com/trusted-publishers'
-
-            if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-                local token_config
-                token_config=$(npm config get //npm.pkg.github.com/:_authToken 2>/dev/null || echo "")
-
-                if [[ -n "$token_config" && "$token_config" != "null" ]]; then
-                    print_info 'GitHub Packages authentication configured (used as fallback if trusted publishing not available)'
-                else
-                    print_info 'GitHub Packages token not configured - relying on trusted publishing'
-                fi
-            else
-                print_info 'GITHUB_TOKEN not set - relying on trusted publishing for GitHub Packages'
-            fi
-        else
-            print_warning 'npm is not available (required for GitHub Packages authentication)'
         fi
     fi
 }
@@ -455,7 +413,7 @@ trigger_docs_rs_rebuild() {
 publish_npm_package() {
     local version=$1
 
-    print_distribution "Publishing npm package v$version to both npmjs.com and GitHub Packages using trusted publishers..."
+    print_distribution "Publishing npm package v$version to npmjs.com..."
 
     if [[ ! -f 'npm/package.json' ]]; then
         print_warning 'npm package.json not found - skipping npm publish'
@@ -501,18 +459,14 @@ publish_npm_package() {
         print_info "If publishing fails, you may need to configure npm tokens locally or run in CI/CD environment"
     fi
 
-    # If running locally without npm login or GitHub token, skip npm publishes to avoid 401s
+    # If running locally without npm login, skip npm publish to avoid 401s
     local npm_logged_in=true
     if ! npm whoami >/dev/null 2>&1; then
         npm_logged_in=false
     fi
-    local has_github_token=true
-    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-        has_github_token=false
-    fi
 
-    if [[ "$in_ci" == false && "$npm_logged_in" == false && "$has_github_token" == false ]]; then
-        print_warning "npm/GitHub Packages auth not configured locally; skipping npm publishes (use --skip-npm or npm login / set GITHUB_TOKEN)"
+    if [[ "$in_ci" == false && "$npm_logged_in" == false ]]; then
+        print_warning "npm auth not configured locally; skipping npm publish (use --skip-npm or npm login)"
         return 0
     fi
 
@@ -529,9 +483,6 @@ EOF
         chmod +x npm/bin/vtcode
         print_success "Created npm/bin/vtcode stub for publish validation"
     fi
-
-    local npm_publish_success=0
-    local github_publish_success=0
 
     # Publish to npmjs.com with different package name using trusted publishing (OIDC)
     print_distribution "Publishing npm package v$version to npmjs.com using trusted publishers (OIDC)..."
@@ -556,7 +507,7 @@ EOF
         # In local environments, this may fallback to configured tokens
         if npm publish; then
             print_success "npm package v$version published to npmjs.com as vtcode-bin using trusted publishers"
-            npm_publish_success=1
+            return 0
         else
             print_warning "npm publish to npmjs.com failed"
 
@@ -570,68 +521,13 @@ EOF
                 print_info "Or ensure you have proper token configured in ~/.npmrc"
             fi
 
-            npm_publish_success=0
+            return 1
         fi
     )
 
     # Clean up temporary directory
     rm -rf "$temp_npm_dir"
 
-    # Publish to GitHub Packages with original package using trusted publishing or fallback
-    print_distribution "Publishing npm package v$version to GitHub Packages..."
-    (
-        cd npm || return 1
-
-        # Try trusted publishing first (works in CI/CD with proper permissions)
-        if npm publish --registry https://npm.pkg.github.com; then
-            print_success "npm package v$version published to GitHub Packages as @vinhnx/vtcode using trusted publishers"
-            github_publish_success=1
-        else
-            print_warning "Trusted publishing to GitHub Packages failed"
-
-            # Fallback to token-based authentication if available
-            if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-                print_info "Attempting fallback to token-based publishing to GitHub Packages..."
-
-                # Temporarily configure npm auth for GitHub Packages as fallback
-                npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN" || {
-                    print_warning "Failed to set GitHub token for GitHub Packages"
-                    return 1
-                }
-
-                if npm publish --registry https://npm.pkg.github.com; then
-                    print_success "npm package v$version published to GitHub Packages as @vinhnx/vtcode using token authentication"
-                    github_publish_success=1
-                else
-                    print_warning "GitHub Packages publishing failed with both trusted publishing and token fallback"
-                fi
-
-                # Clean up npm config
-                npm config delete //npm.pkg.github.com/:_authToken || true
-            else
-                print_info "No GITHUB_TOKEN available for fallback - ensure trusted publishing is configured"
-                print_info "For GitHub Actions, ensure GITHUB_TOKEN is available and workflow has proper permissions"
-            fi
-
-            if [[ $github_publish_success -eq 0 ]]; then
-                print_info "To configure trusted publishing for GitHub Packages, visit: https://docs.npmjs.com/trusted-publishers"
-            fi
-        fi
-    )
-
-    # Return success if at least one registry published successfully
-    if [[ $npm_publish_success -eq 1 || $github_publish_success -eq 1 ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-publish_github_packages() {
-    local version=$1
-
-    # GitHub Packages publishing is now handled by publish_npm_package
-    # This function is kept for backward compatibility
     return 0
 }
 
@@ -645,33 +541,9 @@ build_and_upload_binaries() {
         return 0
     fi
 
-    # Ensure correct GitHub account before building/uploading
-    print_info "Verifying GitHub CLI authentication for binary upload..."
-    if ! command -v gh &> /dev/null; then
-        print_error "GitHub CLI (gh) is required for binary uploads but not installed"
-        return 1
-    fi
-    
-    local expected_account="vinhnx"
-    if ! gh auth status >/dev/null 2>&1; then
-        print_error "GitHub CLI is not authenticated. Please run: gh auth login"
-        return 1
-    fi
-    
-    # Check if we're logged in to the expected account and it's active
-    if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
-        print_error "Not logged in to GitHub account: $expected_account"
-        print_info "Run: gh auth login --hostname github.com"
-        return 1
-    fi
-    
-    if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
-        print_error "GitHub account '$expected_account' is not active"
-        print_info "Run: gh auth switch --hostname github.com --user $expected_account"
-        return 1
-    fi
-    
-    print_success "GitHub CLI authenticated with correct account: $expected_account"
+    # Enable cross-compilation by default for multi-platform builds
+    export VTCODE_DISABLE_CROSS=0
+    print_info "Cross-compilation enabled for multi-platform builds"
 
     if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
         print_warning 'Binary build/distribution failed'
@@ -927,7 +799,6 @@ main() {
     local dry_run=false
     local skip_crates=false
     local skip_npm=false
-    local skip_github_packages=false
     local skip_binaries=false
     local skip_docs=false
     local pre_release=false
@@ -983,10 +854,6 @@ main() {
                 skip_npm=true
                 shift
                 ;;
-            --skip-github-packages)
-                skip_github_packages=true
-                shift
-                ;;
             --skip-binaries)
                 skip_binaries=true
                 shift
@@ -1040,7 +907,7 @@ main() {
     fi
 
     # Run all auth checks together (they are fast and don't block each other)
-    check_all_auth "$skip_npm" "$skip_github_packages"
+    check_all_auth "$skip_npm"
 
     local current_version
     current_version=$(get_current_version)
@@ -1085,31 +952,85 @@ main() {
     git push origin main && git push --tags origin
     print_success "Commits and tags pushed successfully"
 
-    # Verify GitHub release was created before starting uploads
-    print_info "Verifying GitHub release v$released_version exists..."
+    # Wait for GitHub release to be created by cargo-release
+    print_info "Waiting for GitHub release v$released_version to be created..."
     local retry_count=0
-    local max_retries=10
+    local max_retries=30  # Increased from 10 to 30 (up to 60 seconds)
     while ! gh release view "v$released_version" >/dev/null 2>&1; do
         retry_count=$((retry_count + 1))
         if [[ $retry_count -gt $max_retries ]]; then
             print_warning "GitHub release v$released_version not found after $max_retries attempts"
-            print_info "Continuing anyway - uploads may still succeed if release is being created"
-            break
+            print_warning "You may need to create the release manually or wait longer"
+            print_info "Try running this script again with --skip-release flag"
+            exit 1
         fi
-        print_info "Release not found yet, waiting... (attempt $retry_count/$max_retries)"
+        if [[ $retry_count -eq 1 ]]; then
+            print_info "Release not found yet, will keep checking..."
+        fi
+        # Show progress every 5 attempts
+        if [[ $((retry_count % 5)) -eq 0 ]]; then
+            print_info "Still waiting... (attempt $retry_count/$max_retries)"
+        fi
         sleep 2
     done
     
-    if gh release view "v$released_version" >/dev/null 2>&1; then
-        print_success "GitHub release v$released_version confirmed"
+    print_success "GitHub release v$released_version confirmed created"
+
+    # Verify GitHub CLI authentication before starting uploads
+    print_info "Verifying GitHub CLI authentication..."
+    if ! command -v gh &> /dev/null; then
+        print_error "GitHub CLI (gh) is required for binary uploads but not installed"
+        print_info "Install from: https://cli.github.com/"
+        exit 1
+    fi
+    
+    local expected_account="vinhnx"
+    if ! gh auth status >/dev/null 2>&1; then
+        print_error "GitHub CLI is not authenticated. Please run: gh auth login"
+        exit 1
+    fi
+    
+    if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
+        print_error "Not logged in to GitHub account: $expected_account"
+        print_info "Run: gh auth login --hostname github.com"
+        exit 1
+    fi
+    
+    if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
+        print_error "GitHub account '$expected_account' is not active"
+        print_info "Run: gh auth switch --hostname github.com --user $expected_account"
+        exit 1
+    fi
+    
+    print_success "GitHub CLI authenticated with correct account: $expected_account"
+
+    # Perform post-release operations sequentially
+    # 1. Publish npm package
+    if [[ "$skip_npm" == 'false' ]]; then
+        if ! publish_npm_package "$released_version"; then
+            print_error "npm publish failed"
+            exit 1
+        fi
     fi
 
-    # Perform post-release operations in parallel with proper dependency management
+    # 2. Build and upload binaries
+    if [[ "$skip_binaries" == 'false' ]]; then
+        # Enable cross-compilation for multi-platform builds
+        export VTCODE_DISABLE_CROSS=0
+        print_info "Cross-compilation enabled for multi-platform builds"
+        
+        if ! build_and_upload_binaries "$released_version"; then
+            print_error "Binary build/upload failed"
+            exit 1
+        fi
+    fi
+
+    # 3. Handle docs.rs rebuild (background)
     local pid_docs=""
-    local pid_npm=""
-    local pid_github=""
-    local pid_binaries=""
-    local pid_vscode=""
+    if [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]]; then
+        trigger_docs_rs_rebuild "$released_version" false &
+        pid_docs=$!
+    fi
 
     # Trigger docs.rs rebuild in background if not skipped
     if [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]]; then
@@ -1117,16 +1038,10 @@ main() {
         pid_docs=$!
     fi
 
-    # Publish to GitHub Packages npm registry in background if not skipped
+    # Publish to npmjs.com registry in background if not skipped
     if [[ "$skip_npm" == 'false' ]]; then
         publish_npm_package "$released_version" &
         pid_npm=$!
-    fi
-
-    # Publish to GitHub Packages registry if not skipped
-    if [[ "$skip_github_packages" == 'false' ]]; then
-        publish_github_packages "$released_version" &
-        pid_github=$!
     fi
 
     # Build binaries in background if not skipped
@@ -1150,25 +1065,15 @@ main() {
     # Update extension versions to match main project version
     update_extensions_version "$released_version"
 
-    # Wait for all background processes to complete
-    print_info 'Waiting for background processes to complete...'
-    local npm_publish_success=0
-    for pid in $pid_docs $pid_npm $pid_github; do
-        if [[ -n "$pid" ]]; then
-            if [[ "$pid" == "$pid_npm" ]]; then
-                # Special handling for npm publish - treat as more critical
-                if wait "$pid"; then
-                    print_success "npm publish completed successfully"
-                    npm_publish_success=1
-                else
-                    print_error "npm publish failed - this may require manual intervention"
-                    npm_publish_success=0
-                fi
-            else
-                wait "$pid" || print_warning "Background process $pid failed"
-            fi
+    # Wait for background docs.rs process if it was started
+    if [[ -n "$pid_docs" ]]; then
+        print_info 'Waiting for docs.rs rebuild trigger to complete...'
+        if wait "$pid_docs"; then
+            print_success 'docs.rs rebuild triggered'
+        else
+            print_warning 'docs.rs rebuild trigger may have failed'
         fi
-    done
+    fi
 
     print_info 'VSCode extension publishing skipped'
     print_info 'To release the VSCode extension separately, use: cd vscode-extension && ./release.sh'
@@ -1176,17 +1081,11 @@ main() {
     print_success 'Release process finished'
     print_info "GitHub Release should now contain changelog notes generated by cargo-release"
     print_info "All commits, tags, and releases have been pushed to the remote repository"
+    print_info "Binary assets have been uploaded to the GitHub release"
 
     if [[ "$skip_npm" == 'false' ]]; then
-        if [[ $npm_publish_success -eq 1 ]]; then
-            print_success "npm package published to both registries:"
-            print_success "  - npmjs.com: https://www.npmjs.com/package/vtcode-bin"
-            print_success "  - GitHub Packages: https://github.com/vinhnx/vtcode/pkgs/npm/vtcode"
-        else
-            print_warning "npm package may not have been published successfully - check logs above and consider manual publishing"
-            print_info "To publish npm package manually to npmjs.com: cd npm && npm publish (with different package name)"
-            print_info "To publish npm package manually to GitHub Packages: cd npm && npm publish --registry https://npm.pkg.github.com"
-        fi
+        print_success "npm package published to npmjs.com:"
+        print_success "  - https://www.npmjs.com/package/vtcode-bin"
     else
         print_info "npm package publishing was skipped as requested"
     fi
