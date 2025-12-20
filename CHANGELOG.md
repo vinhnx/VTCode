@@ -3,6 +3,32 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.50.12] - 2025-12-20
+
+
+### Features
+    - feat: Enhance tool execution error handling and implement planning mode warnings
+    - feat: Implement TUI-aware tool approval prompts and human-in-the-loop notification bell.
+    - feat: add plan phase management and update tool registry for planning mode
+    - feat: add HITL notification bell configuration and implement terminal bell notification for approvals
+    - feat: Implement pre-flight LLM request and tool definition validation, and ensure `mark_tool_loop_limit_hit` is idempotent.
+    - feat: improve release process by adding Linux build automation and related documentation.
+    - feat: Add Linux build and release support, fix npm publish, and improve release asset uploads and install script error handling.
+
+
+### Performance Improvements
+    - perf: optimize rate limiting with a read-lock fast path and refactor tool execution retry delays using constant values.
+
+
+### Documentation
+    - docs: update changelog for v0.50.11 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.50.11 [skip ci]
+    - chore: release v0.50.11
+    - chore: update VSCode extension package.json to v0.50.10 [skip ci]
+    - chore: update npm package.json to v0.50.10 [skip ci]
 # [Version 0.50.11] - 2025-12-20
 
 
