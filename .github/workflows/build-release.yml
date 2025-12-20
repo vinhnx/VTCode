@@ -5,6 +5,12 @@ permissions:
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.50.8)'
+        required: true
+        type: string
 
 env:
   CARGO_INCREMENTAL: 0
@@ -42,6 +48,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.version || github.event.release.tag_name }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -78,18 +86,19 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          tar -czf ../../../vtcode-${{ github.event.release.tag_name }}-${{ matrix.name }}.tar.gz vtcode
+          tar -czf ../../../vtcode-${{ github.event.inputs.version || github.event.release.tag_name }}-${{ matrix.name }}.tar.gz vtcode
 
       - name: Package binary (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ../../../vtcode-${{ github.event.release.tag_name }}-${{ matrix.name }}.zip vtcode.exe
+          7z a ../../../vtcode-${{ github.event.inputs.version || github.event.release.tag_name }}-${{ matrix.name }}.zip vtcode.exe
 
       - name: Upload binary
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: vtcode-${{ github.event.release.tag_name }}-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
+          tag_name: ${{ github.event.inputs.version || github.event.release.tag_name }}
+          files: vtcode-${{ github.event.inputs.version || github.event.release.tag_name }}-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
           fail_on_unmatched_files: true
