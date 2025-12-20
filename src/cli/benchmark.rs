@@ -222,11 +222,12 @@ pub async fn handle_benchmark_command(
     runner.enable_full_auto(&automation_cfg.allowed_tools).await;
 
     let mut reports = Vec::with_capacity(tasks.len());
+    let max_retries = vt_cfg.agent.max_task_retries;
     for prepared in &tasks {
         let result = runner
-            .execute_task(&prepared.task, &prepared.contexts)
+            .execute_task_with_retry(&prepared.task, &prepared.contexts, max_retries)
             .await
-            .with_context(|| format!("Failed to execute task '{}'", prepared.task.id))?;
+            .with_context(|| format!("Failed to execute task '{}' after retries", prepared.task.id))?;
         reports.push(BenchmarkTaskReport::from(&prepared.task, result));
     }
 

@@ -89,10 +89,11 @@ pub async fn handle_auto_task_command(
         instructions: None,
     };
 
+    let max_retries = vt_cfg.agent.max_task_retries;
     let result = runner
-        .execute_task(&task, &[] as &[ContextItem])
+        .execute_task_with_retry(&task, &[] as &[ContextItem], max_retries)
         .await
-        .context("Failed to execute autonomous task")?;
+        .context("Failed to execute autonomous task after retries")?;
 
     if !result.summary.trim().is_empty() {
         println!(

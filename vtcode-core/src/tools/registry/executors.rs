@@ -3996,6 +3996,7 @@ fn extract_build_errors_and_summary(output: &str, max_tokens: usize) -> String {
         "generated",
         "warning:",
         "error:",
+        "Next:",  // CRITICAL: Preserve agent follow-up prompts during truncation
     ];
 
     while i < total_lines {

@@ -135,6 +135,12 @@ pub struct AgentConfig {
     /// Vibe coding configuration for lazy/vague request support
     #[serde(default)]
     pub vibe_coding: AgentVibeCodingConfig,
+
+    /// Maximum number of retries for agent task execution (default: 2)
+    /// When an agent task fails due to retryable errors (timeout, network, 503, etc.),
+    /// it will be retried up to this many times with exponential backoff
+    #[serde(default = "default_max_task_retries")]
+    pub max_task_retries: u32,
 }
 
 impl Default for AgentConfig {
@@ -167,6 +173,7 @@ impl Default for AgentConfig {
             custom_api_keys: BTreeMap::new(),
             checkpointing: AgentCheckpointingConfig::default(),
             vibe_coding: AgentVibeCodingConfig::default(),
+            max_task_retries: default_max_task_retries(),
         }
     }
 }
@@ -291,6 +298,11 @@ const fn default_project_doc_max_bytes() -> usize {
 #[inline]
 const fn default_instruction_max_bytes() -> usize {
     instructions::DEFAULT_MAX_BYTES
+}
+
+#[inline]
+const fn default_max_task_retries() -> u32 {
+    2  // Retry twice on transient failures
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
