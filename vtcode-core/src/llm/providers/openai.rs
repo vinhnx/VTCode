@@ -2148,6 +2148,7 @@ mod tests {
             None,
             Some(pc),
             None,
+            None,
         );
 
         let request = sample_request(models::openai::GPT_5_1);
@@ -2174,6 +2175,7 @@ mod tests {
             None,
             Some(pc),
             None,
+            None,
         );
 
         let mut request = sample_request(models::openai::GPT_5_1);
@@ -2195,6 +2197,7 @@ mod tests {
             Some(models::openai::GPT_5_1.to_string()),
             None,
             Some(pc),
+            None,
             None,
         );
 
@@ -2223,6 +2226,7 @@ mod tests {
             None,
             Some(pc),
             None,
+            None,
         );
 
         let request = sample_request(models::openai::CODEX_MINI_LATEST);
@@ -2242,6 +2246,7 @@ mod tests {
             Some(models::openai::GPT_5_1.to_string()),
             None,
             Some(pc.clone()),
+            None,
             None,
         );
 
