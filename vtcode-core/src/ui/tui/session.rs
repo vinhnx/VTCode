@@ -60,7 +60,7 @@ mod tool_renderer;
 use self::file_palette::FilePalette;
 use self::input_manager::InputManager;
 use self::message::{MessageLabels, MessageLine};
-use self::modal::ModalState;
+use self::modal::{ModalState, WizardModalState};
 
 use self::prompt_palette::PromptPalette;
 use self::queue::QueueOverlay;
@@ -142,6 +142,7 @@ pub struct Session {
     queue_overlay_cache: Option<QueueOverlay>,
     queue_overlay_version: u64,
     modal: Option<ModalState>,
+    wizard_modal: Option<WizardModalState>,
     show_timeline_pane: bool,
     plan: TaskPlan,
     line_revision_counter: u64,
@@ -265,6 +266,7 @@ impl Session {
             queue_overlay_cache: None,
             queue_overlay_version: 0,
             modal: None,
+            wizard_modal: None,
             show_timeline_pane,
             plan: TaskPlan::default(),
             header_rows: initial_header_rows,
@@ -496,6 +498,14 @@ impl Session {
                 search,
             } => {
                 self.show_list_modal(title, lines, items, selected, search);
+            }
+            InlineCommand::ShowWizardModal {
+                title,
+                steps,
+                current_step: _,
+                search,
+            } => {
+                self.show_wizard_modal(title, steps, search);
             }
             InlineCommand::CloseModal => {
                 self.close_modal();
@@ -1980,12 +1990,12 @@ mod tests {
         assert_eq!(session.navigation_state.selected(), Some(0));
 
         let title: String = session
-            .navigation_block_title()
+            .timeline_block_title()
             .spans
             .iter()
             .map(|span| span.content.clone().into_owned())
             .collect();
-        assert!(title.contains(ui::PLAN_BLOCK_TITLE));
+        assert!(title.contains(ui::NAVIGATION_BLOCK_TITLE));
     }
 
     #[test]

@@ -94,15 +94,15 @@ impl Session {
         let mut offset = 0;
 
         // Add goal/explanation if it exists and we have space
-        if let Some(explanation) = &self.plan.explanation {
-            if inner.height > 4 {
-                items.push(ListItem::new(Line::from(vec![
-                    Span::styled("Goal: ", self.navigation_index_style()),
-                    Span::styled(explanation.clone(), self.styles.default_style()),
-                ])));
-                items.push(ListItem::new(Line::from("")));
-                offset = 2;
-            }
+        if let Some(explanation) = &self.plan.explanation
+            && inner.height > 4
+        {
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled("Goal: ", self.navigation_index_style()),
+                Span::styled(explanation.clone(), self.styles.default_style()),
+            ])));
+            items.push(ListItem::new(Line::from("")));
+            offset = 2;
         }
 
         items.extend(self.plan_navigation_items());

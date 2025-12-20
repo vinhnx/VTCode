@@ -12,10 +12,11 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
     InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
+    WizardStep,
 };
 use super::{
     Session,
-    modal::{ModalListState, ModalSearchState, ModalState},
+    modal::{ModalListState, ModalSearchState, ModalState, WizardModalState},
 };
 use crate::config::constants::ui;
 use tui_popup::PopupState;
@@ -139,6 +140,20 @@ impl Session {
         self.input_enabled = false;
         self.cursor_visible = false;
         self.modal = Some(state);
+        self.mark_dirty();
+    }
+
+    /// Show a multi-step wizard modal with tabs for navigation
+    pub(super) fn show_wizard_modal(
+        &mut self,
+        title: String,
+        steps: Vec<WizardStep>,
+        search: Option<InlineListSearchConfig>,
+    ) {
+        let wizard = WizardModalState::new(title, steps, search);
+        self.wizard_modal = Some(wizard);
+        self.input_enabled = false;
+        self.cursor_visible = false;
         self.mark_dirty();
     }
 

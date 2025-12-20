@@ -20,7 +20,7 @@ pub use types::{
     InlineCommand, InlineEvent, InlineEventCallback, InlineHandle, InlineHeaderContext,
     InlineHeaderHighlight, InlineListItem, InlineListSearchConfig, InlineListSelection,
     InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle, InlineTheme,
-    SecurePromptConfig,
+    SecurePromptConfig, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

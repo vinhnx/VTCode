@@ -745,19 +745,13 @@ impl AgentRunner {
                     let tool_result = serde_json::to_string(&optimized_result)?;
                     let display_text = format_tool_result_for_display(&name, &optimized_result);
 
-                    if is_gemini {
-                        task_state.conversation.push(Content {
-                            role: ROLE_USER.to_owned(),
-                            parts: vec![Part::Text {
-                                text: display_text,
-                                thought_signature: None,
-                            }],
-                        });
-                    }
-                    task_state
-                        .conversation_messages
-                        .push(Message::tool_response(call_id, tool_result));
-                    task_state.executed_commands.push(name.clone());
+                    task_state.push_tool_result(
+                        call_id,
+                        &name,
+                        display_text,
+                        tool_result,
+                        is_gemini,
+                    );
                     event_recorder.command_finished(
                         &command_event,
                         CommandExecutionStatus::Completed,
@@ -773,18 +767,7 @@ impl AgentRunner {
                         agent_prefix,
                         format!("{} {}", style("(ERR)").red(), error_msg)
                     );
-                    if is_gemini {
-                        task_state.conversation.push(Content {
-                            role: ROLE_USER.into(),
-                            parts: vec![Part::Text {
-                                text: error_msg.clone(),
-                                thought_signature: None,
-                            }],
-                        });
-                    }
-                    task_state
-                        .conversation_messages
-                        .push(Message::tool_response(call_id, error_msg));
+                    task_state.push_tool_error(call_id, error_msg, is_gemini);
                     event_recorder.command_finished(
                         &command_event,
                         CommandExecutionStatus::Failed,
@@ -847,7 +830,8 @@ impl AgentRunner {
                 tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
 
-            match self.execute_tool(&name, &args).await {
+            // Use internal execution since is_valid_tool was already called above
+            match self.execute_tool_internal(&name, &args).await {
                 Ok(result) => {
                     runner_println!(
                         self,
@@ -864,19 +848,13 @@ impl AgentRunner {
                     let tool_result = serde_json::to_string(&optimized_result)?;
                     let display_text = format_tool_result_for_display(&name, &optimized_result);
 
-                    if is_gemini {
-                        task_state.conversation.push(Content {
-                            role: ROLE_USER.to_owned(),
-                            parts: vec![Part::Text {
-                                text: display_text,
-                                thought_signature: None,
-                            }],
-                        });
-                    }
-                    task_state
-                        .conversation_messages
-                        .push(Message::tool_response(call.id.clone(), tool_result));
-                    task_state.executed_commands.push(name.clone());
+                    task_state.push_tool_result(
+                        call.id.clone(),
+                        &name,
+                        display_text,
+                        tool_result,
+                        is_gemini,
+                    );
                     event_recorder.command_finished(
                         &command_event,
                         CommandExecutionStatus::Completed,
@@ -1901,13 +1879,21 @@ impl AgentRunner {
         true
     }
 
-    /// Execute a tool by name with given arguments
+    /// Execute a tool by name with given arguments.
+    /// This is the public API that includes validation; for internal use after
+    /// validation, prefer `execute_tool_internal`.
+    #[allow(dead_code)]
     async fn execute_tool(&self, tool_name: &str, args: &Value) -> Result<Value> {
         // Fail fast if tool is denied or missing to avoid tight retry loops
         if !self.is_valid_tool(tool_name).await {
             return Err(anyhow!("{}: {}", ERR_TOOL_DENIED, tool_name));
         }
+        self.execute_tool_internal(tool_name, args).await
+    }
 
+    /// Internal tool execution, skipping validation.
+    /// Use when `is_valid_tool` has already been called by the caller.
+    async fn execute_tool_internal(&self, tool_name: &str, args: &Value) -> Result<Value> {
         // Enforce per-agent shell policies for RUN_PTY_CMD
         let is_shell = tool_name == tools::RUN_PTY_CMD;
         if is_shell {

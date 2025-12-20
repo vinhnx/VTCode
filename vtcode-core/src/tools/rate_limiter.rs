@@ -117,8 +117,68 @@ impl RateLimiterInner {
 /// instead we rely on `once_cell::sync::Lazy` which is already a transitive
 /// dependency of the project.
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 
 pub static GLOBAL_RATE_LIMITER: Lazy<Mutex<RateLimiterInner>> = Lazy::new(|| Mutex::new(RateLimiterInner::new()));
+
+/// Per-tool rate limiter for finer-grained control.
+/// Each tool gets its own token bucket, allowing different rate limits per tool.
+pub struct PerToolRateLimiter {
+    /// Per-tool token buckets. Key is tool name.
+    buckets: HashMap<String, RateLimiterInner>,
+    /// Default config for new tool buckets.
+    default_config: Config,
+}
+
+impl Default for PerToolRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PerToolRateLimiter {
+    /// Create a new per-tool rate limiter with default configuration.
+    pub fn new() -> Self {
+        Self {
+            buckets: HashMap::new(),
+            default_config: Config::default(),
+        }
+    }
+
+    /// Try to acquire a token for a specific tool.
+    /// Returns `Ok(())` if allowed, `Err` if rate limited.
+    pub fn try_acquire_for(&mut self, tool_name: &str) -> Result<()> {
+        let bucket = self.buckets.entry(tool_name.to_owned()).or_insert_with(|| {
+            RateLimiterInner {
+                config: self.default_config,
+                tokens: self.default_config.burst,
+                last_refill: Instant::now(),
+            }
+        });
+        bucket.try_acquire()
+    }
+
+    /// Check if a tool is currently rate limited without consuming a token.
+    pub fn is_limited(&mut self, tool_name: &str) -> bool {
+        if let Some(bucket) = self.buckets.get_mut(tool_name) {
+            bucket.refill();
+            bucket.tokens == 0
+        } else {
+            false
+        }
+    }
+
+    /// Reset the rate limiter for a specific tool.
+    pub fn reset_tool(&mut self, tool_name: &str) {
+        if let Some(bucket) = self.buckets.get_mut(tool_name) {
+            bucket.tokens = bucket.config.burst;
+            bucket.last_refill = Instant::now();
+        }
+    }
+}
+
+/// Global per-tool rate limiter instance.
+pub static PER_TOOL_RATE_LIMITER: Lazy<Mutex<PerToolRateLimiter>> = Lazy::new(|| Mutex::new(PerToolRateLimiter::new()));
 
 /// Public API – try to acquire permission for a tool call.
 ///
@@ -128,3 +188,49 @@ pub fn try_acquire() -> Result<()> {
     guard.try_acquire()
 }
 
+/// Try to acquire permission for a specific tool.
+/// Uses per-tool rate limiting for finer-grained control.
+pub fn try_acquire_for(tool_name: &str) -> Result<()> {
+    let mut guard = PER_TOOL_RATE_LIMITER.lock().map_err(|e| anyhow!("per-tool rate limiter poisoned: {}", e))?;
+    guard.try_acquire_for(tool_name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_global_limiter_allows_burst() {
+        let mut limiter = RateLimiterInner::new();
+        // Should allow up to burst capacity
+        for _ in 0..limiter.config.burst {
+            assert!(limiter.try_acquire().is_ok());
+        }
+        // Next should fail
+        assert!(limiter.try_acquire().is_err());
+    }
+
+    #[test]
+    fn test_per_tool_limiter_isolates_tools() {
+        let mut limiter = PerToolRateLimiter::new();
+        // Exhaust tool_a
+        for _ in 0..5 {
+            let _ = limiter.try_acquire_for("tool_a");
+        }
+        // tool_b should still have tokens
+        assert!(limiter.try_acquire_for("tool_b").is_ok());
+    }
+
+    #[test]
+    fn test_reset_tool_restores_tokens() {
+        let mut limiter = PerToolRateLimiter::new();
+        // Exhaust tokens
+        for _ in 0..10 {
+            let _ = limiter.try_acquire_for("tool_x");
+        }
+        assert!(limiter.is_limited("tool_x"));
+        // Reset
+        limiter.reset_tool("tool_x");
+        assert!(!limiter.is_limited("tool_x"));
+    }
+}

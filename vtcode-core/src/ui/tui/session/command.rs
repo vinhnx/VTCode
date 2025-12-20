@@ -113,6 +113,20 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         } => {
             show_list_modal(session, title, lines, items, selected, search);
         }
+        InlineCommand::ShowWizardModal {
+            title,
+            steps,
+            current_step: _,
+            search,
+        } => {
+            // Note: Wizard modal handling is done through show_wizard_modal in state.rs
+            // This command path is for the session-based handling
+            let wizard = super::modal::WizardModalState::new(title, steps, search);
+            session.wizard_modal = Some(wizard);
+            session.input_enabled = false;
+            session.cursor_visible = false;
+            mark_dirty(session);
+        }
         InlineCommand::CloseModal => {
             close_modal(session);
         }

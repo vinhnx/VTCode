@@ -3,6 +3,7 @@ use crate::config::constants::ui;
 use crate::ui::search::{fuzzy_match, normalize_query};
 use crate::ui::tui::types::{
     InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
+    WizardStep,
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -10,7 +11,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Tabs, Wrap},
 };
 use terminal_size::{Height, Width, terminal_size};
 use tui_popup::PopupState;
@@ -33,6 +34,32 @@ pub struct ModalState {
     #[allow(dead_code)]
     pub restore_cursor: bool,
     pub search: Option<ModalSearchState>,
+}
+
+/// State for a multi-step wizard modal with tabs for navigation
+#[allow(dead_code)]
+#[derive(Clone)]
+pub struct WizardModalState {
+    pub title: String,
+    pub steps: Vec<WizardStepState>,
+    pub current_step: usize,
+    pub search: Option<ModalSearchState>,
+}
+
+/// State for a single wizard step
+#[allow(dead_code)]
+#[derive(Clone)]
+pub struct WizardStepState {
+    /// Title displayed in the tab header
+    pub title: String,
+    /// Question or instruction shown above the list
+    pub question: String,
+    /// List state for selectable items
+    pub list: ModalListState,
+    /// Whether this step has been completed
+    pub completed: bool,
+    /// The selected answer for this step
+    pub answer: Option<InlineListSelection>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -483,6 +510,83 @@ pub fn render_modal_list(
         .repeat_highlight_symbol(true);
     frame.render_stateful_widget(widget, area, &mut list.list_state);
 }
+
+/// Render wizard tabs header showing steps with completion status
+#[allow(dead_code)]
+pub fn render_wizard_tabs(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    steps: &[WizardStepState],
+    current_step: usize,
+    styles: &ModalRenderStyles,
+) {
+    if area.height == 0 || area.width == 0 {
+        return;
+    }
+
+    let titles: Vec<Line<'static>> = steps
+        .iter()
+        .enumerate()
+        .map(|(i, step)| {
+            let icon = if step.completed { "✔" } else { "☐" };
+            let text = format!("{} {}", icon, step.title);
+            if i == current_step {
+                Line::from(Span::styled(text, styles.highlight))
+            } else if step.completed {
+                Line::from(Span::styled(text, styles.selectable))
+            } else {
+                Line::from(Span::styled(text, styles.detail))
+            }
+        })
+        .collect();
+
+    let tabs = Tabs::new(titles)
+        .select(current_step)
+        .divider(" ")
+        .padding("← ", " →")
+        .highlight_style(styles.highlight);
+
+    frame.render_widget(tabs, area);
+}
+
+/// Render wizard modal body including tabs, question, and list
+#[allow(dead_code)]
+pub fn render_wizard_modal_body(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    wizard: &mut WizardModalState,
+    styles: &ModalRenderStyles,
+) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    // Layout: [Tabs Header (1 row)] [Question text] [List]
+    let chunks = Layout::vertical(vec![
+        Constraint::Length(1),  // Tabs
+        Constraint::Length(2),  // Question with padding
+        Constraint::Min(3),     // List
+    ])
+    .split(area);
+
+    // Render tabs
+    render_wizard_tabs(frame, chunks[0], &wizard.steps, wizard.current_step, styles);
+
+    // Render question for current step
+    if let Some(step) = wizard.steps.get(wizard.current_step) {
+        let question = Paragraph::new(Line::from(Span::styled(
+            step.question.clone(),
+            styles.header,
+        )));
+        frame.render_widget(question, chunks[1]);
+    }
+
+    // Render list for current step
+    if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
+        render_modal_list(frame, chunks[2], &mut step.list, styles);
+    }
+}
+
 
 fn modal_list_block(list: &ModalListState, styles: &ModalRenderStyles) -> Block<'static> {
     let mut block = Block::default()
@@ -1303,6 +1407,157 @@ impl ModalListState {
     fn page_step(&self) -> usize {
         let rows = self.viewport_rows.unwrap_or(0).max(1);
         usize::from(rows)
+    }
+}
+
+#[allow(dead_code)]
+impl WizardModalState {
+    /// Create a new wizard modal state from wizard steps
+    pub fn new(
+        title: String,
+        steps: Vec<WizardStep>,
+        search: Option<InlineListSearchConfig>,
+    ) -> Self {
+        let step_states: Vec<WizardStepState> = steps
+            .into_iter()
+            .map(|step| WizardStepState {
+                title: step.title,
+                question: step.question,
+                list: ModalListState::new(step.items, step.answer.clone()),
+                completed: step.completed,
+                answer: step.answer,
+            })
+            .collect();
+
+        Self {
+            title,
+            steps: step_states,
+            current_step: 0,
+            search: search.map(ModalSearchState::from),
+        }
+    }
+
+    /// Handle key event for wizard navigation
+    pub fn handle_key_event(
+        &mut self,
+        key: &KeyEvent,
+        modifiers: ModalKeyModifiers,
+    ) -> ModalListKeyResult {
+        match key.code {
+            // Left arrow: go to previous step if available
+            KeyCode::Left => {
+                if self.current_step > 0 {
+                    self.current_step -= 1;
+                    ModalListKeyResult::Redraw
+                } else {
+                    ModalListKeyResult::HandledNoRedraw
+                }
+            }
+            // Right arrow: go to next step if current is completed
+            KeyCode::Right => {
+                if self.current_step_completed()
+                    && self.current_step < self.steps.len().saturating_sub(1)
+                {
+                    self.current_step += 1;
+                    ModalListKeyResult::Redraw
+                } else {
+                    ModalListKeyResult::HandledNoRedraw
+                }
+            }
+            // Enter: select current item and mark step complete
+            KeyCode::Enter => {
+                if let Some(selection) = self.current_selection() {
+                    self.complete_current_step(selection.clone());
+                    // Advance to next step if available, else submit
+                    if self.current_step < self.steps.len().saturating_sub(1) {
+                        self.current_step += 1;
+                        ModalListKeyResult::Submit(InlineEvent::WizardModalStepComplete {
+                            step: self.current_step.saturating_sub(1),
+                            answer: selection,
+                        })
+                    } else {
+                        // Final step, submit all answers
+                        ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(
+                            self.collect_answers(),
+                        ))
+                    }
+                } else {
+                    ModalListKeyResult::HandledNoRedraw
+                }
+            }
+            // Escape: cancel wizard
+            KeyCode::Esc => ModalListKeyResult::Cancel(InlineEvent::WizardModalCancel),
+            // Up/Down/Tab: delegate to current step's list
+            KeyCode::Up | KeyCode::Down | KeyCode::Tab | KeyCode::BackTab => {
+                if let Some(step) = self.steps.get_mut(self.current_step) {
+                    match key.code {
+                        KeyCode::Up => {
+                            if modifiers.command {
+                                step.list.select_first();
+                            } else {
+                                step.list.select_previous();
+                            }
+                            ModalListKeyResult::Redraw
+                        }
+                        KeyCode::Down => {
+                            if modifiers.command {
+                                step.list.select_last();
+                            } else {
+                                step.list.select_next();
+                            }
+                            ModalListKeyResult::Redraw
+                        }
+                        KeyCode::Tab => {
+                            step.list.select_next();
+                            ModalListKeyResult::Redraw
+                        }
+                        KeyCode::BackTab => {
+                            step.list.select_previous();
+                            ModalListKeyResult::Redraw
+                        }
+                        _ => ModalListKeyResult::NotHandled,
+                    }
+                } else {
+                    ModalListKeyResult::NotHandled
+                }
+            }
+            _ => ModalListKeyResult::NotHandled,
+        }
+    }
+
+    /// Get current selection from the active step
+    fn current_selection(&self) -> Option<InlineListSelection> {
+        self.steps
+            .get(self.current_step)
+            .and_then(|step| step.list.current_selection())
+    }
+
+    /// Check if current step is completed
+    fn current_step_completed(&self) -> bool {
+        self.steps
+            .get(self.current_step)
+            .is_some_and(|step| step.completed)
+    }
+
+    /// Mark current step as completed with the given answer
+    fn complete_current_step(&mut self, answer: InlineListSelection) {
+        if let Some(step) = self.steps.get_mut(self.current_step) {
+            step.completed = true;
+            step.answer = Some(answer);
+        }
+    }
+
+    /// Collect all answers from completed steps
+    fn collect_answers(&self) -> Vec<InlineListSelection> {
+        self.steps
+            .iter()
+            .filter_map(|step| step.answer.clone())
+            .collect()
+    }
+
+    /// Check if all steps are completed
+    pub fn all_steps_completed(&self) -> bool {
+        self.steps.iter().all(|step| step.completed)
     }
 }
 
