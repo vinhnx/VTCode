@@ -323,6 +323,22 @@ impl PromptPalette {
         self.filtered_prompts.get(self.selected_index)
     }
 
+    /// Get the best matching prompt entry based on current filter query
+    /// Used for Tab autocomplete - returns the first filtered prompt if any exist
+    #[allow(dead_code)]
+    pub fn get_best_match(&self) -> Option<&PromptEntry> {
+        // Return the first prompt in filtered results (already sorted by score)
+        self.filtered_prompts.first()
+    }
+
+    /// Set selection to the best match
+    pub fn select_best_match(&mut self) {
+        if !self.filtered_prompts.is_empty() {
+            self.selected_index = 0;
+            self.current_page = 0;
+        }
+    }
+
     pub fn current_page_items(&self) -> Vec<(usize, &PromptEntry, bool)> {
         let start = self.current_page * PAGE_SIZE;
         let end = (start + PAGE_SIZE).min(self.filtered_prompts.len());

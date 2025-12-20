@@ -9,6 +9,7 @@ pub mod minimax;
 pub mod moonshot;
 pub mod ollama;
 pub mod openai;
+pub mod huggingface;
 pub mod openrouter;
 pub mod provider_base;
 pub mod streaming_progress;
@@ -31,6 +32,7 @@ pub(crate) use reasoning::{ReasoningBuffer, extract_reasoning_trace, split_reaso
 pub use anthropic::AnthropicProvider;
 pub use deepseek::DeepSeekProvider;
 pub use gemini::GeminiProvider;
+pub use huggingface::HuggingFaceProvider;
 pub use lmstudio::LmStudioProvider;
 pub use minimax::MinimaxProvider;
 pub use moonshot::MoonshotProvider;

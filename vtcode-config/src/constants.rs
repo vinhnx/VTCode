@@ -162,6 +162,32 @@ pub mod models {
         pub const GPT_OSS_120B: &str = "gpt-oss-120b";
     }
 
+    // Hugging Face Inference Providers (OpenAI-compatible router)
+    pub mod huggingface {
+        pub const DEFAULT_MODEL: &str = OPENAI_GPT_OSS_20B;
+        pub const SUPPORTED_MODELS: &[&str] = &[
+            DEEPSEEK_V32,
+            OPENAI_GPT_OSS_20B,
+            OPENAI_GPT_OSS_120B,
+            ZAI_GLM_46,
+            MOONSHOT_KIMI_K2_THINKING,
+        ];
+
+        pub const DEEPSEEK_V32: &str = "deepseek-ai/DeepSeek-V3.2";
+        pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b";
+        pub const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b";
+        pub const ZAI_GLM_46: &str = "zai-org/GLM-4.6";
+        pub const MOONSHOT_KIMI_K2_THINKING: &str = "moonshotai/Kimi-K2-Thinking";
+
+        pub const REASONING_MODELS: &[&str] = &[
+            DEEPSEEK_V32,
+            OPENAI_GPT_OSS_20B,
+            OPENAI_GPT_OSS_120B,
+            ZAI_GLM_46,
+            MOONSHOT_KIMI_K2_THINKING,
+        ];
+    }
+
     // Z.AI models (direct API)
     pub mod zai {
         pub const DEFAULT_MODEL: &str = "glm-4.6";
@@ -752,6 +778,7 @@ pub mod message_roles {
 pub mod urls {
     pub const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta";
     pub const OPENAI_API_BASE: &str = "https://api.openai.com/v1";
+    pub const HUGGINGFACE_API_BASE: &str = "https://router.huggingface.co/v1";
     pub const ANTHROPIC_API_BASE: &str = "https://api.anthropic.com/v1";
     pub const ANTHROPIC_API_VERSION: &str = "2023-06-01";
     pub const MINIMAX_API_BASE: &str = "https://api.minimax.io/anthropic/v1";
@@ -769,6 +796,7 @@ pub mod urls {
 pub mod env_vars {
     pub const GEMINI_BASE_URL: &str = "GEMINI_BASE_URL";
     pub const OPENAI_BASE_URL: &str = "OPENAI_BASE_URL";
+    pub const HUGGINGFACE_BASE_URL: &str = "HUGGINGFACE_BASE_URL";
     pub const ANTHROPIC_BASE_URL: &str = "ANTHROPIC_BASE_URL";
     pub const OPENROUTER_BASE_URL: &str = "OPENROUTER_BASE_URL";
     pub const XAI_BASE_URL: &str = "XAI_BASE_URL";

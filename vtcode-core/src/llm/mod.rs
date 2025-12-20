@@ -188,7 +188,8 @@ pub use client::{AnyClient, make_client};
 pub use factory::{create_provider_with_config, get_factory};
 pub use provider::{FinishReason, LLMStream, LLMStreamEvent, Usage};
 pub use providers::{
-    AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider, XAIProvider, ZAIProvider,
+    AnthropicProvider, GeminiProvider, HuggingFaceProvider, OllamaProvider, OpenAIProvider,
+    XAIProvider, ZAIProvider,
 };
 pub use tool_bridge::{
     CorrelationStats, IntentFulfillment, MessageCorrelationTracker, MessageToolCorrelation,

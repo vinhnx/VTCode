@@ -230,7 +230,13 @@ impl ModalState {
                 ModalListKeyResult::Redraw
             }
             KeyCode::Tab => {
-                list.select_next();
+                // With no search active, Tab moves to first item for autocomplete behavior
+                // If search is active, we already handled it above
+                if self.search.is_none() && !list.visible_indices.is_empty() {
+                    list.select_first();
+                } else {
+                    list.select_next();
+                }
                 ModalListKeyResult::Redraw
             }
             KeyCode::BackTab => {

@@ -34,6 +34,8 @@ pub enum Provider {
     Anthropic,
     /// DeepSeek native models
     DeepSeek,
+    /// Hugging Face Inference Providers
+    HuggingFace,
     /// OpenRouter marketplace models
     OpenRouter,
     /// Local Ollama models
@@ -58,6 +60,7 @@ impl Provider {
             Provider::OpenAI => "OPENAI_API_KEY",
             Provider::Anthropic => "ANTHROPIC_API_KEY",
             Provider::DeepSeek => "DEEPSEEK_API_KEY",
+            Provider::HuggingFace => "HF_TOKEN",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::Ollama => "OLLAMA_API_KEY",
             Provider::LmStudio => "LMSTUDIO_API_KEY",
@@ -76,6 +79,7 @@ impl Provider {
             Provider::Minimax,
             Provider::Gemini,
             Provider::DeepSeek,
+            Provider::HuggingFace,
             Provider::OpenRouter,
             Provider::Ollama,
             Provider::LmStudio,
@@ -92,6 +96,7 @@ impl Provider {
             Provider::OpenAI => "OpenAI",
             Provider::Anthropic => "Anthropic",
             Provider::DeepSeek => "DeepSeek",
+            Provider::HuggingFace => "Hugging Face",
             Provider::OpenRouter => "OpenRouter",
             Provider::Ollama => "Ollama",
             Provider::LmStudio => "LM Studio",
@@ -111,6 +116,7 @@ impl Provider {
             Provider::OpenAI => models::openai::REASONING_MODELS.contains(&model),
             Provider::Anthropic => models::anthropic::REASONING_MODELS.contains(&model),
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
+            Provider::HuggingFace => models::huggingface::REASONING_MODELS.contains(&model),
             Provider::OpenRouter => {
                 if let Ok(model_id) = ModelId::from_str(model) {
                     return model_id.is_reasoning_variant();
@@ -134,6 +140,7 @@ impl fmt::Display for Provider {
             Provider::OpenAI => write!(f, "openai"),
             Provider::Anthropic => write!(f, "anthropic"),
             Provider::DeepSeek => write!(f, "deepseek"),
+            Provider::HuggingFace => write!(f, "huggingface"),
             Provider::OpenRouter => write!(f, "openrouter"),
             Provider::Ollama => write!(f, "ollama"),
             Provider::LmStudio => write!(f, "lmstudio"),
@@ -154,6 +161,7 @@ impl FromStr for Provider {
             "openai" => Ok(Provider::OpenAI),
             "anthropic" => Ok(Provider::Anthropic),
             "deepseek" => Ok(Provider::DeepSeek),
+            "huggingface" => Ok(Provider::HuggingFace),
             "openrouter" => Ok(Provider::OpenRouter),
             "ollama" => Ok(Provider::Ollama),
             "lmstudio" => Ok(Provider::LmStudio),
@@ -226,6 +234,18 @@ pub enum ModelId {
     DeepSeekChat,
     /// DeepSeek V3.2 Reasoner - Thinking mode with structured reasoning output
     DeepSeekReasoner,
+
+    // Hugging Face Inference Providers
+    /// DeepSeek V3.2 via Hugging Face router
+    HuggingFaceDeepseekV32,
+    /// OpenAI GPT-OSS 20B via Hugging Face router
+    HuggingFaceOpenAIGptOss20b,
+    /// OpenAI GPT-OSS 120B via Hugging Face router
+    HuggingFaceOpenAIGptOss120b,
+    /// Z.AI GLM-4.6 via Hugging Face router
+    HuggingFaceGlm46,
+    /// MoonshotAI Kimi K2 Thinking via Hugging Face router
+    HuggingFaceKimiK2Thinking,
 
     // xAI models
     /// Grok-4 - Flagship xAI model with advanced reasoning
@@ -453,6 +473,12 @@ impl ModelId {
             // DeepSeek models
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
             ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,
+            // Hugging Face Inference Providers
+            ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
+            ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
+            ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
+            ModelId::HuggingFaceGlm46 => models::huggingface::ZAI_GLM_46,
+            ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
             // xAI models
             ModelId::XaiGrok4 => models::xai::GROK_4,
             ModelId::XaiGrok4Mini => models::xai::GROK_4_MINI,
@@ -572,6 +598,11 @@ impl ModelId {
             | ModelId::ClaudeHaiku45
             | ModelId::ClaudeSonnet4 => Provider::Anthropic,
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
+            ModelId::HuggingFaceDeepseekV32
+            | ModelId::HuggingFaceOpenAIGptOss20b
+            | ModelId::HuggingFaceOpenAIGptOss120b
+            | ModelId::HuggingFaceGlm46
+            | ModelId::HuggingFaceKimiK2Thinking => Provider::HuggingFace,
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
             | ModelId::XaiGrok4Code
@@ -757,6 +788,12 @@ impl ModelId {
             // DeepSeek models
             ModelId::DeepSeekChat => "DeepSeek V3.2 Chat",
             ModelId::DeepSeekReasoner => "DeepSeek V3.2 Reasoner",
+            // Hugging Face Inference Providers
+            ModelId::HuggingFaceDeepseekV32 => "DeepSeek V3.2 (HF)",
+            ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
+            ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
+            ModelId::HuggingFaceGlm46 => "GLM-4.6 (HF)",
+            ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
             // xAI models
             ModelId::XaiGrok4 => "Grok-4",
             ModelId::XaiGrok4Mini => "Grok-4 Mini",
@@ -869,6 +906,22 @@ impl ModelId {
             }
             ModelId::DeepSeekReasoner => {
                 "DeepSeek V3.2 - Thinking mode with integrated tool-use and reasoning capability"
+            }
+            // Hugging Face models
+            ModelId::HuggingFaceDeepseekV32 => {
+                "DeepSeek V3.2 served via Hugging Face's OpenAI-compatible router"
+            }
+            ModelId::HuggingFaceOpenAIGptOss20b => {
+                "OpenAI GPT-OSS 20B available through Hugging Face Inference Providers"
+            }
+            ModelId::HuggingFaceOpenAIGptOss120b => {
+                "OpenAI GPT-OSS 120B available through Hugging Face Inference Providers"
+            }
+            ModelId::HuggingFaceGlm46 => {
+                "Z.AI GLM-4.6 long-context reasoning model served via Hugging Face router"
+            }
+            ModelId::HuggingFaceKimiK2Thinking => {
+                "MoonshotAI Kimi K2 Thinking routed through Hugging Face"
             }
             // xAI models
             ModelId::XaiGrok4 => "Flagship Grok 4 model with long context and tool use",
@@ -1041,6 +1094,12 @@ impl ModelId {
             // DeepSeek models
             ModelId::DeepSeekChat,
             ModelId::DeepSeekReasoner,
+            // Hugging Face models
+            ModelId::HuggingFaceDeepseekV32,
+            ModelId::HuggingFaceOpenAIGptOss20b,
+            ModelId::HuggingFaceOpenAIGptOss120b,
+            ModelId::HuggingFaceGlm46,
+            ModelId::HuggingFaceKimiK2Thinking,
             // xAI models
             ModelId::XaiGrok4,
             ModelId::XaiGrok4Mini,
@@ -1137,6 +1196,7 @@ impl ModelId {
             Provider::Anthropic => ModelId::ClaudeOpus45,
             Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
+            Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
@@ -1154,6 +1214,7 @@ impl ModelId {
             Provider::Anthropic => ModelId::ClaudeSonnet45,
             Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekChat,
+            Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss20b,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
             Provider::XAI => ModelId::XaiGrok4Code,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
@@ -1171,6 +1232,7 @@ impl ModelId {
             Provider::Anthropic => ModelId::ClaudeOpus41,
             Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
+            Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
@@ -1300,6 +1362,12 @@ impl ModelId {
             ModelId::ClaudeSonnet4 => "4",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
+            // Hugging Face generations
+            ModelId::HuggingFaceDeepseekV32 => "V3.2-Exp",
+            ModelId::HuggingFaceOpenAIGptOss20b => "oss",
+            ModelId::HuggingFaceOpenAIGptOss120b => "oss",
+            ModelId::HuggingFaceGlm46 => "4.6",
+            ModelId::HuggingFaceKimiK2Thinking => "k2",
             // xAI generations
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
@@ -1448,6 +1516,20 @@ impl FromStr for ModelId {
             // DeepSeek models
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
+            // Hugging Face models
+            s if s == models::huggingface::DEEPSEEK_V32 => {
+                Ok(ModelId::HuggingFaceDeepseekV32)
+            }
+            s if s == models::huggingface::OPENAI_GPT_OSS_20B => {
+                Ok(ModelId::HuggingFaceOpenAIGptOss20b)
+            }
+            s if s == models::huggingface::OPENAI_GPT_OSS_120B => {
+                Ok(ModelId::HuggingFaceOpenAIGptOss120b)
+            }
+            s if s == models::huggingface::ZAI_GLM_46 => Ok(ModelId::HuggingFaceGlm46),
+            s if s == models::huggingface::MOONSHOT_KIMI_K2_THINKING => {
+                Ok(ModelId::HuggingFaceKimiK2Thinking)
+            }
             // xAI models
             s if s == models::xai::GROK_4 => Ok(ModelId::XaiGrok4),
             s if s == models::xai::GROK_4_MINI => Ok(ModelId::XaiGrok4Mini),
@@ -1594,6 +1676,15 @@ mod tests {
             ModelId::DeepSeekReasoner.as_str(),
             models::DEEPSEEK_REASONER
         );
+        // Hugging Face models
+        assert_eq!(
+            ModelId::HuggingFaceDeepseekV32.as_str(),
+            models::huggingface::DEEPSEEK_V32
+        );
+        assert_eq!(
+            ModelId::HuggingFaceOpenAIGptOss20b.as_str(),
+            models::huggingface::OPENAI_GPT_OSS_20B
+        );
         // xAI models
         assert_eq!(ModelId::XaiGrok4.as_str(), models::xai::GROK_4);
         assert_eq!(ModelId::XaiGrok4Mini.as_str(), models::xai::GROK_4_MINI);
@@ -1692,6 +1783,20 @@ mod tests {
             models::DEEPSEEK_REASONER.parse::<ModelId>().unwrap(),
             ModelId::DeepSeekReasoner
         );
+        // Hugging Face models
+        assert_eq!(
+            models::huggingface::DEEPSEEK_V32.parse::<ModelId>().unwrap(),
+            ModelId::HuggingFaceDeepseekV32
+        );
+        assert_eq!(
+            models::huggingface::OPENAI_GPT_OSS_20B
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::HuggingFaceOpenAIGptOss20b
+        );
+        // Removed / invalid HF models should not parse
+        assert!("minimaxai/MiniMax-M2".parse::<ModelId>().is_err());
+        assert!("qwen/Qwen3-Coder-30B-A3B-Instruct".parse::<ModelId>().is_err());
         // xAI models
         assert_eq!(
             models::xai::GROK_4.parse::<ModelId>().unwrap(),

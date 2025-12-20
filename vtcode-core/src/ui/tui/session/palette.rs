@@ -77,6 +77,11 @@ impl Session {
                 self.mark_dirty();
                 true
             }
+            KeyCode::Tab => {
+                palette.select_best_match();
+                self.mark_dirty();
+                true
+            }
             KeyCode::Enter => {
                 let selected_path = palette.get_selected().map(|e| e.relative_path.clone());
                 if let Some(path) = selected_path {
@@ -194,6 +199,11 @@ impl Session {
             }
             KeyCode::Down => {
                 palette.move_selection_down();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Tab => {
+                palette.select_best_match();
                 self.mark_dirty();
                 true
             }

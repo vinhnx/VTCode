@@ -375,6 +375,131 @@
       }
     }
   },
+  "huggingface": {
+    "id": "huggingface",
+    "env": [
+      "HF_TOKEN"
+    ],
+    "api": "https://router.huggingface.co/v1",
+    "name": "Hugging Face Inference Providers",
+    "description": "OpenAI-compatible router for hosted models via Hugging Face Inference Providers.",
+    "doc": "https://huggingface.co/docs/inference-providers",
+    "default_model": "openai/gpt-oss-20b",
+    "models": {
+      "deepseek-ai/DeepSeek-V3.2": {
+        "id": "deepseek-ai/DeepSeek-V3.2",
+        "name": "DeepSeek V3.2",
+        "description": "DeepSeek V3.2 served via Hugging Face Inference Providers (OpenAI-compatible chat endpoint).",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "openai/gpt-oss-20b": {
+        "id": "openai/gpt-oss-20b",
+        "name": "GPT-OSS 20B",
+        "description": "OpenAI GPT-OSS 20B routed through Hugging Face's OpenAI-compatible endpoint.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "openai/gpt-oss-120b": {
+        "id": "openai/gpt-oss-120b",
+        "name": "GPT-OSS 120B",
+        "description": "OpenAI GPT-OSS 120B routed through Hugging Face's OpenAI-compatible endpoint.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "zai-org/GLM-4.6": {
+        "id": "zai-org/GLM-4.6",
+        "name": "GLM-4.6",
+        "description": "Z.AI GLM-4.6 reasoning model available via Hugging Face router.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "moonshotai/Kimi-K2-Thinking": {
+        "id": "moonshotai/Kimi-K2-Thinking",
+        "name": "Kimi K2 Thinking",
+        "description": "MoonshotAI Kimi K2 Thinking served through Hugging Face router.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "minimaxai/MiniMax-M2": {
+        "id": "minimaxai/MiniMax-M2",
+        "name": "MiniMax M2",
+        "description": "MiniMax M2 reasoning model via Hugging Face router.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "qwen/Qwen3-Coder-30B-A3B-Instruct": {
+        "id": "qwen/Qwen3-Coder-30B-A3B-Instruct",
+        "name": "Qwen3 Coder 30B A3B Instruct",
+        "description": "Qwen3 Coder 30B A3B Instruct served via Hugging Face router.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      }
+    }
+  },
   "anthropic": {
     "id": "anthropic",
     "env": [

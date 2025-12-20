@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "huggingface"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-oss:20b-cloud"
+default_model = "deepseek-ai/DeepSeek-V3.2"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -28,7 +28,7 @@ max_conversation_turns = 50
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 # For Gemini 3 Pro: Use "low" for fast responses, "high" for maximum reasoning depth, "medium" defaults to high (not yet generally available)
-reasoning_effort = "low"
+reasoning_effort = "medium"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -76,6 +76,7 @@ instruction_max_bytes = 16384
 # List of additional instruction files to include in context
 instruction_files = []
 verbosity = "medium"
+max_task_retries = 2
 
 # Ripgrep dependency management - Auto-install ripgrep on startup for faster file search
 [agent.ripgrep]
@@ -92,6 +93,15 @@ skip_cache = false
 
 # Installation timeout in seconds (prevents hung installations)
 timeout_seconds = 300
+
+[agent.small_model]
+enabled = true
+model = ""
+max_tokens = 1000
+temperature = 0.3
+use_for_large_reads = true
+use_for_web_summary = true
+use_for_git_history = true
 
 # Ripgrep should respect .vtcodegitignore patterns for efficient searching
 # This uses the same ignore patterns as git operations but for agent tools
@@ -493,6 +503,10 @@ model_input_token_budget = 25000
 # Secondary byte fuse applied after token truncation (in bytes)
 # Provides protection against pathological cases
 model_input_byte_fuse = 10240
+semantic_compression = false
+tool_aware_retention = false
+max_structural_depth = 3
+preserve_recent_tools = 5
 
 # Decision ledger configuration - Track important decisions
 [context.ledger]
@@ -671,12 +685,6 @@ args = ["mcp-server-time"]
 enabled = true
 max_concurrent_requests = 3
 
-# MCP UI configuration
-[mcp.ui]
-mode = "compact"
-max_events = 50
-show_provider_names = true
-
 [mcp.providers.env]
 
 [[mcp.providers]]
@@ -687,6 +695,12 @@ enabled = true
 max_concurrent_requests = 3
 
 [mcp.providers.env]
+
+# MCP UI configuration
+[mcp.ui]
+mode = "compact"
+max_events = 50
+show_provider_names = true
 
 # MCP renderer profiles for different services
 [mcp.ui.renderers]
@@ -735,7 +749,27 @@ schema_validation_enabled = true
 path_traversal_protection = true
 max_argument_size = 1048576
 
+[hooks.lifecycle]
+session_start = []
+session_end = []
+user_prompt_submit = []
+pre_tool_use = []
+post_tool_use = []
+
 [model]
 skip_loop_detection = false
 loop_detection_threshold = 1
 loop_detection_interactive = true
+
+[provider.anthropic]
+interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
+interleaved_thinking_budget_tokens = 12000
+interleaved_thinking_type_enabled = "enabled"
+
+[skills]
+render-mode = "lean"
+prompt-format = "xml"
+max-skills-in-prompt = 10
+enable-auto-trigger = true
+enable-description-matching = true
+min-keyword-matches = 2
