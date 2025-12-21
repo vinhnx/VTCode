@@ -8,13 +8,14 @@ use ratatui::{
 
 use crate::config::constants::ui;
 use crate::ui::tui::session::{
-    Session,
+    PROMPT_COMMAND_NAME, Session,
     modal::compute_modal_area,
     slash_palette::{SlashPalette, SlashPaletteSuggestion},
     terminal_capabilities,
-    PROMPT_COMMAND_NAME,
 };
-use crate::ui::tui::style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline};
+use crate::ui::tui::style::{
+    measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline,
+};
 use crate::ui::tui::types::InlineTextStyle;
 
 /// Widget for rendering the slash command palette
@@ -65,7 +66,7 @@ impl<'a> Widget for SlashWidget<'a> {
         // Calculate width hint based on the longest suggestion
         let mut width_hint = measure_text_width(ui::SLASH_PALETTE_HINT_PRIMARY);
         width_hint = width_hint.max(measure_text_width(ui::SLASH_PALETTE_HINT_SECONDARY));
-        
+
         for suggestion in suggestions.iter().take(ui::SLASH_SUGGESTION_LIMIT) {
             let label = match suggestion {
                 SlashPaletteSuggestion::Static(cmd) => {
@@ -95,7 +96,7 @@ impl<'a> Widget for SlashWidget<'a> {
 
         // Clear the background
         Clear.render(area, buf);
-        
+
         // Create the bordered block with title
         let block = Block::bordered()
             .title("Slash Commands")
@@ -136,7 +137,10 @@ impl<'a> Widget for SlashWidget<'a> {
             let list_items = self.create_list_items(suggestions);
             let list = List::new(list_items)
                 .style(self.session.styles.default_style())
-                .highlight_style(self.highlight_style.unwrap_or_else(|| self.slash_highlight_style()))
+                .highlight_style(
+                    self.highlight_style
+                        .unwrap_or_else(|| self.slash_highlight_style()),
+                )
                 .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
                 .repeat_highlight_symbol(true);
 
@@ -153,16 +157,14 @@ impl<'a> SlashWidget<'a> {
         suggestions
             .iter()
             .map(|suggestion| match suggestion {
-                SlashPaletteSuggestion::Static(command) => {
-                    ListItem::new(Line::from(vec![
-                        Span::styled(format!("/ {}", command.name), self.slash_name_style()),
-                        Span::raw(" "),
-                        Span::styled(
-                            command.description.to_owned(),
-                            self.slash_description_style(),
-                        ),
-                    ]))
-                }
+                SlashPaletteSuggestion::Static(command) => ListItem::new(Line::from(vec![
+                    Span::styled(format!("/ {}", command.name), self.slash_name_style()),
+                    Span::raw(" "),
+                    Span::styled(
+                        command.description.to_owned(),
+                        self.slash_description_style(),
+                    ),
+                ])),
                 SlashPaletteSuggestion::Custom(prompt) => {
                     let display_name = format!("{}:{}", PROMPT_COMMAND_NAME, prompt.name);
                     let description = prompt.description.clone().unwrap_or_default();
@@ -185,7 +187,10 @@ impl<'a> SlashWidget<'a> {
             )),
             Line::from(Span::styled(
                 ui::SLASH_PALETTE_HINT_SECONDARY.to_owned(),
-                self.session.styles.default_style().add_modifier(Modifier::DIM),
+                self.session
+                    .styles
+                    .default_style()
+                    .add_modifier(Modifier::DIM),
             )),
         ]
     }
@@ -209,7 +214,10 @@ impl<'a> SlashWidget<'a> {
 
     /// Get the style for command descriptions
     fn slash_description_style(&self) -> Style {
-        self.session.styles.default_style().add_modifier(Modifier::DIM)
+        self.session
+            .styles
+            .default_style()
+            .add_modifier(Modifier::DIM)
     }
 }
 
@@ -217,8 +225,8 @@ impl<'a> SlashWidget<'a> {
 mod tests {
     use super::*;
     use crate::ui::tui::{InlineTheme, types::InlineTextStyle};
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
 
     fn create_test_session() -> Session {
         let theme = InlineTheme::default();
@@ -237,9 +245,9 @@ mod tests {
         let session = create_test_session();
         let palette = create_test_palette();
         let viewport = ratatui::layout::Rect::new(0, 0, 80, 24);
-        
+
         let widget = SlashWidget::new(&session, &palette, viewport);
-        
+
         // Widget should be created successfully
         assert_eq!(viewport.width, 80);
         assert_eq!(viewport.height, 24);
@@ -250,15 +258,17 @@ mod tests {
         let session = create_test_session();
         let palette = SlashPalette::new(); // Empty palette
         let viewport = ratatui::layout::Rect::new(0, 0, 80, 24);
-        
+
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
-        
-        terminal.draw(|frame| {
-            let widget = SlashWidget::new(&session, &palette, viewport);
-            widget.render(viewport, frame.buffer_mut());
-        }).unwrap();
-        
+
+        terminal
+            .draw(|frame| {
+                let widget = SlashWidget::new(&session, &palette, viewport);
+                widget.render(viewport, frame.buffer_mut());
+            })
+            .unwrap();
+
         // Should render without panicking even with empty palette
         assert!(true);
     }
@@ -269,15 +279,17 @@ mod tests {
         let mut palette = SlashPalette::new();
         palette.update(Some(""), 5); // This should populate with some default suggestions
         let viewport = ratatui::layout::Rect::new(0, 0, 80, 24);
-        
+
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
-        
-        terminal.draw(|frame| {
-            let widget = SlashWidget::new(&session, &palette, viewport);
-            widget.render(viewport, frame.buffer_mut());
-        }).unwrap();
-        
+
+        terminal
+            .draw(|frame| {
+                let widget = SlashWidget::new(&session, &palette, viewport);
+                widget.render(viewport, frame.buffer_mut());
+            })
+            .unwrap();
+
         // Should render without panicking with suggestions
         assert!(true);
     }

@@ -1,5 +1,8 @@
 use crate::constants::{defaults, instructions, llm_generation, project_doc, prompts};
-use crate::types::{ReasoningEffortLevel, UiSurfacePreference, VerbosityLevel};
+use crate::types::{
+    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
+    VerbosityLevel,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -26,6 +29,29 @@ pub struct AgentConfig {
     /// UI theme identifier controlling ANSI styling
     #[serde(default = "default_theme")]
     pub theme: String,
+
+    /// System prompt mode controlling verbosity and token overhead
+    /// Options: minimal (~500-800 tokens), lightweight (~1-2k), default (~6-7k), specialized (~7-8k)
+    /// Inspired by pi-coding-agent: modern models often perform well with minimal prompts
+    #[serde(default)]
+    pub system_prompt_mode: SystemPromptMode,
+
+    /// Tool documentation mode controlling token overhead for tool definitions
+    /// Options: minimal (~800 tokens), progressive (~1.2k), full (~3k current)
+    /// Progressive: signatures upfront, detailed docs on-demand (recommended)
+    /// Minimal: signatures only, pi-coding-agent style (power users)
+    /// Full: all documentation upfront (current behavior, default)
+    #[serde(default)]
+    pub tool_documentation_mode: ToolDocumentationMode,
+
+    /// Enable split tool results for massive token savings (Phase 4)
+    /// When enabled, tools return dual-channel output:
+    /// - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction)
+    /// - ui_content: Rich output displayed to user (full details preserved)
+    /// Applies to: grep_file, list_files, read_file, run_pty_cmd, write_file, edit_file
+    /// Default: true (opt-out for compatibility), recommended for production use
+    #[serde(default = "default_enable_split_tool_results")]
+    pub enable_split_tool_results: bool,
 
     /// Enable TODO planning workflow integrations (update_plan tool, onboarding hints)
     #[serde(default = "default_todo_planning_mode")]
@@ -150,6 +176,9 @@ impl Default for AgentConfig {
             api_key_env: default_api_key_env(),
             default_model: default_model(),
             theme: default_theme(),
+            system_prompt_mode: SystemPromptMode::default(),
+            tool_documentation_mode: ToolDocumentationMode::default(),
+            enable_split_tool_results: default_enable_split_tool_results(),
             todo_planning_mode: default_todo_planning_mode(),
             ui_surface: UiSurfacePreference::default(),
             max_conversation_turns: default_max_conversation_turns(),
@@ -233,6 +262,11 @@ fn default_theme() -> String {
 #[inline]
 const fn default_todo_planning_mode() -> bool {
     true
+}
+
+#[inline]
+const fn default_enable_split_tool_results() -> bool {
+    true // Default: enabled for production use (84% token savings)
 }
 
 #[inline]

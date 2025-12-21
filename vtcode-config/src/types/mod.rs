@@ -71,6 +71,160 @@ impl ReasoningEffortLevel {
     }
 }
 
+/// System prompt mode (inspired by pi-coding-agent philosophy)
+/// Controls verbosity and complexity of system prompts sent to models
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum SystemPromptMode {
+    /// Minimal prompt (~500-800 tokens) - Pi-inspired, modern models need less guidance
+    /// Best for: Power users, token-constrained contexts, fast responses
+    Minimal,
+    /// Lightweight prompt (~1-2k tokens) - Essential guidance only
+    /// Best for: Resource-constrained operations, simple tasks
+    Lightweight,
+    /// Default prompt (~6-7k tokens) - Full guidance with all features
+    /// Best for: General usage, comprehensive error handling
+    #[default]
+    Default,
+    /// Specialized prompt (~7-8k tokens) - Complex refactoring and analysis
+    /// Best for: Multi-file changes, sophisticated code analysis
+    Specialized,
+}
+
+impl SystemPromptMode {
+    /// Return the textual representation for configuration
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Minimal => "minimal",
+            Self::Lightweight => "lightweight",
+            Self::Default => "default",
+            Self::Specialized => "specialized",
+        }
+    }
+
+    /// Parse system prompt mode from user configuration
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("minimal") {
+            Some(Self::Minimal)
+        } else if normalized.eq_ignore_ascii_case("lightweight") {
+            Some(Self::Lightweight)
+        } else if normalized.eq_ignore_ascii_case("default") {
+            Some(Self::Default)
+        } else if normalized.eq_ignore_ascii_case("specialized") {
+            Some(Self::Specialized)
+        } else {
+            None
+        }
+    }
+
+    /// Allowed configuration values for validation
+    pub fn allowed_values() -> &'static [&'static str] {
+        &["minimal", "lightweight", "default", "specialized"]
+    }
+}
+
+impl fmt::Display for SystemPromptMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for SystemPromptMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        if let Some(parsed) = Self::parse(&raw) {
+            Ok(parsed)
+        } else {
+            tracing::warn!(
+                input = raw,
+                allowed = ?Self::allowed_values(),
+                "Invalid system_prompt_mode provided; falling back to default"
+            );
+            Ok(Self::default())
+        }
+    }
+}
+
+/// Tool documentation mode (inspired by pi-coding-agent progressive disclosure)
+/// Controls how much tool documentation is loaded upfront vs on-demand
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum ToolDocumentationMode {
+    /// Minimal signatures only (~800 tokens total) - Pi-style, power users
+    /// Best for: Maximum efficiency, experienced users, token-constrained contexts
+    Minimal,
+    /// Signatures + common parameters (~1,200 tokens total) - Smart hints
+    /// Best for: General usage, balances overhead vs guidance (recommended)
+    Progressive,
+    /// Full documentation upfront (~3,000 tokens total) - Current behavior
+    /// Best for: Maximum hand-holding, comprehensive parameter documentation
+    #[default]
+    Full,
+}
+
+impl ToolDocumentationMode {
+    /// Return the textual representation for configuration
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Minimal => "minimal",
+            Self::Progressive => "progressive",
+            Self::Full => "full",
+        }
+    }
+
+    /// Parse tool documentation mode from user configuration
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("minimal") {
+            Some(Self::Minimal)
+        } else if normalized.eq_ignore_ascii_case("progressive") {
+            Some(Self::Progressive)
+        } else if normalized.eq_ignore_ascii_case("full") {
+            Some(Self::Full)
+        } else {
+            None
+        }
+    }
+
+    /// Allowed configuration values for validation
+    pub fn allowed_values() -> &'static [&'static str] {
+        &["minimal", "progressive", "full"]
+    }
+}
+
+impl fmt::Display for ToolDocumentationMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for ToolDocumentationMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        if let Some(parsed) = Self::parse(&raw) {
+            Ok(parsed)
+        } else {
+            tracing::warn!(
+                input = raw,
+                allowed = ?Self::allowed_values(),
+                "Invalid tool_documentation_mode provided; falling back to default"
+            );
+            Ok(Self::default())
+        }
+    }
+}
+
 /// Verbosity level for model output (GPT-5.1 and compatible models)
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

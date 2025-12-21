@@ -37,7 +37,7 @@ pub struct SessionWidget<'a> {
 impl<'a> SessionWidget<'a> {
     /// Create a new SessionWidget with required parameters
     pub fn new(session: &'a mut Session) -> Self {
-        Self { 
+        Self {
             session,
             header_lines: None,
             header_area: None,
@@ -118,7 +118,9 @@ impl<'a> Widget for &'a mut SessionWidget<'_> {
         let header_area = self.header_area.unwrap_or_else(|| {
             // Calculate header height if not provided
             let header_lines = self.session.header_lines();
-            let header_height = self.session.header_height_from_lines(area.width, &header_lines);
+            let header_height = self
+                .session
+                .header_height_from_lines(area.width, &header_lines);
             if header_height != self.session.header_rows {
                 self.session.header_rows = header_height;
                 crate::ui::tui::session::render::recalculate_transcript_rows(self.session);
@@ -139,14 +141,18 @@ impl<'a> Widget for &'a mut SessionWidget<'_> {
         apply_view_rows(self.session, transcript_area.height);
 
         // Render header using builder pattern
-        let header_lines = self.header_lines.as_ref().unwrap_or(&self.session.header_lines()).clone();
+        let header_lines = self
+            .header_lines
+            .as_ref()
+            .unwrap_or(&self.session.header_lines())
+            .clone();
         HeaderWidget::new(self.session)
             .lines(header_lines)
             .render(header_area, buf);
 
         // Render transcript with optional splits for timeline/logs
         let has_logs = self.session.show_logs && self.session.has_logs();
-        
+
         if self.session.show_timeline_pane && has_logs {
             // Both timeline and logs visible - split horizontally
             let timeline_chunks =
@@ -186,11 +192,10 @@ impl<'a> SessionWidget<'a> {
             return;
         }
 
-        let paragraph = Paragraph::new((*self.session.log_text()).clone()).wrap(Wrap { trim: false });
+        let paragraph =
+            Paragraph::new((*self.session.log_text()).clone()).wrap(Wrap { trim: false });
         paragraph.render(inner, buf);
     }
-
-
 
     fn render_overlays(&mut self, viewport: Rect, buf: &mut Buffer) {
         // Note: Modal and slash palette still use Frame API, so they're handled separately

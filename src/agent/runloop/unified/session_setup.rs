@@ -118,6 +118,10 @@ pub(crate) async fn initialize_session(
         .map(|cfg| cfg.agent.todo_planning_mode)
         .unwrap_or(true);
 
+    let tool_documentation_mode = vt_cfg
+        .map(|cfg| cfg.agent.tool_documentation_mode)
+        .unwrap_or_default();
+
     // Create async MCP manager if enabled
     let async_mcp_manager = if let Some(cfg) = vt_cfg {
         if cfg.mcp.enabled {
@@ -187,7 +191,10 @@ pub(crate) async fn initialize_session(
 
     let mut full_auto_allowlist = None;
 
-    let base_declarations = build_function_declarations_with_mode(todo_planning_enabled);
+    let base_declarations = build_function_declarations_with_mode(
+        todo_planning_enabled,
+        tool_documentation_mode,
+    );
     let mut tool_definitions: Vec<uni::ToolDefinition> = base_declarations
         .into_iter()
         .map(|decl| {

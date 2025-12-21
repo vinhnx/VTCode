@@ -31,7 +31,10 @@ pub struct InputWidget<'a> {
 impl<'a> InputWidget<'a> {
     /// Create a new InputWidget with required parameters
     pub fn new(session: &'a mut Session) -> Self {
-        Self { session, area: None }
+        Self {
+            session,
+            area: None,
+        }
     }
 
     /// Set the area for rendering (used for cursor positioning calculations)
@@ -65,7 +68,7 @@ impl<'a> Widget for InputWidget<'a> {
 
         // Create the border block first to get the inner area
         let temp_data = self.session.build_input_widget_data(1, 1); // Temporary data for style access
-        
+
         // Determine border styling based on trust mode
         let border_style = if temp_data.is_full_auto_trust {
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
@@ -88,12 +91,14 @@ impl<'a> Widget for InputWidget<'a> {
             .style(temp_data.default_style)
             .border_style(border_style)
             .title(trust_title);
-        
+
         let inner = block.inner(input_area);
-        
+
         // Now get the actual input data with the correct dimensions
-        let input_data = self.session.build_input_widget_data(inner.width, inner.height);
-        
+        let input_data = self
+            .session
+            .build_input_widget_data(inner.width, inner.height);
+
         let paragraph = Paragraph::new(input_data.text)
             .style(input_data.default_style)
             .wrap(Wrap { trim: false })
@@ -110,7 +115,7 @@ impl<'a> Widget for InputWidget<'a> {
                 .cursor_y
                 .min(inner.height.saturating_sub(1))
                 .saturating_add(inner.y);
-            
+
             // Set cursor position using buffer's set_span method with cursor positioning
             if let Some(cell) = buf.cell_mut((cursor_x, cursor_y)) {
                 cell.set_symbol("");

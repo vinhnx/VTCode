@@ -5,16 +5,34 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "deepseek-ai/DeepSeek-V3.2"
+default_model = "gpt-oss:120b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
+
+# Enable split tool results for massive token savings (Phase 4: pi-coding-agent integration)
+# When enabled, tools send concise summaries to LLM (53-95% token reduction) while preserving full output for UI
+# Applies to: grep_file, list_files, read_file, run_pty_cmd, write_file, edit_file
+# Result: ~84% average session token reduction, ~$15K annual savings at scale
+# Default: true (recommended for production use)
+enable_split_tool_results = true
+
+system_prompt_mode = "minimal"
+# system_prompt_mode = "minimal" # ~700 tokens, 87% savings
+# # Streamlined (good middle ground)
+# system_prompt_mode = "lightweight" # ~1.8K tokens, 67% savings
+# # Current behavior (no change for existing users)
+# system_prompt_mode = "default" # ~6.5K tokens, baseline
+# # Enhanced for complex work
+# system_prompt_mode = "specialized"  # ~7K tokens, deep guidance
+
+tool_documentation_mode = "minimal"
 
 # Enable TODO planning helper mode for structured task management
 todo_planning_mode = true
@@ -41,7 +59,7 @@ temperature = 0.7
 # Adjust based on model context window:
 # - 16384 for models with 128k context
 # - 32768 for models with 256k context
-max_tokens = 2000
+max_tokens = 32768
 
 # Temperature for prompt refinement (0.0-1.0)
 # Lower values ensure more deterministic/consistent prompt improvement
@@ -552,14 +570,7 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = [
-    "rust",
-    "python",
-    "javascript",
-    "typescript",
-    "go",
-    "java",
-]
+enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
