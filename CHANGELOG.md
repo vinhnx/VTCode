@@ -3,6 +3,49 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.50.13] - 2025-12-21
+
+
+### Features
+    - feat: enhance session logging functionality and update default model
+    - feat: integrate SessionWidget into main render function
+    - feat: add buffer-based widgets for input, modal, and slash
+    - feat: create ratatui widget foundation
+    - feat: implement centralized panic handling for TUI applications
+    - feat: add better panic handling with debug mode support
+    - feat: enhance list rendering with highlight symbol and repeat option
+    - feat: implement XDG Base Directory Specification for configuration and data storage
+    - feat: Enhance tool execution error handling and implement planning mode warnings
+    - feat: Implement TUI-aware tool approval prompts and human-in-the-loop notification bell.
+    - feat: add plan phase management and update tool registry for planning mode
+    - feat: add HITL notification bell configuration and implement terminal bell notification for approvals
+    - feat: Implement pre-flight LLM request and tool definition validation, and ensure `mark_tool_loop_limit_hit` is idempotent.
+    - feat: improve release process by adding Linux build automation and related documentation.
+
+
+### Bug Fixes
+    - fix: redirect terminal commands from stdout to stderr for TUI functionality
+    - fix: change terminal output from stderr to stdout for ModernTui
+    - fix: reorder MCP time policies and update tool policy documentation
+    - fix: align OpenAI Responses API implementation with official spec
+
+
+### Performance Improvements
+    - perf: optimize rate limiting with a read-lock fast path and refactor tool execution retry delays using constant values.
+
+
+### Refactors
+    - refactor: streamline widget block creation and layout definitions in TUI components
+
+
+### Documentation
+    - docs: update changelog for v0.50.12 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.50.12 [skip ci]
+    - chore: release v0.50.12
+    - chore: update npm package.json to v0.50.11 [skip ci]
 # [Version 0.50.12] - 2025-12-20
 
 
