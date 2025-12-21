@@ -212,6 +212,10 @@ pub async fn run_tui(
     events: UnboundedSender<InlineEvent>,
     options: TuiOptions,
 ) -> Result<()> {
+    // Create a guard to mark TUI as initialized during the session
+    // This ensures the panic hook knows to restore terminal state
+    let _panic_guard = crate::ui::tui::panic_hook::TuiPanicGuard::new();
+
     let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
     let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
     set_log_theme_name(options.log_theme.clone());

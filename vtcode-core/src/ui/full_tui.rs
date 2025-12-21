@@ -9,6 +9,7 @@ use crossterm::event::{
 };
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::CrosstermBackend as Backend;
+use crate::ui::tui::panic_hook::TuiPanicGuard;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -62,6 +63,7 @@ pub struct FullTui {
     pub tick_rate: f64,
     pub mouse: bool,
     pub paste: bool,
+    pub panic_guard: Option<TuiPanicGuard>,
 }
 
 #[allow(dead_code)]
@@ -87,6 +89,7 @@ impl FullTui {
             tick_rate,
             mouse,
             paste,
+            panic_guard: None,
         })
     }
 
@@ -112,6 +115,7 @@ impl FullTui {
             tick_rate,
             mouse,
             paste,
+            panic_guard: None,
         })
     }
 
@@ -226,6 +230,7 @@ impl FullTui {
 
     /// Enter terminal raw mode and alternate screen
     pub fn enter(&mut self) -> Result<()> {
+        self.panic_guard = Some(TuiPanicGuard::new());
         crossterm::terminal::enable_raw_mode()?;
         crossterm::execute!(std::io::stderr(), EnterAlternateScreen, cursor::Hide)?;
         if self.mouse {
@@ -252,6 +257,9 @@ impl FullTui {
             crossterm::execute!(std::io::stderr(), LeaveAlternateScreen, cursor::Show)?;
             crossterm::terminal::disable_raw_mode()?;
         }
+
+        self.panic_guard = None;
+
         Ok(())
     }
 

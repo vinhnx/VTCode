@@ -21,6 +21,7 @@ use std::{
     ops::{Deref, DerefMut},
     time::Duration,
 };
+use crate::ui::tui::panic_hook::TuiPanicGuard;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -55,6 +56,7 @@ pub struct ModernTui {
     pub tick_rate: f64,
     pub mouse: bool,
     pub paste: bool,
+    pub panic_guard: Option<TuiPanicGuard>,
 }
 
 // A trait to allow both old and new TUI implementations to work with the same interface
@@ -91,6 +93,7 @@ impl ModernTui {
             tick_rate: 4.0,
             mouse: false,
             paste: false,
+            panic_guard: None,
         })
     }
 
@@ -115,6 +118,7 @@ impl ModernTui {
     }
 
     pub async fn enter(&mut self) -> Result<()> {
+        self.panic_guard = Some(TuiPanicGuard::new());
         terminal::enable_raw_mode().context("failed to enable raw mode")?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, cursor::Hide)
@@ -164,6 +168,8 @@ impl ModernTui {
             let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
         }
 
+        self.panic_guard = None;
+
         Ok(())
     }
 
@@ -182,6 +188,8 @@ impl ModernTui {
             let _ = execute!(io::stdout(), DisableFocusChange);
             let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
         }
+
+        self.panic_guard = None;
 
         // Execute suspend command to allow job control (Ctrl+Z)
         #[cfg(unix)]
