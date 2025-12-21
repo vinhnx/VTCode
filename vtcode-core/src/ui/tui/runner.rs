@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use crossterm::{
     event::{
-        self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
+        DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
         Event as CrosstermEvent, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
         PushKeyboardEnhancementFlags,
     },
@@ -14,6 +14,7 @@ use crossterm::{
         supports_keyboard_enhancement,
     },
 };
+use futures::{FutureExt, StreamExt};
 use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
@@ -32,7 +33,6 @@ use super::{
 };
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
-const INPUT_POLL_INTERVAL_MS: u64 = 16;
 const ALTERNATE_SCREEN_ERROR: &str = "failed to enter alternate inline screen";
 const RAW_MODE_ENABLE_ERROR: &str = "failed to enable raw mode for inline terminal";
 const RAW_MODE_DISABLE_ERROR: &str = "failed to disable raw mode after inline session";
@@ -46,7 +46,11 @@ struct TerminalModeState {
     keyboard_enhancements_pushed: bool,
 }
 
-type TerminalEvent = CrosstermEvent;
+#[derive(Debug, Clone)]
+enum TerminalEvent {
+    Tick,
+    Crossterm(CrosstermEvent),
+}
 
 #[derive(Clone)]
 struct EventChannels {
@@ -97,37 +101,40 @@ impl EventListener {
 }
 
 // Spawn the async event loop with proper cancellation token support
-// Uses blocking reads via tokio::task::block_in_place for crossterm compatibility
+// Uses crossterm::event::EventStream for async-native event handling
 async fn spawn_event_loop(
     event_tx: UnboundedSender<TerminalEvent>,
     cancellation_token: CancellationToken,
     rx_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) {
+    let mut reader = crossterm::event::EventStream::new();
     let mut tick_interval = interval(Duration::from_secs_f64(1.0 / 4.0)); // 4 ticks per second
-    let poll_timeout = Duration::from_millis(16);
 
     loop {
+        let tick_delay = tick_interval.tick();
+        let crossterm_event = reader.next().fuse();
+
         tokio::select! {
             _ = cancellation_token.cancelled() => {
                 break;
             }
-            _ = tick_interval.tick() => {
-                // Tick for app logic updates - continue loop for next event
-            }
-            _ = async {
-                // Use block_in_place to allow crossterm's blocking poll
-                tokio::task::block_in_place(|| {
-                    // Only poll if not paused. When paused (e.g., during external editor launch),
-                    // skip polling to prevent reading from stdin while the editor is active.
-                    if !rx_paused.load(std::sync::atomic::Ordering::Acquire)
-                        && event::poll(poll_timeout).unwrap_or(false)
-                        && let Ok(event) = event::read()
-                    {
-                        let _ = event_tx.send(event);
+            maybe_event = crossterm_event => {
+                match maybe_event {
+                    Some(Ok(evt)) => {
+                        // Only send if not paused. When paused (e.g., during external editor launch),
+                        // skip sending to prevent processing input while the editor is active.
+                        if !rx_paused.load(std::sync::atomic::Ordering::Acquire) {
+                            let _ = event_tx.send(TerminalEvent::Crossterm(evt));
+                        }
                     }
-                })
-            } => {
-                // Event has been sent
+                    Some(Err(error)) => {
+                        tracing::error!(%error, "terminal event stream error");
+                    }
+                    None => {}
+                }
+            }
+            _ = tick_delay => {
+                let _ = event_tx.send(TerminalEvent::Tick);
             }
         }
 
@@ -443,7 +450,7 @@ async fn drive_terminal<B: Backend>(
             }
             result = inputs.recv() => {
                 match result {
-                    Some(event) => {
+                    Some(TerminalEvent::Crossterm(event)) => {
                         // Skip event processing if the TUI is suspended (e.g., external editor is running)
                         if !event_channels.rx_paused.load(std::sync::atomic::Ordering::Acquire) {
                             session.handle_event(
@@ -458,6 +465,16 @@ async fn drive_terminal<B: Backend>(
                             }
                         }
                     }
+                    Some(TerminalEvent::Tick) => {
+                        // Periodic tick for animations or state updates
+                        if !event_channels.rx_paused.load(std::sync::atomic::Ordering::Acquire)
+                            && session.take_redraw()
+                        {
+                            terminal
+                                .draw(|frame| session.render(frame))
+                                .context("failed to draw inline session")?;
+                        }
+                    }
                     None => {
                         if commands.is_closed() {
                             break 'main;
@@ -465,7 +482,6 @@ async fn drive_terminal<B: Backend>(
                     }
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(INPUT_POLL_INTERVAL_MS)) => {}
         }
 
         if session.should_exit() {

@@ -46,7 +46,7 @@ pub enum Event {
 
 // Terminal User Interface (TUI) struct following the Ratatui recipe
 pub struct ModernTui {
-    pub terminal: ratatui::Terminal<CrosstermBackend<std::io::Stderr>>,
+    pub terminal: ratatui::Terminal<CrosstermBackend<std::io::Stdout>>,
     pub task: tokio::task::JoinHandle<()>,
     pub cancellation_token: CancellationToken,
     pub event_rx: mpsc::UnboundedReceiver<Event>,
@@ -82,7 +82,7 @@ impl ModernTui {
         let task = tokio::spawn(async {});
 
         Ok(Self {
-            terminal: ratatui::Terminal::new(CrosstermBackend::new(std::io::stderr()))?,
+            terminal: ratatui::Terminal::new(CrosstermBackend::new(std::io::stdout()))?,
             task,
             cancellation_token,
             event_rx,
@@ -116,7 +116,7 @@ impl ModernTui {
 
     pub async fn enter(&mut self) -> Result<()> {
         terminal::enable_raw_mode().context("failed to enable raw mode")?;
-        let mut stdout = io::stderr();
+        let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, cursor::Hide)
             .context("failed to enter alternate screen")?;
         if self.mouse {
@@ -150,18 +150,18 @@ impl ModernTui {
         if terminal::is_raw_mode_enabled().unwrap_or(false) {
             self.terminal.flush().context("failed to flush terminal")?;
             if self.paste {
-                execute!(io::stderr(), DisableBracketedPaste)
+                execute!(io::stdout(), DisableBracketedPaste)
                     .context("failed to disable bracketed paste")?;
             }
             if self.mouse {
-                execute!(io::stderr(), event::DisableMouseCapture)
+                execute!(io::stdout(), event::DisableMouseCapture)
                     .context("failed to disable mouse capture")?;
             }
-            execute!(io::stderr(), LeaveAlternateScreen, cursor::Show)
+            execute!(io::stdout(), LeaveAlternateScreen, cursor::Show)
                 .context("failed to leave alternate screen")?;
             terminal::disable_raw_mode().context("failed to disable raw mode")?;
-            let _ = execute!(io::stderr(), DisableFocusChange);
-            let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
+            let _ = execute!(io::stdout(), DisableFocusChange);
+            let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
         }
 
         Ok(())
@@ -172,15 +172,15 @@ impl ModernTui {
         if terminal::is_raw_mode_enabled().unwrap_or(false) {
             let _ = self.terminal.flush();
             if self.paste {
-                let _ = execute!(io::stderr(), DisableBracketedPaste);
+                let _ = execute!(io::stdout(), DisableBracketedPaste);
             }
             if self.mouse {
-                let _ = execute!(io::stderr(), event::DisableMouseCapture);
+                let _ = execute!(io::stdout(), event::DisableMouseCapture);
             }
-            let _ = execute!(io::stderr(), LeaveAlternateScreen, cursor::Show);
+            let _ = execute!(io::stdout(), LeaveAlternateScreen, cursor::Show);
             let _ = terminal::disable_raw_mode();
-            let _ = execute!(io::stderr(), DisableFocusChange);
-            let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
+            let _ = execute!(io::stdout(), DisableFocusChange);
+            let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
         }
 
         // Execute suspend command to allow job control (Ctrl+Z)
@@ -314,7 +314,7 @@ impl Drop for ModernTui {
 }
 
 impl Deref for ModernTui {
-    type Target = ratatui::Terminal<CrosstermBackend<std::io::Stderr>>;
+    type Target = ratatui::Terminal<CrosstermBackend<std::io::Stdout>>;
 
     fn deref(&self) -> &Self::Target {
         &self.terminal
