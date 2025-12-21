@@ -88,6 +88,21 @@ impl Session {
         self.mark_dirty();
     }
 
+    /// Toggle the logs panel visibility
+    pub(super) fn toggle_logs(&mut self) {
+        self.show_logs = !self.show_logs;
+        self.invalidate_scroll_metrics();
+        self.mark_dirty();
+    }
+
+    /// Toggle both timeline pane and logs panel visibility
+    pub(super) fn toggle_timeline_and_logs(&mut self) {
+        self.show_timeline_pane = !self.show_timeline_pane;
+        self.show_logs = !self.show_logs;
+        self.invalidate_scroll_metrics();
+        self.mark_dirty();
+    }
+
     /// Show a simple modal dialog
     pub(super) fn show_modal(
         &mut self,

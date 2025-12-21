@@ -28,6 +28,11 @@ pub fn set_debug_mode(enabled: bool) {
     DEBUG_MODE.store(enabled, Ordering::SeqCst);
 }
 
+/// Get whether the application is in debug mode
+pub fn is_debug_mode() -> bool {
+    DEBUG_MODE.load(Ordering::SeqCst)
+}
+
 /// Initialize the panic hook to restore terminal state on panic and provide better formatting
 ///
 /// This function should be called very early in the application lifecycle,

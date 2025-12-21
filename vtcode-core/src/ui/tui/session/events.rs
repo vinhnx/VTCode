@@ -271,7 +271,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             None
         }
         KeyCode::Char('t') | KeyCode::Char('T') if has_control => {
-            session.toggle_timeline_pane();
+            session.toggle_timeline_and_logs();
             None
         }
         KeyCode::Char(ch) => {

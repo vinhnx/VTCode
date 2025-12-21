@@ -145,23 +145,23 @@ impl<'a> Widget for &'a mut SessionWidget<'_> {
             .render(header_area, buf);
 
         // Render transcript with optional splits for timeline/logs
-        if self.session.show_timeline_pane {
+        let has_logs = self.session.show_logs && self.session.has_logs();
+        
+        if self.session.show_timeline_pane && has_logs {
+            // Both timeline and logs visible - split horizontally
             let timeline_chunks =
                 Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
                     .split(transcript_area);
             TranscriptWidget::new(self.session).render(timeline_chunks[0], buf);
-
-            if self.session.show_logs {
-                self.render_logs(timeline_chunks[1], buf);
-            } else {
-                self.render_logs_placeholder(timeline_chunks[1], buf);
-            }
-        } else if self.session.show_logs {
+            self.render_logs(timeline_chunks[1], buf);
+        } else if has_logs {
+            // Only logs visible (no timeline) - split vertically
             let split = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
                 .split(transcript_area);
             TranscriptWidget::new(self.session).render(split[0], buf);
             self.render_logs(split[1], buf);
         } else {
+            // Logs hidden or empty - full transcript area
             TranscriptWidget::new(self.session).render(transcript_area, buf);
         }
 
@@ -190,29 +190,7 @@ impl<'a> SessionWidget<'a> {
         paragraph.render(inner, buf);
     }
 
-    fn render_logs_placeholder(&self, area: Rect, buf: &mut Buffer) {
-        use ratatui::layout::{Position, Size};
-        use ratatui::widgets::{Block, RatatuiLogo};
 
-        let block = Block::bordered()
-            .title("Logs hidden")
-            .border_type(crate::ui::tui::session::terminal_capabilities::get_border_type())
-            .style(self.session.styles.default_style())
-            .border_style(self.session.styles.border_style());
-        let inner = block.inner(area);
-        block.render(area, buf);
-
-        if inner.width >= 15 && inner.height >= 2 {
-            let logo_area = Rect::from((
-                Position::new(
-                    inner.x + (inner.width.saturating_sub(15)) / 2,
-                    inner.y + (inner.height.saturating_sub(2)) / 2,
-                ),
-                Size::new(15, 2),
-            ));
-            RatatuiLogo::tiny().render(logo_area, buf);
-        }
-    }
 
     fn render_overlays(&mut self, viewport: Rect, buf: &mut Buffer) {
         // Note: Modal and slash palette still use Frame API, so they're handled separately

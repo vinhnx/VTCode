@@ -68,7 +68,7 @@ pub fn spawn_session_with_prompts(
                 surface_preference,
                 inline_rows,
                 show_timeline_pane,
-                show_logs: true,
+                show_logs: crate::ui::tui::panic_hook::is_debug_mode(),
                 log_theme: None,
                 event_callback,
                 custom_prompts,
