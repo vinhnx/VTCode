@@ -88,7 +88,9 @@ pub(super) fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>,
 
     let list = List::new(list_items)
         .style(session.styles.default_style())
-        .highlight_style(slash_highlight_style(session));
+        .highlight_style(slash_highlight_style(session))
+        .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
+        .repeat_highlight_symbol(true);
 
     frame.render_stateful_widget(
         list,

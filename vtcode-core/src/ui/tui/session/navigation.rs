@@ -72,7 +72,9 @@ impl Session {
         let list = List::new(items)
             .block(block)
             .style(self.styles.default_style())
-            .highlight_style(self.navigation_highlight_style());
+            .highlight_style(self.navigation_highlight_style())
+            .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
+            .repeat_highlight_symbol(true);
 
         frame.render_stateful_widget(list, area, &mut self.navigation_state);
     }
@@ -126,7 +128,9 @@ impl Session {
         let list = List::new(items)
             .block(block)
             .style(self.styles.default_style())
-            .highlight_style(self.navigation_highlight_style());
+            .highlight_style(self.navigation_highlight_style())
+            .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
+            .repeat_highlight_symbol(true);
 
         frame.render_stateful_widget(list, area, &mut self.plan_navigation_state);
     }

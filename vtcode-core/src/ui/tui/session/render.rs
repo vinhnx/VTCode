@@ -360,7 +360,10 @@ fn render_palette_generic<F>(
         ))));
     }
 
-    let list = List::new(list_items).style(default_style(session));
+    let list = List::new(list_items)
+        .style(default_style(session))
+        .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
+        .repeat_highlight_symbol(true);
     frame.render_widget(list, layout.list_area);
 }
 
