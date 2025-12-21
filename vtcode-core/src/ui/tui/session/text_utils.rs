@@ -2,10 +2,7 @@ use std::mem;
 
 use line_clipping::cohen_sutherland::clip_line;
 use line_clipping::{LineSegment, Point, Window};
-use ratatui::{
-    style::Style,
-    text::{Line, Span},
-};
+use ratatui::prelude::*;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 

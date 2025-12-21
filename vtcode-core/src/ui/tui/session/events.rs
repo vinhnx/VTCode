@@ -1,5 +1,5 @@
 use super::*;
-use crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
+use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 

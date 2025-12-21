@@ -2,7 +2,7 @@ use std::io::{self, IsTerminal};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use crossterm::{
+use ratatui::crossterm::{
     event::{
         DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
         Event as CrosstermEvent, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,

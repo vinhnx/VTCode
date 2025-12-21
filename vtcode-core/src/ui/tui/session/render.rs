@@ -2,10 +2,7 @@
 
 use anstyle::Color as AnsiColorEnum;
 use ratatui::{
-    Frame,
-    layout::{Constraint, Layout, Rect},
-    style::{Modifier, Style},
-    text::{Line, Span},
+    prelude::*,
     widgets::{Block, Clear, List, ListItem, Paragraph, RatatuiLogo, Wrap},
 };
 use unicode_width::UnicodeWidthStr;
@@ -135,12 +132,13 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
             frame.render_widget(block, timeline_chunks[1]);
 
             if inner.width >= 15 && inner.height >= 2 {
-                let logo_area = Rect::new(
-                    inner.x + (inner.width.saturating_sub(15)) / 2,
-                    inner.y + (inner.height.saturating_sub(2)) / 2,
-                    15,
-                    2,
-                );
+                let logo_area = Rect::from((
+                    Position::new(
+                        inner.x + (inner.width.saturating_sub(15)) / 2,
+                        inner.y + (inner.height.saturating_sub(2)) / 2,
+                    ),
+                    Size::new(15, 2),
+                ));
                 frame.render_widget(RatatuiLogo::tiny(), logo_area);
             }
         }
@@ -239,7 +237,7 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     session.transcript_view_top = vertical_offset;
 
     let visible_start = vertical_offset;
-    let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
+    let scroll_area = inner;
 
     // Use cached visible lines to avoid re-cloning on viewport-only scrolls
     let cached_lines =
@@ -455,7 +453,7 @@ fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: R
                 }
 
                 let display = format!("{}{}", prefix, display_text.trim_end_matches("/ "));
-                ListItem::new(Line::from(Span::styled(display, style)))
+                ListItem::new(Line::from(display).style(style))
             },
         },
     );
@@ -591,7 +589,7 @@ fn render_prompt_palette(session: &mut Session, frame: &mut Frame<'_>, viewport:
 
                 // Format: "  · prompt-name"
                 let display = format!("  · {}", display_text);
-                ListItem::new(Line::from(Span::styled(display, base_style)))
+                ListItem::new(Line::from(display).style(base_style))
             },
         },
     );
@@ -901,7 +899,7 @@ fn wrap_block_lines_with_options(
         } else {
             format!("{}│", first_prefix)
         };
-        return vec![Line::from(vec![Span::styled(fallback, border_style)])];
+        return vec![Line::from(fallback).style(border_style)];
     }
 
     let right_border = if show_right_border {
@@ -1105,7 +1103,7 @@ fn message_divider_line(session: &Session, width: usize, kind: InlineMessageKind
 
     let content = ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.repeat(width);
     let style = message_divider_style(session, kind);
-    Line::from(vec![Span::styled(content, style)])
+    Line::from(content).style(style)
 }
 
 fn message_divider_style(session: &Session, kind: InlineMessageKind) -> Style {
@@ -1212,7 +1210,7 @@ fn justify_message_line(
 ) -> Line<'static> {
     let span = &line.spans[0];
     if let Some(justified) = justify_plain_text(span.content.as_ref(), max_width) {
-        Line::from(vec![Span::styled(justified, span.style)])
+        Line::from(justified).style(span.style)
     } else {
         line.clone()
     }

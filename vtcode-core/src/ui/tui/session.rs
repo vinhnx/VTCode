@@ -3,7 +3,7 @@ use std::{collections::VecDeque, sync::Arc};
 #[cfg(test)]
 use anstyle::Color as AnsiColorEnum;
 use anstyle::RgbColor;
-use crossterm::event::{
+use ratatui::crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent, MouseEventKind,
 };
 
@@ -784,7 +784,7 @@ impl Session {
         self.transcript_view_top = vertical_offset;
 
         let visible_start = vertical_offset;
-        let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
+        let scroll_area = inner;
 
         // Use cached visible lines to avoid re-cloning on viewport-only scrolls
         let cached_lines =
@@ -882,7 +882,7 @@ mod tests {
     use crate::ui::tui::style::ratatui_style_from_inline;
     use crate::ui::tui::{InlineSegment, InlineTextStyle, InlineTheme};
     use chrono::Utc;
-    use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{
         Terminal,
         backend::TestBackend,

@@ -4,10 +4,7 @@ use crate::config::constants::ui;
 use crate::ui::tui::types::InlineTextStyle;
 use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
+    prelude::*,
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -103,7 +100,7 @@ impl Session {
                 .cursor_y
                 .min(inner.height.saturating_sub(1))
                 .saturating_add(inner.y);
-            frame.set_cursor_position((cursor_x, cursor_y));
+            frame.set_cursor_position(Position::new(cursor_x, cursor_y));
         }
 
         if let (Some(status_rect), Some(line)) = (status_area, status_line) {

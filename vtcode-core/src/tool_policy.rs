@@ -1085,12 +1085,12 @@ impl ToolPolicyManager {
 
 /// Render a Ratatui-based confirmation dialog when running in TUI mode.
 fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
-    use crossterm::cursor::{Hide, Show};
-    use crossterm::event::{Event, KeyCode, KeyEventKind, read};
-    use crossterm::terminal::{
+    use ratatui::crossterm::cursor::{Hide, Show};
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind, read};
+    use ratatui::crossterm::terminal::{
         EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
     };
-    use crossterm::{ExecutableCommand, execute};
+    use ratatui::crossterm::{ExecutableCommand, execute};
     use ratatui::Terminal;
     use ratatui::backend::CrosstermBackend;
     use ratatui::layout::{Constraint, Layout};
@@ -1151,7 +1151,7 @@ fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
                     .iter()
                     .map(|(title, detail)| {
                         ListItem::new(vec![
-                            Line::from(Span::raw(*title)),
+                            Line::from(*title),
                             Line::from(Span::styled(
                                 format!("  {detail}"),
                                 Style::default().fg(Color::Gray),
@@ -1180,13 +1180,10 @@ fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
         match read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Up => {
-                    let idx = state.selected().unwrap_or(0);
-                    state.select(Some(idx.saturating_sub(1)));
+                    state.select_previous();
                 }
                 KeyCode::Down => {
-                    let idx = state.selected().unwrap_or(0);
-                    let next = (idx + 1).min(items.len().saturating_sub(1));
-                    state.select(Some(next));
+                    state.select_next();
                 }
                 KeyCode::Enter => {
                     let choice = state.selected().unwrap_or(0);

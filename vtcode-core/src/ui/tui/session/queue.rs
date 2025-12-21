@@ -1,8 +1,5 @@
 use super::Session;
-use ratatui::{
-    style::{Modifier, Style},
-    text::{Line, Span},
-};
+use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 
 pub(super) struct QueueOverlay {
@@ -92,7 +89,7 @@ impl Session {
         };
 
         let mut header_lines = self.wrap_line(
-            Line::from(vec![Span::styled(header_text, header_style)]),
+            Line::from(header_text).style(header_style),
             max_width,
         );
         if header_lines.is_empty() {
@@ -115,7 +112,7 @@ impl Session {
         if remaining > 0 {
             let indicator = format!("  +{}...", remaining);
             let mut indicator_lines = self.wrap_line(
-                Line::from(vec![Span::styled(indicator, message_style)]),
+                Line::from(indicator).style(message_style),
                 max_width,
             );
             if indicator_lines.is_empty() {
@@ -142,7 +139,7 @@ impl Session {
         let label_width = UnicodeWidthStr::width(label);
         if max_width <= label_width {
             let mut wrapped_label = self.wrap_line(
-                Line::from(vec![Span::styled(label.to_owned(), label_style)]),
+                Line::from(label.to_owned()).style(label_style),
                 max_width,
             );
             if wrapped_label.is_empty() {
@@ -153,7 +150,7 @@ impl Session {
 
         let available = max_width - label_width;
         let mut wrapped = self.wrap_line(
-            Line::from(vec![Span::styled(message.to_owned(), message_style)]),
+            Line::from(message.to_owned()).style(message_style),
             available,
         );
         if wrapped.is_empty() {

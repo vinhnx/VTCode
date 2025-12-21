@@ -155,12 +155,12 @@ checksum = "5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78"
 
 [[package]]
 name = "anstyle-crossterm"
-version = "4.0.2"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e2fd47259692825ef4023fc0bb544ecba98834980e21d6a2b807c9e163659d8"
+checksum = "a39445f0a9ac3b14b227fe43486aa97845738d661e167621efc96ef907823fbf"
 dependencies = [
  "anstyle",
- "crossterm 0.29.0",
+ "crossterm",
 ]
 
 [[package]]
@@ -936,15 +936,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "convert_case"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb402b8d4c85569410425650ce3eddc7d698ed96d39a73f941b08fb63082f1e7"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1065,28 +1056,10 @@ checksum = "829d955a0bb380ef178a640b91779e3987da38c9aea133b20614cfed8cdea9c6"
 dependencies = [
  "bitflags 2.10.0",
  "crossterm_winapi",
- "mio",
- "parking_lot",
- "rustix 0.38.44",
- "signal-hook",
- "signal-hook-mio",
- "winapi",
-]
-
-[[package]]
-name = "crossterm"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8b9f2e4c67f833b660cdb0a3523065869fb35570177239812ed4c905aeff87b"
-dependencies = [
- "bitflags 2.10.0",
- "crossterm_winapi",
- "derive_more",
- "document-features",
  "futures-core",
  "mio",
  "parking_lot",
- "rustix 1.1.2",
+ "rustix 0.38.44",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -1280,7 +1253,6 @@ version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
 dependencies = [
- "convert_case",
  "proc-macro2",
  "quote",
  "syn",
@@ -3722,7 +3694,7 @@ dependencies = [
  "bitflags 2.10.0",
  "cassowary",
  "compact_str 0.8.1",
- "crossterm 0.28.1",
+ "crossterm",
  "indoc",
  "instability",
  "itertools 0.13.0",
@@ -5672,7 +5644,7 @@ dependencies = [
  "chrono",
  "clap",
  "colorchoice",
- "crossterm 0.29.0",
+ "crossterm",
  "dialoguer",
  "dirs",
  "dotenvy",
@@ -5792,7 +5764,7 @@ dependencies = [
  "chrono",
  "clap",
  "colorchoice-clap",
- "crossterm 0.29.0",
+ "crossterm",
  "dialoguer",
  "dirs",
  "dotenvy",

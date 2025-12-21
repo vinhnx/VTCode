@@ -29,10 +29,7 @@
 /// renderer.render(frame, viewport, theme);
 /// ```
 use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Modifier, Style},
-    text::{Line, Span},
+    prelude::*,
     widgets::{Block, Clear, Paragraph, Wrap},
 };
 
