@@ -75,4 +75,7 @@ pub use root::{PtyConfig, StatusLineConfig, StatusLineMode, ToolOutputMode, UiCo
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
 pub use telemetry::TelemetryConfig;
 pub use timeouts::TimeoutsConfig;
-pub use types::{ReasoningEffortLevel, UiSurfacePreference};
+pub use types::{
+    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
+    VerbosityLevel,
+};

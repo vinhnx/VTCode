@@ -9,8 +9,8 @@ use ratatui::{
 use crate::config::constants::ui;
 use crate::ui::tui::session::{
     modal::{
-        compute_modal_area, ModalListLayout, ModalRenderStyles, ModalSearchState, ModalSection,
-        WizardModalState,
+        ModalListLayout, ModalRenderStyles, ModalSearchState, ModalSection, WizardModalState,
+        compute_modal_area,
     },
     terminal_capabilities,
 };
@@ -43,18 +43,14 @@ pub struct ModalWidget<'a> {
 /// Different types of modals that can be rendered
 pub enum ModalType<'a> {
     /// Simple text modal with instructions
-    Text {
-        lines: &'a [String],
-    },
+    Text { lines: &'a [String] },
     /// List modal with selectable items
     List {
         lines: &'a [String],
         list_state: &'a mut crate::ui::tui::session::modal::ModalListState,
     },
     /// Wizard modal with tabs and steps
-    Wizard {
-        wizard_state: &'a WizardModalState,
-    },
+    Wizard { wizard_state: &'a WizardModalState },
     /// Search modal with input field
     Search {
         lines: &'a [String],
@@ -126,7 +122,8 @@ impl<'a> ModalWidget<'a> {
 
     /// Calculate the modal area based on content
     fn calculate_modal_area(&self) -> Rect {
-        let (width_hint, text_lines, prompt_lines, search_lines, has_list) = match &self.modal_type {
+        let (width_hint, text_lines, prompt_lines, search_lines, has_list) = match &self.modal_type
+        {
             ModalType::Text { lines } => {
                 let width = lines
                     .iter()
@@ -212,7 +209,10 @@ impl<'a> Widget for ModalWidget<'a> {
             ModalType::Text { lines } => {
                 self.render_text_modal(inner, buf, lines);
             }
-            ModalType::List { lines, ref list_state } => {
+            ModalType::List {
+                lines,
+                ref list_state,
+            } => {
                 self.render_list_modal(inner, buf, lines, list_state);
             }
             ModalType::Wizard { wizard_state } => {
@@ -283,7 +283,12 @@ impl<'a> ModalWidget<'a> {
         .split(area);
 
         // Render tabs
-        self.render_wizard_tabs(chunks[0], buf, &wizard_state.steps, wizard_state.current_step);
+        self.render_wizard_tabs(
+            chunks[0],
+            buf,
+            &wizard_state.steps,
+            wizard_state.current_step,
+        );
 
         // Render question for current step
         if let Some(step) = wizard_state.steps.get(wizard_state.current_step) {
@@ -427,7 +432,10 @@ impl<'a> ModalWidget<'a> {
                     ListItem::new(Line::default())
                 } else if i == 0 {
                     // First line gets header style
-                    ListItem::new(Line::from(Span::styled(trimmed.to_owned(), self.styles.header)))
+                    ListItem::new(Line::from(Span::styled(
+                        trimmed.to_owned(),
+                        self.styles.header,
+                    )))
                 } else {
                     // Subsequent lines get bullet points
                     let bullet_prefix = format!("{} ", ui::MODAL_INSTRUCTIONS_BULLET);
@@ -480,11 +488,17 @@ impl<'a> ModalWidget<'a> {
             .highlight_style(self.styles.highlight)
             .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
             .repeat_highlight_symbol(true);
-        
+
         widget.render(area, buf);
     }
 
-    fn render_wizard_tabs(&self, area: Rect, buf: &mut Buffer, steps: &[crate::ui::tui::session::modal::WizardStepState], current_step: usize) {
+    fn render_wizard_tabs(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        steps: &[crate::ui::tui::session::modal::WizardStepState],
+        current_step: usize,
+    ) {
         // Simple tab rendering - just show the current step title
         if let Some(step) = steps.get(current_step) {
             let icon = if step.completed { "✔" } else { "☐" };
@@ -501,7 +515,10 @@ impl<'a> ModalWidget<'a> {
                 spans.push(Span::styled(placeholder.clone(), self.styles.detail));
             }
         } else {
-            spans.push(Span::styled(search_state.query.clone(), self.styles.selectable));
+            spans.push(Span::styled(
+                search_state.query.clone(),
+                self.styles.selectable,
+            ));
         }
         spans.push(Span::styled("▌".to_owned(), self.styles.highlight));
 
@@ -528,7 +545,7 @@ impl<'a> ModalWidget<'a> {
         // The full tui-prompts integration requires a Frame, not just a Buffer
         let grapheme_count = input.chars().count();
         let sanitized: String = std::iter::repeat_n('•', grapheme_count).collect();
-        
+
         let mut spans = vec![Span::styled(config.label.clone(), self.styles.header)];
         spans.push(Span::raw(" "));
         spans.push(Span::styled(sanitized, self.styles.selectable));

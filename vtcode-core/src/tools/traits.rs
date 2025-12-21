@@ -8,12 +8,51 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::tool_policy::ToolPolicy;
+use crate::tools::result::ToolResult as SplitToolResult;
 
 /// Core trait for all agent tools
 #[async_trait]
 pub trait Tool: Send + Sync {
     /// Execute the tool with given arguments
+    ///
+    /// Returns a JSON Value for backward compatibility.
+    /// For new tools, consider implementing `execute_dual()` instead.
     async fn execute(&self, args: Value) -> Result<Value>;
+
+    /// Execute with dual-channel output (LLM summary + UI content)
+    ///
+    /// This method enables significant token savings by separating:
+    /// - `llm_content`: Concise summary sent to LLM context (token-optimized)
+    /// - `ui_content`: Rich output displayed to user (full details)
+    ///
+    /// Default implementation wraps single-channel `execute()` result for backward compatibility.
+    /// Tools can override this to provide optimized dual output.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use vtcode_core::tools::result::ToolResult as SplitToolResult;
+    /// use serde_json::Value;
+    /// use anyhow::Result;
+    ///
+    /// async fn execute_dual(&self, args: Value) -> Result<SplitToolResult> {
+    ///     let full_output = "127 matches across 2,500 tokens...";
+    ///     let summary = "Found 127 matches in 15 files. Key: src/tools/grep.rs (3)";
+    ///     Ok(SplitToolResult::new(self.name(), summary, full_output))
+    /// }
+    /// ```
+    async fn execute_dual(&self, args: Value) -> Result<SplitToolResult> {
+        // Default: wrap single-channel result for backward compatibility
+        let result = self.execute(args).await?;
+
+        // Convert JSON Value to string for dual output
+        let content = if result.is_string() {
+            result.as_str().unwrap_or("").to_string()
+        } else {
+            serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string())
+        };
+
+        Ok(SplitToolResult::simple(self.name(), content))
+    }
 
     /// Get the tool's name
     fn name(&self) -> &'static str;

@@ -119,9 +119,33 @@ pub fn default_system_prompt() -> &'static str {
     DEFAULT_SYSTEM_PROMPT
 }
 
+pub fn minimal_system_prompt() -> &'static str {
+    MINIMAL_SYSTEM_PROMPT
+}
+
 pub fn default_lightweight_prompt() -> &'static str {
     DEFAULT_LIGHTWEIGHT_PROMPT
 }
+
+/// MINIMAL PROMPT (v5.0 - Pi-inspired, <1K tokens)
+/// Based on pi-coding-agent philosophy: modern models need minimal guidance
+/// Reference: https://mariozechner.at/posts/2025-11-30-pi-coding-agent/
+const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, an expert coding assistant. Use JSON params for tools.
+
+## Core
+Act until done, >85% budget, or blocked. Stay in WORKSPACE_DIR; confirm destructive ops. Read before editing; never give up without 3 alternatives.
+
+## Loop: UNDERSTAND → GATHER → EXECUTE → VERIFY
+- GATHER: list_files (scoped), grep_file (≤5), read_file (max_tokens)
+- EXECUTE: edit_file, create_file, run_pty_cmd (quote paths)
+- VERIFY: cargo check/test, confirm changes
+
+## Budget
+<75%: normal | 75-85%: trim | 85-90%: summarize | >90%: checkpoint
+Max tool output: 25K tokens
+
+## Tools
+Prefer MCP when enabled. JSON only. Quote paths. Stop after 3 repeated failures."#;
 
 /// LIGHTWEIGHT PROMPT (v4.1 - Resource-constrained / Simple operations)
 /// Minimal, essential guidance only
@@ -208,7 +232,22 @@ pub async fn compose_system_instruction_text(
     let home_path = home_dir();
     let instruction_bundle = read_instruction_hierarchy(project_root, vtcode_config).await;
 
-    let base_len = DEFAULT_SYSTEM_PROMPT.len();
+    // Select base prompt based on configured mode
+    use crate::config::types::SystemPromptMode;
+    let (base_prompt, mode_name) = match vtcode_config.map(|c| c.agent.system_prompt_mode) {
+        Some(SystemPromptMode::Minimal) => (MINIMAL_SYSTEM_PROMPT, "minimal"),
+        Some(SystemPromptMode::Lightweight) => (DEFAULT_LIGHTWEIGHT_PROMPT, "lightweight"),
+        Some(SystemPromptMode::Specialized) => (DEFAULT_SPECIALIZED_PROMPT, "specialized"),
+        Some(SystemPromptMode::Default) | None => (DEFAULT_SYSTEM_PROMPT, "default"),
+    };
+
+    tracing::debug!(
+        mode = mode_name,
+        base_tokens_approx = base_prompt.len() / 4, // rough token estimate
+        "Selected system prompt mode"
+    );
+
+    let base_len = base_prompt.len();
     let config_overhead = vtcode_config.map_or(0, |_| 1024);
     let instruction_hierarchy_size = instruction_bundle
         .as_ref()
@@ -222,7 +261,7 @@ pub async fn compose_system_instruction_text(
 
     let estimated_capacity = base_len + config_overhead + instruction_hierarchy_size + 512;
     let mut instruction = String::with_capacity(estimated_capacity);
-    instruction.push_str(DEFAULT_SYSTEM_PROMPT);
+    instruction.push_str(base_prompt);
 
     if let Some(cfg) = vtcode_config {
         instruction.push_str("\n\n## CONFIGURATION AWARENESS\n");
@@ -420,6 +459,12 @@ fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeCo
     format!("sys_prompt_async:{root}:default")
 }
 
+/// Generate a minimal system instruction (pi-inspired, <1K tokens)
+pub fn generate_minimal_instruction() -> Content {
+    // OPTIMIZATION: MINIMAL_SYSTEM_PROMPT is &'static str, use directly
+    Content::system_text(MINIMAL_SYSTEM_PROMPT)
+}
+
 /// Generate a lightweight system instruction for simple operations
 pub fn generate_lightweight_instruction() -> Content {
     // OPTIMIZATION: DEFAULT_LIGHTWEIGHT_PROMPT is &'static str, use directly
@@ -430,4 +475,114 @@ pub fn generate_lightweight_instruction() -> Content {
 pub fn generate_specialized_instruction() -> Content {
     // OPTIMIZATION: DEFAULT_SPECIALIZED_PROMPT is &'static str, use directly
     Content::system_text(DEFAULT_SPECIALIZED_PROMPT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::VTCodeConfig;
+    use crate::config::types::SystemPromptMode;
+    use std::path::PathBuf;
+
+    #[tokio::test]
+    async fn test_minimal_mode_selection() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Minimal;
+
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config)).await;
+
+        // Minimal prompt should be much shorter than default
+        assert!(result.len() < 3000, "Minimal mode should produce <3K chars");
+        assert!(
+            result.contains("VT Code"),
+            "Should contain VT Code identifier"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_default_mode_selection() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Default;
+
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config)).await;
+
+        // Default prompt should be longer
+        assert!(result.len() > 5000, "Default mode should produce >5K chars");
+        assert!(
+            result.contains("Anti-Giving-Up Policy"),
+            "Should contain full guidance"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lightweight_mode_selection() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Lightweight;
+
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config)).await;
+
+        // Lightweight should be between minimal and default
+        assert!(result.len() > 1000, "Lightweight should be >1K chars");
+        assert!(result.len() < 5000, "Lightweight should be <5K chars");
+    }
+
+    #[tokio::test]
+    async fn test_specialized_mode_selection() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Specialized;
+
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config)).await;
+
+        // Specialized for complex tasks
+        assert!(
+            result.len() > 1000,
+            "Specialized should have substantial content"
+        );
+        assert!(
+            result.contains("specialized"),
+            "Should indicate specialized mode"
+        );
+    }
+
+    #[test]
+    fn test_prompt_mode_enum_parsing() {
+        assert_eq!(
+            SystemPromptMode::parse("minimal"),
+            Some(SystemPromptMode::Minimal)
+        );
+        assert_eq!(
+            SystemPromptMode::parse("LIGHTWEIGHT"),
+            Some(SystemPromptMode::Lightweight)
+        );
+        assert_eq!(
+            SystemPromptMode::parse("Default"),
+            Some(SystemPromptMode::Default)
+        );
+        assert_eq!(
+            SystemPromptMode::parse("specialized"),
+            Some(SystemPromptMode::Specialized)
+        );
+        assert_eq!(SystemPromptMode::parse("invalid"), None);
+    }
+
+    #[test]
+    fn test_minimal_prompt_token_count() {
+        // Rough estimate: 1 token ≈ 4 characters
+        let approx_tokens = MINIMAL_SYSTEM_PROMPT.len() / 4;
+        assert!(
+            approx_tokens < 1000,
+            "Minimal prompt should be <1K tokens, got ~{}",
+            approx_tokens
+        );
+    }
+
+    #[test]
+    fn test_default_prompt_token_count() {
+        let approx_tokens = DEFAULT_SYSTEM_PROMPT.len() / 4;
+        assert!(
+            approx_tokens > 1000,
+            "Default prompt should be >1K tokens, got ~{}",
+            approx_tokens
+        );
+    }
 }

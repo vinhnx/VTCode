@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Clear, ListState, Paragraph, Wrap, Widget},
+    widgets::{Block, BorderType, Clear, ListState, Paragraph, Widget, Wrap},
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -22,8 +22,8 @@ use super::{
         InlineTheme,
     },
 };
-use crate::ui::tui::widgets::SessionWidget;
 use crate::config::constants::ui;
+use crate::ui::tui::widgets::SessionWidget;
 
 pub mod file_palette;
 mod header;

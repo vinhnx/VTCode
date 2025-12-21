@@ -8,10 +8,7 @@ use ratatui::{
 
 use crate::config::constants::ui;
 use crate::ui::tui::session::{
-    Session,
-    file_palette::FilePalette,
-    modal::compute_modal_area,
-    prompt_palette::PromptPalette,
+    Session, file_palette::FilePalette, modal::compute_modal_area, prompt_palette::PromptPalette,
     terminal_capabilities,
 };
 use crate::ui::tui::style::measure_text_width;
@@ -79,8 +76,10 @@ impl<'a> Widget for FilePaletteWidget<'a> {
         }
 
         let instructions = self.instructions();
-        let modal_height =
-            items.len() + instructions.len() + 2 + if self.palette.has_more_items() { 1 } else { 0 };
+        let modal_height = items.len()
+            + instructions.len()
+            + 2
+            + if self.palette.has_more_items() { 1 } else { 0 };
         let area = compute_modal_area(self.viewport, width_hint, modal_height, 0, 0, true);
 
         Clear.render(area, buf);
@@ -199,7 +198,10 @@ impl<'a> FilePaletteWidget<'a> {
         if inner.height > 0 && inner.width > 0 {
             let loading_text = vec![Line::from(Span::styled(
                 "Loading workspace files...".to_owned(),
-                self.session.styles.default_style().add_modifier(Modifier::DIM),
+                self.session
+                    .styles
+                    .default_style()
+                    .add_modifier(Modifier::DIM),
             ))];
             let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
             paragraph.render(inner, buf);
@@ -313,8 +315,10 @@ impl<'a> Widget for PromptPaletteWidget<'a> {
         }
 
         let instructions = self.instructions();
-        let modal_height =
-            items.len() + instructions.len() + 2 + if self.palette.has_more_items() { 1 } else { 0 };
+        let modal_height = items.len()
+            + instructions.len()
+            + 2
+            + if self.palette.has_more_items() { 1 } else { 0 };
         let area = compute_modal_area(self.viewport, width_hint, modal_height, 0, 0, true);
 
         Clear.render(area, buf);
@@ -414,7 +418,10 @@ impl<'a> PromptPaletteWidget<'a> {
         if inner.height > 0 && inner.width > 0 {
             let loading_text = vec![Line::from(Span::styled(
                 "Loading custom prompts...".to_owned(),
-                self.session.styles.default_style().add_modifier(Modifier::DIM),
+                self.session
+                    .styles
+                    .default_style()
+                    .add_modifier(Modifier::DIM),
             ))];
             let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
             paragraph.render(inner, buf);

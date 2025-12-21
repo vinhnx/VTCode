@@ -6,8 +6,12 @@ use crate::config::types::CapabilityLevel;
 use crate::gemini::FunctionDeclaration;
 use crate::tool_policy::ToolPolicy;
 use serde_json::{Map, Value, json};
+use vtcode_config::ToolDocumentationMode;
 
 use super::builtins::builtin_tool_registrations;
+use super::progressive_docs::{
+    build_minimal_declarations, build_progressive_declarations, minimal_tool_signatures,
+};
 
 const PATH_ALIAS_WITH_TARGET: &[(&str, &str)] = &[
     ("file_path", "Alias for path"),
@@ -701,17 +705,51 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 }
 
 pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
-    build_function_declarations_with_mode(true)
+    build_function_declarations_with_mode(true, ToolDocumentationMode::default())
 }
 
 pub fn build_function_declarations_with_mode(
     todo_planning_enabled: bool,
+    tool_documentation_mode: ToolDocumentationMode,
 ) -> Vec<FunctionDeclaration> {
-    let mut declarations = base_function_declarations();
-    apply_metadata_overrides(&mut declarations);
+    // Select base declarations based on documentation mode
+    let mut declarations = match tool_documentation_mode {
+        ToolDocumentationMode::Minimal => {
+            tracing::debug!(
+                mode = "minimal",
+                "Building minimal tool declarations (~800 tokens total)"
+            );
+            let signatures = minimal_tool_signatures();
+            build_minimal_declarations(&signatures)
+        }
+        ToolDocumentationMode::Progressive => {
+            tracing::debug!(
+                mode = "progressive",
+                "Building progressive tool declarations (~1,200 tokens total)"
+            );
+            let signatures = minimal_tool_signatures();
+            build_progressive_declarations(&signatures)
+        }
+        ToolDocumentationMode::Full => {
+            tracing::debug!(
+                mode = "full",
+                "Building full tool declarations (~3,000 tokens total)"
+            );
+            base_function_declarations()
+        }
+    };
+
+    // Apply metadata overrides only for full mode
+    // (minimal/progressive already have optimized structure)
+    if tool_documentation_mode == ToolDocumentationMode::Full {
+        apply_metadata_overrides(&mut declarations);
+    }
+
+    // Remove update_plan tool if todo planning is disabled
     if !todo_planning_enabled {
         declarations.retain(|decl| decl.name != tools::UPDATE_PLAN);
     }
+
     declarations
 }
 

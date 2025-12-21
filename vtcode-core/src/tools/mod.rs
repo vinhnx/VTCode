@@ -149,8 +149,10 @@ pub mod plugins;
 pub mod pty;
 pub mod rate_limiter;
 pub mod registry;
+pub mod result;
 pub mod result_cache;
 pub mod result_metadata;
+pub mod summarizers;
 pub mod search_metrics;
 pub mod shell;
 pub mod smart_cache;
@@ -204,6 +206,7 @@ pub use registry::{
     ToolJustification, ToolRegistration, ToolRegistry, ToolRiskContext, ToolRiskScorer, ToolSource,
     WorkspaceTrust,
 };
+pub use result::{TokenCounts, ToolMetadata, ToolMetadataBuilder, ToolResult as SplitToolResult};
 pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
