@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+use directories::ProjectDirs;
 use once_cell::sync::Lazy;
 use vtcode_commons::paths::WorkspacePaths;
 
@@ -130,9 +131,55 @@ where
     }
 }
 
+/// Get the XDG-compliant configuration directory for vtcode.
+///
+/// Follows the Ratatui recipe pattern for config directories:
+/// 1. Check environment variable VTCODE_CONFIG for custom location
+/// 2. Use XDG Base Directory Specification via ProjectDirs
+/// 3. Fallback to legacy ~/.vtcode/ for backwards compatibility
+///
+/// Returns `None` if no suitable directory can be determined.
+pub fn get_config_dir() -> Option<PathBuf> {
+    // Allow custom config directory via environment variable
+    if let Ok(custom_dir) = std::env::var("VTCODE_CONFIG") {
+        return Some(PathBuf::from(custom_dir));
+    }
+
+    // Use XDG-compliant directories (e.g., ~/.config/vtcode on Linux)
+    if let Some(proj_dirs) = ProjectDirs::from("com", "vinhnx", "vtcode") {
+        return Some(proj_dirs.config_local_dir().to_path_buf());
+    }
+
+    // Fallback to legacy ~/.vtcode/ for backwards compatibility
+    dirs::home_dir().map(|home| home.join(DEFAULT_CONFIG_DIR_NAME))
+}
+
+/// Get the XDG-compliant data directory for vtcode.
+///
+/// Follows the Ratatui recipe pattern for data directories:
+/// 1. Check environment variable VTCODE_DATA for custom location
+/// 2. Use XDG Base Directory Specification via ProjectDirs
+/// 3. Fallback to legacy ~/.vtcode/cache for backwards compatibility
+///
+/// Returns `None` if no suitable directory can be determined.
+pub fn get_data_dir() -> Option<PathBuf> {
+    // Allow custom data directory via environment variable
+    if let Ok(custom_dir) = std::env::var("VTCODE_DATA") {
+        return Some(PathBuf::from(custom_dir));
+    }
+
+    // Use XDG-compliant directories (e.g., ~/.local/share/vtcode on Linux)
+    if let Some(proj_dirs) = ProjectDirs::from("com", "vinhnx", "vtcode") {
+        return Some(proj_dirs.data_local_dir().to_path_buf());
+    }
+
+    // Fallback to legacy ~/.vtcode/cache for backwards compatibility
+    dirs::home_dir().map(|home| home.join(DEFAULT_CONFIG_DIR_NAME).join("cache"))
+}
+
 fn default_home_paths(config_file_name: &str) -> Vec<PathBuf> {
-    dirs::home_dir()
-        .map(|home| home.join(DEFAULT_CONFIG_DIR_NAME).join(config_file_name))
+    get_config_dir()
+        .map(|config_dir| config_dir.join(config_file_name))
         .into_iter()
         .collect()
 }

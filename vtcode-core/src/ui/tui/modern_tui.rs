@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use crossterm::{
+    cursor,
     event::{
-        self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
-        Event as CrosstermEvent, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-        PushKeyboardEnhancementFlags,
+        self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste,
+        EnableFocusChange, Event as CrosstermEvent, KeyboardEnhancementFlags, KeyEventKind,
+        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
     terminal::{
@@ -15,9 +16,14 @@ use crossterm::{
 use futures::StreamExt;
 use futures::future::FutureExt;
 use ratatui::backend::CrosstermBackend;
-use std::io;
+use std::{
+    io,
+    ops::{Deref, DerefMut},
+    time::Duration,
+};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use tracing::error;
 
 // Check if nix is available for Unix-specific signal handling
 
@@ -73,10 +79,7 @@ impl ModernTui {
     pub fn new() -> Result<Self> {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let cancellation_token = CancellationToken::new();
-        let init_tx = event_tx.clone();
-        let task = tokio::spawn(async move {
-            let _ = init_tx.send(Event::Init);
-        });
+        let task = tokio::spawn(async {});
 
         Ok(Self {
             terminal: ratatui::Terminal::new(CrosstermBackend::new(std::io::stderr()))?,
@@ -114,11 +117,10 @@ impl ModernTui {
     pub async fn enter(&mut self) -> Result<()> {
         terminal::enable_raw_mode().context("failed to enable raw mode")?;
         let mut stdout = io::stderr();
-        execute!(stdout, EnterAlternateScreen).context("failed to enter alternate screen")?;
+        execute!(stdout, EnterAlternateScreen, cursor::Hide)
+            .context("failed to enter alternate screen")?;
         if self.mouse {
-            // Mouse functionality disabled
-            // execute!(stdout, event::EnableMouseCapture)
-            //     .context("failed to enable mouse capture")?;
+            execute!(stdout, event::EnableMouseCapture).context("failed to enable mouse capture")?;
         }
         if self.paste {
             execute!(stdout, EnableBracketedPaste).context("failed to enable bracketed paste")?;
@@ -139,100 +141,47 @@ impl ModernTui {
             );
         }
 
-        let tick_delay = std::time::Duration::from_secs_f64(1.0 / self.tick_rate);
-        let render_delay = std::time::Duration::from_secs_f64(1.0 / self.frame_rate);
-        self.task = tokio::spawn({
-            let cancellation_token = self.cancellation_token.clone();
-            let event_tx = self.event_tx.clone();
-            async move {
-                let mut reader = crossterm::event::EventStream::new();
-                let mut tick_interval = tokio::time::interval(tick_delay);
-                let mut render_interval = tokio::time::interval(render_delay);
-                loop {
-                    let tick_delay = tick_interval.tick();
-                    let render_delay = render_interval.tick();
-                    let crossterm_event = reader.next().fuse();
-                    tokio::select! {
-                        _ = cancellation_token.cancelled() => {
-                            break;
-                        }
-                        maybe_event = crossterm_event => {
-                            match maybe_event {
-                                Some(Ok(evt)) => {
-                                    match evt {
-                                        CrosstermEvent::Key(key) => {
-                                            event_tx.send(Event::Key(key)).unwrap();
-                                        }
-                                        CrosstermEvent::Mouse(mouse) => {
-                                            event_tx.send(Event::Mouse(mouse)).unwrap();
-                                        }
-                                        CrosstermEvent::Resize(x, y) => {
-                                            event_tx.send(Event::Resize(x, y)).unwrap();
-                                        }
-                                        CrosstermEvent::FocusGained => {
-                                            event_tx.send(Event::FocusGained).unwrap();
-                                        }
-                                        CrosstermEvent::FocusLost => {
-                                            event_tx.send(Event::FocusLost).unwrap();
-                                        }
-                                        CrosstermEvent::Paste(s) => {
-                                            event_tx.send(Event::Paste(s)).unwrap();
-                                        }
-                                    }
-                                }
-                                Some(Err(_)) => {
-                                    event_tx.send(Event::Error).unwrap();
-                                }
-                                None => {
-                                    event_tx.send(Event::Closed).unwrap();
-                                    break;
-                                }
-                            }
-                        },
-                        _ = tick_delay => {
-                            event_tx.send(Event::Tick).unwrap();
-                        },
-                        _ = render_delay => {
-                            event_tx.send(Event::Render).unwrap();
-                        },
-                    }
-                }
-            }
-        });
+        self.start_event_task();
         Ok(())
     }
 
     pub async fn exit(&mut self) -> Result<()> {
-        self.cancellation_token.cancel();
-        self.task.abort();
+        self.stop().await?;
         if terminal::is_raw_mode_enabled().unwrap_or(false) {
+            self.terminal.flush().context("failed to flush terminal")?;
+            if self.paste {
+                execute!(io::stderr(), DisableBracketedPaste)
+                    .context("failed to disable bracketed paste")?;
+            }
+            if self.mouse {
+                execute!(io::stderr(), event::DisableMouseCapture)
+                    .context("failed to disable mouse capture")?;
+            }
+            execute!(io::stderr(), LeaveAlternateScreen, cursor::Show)
+                .context("failed to leave alternate screen")?;
             terminal::disable_raw_mode().context("failed to disable raw mode")?;
+            let _ = execute!(io::stderr(), DisableFocusChange);
+            let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
         }
-        execute!(io::stderr(), LeaveAlternateScreen).context("failed to leave alternate screen")?;
-        if self.mouse {
-            // Mouse functionality disabled
-            // execute!(io::stderr(), event::DisableMouseCapture)
-            //     .context("failed to disable mouse capture")?;
-        }
-        execute!(io::stderr(), DisableBracketedPaste)
-            .context("failed to disable bracketed paste")?;
-
-        // Disable focus change events if they were enabled
-        let _ = execute!(io::stderr(), DisableFocusChange);
-
-        // Pop keyboard enhancements if they were pushed
-        let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
 
         Ok(())
     }
 
     pub async fn suspend(&mut self) -> Result<()> {
-        self.cancellation_token.cancel();
-        self.task.abort();
+        self.stop().await?;
         if terminal::is_raw_mode_enabled().unwrap_or(false) {
-            terminal::disable_raw_mode().context("failed to disable raw mode")?;
+            let _ = self.terminal.flush();
+            if self.paste {
+                let _ = execute!(io::stderr(), DisableBracketedPaste);
+            }
+            if self.mouse {
+                let _ = execute!(io::stderr(), event::DisableMouseCapture);
+            }
+            let _ = execute!(io::stderr(), LeaveAlternateScreen, cursor::Show);
+            let _ = terminal::disable_raw_mode();
+            let _ = execute!(io::stderr(), DisableFocusChange);
+            let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
         }
-        execute!(io::stderr(), LeaveAlternateScreen).context("failed to leave alternate screen")?;
 
         // Execute suspend command to allow job control (Ctrl+Z)
         #[cfg(unix)]
@@ -246,103 +195,134 @@ impl ModernTui {
     }
 
     pub async fn resume(&mut self) -> Result<()> {
-        // Enable raw mode and enter alternate screen again
-        terminal::enable_raw_mode().context("failed to enable raw mode")?;
-        execute!(io::stderr(), EnterAlternateScreen).context("failed to enter alternate screen")?;
-        if self.mouse {
-            // Mouse functionality disabled
-            // execute!(io::stderr(), event::EnableMouseCapture)
-            //     .context("failed to enable mouse capture")?;
-        }
-        if self.paste {
-            execute!(io::stderr(), EnableBracketedPaste)
-                .context("failed to enable bracketed paste")?;
-        }
+        self.enter().await
+    }
 
-        // Enable focus change and keyboard enhancements
-        let _ = execute!(io::stderr(), EnableFocusChange);
-        if supports_keyboard_enhancement().unwrap_or(false) {
-            let _ = execute!(
-                io::stderr(),
-                PushKeyboardEnhancementFlags(
-                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                        | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
-                )
-            );
-        }
+    pub async fn next(&mut self) -> Option<Event> {
+        self.event_rx.recv().await
+    }
 
-        let tick_delay = std::time::Duration::from_secs_f64(1.0 / self.tick_rate);
-        let render_delay = std::time::Duration::from_secs_f64(1.0 / self.frame_rate);
-        self.task = tokio::spawn({
-            let cancellation_token = self.cancellation_token.clone();
-            let event_tx = self.event_tx.clone();
-            async move {
-                let mut reader = crossterm::event::EventStream::new();
-                let mut tick_interval = tokio::time::interval(tick_delay);
-                let mut render_interval = tokio::time::interval(render_delay);
-                loop {
-                    let tick_delay = tick_interval.tick();
-                    let render_delay = render_interval.tick();
-                    let crossterm_event = reader.next().fuse();
-                    tokio::select! {
-                        _ = cancellation_token.cancelled() => {
-                            break;
-                        }
-                        maybe_event = crossterm_event => {
-                            match maybe_event {
-                                Some(Ok(evt)) => {
-                                    match evt {
-                                        CrosstermEvent::Key(key) => {
-                                            event_tx.send(Event::Key(key)).unwrap();
-                                        }
-                                        CrosstermEvent::Mouse(mouse) => {
-                                            event_tx.send(Event::Mouse(mouse)).unwrap();
-                                        }
-                                        CrosstermEvent::Resize(x, y) => {
-                                            event_tx.send(Event::Resize(x, y)).unwrap();
-                                        }
-                                        CrosstermEvent::FocusGained => {
-                                            event_tx.send(Event::FocusGained).unwrap();
-                                        }
-                                        CrosstermEvent::FocusLost => {
-                                            event_tx.send(Event::FocusLost).unwrap();
-                                        }
-                                        CrosstermEvent::Paste(s) => {
-                                            event_tx.send(Event::Paste(s)).unwrap();
+    pub fn cancel(&self) {
+        self.cancellation_token.cancel();
+    }
+
+    pub async fn stop(&mut self) -> Result<()> {
+        self.cancel();
+        let mut counter = 0;
+        while !self.task.is_finished() {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            counter += 1;
+            if counter > 50 {
+                self.task.abort();
+            }
+            if counter > 100 {
+                error!("Failed to abort event task in 100 milliseconds");
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn start_event_task(&mut self) {
+        let tick_delay = Duration::from_secs_f64(1.0 / self.tick_rate);
+        let render_delay = Duration::from_secs_f64(1.0 / self.frame_rate);
+
+        self.cancel();
+        self.cancellation_token = CancellationToken::new();
+
+        let cancellation_token = self.cancellation_token.clone();
+        let event_tx = self.event_tx.clone();
+        self.task = tokio::spawn(async move {
+            let mut reader = crossterm::event::EventStream::new();
+            let mut tick_interval = tokio::time::interval(tick_delay);
+            let mut render_interval = tokio::time::interval(render_delay);
+            let _ = event_tx.send(Event::Init);
+
+            loop {
+                let tick_delay = tick_interval.tick();
+                let render_delay = render_interval.tick();
+                let crossterm_event = reader.next().fuse();
+
+                tokio::select! {
+                    _ = cancellation_token.cancelled() => {
+                        break;
+                    }
+                    maybe_event = crossterm_event => {
+                        match maybe_event {
+                            Some(Ok(evt)) => {
+                                match evt {
+                                    CrosstermEvent::Key(key) => {
+                                        if key.kind == KeyEventKind::Press {
+                                            let _ = event_tx.send(Event::Key(key));
                                         }
                                     }
-                                }
-                                Some(Err(_)) => {
-                                    event_tx.send(Event::Error).unwrap();
-                                }
-                                None => {
-                                    event_tx.send(Event::Closed).unwrap();
-                                    break;
+                                    CrosstermEvent::Mouse(mouse) => {
+                                        let _ = event_tx.send(Event::Mouse(mouse));
+                                    }
+                                    CrosstermEvent::Resize(x, y) => {
+                                        let _ = event_tx.send(Event::Resize(x, y));
+                                    }
+                                    CrosstermEvent::FocusGained => {
+                                        let _ = event_tx.send(Event::FocusGained);
+                                    }
+                                    CrosstermEvent::FocusLost => {
+                                        let _ = event_tx.send(Event::FocusLost);
+                                    }
+                                    CrosstermEvent::Paste(s) => {
+                                        let _ = event_tx.send(Event::Paste(s));
+                                    }
                                 }
                             }
-                        },
-                        _ = tick_delay => {
-                            event_tx.send(Event::Tick).unwrap();
-                        },
-                        _ = render_delay => {
-                            event_tx.send(Event::Render).unwrap();
-                        },
-                    }
+                            Some(Err(_)) => {
+                                let _ = event_tx.send(Event::Error);
+                            }
+                            None => {
+                                let _ = event_tx.send(Event::Closed);
+                                break;
+                            }
+                        }
+                    },
+                    _ = tick_delay => {
+                        let _ = event_tx.send(Event::Tick);
+                    },
+                    _ = render_delay => {
+                        let _ = event_tx.send(Event::Render);
+                    },
                 }
             }
         });
-        Ok(())
     }
 }
 
 impl Drop for ModernTui {
     fn drop(&mut self) {
-        self.cancellation_token.cancel();
+        self.cancel();
         self.task.abort();
 
-        // Ensure cleanup
+        let _ = self.terminal.flush();
+        if self.paste {
+            let _ = execute!(io::stderr(), DisableBracketedPaste);
+        }
+        if self.mouse {
+            let _ = execute!(io::stderr(), event::DisableMouseCapture);
+        }
+        let _ = execute!(io::stderr(), LeaveAlternateScreen, cursor::Show);
         let _ = disable_raw_mode();
-        let _ = execute!(io::stderr(), LeaveAlternateScreen);
+        let _ = execute!(io::stderr(), DisableFocusChange);
+        let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
+    }
+}
+
+impl Deref for ModernTui {
+    type Target = ratatui::Terminal<CrosstermBackend<std::io::Stderr>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.terminal
+    }
+}
+
+impl DerefMut for ModernTui {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.terminal
     }
 }

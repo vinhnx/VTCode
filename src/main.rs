@@ -34,6 +34,12 @@ async fn main() -> Result<()> {
     process_hardening::apply_process_hardening()
         .context("failed to apply process hardening safeguards")?;
 
+    // If user asked for version, print enhanced version with XDG directory info
+    if std::env::args().any(|a| a == "-V" || a == "--version") {
+        println!("{}", vtcode_core::cli::args::long_version());
+        return Ok(());
+    }
+
     // If user asked for help, augment the help output with dynamic model list
     // and print the help with the additional CLI details.
     if std::env::args().any(|a| a == "-h" || a == "--help") {

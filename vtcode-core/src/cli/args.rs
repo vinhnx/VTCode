@@ -5,13 +5,40 @@ use clap::{ArgAction, ColorChoice, Parser, Subcommand, ValueEnum, ValueHint};
 use colorchoice_clap::Color as ColorSelection;
 use std::path::PathBuf;
 
+/// Get the long version information following Ratatui recipe pattern
+///
+/// Displays version, authors, and directory information following the
+/// XDG Base Directory Specification for organized file storage.
+/// See: https://ratatui.rs/recipes/apps/config-directories/
+///
+/// This function is called at runtime to provide dynamic version info
+/// that includes actual resolved directory paths.
+pub fn long_version() -> String {
+    use crate::config::defaults::{get_config_dir, get_data_dir};
+
+    let config_dir = get_config_dir()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "~/.vtcode/".to_string());
+
+    let data_dir = get_data_dir()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "~/.vtcode/cache/".to_string());
+
+    format!(
+        "{}\n\nAuthors: {}\nConfig directory: {}\nData directory: {}\n\nEnvironment variables:\n  VTCODE_CONFIG - Override config directory\n  VTCODE_DATA - Override data directory",
+        env!("CARGO_PKG_VERSION"),
+        env!("CARGO_PKG_AUTHORS"),
+        config_dir,
+        data_dir
+    )
+}
+
 /// Main CLI structure for vtcode with advanced features
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "vtcode",
     version,
-    about = "Advanced coding agent with Decision Ledger\n\nFeatures:\n• Single-agent architecture with Decision Ledger for reliable task execution\n• Tree-sitter powered code analysis (Rust, Python, JavaScript, TypeScript, Go, Java)\n• Multi-provider LLM support (Gemini, OpenAI, Anthropic, DeepSeek, xAI, Z.AI, Moonshot AI, OpenRouter, Ollama)
-• Prompt caching and token-efficient context management\n• Real-time performance monitoring and benchmarking\n• Enhanced security with tool policies and execution control\n• Research-preview context management\n\nQuick Start:\n  export GEMINI_API_KEY=\"your_key\"\n  vtcode chat",
+    about = "Advanced coding agent with XDG-compliant configuration\n\nFeatures:\n• Single-agent architecture with Decision Ledger for reliable task execution\n• XDG Base Directory Specification compliance for organized storage\n• Tree-sitter powered code analysis (Rust, Python, JavaScript, TypeScript, Go, Java)\n• Multi-provider LLM support (Gemini, OpenAI, Anthropic, DeepSeek, xAI, Z.AI, Moonshot AI, OpenRouter, Ollama)\n• Thinking/Reasoning support with configurable thinking levels (Gemini 3, GPT-5, Claude 4.5)\n• Agent Client Protocol (ACP) bridge for IDE integrations (Zed, VS Code)\n• Prompt caching and token-efficient context management\n• Real-time performance monitoring and benchmarking\n• Enhanced security with tool policies and execution control\n\nConfiguration:\n• Config dir: Set VTCODE_CONFIG or uses XDG directories\n• Data dir: Set VTCODE_DATA or uses XDG directories\n• See: https://ratatui.rs/recipes/apps/config-directories/\n\nQuick Start:\n  export GEMINI_API_KEY=\"your_key\"\n  vtcode chat",
     color = ColorChoice::Auto
 )]
 pub struct Cli {
@@ -30,28 +57,23 @@ pub struct Cli {
     /// LLM Model ID with latest model support
     ///
     /// Available providers & models:
-    ///   • gemini-2.5-flash-preview-05-20 - Latest fast Gemini model (default)
-    ///   • gemini-2.5-pro - Latest, most capable Gemini model
-    ///   • gpt-5.2 - OpenAI's latest flagship (Responses API, legacy alias: gpt-5.2-2025-12-11)
-    ///   • gpt-5 - OpenAI's latest
+    ///   • gemini-3-pro-preview - Latest flagship Gemini model with advanced reasoning
+    ///   • gemini-3-flash-preview - Fast version of Gemini 3 Pro with 3-level thinking
+    ///   • gemini-2.5-flash - Stable fast Gemini model (default)
+    ///   • gpt-5 - OpenAI's latest flagship (default)
     ///   • gpt-5-codex - OpenAI's latest coding-focused model
-    ///   • claude-sonnet-4-5 - Anthropic's latest Sonnet model
-    ///   • claude-opus-4-1-20250805 - Anthropic's latest Opus model
+    ///   • gpt-5.2 - OpenAI's latest flagship (Responses API)
+    ///   • claude-sonnet-4-5-20250929 - Anthropic's latest Sonnet model (default)
+    ///   • claude-opus-4-5-20251101 - Anthropic's latest Opus model
     ///   • deepseek-reasoner - DeepSeek reasoning model
-    ///   • deepseek-chat - DeepSeek chat model
-    ///   • grok-4 - xAI Grok flagship model
+    ///   • deepseek-chat - DeepSeek chat model (default)
+    ///   • grok-4 - xAI Grok flagship model (default)
     ///   • grok-4-code - xAI Grok coding-specific model
-    ///   • glm-4.6 - Z.AI GLM 4.6 model
-    ///   • kimi-k2-turbo-preview - Moonshot AI Kimi K2 Turbo
+    ///   • glm-4.6 - Z.AI GLM 4.6 model (default)
+    ///   • kimi-k2-0905 - Moonshot AI Kimi K2 (default)
     ///   • x-ai/grok-code-fast-1 - OpenRouter Grok fast coding model
-    ///   • x-ai/grok-4 - OpenRouter xAI Grok 4
     ///   • qwen/qwen3-coder - OpenRouter Qwen3 Coder optimized for IDE usage
-    ///   • qwen/qwen3-coder-plus - OpenRouter Qwen3 Coder Plus
-    ///   • qwen/qwen3-235b-a22b - OpenRouter Qwen3 235B model
-    ///   • openai/gpt-oss-20b - OpenRouter OSS 20B model
-    ///   • z-ai/glm-4.6 - OpenRouter Z.AI GLM 4.6
-    ///   • moonshotai/kimi-k2-0905 - OpenRouter MoonshotAI Kimi K2
-    ///   • gpt-oss:20b - Ollama local model
+    ///   • gpt-oss:20b - Ollama local model (default)
     /// Note: If using OpenAI, the `prompt_cache_retention` configuration applies only to models
     /// that support the OpenAI Responses API (e.g., gpt-5, gpt-5.1, gpt-5.2). Setting it for
     /// non-Responses models will be ignored.
@@ -76,6 +98,7 @@ pub struct Cli {
     ///   • xai - xAI Grok models
     ///   • zai - Z.AI GLM models
     ///   • moonshot - Moonshot AI Kimi models
+    ///   • minimax - MiniMax models (Anthropic-compatible)
     ///   • ollama - Local Ollama server (default gpt-oss:20b)
     ///   • lmstudio - Local LM Studio server (OpenAI-compatible)
     ///
@@ -297,20 +320,20 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub enable_skills: bool,
 
-    /// TUI tick rate (ms) - Controls how frequently the UI updates
+    /// App tick rate in milliseconds - Controls how frequently the UI updates
     ///
+    /// This dictates the application's tick rate for event processing.
     /// Lower values: More responsive UI but higher CPU usage
     /// Higher values: Less CPU usage but potentially less responsive
-    /// Default: 250ms
-    #[arg(long, global = true, default_value_t = 250)]
+    #[arg(short = 't', long, default_value_t = 250)]
     pub tick_rate: u64,
 
-    /// TUI frame rate (FPS) - Controls rendering frequency
+    /// Frame rate in FPS - Controls rendering frequency
     ///
+    /// This controls how often the terminal UI is redrawn.
     /// Lower values: Less CPU usage but potentially choppier animations
     /// Higher values: Smoother UI but higher CPU usage
-    /// Default: 60 FPS
-    #[arg(long, global = true, default_value_t = 60)]
+    #[arg(short = 'f', long, default_value_t = 60)]
     pub frame_rate: u64,
 
     #[command(subcommand)]
