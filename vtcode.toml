@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "openai"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "OPENAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "deepseek-ai/DeepSeek-V3.2"
+default_model = "gpt-5-nano"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
