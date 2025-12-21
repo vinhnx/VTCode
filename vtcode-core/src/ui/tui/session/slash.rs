@@ -10,11 +10,11 @@ use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
 use super::{
-    LEGACY_PROMPT_COMMAND_NAME, PROMPT_COMMAND_NAME, PROMPT_COMMAND_PREFIX, Session,
-    measure_text_width,
+    Session, measure_text_width,
     modal::{ModalListLayout, compute_modal_area},
     ratatui_color_from_ansi, ratatui_style_from_inline,
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
+    PROMPT_COMMAND_NAME, LEGACY_PROMPT_COMMAND_NAME, PROMPT_COMMAND_PREFIX,
 };
 
 pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {

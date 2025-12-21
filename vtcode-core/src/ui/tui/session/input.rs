@@ -396,4 +396,37 @@ impl Session {
     fn is_tools_policy_trust(&self) -> bool {
         self.header_context.workspace_trust.contains("tools policy")
     }
+
+    /// Build input render data for external widgets
+    pub fn build_input_widget_data(&self, width: u16, height: u16) -> InputWidgetData {
+        let input_render = self.build_input_render(width, height);
+        InputWidgetData {
+            text: input_render.text,
+            cursor_x: input_render.cursor_x,
+            cursor_y: input_render.cursor_y,
+            is_full_auto_trust: self.is_full_auto_trust(),
+            is_tools_policy_trust: self.is_tools_policy_trust(),
+            cursor_should_be_visible: self.cursor_should_be_visible(),
+            border_style: self.styles.accent_style(),
+            default_style: self.styles.default_style(),
+        }
+    }
+
+    /// Build input status line for external widgets
+    pub fn build_input_status_widget_data(&self, width: u16) -> Option<Vec<Span<'static>>> {
+        self.render_input_status_line(width).map(|line| line.spans)
+    }
+}
+
+/// Data structure for input widget rendering
+#[derive(Clone, Debug)]
+pub struct InputWidgetData {
+    pub text: Text<'static>,
+    pub cursor_x: u16,
+    pub cursor_y: u16,
+    pub is_full_auto_trust: bool,
+    pub is_tools_policy_trust: bool,
+    pub cursor_should_be_visible: bool,
+    pub border_style: Style,
+    pub default_style: Style,
 }

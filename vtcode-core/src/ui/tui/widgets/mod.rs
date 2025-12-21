@@ -4,11 +4,17 @@
 /// These widgets enable better composition, testability, and separation of concerns.
 
 pub mod header;
+pub mod input;
+pub mod modal;
 pub mod palette;
 pub mod session;
+pub mod slash;
 pub mod transcript;
 
 pub use header::HeaderWidget;
+pub use input::InputWidget;
+pub use modal::{ModalWidget, ModalType};
 pub use palette::{FilePaletteWidget, PromptPaletteWidget};
 pub use session::SessionWidget;
+pub use slash::SlashWidget;
 pub use transcript::TranscriptWidget;
