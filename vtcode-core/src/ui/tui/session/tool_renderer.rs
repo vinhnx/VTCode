@@ -1,4 +1,4 @@
-use ratatui::text::Span;
+use ratatui::prelude::*;
 
 use super::super::style::ratatui_style_from_inline;
 use super::super::types::InlineTheme;

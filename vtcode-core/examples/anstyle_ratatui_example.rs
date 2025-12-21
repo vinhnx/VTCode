@@ -4,7 +4,7 @@
 //! in both CLI output and TUI widgets.
 
 use anstyle::{AnsiColor, Color, Effects, Style};
-use crossterm::terminal::{
+use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use ratatui::Terminal;
@@ -153,7 +153,7 @@ fn main() -> io::Result<()> {
     })?;
 
     // Wait for input
-    use crossterm::event::{Event, KeyCode, read};
+    use ratatui::crossterm::event::{Event, KeyCode, read};
     loop {
         if let Event::Key(key) = read()? {
             if key.code == KeyCode::Char('q') {

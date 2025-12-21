@@ -5,6 +5,7 @@ use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme};
 use anyhow::Result;
+use ratatui::crossterm::event::MouseEventKind;
 use tokio::sync::mpsc;
 
 use super::modern_tui::{Event, ModernTui};
@@ -104,10 +105,10 @@ pub async fn run_modern_tui(
                             Event::Mouse(mouse_event) => {
                                 // Handle mouse events if needed
                                 match mouse_event.kind {
-                                    crossterm::event::MouseEventKind::ScrollDown => {
+                                    MouseEventKind::ScrollDown => {
                                         session.scroll_line_down();
                                     }
-                                    crossterm::event::MouseEventKind::ScrollUp => {
+                                    MouseEventKind::ScrollUp => {
                                         session.scroll_line_up();
                                     }
                                     _ => {}

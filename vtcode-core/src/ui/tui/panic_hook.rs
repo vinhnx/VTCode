@@ -7,7 +7,7 @@ use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use better_panic::Settings;
-use crossterm::{
+use ratatui::crossterm::{
     cursor::Show,
     event::{
         DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, PopKeyboardEnhancementFlags,

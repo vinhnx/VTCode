@@ -1,8 +1,5 @@
 use ratatui::{
-    Frame,
-    layout::{Constraint, Layout, Rect},
-    style::{Modifier, Style},
-    text::{Line, Span},
+    prelude::*,
     widgets::{Block, BorderType, Borders, Clear, List, ListItem},
 };
 
@@ -63,8 +60,7 @@ impl Session {
             self.navigation_state.select(None);
             *self.navigation_state.offset_mut() = 0;
         } else {
-            let last_index = self.lines.len().saturating_sub(1);
-            self.navigation_state.select(Some(last_index));
+            self.navigation_state.select_last();
             let max_offset = item_count.saturating_sub(viewport);
             *self.navigation_state.offset_mut() = max_offset;
         }

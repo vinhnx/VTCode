@@ -5,8 +5,9 @@ use std::process::Command;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
-use crossterm::ExecutableCommand;
-use crossterm::terminal::{
+use ratatui::crossterm::ExecutableCommand;
+use ratatui::crossterm::event;
+use ratatui::crossterm::terminal::{
     Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use editor_command::Editor;
@@ -156,8 +157,8 @@ impl TerminalAppLauncher {
         // CRITICAL: Drain any pending crossterm events BEFORE disabling raw mode.
         // This prevents the external app from receiving garbage input (like terminal
         // capability responses or buffered keystrokes) that might have been sent to the TUI.
-        while crossterm::event::poll(Duration::from_millis(0)).unwrap_or(false) {
-            let _ = crossterm::event::read();
+        while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+            let _ = event::read();
         }
 
         // Disable raw mode

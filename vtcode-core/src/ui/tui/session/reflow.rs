@@ -7,10 +7,7 @@ use anstyle::Effects;
 /// - Tool and PTY output formatting with borders
 /// - Diff line padding
 /// - Block line wrapping with borders
-use ratatui::{
-    style::{Modifier, Style},
-    text::{Line, Span},
-};
+use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 
 use super::super::style::ratatui_style_from_inline;
@@ -162,7 +159,7 @@ impl Session {
             } else {
                 format!("{}│", first_prefix)
             };
-            return vec![Line::from(vec![Span::styled(fallback, border_style)])];
+            return vec![Line::from(fallback).style(border_style)];
         }
 
         let right_border = if show_right_border {
@@ -264,7 +261,7 @@ impl Session {
             // Collapse multiple consecutive newlines
             let processed_text = collapse_excess_newlines(&combined_text);
 
-            let base_line = Line::from(vec![Span::raw(processed_text.into_owned())]);
+            let base_line = Line::from(processed_text.into_owned());
             if max_width > 0 {
                 lines.extend(self.wrap_line(base_line, max_width));
             } else {
@@ -431,7 +428,7 @@ impl Session {
 
         let content = ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.repeat(width);
         let style = self.message_divider_style(kind);
-        Line::from(vec![Span::styled(content, style)])
+        Line::from(content).style(style)
     }
 
     /// Get the style for a message divider
@@ -542,7 +539,7 @@ impl Session {
     ) -> Line<'static> {
         let span = &line.spans[0];
         if let Some(justified) = text_utils::justify_plain_text(span.content.as_ref(), max_width) {
-            Line::from(vec![Span::styled(justified, span.style)])
+            Line::from(justified).style(span.style)
         } else {
             line.clone()
         }

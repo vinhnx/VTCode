@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use crossterm::{
+use ratatui::crossterm::{
     cursor,
     event::{
         self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste,
@@ -241,7 +241,7 @@ impl ModernTui {
         let cancellation_token = self.cancellation_token.clone();
         let event_tx = self.event_tx.clone();
         self.task = tokio::spawn(async move {
-            let mut reader = crossterm::event::EventStream::new();
+            let mut reader = event::EventStream::new();
             let mut tick_interval = tokio::time::interval(tick_delay);
             let mut render_interval = tokio::time::interval(render_delay);
             let _ = event_tx.send(Event::Init);

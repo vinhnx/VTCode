@@ -28,7 +28,7 @@ default-run = "vtcode"
 # Override sections to consolidate duplicate dependencies
 [workspace.dependencies]
 base64 = "0.22.1"
-crossterm = "0.29.0"
+crossterm = "0.28.1"
 schemars = "1.1.0"
 thiserror = "2.0.17"
 unicode-width = "0.2.0"
@@ -139,7 +139,7 @@ sha2 = "0.10"
 # ANSI styling
 anstyle = "1.0"
 anstyle-git = "1.1"
-anstyle-crossterm = "4.0"
+anstyle-crossterm = "3.0"
 colorchoice = "1.0"
 agent-client-protocol = "0.7.0"
 percent-encoding = "2.3"

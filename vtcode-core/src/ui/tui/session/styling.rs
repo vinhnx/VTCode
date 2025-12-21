@@ -1,5 +1,5 @@
 use anstyle::{AnsiColor, Color as AnsiColorEnum};
-use ratatui::style::{Modifier, Style};
+use ratatui::prelude::*;
 
 use crate::ui::tui::{
     style::{ratatui_color_from_ansi, ratatui_style_from_inline},

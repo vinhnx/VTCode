@@ -2,12 +2,14 @@ use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use crossterm::cursor;
-use crossterm::event::{
-    DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-    Event as CrosstermEvent, KeyEvent, KeyEventKind, MouseEvent,
+use ratatui::crossterm::{
+    cursor, execute,
+    event::{
+        self as event, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste,
+        EnableMouseCapture, Event as CrosstermEvent, KeyEvent, KeyEventKind, MouseEvent,
+    },
+    terminal::{self as terminal, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::CrosstermBackend as Backend;
 use crate::ui::tui::panic_hook::TuiPanicGuard;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -162,7 +164,7 @@ impl FullTui {
             loop {
                 let tick_delay_fut = tick_interval.tick();
                 let render_delay_fut = render_interval.tick();
-                let event_fut = tokio::task::spawn_blocking(crossterm::event::read);
+                let event_fut = tokio::task::spawn_blocking(event::read);
 
                 tokio::select! {
                     _ = _cancellation_token.cancelled() => {
@@ -231,13 +233,13 @@ impl FullTui {
     /// Enter terminal raw mode and alternate screen
     pub fn enter(&mut self) -> Result<()> {
         self.panic_guard = Some(TuiPanicGuard::new());
-        crossterm::terminal::enable_raw_mode()?;
-        crossterm::execute!(std::io::stderr(), EnterAlternateScreen, cursor::Hide)?;
+        terminal::enable_raw_mode()?;
+        execute!(std::io::stderr(), EnterAlternateScreen, cursor::Hide)?;
         if self.mouse {
-            crossterm::execute!(std::io::stderr(), EnableMouseCapture)?;
+            execute!(std::io::stderr(), EnableMouseCapture)?;
         }
         if self.paste {
-            crossterm::execute!(std::io::stderr(), EnableBracketedPaste)?;
+            execute!(std::io::stderr(), EnableBracketedPaste)?;
         }
         self.start();
         Ok(())
@@ -246,16 +248,16 @@ impl FullTui {
     /// Exit terminal raw mode and alternate screen
     pub fn exit(&mut self) -> Result<()> {
         self.stop()?;
-        if crossterm::terminal::is_raw_mode_enabled()? {
+        if terminal::is_raw_mode_enabled()? {
             self.flush()?;
             if self.paste {
-                crossterm::execute!(std::io::stderr(), DisableBracketedPaste)?;
+                execute!(std::io::stderr(), DisableBracketedPaste)?;
             }
             if self.mouse {
-                crossterm::execute!(std::io::stderr(), DisableMouseCapture)?;
+                execute!(std::io::stderr(), DisableMouseCapture)?;
             }
-            crossterm::execute!(std::io::stderr(), LeaveAlternateScreen, cursor::Show)?;
-            crossterm::terminal::disable_raw_mode()?;
+            execute!(std::io::stderr(), LeaveAlternateScreen, cursor::Show)?;
+            terminal::disable_raw_mode()?;
         }
 
         self.panic_guard = None;
@@ -356,35 +358,35 @@ impl ExternalAppLauncher for FullTui {
             self.stop()?;
 
             // 2. Leave alternate screen
-            crossterm::execute!(std::io::stderr(), LeaveAlternateScreen)
+            execute!(std::io::stderr(), LeaveAlternateScreen)
                 .context("failed to leave alternate screen")?;
 
             // 3. Drain any pending crossterm events BEFORE disabling raw mode
             // CRITICAL: This prevents the external app from receiving garbage input like
             // terminal capability responses or buffered keystrokes sent to the TUI.
-            while crossterm::event::poll(Duration::from_millis(0)).unwrap_or(false) {
-                let _ = crossterm::event::read();
+            while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                let _ = event::read();
             }
 
             // 4. Disable raw mode
-            crossterm::terminal::disable_raw_mode().context("failed to disable raw mode")?;
+            terminal::disable_raw_mode().context("failed to disable raw mode")?;
 
             // 5. Run the closure (external app can use terminal freely)
             let result = f();
 
             // 6. Re-enable raw mode
-            crossterm::terminal::enable_raw_mode().context("failed to re-enable raw mode")?;
+            terminal::enable_raw_mode().context("failed to re-enable raw mode")?;
 
             // 7. Re-enter alternate screen
-            crossterm::execute!(std::io::stderr(), EnterAlternateScreen)
+            execute!(std::io::stderr(), EnterAlternateScreen)
                 .context("failed to re-enter alternate screen")?;
 
             // 8. Clear terminal to remove any artifacts
             // This prevents ANSI escape codes from external apps' background color requests
             // from appearing in the TUI.
-            crossterm::execute!(
+            execute!(
                 std::io::stderr(),
-                crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
+                terminal::Clear(terminal::ClearType::All)
             )
             .context("failed to clear terminal")?;
 

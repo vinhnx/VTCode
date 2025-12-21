@@ -5,7 +5,7 @@
 /// - Checking and handling triggers
 /// - Key event handling for palette navigation
 /// - Reference insertion
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::path::PathBuf;
 
 use super::{

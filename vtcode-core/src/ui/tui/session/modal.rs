@@ -5,12 +5,9 @@ use crate::ui::tui::types::{
     InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
     WizardStep,
 };
-use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    Frame,
-    layout::{Constraint, Layout, Rect},
-    style::Style,
-    text::{Line, Span},
+    prelude::*,
     widgets::{Block, List, ListItem, ListState, Paragraph, Tabs, Wrap},
 };
 use terminal_size::{Height, Width, terminal_size};
@@ -537,11 +534,11 @@ pub fn render_wizard_tabs(
             let icon = if step.completed { "✔" } else { "☐" };
             let text = format!("{} {}", icon, step.title);
             if i == current_step {
-                Line::from(Span::styled(text, styles.highlight))
+                Line::from(text).style(styles.highlight)
             } else if step.completed {
-                Line::from(Span::styled(text, styles.selectable))
+                Line::from(text).style(styles.selectable)
             } else {
-                Line::from(Span::styled(text, styles.detail))
+                Line::from(text).style(styles.detail)
             }
         })
         .collect();
@@ -1566,7 +1563,7 @@ impl WizardModalState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::style::{Modifier, Style};
 
     fn base_item(title: &str) -> InlineListItem {

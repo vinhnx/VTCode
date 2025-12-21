@@ -2,10 +2,10 @@ use std::fmt;
 use std::io::{self, IsTerminal, Write};
 
 use anyhow::{Context, Result, anyhow};
-use crossterm::cursor::Show;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use crossterm::execute;
-use crossterm::terminal::{
+use ratatui::crossterm::cursor::Show;
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::execute;
+use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use ratatui::Terminal;
@@ -192,8 +192,8 @@ pub fn run_interactive_selection(
                         )));
                     }
 
-                    summary_lines.push(Line::from(Span::raw(""))); // Blank line
-                    summary_lines.push(Line::from(Span::raw(CONTROLS_HINT)));
+                    summary_lines.push(Line::from("")); // Blank line
+                    summary_lines.push(Line::from(CONTROLS_HINT));
                     summary_lines.push(Line::from(Span::styled(
                         NUMBER_JUMP_HINT,
                         styles::DESCRIPTION,

@@ -19,12 +19,12 @@
 //! ```
 
 use anstyle::Style as AnstyleStyle;
-use crossterm::style::Attribute;
+use ratatui::crossterm::style::Attribute;
 use ratatui::style::{Modifier, Style};
 
 // Type aliases for clarity
 type RatatuiColor = ratatui::style::Color;
-type CrosstermColor = crossterm::style::Color;
+type CrosstermColor = ratatui::crossterm::style::Color;
 
 /// Convert an anstyle Style to a ratatui Style
 ///

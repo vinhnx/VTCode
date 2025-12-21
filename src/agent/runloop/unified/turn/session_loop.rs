@@ -3,7 +3,7 @@ use crate::agent::runloop::unified::turn::session::slash_commands::{
 };
 use anyhow::{Context, Result};
 use chrono::Local;
-use crossterm::terminal::disable_raw_mode;
+use ratatui::crossterm::terminal::disable_raw_mode;
 use std::collections::VecDeque;
 use std::io::Write;
 use std::path::PathBuf;

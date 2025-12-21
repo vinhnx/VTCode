@@ -3,7 +3,7 @@
 //! This module provides improved caching mechanisms for reflowing transcript content,
 //! with performance optimizations for large transcripts.
 
-use ratatui::text::Line;
+use ratatui::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -310,7 +310,7 @@ mod tests {
     #[test]
     fn test_update_message() {
         let mut cache = TranscriptReflowCache::new(80);
-        let test_line = Line::from(vec![Span::raw("Test line")]);
+        let test_line = Line::from("Test line");
         let lines = vec![test_line];
 
         cache.update_message(0, 1, lines);
