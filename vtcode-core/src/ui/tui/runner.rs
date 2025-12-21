@@ -152,8 +152,8 @@ struct TerminalSurface {
 impl TerminalSurface {
     fn detect(preference: UiSurfacePreference, inline_rows: u16) -> Result<Self> {
         let fallback_rows = inline_rows.max(1);
-        let stdout_is_terminal = io::stdout().is_terminal();
-        let resolved_rows = if stdout_is_terminal {
+        let stderr_is_terminal = io::stderr().is_terminal();
+        let resolved_rows = if stderr_is_terminal {
             match measure_terminal_dimensions() {
                 Some((_, rows)) if rows > 0 => rows,
                 _ => match terminal::size() {
@@ -171,18 +171,18 @@ impl TerminalSurface {
 
         let resolved_rows = resolved_rows.max(1);
         let use_alternate = match preference {
-            UiSurfacePreference::Alternate => stdout_is_terminal,
+            UiSurfacePreference::Alternate => stderr_is_terminal,
             UiSurfacePreference::Inline => false,
-            UiSurfacePreference::Auto => stdout_is_terminal,
+            UiSurfacePreference::Auto => stderr_is_terminal,
         };
 
-        if use_alternate && !stdout_is_terminal {
-            tracing::debug!("alternate surface requested but stdout is not a tty");
+        if use_alternate && !stderr_is_terminal {
+            tracing::debug!("alternate surface requested but stderr is not a tty");
         }
 
         Ok(Self {
             rows: resolved_rows,
-            alternate: use_alternate && stdout_is_terminal,
+            alternate: use_alternate && stderr_is_terminal,
         })
     }
 
@@ -251,13 +251,13 @@ pub async fn run_tui(
         .await;
     });
 
-    let mut stdout = io::stdout();
-    let mode_state = enable_terminal_modes(&mut stdout)?;
+    let mut stderr = io::stderr();
+    let mode_state = enable_terminal_modes(&mut stderr)?;
     if surface.use_alternate() {
-        execute!(stdout, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
+        execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
     }
 
-    let backend = CrosstermBackend::new(stdout);
+    let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;
     prepare_terminal(&mut terminal)?;
 
@@ -301,11 +301,11 @@ pub async fn run_tui(
     Ok(())
 }
 
-fn enable_terminal_modes(stdout: &mut io::Stdout) -> Result<TerminalModeState> {
-    execute!(stdout, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
+fn enable_terminal_modes(stderr: &mut io::Stderr) -> Result<TerminalModeState> {
+    execute!(stderr, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
     enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
 
-    let focus_change_enabled = match execute!(stdout, EnableFocusChange) {
+    let focus_change_enabled = match execute!(stderr, EnableFocusChange) {
         Ok(_) => true,
         Err(error) => {
             tracing::debug!(%error, "failed to enable focus change events for inline terminal");
@@ -316,7 +316,7 @@ fn enable_terminal_modes(stdout: &mut io::Stdout) -> Result<TerminalModeState> {
     let keyboard_enhancements_pushed =
         if supports_keyboard_enhancement().context(KEYBOARD_ENHANCEMENT_QUERY_ERROR)? {
             match execute!(
-                stdout,
+                stderr,
                 PushKeyboardEnhancementFlags(
                     KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
                         | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
@@ -343,9 +343,9 @@ fn enable_terminal_modes(stdout: &mut io::Stdout) -> Result<TerminalModeState> {
 }
 
 fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
-    let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
     if state.keyboard_enhancements_pushed
-        && let Err(error) = execute!(stdout, PopKeyboardEnhancementFlags)
+        && let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags)
     {
         tracing::debug!(
             %error,
@@ -354,7 +354,7 @@ fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     }
 
     if state.focus_change_enabled
-        && let Err(error) = execute!(stdout, DisableFocusChange)
+        && let Err(error) = execute!(stderr, DisableFocusChange)
     {
         tracing::debug!(
             %error,
@@ -362,7 +362,7 @@ fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
         );
     }
 
-    execute!(stdout, DisableBracketedPaste).context(DISABLE_BRACKETED_PASTE_ERROR)?;
+    execute!(stderr, DisableBracketedPaste).context(DISABLE_BRACKETED_PASTE_ERROR)?;
 
     Ok(())
 }
@@ -462,22 +462,26 @@ async fn drive_terminal<B: Backend>(
                                 events,
                                 event_callback.as_ref().map(|callback| callback.as_ref()),
                             );
-                            if session.take_redraw() {
-                                terminal
-                                    .draw(|frame| session.render(frame))
-                                    .context("failed to draw inline session")?;
+
+                            // Process all other pending events to avoid redundant draws
+                            while let Ok(next_event) = inputs.receiver.try_recv() {
+                                match next_event {
+                                    TerminalEvent::Crossterm(evt) => {
+                                        session.handle_event(
+                                            evt,
+                                            events,
+                                            event_callback.as_ref().map(|callback| callback.as_ref()),
+                                        );
+                                    }
+                                    TerminalEvent::Tick => {
+                                        // Ticks are handled by the main loop's redraw check
+                                    }
+                                }
                             }
                         }
                     }
                     Some(TerminalEvent::Tick) => {
                         // Periodic tick for animations or state updates
-                        if !event_channels.rx_paused.load(std::sync::atomic::Ordering::Acquire)
-                            && session.take_redraw()
-                        {
-                            terminal
-                                .draw(|frame| session.render(frame))
-                                .context("failed to draw inline session")?;
-                        }
                     }
                     None => {
                         if commands.is_closed() {
