@@ -327,10 +327,8 @@ pub async fn run_turn_loop(
             Ok(val) => val,
             Err(err) => {
                 ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("LLM request failed: {}", err),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Error, &format!("LLM request failed: {}", err))?;
                 working_history.push(uni::Message::assistant(format!("Request failed: {}", err)));
                 result = TurnLoopResult::Aborted;
                 break;
@@ -354,7 +352,10 @@ pub async fn run_turn_loop(
                     if let Some(reasoning_text) = reasoning.as_ref()
                         && !reasoning_text.trim().is_empty()
                     {
-                        ctx.renderer.line(MessageStyle::Info, &format!("Reasoning: {}", reasoning_text))?;
+                        ctx.renderer.line(
+                            MessageStyle::Info,
+                            &format!("Reasoning: {}", reasoning_text),
+                        )?;
                     }
                 }
                 // Note: reasoning already rendered during streaming; don't fabricate announcements
@@ -518,7 +519,10 @@ pub async fn run_turn_loop(
                     if let Some(reasoning_text) = reasoning.as_ref()
                         && !reasoning_text.trim().is_empty()
                     {
-                        ctx.renderer.line(MessageStyle::Info, &format!("Reasoning: {}", reasoning_text))?;
+                        ctx.renderer.line(
+                            MessageStyle::Info,
+                            &format!("Reasoning: {}", reasoning_text),
+                        )?;
                     }
                 }
                 // Note: reasoning already rendered during streaming; don't fabricate announcements

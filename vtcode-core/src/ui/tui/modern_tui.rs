@@ -1,10 +1,14 @@
+use crate::ui::tui::panic_hook::TuiPanicGuard;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use futures::StreamExt;
+use futures::future::FutureExt;
+use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::{
     cursor,
     event::{
-        self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste,
-        EnableFocusChange, Event as CrosstermEvent, KeyboardEnhancementFlags, KeyEventKind,
+        self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
+        Event as CrosstermEvent, KeyEventKind, KeyboardEnhancementFlags,
         PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
@@ -13,15 +17,11 @@ use ratatui::crossterm::{
         supports_keyboard_enhancement,
     },
 };
-use futures::StreamExt;
-use futures::future::FutureExt;
-use ratatui::backend::CrosstermBackend;
 use std::{
     io,
     ops::{Deref, DerefMut},
     time::Duration,
 };
-use crate::ui::tui::panic_hook::TuiPanicGuard;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -124,7 +124,8 @@ impl ModernTui {
         execute!(stderr, EnterAlternateScreen, cursor::Hide)
             .context("failed to enter alternate screen")?;
         if self.mouse {
-            execute!(stderr, event::EnableMouseCapture).context("failed to enable mouse capture")?;
+            execute!(stderr, event::EnableMouseCapture)
+                .context("failed to enable mouse capture")?;
         }
         if self.paste {
             execute!(stderr, EnableBracketedPaste).context("failed to enable bracketed paste")?;

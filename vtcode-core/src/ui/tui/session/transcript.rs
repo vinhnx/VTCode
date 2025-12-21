@@ -239,7 +239,7 @@ impl Session {
     }
 
     /// Gets the total number of rows in the transcript for a given width
-    pub(super) fn total_transcript_rows(&mut self, width: u16) -> usize {
+    pub(crate) fn total_transcript_rows(&mut self, width: u16) -> usize {
         if width == 0 {
             return 0;
         }
@@ -262,7 +262,7 @@ impl Session {
     }
 
     /// Collects a window of visible lines with caching
-    pub(super) fn collect_transcript_window_cached(
+    pub(crate) fn collect_transcript_window_cached(
         &mut self,
         width: u16,
         start_row: usize,

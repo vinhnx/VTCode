@@ -32,6 +32,9 @@ fn test_serialize_deserialize_security_config() {
     let serialized = serde_json::to_string(&original).unwrap();
     let deserialized: SecurityConfig = serde_json::from_str(&serialized).unwrap();
 
-    assert_eq!(original.hitl_notification_bell, deserialized.hitl_notification_bell);
+    assert_eq!(
+        original.hitl_notification_bell,
+        deserialized.hitl_notification_bell
+    );
     assert_eq!(original.human_in_the_loop, deserialized.human_in_the_loop);
 }

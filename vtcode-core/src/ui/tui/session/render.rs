@@ -114,11 +114,9 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     let header_lines = session.header_lines();
     session.render_header(frame, header_area, &header_lines);
     if session.show_timeline_pane {
-        let timeline_chunks = Layout::horizontal([
-            Constraint::Percentage(70),
-            Constraint::Percentage(30),
-        ])
-        .split(transcript_area);
+        let timeline_chunks =
+            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
+                .split(transcript_area);
         render_transcript(session, frame, timeline_chunks[0]);
         if session.show_logs {
             render_log_view(session, frame, timeline_chunks[1]);
@@ -143,11 +141,8 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
             }
         }
     } else if session.show_logs {
-        let split = Layout::vertical([
-            Constraint::Percentage(70),
-            Constraint::Percentage(30),
-        ])
-        .split(transcript_area);
+        let split = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
+            .split(transcript_area);
         render_transcript(session, frame, split[0]);
         render_log_view(session, frame, split[1]);
     } else {
@@ -180,7 +175,7 @@ fn modal_list_highlight_style(session: &Session) -> Style {
     session.styles.modal_list_highlight_style()
 }
 
-pub(super) fn apply_view_rows(session: &mut Session, rows: u16) {
+pub fn apply_view_rows(session: &mut Session, rows: u16) {
     let resolved = rows.max(2);
     if session.view_rows != resolved {
         session.view_rows = resolved;
@@ -190,7 +185,7 @@ pub(super) fn apply_view_rows(session: &mut Session, rows: u16) {
     session.enforce_scroll_bounds();
 }
 
-fn apply_transcript_rows(session: &mut Session, rows: u16) {
+pub fn apply_transcript_rows(session: &mut Session, rows: u16) {
     let resolved = rows.max(1);
     if session.transcript_rows != resolved {
         session.transcript_rows = resolved;
@@ -198,7 +193,7 @@ fn apply_transcript_rows(session: &mut Session, rows: u16) {
     }
 }
 
-fn apply_transcript_width(session: &mut Session, width: u16) {
+pub fn apply_transcript_width(session: &mut Session, width: u16) {
     if session.transcript_width != width {
         session.transcript_width = width;
         invalidate_scroll_metrics(session);
@@ -280,7 +275,7 @@ fn input_reserved_rows(session: &Session) -> u16 {
     header_reserved_rows(session) + session.input_height
 }
 
-pub(super) fn recalculate_transcript_rows(session: &mut Session) {
+pub fn recalculate_transcript_rows(session: &mut Session) {
     let reserved = input_reserved_rows(session).saturating_add(2); // account for transcript block borders
     let available = session.view_rows.saturating_sub(reserved).max(1);
     apply_transcript_rows(session, available);
@@ -1298,7 +1293,7 @@ fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
     text_utils::justify_plain_text(text, max_width)
 }
 
-pub(super) fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
+pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
     if viewport.width == 0 || viewport.height == 0 {
         return;
     }

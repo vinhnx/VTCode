@@ -857,7 +857,12 @@ impl AgentRunner {
                             event_recorder,
                             command_event: &command_event,
                         };
-                        self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.id.as_str()));
+                        self.record_tool_failure(
+                            &mut failure_ctx,
+                            &name,
+                            &e,
+                            Some(call.id.as_str()),
+                        );
                         tokio::time::sleep(Duration::from_millis(250)).await;
                         break;
                     } else if err_lower.contains("denied by policy")
@@ -872,7 +877,12 @@ impl AgentRunner {
                             event_recorder,
                             command_event: &command_event,
                         };
-                        self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.id.as_str()));
+                        self.record_tool_failure(
+                            &mut failure_ctx,
+                            &name,
+                            &e,
+                            Some(call.id.as_str()),
+                        );
                         tokio::time::sleep(Duration::from_millis(250)).await;
                         break;
                     } else {
@@ -1644,10 +1654,7 @@ impl AgentRunner {
                     ) {
                         let warning_message = format!(
                             "Planning mode active (phase: {}). Tool calls are blocked until final_plan.",
-                            plan_phase
-                                .as_ref()
-                                .map(|p| p.label())
-                                .unwrap_or("planning"),
+                            plan_phase.as_ref().map(|p| p.label()).unwrap_or("planning"),
                         );
                         self.record_warning(
                             &agent_prefix,

@@ -13,6 +13,7 @@ mod session;
 mod style;
 mod theme_parser;
 mod types;
+pub mod widgets;
 
 pub use style::{convert_style, theme_from_styles};
 pub use theme_parser::ThemeConfigParser;

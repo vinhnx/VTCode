@@ -24,19 +24,19 @@ use super::{
 };
 use crate::config::constants::ui;
 
-mod file_palette;
+pub mod file_palette;
 mod header;
 mod input;
 mod input_manager;
 mod message;
-mod modal;
+pub mod modal;
 mod navigation;
 mod palette_renderer;
-mod prompt_palette;
+pub mod prompt_palette;
 mod queue;
-mod render;
+pub mod render;
 mod scroll;
-mod slash;
+pub mod slash;
 mod slash_palette;
 mod styling;
 mod text_utils;
@@ -54,7 +54,7 @@ mod palette_views;
 mod reflow;
 mod spinner;
 mod state;
-mod terminal_capabilities;
+pub mod terminal_capabilities;
 mod tool_renderer;
 
 use self::file_palette::FilePalette;
@@ -89,25 +89,25 @@ const MAX_LOG_LINES: usize = 256;
 pub struct Session {
     // --- Managers (Phase 2) ---
     /// Manages user input, cursor, and command history
-    input_manager: InputManager,
+    pub(crate) input_manager: InputManager,
     /// Manages scroll state and viewport metrics
-    scroll_manager: ScrollManager,
+    pub(crate) scroll_manager: ScrollManager,
 
     // --- Message Management ---
-    lines: Vec<MessageLine>,
-    theme: InlineTheme,
-    styles: SessionStyles,
-    header_context: InlineHeaderContext,
-    header_rows: u16,
-    labels: MessageLabels,
+    pub(crate) lines: Vec<MessageLine>,
+    pub(crate) theme: InlineTheme,
+    pub(crate) styles: SessionStyles,
+    pub(crate) header_context: InlineHeaderContext,
+    pub(crate) header_rows: u16,
+    pub(crate) labels: MessageLabels,
 
     // --- Prompt/Input Display ---
     prompt_prefix: String,
     prompt_style: InlineTextStyle,
     placeholder: Option<String>,
     placeholder_style: Option<InlineTextStyle>,
-    input_status_left: Option<String>,
-    input_status_right: Option<String>,
+    pub(crate) input_status_left: Option<String>,
+    pub(crate) input_status_right: Option<String>,
 
     // --- UI State ---
     slash_palette: SlashPalette,
@@ -115,36 +115,36 @@ pub struct Session {
     plan_navigation_state: ListState,
     input_enabled: bool,
     cursor_visible: bool,
-    needs_redraw: bool,
-    needs_full_clear: bool,
+    pub(crate) needs_redraw: bool,
+    pub(crate) needs_full_clear: bool,
     /// Track if transcript content changed (not just scroll position)
-    transcript_content_changed: bool,
+    pub(crate) transcript_content_changed: bool,
     should_exit: bool,
-    view_rows: u16,
-    input_height: u16,
-    transcript_rows: u16,
-    transcript_width: u16,
-    transcript_view_top: usize,
+    pub(crate) view_rows: u16,
+    pub(crate) input_height: u16,
+    pub(crate) transcript_rows: u16,
+    pub(crate) transcript_width: u16,
+    pub(crate) transcript_view_top: usize,
 
     // --- Logging ---
     log_receiver: Option<UnboundedReceiver<LogEntry>>,
     log_lines: VecDeque<Arc<Text<'static>>>,
     log_cached_text: Option<Arc<Text<'static>>>,
     log_evicted: bool,
-    show_logs: bool,
+    pub(crate) show_logs: bool,
 
     // --- Rendering ---
     transcript_cache: Option<TranscriptReflowCache>,
     /// Cache of visible lines by (scroll_offset, width) - shared via Arc for zero-copy reads
     /// Avoids expensive clone on cache hits
     visible_lines_cache: Option<(usize, u16, Arc<Vec<Line<'static>>>)>,
-    queued_inputs: Vec<String>,
+    pub(crate) queued_inputs: Vec<String>,
     queue_overlay_cache: Option<QueueOverlay>,
     queue_overlay_version: u64,
-    modal: Option<ModalState>,
+    pub(crate) modal: Option<ModalState>,
     wizard_modal: Option<WizardModalState>,
-    show_timeline_pane: bool,
-    plan: TaskPlan,
+    pub(crate) show_timeline_pane: bool,
+    pub(crate) plan: TaskPlan,
     line_revision_counter: u64,
     /// Track the first line that needs reflow/update to avoid O(N) scans
     first_dirty_line: Option<usize>,
@@ -152,15 +152,15 @@ pub struct Session {
 
     // --- Palette Management ---
     custom_prompts: Option<CustomPromptRegistry>,
-    file_palette: Option<FilePalette>,
-    file_palette_active: bool,
-    deferred_file_browser_trigger: bool,
-    prompt_palette: Option<PromptPalette>,
-    prompt_palette_active: bool,
-    deferred_prompt_browser_trigger: bool,
+    pub(crate) file_palette: Option<FilePalette>,
+    pub(crate) file_palette_active: bool,
+    pub(crate) deferred_file_browser_trigger: bool,
+    pub(crate) prompt_palette: Option<PromptPalette>,
+    pub(crate) prompt_palette_active: bool,
+    pub(crate) deferred_prompt_browser_trigger: bool,
 
     // --- Thinking Indicator ---
-    thinking_spinner: ThinkingSpinner,
+    pub(crate) thinking_spinner: ThinkingSpinner,
 }
 
 impl Session {
@@ -365,7 +365,7 @@ impl Session {
         self.log_cached_text = None;
     }
 
-    fn log_text(&mut self) -> Arc<Text<'static>> {
+    pub(crate) fn log_text(&mut self) -> Arc<Text<'static>> {
         if let Some(cached) = &self.log_cached_text {
             return Arc::clone(cached);
         }

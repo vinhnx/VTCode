@@ -24,11 +24,11 @@ use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
 use serde_json::{Value, json};
-use tokio::task::spawn_blocking;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use tokio::task::spawn_blocking;
 use tracing::debug;
 
 use openai_harmony::chat::{
@@ -158,7 +158,7 @@ fn parse_responses_payload(
     // - output: array of content items (message type items have "content" array with text, reasoning, tool_call, etc.)
     // - usage: token usage information
     // - status: completion status (we're only called when status is "completed")
-    
+
     let output = response_json
         .get("output")
         .and_then(|value| value.as_array())
@@ -191,13 +191,13 @@ fn parse_responses_payload(
     // - { "type": "reasoning", "text": "..." }
     // - { "type": "function_call", "id": "...", "function": {"name": "...", "arguments": "..."} }
     // - { "type": "refusal", "text": "..." }
-    
+
     for item in output {
         let item_type = item
             .get("type")
             .and_then(|value| value.as_str())
             .unwrap_or("");
-        
+
         // Only process message items which contain actual content
         if item_type != "message" {
             continue;
@@ -209,7 +209,7 @@ fn parse_responses_payload(
                     .get("type")
                     .and_then(|value| value.as_str())
                     .unwrap_or("");
-                
+
                 match entry_type {
                     // Text output from the model
                     "text" | "output_text" => {
@@ -233,12 +233,12 @@ fn parse_responses_payload(
                             .get("id")
                             .and_then(|value| value.as_str())
                             .unwrap_or("");
-                        
-                        let function_obj = entry.get("function").and_then(|value| value.as_object());
-                        let name = function_obj
-                            .and_then(|f| f.get("name").and_then(|n| n.as_str()));
-                        let arguments = function_obj
-                            .and_then(|f| f.get("arguments"));
+
+                        let function_obj =
+                            entry.get("function").and_then(|value| value.as_object());
+                        let name =
+                            function_obj.and_then(|f| f.get("name").and_then(|n| n.as_str()));
+                        let arguments = function_obj.and_then(|f| f.get("arguments"));
 
                         if let Some(func_name) = name {
                             let serialized = arguments.map_or("{}".to_owned(), |args| {
@@ -257,7 +257,8 @@ fn parse_responses_payload(
                     }
                     // Refusal content - treat as content for now (could be separate in future)
                     "refusal" => {
-                        if let Some(refusal_text) = entry.get("refusal").and_then(|value| value.as_str())
+                        if let Some(refusal_text) =
+                            entry.get("refusal").and_then(|value| value.as_str())
                             && !refusal_text.is_empty()
                         {
                             content_fragments.push(format!("[Refusal: {}]", refusal_text));
@@ -827,7 +828,6 @@ impl OpenAIProvider {
         let is_huggingface_router = is_huggingface;
         let strict_tool_schema = is_huggingface;
 
-
         Self {
             api_key: Arc::from(api_key.as_str()),
             http_client: HttpClient::builder()
@@ -1262,10 +1262,8 @@ impl OpenAIProvider {
         };
 
         if responses_payload.input.is_empty() {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                "No messages provided for Responses API",
-            );
+            let formatted_error =
+                error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
             return Err(provider::LLMError::InvalidRequest {
                 message: formatted_error,
                 metadata: None,
@@ -2034,7 +2032,9 @@ mod tests {
     fn serialize_tools_wraps_function_definition() {
         let tools = vec![sample_tool()];
         let provider = OpenAIProvider::new(String::new());
-        let serialized = provider.serialize_tools(&tools).expect("tools should serialize");
+        let serialized = provider
+            .serialize_tools(&tools)
+            .expect("tools should serialize");
         let serialized_tools = serialized
             .as_array()
             .expect("serialized tools should be an array");
@@ -2851,8 +2851,7 @@ impl provider::LLMProvider for OpenAIProvider {
                         "OpenAI",
                         &format!(
                             "Model '{}' not found on provider {}. Ensure the Hugging Face Inference Providers model id is correct and available for text-generation/chat (e.g., https://huggingface.co/models?pipeline_tag=text-generation&inference_provider=all&other=conversational).",
-                            request.model,
-                            self.base_url
+                            request.model, self.base_url
                         ),
                     );
                     return Err(provider::LLMError::Provider {
@@ -3229,8 +3228,7 @@ impl provider::LLMProvider for OpenAIProvider {
                             "OpenAI",
                             &format!(
                                 "Model '{}' not found on provider {}. Ensure the Hugging Face Inference Providers model id is correct and available for text-generation/chat (https://huggingface.co/models?pipeline_tag=text-generation&inference_provider=all&other=conversational).",
-                                request.model,
-                                self.base_url
+                                request.model, self.base_url
                             ),
                         );
                         return Err(provider::LLMError::Provider {

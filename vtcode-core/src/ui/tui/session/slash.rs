@@ -17,7 +17,7 @@ use super::{
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
 };
 
-pub(super) fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
+pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
     if viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
         session.slash_palette.clear_visible_rows();
         return;

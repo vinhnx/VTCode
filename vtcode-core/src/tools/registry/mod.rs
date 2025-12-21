@@ -1562,7 +1562,9 @@ impl ToolRegistry {
 
                 return Err(anyhow!(
                     "Tool '{}' rate limited ({} calls/min, {} recent)",
-                    display_name, rate_limit, calls_last_minute
+                    display_name,
+                    rate_limit,
+                    calls_last_minute
                 )
                 .context("tool rate limited"));
             }

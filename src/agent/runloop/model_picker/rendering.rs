@@ -74,7 +74,9 @@ pub(super) fn render_step_one_inline(
             });
             items.push(InlineListItem {
                 title: "Custom Hugging Face model".to_string(),
-                subtitle: Some("Enter any HF model id (e.g., huggingface <org>/<model>)".to_string()),
+                subtitle: Some(
+                    "Enter any HF model id (e.g., huggingface <org>/<model>)".to_string(),
+                ),
                 badge: Some("Custom".to_string()),
                 indent: 2,
                 selection: Some(InlineListSelection::CustomModel),

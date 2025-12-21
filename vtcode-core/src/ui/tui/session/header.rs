@@ -59,11 +59,11 @@ impl Session {
         frame.render_widget(paragraph, area);
     }
 
-    pub(super) fn header_lines(&self) -> Vec<Line<'static>> {
+    pub(crate) fn header_lines(&self) -> Vec<Line<'static>> {
         vec![self.header_compact_line()]
     }
 
-    pub(super) fn header_height_from_lines(&self, width: u16, lines: &[Line<'static>]) -> u16 {
+    pub(crate) fn header_height_from_lines(&self, width: u16, lines: &[Line<'static>]) -> u16 {
         if width == 0 {
             return self.header_rows.max(ui::INLINE_HEADER_HEIGHT);
         }
@@ -75,7 +75,7 @@ impl Session {
         resolved.clamp(ui::INLINE_HEADER_HEIGHT, 3)
     }
 
-    pub(super) fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
+    pub(crate) fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
         let block = Block::bordered()
             .title(self.header_block_title())
             .border_type(terminal_capabilities::get_border_type())
