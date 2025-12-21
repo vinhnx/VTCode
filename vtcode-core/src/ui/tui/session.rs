@@ -366,6 +366,10 @@ impl Session {
         self.log_cached_text = None;
     }
 
+    pub(crate) fn has_logs(&self) -> bool {
+        !self.log_lines.is_empty()
+    }
+
     pub(crate) fn log_text(&mut self) -> Arc<Text<'static>> {
         if let Some(cached) = &self.log_cached_text {
             return Arc::clone(cached);
