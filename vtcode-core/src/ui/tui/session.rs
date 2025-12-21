@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Clear, ListState, Paragraph, Wrap},
+    widgets::{Block, BorderType, Clear, ListState, Paragraph, Wrap},
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -756,8 +756,7 @@ impl Session {
         if area.height == 0 || area.width == 0 {
             return;
         }
-        let block = Block::default()
-            .borders(Borders::NONE)
+        let block = Block::new()
             .border_type(BorderType::Rounded)
             .style(self.styles.default_style())
             .border_style(self.styles.border_style());

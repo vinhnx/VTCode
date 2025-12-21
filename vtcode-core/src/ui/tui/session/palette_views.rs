@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem},
+    widgets::{Block, Clear, List, ListItem},
 };
 
 use super::super::style::ratatui_color_from_ansi;
@@ -46,9 +46,8 @@ pub(super) fn render_file_palette(
 
     frame.render_widget(Clear, area);
     let title = " [FILES] File Browser ";
-    let block = Block::default()
+    let block = Block::bordered()
         .title(title)
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .border_style(border_style(theme));
     let inner = block.inner(area);
@@ -116,9 +115,8 @@ fn render_file_palette_loading(frame: &mut Frame<'_>, viewport: Rect, theme: &In
     let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
-    let block = Block::default()
+    let block = Block::bordered()
         .title(" [FILES] File Browser ")
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .border_style(border_style(theme));
     let inner = block.inner(area);
@@ -207,9 +205,8 @@ pub(super) fn render_prompt_palette(
 
     frame.render_widget(Clear, area);
     let title = " [PROMPTS] Custom Prompts ";
-    let block = Block::default()
+    let block = Block::bordered()
         .title(title)
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .border_style(border_style(theme));
     let inner = block.inner(area);
@@ -266,9 +263,8 @@ fn render_prompt_palette_loading(frame: &mut Frame<'_>, viewport: Rect, theme: &
     let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
-    let block = Block::default()
+    let block = Block::bordered()
         .title(" [PROMPTS] Custom Prompts ")
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .border_style(border_style(theme));
     let inner = block.inner(area);

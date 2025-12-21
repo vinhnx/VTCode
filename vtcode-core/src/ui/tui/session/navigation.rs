@@ -43,7 +43,7 @@ impl Session {
     }
 
     fn render_timeline_pane(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        let block = Block::default()
+        let block = Block::new()
             .title(self.timeline_block_title())
             .borders(Borders::LEFT)
             .border_type(BorderType::Plain)
@@ -80,7 +80,7 @@ impl Session {
     }
 
     fn render_plan_pane(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        let block = Block::default()
+        let block = Block::new()
             .title(self.plan_block_title())
             .borders(Borders::LEFT | Borders::TOP)
             .border_type(BorderType::Plain)

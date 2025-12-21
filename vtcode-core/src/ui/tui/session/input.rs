@@ -80,7 +80,7 @@ impl Session {
             ""
         };
 
-        let block = Block::default()
+        let block = Block::new()
             .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(terminal_capabilities::get_border_type())
             .style(self.styles.default_style())
