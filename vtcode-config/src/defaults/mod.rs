@@ -4,8 +4,9 @@ pub mod provider;
 pub mod syntax_highlighting;
 
 pub use provider::{
-    ConfigDefaultsProvider, WorkspacePathsDefaults, current_config_defaults,
-    install_config_defaults_provider, reset_to_default_config_defaults, with_config_defaults,
+    ConfigDefaultsProvider, WorkspacePathsDefaults, current_config_defaults, get_config_dir,
+    get_data_dir, install_config_defaults_provider, reset_to_default_config_defaults,
+    with_config_defaults,
 };
 pub use syntax_highlighting::SyntaxHighlightingDefaults;
 
