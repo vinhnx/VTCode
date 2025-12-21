@@ -4,7 +4,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Clear, List, ListItem, Paragraph, Wrap},
 };
 
 use super::terminal_capabilities;
@@ -60,9 +60,8 @@ pub(super) fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>,
     let area = compute_modal_area(viewport, width_hint, instructions.len(), 0, 0, true);
 
     frame.render_widget(Clear, area);
-    let block = Block::default()
+    let block = Block::bordered()
         .title(session.suggestion_block_title())
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .style(session.styles.default_style())
         .border_style(session.styles.border_style());

@@ -5,7 +5,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Clear, Paragraph, Wrap},
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -76,9 +76,8 @@ impl Session {
     }
 
     pub(super) fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
-        let block = Block::default()
+        let block = Block::bordered()
             .title(self.header_block_title())
-            .borders(Borders::ALL)
             .border_type(terminal_capabilities::get_border_type())
             .style(self.styles.default_style());
 

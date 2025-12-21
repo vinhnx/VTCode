@@ -10,11 +10,11 @@ use crossterm::terminal::{
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
-    Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Paragraph, Wrap,
+    Block, BorderType, List, ListDirection, ListItem, ListState, Paragraph, Wrap,
 };
 
 const CONTROLS_HINT: &str =
@@ -105,19 +105,18 @@ pub fn run_interactive_selection(
                     let instruction_lines = instructions.lines().count().max(1) as u16;
                     let instruction_height = instruction_lines.saturating_add(2);
                     let footer_height: u16 = 4;
-                    let layout = Layout::default()
-                        .direction(Direction::Vertical)
-                        .margin(1)
-                        .vertical_margin(1)
-                        .constraints([
-                            Constraint::Length(
-                                instruction_height
-                                    .min(area.height.saturating_sub(footer_height + 5)),
-                            ),
-                            Constraint::Min(5),
-                            Constraint::Length(footer_height),
-                        ])
-                        .split(area);
+                    let layout = Layout::vertical([
+                        Constraint::Length(
+                            instruction_height
+                                .min(area.height.saturating_sub(footer_height + 5)),
+                        ),
+                        Constraint::Min(5),
+                        Constraint::Length(footer_height),
+                    ])
+                    .spacing(-1)
+                    .margin(1)
+                    .vertical_margin(1)
+                    .split(area);
 
                     // Ensure layout has at least 3 sections
                     if layout.len() < 3 {
@@ -126,9 +125,8 @@ pub fn run_interactive_selection(
 
                     let instructions_widget = Paragraph::new(instructions)
                         .block(
-                            Block::default()
+                            Block::bordered()
                                 .title("Instructions")
-                                .borders(Borders::ALL)
                                 .border_type(BorderType::Rounded),
                         )
                         .wrap(Wrap { trim: true });
@@ -157,9 +155,8 @@ pub fn run_interactive_selection(
 
                     let list = List::new(items)
                         .block(
-                            Block::default()
+                            Block::bordered()
                                 .title(title)
-                                .borders(Borders::ALL)
                                 .border_type(BorderType::Rounded),
                         )
                         .style(styles::DEFAULT_TEXT)
@@ -204,9 +201,8 @@ pub fn run_interactive_selection(
 
                     let footer = Paragraph::new(summary_lines)
                         .block(
-                            Block::default()
+                            Block::bordered()
                                 .title("Selection")
-                                .borders(Borders::ALL)
                                 .border_type(BorderType::Rounded),
                         )
                         .wrap(Wrap { trim: true });

@@ -3,10 +3,10 @@
 use anstyle::Color as AnsiColorEnum;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Clear, List, ListItem, Paragraph, RatatuiLogo, Wrap},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -101,17 +101,12 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     let input_height = block_height.saturating_add(status_height);
     session.apply_input_height(input_height);
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Length(header_height),
-                Constraint::Min(1),
-                Constraint::Length(input_height),
-            ]
-            .as_ref(),
-        )
-        .split(size);
+    let chunks = Layout::vertical([
+        Constraint::Length(header_height),
+        Constraint::Min(1),
+        Constraint::Length(input_height),
+    ])
+    .split(size);
 
     let (header_area, transcript_area, input_area) = (chunks[0], chunks[1], chunks[2]);
 
@@ -122,27 +117,39 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     let header_lines = session.header_lines();
     session.render_header(frame, header_area, &header_lines);
     if session.show_timeline_pane {
-        let timeline_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
-            .split(transcript_area);
+        let timeline_chunks = Layout::horizontal([
+            Constraint::Percentage(70),
+            Constraint::Percentage(30),
+        ])
+        .split(transcript_area);
         render_transcript(session, frame, timeline_chunks[0]);
         if session.show_logs {
             render_log_view(session, frame, timeline_chunks[1]);
         } else {
-            let block = Block::default()
+            let block = Block::bordered()
                 .title("Logs hidden")
-                .borders(Borders::ALL)
                 .border_type(terminal_capabilities::get_border_type())
                 .style(default_style(session))
                 .border_style(border_style(session));
+            let inner = block.inner(timeline_chunks[1]);
             frame.render_widget(block, timeline_chunks[1]);
+
+            if inner.width >= 15 && inner.height >= 2 {
+                let logo_area = Rect::new(
+                    inner.x + (inner.width.saturating_sub(15)) / 2,
+                    inner.y + (inner.height.saturating_sub(2)) / 2,
+                    15,
+                    2,
+                );
+                frame.render_widget(RatatuiLogo::tiny(), logo_area);
+            }
         }
     } else if session.show_logs {
-        let split = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
-            .split(transcript_area);
+        let split = Layout::vertical([
+            Constraint::Percentage(70),
+            Constraint::Percentage(30),
+        ])
+        .split(transcript_area);
         render_transcript(session, frame, split[0]);
         render_log_view(session, frame, split[1]);
     } else {
@@ -156,9 +163,8 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
 }
 
 fn render_log_view(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    let block = Block::default()
+    let block = Block::bordered()
         .title("Logs")
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
@@ -205,8 +211,7 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if area.height == 0 || area.width == 0 {
         return;
     }
-    let block = Block::default()
-        .borders(Borders::NONE)
+    let block = Block::new()
         .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
@@ -324,9 +329,8 @@ fn render_palette_generic<F>(
     let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
-    let block = Block::default()
+    let block = Block::bordered()
         .title(params.title)
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
@@ -463,9 +467,8 @@ fn render_file_palette_loading(session: &Session, frame: &mut Frame<'_>, viewpor
     let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
-    let block = Block::default()
+    let block = Block::bordered()
         .title("File Browser")
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
@@ -600,9 +603,8 @@ fn render_prompt_palette_loading(session: &Session, frame: &mut Frame<'_>, viewp
     let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
-    let block = Block::default()
+    let block = Block::bordered()
         .title("Custom Prompts")
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
@@ -1325,9 +1327,8 @@ pub(super) fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewpor
         modal.list.is_some(),
     );
 
-    let block = Block::default()
+    let block = Block::bordered()
         .title(Line::styled(modal.title.clone(), styles.title))
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .border_style(styles.border);
 

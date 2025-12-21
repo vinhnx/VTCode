@@ -1093,10 +1093,10 @@ fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
     use crossterm::{ExecutableCommand, execute};
     use ratatui::Terminal;
     use ratatui::backend::CrosstermBackend;
-    use ratatui::layout::{Constraint, Direction, Layout};
+    use ratatui::layout::{Constraint, Layout};
     use ratatui::style::{Color, Modifier, Style};
     use ratatui::text::{Line, Span};
-    use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
+    use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
     struct TerminalGuard;
 
@@ -1135,17 +1135,14 @@ fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
         terminal
             .draw(|frame| {
                 let area = frame.area();
-                let layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(4), Constraint::Min(5)])
+                let layout = Layout::vertical([Constraint::Length(4), Constraint::Min(5)])
                     .split(area);
 
                 let header = Paragraph::new(format!(
                     "Tool: {tool_name}\nUse ↑/↓ to choose, Enter to confirm, Esc to deny"
                 ))
                 .block(
-                    Block::default()
-                        .borders(Borders::ALL)
+                    Block::bordered()
                         .title("Tool Confirmation"),
                 );
                 frame.render_widget(header, layout[0]);
@@ -1165,8 +1162,7 @@ fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
 
                 let list = List::new(list_items)
                     .block(
-                        Block::default()
-                            .borders(Borders::ALL)
+                        Block::bordered()
                             .title("Select an action"),
                     )
                     .highlight_symbol("➜ ")

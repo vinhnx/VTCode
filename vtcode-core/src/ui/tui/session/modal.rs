@@ -11,7 +11,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Tabs, Wrap},
+    widgets::{Block, List, ListItem, ListState, Paragraph, Tabs, Wrap},
 };
 use terminal_size::{Height, Width, terminal_size};
 use tui_popup::PopupState;
@@ -342,7 +342,7 @@ pub struct ModalBodyContext<'a, 'b> {
 impl ModalListLayout {
     pub fn new(area: Rect, text_line_count: usize) -> Self {
         if text_line_count == 0 {
-            let chunks = Layout::vertical(vec![Constraint::Min(3)]).split(area);
+            let chunks = Layout::vertical([Constraint::Min(3)]).split(area);
             return Self {
                 text_area: None,
                 list_area: chunks[0],
@@ -350,7 +350,7 @@ impl ModalListLayout {
         }
 
         let paragraph_height = (text_line_count.min(u16::MAX as usize) as u16).saturating_add(1);
-        let chunks = Layout::vertical(vec![
+        let chunks = Layout::vertical([
             Constraint::Length(paragraph_height),
             Constraint::Min(3),
         ])
@@ -547,7 +547,7 @@ pub fn render_wizard_tabs(
         .collect();
 
     let tabs = Tabs::new(titles)
-        .select(current_step)
+        .select(Some(current_step))
         .divider(" ")
         .padding("← ", " →")
         .highlight_style(styles.highlight);
@@ -568,7 +568,7 @@ pub fn render_wizard_modal_body(
     }
 
     // Layout: [Tabs Header (1 row)] [Question text] [List]
-    let chunks = Layout::vertical(vec![
+    let chunks = Layout::vertical([
         Constraint::Length(1), // Tabs
         Constraint::Length(2), // Question with padding
         Constraint::Min(3),    // List
@@ -594,8 +594,7 @@ pub fn render_wizard_modal_body(
 }
 
 fn modal_list_block(list: &ModalListState, styles: &ModalRenderStyles) -> Block<'static> {
-    let mut block = Block::default()
-        .borders(Borders::ALL)
+    let mut block = Block::bordered()
         .border_type(terminal_capabilities::get_border_type())
         .border_style(styles.border);
     if let Some(summary) = modal_list_summary_line(list, styles) {
@@ -851,12 +850,11 @@ fn render_modal_instructions(
         items.push(ListItem::new(Line::default()));
     }
 
-    let block = Block::default()
+    let block = Block::bordered()
         .title(Span::styled(
             ui::MODAL_INSTRUCTIONS_TITLE.to_owned(),
             styles.instruction_title,
         ))
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .border_style(styles.instruction_border);
 
@@ -889,9 +887,8 @@ fn render_modal_search(
     }
     spans.push(Span::styled("▌".to_owned(), styles.highlight));
 
-    let block = Block::default()
+    let block = Block::bordered()
         .title(Span::styled(search.label.clone(), styles.header))
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .border_style(styles.border);
 

@@ -33,7 +33,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Clear, Paragraph, Wrap},
 };
 
 use super::modal::compute_modal_area;
@@ -81,9 +81,8 @@ pub fn render_palette_loading(
     let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
-    let block = Block::default()
+    let block = Block::bordered()
         .title(title)
-        .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .style(default_style)
         .border_style(border_style);

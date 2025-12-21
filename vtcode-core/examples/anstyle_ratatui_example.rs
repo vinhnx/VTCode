@@ -89,19 +89,16 @@ fn main() -> io::Result<()> {
 
     // Render TUI demo
     terminal.draw(|f| {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .margin(2)
-            .constraints([
-                Constraint::Length(5),
-                Constraint::Length(8),
-                Constraint::Min(0),
-            ])
-            .split(f.area());
+        let chunks = Layout::vertical([
+            Constraint::Length(5),
+            Constraint::Length(8),
+            Constraint::Min(0),
+        ])
+        .margin(2)
+        .split(f.area());
 
         // Title section
-        let title_block = Block::default()
-            .borders(Borders::ALL)
+        let title_block = Block::bordered()
             .style(anstyle_to_ratatui(theme.title));
 
         let title_text = Line::from(vec![
@@ -135,7 +132,7 @@ fn main() -> io::Result<()> {
             ]),
         ];
 
-        let status_block = Block::default().title(" Status ").borders(Borders::ALL);
+        let status_block = Block::bordered().title(" Status ");
 
         let status = Paragraph::new(status_lines).block(status_block);
 
