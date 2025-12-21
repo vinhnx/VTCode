@@ -49,7 +49,7 @@ impl Session {
         })
     }
 
-    pub(super) fn overlay_queue_lines(
+    pub(crate) fn overlay_queue_lines(
         &mut self,
         visible_lines: &mut [Line<'static>],
         content_width: u16,
@@ -88,10 +88,8 @@ impl Session {
             format!("Queued messages ({})", self.queued_inputs.len())
         };
 
-        let mut header_lines = self.wrap_line(
-            Line::from(header_text).style(header_style),
-            max_width,
-        );
+        let mut header_lines =
+            self.wrap_line(Line::from(header_text).style(header_style), max_width);
         if header_lines.is_empty() {
             header_lines.push(Line::default());
         }
@@ -111,10 +109,8 @@ impl Session {
         let remaining = self.queued_inputs.len().saturating_sub(DISPLAY_LIMIT);
         if remaining > 0 {
             let indicator = format!("  +{}...", remaining);
-            let mut indicator_lines = self.wrap_line(
-                Line::from(indicator).style(message_style),
-                max_width,
-            );
+            let mut indicator_lines =
+                self.wrap_line(Line::from(indicator).style(message_style), max_width);
             if indicator_lines.is_empty() {
                 indicator_lines.push(Line::default());
             }
@@ -138,10 +134,8 @@ impl Session {
 
         let label_width = UnicodeWidthStr::width(label);
         if max_width <= label_width {
-            let mut wrapped_label = self.wrap_line(
-                Line::from(label.to_owned()).style(label_style),
-                max_width,
-            );
+            let mut wrapped_label =
+                self.wrap_line(Line::from(label.to_owned()).style(label_style), max_width);
             if wrapped_label.is_empty() {
                 wrapped_label.push(Line::default());
             }

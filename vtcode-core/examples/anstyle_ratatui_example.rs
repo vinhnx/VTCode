@@ -4,11 +4,11 @@
 //! in both CLI output and TUI widgets.
 
 use anstyle::{AnsiColor, Color, Effects, Style};
+use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
@@ -98,8 +98,7 @@ fn main() -> io::Result<()> {
         .split(f.area());
 
         // Title section
-        let title_block = Block::bordered()
-            .style(anstyle_to_ratatui(theme.title));
+        let title_block = Block::bordered().style(anstyle_to_ratatui(theme.title));
 
         let title_text = Line::from(vec![
             theme.render_tui_span("VTCode ", &theme.title),

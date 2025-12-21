@@ -5,12 +5,12 @@ use std::process::Command;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
+use editor_command::Editor;
 use ratatui::crossterm::ExecutableCommand;
 use ratatui::crossterm::event;
 use ratatui::crossterm::terminal::{
     Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use editor_command::Editor;
 use tempfile::NamedTempFile;
 use tracing::debug;
 

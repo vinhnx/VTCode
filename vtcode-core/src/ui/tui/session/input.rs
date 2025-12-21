@@ -111,7 +111,7 @@ impl Session {
         }
     }
 
-    pub(super) fn desired_input_lines(&self, inner_width: u16) -> u16 {
+    pub(crate) fn desired_input_lines(&self, inner_width: u16) -> u16 {
         if inner_width == 0 || self.input_manager.content().is_empty() {
             return 1;
         }
@@ -124,7 +124,7 @@ impl Session {
         capped as u16
     }
 
-    pub(super) fn apply_input_height(&mut self, height: u16) {
+    pub(crate) fn apply_input_height(&mut self, height: u16) {
         let resolved = height.max(Self::input_block_height_for_lines(1));
         if self.input_height != resolved {
             self.input_height = resolved;
@@ -132,7 +132,7 @@ impl Session {
         }
     }
 
-    pub(super) fn input_block_height_for_lines(lines: u16) -> u16 {
+    pub(crate) fn input_block_height_for_lines(lines: u16) -> u16 {
         lines.max(1).saturating_add(2)
     }
 

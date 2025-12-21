@@ -77,10 +77,20 @@ pub async fn run_modern_tui(
                                 // Update logic can go here if needed
                             }
                             Event::Render => {
-                                // Draw the session to the terminal
+                                // Draw the session to the terminal with performance tracking
+                                let start = std::time::Instant::now();
                                 tui.terminal.draw(|frame| {
                                     session.render(frame);
                                 })?;
+                                let duration = start.elapsed();
+
+                                // Warn if frame rendering exceeds 60 FPS budget (16.67ms)
+                                if duration > std::time::Duration::from_millis(16) {
+                                    tracing::warn!(
+                                        "Slow frame render: {:?} (target: <16ms for 60 FPS)",
+                                        duration
+                                    );
+                                }
                             }
                             Event::Resize(_width, height) => {
                                 // Handle resize by telling the session about new dimensions
@@ -129,10 +139,13 @@ pub async fn run_modern_tui(
                                 // Handle focus lost
                             }
                             Event::Init => {
-                                // Initial setup after TUI is entered
+                                // Initial setup after TUI is entered with performance tracking
+                                let start = std::time::Instant::now();
                                 tui.terminal.draw(|frame| {
                                     session.render(frame);
                                 })?;
+                                let duration = start.elapsed();
+                                tracing::debug!("Initial frame render: {:?}", duration);
                             }
                             Event::Closed => {
                                 break 'main;

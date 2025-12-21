@@ -1517,9 +1517,7 @@ impl FromStr for ModelId {
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
             // Hugging Face models
-            s if s == models::huggingface::DEEPSEEK_V32 => {
-                Ok(ModelId::HuggingFaceDeepseekV32)
-            }
+            s if s == models::huggingface::DEEPSEEK_V32 => Ok(ModelId::HuggingFaceDeepseekV32),
             s if s == models::huggingface::OPENAI_GPT_OSS_20B => {
                 Ok(ModelId::HuggingFaceOpenAIGptOss20b)
             }
@@ -1785,7 +1783,9 @@ mod tests {
         );
         // Hugging Face models
         assert_eq!(
-            models::huggingface::DEEPSEEK_V32.parse::<ModelId>().unwrap(),
+            models::huggingface::DEEPSEEK_V32
+                .parse::<ModelId>()
+                .unwrap(),
             ModelId::HuggingFaceDeepseekV32
         );
         assert_eq!(
@@ -1796,7 +1796,11 @@ mod tests {
         );
         // Removed / invalid HF models should not parse
         assert!("minimaxai/MiniMax-M2".parse::<ModelId>().is_err());
-        assert!("qwen/Qwen3-Coder-30B-A3B-Instruct".parse::<ModelId>().is_err());
+        assert!(
+            "qwen/Qwen3-Coder-30B-A3B-Instruct"
+                .parse::<ModelId>()
+                .is_err()
+        );
         // xAI models
         assert_eq!(
             models::xai::GROK_4.parse::<ModelId>().unwrap(),

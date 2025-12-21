@@ -2,14 +2,14 @@ use std::time::Instant;
 
 /// Spinner state for showing AI thinking indicator
 #[derive(Clone)]
-pub(in crate::ui::tui::session) struct ThinkingSpinner {
-    pub(in crate::ui::tui::session) is_active: bool,
+pub(crate) struct ThinkingSpinner {
+    pub(crate) is_active: bool,
     started_at: Instant,
     spinner_index: usize,
     last_update: Instant,
-    pub(in crate::ui::tui::session) spinner_line_index: Option<usize>,
+    pub(crate) spinner_line_index: Option<usize>,
     #[allow(dead_code)]
-    pub(in crate::ui::tui::session) label: String,
+    pub(crate) label: String,
 }
 
 impl ThinkingSpinner {

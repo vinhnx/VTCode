@@ -227,8 +227,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "zai" => get_zai_api_key(sources),
         "ollama" => get_ollama_api_key(sources),
         "lmstudio" => get_lmstudio_api_key(sources),
-        "huggingface" => env::var("HF_TOKEN")
-            .map_err(|_| anyhow::anyhow!("HF_TOKEN not set")),
+        "huggingface" => env::var("HF_TOKEN").map_err(|_| anyhow::anyhow!("HF_TOKEN not set")),
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
     }
 }

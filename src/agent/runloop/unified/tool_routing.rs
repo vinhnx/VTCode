@@ -153,7 +153,10 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     let default_selection = InlineListSelection::ToolApproval(true);
 
     // Play terminal notification (rich OSC when available, fallback to bell)
-    vtcode_core::utils::ansi_codes::notify_attention(hitl_notification_bell, Some("Tool approval required"));
+    vtcode_core::utils::ansi_codes::notify_attention(
+        hitl_notification_bell,
+        Some("Tool approval required"),
+    );
 
     // Show modal list with full context - arrow keys will work here and history navigation is disabled
     handle.show_list_modal(

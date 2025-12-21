@@ -80,7 +80,10 @@ pub fn play_bell(enabled: bool) {
 #[inline]
 pub fn is_bell_enabled(default_enabled: bool) -> bool {
     if let Ok(val) = std::env::var("VTCODE_HITL_BELL") {
-        return !matches!(val.trim().to_ascii_lowercase().as_str(), "false" | "0" | "off");
+        return !matches!(
+            val.trim().to_ascii_lowercase().as_str(),
+            "false" | "0" | "off"
+        );
     }
     default_enabled
 }
@@ -138,8 +141,12 @@ fn hitl_notify_mode(default_enabled: bool) -> HitlNotifyMode {
 }
 
 fn detect_terminal_notify_kind() -> TerminalNotifyKind {
-    let term = std::env::var("TERM").unwrap_or_default().to_ascii_lowercase();
-    let term_program = std::env::var("TERM_PROGRAM").unwrap_or_default().to_ascii_lowercase();
+    let term = std::env::var("TERM")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let term_program = std::env::var("TERM_PROGRAM")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
 
     if term.contains("kitty") || std::env::var("KITTY_WINDOW_ID").is_ok() {
         return TerminalNotifyKind::Kitty;

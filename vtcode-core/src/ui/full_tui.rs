@@ -1,17 +1,18 @@
 use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
+use crate::ui::tui::panic_hook::TuiPanicGuard;
 use anyhow::{Context, Result};
+use ratatui::backend::CrosstermBackend as Backend;
 use ratatui::crossterm::{
-    cursor, execute,
+    cursor,
     event::{
         self as event, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste,
         EnableMouseCapture, Event as CrosstermEvent, KeyEvent, KeyEventKind, MouseEvent,
     },
+    execute,
     terminal::{self as terminal, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::backend::CrosstermBackend as Backend;
-use crate::ui::tui::panic_hook::TuiPanicGuard;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -384,11 +385,8 @@ impl ExternalAppLauncher for FullTui {
             // 8. Clear terminal to remove any artifacts
             // This prevents ANSI escape codes from external apps' background color requests
             // from appearing in the TUI.
-            execute!(
-                std::io::stderr(),
-                terminal::Clear(terminal::ClearType::All)
-            )
-            .context("failed to clear terminal")?;
+            execute!(std::io::stderr(), terminal::Clear(terminal::ClearType::All))
+                .context("failed to clear terminal")?;
 
             // 9. Restart event handler
             self.start();

@@ -347,11 +347,8 @@ impl ModalListLayout {
         }
 
         let paragraph_height = (text_line_count.min(u16::MAX as usize) as u16).saturating_add(1);
-        let chunks = Layout::vertical([
-            Constraint::Length(paragraph_height),
-            Constraint::Min(3),
-        ])
-        .split(area);
+        let chunks = Layout::vertical([Constraint::Length(paragraph_height), Constraint::Min(3)])
+            .split(area);
 
         Self {
             text_area: Some(chunks[0]),

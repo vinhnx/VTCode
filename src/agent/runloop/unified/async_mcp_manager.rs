@@ -155,7 +155,8 @@ impl AsyncMcpManager {
             }
 
             // Initialize MCP client
-            match Self::initialize_mcp_client(config, hitl_notification_bell, event_callback).await {
+            match Self::initialize_mcp_client(config, hitl_notification_bell, event_callback).await
+            {
                 Ok(client) => {
                     let mut status_guard = status.write().await;
                     *status_guard = McpInitStatus::Ready {

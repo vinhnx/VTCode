@@ -1,0 +1,221 @@
+use ratatui::{
+    buffer::Buffer,
+    layout::{Constraint, Layout, Rect},
+    widgets::Widget,
+};
+
+use super::{FilePaletteWidget, HeaderWidget, PromptPaletteWidget, TranscriptWidget};
+use crate::ui::tui::session::{Session, render::apply_view_rows};
+
+/// Root compositor widget that orchestrates rendering of the entire session UI
+///
+/// This widget follows the compositional pattern recommended by Ratatui where
+/// a single root widget manages the layout and delegates rendering to child widgets.
+///
+/// It handles:
+/// - Layout calculation (header, transcript, input areas)
+/// - Coordinating child widget rendering
+/// - Modal and palette overlay management
+///
+/// # Example
+/// ```ignore
+/// SessionWidget::new(session)
+///     .render(area, buf);
+/// ```
+pub struct SessionWidget<'a> {
+    session: &'a mut Session,
+}
+
+impl<'a> SessionWidget<'a> {
+    /// Create a new SessionWidget with required parameters
+    pub fn new(session: &'a mut Session) -> Self {
+        Self { session }
+    }
+}
+
+impl<'a> Widget for &'a mut SessionWidget<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+
+        // Update spinner animation if active
+        self.session.thinking_spinner.update();
+        if self.session.thinking_spinner.is_active {
+            self.session.needs_redraw = true;
+            if let Some(spinner_idx) = self.session.thinking_spinner.spinner_line_index
+                && spinner_idx < self.session.lines.len()
+            {
+                let frame = self.session.thinking_spinner.current_frame();
+                let revision = self.session.next_revision();
+                if let Some(line) = self.session.lines.get_mut(spinner_idx)
+                    && !line.segments.is_empty()
+                {
+                    line.segments[0].text = format!("{} Thinking...", frame);
+                    line.revision = revision;
+                    self.session.mark_line_dirty(spinner_idx);
+                }
+            }
+        }
+
+        // Handle deferred triggers
+        if self.session.deferred_file_browser_trigger {
+            self.session.deferred_file_browser_trigger = false;
+            self.session.input_manager.insert_char('@');
+            self.session.check_file_reference_trigger();
+            self.session.mark_dirty();
+        }
+
+        if self.session.deferred_prompt_browser_trigger {
+            self.session.deferred_prompt_browser_trigger = false;
+            self.session.input_manager.insert_char('#');
+            self.session.check_prompt_reference_trigger();
+            self.session.mark_dirty();
+        }
+
+        // Pull log entries
+        self.session.poll_log_entries();
+
+        // Calculate header height
+        let header_lines = self.session.header_lines();
+        let header_height = self.session.header_height_from_lines(area.width, &header_lines);
+        if header_height != self.session.header_rows {
+            self.session.header_rows = header_height;
+            crate::ui::tui::session::render::recalculate_transcript_rows(self.session);
+        }
+
+        // Calculate input height
+        let status_height = if area.width > 0 && has_input_status(self.session) {
+            1
+        } else {
+            0
+        };
+        let inner_width = area.width.saturating_sub(2);
+        let desired_lines = self.session.desired_input_lines(inner_width);
+        let block_height = Session::input_block_height_for_lines(desired_lines);
+        let input_height = block_height.saturating_add(status_height);
+        self.session.apply_input_height(input_height);
+
+        // Create layout
+        let chunks = Layout::vertical([
+            Constraint::Length(header_height),
+            Constraint::Min(1),
+            Constraint::Length(input_height),
+        ])
+        .split(area);
+
+        let (header_area, transcript_area, _input_area) = (chunks[0], chunks[1], chunks[2]);
+
+        // Update view rows for transcript
+        apply_view_rows(self.session, transcript_area.height);
+
+        // Render header using builder pattern
+        HeaderWidget::new(self.session)
+            .lines(header_lines)
+            .render(header_area, buf);
+
+        // Render transcript with optional splits for timeline/logs
+        if self.session.show_timeline_pane {
+            let timeline_chunks =
+                Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
+                    .split(transcript_area);
+            TranscriptWidget::new(self.session).render(timeline_chunks[0], buf);
+
+            if self.session.show_logs {
+                self.render_logs(timeline_chunks[1], buf);
+            } else {
+                self.render_logs_placeholder(timeline_chunks[1], buf);
+            }
+        } else if self.session.show_logs {
+            let split = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
+                .split(transcript_area);
+            TranscriptWidget::new(self.session).render(split[0], buf);
+            self.render_logs(split[1], buf);
+        } else {
+            TranscriptWidget::new(self.session).render(transcript_area, buf);
+        }
+
+        // Note: Input rendering needs Frame, so it's handled separately
+
+        // Render overlays (modals, palettes, etc.)
+        self.render_overlays(area, buf);
+    }
+}
+
+impl<'a> SessionWidget<'a> {
+    fn render_logs(&mut self, area: Rect, buf: &mut Buffer) {
+        use ratatui::widgets::{Block, Paragraph, Wrap};
+
+        let block = Block::bordered()
+            .title("Logs")
+            .border_type(crate::ui::tui::session::terminal_capabilities::get_border_type())
+            .style(self.session.styles.default_style())
+            .border_style(self.session.styles.border_style());
+        let inner = block.inner(area);
+        block.render(area, buf);
+
+        if inner.height == 0 || inner.width == 0 {
+            return;
+        }
+
+        let paragraph = Paragraph::new((*self.session.log_text()).clone()).wrap(Wrap { trim: false });
+        paragraph.render(inner, buf);
+    }
+
+    fn render_logs_placeholder(&self, area: Rect, buf: &mut Buffer) {
+        use ratatui::layout::{Position, Size};
+        use ratatui::widgets::{Block, RatatuiLogo};
+
+        let block = Block::bordered()
+            .title("Logs hidden")
+            .border_type(crate::ui::tui::session::terminal_capabilities::get_border_type())
+            .style(self.session.styles.default_style())
+            .border_style(self.session.styles.border_style());
+        let inner = block.inner(area);
+        block.render(area, buf);
+
+        if inner.width >= 15 && inner.height >= 2 {
+            let logo_area = Rect::from((
+                Position::new(
+                    inner.x + (inner.width.saturating_sub(15)) / 2,
+                    inner.y + (inner.height.saturating_sub(2)) / 2,
+                ),
+                Size::new(15, 2),
+            ));
+            RatatuiLogo::tiny().render(logo_area, buf);
+        }
+    }
+
+    fn render_overlays(&mut self, viewport: Rect, buf: &mut Buffer) {
+        // Note: Modal and slash palette still use Frame API, so they're handled separately
+        // Only render the palette widgets that work with Buffer
+
+        // Render file palette using builder pattern
+        if self.session.file_palette_active {
+            if let Some(palette) = self.session.file_palette.as_ref() {
+                FilePaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
+            }
+        }
+
+        // Render prompt palette using builder pattern
+        if self.session.prompt_palette_active {
+            if let Some(palette) = self.session.prompt_palette.as_ref() {
+                PromptPaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
+            }
+        }
+    }
+}
+
+fn has_input_status(session: &Session) -> bool {
+    let left_present = session
+        .input_status_left
+        .as_ref()
+        .is_some_and(|value| !value.trim().is_empty());
+    if left_present {
+        return true;
+    }
+    session
+        .input_status_right
+        .as_ref()
+        .is_some_and(|value| !value.trim().is_empty())
+}

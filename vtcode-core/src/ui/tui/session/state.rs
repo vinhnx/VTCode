@@ -23,7 +23,7 @@ use tui_popup::PopupState;
 
 impl Session {
     /// Get the next revision counter for message tracking
-    pub(super) fn next_revision(&mut self) -> u64 {
+    pub(crate) fn next_revision(&mut self) -> u64 {
         self.line_revision_counter = self.line_revision_counter.wrapping_add(1);
         self.line_revision_counter
     }
@@ -56,7 +56,7 @@ impl Session {
     }
 
     /// Mark a specific line as dirty to optimize reflow scans
-    pub(super) fn mark_line_dirty(&mut self, index: usize) {
+    pub(crate) fn mark_line_dirty(&mut self, index: usize) {
         self.first_dirty_line = match self.first_dirty_line {
             Some(current) => Some(current.min(index)),
             None => Some(index),
@@ -260,7 +260,7 @@ impl Session {
     }
 
     /// Prepare transcript scroll parameters
-    pub(super) fn prepare_transcript_scroll(
+    pub(crate) fn prepare_transcript_scroll(
         &mut self,
         total_rows: usize,
         viewport_rows: usize,

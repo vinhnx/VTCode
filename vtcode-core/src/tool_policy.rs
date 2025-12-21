@@ -1085,14 +1085,14 @@ impl ToolPolicyManager {
 
 /// Render a Ratatui-based confirmation dialog when running in TUI mode.
 fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
+    use ratatui::Terminal;
+    use ratatui::backend::CrosstermBackend;
     use ratatui::crossterm::cursor::{Hide, Show};
     use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind, read};
     use ratatui::crossterm::terminal::{
         EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
     };
     use ratatui::crossterm::{ExecutableCommand, execute};
-    use ratatui::Terminal;
-    use ratatui::backend::CrosstermBackend;
     use ratatui::layout::{Constraint, Layout};
     use ratatui::style::{Color, Modifier, Style};
     use ratatui::text::{Line, Span};
@@ -1135,16 +1135,13 @@ fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
         terminal
             .draw(|frame| {
                 let area = frame.area();
-                let layout = Layout::vertical([Constraint::Length(4), Constraint::Min(5)])
-                    .split(area);
+                let layout =
+                    Layout::vertical([Constraint::Length(4), Constraint::Min(5)]).split(area);
 
                 let header = Paragraph::new(format!(
                     "Tool: {tool_name}\nUse ↑/↓ to choose, Enter to confirm, Esc to deny"
                 ))
-                .block(
-                    Block::bordered()
-                        .title("Tool Confirmation"),
-                );
+                .block(Block::bordered().title("Tool Confirmation"));
                 frame.render_widget(header, layout[0]);
 
                 let list_items: Vec<ListItem> = items
@@ -1161,10 +1158,7 @@ fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
                     .collect();
 
                 let list = List::new(list_items)
-                    .block(
-                        Block::bordered()
-                            .title("Select an action"),
-                    )
+                    .block(Block::bordered().title("Select an action"))
                     .highlight_symbol("➜ ")
                     .highlight_style(
                         Style::default()

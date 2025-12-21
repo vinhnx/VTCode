@@ -2,14 +2,14 @@ use std::fmt;
 use std::io::{self, IsTerminal, Write};
 
 use anyhow::{Context, Result, anyhow};
+use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::cursor::Show;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -107,8 +107,7 @@ pub fn run_interactive_selection(
                     let footer_height: u16 = 4;
                     let layout = Layout::vertical([
                         Constraint::Length(
-                            instruction_height
-                                .min(area.height.saturating_sub(footer_height + 5)),
+                            instruction_height.min(area.height.saturating_sub(footer_height + 5)),
                         ),
                         Constraint::Min(5),
                         Constraint::Length(footer_height),
