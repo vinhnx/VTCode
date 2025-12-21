@@ -12,6 +12,7 @@ use super::file_palette::FilePalette;
 use super::modal::{ModalListLayout, compute_modal_area};
 use super::prompt_palette::PromptPalette;
 use super::terminal_capabilities;
+use crate::config::constants::ui;
 
 pub(super) fn render_file_palette(
     frame: &mut Frame<'_>,
@@ -102,7 +103,10 @@ pub(super) fn render_file_palette(
         ))));
     }
 
-    let list = List::new(list_items).style(default_style_val);
+    let list = List::new(list_items)
+        .style(default_style_val)
+        .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
+        .repeat_highlight_symbol(true);
     frame.render_widget(list, layout.list_area);
 }
 
@@ -249,7 +253,10 @@ pub(super) fn render_prompt_palette(
         ))));
     }
 
-    let list = List::new(list_items).style(default_style_val);
+    let list = List::new(list_items)
+        .style(default_style_val)
+        .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
+        .repeat_highlight_symbol(true);
     frame.render_widget(list, layout.list_area);
 }
 

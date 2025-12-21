@@ -1174,7 +1174,8 @@ fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
                         Style::default()
                             .fg(Color::Cyan)
                             .add_modifier(Modifier::BOLD),
-                    );
+                    )
+                    .repeat_highlight_symbol(true);
 
                 frame.render_stateful_widget(list, layout[1], &mut state);
             })
