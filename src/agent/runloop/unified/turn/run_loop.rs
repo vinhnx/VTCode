@@ -843,17 +843,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     full_auto: bool,
     resume: Option<ResumeSession>,
 ) -> Result<()> {
-    // Set up panic handler to ensure MCP cleanup on panic
-    let original_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic_info| {
-        eprintln!("Application panic occurred: {:?}", panic_info);
-        // Note: We can't easily access the MCP client here due to move semantics
-        // The cleanup will happen in the Drop implementations
-        original_hook(panic_info);
-    }));
-
-    // Note: The original hook will not be restored during this session
-    // but Rust runtime should handle this appropriately
+    // Note: The global panic hook in vtcode-core handles terminal restoration and reporting on panic
     let mut config = config.clone();
     let mut resume_state = resume;
 

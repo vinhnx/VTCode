@@ -8,6 +8,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use better_panic::Settings;
 use crossterm::{
+    cursor::Show,
+    event::{
+        DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, PopKeyboardEnhancementFlags,
+    },
     execute,
     terminal::{LeaveAlternateScreen, disable_raw_mode},
 };
@@ -28,9 +32,11 @@ pub fn set_debug_mode(enabled: bool) {
 ///
 /// This function should be called very early in the application lifecycle,
 /// before any TUI operations begin.
+///
+/// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/panic-hooks/
 pub fn init_panic_hook() {
-    // Store the original panic hook to potentially chain to it later if needed
-    let _original_hook = panic::take_hook();
+    // Store the original panic hook to chain to it later
+    let original_hook = panic::take_hook();
 
     panic::set_hook(Box::new(move |panic_info| {
         let is_tui = TUI_INITIALIZED.load(Ordering::SeqCst);
@@ -39,7 +45,7 @@ pub fn init_panic_hook() {
         // First, attempt to restore terminal state if TUI was active
         if is_tui {
             // Try to restore the terminal - ignore errors since we're in a panic state
-            let _ = restore_terminal_on_panic();
+            let _ = restore_tui();
         }
 
         if is_debug {
@@ -55,13 +61,16 @@ pub fn init_panic_hook() {
                 tracing::debug!(panic = %panic_info, "VTCode encountered a critical error");
             }
 
-            eprintln!("VTCode encountered a critical error and needs to shut down.");
+            eprintln!("\nVTCode encountered a critical error and needs to shut down.");
             eprintln!("Error details: {}", panic_info);
             eprintln!("If you encounter this issue, please report it to the VTCode team.");
-            eprintln!("Run with --debug for more information.");
+            eprintln!("Run with --debug for more information.\n");
+
+            // Call the original hook to ensure standard panic reporting (like backtraces)
+            original_hook(panic_info);
         }
 
-        // Exit with failure code
+        // Exit with failure code to ensure the entire process terminates
         std::process::exit(1);
     }));
 }
@@ -82,7 +91,9 @@ pub fn mark_tui_deinitialized() {
 /// by disabling raw mode and leaving alternate screen if they were active.
 /// It handles all errors internally to ensure cleanup happens even if individual
 /// operations fail.
-fn restore_terminal_on_panic() -> io::Result<()> {
+///
+/// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/panic-hooks/
+pub fn restore_tui() -> io::Result<()> {
     // Attempt to disable raw mode if it was enabled
     // We ignore errors here since raw mode might not have been enabled
     let _ = disable_raw_mode();
@@ -90,15 +101,21 @@ fn restore_terminal_on_panic() -> io::Result<()> {
     // Get stdout for executing terminal commands
     let mut stdout = io::stdout();
 
+    // Disable various terminal modes that might have been enabled by the TUI
+    let _ = execute!(stdout, DisableBracketedPaste);
+    let _ = execute!(stdout, DisableFocusChange);
+    let _ = execute!(stdout, DisableMouseCapture);
+    let _ = execute!(stdout, PopKeyboardEnhancementFlags);
+
     // Ensure cursor is visible
-    let _ = execute!(stdout, crossterm::cursor::Show);
+    let _ = execute!(stdout, Show);
 
     // Try to leave alternate screen to return to normal terminal
     // This might fail if we're not in alternate screen, which is fine
     let _ = execute!(stdout, LeaveAlternateScreen);
 
     // Additional flush to ensure all escape sequences are processed
-    stdout.flush()?;
+    let _ = stdout.flush();
 
     Ok(())
 }
@@ -165,7 +182,7 @@ mod tests {
         TUI_INITIALIZED.store(false, Ordering::SeqCst);
 
         // This should not cause issues even if terminal is not in expected state
-        let result = restore_terminal_on_panic();
+        let result = restore_tui();
         // Should return Ok or Err but not panic
         assert!(result.is_ok() || result.is_err());
     }

@@ -85,26 +85,11 @@ pub(crate) async fn run_single_agent_loop_unified(
     full_auto: bool,
     resume: Option<ResumeSession>,
 ) -> Result<()> {
-    // Set up panic handler to ensure terminal cleanup on panic
-    // This is critical for handling abnormal termination (e.g., from panics)
-    // without leaving ANSI escape sequences in the terminal
-    let original_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic_info| {
-        // Attempt to restore terminal to clean state
-        let _ = disable_raw_mode();
-        let mut stdout = std::io::stdout();
-        let _ = stdout.flush();
-
-        // Call the original panic hook to maintain normal panic behavior
-        original_hook(panic_info);
-    }));
-
     // Create a guard that ensures terminal is restored even on early return
     // This is important because the TUI task may not shutdown cleanly
     let _terminal_cleanup_guard = TerminalCleanupGuard::new();
 
-    // Note: The original hook will not be restored during this session
-    // but Rust runtime should handle this appropriately
+    // Note: The global panic hook in vtcode-core handles terminal restoration on panic
     let mut config = config.clone();
     let mut resume_state = resume;
 
