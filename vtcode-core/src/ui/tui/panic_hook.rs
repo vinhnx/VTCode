@@ -6,12 +6,23 @@ use std::io::{self, Write};
 use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use better_panic::Settings;
 use crossterm::{
     execute,
     terminal::{LeaveAlternateScreen, disable_raw_mode},
 };
+use tracing;
 
 static TUI_INITIALIZED: AtomicBool = AtomicBool::new(false);
+static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
+
+/// Set whether the application is in debug mode
+///
+/// When debug mode is enabled, panics will show a detailed backtrace
+/// using better-panic.
+pub fn set_debug_mode(enabled: bool) {
+    DEBUG_MODE.store(enabled, Ordering::SeqCst);
+}
 
 /// Initialize the panic hook to restore terminal state on panic and provide better formatting
 ///
@@ -19,21 +30,36 @@ static TUI_INITIALIZED: AtomicBool = AtomicBool::new(false);
 /// before any TUI operations begin.
 pub fn init_panic_hook() {
     // Store the original panic hook to potentially chain to it later if needed
-    let original_hook = panic::take_hook();
+    let _original_hook = panic::take_hook();
 
     panic::set_hook(Box::new(move |panic_info| {
+        let is_tui = TUI_INITIALIZED.load(Ordering::SeqCst);
+        let is_debug = DEBUG_MODE.load(Ordering::SeqCst);
+
         // First, attempt to restore terminal state if TUI was active
-        if TUI_INITIALIZED.load(Ordering::SeqCst) {
+        if is_tui {
             // Try to restore the terminal - ignore errors since we're in a panic state
             let _ = restore_terminal_on_panic();
         }
 
-        eprintln!("VTCode encountered a critical error and needs to shut down.");
-        eprintln!("Error details: {}", panic_info);
-        eprintln!("If you encounter this issue, please report it to the VTCode team.");
+        if is_debug {
+            // Show pretty backtrace (the "modal" look)
+            Settings::debug()
+                .most_recent_first(false)
+                .lineno_suffix(true)
+                .create_panic_handler()(panic_info);
+        } else {
+            if !is_tui {
+                // On program CLI show on debug log
+                // We use tracing if available, but also print a simple message
+                tracing::debug!(panic = %panic_info, "VTCode encountered a critical error");
+            }
 
-        // Call the original hook as well, in case other code has registered hooks
-        original_hook(panic_info);
+            eprintln!("VTCode encountered a critical error and needs to shut down.");
+            eprintln!("Error details: {}", panic_info);
+            eprintln!("If you encounter this issue, please report it to the VTCode team.");
+            eprintln!("Run with --debug for more information.");
+        }
 
         // Exit with failure code
         std::process::exit(1);

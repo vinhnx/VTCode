@@ -54,6 +54,7 @@ async fn main() -> Result<()> {
     }
 
     let args = Cli::parse();
+    panic_hook::set_debug_mode(args.debug);
 
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = match initialize_tracing(&args).await {

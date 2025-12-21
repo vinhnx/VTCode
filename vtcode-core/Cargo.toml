@@ -154,6 +154,7 @@ which = "8.0.0"
 textwrap = "0.16"
 editor-command = "2.0"
 signal-hook = "0.3"
+better-panic = { version = "0.3.0", features = ["syntect"] }
 
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config", version = "0.50.12" }
