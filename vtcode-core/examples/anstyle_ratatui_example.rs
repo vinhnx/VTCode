@@ -81,10 +81,10 @@ fn main() -> io::Result<()> {
 
     // Setup terminal for TUI
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    crossterm::execute!(stdout, EnterAlternateScreen)?;
+    let mut stderr = io::stderr();
+    crossterm::execute!(stderr, EnterAlternateScreen)?;
 
-    let backend = CrosstermBackend::new(stdout);
+    let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend)?;
 
     // Render TUI demo

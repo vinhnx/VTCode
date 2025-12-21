@@ -98,24 +98,24 @@ pub fn restore_tui() -> io::Result<()> {
     // We ignore errors here since raw mode might not have been enabled
     let _ = disable_raw_mode();
 
-    // Get stdout for executing terminal commands
-    let mut stdout = io::stdout();
+    // Get stderr for executing terminal commands
+    let mut stderr = io::stderr();
 
     // Disable various terminal modes that might have been enabled by the TUI
-    let _ = execute!(stdout, DisableBracketedPaste);
-    let _ = execute!(stdout, DisableFocusChange);
-    let _ = execute!(stdout, DisableMouseCapture);
-    let _ = execute!(stdout, PopKeyboardEnhancementFlags);
+    let _ = execute!(stderr, DisableBracketedPaste);
+    let _ = execute!(stderr, DisableFocusChange);
+    let _ = execute!(stderr, DisableMouseCapture);
+    let _ = execute!(stderr, PopKeyboardEnhancementFlags);
 
     // Ensure cursor is visible
-    let _ = execute!(stdout, Show);
+    let _ = execute!(stderr, Show);
 
     // Try to leave alternate screen to return to normal terminal
     // This might fail if we're not in alternate screen, which is fine
-    let _ = execute!(stdout, LeaveAlternateScreen);
+    let _ = execute!(stderr, LeaveAlternateScreen);
 
     // Additional flush to ensure all escape sequences are processed
-    let _ = stdout.flush();
+    let _ = stderr.flush();
 
     Ok(())
 }

@@ -76,16 +76,16 @@ pub fn run_interactive_selection(
         return Err(anyhow!("No options available for selection"));
     }
 
-    if !io::stdout().is_terminal() {
+    if !io::stderr().is_terminal() {
         return Err(anyhow!("Terminal UI is unavailable"));
     }
 
-    let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
     let mut terminal_guard = TerminalModeGuard::new(title);
     terminal_guard.enable_raw_mode()?;
-    terminal_guard.enter_alternate_screen(&mut stdout)?;
+    terminal_guard.enter_alternate_screen(&mut stderr)?;
 
-    let backend = CrosstermBackend::new(stdout);
+    let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend)
         .with_context(|| format!("Failed to initialize Ratatui terminal for {title} selector"))?;
     terminal_guard.hide_cursor(&mut terminal)?;
@@ -310,8 +310,8 @@ impl TerminalModeGuard {
         Ok(())
     }
 
-    fn enter_alternate_screen(&mut self, stdout: &mut io::Stdout) -> Result<()> {
-        execute!(stdout, EnterAlternateScreen).with_context(|| {
+    fn enter_alternate_screen(&mut self, stderr: &mut io::Stderr) -> Result<()> {
+        execute!(stderr, EnterAlternateScreen).with_context(|| {
             format!(
                 "Failed to enter alternate screen for {} selector",
                 self.label
@@ -321,7 +321,7 @@ impl TerminalModeGuard {
         Ok(())
     }
 
-    fn hide_cursor(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    fn hide_cursor(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stderr>>) -> Result<()> {
         terminal
             .hide_cursor()
             .with_context(|| format!("Failed to hide cursor for {} selector", self.label))?;
@@ -331,7 +331,7 @@ impl TerminalModeGuard {
 
     fn restore_with_terminal(
         &mut self,
-        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        terminal: &mut Terminal<CrosstermBackend<io::Stderr>>,
     ) -> Result<()> {
         if self.raw_mode_enabled {
             disable_raw_mode().with_context(|| {
@@ -359,7 +359,7 @@ impl TerminalModeGuard {
 
         // Flush output to ensure all terminal commands are processed
         terminal.backend_mut().flush().ok();
-        io::stdout().flush().ok();
+        io::stderr().flush().ok();
 
         Ok(())
     }
@@ -373,19 +373,19 @@ impl Drop for TerminalModeGuard {
         }
 
         if self.alternate_screen {
-            let mut stdout = io::stdout();
-            let _ = execute!(stdout, LeaveAlternateScreen);
+            let mut stderr = io::stderr();
+            let _ = execute!(stderr, LeaveAlternateScreen);
             self.alternate_screen = false;
         }
 
         if self.cursor_hidden {
-            let mut stdout = io::stdout();
-            let _ = execute!(stdout, Show);
-            let _ = stdout.flush();
+            let mut stderr = io::stderr();
+            let _ = execute!(stderr, Show);
+            let _ = stderr.flush();
             self.cursor_hidden = false;
         }
 
-        // Ensure stdout is flushed to prevent escape codes from appearing
-        let _ = io::stdout().flush();
+        // Ensure stderr is flushed to prevent escape codes from appearing
+        let _ = io::stderr().flush();
     }
 }
