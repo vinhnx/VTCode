@@ -51,8 +51,8 @@ pub fn strip_ansi(text: &str) -> String {
                             i += 1;
                         }
                     }
-                    b'P' | b'^' | b'_' => {
-                        // DCS/PM/APC sequence - ends with ST (ESC \)
+                    b'P' | b'^' | b'_' | b'X' => {
+                        // DCS/PM/APC/SOS sequence - ends with ST (ESC \)
                         i += 2;
                         while i < bytes.len() {
                             if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
@@ -143,8 +143,8 @@ pub fn parse_ansi_sequence(text: &str) -> Option<usize> {
             }
             None
         }
-        b'P' | b'^' | b'_' => {
-            // DCS/PM/APC sequences - starts with ESC P, ESC ^, or ESC _
+        b'P' | b'^' | b'_' | b'X' => {
+            // DCS/PM/APC/SOS sequences - starts with ESC P, ESC ^, ESC _, or ESC X
             // Ends with ST (ESC \)
             for index in 2..bytes.len() {
                 if bytes[index] == 0x1b && index + 1 < bytes.len() && bytes[index + 1] == b'\\' {
@@ -216,8 +216,8 @@ pub fn strip_ansi_ascii_only(text: &str) -> String {
                             i += 1;
                         }
                     }
-                    b'P' | b'^' | b'_' => {
-                        // DCS/PM/APC sequence - ends with ST (ESC \)
+                    b'P' | b'^' | b'_' | b'X' => {
+                        // DCS/PM/APC/SOS sequence - ends with ST (ESC \)
                         i += 2;
                         while i < bytes.len() {
                             if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
@@ -387,6 +387,12 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_ansi_sequence_sos() {
+        // SOS sequence terminated with ST (ESC \)
+        assert_eq!(parse_ansi_sequence("\x1bXignored\x1b\\"), Some(11));
+    }
+
+    #[test]
     fn test_unicode_preservation() {
         let input = "VT\u{2014}Code"; // VT—Code
         assert_eq!(strip_ansi(input), "VT\u{2014}Code");
@@ -434,5 +440,23 @@ mod tests {
             strip_ansi("\x1b[1;4;41;33mBold underline yellow on red\x1b[0m"),
             "Bold underline yellow on red"
         );
+    }
+
+    #[test]
+    fn test_colon_separated_csi() {
+        let input = "shade \x1b[38:2:255:0:0mred\x1b[0m done";
+        assert_eq!(strip_ansi(input), "shade red done");
+    }
+
+    #[test]
+    fn test_sos_and_pm_sequences() {
+        let input = "pre\x1bXignored\x1b\\mid\x1b^more\x1b\\post";
+        assert_eq!(strip_ansi(input), "premidpost");
+    }
+
+    #[test]
+    fn test_osc_bel_termination() {
+        let input = "start\x1b]9;notice\x07end";
+        assert_eq!(strip_ansi(input), "startend");
     }
 }

@@ -1170,6 +1170,7 @@ mod tests {
             None,
             Some(config),
             None,
+            None,
         );
 
         let request = sample_request();
@@ -1211,6 +1212,7 @@ mod tests {
             None,
             Some(config),
             None,
+            None,
         );
 
         let beta_header = provider
@@ -1231,6 +1233,7 @@ mod tests {
             Some(models::CLAUDE_SONNET_4_5.to_string()),
             None,
             Some(config),
+            None,
             None,
         );
 
@@ -1271,6 +1274,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
 
         // Claude Sonnet 4.5 should support structured output
@@ -1295,6 +1299,7 @@ mod tests {
         let provider_default = AnthropicProvider::from_config(
             Some("key".to_string()),
             Some(models::anthropic::DEFAULT_MODEL.to_string()),
+            None,
             None,
             None,
             None,

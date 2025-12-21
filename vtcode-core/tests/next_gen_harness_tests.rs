@@ -1,3 +1,5 @@
+#![cfg(feature = "rl-next-gen")]
+
 use vtcode_core::VTCodeConfig;
 use vtcode_core::llm::rl::{PolicyContext, RlEngine};
 use vtcode_core::orchestrator::{DistributedOrchestrator, ExecutionTarget, ScheduledWork};

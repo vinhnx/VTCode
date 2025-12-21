@@ -587,13 +587,14 @@ pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
                     // CSI: ESC [ ... letter
                     chars.next();
                     for next in chars.by_ref() {
-                        if next.is_ascii_alphabetic() {
+                        let codepoint = next as u32;
+                        if (0x40..=0x7e).contains(&codepoint) {
                             break;
                         }
                     }
                 }
-                Some(']') | Some('P') | Some('^') | Some('_') => {
-                    // OSC/DCS/PM/APC: ESC X ... ST (where ST = ESC \ or BEL)
+                Some(']') | Some('P') | Some('^') | Some('_') | Some('X') => {
+                    // OSC/DCS/PM/APC/SOS: ESC X ... ST (where ST = ESC \ or BEL)
                     chars.next();
                     while let Some(next) = chars.next() {
                         if next == '\x07' {
@@ -710,6 +711,27 @@ mod ansi_stripping_tests {
         // Should preserve text but remove OSC sequences
         assert!(result.contains("here"));
         assert!(!result.contains("\u{1b}"));
+    }
+
+    #[test]
+    fn test_osc_bel_terminator() {
+        let input = "alert \u{1b}]9;ping\u{07}done";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "alert done");
+    }
+
+    #[test]
+    fn test_csi_colon_parameters() {
+        let input = "color \u{1b}[38:2:255:0:0mred\u{1b}[0m ready";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "color red ready");
+    }
+
+    #[test]
+    fn test_sos_and_pm_sequences() {
+        let input = "pre\u{1b}Xignored\u{1b}\\mid\u{1b}^more\u{1b}\\post";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "premidpost");
     }
 
     #[test]
