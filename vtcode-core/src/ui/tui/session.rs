@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Clear, ListState, Paragraph, Wrap},
+    widgets::{Block, BorderType, Clear, ListState, Paragraph, Wrap, Widget},
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -22,6 +22,7 @@ use super::{
         InlineTheme,
     },
 };
+use crate::ui::tui::widgets::SessionWidget;
 use crate::config::constants::ui;
 
 pub mod file_palette;
@@ -37,7 +38,7 @@ mod queue;
 pub mod render;
 mod scroll;
 pub mod slash;
-mod slash_palette;
+pub mod slash_palette;
 mod styling;
 mod text_utils;
 mod transcript;
@@ -79,11 +80,11 @@ use crate::ui::tui::log::{LogEntry, highlight_log_entry};
 
 const USER_PREFIX: &str = "";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
-const PROMPT_COMMAND_NAME: &str = "prompt";
-const LEGACY_PROMPT_COMMAND_NAME: &str = "prompts";
-const PROMPT_INVOKE_PREFIX: &str = "prompt:";
-const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
-const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
+pub const PROMPT_COMMAND_NAME: &str = "prompt";
+pub const LEGACY_PROMPT_COMMAND_NAME: &str = "prompts";
+pub const PROMPT_INVOKE_PREFIX: &str = "prompt:";
+pub const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
+pub const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 const MAX_LOG_LINES: usize = 256;
 
 pub struct Session {
@@ -592,52 +593,13 @@ impl Session {
             return;
         }
 
-        // Update spinner animation frame and message
-        self.thinking_spinner.update();
-        if self.thinking_spinner.is_active {
-            // Request continuous redraws while thinking
-            self.needs_redraw = true;
-            // Update spinner message with current frame
-            if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index
-                && spinner_idx < self.lines.len()
-            {
-                let frame = self.thinking_spinner.current_frame();
-                let revision = self.next_revision();
-                if let Some(line) = self.lines.get_mut(spinner_idx)
-                    && !line.segments.is_empty()
-                {
-                    line.segments[0].text = format!("{} Thinking...", frame);
-                    line.revision = revision;
-                }
-            }
-        }
-
         // Clear entire frame if modal was just closed to remove artifacts
         if self.needs_full_clear {
             frame.render_widget(Clear, viewport);
             self.needs_full_clear = false;
         }
 
-        // Handle deferred file browser trigger (after slash modal dismisses)
-        if self.deferred_file_browser_trigger {
-            self.deferred_file_browser_trigger = false;
-            // Insert @ to trigger file browser now that slash modal is gone
-            self.input_manager.insert_char('@');
-            self.check_file_reference_trigger();
-            self.mark_dirty(); // Ensure UI updates
-        }
-
-        // Handle deferred prompt browser trigger (after slash modal dismisses)
-        if self.deferred_prompt_browser_trigger {
-            self.deferred_prompt_browser_trigger = false;
-            // Insert # to trigger prompt browser now that slash modal is gone
-            self.input_manager.insert_char('#');
-            self.check_prompt_reference_trigger();
-            self.mark_dirty(); // Ensure UI updates
-        }
-
-        self.apply_view_rows(viewport.height);
-
+        // Calculate layout constraints
         let header_lines = self.header_lines();
         let header_height = self.header_height_from_lines(viewport.width, &header_lines);
         if header_height != self.header_rows {
@@ -705,11 +667,19 @@ impl Session {
             (main_area, Rect::new(main_area.x, main_area.y, 0, 0))
         };
 
-        self.render_header(frame, header_area, &header_lines);
+        // Use SessionWidget for buffer-based rendering (header, transcript, overlays)
+        SessionWidget::new(self)
+            .header_lines(header_lines.clone())
+            .header_area(header_area)
+            .transcript_area(transcript_area)
+            .navigation_area(navigation_area)
+            .render(viewport, frame.buffer_mut());
+
+        // Handle frame-based rendering for components that need it
+        // Note: header, transcript, and overlays are handled by SessionWidget
         if self.show_timeline_pane {
             self.render_navigation(frame, navigation_area);
         }
-        self.render_transcript(frame, transcript_area);
         self.render_input(frame, input_area);
         render::render_modal(self, frame, viewport);
         slash::render_slash_palette(self, frame, viewport);

@@ -20,16 +20,54 @@ use crate::ui::tui::session::{Session, render::apply_view_rows};
 /// # Example
 /// ```ignore
 /// SessionWidget::new(session)
+///     .header_lines(lines)
+///     .header_area(header_area)
+///     .transcript_area(transcript_area)
+///     .navigation_area(navigation_area)
 ///     .render(area, buf);
 /// ```
 pub struct SessionWidget<'a> {
     session: &'a mut Session,
+    header_lines: Option<Vec<ratatui::text::Line<'static>>>,
+    header_area: Option<Rect>,
+    transcript_area: Option<Rect>,
+    navigation_area: Option<Rect>,
 }
 
 impl<'a> SessionWidget<'a> {
     /// Create a new SessionWidget with required parameters
     pub fn new(session: &'a mut Session) -> Self {
-        Self { session }
+        Self { 
+            session,
+            header_lines: None,
+            header_area: None,
+            transcript_area: None,
+            navigation_area: None,
+        }
+    }
+
+    /// Set the header lines to render
+    pub fn header_lines(mut self, lines: Vec<ratatui::text::Line<'static>>) -> Self {
+        self.header_lines = Some(lines);
+        self
+    }
+
+    /// Set the header area
+    pub fn header_area(mut self, area: Rect) -> Self {
+        self.header_area = Some(area);
+        self
+    }
+
+    /// Set the transcript area
+    pub fn transcript_area(mut self, area: Rect) -> Self {
+        self.transcript_area = Some(area);
+        self
+    }
+
+    /// Set the navigation area
+    pub fn navigation_area(mut self, area: Rect) -> Self {
+        self.navigation_area = Some(area);
+        self
     }
 }
 
@@ -43,17 +81,17 @@ impl<'a> Widget for &'a mut SessionWidget<'_> {
         self.session.thinking_spinner.update();
         if self.session.thinking_spinner.is_active {
             self.session.needs_redraw = true;
-            if let Some(spinner_idx) = self.session.thinking_spinner.spinner_line_index
-                && spinner_idx < self.session.lines.len()
-            {
-                let frame = self.session.thinking_spinner.current_frame();
-                let revision = self.session.next_revision();
-                if let Some(line) = self.session.lines.get_mut(spinner_idx)
-                    && !line.segments.is_empty()
-                {
-                    line.segments[0].text = format!("{} Thinking...", frame);
-                    line.revision = revision;
-                    self.session.mark_line_dirty(spinner_idx);
+            if let Some(spinner_idx) = self.session.thinking_spinner.spinner_line_index {
+                if spinner_idx < self.session.lines.len() {
+                    let frame = self.session.thinking_spinner.current_frame();
+                    let revision = self.session.next_revision();
+                    if let Some(line) = self.session.lines.get_mut(spinner_idx) {
+                        if !line.segments.is_empty() {
+                            line.segments[0].text = format!("{} Thinking...", frame);
+                            line.revision = revision;
+                            self.session.mark_line_dirty(spinner_idx);
+                        }
+                    }
                 }
             }
         }
@@ -76,40 +114,32 @@ impl<'a> Widget for &'a mut SessionWidget<'_> {
         // Pull log entries
         self.session.poll_log_entries();
 
-        // Calculate header height
-        let header_lines = self.session.header_lines();
-        let header_height = self.session.header_height_from_lines(area.width, &header_lines);
-        if header_height != self.session.header_rows {
-            self.session.header_rows = header_height;
-            crate::ui::tui::session::render::recalculate_transcript_rows(self.session);
-        }
+        // Use provided areas or fall back to calculated layout
+        let header_area = self.header_area.unwrap_or_else(|| {
+            // Calculate header height if not provided
+            let header_lines = self.session.header_lines();
+            let header_height = self.session.header_height_from_lines(area.width, &header_lines);
+            if header_height != self.session.header_rows {
+                self.session.header_rows = header_height;
+                crate::ui::tui::session::render::recalculate_transcript_rows(self.session);
+            }
+            Rect::new(area.x, area.y, area.width, header_height)
+        });
 
-        // Calculate input height
-        let status_height = if area.width > 0 && has_input_status(self.session) {
-            1
-        } else {
-            0
-        };
-        let inner_width = area.width.saturating_sub(2);
-        let desired_lines = self.session.desired_input_lines(inner_width);
-        let block_height = Session::input_block_height_for_lines(desired_lines);
-        let input_height = block_height.saturating_add(status_height);
-        self.session.apply_input_height(input_height);
+        let transcript_area = self.transcript_area.unwrap_or_else(|| {
+            // Calculate remaining area for transcript
+            let header_bottom = header_area.bottom();
+            let remaining_height = area.height.saturating_sub(header_area.height);
+            Rect::new(area.x, header_bottom, area.width, remaining_height)
+        });
 
-        // Create layout
-        let chunks = Layout::vertical([
-            Constraint::Length(header_height),
-            Constraint::Min(1),
-            Constraint::Length(input_height),
-        ])
-        .split(area);
-
-        let (header_area, transcript_area, _input_area) = (chunks[0], chunks[1], chunks[2]);
+        let _navigation_area = self.navigation_area.unwrap_or(Rect::new(0, 0, 0, 0));
 
         // Update view rows for transcript
         apply_view_rows(self.session, transcript_area.height);
 
         // Render header using builder pattern
+        let header_lines = self.header_lines.as_ref().unwrap_or(&self.session.header_lines()).clone();
         HeaderWidget::new(self.session)
             .lines(header_lines)
             .render(header_area, buf);
@@ -134,8 +164,6 @@ impl<'a> Widget for &'a mut SessionWidget<'_> {
         } else {
             TranscriptWidget::new(self.session).render(transcript_area, buf);
         }
-
-        // Note: Input rendering needs Frame, so it's handled separately
 
         // Render overlays (modals, palettes, etc.)
         self.render_overlays(area, buf);
@@ -206,6 +234,7 @@ impl<'a> SessionWidget<'a> {
     }
 }
 
+#[allow(dead_code)]
 fn has_input_status(session: &Session) -> bool {
     let left_present = session
         .input_status_left
