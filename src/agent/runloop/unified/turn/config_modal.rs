@@ -6,11 +6,13 @@ use toml::Value as TomlValue;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 
 pub(crate) const CONFIG_MODAL_TITLE: &str = "VTCode Configuration";
+#[allow(dead_code)]
 pub(crate) const MODAL_CLOSE_HINT: &str = "Press Esc to close the configuration modal.";
 const SENSITIVE_KEYWORDS: [&str; 5] = ["key", "token", "secret", "password", "credential"];
 const SENSITIVE_MASK: &str = "********";
 
 pub(crate) struct ConfigModalContent {
+    #[allow(dead_code)]
     pub(crate) title: String,
     pub(crate) source_label: String,
     pub(crate) config_lines: Vec<String>,

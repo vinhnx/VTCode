@@ -113,18 +113,11 @@ pub async fn handle_ask_command(
     };
     let request = LLMRequest {
         messages: vec![Message::user(prompt.to_string())],
-        system_prompt: None,
-        tools: None,
         model: config.model.clone(),
-        max_tokens: None,
-        temperature: None,
         stream: matches!(request_mode, AskRequestMode::Streaming),
         tool_choice: Some(ToolChoice::none()),
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
         reasoning_effort,
-        output_format: None,
-        verbosity: None,
+        ..Default::default()
     };
 
     match request_mode {

@@ -70,6 +70,7 @@ pub async fn handle_validate_command(
 
 /// Check API connectivity
 async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
+    use crate::gemini::models::GenerationConfig;
     use crate::gemini::models::SystemInstruction;
     use crate::gemini::{Client, Content, GenerateContentRequest};
     use crate::prompts::generate_lightweight_instruction;
@@ -103,10 +104,11 @@ async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
         contents,
         tools: None,
         tool_config: None,
-        generation_config: Some(json!({
-            "maxOutputTokens": 10,
-            "temperature": 0.1
-        })),
+        generation_config: Some(GenerationConfig {
+            max_output_tokens: Some(10),
+            temperature: Some(0.1),
+            ..Default::default()
+        }),
         system_instruction: Some(system_instruction),
     };
 

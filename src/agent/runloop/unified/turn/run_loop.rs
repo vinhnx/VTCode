@@ -2204,7 +2204,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     temperature: Some(0.7),
                     stream: use_streaming,
                     tool_choice: Some(uni::ToolChoice::auto()),
-                    parallel_tool_calls: None,
                     parallel_tool_config: if provider_client
                         .supports_parallel_tool_config(&active_model)
                     {
@@ -2213,8 +2212,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         None
                     },
                     reasoning_effort,
-                    output_format: None,
-                    verbosity: None,
+                    ..Default::default()
                 };
 
                 let action_suggestion = extract_action_from_messages(working_history);
@@ -3003,14 +3001,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     text
                                 ))],
                                 system_prompt: Some(review_system.clone()),
-                                tools: None,
                                 model: config.model.clone(),
                                 max_tokens: Some(2000),
                                 temperature: Some(0.5),
-                                stream: false,
                                 tool_choice: Some(uni::ToolChoice::none()),
-                                parallel_tool_calls: None,
-                                parallel_tool_config: None,
                                 reasoning_effort: vt_cfg.as_ref().and_then(|cfg| {
                                     if provider_client.supports_reasoning_effort(&active_model) {
                                         Some(cfg.agent.reasoning_effort)
@@ -3018,8 +3012,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         None
                                     }
                                 }),
-                                output_format: None,
-                                verbosity: None,
+                                ..Default::default()
                             };
                             let rr = provider_client.generate(review_req).await.ok();
                             if let Some(r) = rr.and_then(|result| result.content)

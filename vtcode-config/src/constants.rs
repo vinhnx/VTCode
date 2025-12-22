@@ -40,6 +40,8 @@ pub mod models {
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
         ];
 
         /// Models that support thinking/reasoning capability with configurable thinking_level
@@ -53,6 +55,8 @@ pub mod models {
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
         ];
 
         /// Models that support Gemini 3 extended thinking levels (minimal, medium)
@@ -72,6 +76,8 @@ pub mod models {
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
         ];
 
         /// Models that support code execution (Python)
@@ -84,6 +90,8 @@ pub mod models {
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
         ];
 
         // Convenience constants for commonly used models

@@ -34,18 +34,9 @@ async fn mock_responses_api_streaming_includes_prompt_cache_retention() {
 
     let request = LLMRequest {
         messages: vec![Message::user("Hello".to_string())],
-        system_prompt: None,
-        tools: None,
         model: "gpt-5".to_string(),
-        max_tokens: None,
-        temperature: None,
         stream: true,
-        output_format: None,
-        tool_choice: None,
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        verbosity: None,
+        ..Default::default()
     };
 
     let response = LLMProvider::generate(&provider, request)

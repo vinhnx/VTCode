@@ -127,11 +127,9 @@ pub(crate) async fn execute_llm_request(
         temperature: Some(0.7),
         stream: use_streaming,
         tool_choice,
-        parallel_tool_calls: None,
         parallel_tool_config: parallel_config,
         reasoning_effort,
-        output_format: None,
-        verbosity: None,
+        ..Default::default()
     };
 
     let action_suggestion = extract_action_from_messages(ctx.working_history);

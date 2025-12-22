@@ -38,18 +38,8 @@ impl LLMClient for ProviderClientAdapter {
         use super::provider::{LLMRequest, Message};
         let request = LLMRequest {
             messages: vec![Message::user(prompt.to_string())],
-            system_prompt: None,
-            tools: None,
             model: self.model_id.clone(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
-            output_format: None,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
+            ..Default::default()
         };
         let provider_response = self.provider.generate(request).await?;
         // Convert provider::LLMResponse to types::LLMResponse

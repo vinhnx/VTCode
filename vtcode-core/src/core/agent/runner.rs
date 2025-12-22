@@ -1514,9 +1514,6 @@ impl AgentRunner {
                     max_tokens: Some(2000),
                     temperature: Some(0.7),
                     stream: self.provider_client.supports_streaming(),
-                    output_format: None,
-                    tool_choice: None,
-                    parallel_tool_calls: None,
                     parallel_tool_config,
                     reasoning_effort: if self.provider_client.supports_reasoning_effort(&turn_model)
                     {
@@ -1525,6 +1522,7 @@ impl AgentRunner {
                         None
                     },
                     verbosity: self.verbosity,
+                    ..Default::default()
                 };
 
                 let resp_summary = self

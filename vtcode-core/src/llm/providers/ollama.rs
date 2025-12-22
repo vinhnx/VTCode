@@ -269,12 +269,7 @@ impl OllamaProvider {
                 .get("stream")
                 .and_then(|entry| entry.as_bool())
                 .unwrap_or(false),
-            output_format: None,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
+            ..Default::default()
         })
     }
 
@@ -1002,18 +997,9 @@ mod tests {
 
         let request = LLMRequest {
             messages: vec![Message::user("hi".to_string())],
-            system_prompt: None,
-            tools: None,
             model: models::ollama::DEFAULT_LOCAL_MODEL.to_string(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
             output_format: Some(json!("json")),
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
+            ..Default::default()
         };
 
         let payload = provider.build_payload(&request, false).unwrap();

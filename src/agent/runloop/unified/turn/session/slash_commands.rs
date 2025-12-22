@@ -46,7 +46,7 @@ use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::config::constants::tools as tools_consts;
 use webbrowser;
 
-use super::super::config_modal::{MODAL_CLOSE_HINT, load_config_modal_content};
+use super::super::config_modal::load_config_modal_content;
 
 pub enum SlashCommandControl {
     Continue,

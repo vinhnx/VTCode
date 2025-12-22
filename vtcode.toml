@@ -28,7 +28,7 @@ system_prompt_mode = "minimal"
 # # Streamlined (good middle ground)
 # system_prompt_mode = "lightweight" # ~1.8K tokens, 67% savings
 # # Current behavior (no change for existing users)
-# system_prompt_mode = "default" # ~6.5K tokens, baseline
+system_prompt_mode = "default" # ~6.5K tokens, baseline
 # # Enhanced for complex work
 # system_prompt_mode = "specialized"  # ~7K tokens, deep guidance
 
