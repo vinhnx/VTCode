@@ -3,6 +3,40 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.51.0] - 2025-12-22
+
+
+### Features
+    - feat: Introduce a TUI config palette, refactor rendering logic, and enable dynamic theme application.
+    - feat: enhance session logging functionality and update default model
+    - feat: integrate SessionWidget into main render function
+    - feat: add buffer-based widgets for input, modal, and slash
+    - feat: create ratatui widget foundation
+    - feat: implement centralized panic handling for TUI applications
+    - feat: add better panic handling with debug mode support
+    - feat: enhance list rendering with highlight symbol and repeat option
+    - feat: implement XDG Base Directory Specification for configuration and data storage
+
+
+### Bug Fixes
+    - fix: redirect terminal commands from stdout to stderr for TUI functionality
+    - fix: change terminal output from stderr to stdout for ModernTui
+    - fix: reorder MCP time policies and update tool policy documentation
+    - fix: align OpenAI Responses API implementation with official spec
+
+
+### Refactors
+    - refactor: streamline widget block creation and layout definitions in TUI components
+
+
+### Documentation
+    - docs: update changelog for v0.50.13 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.50.13 [skip ci]
+    - chore: release v0.50.13
+    - chore: update npm package.json to v0.50.12 [skip ci]
 # [Version 0.50.13] - 2025-12-21
 
 
