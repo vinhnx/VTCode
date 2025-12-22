@@ -1219,25 +1219,27 @@ impl OpenAIProvider {
                     // Override parallel tool calls to false if custom tools are present
                     openai_request["parallel_tool_calls"] = Value::Bool(false);
                 }
-            }
 
-            if let Some(tool_choice) = &request.tool_choice {
-                openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
-            }
-
-            // Only set parallel tool calls if not overridden due to custom tools
-            if request.parallel_tool_calls.is_some()
-                && openai_request.get("parallel_tool_calls").is_none()
-            {
-                if let Some(parallel) = request.parallel_tool_calls {
-                    openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+                // Only add tool_choice when tools are present
+                if let Some(tool_choice) = &request.tool_choice {
+                    openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
                 }
-            }
 
-            if self.supports_parallel_tool_config(&request.model) {
-                if let Some(config) = &request.parallel_tool_config {
-                    if let Ok(config_value) = serde_json::to_value(config) {
-                        openai_request["parallel_tool_config"] = config_value;
+                // Only set parallel tool calls if not overridden due to custom tools
+                if request.parallel_tool_calls.is_some()
+                    && openai_request.get("parallel_tool_calls").is_none()
+                {
+                    if let Some(parallel) = request.parallel_tool_calls {
+                        openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+                    }
+                }
+
+                // Only add parallel_tool_config when tools are present
+                if self.supports_parallel_tool_config(&request.model) {
+                    if let Some(config) = &request.parallel_tool_config {
+                        if let Ok(config_value) = serde_json::to_value(config) {
+                            openai_request["parallel_tool_config"] = config_value;
+                        }
                     }
                 }
             }
@@ -1304,26 +1306,28 @@ impl OpenAIProvider {
                         // Override parallel tool calls to false if custom tools are present
                         openai_request["parallel_tool_calls"] = Value::Bool(false);
                     }
-                }
-            }
 
-            if let Some(tool_choice) = &request.tool_choice {
-                openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
-            }
+                    // Only add tool_choice when tools are present
+                    if let Some(tool_choice) = &request.tool_choice {
+                        openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
+                    }
 
-            // Only set parallel tool calls if not overridden due to custom tools
-            if request.parallel_tool_calls.is_some()
-                && !openai_request.get("parallel_tool_calls").is_some()
-            {
-                if let Some(parallel) = request.parallel_tool_calls {
-                    openai_request["parallel_tool_calls"] = Value::Bool(parallel);
-                }
-            }
+                    // Only set parallel tool calls if not overridden due to custom tools
+                    if request.parallel_tool_calls.is_some()
+                        && !openai_request.get("parallel_tool_calls").is_some()
+                    {
+                        if let Some(parallel) = request.parallel_tool_calls {
+                            openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+                        }
+                    }
 
-            if self.supports_parallel_tool_config(&request.model) {
-                if let Some(config) = &request.parallel_tool_config {
-                    if let Ok(config_value) = serde_json::to_value(config) {
-                        openai_request["parallel_tool_config"] = config_value;
+                    // Only add parallel_tool_config when tools are present
+                    if self.supports_parallel_tool_config(&request.model) {
+                        if let Some(config) = &request.parallel_tool_config {
+                            if let Ok(config_value) = serde_json::to_value(config) {
+                                openai_request["parallel_tool_config"] = config_value;
+                            }
+                        }
                     }
                 }
             }

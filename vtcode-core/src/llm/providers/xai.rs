@@ -84,6 +84,8 @@ impl LLMProvider for XAIProvider {
         requested == models::xai::GROK_4
             || requested == models::xai::GROK_4_CODE
             || requested == models::xai::GROK_4_CODE_LATEST
+            || requested == models::xai::GROK_4_1_FAST
+            || requested == models::xai::GROK_CODE_FAST_1
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {

@@ -396,6 +396,8 @@ pub mod models {
             "grok-4-code",
             "grok-4-code-latest",
             "grok-4-vision",
+            "grok-4-1-fast",
+            "grok-code-fast-1",
         ];
 
         pub const GROK_4: &str = "grok-4";
@@ -403,6 +405,8 @@ pub mod models {
         pub const GROK_4_CODE: &str = "grok-4-code";
         pub const GROK_4_CODE_LATEST: &str = "grok-4-code-latest";
         pub const GROK_4_VISION: &str = "grok-4-vision";
+        pub const GROK_4_1_FAST: &str = "grok-4-1-fast";
+        pub const GROK_CODE_FAST_1: &str = "grok-code-fast-1";
     }
 
     // Backwards compatibility - keep old constants working
