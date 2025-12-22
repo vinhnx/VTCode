@@ -191,10 +191,8 @@ pub(crate) async fn initialize_session(
 
     let mut full_auto_allowlist = None;
 
-    let base_declarations = build_function_declarations_with_mode(
-        todo_planning_enabled,
-        tool_documentation_mode,
-    );
+    let base_declarations =
+        build_function_declarations_with_mode(todo_planning_enabled, tool_documentation_mode);
     let mut tool_definitions: Vec<uni::ToolDefinition> = base_declarations
         .into_iter()
         .map(|decl| {

@@ -11,7 +11,7 @@
 //!
 //! Target: ~50 tokens vs 2,500 tokens = 98% savings
 
-use super::{Summarizer, estimate_tokens, truncate_to_tokens};
+use super::{Summarizer, truncate_to_tokens};
 use anyhow::Result;
 use std::collections::HashMap;
 
@@ -36,20 +36,24 @@ impl Default for GrepSummarizer {
 }
 
 impl Summarizer for GrepSummarizer {
-    fn summarize(&self, full_output: &str, _metadata: Option<&serde_json::Value>) -> Result<String> {
+    fn summarize(
+        &self,
+        full_output: &str,
+        _metadata: Option<&serde_json::Value>,
+    ) -> Result<String> {
         // Parse grep output to extract key information
         let stats = parse_grep_output(full_output);
 
         // Build concise summary
         let mut summary = format!(
             "Found {} matches in {} files",
-            stats.total_matches,
-            stats.unique_files
+            stats.total_matches, stats.unique_files
         );
 
         // Add top files if available
         if !stats.top_files.is_empty() {
-            let file_list: Vec<String> = stats.top_files
+            let file_list: Vec<String> = stats
+                .top_files
                 .iter()
                 .take(self.max_files)
                 .map(|(file, count)| format!("{} ({})", file, count))
@@ -59,7 +63,8 @@ impl Summarizer for GrepSummarizer {
 
         // Add pattern context if available
         if !stats.symbols.is_empty() {
-            let symbol_list: Vec<&str> = stats.symbols
+            let symbol_list: Vec<&str> = stats
+                .symbols
                 .iter()
                 .take(self.max_symbols)
                 .map(|s| s.as_str())
@@ -90,19 +95,22 @@ impl Default for ListSummarizer {
 }
 
 impl Summarizer for ListSummarizer {
-    fn summarize(&self, full_output: &str, _metadata: Option<&serde_json::Value>) -> Result<String> {
+    fn summarize(
+        &self,
+        full_output: &str,
+        _metadata: Option<&serde_json::Value>,
+    ) -> Result<String> {
         let stats = parse_list_output(full_output);
 
         let mut summary = format!(
             "Listed {} items ({} files, {} directories)",
-            stats.total_items,
-            stats.file_count,
-            stats.dir_count
+            stats.total_items, stats.file_count, stats.dir_count
         );
 
         // Add sample files if available
         if !stats.sample_files.is_empty() {
-            let files: Vec<&str> = stats.sample_files
+            let files: Vec<&str> = stats
+                .sample_files
                 .iter()
                 .take(self.max_files)
                 .map(|s| s.as_str())
@@ -119,8 +127,8 @@ impl Summarizer for ListSummarizer {
 struct GrepStats {
     total_matches: usize,
     unique_files: usize,
-    top_files: Vec<(String, usize)>,  // (filename, match_count)
-    symbols: Vec<String>,  // function names, identifiers
+    top_files: Vec<(String, usize)>, // (filename, match_count)
+    symbols: Vec<String>,            // function names, identifiers
 }
 
 /// Statistics extracted from list output
@@ -229,6 +237,7 @@ fn extract_symbols(line: &str, symbols: &mut std::collections::HashSet<String>) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::estimate_tokens;
 
     #[test]
     fn test_grep_summarizer() {
@@ -252,7 +261,9 @@ src/main.rs:100:    grep.execute(\"test\")?;
         assert!(
             pct > 20.0,
             "Should save >20% (got {:.1}%, {} → {} tokens)",
-            pct, ui, llm
+            pct,
+            ui,
+            llm
         );
         assert!(llm < ui);
     }
@@ -334,7 +345,7 @@ src/tools/list.rs:23:    // comment
         assert!(summary.contains("Found 200 matches"));
 
         // Verify massive savings
-        let (llm, ui, pct) = summarizer.estimate_savings(&output, &summary);
+        let (_llm, _ui, pct) = summarizer.estimate_savings(&output, &summary);
         assert!(pct > 95.0, "Should save >95% on large output");
     }
 }

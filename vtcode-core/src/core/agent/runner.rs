@@ -75,7 +75,7 @@ struct ToolFailureContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::agent::state::{ApiFailureTracker, TaskRunState, record_turn_duration};
+    use crate::core::agent::state::record_turn_duration;
 
     #[test]
     fn record_turn_duration_records_once() {

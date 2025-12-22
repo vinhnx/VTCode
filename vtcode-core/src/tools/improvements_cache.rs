@@ -59,7 +59,6 @@ impl<V> CacheEntry<V> {
 /// **DEPRECATED**: Use `crate::cache::UnifiedCache` instead
 ///
 /// LRU cache with TTL support (kept for backward compatibility only)
-#[deprecated(since = "0.47.7", note = "Use crate::cache::UnifiedCache instead")]
 pub struct LruCache<K: Clone + Eq + std::hash::Hash, V: Clone> {
     max_size: usize,
     default_ttl: Duration,

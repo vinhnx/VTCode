@@ -2,9 +2,9 @@
 //!
 //! Demonstrates dual-output execution with real tools showing token savings.
 
+use serde_json::json;
 use std::path::PathBuf;
 use vtcode_core::tools::registry::ToolRegistry;
-use serde_json::json;
 
 #[tokio::test]
 async fn test_grep_dual_output_integration() {
@@ -55,7 +55,10 @@ async fn test_grep_dual_output_integration() {
         println!("✅ Token Savings Achieved:");
         println!("   UI tokens: {}", counts.ui_tokens);
         println!("   LLM tokens: {}", counts.llm_tokens);
-        println!("   Saved: {} tokens ({:.1}%)", counts.savings_tokens, counts.savings_percent);
+        println!(
+            "   Saved: {} tokens ({:.1}%)",
+            counts.savings_tokens, counts.savings_percent
+        );
     }
 
     // Verify: Summary structure for grep results
@@ -238,7 +241,10 @@ async fn test_edit_dual_output() {
     // Verify: LLM summary should mention file operation
     let llm_lower = result.llm_content.to_lowercase();
     assert!(
-        llm_lower.contains("modified") || llm_lower.contains("file") || llm_lower.contains("success") || llm_lower.contains("wrote"),
+        llm_lower.contains("modified")
+            || llm_lower.contains("file")
+            || llm_lower.contains("success")
+            || llm_lower.contains("wrote"),
         "LLM summary should mention file operation: {}",
         result.llm_content
     );
@@ -280,5 +286,8 @@ async fn test_backward_compatibility() {
 
     println!("✅ Backward Compatibility:");
     println!("   Old API: Working");
-    println!("   New API: Working with {} savings", new_result.savings_summary());
+    println!(
+        "   New API: Working with {} savings",
+        new_result.savings_summary()
+    );
 }

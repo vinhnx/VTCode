@@ -152,10 +152,10 @@ pub mod registry;
 pub mod result;
 pub mod result_cache;
 pub mod result_metadata;
-pub mod summarizers;
 pub mod search_metrics;
 pub mod shell;
 pub mod smart_cache;
+pub mod summarizers;
 pub mod terminal_app;
 pub mod tool_effectiveness;
 pub mod traits;
@@ -166,8 +166,7 @@ pub mod web_fetch;
 // Production-grade improvements modules
 pub mod async_middleware;
 pub mod improvement_algorithms;
-#[deprecated(since = "0.47.7", note = "Use crate::cache::UnifiedCache instead")]
-pub mod improvements_cache; // Deprecated - kept for backward compatibility only
+pub mod improvements_cache; // Deprecated (pending migration) - kept for backward compatibility
 pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
@@ -231,10 +230,8 @@ pub use improvement_algorithms::{
 };
 // Deprecated exports - use crate::cache instead
 #[allow(deprecated)]
-#[deprecated(since = "0.47.7", note = "Use crate::cache::CacheStats instead")]
 pub use improvements_cache::CacheStats as LruCacheStats;
 #[allow(deprecated)]
-#[deprecated(since = "0.47.7", note = "Use crate::cache::UnifiedCache instead")]
 pub use improvements_cache::LruCache;
 pub use improvements_config::{
     CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig,

@@ -315,6 +315,7 @@ pub enum InlineCommand {
         files: Vec<String>,
         workspace: std::path::PathBuf,
     },
+    OpenConfigPalette,
     ClearScreen,
     SuspendEventLoop,
     ResumeEventLoop,
@@ -529,6 +530,10 @@ impl InlineHandle {
         let _ = self
             .sender
             .send(InlineCommand::LoadFilePalette { files, workspace });
+    }
+
+    pub fn open_config_palette(&self) {
+        let _ = self.sender.send(InlineCommand::OpenConfigPalette);
     }
 }
 

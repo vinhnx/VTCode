@@ -12,6 +12,7 @@ use super::super::types::{InlineMessageKind, InlineTextStyle};
 use super::terminal_capabilities;
 use super::{
     Session,
+    config_palette::ConfigItemKind,
     file_palette::FilePalette,
     message::MessageLine,
     modal::{
@@ -153,6 +154,7 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     super::slash::render_slash_palette(session, frame, size);
     render_file_palette(session, frame, size);
     render_prompt_palette(session, frame, size);
+    render_config_palette(session, frame, size);
 }
 
 fn render_log_view(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
@@ -364,7 +366,88 @@ fn render_palette_generic<F>(
     frame.render_widget(list, layout.list_area);
 }
 
-fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
+pub fn render_config_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
+    if !session.config_palette_active {
+        return;
+    }
+
+    // Extract styles first to avoid borrow checker issues with session
+    let modal_hl_style = modal_list_highlight_style(session);
+    let def_style = default_style(session);
+    let acc_style = accent_style(session);
+    let b_style = border_style(session);
+    let b_type = terminal_capabilities::get_border_type();
+
+    let Some(palette) = session.config_palette.as_mut() else {
+        return;
+    };
+
+    let items: Vec<ListItem> = palette
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let is_selected = palette.list_state.selected() == Some(i);
+            let value_str = match &item.kind {
+                ConfigItemKind::Bool { value } => {
+                    if *value { "[X]" } else { "[ ]" }.to_string()
+                }
+                ConfigItemKind::Enum { value, .. } => format!("< {} >", value),
+                ConfigItemKind::Number { value, .. } => value.to_string(),
+                ConfigItemKind::Display { value } => value.clone(),
+            };
+
+            let style = if is_selected { modal_hl_style } else { def_style };
+
+            let label_span = Span::styled(format!("{:<30}", item.label), style);
+            let value_span = Span::styled(
+                value_str,
+                if is_selected {
+                    style
+                } else {
+                    acc_style
+                },
+            );
+
+            let mut label_line = vec![label_span, Span::raw(" "), value_span];
+            if is_selected {
+                label_line.insert(0, Span::raw("> "));
+            } else {
+                label_line.insert(0, Span::raw("  "));
+            }
+
+            let mut lines = vec![Line::from(label_line)];
+            if let Some(desc) = &item.description {
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(desc.to_owned(), def_style.add_modifier(Modifier::DIM)),
+                ]));
+            }
+
+            ListItem::new(lines)
+        })
+        .collect();
+
+    let width_hint = 70u16;
+    let modal_height = (items.len() * 2 + 2).min(viewport.height as usize - 4);
+    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+    frame.render_widget(Clear, area);
+    let block = Block::bordered()
+        .title("Configuration")
+        .border_type(b_type)
+        .style(def_style)
+        .border_style(b_style);
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let list = List::new(items).highlight_style(modal_hl_style);
+
+    frame.render_stateful_widget(list, inner, &mut palette.list_state);
+}
+
+pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
     if !session.file_palette_active {
         return;
     }
@@ -520,7 +603,7 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
     lines
 }
 
-fn render_prompt_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
+pub fn render_prompt_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
     if !session.prompt_palette_active {
         return;
     }

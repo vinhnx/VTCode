@@ -80,7 +80,11 @@ pub fn truncate_to_tokens(text: &str, max_tokens: usize) -> String {
 pub fn extract_key_info(text: &str, max_lines: usize) -> String {
     let lines: Vec<&str> = text.lines().take(max_lines).collect();
     if text.lines().count() > max_lines {
-        format!("{}\n[...{} more lines]", lines.join("\n"), text.lines().count() - max_lines)
+        format!(
+            "{}\n[...{} more lines]",
+            lines.join("\n"),
+            text.lines().count() - max_lines
+        )
     } else {
         lines.join("\n")
     }

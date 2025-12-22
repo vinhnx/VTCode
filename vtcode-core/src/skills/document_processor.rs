@@ -350,7 +350,6 @@ impl Drop for DocumentProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
     #[test]
     fn test_document_type_detection() {

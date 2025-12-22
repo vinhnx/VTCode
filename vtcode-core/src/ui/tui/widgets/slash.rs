@@ -224,7 +224,7 @@ impl<'a> SlashWidget<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::tui::{InlineTheme, types::InlineTextStyle};
+    use crate::ui::tui::InlineTheme;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
@@ -246,7 +246,7 @@ mod tests {
         let palette = create_test_palette();
         let viewport = ratatui::layout::Rect::new(0, 0, 80, 24);
 
-        let widget = SlashWidget::new(&session, &palette, viewport);
+        let _widget = SlashWidget::new(&session, &palette, viewport);
 
         // Widget should be created successfully
         assert_eq!(viewport.width, 80);

@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::time::Instant;
 use vtcode_core::core::agent::state::TaskRunState;
 use vtcode_core::tools::ToolRegistry;
@@ -23,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
     // 2. Verify ToolRegistry Caching
     println!("Verifying ToolRegistry Caching...");
     let workspace = std::env::current_dir()?;
-    let mut registry = ToolRegistry::new(workspace).await;
+    let registry = ToolRegistry::new(workspace).await;
 
     let start = Instant::now();
     let tools1 = registry.available_tools().await;
