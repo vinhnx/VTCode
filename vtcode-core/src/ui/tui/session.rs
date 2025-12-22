@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Clear, ListState, Paragraph, Widget, Wrap},
+    widgets::{Clear, ListState, Widget},
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -46,18 +46,20 @@ mod transcript;
 // New modular components (refactored from main session.rs)
 mod ansi_utils;
 mod command;
+pub mod config_palette;
 mod editing;
+
 mod events;
 mod message_renderer;
 mod messages;
 mod palette;
-mod palette_views;
 mod reflow;
 mod spinner;
 mod state;
 pub mod terminal_capabilities;
 mod tool_renderer;
 
+use self::config_palette::ConfigPalette;
 use self::file_palette::FilePalette;
 use self::input_manager::InputManager;
 use self::message::{MessageLabels, MessageLine};
@@ -153,6 +155,8 @@ pub struct Session {
 
     // --- Palette Management ---
     custom_prompts: Option<CustomPromptRegistry>,
+    pub(crate) config_palette: Option<ConfigPalette>,
+    pub(crate) config_palette_active: bool,
     pub(crate) file_palette: Option<FilePalette>,
     pub(crate) file_palette_active: bool,
     pub(crate) deferred_file_browser_trigger: bool,
@@ -277,6 +281,8 @@ impl Session {
 
             // --- Palette Management ---
             custom_prompts: None,
+            config_palette: None,
+            config_palette_active: false,
             file_palette: None,
             file_palette_active: false,
             deferred_file_browser_trigger: false,
@@ -452,7 +458,8 @@ impl Session {
                 self.needs_redraw = true;
             }
             InlineCommand::SetTheme { theme } => {
-                self.theme = theme;
+                self.theme = theme.clone();
+                self.styles.set_theme(theme);
                 self.ensure_prompt_style_color();
                 self.invalidate_transcript_cache();
             }
@@ -524,6 +531,9 @@ impl Session {
             InlineCommand::ClearScreen => {
                 self.clear_screen();
             }
+            InlineCommand::OpenConfigPalette => {
+                command::open_config_palette(self);
+            }
             InlineCommand::SuspendEventLoop
             | InlineCommand::ResumeEventLoop
             | InlineCommand::ClearInputQueue => {
@@ -583,6 +593,25 @@ impl Session {
             }
             _ => {}
         }
+    }
+
+    pub fn apply_config(&mut self, config: &crate::config::loader::VTCodeConfig) {
+        self.show_timeline_pane = config.ui.show_timeline_pane;
+
+        // Apply theme changes in real-time
+        if let Ok(_) = crate::ui::theme::set_active_theme(&config.agent.theme) {
+            let active_styles = crate::ui::theme::active_styles();
+            let inline_theme = crate::ui::tui::style::theme_from_styles(&active_styles);
+
+            self.theme = inline_theme.clone();
+            self.styles.set_theme(inline_theme);
+
+            // Re-apply theme to prompt prefix if needed (though it usually uses self.theme)
+            self.prompt_style.color = self.theme.primary.or(self.theme.foreground);
+        }
+
+        self.recalculate_transcript_rows();
+        self.mark_dirty();
     }
 
     /// Emits an InlineEvent through the event channel and callback
@@ -687,8 +716,9 @@ impl Session {
         self.render_input(frame, input_area);
         render::render_modal(self, frame, viewport);
         slash::render_slash_palette(self, frame, viewport);
-        self.render_file_palette(frame, viewport);
-        self.render_prompt_palette(frame, viewport);
+        render::render_config_palette(self, frame, viewport);
+        render::render_file_palette(self, frame, viewport);
+        render::render_prompt_palette(self, frame, viewport);
     }
 
     fn set_plan(&mut self, plan: TaskPlan) {
@@ -711,123 +741,19 @@ impl Session {
         self.apply_view_rows(rows);
     }
 
-    fn apply_transcript_rows(&mut self, rows: u16) {
-        let resolved = rows.max(1);
-        if self.transcript_rows != resolved {
-            self.transcript_rows = resolved;
-            self.invalidate_scroll_metrics();
-        }
-    }
 
-    fn apply_transcript_width(&mut self, width: u16) {
-        if self.transcript_width != width {
-            self.transcript_width = width;
-            self.invalidate_scroll_metrics();
-        }
-    }
 
-    fn render_transcript(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        if area.height == 0 || area.width == 0 {
-            return;
-        }
-        let block = Block::new()
-            .border_type(BorderType::Rounded)
-            .style(self.styles.default_style())
-            .border_style(self.styles.border_style());
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-        if inner.height == 0 || inner.width == 0 {
-            return;
-        }
-
-        self.apply_transcript_rows(inner.height);
-
-        let content_width = inner.width;
-        if content_width == 0 {
-            return;
-        }
-        self.apply_transcript_width(content_width);
-
-        let viewport_rows = inner.height as usize;
-        let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
-        let effective_padding = padding.min(viewport_rows.saturating_sub(1));
-        let total_rows = self.total_transcript_rows(content_width) + effective_padding;
-        let (top_offset, _clamped_total_rows) =
-            self.prepare_transcript_scroll(total_rows, viewport_rows);
-        let vertical_offset = top_offset.min(self.scroll_manager.max_offset());
-        self.transcript_view_top = vertical_offset;
-
-        let visible_start = vertical_offset;
-        let scroll_area = inner;
-
-        // Use cached visible lines to avoid re-cloning on viewport-only scrolls
-        let cached_lines =
-            self.collect_transcript_window_cached(content_width, visible_start, viewport_rows);
-
-        let fill_count = viewport_rows.saturating_sub(cached_lines.len());
-        let visible_lines = if fill_count > 0 || !self.queued_inputs.is_empty() {
-            let mut lines = (*cached_lines).clone();
-            if fill_count > 0 {
-                let target_len = lines.len() + fill_count;
-                lines.resize_with(target_len, Line::default);
-            }
-            self.overlay_queue_lines(&mut lines, content_width);
-            lines
-        } else {
-            (*cached_lines).clone()
-        };
-
-        let paragraph = Paragraph::new(visible_lines)
-            .style(self.styles.default_style())
-            .wrap(Wrap { trim: true });
-
-        // Only clear if content actually changed, not on viewport-only scroll
-        // This is a significant optimization: avoids expensive Clear operation on most scrolls
-        if self.transcript_content_changed {
-            frame.render_widget(Clear, scroll_area);
-            self.transcript_content_changed = false;
-        }
-        frame.render_widget(paragraph, scroll_area);
-    }
 
     fn recalculate_transcript_rows(&mut self) {
         // Calculate reserved rows: header + input + borders (2)
         let header_rows = self.header_rows.max(ui::INLINE_HEADER_HEIGHT);
         let reserved = (header_rows + self.input_height).saturating_add(2);
         let available = self.view_rows.saturating_sub(reserved).max(1);
-        self.apply_transcript_rows(available);
-    }
 
-    fn render_file_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
-        if !self.file_palette_active {
-            return;
+        if self.transcript_rows != available {
+            self.transcript_rows = available;
+            self.invalidate_scroll_metrics();
         }
-
-        let Some(palette) = self.file_palette.as_ref() else {
-            return;
-        };
-
-        if viewport.height == 0 || viewport.width == 0 || self.modal.is_some() {
-            return;
-        }
-
-        palette_views::render_file_palette(frame, viewport, palette, &self.theme);
-    }
-
-    fn render_prompt_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
-        if !self.prompt_palette_active {
-            return;
-        }
-
-        let Some(palette) = self.prompt_palette.as_ref() else {
-            return;
-        };
-
-        if viewport.height == 0 || viewport.width == 0 || self.modal.is_some() {
-            return;
-        }
-
-        palette_views::render_prompt_palette(frame, viewport, palette, &self.theme);
     }
 
     #[allow(dead_code)]

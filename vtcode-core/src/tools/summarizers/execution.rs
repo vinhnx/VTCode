@@ -88,9 +88,9 @@ impl Summarizer for BashSummarizer {
                 }
 
                 if result.total_lines > self.max_head_lines {
-                    let omitted = result.total_lines.saturating_sub(
-                        self.max_head_lines + self.max_tail_lines
-                    );
+                    let omitted = result
+                        .total_lines
+                        .saturating_sub(self.max_head_lines + self.max_tail_lines);
                     if omitted > 0 {
                         summary.push_str(&format!("[...{} more lines]\n", omitted));
                     }
@@ -140,20 +140,24 @@ fn parse_bash_output(output: &str, metadata: Option<&Value>) -> BashResult {
 
     // Try to parse as JSON first (structured output from bash tool)
     if let Ok(json) = serde_json::from_str::<Value>(output) {
-        result.command = json.get("command")
+        result.command = json
+            .get("command")
             .and_then(|c| c.as_str())
             .map(|s| s.to_string());
 
-        result.exit_code = json.get("exit_code")
+        result.exit_code = json
+            .get("exit_code")
             .or_else(|| json.get("exitCode"))
             .and_then(|e| e.as_i64())
             .unwrap_or(0) as i32;
 
-        result.success = json.get("success")
+        result.success = json
+            .get("success")
             .and_then(|s| s.as_bool())
             .unwrap_or(result.exit_code == 0);
 
-        result.duration_ms = json.get("duration_ms")
+        result.duration_ms = json
+            .get("duration_ms")
             .or_else(|| json.get("durationMs"))
             .and_then(|d| d.as_u64());
 
@@ -179,7 +183,8 @@ fn parse_bash_output(output: &str, metadata: Option<&Value>) -> BashResult {
 
         // Extract command from metadata if available
         if let Some(meta) = metadata {
-            result.command = meta.get("command")
+            result.command = meta
+                .get("command")
                 .and_then(|c| c.as_str())
                 .map(|s| s.to_string());
         }
@@ -195,11 +200,7 @@ fn parse_output_lines(output: &str, result: &mut BashResult) {
     result.total_bytes = output.len();
 
     // Head lines (first 5)
-    result.head_lines = lines
-        .iter()
-        .take(5)
-        .map(|line| line.to_string())
-        .collect();
+    result.head_lines = lines.iter().take(5).map(|line| line.to_string()).collect();
 
     // Tail lines (last 3) if output is long
     if lines.len() > 8 {
@@ -289,7 +290,8 @@ mod tests {
             "exit_code": 0,
             "success": true,
             "stdout": stdout
-        }).to_string();
+        })
+        .to_string();
 
         let summarizer = BashSummarizer::default();
         let summary = summarizer.summarize(&full_output, None).unwrap();
@@ -300,7 +302,11 @@ mod tests {
 
         // Should show significant savings on large output
         let (_llm, _ui, pct) = summarizer.estimate_savings(&full_output, &summary);
-        assert!(pct > 70.0, "Should save >70% on large output (got {:.1}%)", pct);
+        assert!(
+            pct > 70.0,
+            "Should save >70% on large output (got {:.1}%)",
+            pct
+        );
     }
 
     #[test]

@@ -394,10 +394,10 @@ async fn drive_terminal<B: Backend>(
                         terminal
                             .clear()
                             .context("failed to clear terminal for redraw")?;
-                        session.handle_command(command);
+                        session.handle_command(InlineCommand::ForceRedraw);
                     }
-                    _ => {
-                        session.handle_command(command);
+                    cmd => {
+                        session.handle_command(cmd);
                     }
                 },
                 Err(TryRecvError::Empty) => break,
@@ -439,10 +439,10 @@ async fn drive_terminal<B: Backend>(
                             }
                             InlineCommand::ForceRedraw => {
                                 terminal.clear().context("failed to clear terminal for redraw")?;
-                                session.handle_command(command);
+                                session.handle_command(InlineCommand::ForceRedraw);
                             }
-                            _ => {
-                                session.handle_command(command);
+                            cmd => {
+                                session.handle_command(cmd);
                             }
                         }
                         continue 'main;

@@ -14,7 +14,7 @@ api_key_env = "OLLAMA_API_KEY"
 default_model = "gpt-oss:120b-cloud"
 
 # Visual theme for the terminal interface
-theme = "ciapre-dark"
+theme = "ciapre-blue"
 
 # Enable split tool results for massive token savings (Phase 4: pi-coding-agent integration)
 # When enabled, tools send concise summaries to LLM (53-95% token reduction) while preserving full output for UI
@@ -418,13 +418,13 @@ tool_output_spool_bytes = 200000
 # tool_output_spool_dir = "/path/to/custom/spool/dir"
 
 # Allow ANSI escape sequences in tool output (enables colors but may cause layout issues)
-allow_tool_ansi = false
+allow_tool_ansi = true
 
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
 
 # Show timeline navigation panel (displays plan when available, timeline otherwise)
-show_timeline_pane = true
+show_timeline_pane = false
 
 # Status line configuration
 [ui.status_line]
@@ -470,7 +470,7 @@ default_cols = 120
 max_sessions = 10
 
 # Command timeout in seconds (prevents hanging commands)
-command_timeout_seconds = 300
+command_timeout_seconds = 3600
 
 # Number of recent lines to show in PTY output
 # Reduced to prevent display clutter
@@ -570,7 +570,14 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000

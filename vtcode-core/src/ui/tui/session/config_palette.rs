@@ -1,0 +1,623 @@
+use crate::config::ToolOutputMode;
+use crate::config::loader::{ConfigManager, VTCodeConfig};
+use crate::config::{
+    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, ToolPolicy, VerbosityLevel,
+};
+use ratatui::widgets::ListState;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConfigItemKind {
+    Bool { value: bool },
+    Enum { value: String, options: Vec<String> },
+    Number { value: i64, min: i64, max: i64 },
+    Display { value: String },
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfigItem {
+    pub key: String,
+    pub label: String,
+    pub kind: ConfigItemKind,
+    pub description: Option<String>,
+}
+
+pub struct ConfigPalette {
+    pub items: Vec<ConfigItem>,
+    pub list_state: ListState,
+    pub config_manager: ConfigManager,
+    // Keep a local copy to modify before saving
+    pub config: VTCodeConfig,
+    pub modified: bool,
+}
+
+impl ConfigPalette {
+    pub fn new(manager: ConfigManager) -> Self {
+        let config = manager.config().clone();
+        let mut palette = Self {
+            items: Vec::new(),
+            list_state: ListState::default(),
+            config_manager: manager,
+            config,
+            modified: false,
+        };
+        palette.reload_items_from_config();
+
+        // select first item by default if available
+        if !palette.items.is_empty() {
+            palette.list_state.select(Some(0));
+        }
+
+        palette
+    }
+
+    pub fn reload_items_from_config(&mut self) {
+        let config = &self.config;
+        let mut items = Vec::new();
+
+        // -- Agent Behavior Section --
+
+        // Reasoning Effort
+        items.push(ConfigItem {
+            key: "agent.reasoning_effort".to_string(),
+            label: "Reasoning Effort".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: config.agent.reasoning_effort.to_string(),
+                options: vec![
+                    "none".to_string(),
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                ],
+            },
+            description: Some("Model reasoning depth (e.g. for Gemini thinking)".to_string()),
+        });
+
+        // System Prompt Mode
+        items.push(ConfigItem {
+            key: "agent.system_prompt_mode".to_string(),
+            label: "System Prompt Mode".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: config.agent.system_prompt_mode.to_string(),
+                options: vec![
+                    "minimal".to_string(),
+                    "lightweight".to_string(),
+                    "default".to_string(),
+                    "specialized".to_string(),
+                ],
+            },
+            description: Some("Complexity of instructions sent to the model".to_string()),
+        });
+
+        // Tool Documentation Mode
+        items.push(ConfigItem {
+            key: "agent.tool_documentation_mode".to_string(),
+            label: "Tool Doc Mode".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: config.agent.tool_documentation_mode.to_string(),
+                options: vec![
+                    "minimal".to_string(),
+                    "progressive".to_string(),
+                    "full".to_string(),
+                ],
+            },
+            description: Some("How much tool documentation to include in context".to_string()),
+        });
+
+        // Verbosity Level
+        items.push(ConfigItem {
+            key: "agent.verbosity_level".to_string(),
+            label: "Verbosity Level".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: config.agent.verbosity.to_string(),
+                options: vec!["low".to_string(), "medium".to_string(), "high".to_string()],
+            },
+            description: Some("Control model verbosity and detail level".to_string()),
+        });
+
+        // -- Features Section --
+
+        // TODO Planning Mode
+        items.push(ConfigItem {
+            key: "agent.todo_planning_mode".to_string(),
+            label: "TODO Planning Mode".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.agent.todo_planning_mode,
+            },
+            description: Some("Enable update_plan tool and onboarding hints".to_string()),
+        });
+
+        // Checkpointing
+        items.push(ConfigItem {
+            key: "agent.checkpointing.enabled".to_string(),
+            label: "Auto Checkpoints".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.agent.checkpointing.enabled,
+            },
+            description: Some("Take snapshots after each successful turn".to_string()),
+        });
+
+        // Small Model
+        items.push(ConfigItem {
+            key: "agent.small_model.enabled".to_string(),
+            label: "Small Model Tier".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.agent.small_model.enabled,
+            },
+            description: Some("Use cheaper model for logs/reading (>80% savings)".to_string()),
+        });
+
+        // Vibe Coding
+        items.push(ConfigItem {
+            key: "agent.vibe_coding.enabled".to_string(),
+            label: "Vibe Coding".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.agent.vibe_coding.enabled,
+            },
+            description: Some("Enable lazy/casual request support".to_string()),
+        });
+
+        // Prompt Caching
+        items.push(ConfigItem {
+            key: "prompt_cache.enabled".to_string(),
+            label: "Prompt Caching".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.prompt_cache.enabled,
+            },
+            description: Some("Enable local prompt caching to reduce API costs".to_string()),
+        });
+
+        // MCP Support
+        items.push(ConfigItem {
+            key: "mcp.enabled".to_string(),
+            label: "MCP Support".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.mcp.enabled,
+            },
+            description: Some("Enable Model Context Protocol support".to_string()),
+        });
+
+        // -- Limits & Session Section --
+
+        // Max Context Tokens
+        items.push(ConfigItem {
+            key: "context.max_context_tokens".to_string(),
+            label: "Max Context Tokens".to_string(),
+            kind: ConfigItemKind::Number {
+                value: config.context.max_context_tokens as i64,
+                min: 4096,
+                max: 200000,
+            },
+            description: Some("Maximum tokens to preserve in conversation context".to_string()),
+        });
+
+        // Max Turns
+        items.push(ConfigItem {
+            key: "agent.max_conversation_turns".to_string(),
+            label: "Max Turns".to_string(),
+            kind: ConfigItemKind::Number {
+                value: config.agent.max_conversation_turns as i64,
+                min: 10,
+                max: 500,
+            },
+            description: Some("Auto-terminate session after this many turns".to_string()),
+        });
+
+        // -- UI & Appearance Section --
+
+        // Theme
+        items.push(ConfigItem {
+            key: "agent.theme".to_string(),
+            label: "UI Theme".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: config.agent.theme.clone(),
+                options: crate::ui::theme::available_themes()
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+            },
+            description: Some("UI color theme".to_string()),
+        });
+
+        // Tool Output Mode
+        items.push(ConfigItem {
+            key: "ui.tool_output_mode".to_string(),
+            label: "Tool Output Mode".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: match config.ui.tool_output_mode {
+                    ToolOutputMode::Compact => "compact".to_string(),
+                    ToolOutputMode::Full => "full".to_string(),
+                },
+                options: vec!["compact".to_string(), "full".to_string()],
+            },
+            description: Some("Control verbosity of tool output".to_string()),
+        });
+
+        // Show Timeline Pane
+        items.push(ConfigItem {
+            key: "ui.show_timeline_pane".to_string(),
+            label: "Show Timeline Pane".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.show_timeline_pane,
+            },
+            description: Some("Display the navigation/timeline pane on the left".to_string()),
+        });
+
+        // Allow Tool ANSI
+        items.push(ConfigItem {
+            key: "ui.allow_tool_ansi".to_string(),
+            label: "Allow Tool ANSI".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.allow_tool_ansi,
+            },
+            description: Some("Preserve ANSI color codes from tool output".to_string()),
+        });
+
+        // -- Internal Section --
+
+        // Inline Viewport Rows
+        items.push(ConfigItem {
+            key: "ui.inline_viewport_rows".to_string(),
+            label: "Viewport Rows".to_string(),
+            kind: ConfigItemKind::Number {
+                value: config.ui.inline_viewport_rows as i64,
+                min: 5,
+                max: 50,
+            },
+            description: Some("Height of the main TUI viewport".to_string()),
+        });
+
+        // PTY Rows/Cols info
+        items.push(ConfigItem {
+            key: "pty.default_rows".to_string(),
+            label: "PTY Rows".to_string(),
+            kind: ConfigItemKind::Number {
+                value: config.pty.default_rows as i64,
+                min: 10,
+                max: 100,
+            },
+            description: Some("Default rows for PTY sessions".to_string()),
+        });
+
+        // Read-only model info
+        items.push(ConfigItem {
+            key: "agent.default_model".to_string(),
+            label: "Active Model".to_string(),
+            kind: ConfigItemKind::Display {
+                value: config.agent.default_model.clone(),
+            },
+            description: Some("Main AI model (read-only)".to_string()),
+        });
+
+        self.items = items;
+    }
+
+    pub fn selected(&self) -> Option<usize> {
+        self.list_state.selected()
+    }
+
+    pub fn move_up(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        let i = match self.list_state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.list_state.select(Some(i));
+    }
+
+    pub fn move_down(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        let i = match self.list_state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.list_state.select(Some(i));
+    }
+
+    pub fn adjust_numeric_val(&mut self, delta: i64) {
+        if let Some(index) = self.selected() {
+            if let Some(item) = self.items.get(index) {
+                let key = item.key.clone();
+                let mut changed = false;
+
+                match key.as_str() {
+                    "ui.inline_viewport_rows" => {
+                        let val = (self.config.ui.inline_viewport_rows as i64 + delta).clamp(5, 50);
+                        self.config.ui.inline_viewport_rows = val as u16;
+                        changed = true;
+                    }
+                    "pty.default_rows" => {
+                        let val = (self.config.pty.default_rows as i64 + delta).clamp(10, 100);
+                        self.config.pty.default_rows = val as u16;
+                        changed = true;
+                    }
+                    "pty.default_cols" => {
+                        let val = (self.config.pty.default_cols as i64 + delta).clamp(40, 200);
+                        self.config.pty.default_cols = val as u16;
+                        changed = true;
+                    }
+                    "pty.command_timeout_seconds" => {
+                        let val = (self.config.pty.command_timeout_seconds as i64 + delta).clamp(10, 3600);
+                        self.config.pty.command_timeout_seconds = val as u64;
+                        changed = true;
+                    }
+                    "context.max_context_tokens" => {
+                        // Use larger step for tokens: 1024 if small delta, otherwise as is
+                        let step = if delta.abs() == 1 { 1024 * delta } else { delta };
+                        let val = (self.config.context.max_context_tokens as i64 + step).clamp(4096, 200000);
+                        self.config.context.max_context_tokens = val as usize;
+                        changed = true;
+                    }
+                    "context.trim_to_percent" => {
+                        let val = (self.config.context.trim_to_percent as i64 + delta).clamp(10, 95);
+                        self.config.context.trim_to_percent = val as u8;
+                        changed = true;
+                    }
+                    "agent.max_conversation_turns" => {
+                        let val = (self.config.agent.max_conversation_turns as i64 + delta).clamp(10, 500);
+                        self.config.agent.max_conversation_turns = val as usize;
+                        changed = true;
+                    }
+                    _ => {}
+                }
+
+                if changed {
+                    self.modified = true;
+                    self.reload_items_from_config();
+                }
+            }
+        }
+    }
+
+    pub fn toggle_selected(&mut self) {
+        if let Some(index) = self.selected() {
+            if let Some(item) = self.items.get(index) {
+                let key = item.key.clone();
+                let mut changed = false;
+
+                match key.as_str() {
+                    "ui.tool_output_mode" => {
+                        self.config.ui.tool_output_mode = match self.config.ui.tool_output_mode {
+                            ToolOutputMode::Compact => ToolOutputMode::Full,
+                            ToolOutputMode::Full => ToolOutputMode::Compact,
+                        };
+                        changed = true;
+                    }
+                    "ui.show_timeline_pane" => {
+                        self.config.ui.show_timeline_pane = !self.config.ui.show_timeline_pane;
+                        changed = true;
+                    }
+                    "ui.allow_tool_ansi" => {
+                        self.config.ui.allow_tool_ansi = !self.config.ui.allow_tool_ansi;
+                        changed = true;
+                    }
+                    "agent.theme" => {
+                        let themes = crate::ui::theme::available_themes();
+                        let current = &self.config.agent.theme;
+                        let index = themes.iter().position(|&t| t == current).unwrap_or(0);
+                        let next_index = (index + 1) % themes.len();
+                        self.config.agent.theme = themes[next_index].to_string();
+                        changed = true;
+                    }
+                    "pty.enabled" => {
+                        self.config.pty.enabled = !self.config.pty.enabled;
+                        changed = true;
+                    }
+                    "security.human_in_the_loop" => {
+                        self.config.security.human_in_the_loop =
+                            !self.config.security.human_in_the_loop;
+                        changed = true;
+                    }
+                    "tools.default_policy" => {
+                        self.config.tools.default_policy = match self.config.tools.default_policy {
+                            ToolPolicy::Allow => ToolPolicy::Prompt,
+                            ToolPolicy::Prompt => ToolPolicy::Deny,
+                            ToolPolicy::Deny => ToolPolicy::Allow,
+                        };
+                        changed = true;
+                    }
+                    "agent.reasoning_effort" => {
+                        self.config.agent.reasoning_effort =
+                            match self.config.agent.reasoning_effort {
+                                ReasoningEffortLevel::None => ReasoningEffortLevel::Minimal,
+                                ReasoningEffortLevel::Minimal => ReasoningEffortLevel::Low,
+                                ReasoningEffortLevel::Low => ReasoningEffortLevel::Medium,
+                                ReasoningEffortLevel::Medium => ReasoningEffortLevel::High,
+                                ReasoningEffortLevel::High => ReasoningEffortLevel::XHigh,
+                                ReasoningEffortLevel::XHigh => ReasoningEffortLevel::None,
+                            };
+                        changed = true;
+                    }
+                    "agent.system_prompt_mode" => {
+                        self.config.agent.system_prompt_mode =
+                            match self.config.agent.system_prompt_mode {
+                                SystemPromptMode::Minimal => SystemPromptMode::Lightweight,
+                                SystemPromptMode::Lightweight => SystemPromptMode::Default,
+                                SystemPromptMode::Default => SystemPromptMode::Specialized,
+                                SystemPromptMode::Specialized => SystemPromptMode::Minimal,
+                            };
+                        changed = true;
+                    }
+                    "agent.tool_documentation_mode" => {
+                        self.config.agent.tool_documentation_mode =
+                            match self.config.agent.tool_documentation_mode {
+                                ToolDocumentationMode::Minimal => ToolDocumentationMode::Progressive,
+                                ToolDocumentationMode::Progressive => ToolDocumentationMode::Full,
+                                ToolDocumentationMode::Full => ToolDocumentationMode::Minimal,
+                            };
+                        changed = true;
+                    }
+                    "agent.verbosity_level" => {
+                        self.config.agent.verbosity = match self.config.agent.verbosity {
+                            VerbosityLevel::Low => VerbosityLevel::Medium,
+                            VerbosityLevel::Medium => VerbosityLevel::High,
+                            VerbosityLevel::High => VerbosityLevel::Low,
+                        };
+                        changed = true;
+                    }
+                    "agent.todo_planning_mode" => {
+                        self.config.agent.todo_planning_mode = !self.config.agent.todo_planning_mode;
+                        changed = true;
+                    }
+                    "agent.checkpointing.enabled" => {
+                        self.config.agent.checkpointing.enabled =
+                            !self.config.agent.checkpointing.enabled;
+                        changed = true;
+                    }
+                    "agent.small_model.enabled" => {
+                        self.config.agent.small_model.enabled =
+                            !self.config.agent.small_model.enabled;
+                        changed = true;
+                    }
+                    "agent.vibe_coding.enabled" => {
+                        self.config.agent.vibe_coding.enabled =
+                            !self.config.agent.vibe_coding.enabled;
+                        changed = true;
+                    }
+                    "syntax_highlighting.enabled" => {
+                        self.config.syntax_highlighting.enabled =
+                            !self.config.syntax_highlighting.enabled;
+                        changed = true;
+                    }
+                    "automation.full_auto.enabled" => {
+                        self.config.automation.full_auto.enabled =
+                            !self.config.automation.full_auto.enabled;
+                        changed = true;
+                    }
+                    "prompt_cache.enabled" => {
+                        self.config.prompt_cache.enabled = !self.config.prompt_cache.enabled;
+                        changed = true;
+                    }
+                    "mcp.enabled" => {
+                        self.config.mcp.enabled = !self.config.mcp.enabled;
+                        changed = true;
+                    }
+                    "ui.inline_viewport_rows"
+                    | "pty.default_rows"
+                    | "pty.default_cols"
+                    | "pty.command_timeout_seconds"
+                    | "context.max_context_tokens"
+                    | "context.trim_to_percent"
+                    | "agent.max_conversation_turns" => {
+                        self.adjust_numeric_val(1);
+                    }
+                    _ => {}
+                }
+
+                if changed {
+                    self.modified = true;
+                    self.reload_items_from_config();
+                }
+            }
+        }
+    }
+
+    pub fn apply_changes(&mut self) -> anyhow::Result<()> {
+        if self.modified {
+            self.config_manager.save_config(&self.config)?;
+            self.modified = false;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::loader::ConfigManager;
+
+    fn setup_palette() -> ConfigPalette {
+        let temp_dir = std::env::temp_dir();
+        let manager = ConfigManager::load_from_workspace(temp_dir).expect("Failed to create test config manager");
+        ConfigPalette::new(manager)
+    }
+
+    #[test]
+    fn test_initialization() {
+        let palette = setup_palette();
+        assert!(!palette.items.is_empty(), "Palette should have items loaded");
+        assert_eq!(palette.selected(), Some(0), "First item should be selected by default");
+        assert!(!palette.modified, "Modified flag should be false initially");
+    }
+
+    #[test]
+    fn test_navigation() {
+        let mut palette = setup_palette();
+        let item_count = palette.items.len();
+        
+        // Test Down navigation
+        palette.list_state.select(Some(0));
+        palette.move_down();
+        assert_eq!(palette.selected(), Some(1), "Should move down to index 1");
+
+        // Test Wrap around Down
+        palette.list_state.select(Some(item_count - 1));
+        palette.move_down();
+        assert_eq!(palette.selected(), Some(0), "Should wrap around to 0");
+
+        // Test Up navigation
+        palette.list_state.select(Some(1));
+        palette.move_up();
+        assert_eq!(palette.selected(), Some(0), "Should move up to 0");
+
+        // Test Wrap around Up
+        palette.list_state.select(Some(0));
+        palette.move_up();
+        assert_eq!(palette.selected(), Some(item_count - 1), "Should wrap around to last item");
+    }
+
+    #[test]
+    fn test_toggle_bool() {
+        let mut palette = setup_palette();
+        
+        // Find a boolean item index (e.g., ui.show_timeline_pane)
+        let index = palette.items.iter().position(|i| i.key == "ui.show_timeline_pane");
+        assert!(index.is_some(), "Should have ui.show_timeline_pane item");
+        let index = index.unwrap();
+
+        palette.list_state.select(Some(index));
+        
+        let initial_value = palette.config.ui.show_timeline_pane;
+        
+        palette.toggle_selected();
+        
+        assert_ne!(palette.config.ui.show_timeline_pane, initial_value, "Value should create toggled");
+        assert!(palette.modified, "Modified flag should be true");
+        
+        // Toggle back
+        palette.toggle_selected();
+        assert_eq!(palette.config.ui.show_timeline_pane, initial_value, "Value should default back");
+    }
+
+    #[test]
+    fn test_cycle_enum() {
+        let mut palette = setup_palette();
+        
+        // Find enum item (e.g., ui.tool_output_mode)
+        let index = palette.items.iter().position(|i| i.key == "ui.tool_output_mode");
+        if let Some(idx) = index {
+             palette.list_state.select(Some(idx));
+             let initial = palette.config.ui.tool_output_mode.clone();
+             
+             palette.toggle_selected();
+             
+             assert_ne!(palette.config.ui.tool_output_mode, initial, "Enum should cycle");
+             assert!(palette.modified, "Modified flag should be true");
+        }
+    }
+}

@@ -297,7 +297,6 @@ impl Default for TranscriptReflowCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::text::Span;
 
     #[test]
     fn test_cache_initialization() {

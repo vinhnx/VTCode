@@ -12,7 +12,7 @@
 //!
 //! Target: ~100-200 tokens vs potentially thousands
 
-use super::{Summarizer, extract_key_info, truncate_to_tokens};
+use super::{Summarizer, truncate_to_tokens};
 use anyhow::Result;
 use serde_json::Value;
 
@@ -48,11 +48,7 @@ impl Summarizer for ReadSummarizer {
         let stats = parse_read_output(full_output);
 
         // Build concise summary
-        let mut summary = format!(
-            "Read {} lines from {}",
-            stats.total_lines,
-            file_path
-        );
+        let mut summary = format!("Read {} lines from {}", stats.total_lines, file_path);
 
         // Add file size if significant
         if stats.total_chars > 10_000 {
@@ -62,7 +58,8 @@ impl Summarizer for ReadSummarizer {
 
         // Add preview of first lines
         if !stats.preview_lines.is_empty() {
-            let preview = stats.preview_lines
+            let preview = stats
+                .preview_lines
                 .iter()
                 .take(self.max_preview_lines)
                 .map(|line| truncate_line(line, 80))
@@ -83,7 +80,8 @@ impl Summarizer for ReadSummarizer {
         if stats.total_lines > self.max_preview_lines + self.max_suffix_lines
             && !stats.suffix_lines.is_empty()
         {
-            let suffix = stats.suffix_lines
+            let suffix = stats
+                .suffix_lines
                 .iter()
                 .take(self.max_suffix_lines)
                 .map(|line| truncate_line(line, 80))
@@ -106,9 +104,7 @@ pub struct EditSummarizer {
 
 impl Default for EditSummarizer {
     fn default() -> Self {
-        Self {
-            max_tokens: 150,
-        }
+        Self { max_tokens: 150 }
     }
 }
 
@@ -127,14 +123,14 @@ impl Summarizer for EditSummarizer {
         if stats.lines_added > 0 || stats.lines_removed > 0 {
             summary.push_str(&format!(
                 ": +{} lines, -{} lines",
-                stats.lines_added,
-                stats.lines_removed
+                stats.lines_added, stats.lines_removed
             ));
         }
 
         // Add affected files
         if !stats.affected_files.is_empty() {
-            let files = stats.affected_files
+            let files = stats
+                .affected_files
                 .iter()
                 .take(5)
                 .map(|f| {
@@ -183,11 +179,7 @@ fn parse_read_output(output: &str) -> ReadStats {
     stats.total_chars = output.len();
 
     // Get preview lines (first 10)
-    stats.preview_lines = lines
-        .iter()
-        .take(10)
-        .map(|line| line.to_string())
-        .collect();
+    stats.preview_lines = lines.iter().take(10).map(|line| line.to_string()).collect();
 
     // Get suffix lines (last 3)
     if lines.len() > 13 {
@@ -209,7 +201,8 @@ fn parse_edit_output(output: &str) -> EditStats {
 
     // Try to parse as JSON first
     if let Ok(json) = serde_json::from_str::<Value>(output) {
-        stats.success = json.get("success")
+        stats.success = json
+            .get("success")
             .and_then(|s| s.as_bool())
             .unwrap_or(false);
 
@@ -223,17 +216,19 @@ fn parse_edit_output(output: &str) -> EditStats {
         }
 
         // Extract change statistics
-        stats.lines_added = json.get("lines_added")
+        stats.lines_added = json
+            .get("lines_added")
             .and_then(|l| l.as_u64())
             .unwrap_or(0) as usize;
 
-        stats.lines_removed = json.get("lines_removed")
+        stats.lines_removed = json
+            .get("lines_removed")
             .and_then(|l| l.as_u64())
             .unwrap_or(0) as usize;
     } else {
         // Fallback: parse text output
-        stats.success = output.to_lowercase().contains("success")
-            && !output.to_lowercase().contains("error");
+        stats.success =
+            output.to_lowercase().contains("success") && !output.to_lowercase().contains("error");
 
         // Try to count +/- lines in diff-like output
         for line in output.lines() {
@@ -293,7 +288,7 @@ mod tests {
         assert!(summary.contains("Line 1"));
 
         // Should be much shorter than full output
-        let (llm, ui, pct) = summarizer.estimate_savings(&full_output, &summary);
+        let (_llm, _ui, pct) = summarizer.estimate_savings(&full_output, &summary);
         assert!(pct > 80.0, "Should save >80% (got {:.1}%)", pct);
     }
 

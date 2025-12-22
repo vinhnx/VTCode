@@ -48,7 +48,10 @@ pub use mcp::{
 };
 pub use models::{ModelId, OpenRouterMetadata};
 pub use telemetry::TelemetryConfig;
-pub use types::{ReasoningEffortLevel, UiSurfacePreference};
+pub use types::{
+    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
+    VerbosityLevel,
+};
 pub use validation::{ValidationResult, validate_config, validate_model_exists};
 pub use validator::{ConfigValidator, ModelsDatabase, ValidationResult as ConfigValidationResult};
 pub use vtcode_config::TimeoutsConfig;

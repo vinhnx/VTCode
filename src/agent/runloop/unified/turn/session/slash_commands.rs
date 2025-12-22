@@ -488,38 +488,25 @@ pub async fn handle_outcome(
             Ok(SlashCommandControl::Continue)
         }
         SlashCommandOutcome::ShowConfig => {
-            let workspace_path = ctx.config.workspace.clone();
-            let vt_snapshot = ctx.vt_cfg.clone();
-            match load_config_modal_content(workspace_path, vt_snapshot).await {
-                Ok(content) => {
-                    if ctx.renderer.prefers_untruncated_output() {
-                        let mut modal_lines = Vec::new();
-                        modal_lines.push(content.source_label.clone());
-                        modal_lines.push(String::new());
-                        modal_lines.extend(content.config_lines.clone());
-                        modal_lines.push(String::new());
-                        modal_lines.push(MODAL_CLOSE_HINT.to_string());
-                        ctx.handle.close_modal();
-                        ctx.handle
-                            .show_modal(content.title.clone(), modal_lines, None);
-                        ctx.renderer.line(
-                            MessageStyle::Info,
-                            &format!("Opened {} modal ({}).", content.title, content.source_label),
-                        )?;
-                        ctx.renderer.line(MessageStyle::Info, MODAL_CLOSE_HINT)?;
-                    } else {
+            if ctx.renderer.supports_inline_ui() {
+                ctx.handle.open_config_palette();
+            } else {
+                let workspace_path = ctx.config.workspace.clone();
+                let vt_snapshot = ctx.vt_cfg.clone();
+                match load_config_modal_content(workspace_path, vt_snapshot).await {
+                    Ok(content) => {
                         ctx.renderer
                             .line(MessageStyle::Info, &content.source_label)?;
                         for line in content.config_lines {
                             ctx.renderer.line(MessageStyle::Info, &line)?;
                         }
                     }
-                }
-                Err(err) => {
-                    ctx.renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to load configuration for display: {}", err),
-                    )?;
+                    Err(err) => {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to load configuration for display: {}", err),
+                        )?;
+                    }
                 }
             }
             Ok(SlashCommandControl::Continue)
