@@ -2,7 +2,7 @@
 
 **Status:**  Complete  
 **Date:** 2025-11-20  
-**Test Framework:** cargo nextest
+**Test Framework:** cargo test
 
 ---
 

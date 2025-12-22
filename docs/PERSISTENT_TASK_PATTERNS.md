@@ -315,7 +315,7 @@ For tasks with learnings that apply to future work (not just this task), create 
 
 ## Build Commands
 - `cargo check` - Quick validation
-- `cargo nextest run` - Run tests
+- `cargo test` - Run tests
 - `cargo clippy` - Linting
 
 ## Code Style

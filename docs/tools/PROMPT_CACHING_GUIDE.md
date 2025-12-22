@@ -119,7 +119,7 @@ These metrics flow through `vtcode-core::llm::types::Usage` and appear anywhere 
 -   `vtcode-core/src/llm/providers/openrouter.rs` exercises usage parsing to ensure cache metrics are preserved.
 -   Local cache behavior tests in `vtcode-core/src/core/prompt_caching.rs` verify caching, eviction, and persistence.
 -   Configuration loading tests ensure settings from `vtcode.toml` are applied correctly.
--   Run `cargo nextest run` to execute all fast tests after updating configuration logic.
+-   Run `cargo test` to execute all fast tests after updating configuration logic.
 
 ## Implementation Architecture
 

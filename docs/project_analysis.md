@@ -130,7 +130,7 @@
 - **Documentation**: Ensure public APIs and newly extracted modules include Rustdoc comments and update relevant docs under `./docs/`. F:AGENTS.md†L165-L193
 - **Separation of concerns**: Keep configuration parsing, command dispatch, and UI rendering in distinct crates/modules to preserve testability. F:Cargo.toml†L1-L103F:src/main.rs†L5-L145
 - **Testing strategy**: Expand unit and integration tests around newly factored components; leverage existing `tests/` harness and encourage scenario-based testing for turn loop and ACP flows.
-- **Performance monitoring**: Profile large modules after refactors (e.g., `cargo nextest`, criterion benchmarks) to ensure decompositions maintain throughput.
+- **Performance monitoring**: Profile large modules after refactors (e.g., `cargo test`, criterion benchmarks) to ensure decompositions maintain throughput.
 - **Vendored code management**: Automate MCP schema updates and document regeneration steps to keep third-party code isolated from manual edits. F:third-party/mcp-types/src/v2024_11_05/types.rs†L1-L120
 
 ## Next Steps

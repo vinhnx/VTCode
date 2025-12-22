@@ -461,7 +461,7 @@ The VTCode optimization project has been **successfully completed** with all obj
 cargo check --package vtcode-core
 
 # Run tests
-cargo nextest run --package vtcode-core
+cargo test --package vtcode-core
 
 # Run benchmarks
 cargo bench --package vtcode-core

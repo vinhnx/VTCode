@@ -310,7 +310,7 @@ deny_glob = [
 
 Result:
 -   Git workflows work fully (`git stash`, `git tag`, etc.)
--   Cargo full toolchain (`cargo nextest`, `cargo doc`)
+-   Cargo full toolchain (`cargo test`, `cargo doc`)
 -   Node.js packages (`yarn`, `pnpm`, `bun`)
 -   Docker builds work (`docker build`, `docker logs`)
 -   But container execution is blocked (`docker run`)

@@ -2,7 +2,7 @@
 
 **Status:**  Partial (2/5 objectives)  
 **Date:** 2025-11-20  
-**Test Framework:** cargo nextest  
+**Test Framework:** cargo test  
 **Coverage:** 10 new assertions
 
 ---

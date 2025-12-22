@@ -259,7 +259,7 @@ pub fn update_schema_snapshots() -> Result<()>
 **Run Command**:
 
 ```bash
-cargo nextest run --test language_consistency_test --test tool_serialization_stability_test
+cargo test --test language_consistency_test --test tool_serialization_stability_test
 Summary [1.901s] 31 tests run: 31 passed, 1 skipped
 ```
 
@@ -270,7 +270,7 @@ Summary [1.901s] 31 tests run: 31 passed, 1 skipped
 
 **Project Conventions**:
 
--     Uses `cargo nextest` as specified
+-     Uses `cargo test` as specified
 -     Async patterns with `#[tokio::test]`
 -     Integration with actual `ToolRegistry`
 -     Proper error handling with `anyhow::Context`
@@ -376,14 +376,14 @@ cargo check
 ### Run Tests
 
 ```bash
-cargo nextest run --test language_consistency_test --test tool_serialization_stability_test
+cargo test --test language_consistency_test --test tool_serialization_stability_test
 # Summary [1.901s] 31 tests run: 31 passed, 1 skipped  
 ```
 
 ### Run All Tests
 
 ```bash
-cargo nextest run
+cargo test
 # Verifies no regressions in existing functionality
 ```
 

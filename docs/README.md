@@ -247,7 +247,7 @@ VT Code includes comprehensive testing infrastructure:
 
 ### Test Categories
 
--   **Unit Tests** - Component-level testing with `cargo nextest run`
+-   **Unit Tests** - Component-level testing with `cargo test`
 -   **Integration Tests** - End-to-end workflow validation
 -   **Performance Tests** - Benchmarking with `cargo bench`
 -   **Configuration Tests** - TOML validation and policy testing
@@ -257,7 +257,7 @@ VT Code includes comprehensive testing infrastructure:
 
 ```bash
 # Run full test suite
-cargo nextest run --workspace
+cargo test --workspace
 
 # Run with coverage
 cargo tarpaulin

@@ -142,7 +142,7 @@ The implementation includes comprehensive unit tests for:
 
 To run the tests:
 ```bash
-cargo nextest run
+cargo test
 ```
 
 ## Migration Considerations

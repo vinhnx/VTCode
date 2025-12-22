@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-Based on the review of `docs/research/codex_issue_review.md` and analysis of changed files, VTCode has successfully implemented **3 out of 4** critical mitigations, with comprehensive test coverage using `cargo nextest`. This report documents completed work and remaining action items.
+Based on the review of `docs/research/codex_issue_review.md` and analysis of changed files, VTCode has successfully implemented **3 out of 4** critical mitigations, with comprehensive test coverage using `cargo test`. This report documents completed work and remaining action items.
 
 ---
 
@@ -205,7 +205,7 @@ pub fn validate_tool_response_language(tool_name: &str, response: &Value) -> Res
 #### Test Results
 
 ```bash
-cargo nextest run --test language_consistency_test
+cargo test --test language_consistency_test
 Summary [1.783s] 17 tests run: 17 passed  
 ```
 
@@ -299,7 +299,7 @@ pub fn update_schema_snapshots() -> Result<()>  // Helper for intentional update
 #### Test Results
 
 ```bash
-cargo nextest run --test tool_serialization_stability_test
+cargo test --test tool_serialization_stability_test
 Summary [1.772s] 14 tests run: 10 passed, 1 skipped, 4 integration  
 ```
 
@@ -320,7 +320,7 @@ Add to `CONTRIBUTING.md`:
 
 When modifying tool descriptions or parameters:
 
-1. Run: `cargo nextest run --test tool_serialization_stability_test`
+1. Run: `cargo test --test tool_serialization_stability_test`
 2. If intentional schema changes, update snapshots:
     ```rust
     #[test]
@@ -347,7 +347,7 @@ When modifying tool descriptions or parameters:
 
 ###   Project Convention Adherence
 
-1. **Uses `cargo nextest`**   - All tests include nextest instructions
+1. **Uses `cargo test`**   - All tests include nextest instructions
 2. **Async patterns**   - Integration tests use `#[tokio::test]`
 3. **VTCode integration**   - Tests use actual `ToolRegistry`
 4. **TempDir usage**   - Follows project patterns
@@ -359,7 +359,7 @@ When modifying tool descriptions or parameters:
 
 ```bash
 # Total test coverage for Codex mitigations
-cargo nextest run --test language_consistency_test --test tool_serialization_stability_test
+cargo test --test language_consistency_test --test tool_serialization_stability_test
 
 Summary [1.772s] 31 tests run: 31 passed, 1 skipped  
 
@@ -409,7 +409,7 @@ Breakdown:
     - Pre-commit hook suggestions
 
 2. **CI integration for schema drift**
-    - Add workflow: `cargo nextest run --ignored ci_validate_no_schema_drift`
+    - Add workflow: `cargo test --ignored ci_validate_no_schema_drift`
     - Fail on schema changes without snapshot updates
 
 ---

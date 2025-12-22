@@ -381,7 +381,7 @@ async fn test_lifecycle_hook_execution() {
 
 **Run async tests:**
 ```bash
-cargo nextest run --lib  # Runs all #[tokio::test] tests
+cargo test --lib  # Runs all #[tokio::test] tests
 ```
 
 ## Configuration

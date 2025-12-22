@@ -10,8 +10,8 @@ trigger: always_on
 
 ```bash
 cargo check                    # Preferred: quick check (no build)
-cargo nextest run              # Run tests (preferred over cargo test)
-cargo nextest run --package vtcode-core  # Single package
+cargo test                     # Run tests
+cargo test --package vtcode-core  # Single package
 cargo clippy                   # Linting (strict Clippy rules enforced)
 cargo fmt                      # Format code
 ```
@@ -34,7 +34,7 @@ cargo fmt                      # Format code
 ## Important Rules (from .github/copilot-instructions.md)
 
 - Use `cargo check` instead of `cargo build` when possible
-- Use `cargo nextest` instead of `cargo test`
+- Use `cargo test` for running tests
 - Put all md docs in `./docs/` folder only (THIS IS IMPORTANT)
 - Check `docs/models.json` for latest LLM models; never guess model IDs
 - Use `vtcode-core/src/config/constants.rs` for all constants; no hardcoding
