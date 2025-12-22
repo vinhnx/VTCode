@@ -3,6 +3,25 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.51.2] - 2025-12-22
+
+
+### Features
+    - feat: Add new model constants for grok-4-1-fast and grok-code-fast-1
+    - feat: Implement search and filter functionality for the TUI configuration palette.
+    - feat: Introduce a TUI config palette, refactor rendering logic, and enable dynamic theme application.
+
+
+### Documentation
+    - docs: update changelog for v0.51.1 [skip ci]
+    - docs: update changelog for v0.51.0 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.51.1 [skip ci]
+    - chore: release v0.51.1
+    - chore: release v0.51.0
+    - chore: update npm package.json to v0.50.13 [skip ci]
 # [Version 0.51.1] - 2025-12-22
 
 
