@@ -515,20 +515,56 @@ pub(super) fn handle_config_palette_key(session: &mut Session, key: &KeyEvent) -
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
             palette.toggle_selected();
+            let config = palette.config.clone();
+            if let Err(e) = palette.apply_changes() {
+                tracing::error!("Failed to save config: {}", e);
+            }
+            session.apply_config(&config);
+            session.mark_dirty();
+            true
+        }
+        KeyCode::Char(ch) => {
+            palette.push_char(ch);
+            session.mark_dirty();
+            true
+        }
+        KeyCode::Backspace => {
+            palette.backspace();
+            session.mark_dirty();
+            true
+        }
+        KeyCode::Delete => {
+            palette.clear_search();
             session.mark_dirty();
             true
         }
         KeyCode::Left => {
             palette.adjust_numeric_val(-1);
+            let config = palette.config.clone();
+            if let Err(e) = palette.apply_changes() {
+                tracing::error!("Failed to save config: {}", e);
+            }
+            session.apply_config(&config);
             session.mark_dirty();
             true
         }
         KeyCode::Right => {
             palette.adjust_numeric_val(1);
+            let config = palette.config.clone();
+            if let Err(e) = palette.apply_changes() {
+                tracing::error!("Failed to save config: {}", e);
+            }
+            session.apply_config(&config);
             session.mark_dirty();
             true
         }
         KeyCode::Esc => {
+            if !palette.search_query.is_empty() {
+                palette.clear_search();
+                session.mark_dirty();
+                return true;
+            }
+
             // Extract config before closing to apply changes to session
             let config = palette.config.clone();
 

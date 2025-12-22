@@ -433,8 +433,20 @@ pub fn render_config_palette(session: &mut Session, frame: &mut Frame<'_>, viewp
     let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
+
+    let title = if palette.search_query.is_empty() {
+        "Configuration (Type to search)".to_string()
+    } else {
+        format!("Configuration (Filter: {})", palette.search_query)
+    };
+
+    let instructions = " ↑↓ Navigate · Space/Enter Toggle · ←→ Adjust · Esc Close/Save ";
     let block = Block::bordered()
-        .title("Configuration")
+        .title(title)
+        .title_bottom(Span::styled(
+            instructions,
+            def_style.add_modifier(Modifier::DIM),
+        ))
         .border_type(b_type)
         .style(def_style)
         .border_style(b_style);

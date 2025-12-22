@@ -28,6 +28,7 @@ pub struct ConfigPalette {
     // Keep a local copy to modify before saving
     pub config: VTCodeConfig,
     pub modified: bool,
+    pub search_query: String,
 }
 
 impl ConfigPalette {
@@ -39,6 +40,7 @@ impl ConfigPalette {
             config_manager: manager,
             config,
             modified: false,
+            search_query: String::new(),
         };
         palette.reload_items_from_config();
 
@@ -288,7 +290,44 @@ impl ConfigPalette {
             description: Some("Main AI model (read-only)".to_string()),
         });
 
+        // Apply fuzzy search filter if query is present
+        if !self.search_query.is_empty() {
+            let normalized = crate::ui::search::normalize_query(&self.search_query);
+            items.retain(|item| {
+                crate::ui::search::fuzzy_match(&normalized, &item.label)
+                    || crate::ui::search::fuzzy_match(&normalized, &item.key)
+            });
+        }
+
         self.items = items;
+
+        // Ensure selection is within bounds after filtering
+        if let Some(selected) = self.list_state.selected() {
+            if selected >= self.items.len() && !self.items.is_empty() {
+                self.list_state.select(Some(self.items.len() - 1));
+            } else if self.items.is_empty() {
+                self.list_state.select(None);
+            }
+        } else if !self.items.is_empty() {
+            self.list_state.select(Some(0));
+        }
+    }
+
+    pub fn push_char(&mut self, ch: char) {
+        self.search_query.push(ch);
+        self.reload_items_from_config();
+    }
+
+    pub fn backspace(&mut self) {
+        self.search_query.pop();
+        self.reload_items_from_config();
+    }
+
+    pub fn clear_search(&mut self) {
+        if !self.search_query.is_empty() {
+            self.search_query.clear();
+            self.reload_items_from_config();
+        }
     }
 
     pub fn selected(&self) -> Option<usize> {
