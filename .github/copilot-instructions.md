@@ -5,9 +5,9 @@
 ## Build & Test Commands
 
 ```bash
-cargo check                 # Preferred over cargo build
-cargo nextest run           # Run tests (preferred over cargo test)
-cargo nextest run --package vtcode-core  # Single package
+cargo check                 # Fast compile check
+cargo test                  # Run tests
+cargo test --package vtcode-core  # Single package
 cargo clippy                # Lint (strict Clippy rules)
 cargo fmt                   # Format code
 ```

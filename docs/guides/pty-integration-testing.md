@@ -7,7 +7,6 @@ This guide shows how to exercise the portable-pty powered terminal path so you c
 1. Install the project dependencies:
    ```bash
    rustup show # ensures the pinned toolchain is active
-   cargo install cargo-nextest --locked # optional but preferred
    ```
 2. Export at least one supported API key before launching the TUI (Gemini, OpenAI, Anthropic). For example:
    ```bash
@@ -20,13 +19,7 @@ This guide shows how to exercise the portable-pty powered terminal path so you c
 Run the focused PTY smoke tests directly:
 
 ```bash
-cargo nextest run --test pty_tests
-```
-
-If `cargo-nextest` is not installed, fall back to the standard test harness:
-
-```bash
-cargo test --package vtcode-core --test pty_tests
+cargo test --test pty_tests
 ```
 
 To execute the same checks plus external tool availability in one pass, use the helper script:
@@ -35,7 +28,7 @@ To execute the same checks plus external tool availability in one pass, use the 
 scripts/test_pty_tools.sh
 ```
 
-The script automatically prefers `cargo nextest` when available and prints the captured log if any PTY assertion fails.
+The script runs the PTY tests and prints the captured log if any PTY assertion fails.
 
 ## Manual TUI Walkthrough
 

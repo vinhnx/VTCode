@@ -56,7 +56,6 @@ rustup update stable
 rustup default stable
 rustup component add clippy rustfmt
 
-cargo install cargo-nextest --locked
 cargo install cargo-audit --locked || true
 
 cargo fetch --locked
@@ -66,7 +65,7 @@ This script makes sure:
 
 -   System build dependencies are present.
 -   The stable Rust toolchain and required components (`rustfmt`, `clippy`) are installed.
--   `cargo-nextest` is available for the preferred test runner and `cargo-audit` for security checks.
+-   `cargo-audit` is available for security checks.
 -   Cargo downloads dependencies up front so cached containers can reuse them.
 
 If you need additional tooling (for example `node`, `python`, or project-specific binaries), add
@@ -102,7 +101,7 @@ CLI) that executes:
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features
-cargo nextest run --workspace
+cargo test --workspace
 ```
 
 All three commands should succeed without additional manual steps. If they fail, update the setup

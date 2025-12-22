@@ -143,7 +143,7 @@ All ANSI-related code has comprehensive tests:
 
 Run tests:
 ```bash
-cargo nextest run --package vtcode-core ansi
+cargo test --package vtcode-core ansi
 ```
 
 ## External Resources

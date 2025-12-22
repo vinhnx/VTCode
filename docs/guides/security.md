@@ -191,7 +191,7 @@ VT Code includes comprehensive security tests:
 cargo test -p vtcode-core --test execpolicy_security_tests
 
 # Run all tests
-cargo nextest run --workspace
+cargo test --workspace
 ```
 
 ### Manual Testing

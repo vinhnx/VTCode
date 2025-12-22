@@ -36,7 +36,7 @@ cargo fmt --package vtcode-core -- --check
 
 # 4. Run tests
 echo " Running tests..."
-cargo nextest run --package vtcode-core
+cargo test --package vtcode-core
 
 # 5. Check for dead code
 echo "  Checking for dead code..."
@@ -464,7 +464,7 @@ cat > "$REPORT_FILE" << EOF
 $(cargo check --package vtcode-core 2>&1)
 
 ## Test Results
-$(cargo nextest run --package vtcode-core 2>&1 | tail -20)
+$(cargo test --package vtcode-core 2>&1 | tail -20)
 
 ## Clippy Results
 $(cargo clippy --package vtcode-core 2>&1 | tail -20)

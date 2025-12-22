@@ -107,7 +107,7 @@ Warnings: 6 (unused imports and variables - cleanup pending)
    - Look for missing context optimization
 
 3. **Test Suite Verification** - ⏳ Planned
-   - Run `cargo nextest run` for full test suite
+   - Run `cargo test` for full test suite
    - Verify all optimizations don't break functionality
    - Check for performance regressions
 

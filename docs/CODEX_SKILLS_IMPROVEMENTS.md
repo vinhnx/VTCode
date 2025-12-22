@@ -209,13 +209,13 @@ All features tested with comprehensive unit tests:
 
 ```bash
 # Rendering modes
-cargo nextest run --package vtcode-core --lib 'skills::prompt_integration'
+cargo test --package vtcode-core --lib 'skills::prompt_integration'
 
 # Auto-trigger detection
-cargo nextest run --package vtcode-core --lib 'skills::loader::tests::test_detect'
+cargo test --package vtcode-core --lib 'skills::loader::tests::test_detect'
 
 # Configuration
-cargo nextest run --package vtcode-config --lib 'core::skills'
+cargo test --package vtcode-config --lib 'core::skills'
 ```
 
 **Test Coverage**:

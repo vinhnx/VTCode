@@ -58,7 +58,7 @@ This guide walks through updating existing VTCode integrations to rely on the st
 ### 5. Refresh Tests & Automation
 - Update integration tests to install a provider before exercising bootstrap or loader flows. The `TestWorkspaceDefaults` helper in `vtcode-core/tests/config_loader_test.rs` illustrates how to inject ephemeral directories.
 - Regenerate fixtures or golden files if they previously assumed `.vtcode`-relative paths.
-- Run `cargo fmt`, `cargo clippy --all-targets`, and `cargo nextest run` (or `cargo test`) within your workspace to verify compatibility.
+- Run `cargo fmt`, `cargo clippy --all-targets`, and `cargo test` (or `cargo test`) within your workspace to verify compatibility.
 
 ### 6. Clean Up Deprecated Imports
 - Remove references to `vtcode_core::config::loader` and the old `VTCodeConfig` bootstrap APIs once your integration compiles against `vtcode-config`.

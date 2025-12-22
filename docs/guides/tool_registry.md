@@ -75,7 +75,7 @@ from the repository root:
 
 -   `cargo fmt`
 -   `cargo clippy`
--   `cargo nextest run`
+-   `cargo test`
 
 These checks validate formatting, lint rules, and runtime behaviour of the new
 registry entries.

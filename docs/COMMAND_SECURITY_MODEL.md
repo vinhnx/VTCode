@@ -52,7 +52,7 @@ Inspect repository state and manage commits safely:
 #### 3. Build Systems
 Core compilation and build tool execution:
 - **Make-based**: `make`, `cmake`, `ninja`, `meson`, `bazel`
-- **Rust ecosystem**: `cargo`, `rustc`, `rustfmt`, `rustup`, `cargo nextest`
+- **Rust ecosystem**: `cargo`, `rustc`, `rustfmt`, `rustup`, `cargo test`
 - **All major subcommands**: `cargo build`, `cargo test`, `cargo check`, `cargo run`, etc.
 
 #### 4. Language Runtimes & Package Managers
@@ -86,7 +86,7 @@ Patterns like `git *`, `cargo *`, `npm run *` enable entire command families:
 allow_glob = [
   "git *",              # All git subcommands
   "cargo *",            # All cargo workflows
-  "cargo nextest *",    # Test execution
+  "cargo test *",    # Test execution
   "python *",           # Python with any flags
   "npm run *",          # NPM script execution
   "docker *",           # All docker (except restricted)
@@ -416,7 +416,7 @@ allow_list = [
 allow_glob = [
   "git *",
   "cargo *",
-  "cargo nextest *",
+  "cargo test *",
 ]
 
 deny_glob = [

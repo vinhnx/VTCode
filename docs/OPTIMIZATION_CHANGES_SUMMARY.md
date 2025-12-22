@@ -172,7 +172,7 @@ pub fn as_factory_config(source: &dyn ProviderConfig) -> vtcode_core::llm::facto
 
 After these changes, please verify:
 
-1. **Unit Tests:** `cargo nextest run --workspace`
+1. **Unit Tests:** `cargo test --workspace`
 2. **Integration Tests:** `cargo test --workspace`
 3. **Binary Functionality:** Test core workflows with release binary
 4. **Memory Profiling:** Monitor memory usage in production workloads

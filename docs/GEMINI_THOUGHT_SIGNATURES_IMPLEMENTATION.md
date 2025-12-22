@@ -132,7 +132,7 @@ The tests added compile successfully but cannot run due to unrelated compilation
 Once other compilation issues are resolved, run:
 
 ```bash
-cargo nextest run --package vtcode-core thought_signature
+cargo test --package vtcode-core thought_signature
 ```
 
 Expected results:
