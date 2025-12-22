@@ -1054,6 +1054,11 @@ mod tests {
             parallel_tool_config: None,
             reasoning_effort: None,
             verbosity: None,
+            top_p: None,
+            top_k: None,
+            presence_penalty: None,
+            frequency_penalty: None,
+            stop_sequences: None,
         }
     }
 

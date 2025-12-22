@@ -146,7 +146,7 @@ For new developers:
 
     ```bash
     cargo build
-    cargo nextest run
+    cargo test
     ```
 
 ## API Key Configuration

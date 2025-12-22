@@ -5,7 +5,7 @@
 //! Codex constrained sampling regression issue where <0.25% of sessions
 //! experienced mixed-language segments.
 //!
-//! Run with: `cargo nextest run --test language_consistency_test`
+//! Run with: `cargo test --test language_consistency_test -- --nocapture`
 
 use anyhow::{Context, Result};
 use serde_json::{Value, json};

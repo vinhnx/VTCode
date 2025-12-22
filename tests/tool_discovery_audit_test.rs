@@ -6,7 +6,7 @@
 /// 3. Tool metadata is consistent across the system
 /// 4. No tools are silently dropped or hidden
 ///
-/// Run with: cargo nextest run tool_discovery_audit_test -- --nocapture
+/// Run with: cargo test --test tool_discovery_audit_test -- --nocapture
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]

@@ -63,15 +63,9 @@ echo -e "\nTesting PTY Integration"
 echo "======================="
 
 set +e
-if command -v cargo-nextest >/dev/null 2>&1; then
-    PTY_LOG=$(mktemp)
-    cargo nextest run --test pty_tests >"$PTY_LOG" 2>&1
-    PTY_STATUS=$?
-else
-    PTY_LOG=$(mktemp)
-    cargo test --package vtcode-core --test pty_tests >"$PTY_LOG" 2>&1
-    PTY_STATUS=$?
-fi
+PTY_LOG=$(mktemp)
+cargo test --package vtcode-core --test pty_tests >"$PTY_LOG" 2>&1
+PTY_STATUS=$?
 set -e
 
 if [ $PTY_STATUS -eq 0 ]; then

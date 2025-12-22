@@ -148,14 +148,8 @@ post_publish_follow_up() {
 if [[ $RUN_TESTS -eq 1 ]]; then
     run_cmd "cargo fmt"
     run_cmd "cargo clippy --all-targets --all-features"
-    if cargo nextest --version >/dev/null 2>&1; then
-        run_cmd "cargo nextest run --workspace"
-        # Run doctests separately since nextest doesn't execute them
-        run_cmd "cargo test --doc"
-    else
-        echo "cargo nextest not found; falling back to cargo test"
-        run_cmd "cargo test"
-    fi
+    run_cmd "cargo test --workspace"
+    run_cmd "cargo test --doc"
 fi
 
 for crate in "${CRATES[@]}"; do

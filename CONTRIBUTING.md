@@ -127,14 +127,8 @@ let x = calculate_something(a, b, c);
 # Run all tests
 cargo test
 
-# Run with nextest (preferred)
-cargo nextest run
-
 # Run specific test
-cargo test test_name
-
-# Run specific test with nextest
-cargo nextest run test_name
+cargo test test_name -- --nocapture
 
 # Run tests with debug output
 cargo test -- --nocapture

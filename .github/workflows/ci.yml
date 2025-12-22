@@ -182,14 +182,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install nextest
-        run: cargo install cargo-nextest --locked
-
-      - name: Compile tests
-        run: cargo test --locked --no-run
-
-      - name: Run tests with nextest
-        run: cargo nextest run --locked
+      - name: Run tests
+        run: cargo test --locked
 
   # clippy:
   #   name: "Cargo clippy"

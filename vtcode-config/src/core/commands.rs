@@ -61,8 +61,6 @@ const DEFAULT_ALLOW_LIST: &[&str] = &[
     "cargo tree",
     "cargo metadata",
     "cargo doc",
-    "cargo nextest run",
-    "cargo nextest",
     "rustc",
     "which",
     "echo",
@@ -189,7 +187,6 @@ impl Default for CommandsConfig {
             allow_glob: vec![
                 "git *".into(),
                 "cargo *".into(),
-                "cargo nextest *".into(),
                 "rustc *".into(),
                 "python *".into(),
                 "python3 *".into(),
@@ -243,7 +240,7 @@ impl Default for CommandsConfig {
             allow_regex: vec![
                 r"^(ls|pwd|cat|grep|find|head|tail|wc|echo|printf|date|tree|stat|file|sort|uniq|cut|awk|sed|tar|zip|unzip|gzip|gunzip)\b".into(),
                 r"^git (status|diff|log|show|branch|remote)\b".into(),
-                r"^cargo (check|build|test|run|doc|clippy|fmt|tree|metadata|nextest)\b".into(),
+                r"^cargo (check|build|test|run|doc|clippy|fmt|tree|metadata)\b".into(),
                 r"^rustc\b".into(),
                 r"^(python|python3) (-m | )?\w*".into(),
                 r"^(pip|pip3)\b".into(),
