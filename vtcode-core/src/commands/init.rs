@@ -529,7 +529,7 @@ fn build_quick_start_section(analysis: &ProjectAnalysis) -> String {
             "Format via `cargo fmt` and lint with `cargo clippy` before committing.".to_owned(),
         );
         lines.push(
-            "Run full tests using `cargo nextest run` (fallback `cargo test`); focus with `cargo nextest run <name>` or `cargo test <name>`."
+            "Run tests with `cargo test` or focus on specific tests with `cargo test <name> -- --nocapture`."
                 .to_owned(),
         );
         lines.push("Headless prompts: `cargo run -- ask \"<prompt>\"`.".to_owned());
@@ -671,7 +671,7 @@ fn build_testing_section(analysis: &ProjectAnalysis) -> String {
     let systems = unique_preserving_order(&analysis.build_systems);
 
     if systems.iter().any(|system| system == "Cargo") {
-        lines.push("Full suite: `cargo nextest run` (or `cargo test`). Single test: `cargo nextest run <name>` / `cargo test <name>`.".to_owned());
+        lines.push("Full suite: `cargo test`. Single test: `cargo test <name> -- --nocapture`.".to_owned());
         lines.push("Lint before commit with `cargo clippy` and fix issues proactively.".to_owned());
     }
 

@@ -345,8 +345,7 @@ allow_list = [
   "cargo tree",
   "cargo metadata",
   "cargo doc",
-  "cargo nextest",
-  "cargo nextest run",
+
   "rustc",
   "rustfmt",
   "rustup",
@@ -477,7 +476,6 @@ allow_glob = [
   "svn *",        # Subversion workflows
   # Build and compilation workflows
   "cargo *",      # Allow cargo workflows; publishing requires confirm
-  "cargo nextest *",  # Test execution
   "rustc *",      # Rust compiler
   "rustfmt *",    # Code formatter
   "make *",       # Make build system

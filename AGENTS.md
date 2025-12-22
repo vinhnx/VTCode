@@ -6,20 +6,19 @@ This file provides guidance to VT Code when working with code in this repository
 
 ```bash
 # Preferred development workflow
-cargo check                          # Fast compile check (preferred over cargo build)
-cargo nextest run                    # Run tests (preferred over cargo test)
-cargo nextest run --package vtcode-core  # Test specific package
+cargo check                          # Fast compile check
+cargo test                           # Run tests
+cargo test --package vtcode-core    # Test specific package
 cargo clippy                         # Lint with strict rules
 cargo fmt                           # Format code
 
 # Additional commands
-cargo test -- --nocapture           # Standard tests with output
+cargo test -- --nocapture           # Tests with output
 cargo bench                          # Run performance benchmarks
 cargo build                          # Build the project
 cargo run -- ask "Hello world"      # Run VT Code CLI
 
 # Run a single test
-cargo nextest run test_name
 cargo test test_name -- --nocapture
 ```
 
@@ -142,18 +141,6 @@ let config = Config::load("vtcode.toml")?;
 
 ## Testing Infrastructure
 
-### Preferred Test Runner: nextest
-
-```bash
-# nextest is faster and provides better output
-cargo nextest run                    # All tests
-cargo nextest run --package vtcode-core
-cargo nextest run test_specific_name
-
-# Standard cargo test (fallback)
-cargo test -- --nocapture
-```
-
 ### Test Organization
 
 -   **Unit tests**: Inline with source in `#[cfg(test)]` modules
@@ -164,6 +151,9 @@ cargo test -- --nocapture
 ### Running Specific Tests
 
 ```bash
+# All tests
+cargo test
+
 # Integration tests
 cargo test --test integration_tests
 
@@ -215,7 +205,7 @@ cargo test -- --nocapture
 
 ```bash
 # Run all quality checks
-cargo clippy && cargo fmt --check && cargo check && cargo nextest run
+cargo clippy && cargo fmt --check && cargo check && cargo test
 ```
 
 ### Adding New Features

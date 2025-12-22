@@ -7,7 +7,7 @@
 //! Addresses the Codex Responses API encoding difference issue where extra
 //! newlines altered request encoding.
 //!
-//! Run with: `cargo nextest run --test tool_serialization_stability_test`
+//! Run with: `cargo test --test tool_serialization_stability_test -- --nocapture`
 
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
