@@ -1065,12 +1065,10 @@ impl OpenRouterProvider {
             max_tokens,
             temperature,
             stream,
-            output_format: None,
             tool_choice,
             parallel_tool_calls,
-            parallel_tool_config: None,
             reasoning_effort,
-            verbosity: None,
+            ..Default::default()
         })
     }
 
@@ -2151,18 +2149,11 @@ mod tests {
     fn request_with_tools(model: &str) -> LLMRequest {
         LLMRequest {
             messages: vec![Message::user("hi".to_string())],
-            system_prompt: None,
             tools: Some(vec![sample_tool()]),
             model: model.to_string(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
-            output_format: None,
             tool_choice: Some(ToolChoice::Any),
             parallel_tool_calls: Some(true),
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
+            ..Default::default()
         }
     }
 

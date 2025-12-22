@@ -64,14 +64,7 @@ pub async fn execute_skill_with_sub_llm(
         },
         model: model.clone(),
         max_tokens: Some(4096),
-        temperature: None,
-        stream: false,
-        output_format: None,
-        tool_choice: None,
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        verbosity: None,
+        ..Default::default()
     };
 
     // Loop: Make LLM request and handle tool calls

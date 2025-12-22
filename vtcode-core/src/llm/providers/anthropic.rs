@@ -440,7 +440,7 @@ impl AnthropicProvider {
             parallel_tool_config,
             reasoning_effort,
             output_format,
-            verbosity: None,
+            ..Default::default()
         })
     }
 
@@ -1151,13 +1151,7 @@ mod tests {
             model: models::CLAUDE_SONNET_4_5.to_string(),
             max_tokens: Some(512),
             temperature: Some(0.2),
-            stream: false,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            output_format: None,
-            verbosity: None,
+            ..Default::default()
         }
     }
 

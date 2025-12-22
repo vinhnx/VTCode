@@ -263,18 +263,10 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
 
     let test_request = crate::llm::provider::LLMRequest {
         messages: vec![crate::llm::provider::Message::user("test".to_owned())],
-        system_prompt: None,
-        tools: None,
         model: model.clone().unwrap_or_else(|| "test".to_owned()),
         max_tokens: Some(10),
         temperature: Some(0.0),
-        stream: false,
-        output_format: None,
-        tool_choice: None,
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        verbosity: None,
+        ..Default::default()
     };
 
     match provider_instance.generate(test_request).await {

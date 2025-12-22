@@ -87,6 +87,38 @@ pub struct LLMRequest {
     /// Verbosity level for output text (low, medium, high)
     /// Applies to: GPT-5.1 and other models that support verbosity control
     pub verbosity: Option<VerbosityLevel>,
+
+    /// Advanced generation parameters
+    pub top_p: Option<f32>,
+    pub top_k: Option<i32>,
+    pub presence_penalty: Option<f32>,
+    pub frequency_penalty: Option<f32>,
+    pub stop_sequences: Option<Vec<String>>,
+}
+
+impl Default for LLMRequest {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            system_prompt: None,
+            tools: None,
+            model: String::new(),
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            output_format: None,
+            tool_choice: None, // Default to None, allowing provider to decide or be explicitly set
+            parallel_tool_calls: None, // Default to None, allowing provider to decide or be explicitly set
+            parallel_tool_config: None,
+            reasoning_effort: None,
+            verbosity: None,
+            top_p: None,
+            top_k: None,
+            presence_penalty: None,
+            frequency_penalty: None,
+            stop_sequences: None,
+        }
+    }
 }
 
 /// Tool choice configuration that works across different providers
@@ -110,6 +142,12 @@ pub enum ToolChoice {
     /// Force the model to call a specific tool
     /// Useful for directing model to use particular functionality
     Specific(SpecificToolChoice),
+}
+
+impl Default for ToolChoice {
+    fn default() -> Self {
+        Self::Auto
+    }
 }
 
 /// Specific tool choice for forcing a particular function call
@@ -324,6 +362,7 @@ impl ContentPart {
 /// Universal message structure supporting both text and image content
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
+    #[serde(default)]
     pub role: MessageRole,
     /// Content can be a string (for backward compatibility) or an array of content parts
     #[serde(default)]
@@ -332,12 +371,28 @@ pub struct Message {
     pub reasoning: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_details: Option<Vec<serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
     /// Optional origin tool name for tracking which tool generated this message
     /// Used in tool-aware context retention to preserve results from recently-active tools
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin_tool: Option<String>,
+}
+
+impl Default for Message {
+    fn default() -> Self {
+        Self {
+            role: MessageRole::default(),
+            content: MessageContent::default(),
+            reasoning: None,
+            reasoning_details: None,
+            tool_calls: None,
+            tool_call_id: None,
+            origin_tool: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -727,9 +782,10 @@ impl Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum MessageRole {
     System,
+    #[default]
     User,
     Assistant,
     Tool,

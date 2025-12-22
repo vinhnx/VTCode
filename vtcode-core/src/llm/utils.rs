@@ -52,18 +52,10 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
 
     Some(LLMRequest {
         messages: parsed_messages,
-        system_prompt: None,
-        tools: None,
         model: model.to_string(),
         max_tokens,
         temperature,
-        stream: false,
-        output_format: None,
-        tool_choice: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        parallel_tool_calls: None,
-        verbosity: None,
+        ..Default::default()
     })
 }
 

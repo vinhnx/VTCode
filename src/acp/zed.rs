@@ -1853,7 +1853,7 @@ impl acp::Agent for ZedAgent {
         let has_local_tools = self.acp_tool_registry.has_local_tools();
         let tools_allowed =
             provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
-        let tool_definitions = self.tool_definitions(provider_supports_tools, &enabled_tools);
+        let _tool_definitions = self.tool_definitions(provider_supports_tools, &enabled_tools);
         let mut messages = self.resolved_messages(&session);
         let allow_streaming = supports_streaming && !tools_allowed;
 
@@ -1868,18 +1868,11 @@ impl acp::Agent for ZedAgent {
         if allow_streaming {
             let request = LLMRequest {
                 messages: messages.clone(),
-                system_prompt: None,
-                tools: tool_definitions.clone(),
                 model: self.config.model.clone(),
-                max_tokens: None,
-                temperature: None,
                 stream: true,
                 tool_choice: self.tool_choice(tools_allowed),
-                parallel_tool_calls: None,
-                parallel_tool_config: None,
                 reasoning_effort,
-                output_format: None,
-                verbosity: None,
+                ..Default::default()
             };
 
             let mut stream = provider
@@ -1961,18 +1954,10 @@ impl acp::Agent for ZedAgent {
 
                 let request = LLMRequest {
                     messages: messages.clone(),
-                    system_prompt: None,
-                    tools: tool_definitions.clone(),
                     model: self.config.model.clone(),
-                    max_tokens: None,
-                    temperature: None,
-                    stream: false,
                     tool_choice: self.tool_choice(tools_allowed),
-                    parallel_tool_calls: None,
-                    parallel_tool_config: None,
                     reasoning_effort,
-                    output_format: None,
-                    verbosity: None,
+                    ..Default::default()
                 };
 
                 let response = provider

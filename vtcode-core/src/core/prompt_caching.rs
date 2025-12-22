@@ -429,34 +429,18 @@ impl PromptOptimizer {
                 Message {
                     role: MessageRole::System,
                     content: MessageContent::Text(system_prompt),
-                    reasoning: None,
-                    reasoning_details: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                    origin_tool: None,
+                    ..Default::default()
                 },
                 Message {
                     role: MessageRole::User,
                     content: MessageContent::Text(user_prompt),
-                    reasoning: None,
-                    reasoning_details: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                    origin_tool: None,
+                    ..Default::default()
                 },
             ],
-            system_prompt: None,
-            tools: None,
             model: target_model.to_string(),
             max_tokens: Some(2000),
             temperature: Some(0.3),
-            stream: false,
-            output_format: None,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
+            ..Default::default()
         };
 
         let response = self

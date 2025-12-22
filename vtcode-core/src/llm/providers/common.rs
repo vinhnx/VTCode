@@ -29,18 +29,8 @@ pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
 pub fn make_default_request(prompt: &str, model: &str) -> LLMRequest {
     LLMRequest {
         messages: vec![Message::user(prompt.to_owned())],
-        system_prompt: None,
-        tools: None,
         model: model.to_owned(),
-        max_tokens: None,
-        temperature: None,
-        stream: false,
-        output_format: None,
-        tool_choice: None,
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        verbosity: None,
+        ..Default::default()
     }
 }
 
@@ -403,13 +393,7 @@ where
             .get("stream")
             .and_then(|s| s.as_bool())
             .unwrap_or(false),
-        tools: None,
-        output_format: None,
-        tool_choice: None,
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        verbosity: None,
+        ..Default::default()
     })
 }
 

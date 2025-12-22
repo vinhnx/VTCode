@@ -1036,8 +1036,8 @@ impl OpenAIProvider {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         let tool_choice = value.get("tool_choice").and_then(Self::parse_tool_choice);
-        let parallel_tool_calls = value.get("parallel_tool_calls").and_then(|v| v.as_bool());
-        let reasoning_effort = value
+        let _parallel_tool_calls = value.get("parallel_tool_calls").and_then(|v| v.as_bool());
+        let _reasoning_effort = value
             .get("reasoning_effort")
             .and_then(|v| v.as_str())
             .and_then(ReasoningEffortLevel::parse)
@@ -1063,12 +1063,8 @@ impl OpenAIProvider {
             max_tokens,
             temperature,
             stream,
-            output_format: None,
             tool_choice,
-            parallel_tool_calls,
-            parallel_tool_config: None,
-            reasoning_effort,
-            verbosity: None,
+            ..Default::default()
         })
     }
 
@@ -2017,18 +2013,9 @@ mod tests {
     fn sample_request(model: &str) -> provider::LLMRequest {
         provider::LLMRequest {
             messages: vec![provider::Message::user("Hello".to_owned())],
-            system_prompt: None,
             tools: Some(vec![sample_tool()]),
-            output_format: None,
             model: model.to_string(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
+            ..Default::default()
         }
     }
 
