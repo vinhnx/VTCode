@@ -14,7 +14,7 @@ api_key_env = "OLLAMA_API_KEY"
 default_model = "gpt-oss:120b-cloud"
 
 # Visual theme for the terminal interface
-theme = "ciapre-blue"
+theme = "ciapre-dark"
 
 # Enable split tool results for massive token savings (Phase 4: pi-coding-agent integration)
 # When enabled, tools send concise summaries to LLM (53-95% token reduction) while preserving full output for UI
