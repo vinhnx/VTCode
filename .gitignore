@@ -787,3 +787,5 @@ TODO2.md
 .vtcode/
 vtcode.toml
 .claude/
+.agent/
+.github/
