@@ -803,10 +803,88 @@
     "name": "Z.AI",
     "doc": "https://docs.z.ai/guides/llm/glm-4.6",
     "models": {
+      "glm-4-plus": {
+        "id": "glm-4-plus",
+        "name": "GLM 4 Plus",
+        "description": "Z.AI flagship model with top-tier capability in reasoning, writing, and tool-use.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
+      },
+      "glm-4-plus:thinking": {
+        "id": "glm-4-plus:thinking",
+        "name": "GLM 4 Plus (Deep Thinking)",
+        "description": "Z.AI GLM 4 Plus with forced Deep Thinking mode enabled.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
+      },
       "glm-4.7": {
         "id": "glm-4.7",
         "name": "GLM 4.7",
         "description": "Z.AI's latest flagship model with enhanced programming, reasoning, and frontend aesthetics. Supports thinking mode and has 200K context length.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
+      },
+      "glm-4.7:thinking": {
+        "id": "glm-4.7:thinking",
+        "name": "GLM 4.7 (Deep Thinking)",
+        "description": "Z.AI GLM 4.7 with forced Deep Thinking mode enabled for maximum reasoning capability.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -843,7 +921,40 @@
           ]
         },
         "context": 200000,
-        "max_output_tokens": 128000
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
+      },
+      "glm-4.6:thinking": {
+        "id": "glm-4.6:thinking",
+        "name": "GLM 4.6 (Deep Thinking)",
+        "description": "Z.AI GLM 4.6 with forced Deep Thinking mode enabled.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
       },
       "glm-4.5": {
         "id": "glm-4.5",
@@ -859,7 +970,40 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000
+        "max_output_tokens": 96000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
+      },
+      "glm-4.5:thinking": {
+        "id": "glm-4.5:thinking",
+        "name": "GLM 4.5 (Deep Thinking)",
+        "description": "Z.AI GLM 4.5 with forced Deep Thinking mode enabled for complex tasks.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 96000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
       },
       "glm-4.5-air": {
         "id": "glm-4.5-air",
@@ -875,7 +1019,15 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000
+        "max_output_tokens": 96000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
       },
       "glm-4.5-x": {
         "id": "glm-4.5-x",
@@ -891,7 +1043,15 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000
+        "max_output_tokens": 96000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
       },
       "glm-4.5-airx": {
         "id": "glm-4.5-airx",
@@ -907,7 +1067,15 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000
+        "max_output_tokens": 96000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
       },
       "glm-4.5-flash": {
         "id": "glm-4.5-flash",
@@ -923,7 +1091,15 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000
+        "max_output_tokens": 96000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
       },
       "glm-4-32b-0414-128k": {
         "id": "glm-4-32b-0414-128k",

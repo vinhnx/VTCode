@@ -2114,42 +2114,53 @@ This skill generates files. After execution, file locations will be automaticall
         retry_count: u32,
     ) -> Result<(Option<i32>, PtyEphemeralCapture, VTCodePtySession)> {
         let mut lifecycle = PtySessionLifecycle::start(self)?;
+        
+        // Increment active PTY sessions counter
+        self.increment_active_pty_sessions();
 
-        self.pty_manager()
-            .create_session(
-                setup.session_id.clone(),
-                setup.command.clone(),
-                setup.working_dir_path.clone(),
-                setup.size(),
-            )
-            .with_context(|| {
-                format!(
-                    "failed to create PTY session '{}' for command {:?} (attempt {})",
-                    setup.session_id,
-                    setup.command,
-                    retry_count + 1
+        // Ensure we always decrement the counter when the session ends
+        let result = async {
+            self.pty_manager()
+                .create_session(
+                    setup.session_id.clone(),
+                    setup.command.clone(),
+                    setup.working_dir_path.clone(),
+                    setup.size(),
                 )
-            })?;
-        lifecycle.commit();
+                .with_context(|| {
+                    format!(
+                        "failed to create PTY session '{}' for command {:?} (attempt {})",
+                        setup.session_id,
+                        setup.command,
+                        retry_count + 1
+                    )
+                })?;
+            lifecycle.commit();
 
-        // Use adaptive timeout: longer for known long-running commands
-        let poll_timeout = if is_long_running_command(&setup.command) {
-            Duration::from_secs(RUN_PTY_POLL_TIMEOUT_LONG_RUNNING)
-        } else {
-            Duration::from_secs(RUN_PTY_POLL_TIMEOUT_SECS)
-        };
+            // Use adaptive timeout: longer for known long-running commands
+            let poll_timeout = if is_long_running_command(&setup.command) {
+                Duration::from_secs(RUN_PTY_POLL_TIMEOUT_LONG_RUNNING)
+            } else {
+                Duration::from_secs(RUN_PTY_POLL_TIMEOUT_SECS)
+            };
 
-        // Wait for full command completion, not just initial output
-        let capture = self
-            .wait_for_pty_completion(&setup.session_id, poll_timeout)
-            .await;
+            // Wait for full command completion, not just initial output
+            let capture = self
+                .wait_for_pty_completion(&setup.session_id, poll_timeout)
+                .await;
 
-        let snapshot = self
-            .pty_manager()
-            .snapshot_session(&setup.session_id)
-            .with_context(|| format!("failed to snapshot PTY session '{}'", setup.session_id))?;
+            let snapshot = self
+                .pty_manager()
+                .snapshot_session(&setup.session_id)
+                .with_context(|| format!("failed to snapshot PTY session '{}'", setup.session_id))?;
 
-        Ok((capture.exit_code, capture, snapshot))
+            Ok((capture.exit_code, capture, snapshot))
+        }.await;
+        
+        // Decrement active PTY sessions counter (always executed)
+        self.decrement_active_pty_sessions();
+        
+        result
     }
 
     async fn wait_for_pty_completion(

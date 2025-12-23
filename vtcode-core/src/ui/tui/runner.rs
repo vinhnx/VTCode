@@ -1,4 +1,5 @@
 use std::io::{self, IsTerminal};
+
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -206,6 +207,7 @@ pub struct TuiOptions {
     pub event_callback: Option<InlineEventCallback>,
     pub custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
     pub keyboard_flags: Option<KeyboardEnhancementFlags>,
+    pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
 }
 
 pub async fn run_tui(
@@ -228,6 +230,7 @@ pub async fn run_tui(
         options.show_logs,
     );
     session.set_log_receiver(log_rx);
+    session.active_pty_sessions = options.active_pty_sessions;
     register_tui_log_sender(log_tx);
 
     // Pre-load custom prompts if provided

@@ -1,6 +1,7 @@
 use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 
+
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
 #[allow(dead_code)]
@@ -127,8 +128,17 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 None
             } else {
                 let is_double_escape = session.input_manager.check_escape_double_tap();
+                let active_pty_count = session
+                    .active_pty_sessions
+                    .as_ref()
+                    .map(|s| s.load(std::sync::atomic::Ordering::Relaxed))
+                    .unwrap_or(0);
 
-                if is_double_escape && !session.input_manager.content().is_empty() {
+                if is_double_escape && active_pty_count > 0 {
+                    // Double-escape with active PTY sessions: force cancel them
+                    session.mark_dirty();
+                    Some(InlineEvent::ForceCancelPtySession)
+                } else if is_double_escape && !session.input_manager.content().is_empty() {
                     crate::ui::tui::session::command::clear_input(session);
                     session.mark_dirty();
                     None

@@ -946,6 +946,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             inline_rows,
             show_timeline_pane,
             Some(interrupt_callback),
+            None,
         )
         .context("failed to launch inline session")?;
         let handle = session.clone_inline_handle();

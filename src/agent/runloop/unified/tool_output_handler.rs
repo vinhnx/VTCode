@@ -399,6 +399,7 @@ mod tests {
             10,
             false,
             None,
+            None,
         )
         .unwrap();
         let handle = session.clone_inline_handle();

@@ -931,6 +931,7 @@ mod tests {
                 10,
                 false,
                 None,
+                None,
             )
             .unwrap();
             let handle = session.clone_inline_handle();
@@ -1136,6 +1137,7 @@ mod tests {
             vtcode_core::config::types::UiSurfacePreference::default(),
             10,
             false,
+            None,
             None,
         )
         .unwrap();

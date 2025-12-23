@@ -14,7 +14,7 @@ api_key_env = "HF_TOKEN"
 default_model = "moonshotai/Kimi-K2-Thinking"
 
 # Visual theme for the terminal interface
-theme = "ciapre-dark"
+theme = "vitesse-black"
 
 # Enable split tool results for massive token savings (Phase 4: pi-coding-agent integration)
 # When enabled, tools send concise summaries to LLM (53-95% token reduction) while preserving full output for UI
