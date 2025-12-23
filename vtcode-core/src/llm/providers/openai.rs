@@ -150,6 +150,27 @@ fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
         || body.contains("not enabled for the Responses API")
 }
 
+fn parse_responses_tool_call(item: &Value) -> Option<provider::ToolCall> {
+    let call_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+    let function_obj = item.get("function").and_then(|v| v.as_object());
+    let name = function_obj.and_then(|f| f.get("name").and_then(|n| n.as_str()))?;
+    let arguments = function_obj.and_then(|f| f.get("arguments"));
+
+    let serialized = arguments.map_or("{}".to_owned(), |args| {
+        if args.is_string() {
+            args.as_str().unwrap_or("{}").to_string()
+        } else {
+            args.to_string()
+        }
+    });
+
+    Some(provider::ToolCall::function(
+        call_id.to_string(),
+        name.to_string(),
+        serialized,
+    ))
+}
+
 fn parse_responses_payload(
     response_json: Value,
     include_cached_prompt_metrics: bool,
@@ -198,75 +219,79 @@ fn parse_responses_payload(
             .and_then(|value| value.as_str())
             .unwrap_or("");
 
-        // Only process message items which contain actual content
-        if item_type != "message" {
-            continue;
-        }
-
-        if let Some(content_array) = item.get("content").and_then(|value| value.as_array()) {
-            for entry in content_array {
-                let entry_type = entry
-                    .get("type")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or("");
-
-                match entry_type {
-                    // Text output from the model
-                    "text" | "output_text" => {
-                        if let Some(text) = entry.get("text").and_then(|value| value.as_str())
-                            && !text.is_empty()
-                        {
-                            content_fragments.push(text.to_string());
-                        }
-                    }
-                    // Reasoning content (thinking/reasoning models)
-                    "reasoning" => {
-                        if let Some(text) = entry.get("text").and_then(|value| value.as_str())
-                            && !text.is_empty()
-                        {
-                            reasoning_fragments.push(text.to_string());
-                        }
-                    }
-                    // Function/tool calls
-                    "function_call" => {
-                        let call_id = entry
-                            .get("id")
+        match item_type {
+            "message" => {
+                if let Some(content_array) = item.get("content").and_then(|value| value.as_array()) {
+                    for entry in content_array {
+                        let entry_type = entry
+                            .get("type")
                             .and_then(|value| value.as_str())
                             .unwrap_or("");
 
-                        let function_obj =
-                            entry.get("function").and_then(|value| value.as_object());
-                        let name =
-                            function_obj.and_then(|f| f.get("name").and_then(|n| n.as_str()));
-                        let arguments = function_obj.and_then(|f| f.get("arguments"));
-
-                        if let Some(func_name) = name {
-                            let serialized = arguments.map_or("{}".to_owned(), |args| {
-                                if args.is_string() {
-                                    args.as_str().unwrap_or("{}").to_string()
-                                } else {
-                                    args.to_string()
+                        match entry_type {
+                            // Text output from the model
+                            "text" | "output_text" => {
+                                if let Some(text) = entry.get("text").and_then(|value| value.as_str())
+                                    && !text.is_empty()
+                                {
+                                    content_fragments.push(text.to_string());
                                 }
-                            });
-                            tool_calls_vec.push(provider::ToolCall::function(
-                                call_id.to_string(),
-                                func_name.to_string(),
-                                serialized,
-                            ));
+                            }
+                            // Reasoning content (thinking/reasoning models)
+                            "reasoning" => {
+                                if let Some(text) = entry.get("text").and_then(|value| value.as_str())
+                                    && !text.is_empty()
+                                {
+                                    reasoning_fragments.push(text.to_string());
+                                }
+                            }
+                            // Function/tool calls (nested inside message)
+                            "function_call" | "tool_call" => {
+                                if let Some(call) = parse_responses_tool_call(entry) {
+                                    tool_calls_vec.push(call);
+                                }
+                            }
+                            // Refusal content - treat as content for now
+                            "refusal" => {
+                                if let Some(refusal_text) =
+                                    entry.get("refusal").and_then(|value| value.as_str())
+                                    && !refusal_text.is_empty()
+                                {
+                                    content_fragments.push(format!("[Refusal: {}]", refusal_text));
+                                }
+                            }
+                            _ => {}
                         }
                     }
-                    // Refusal content - treat as content for now (could be separate in future)
-                    "refusal" => {
-                        if let Some(refusal_text) =
-                            entry.get("refusal").and_then(|value| value.as_str())
-                            && !refusal_text.is_empty()
-                        {
-                            content_fragments.push(format!("[Refusal: {}]", refusal_text));
-                        }
-                    }
-                    _ => {}
                 }
             }
+            // Top-level function/tool calls and search results
+            "function_call" | "tool_call" => {
+                if let Some(call) = parse_responses_tool_call(item) {
+                    tool_calls_vec.push(call);
+                }
+            }
+            "web_search" | "file_search" => {
+                // If search results are present at the top level, we can inject them as citations
+                if let Some(results) = item.get("results").and_then(|r| r.as_array()) {
+                    let citations: Vec<String> = results
+                        .iter()
+                        .filter_map(|r| {
+                            let title = r.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+                            let url = r.get("url").and_then(|v| v.as_str()).unwrap_or("");
+                            if !url.is_empty() {
+                                Some(format!("[{}]({})", title, url))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    if !citations.is_empty() {
+                        content_fragments.push(format!("\n\nSources:\n{}", citations.join("\n")));
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -1275,7 +1300,8 @@ impl OpenAIProvider {
         let mut openai_request = json!({
             "model": request.model,
             "input": responses_payload.input,
-            "stream": request.stream
+            "stream": request.stream,
+            "output_types": ["message", "tool_call"]
         });
 
         if let Some(instructions) = responses_payload.instructions {
@@ -1284,14 +1310,38 @@ impl OpenAIProvider {
             }
         }
 
+        let mut sampling_parameters = json!({});
+        let mut has_sampling = false;
+
         if let Some(max_tokens) = request.max_tokens {
-            openai_request["max_output_tokens"] = json!(max_tokens);
+            sampling_parameters["max_output_tokens"] = json!(max_tokens);
+            has_sampling = true;
         }
 
         if let Some(temperature) = request.temperature {
             if Self::supports_temperature_parameter(&request.model) {
-                openai_request["temperature"] = json!(temperature);
+                sampling_parameters["temperature"] = json!(temperature);
+                has_sampling = true;
             }
+        }
+
+        if let Some(top_p) = request.top_p {
+            sampling_parameters["top_p"] = json!(top_p);
+            has_sampling = true;
+        }
+
+        if let Some(presence_penalty) = request.presence_penalty {
+            sampling_parameters["presence_penalty"] = json!(presence_penalty);
+            has_sampling = true;
+        }
+
+        if let Some(frequency_penalty) = request.frequency_penalty {
+            sampling_parameters["frequency_penalty"] = json!(frequency_penalty);
+            has_sampling = true;
+        }
+
+        if has_sampling {
+            openai_request["sampling_parameters"] = sampling_parameters;
         }
 
         if self.supports_tools(&request.model) {
@@ -2772,7 +2822,8 @@ impl provider::LLMProvider for OpenAIProvider {
                 model = %request.model,
                 "Using standard Chat Completions for streaming"
             );
-            let openai_request = self.convert_to_openai_format(&request)?;
+            let mut openai_request = self.convert_to_openai_format(&request)?;
+            openai_request["stream"] = Value::Bool(true);
             let url = format!("{}/chat/completions", self.base_url);
 
             let response = self
