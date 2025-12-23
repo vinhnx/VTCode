@@ -817,16 +817,20 @@ impl OpenAIProvider {
 
         let mut responses_api_modes = HashMap::new();
         let default_state = Self::default_responses_state(&model);
-        // Hugging Face router only supports the Chat Completions-compatible surface; disable Responses API.
-        let initial_state = if resolved_base_url.contains("huggingface.co") {
+        let is_huggingface = resolved_base_url.contains("huggingface.co");
+        let is_xai = resolved_base_url.contains("api.x.ai");
+
+        // Hugging Face and xAI only support the Chat Completions-compatible surface; disable Responses API.
+        let initial_state = if is_huggingface || is_xai {
             ResponsesApiState::Disabled
         } else {
             default_state
         };
         responses_api_modes.insert(model.clone(), initial_state);
-        let is_huggingface = resolved_base_url.contains("huggingface.co");
         let is_huggingface_router = is_huggingface;
         let strict_tool_schema = is_huggingface;
+        let disable_harmony = is_huggingface || is_xai;
+        let disable_model_fallback = is_huggingface || is_xai;
 
         Self {
             api_key: Arc::from(api_key.as_str()),
@@ -839,9 +843,9 @@ impl OpenAIProvider {
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
             prompt_cache_settings,
-            disable_model_fallback: is_huggingface,
+            disable_model_fallback,
             strict_tool_schema,
-            disable_harmony: is_huggingface,
+            disable_harmony,
             is_huggingface_router,
         }
     }

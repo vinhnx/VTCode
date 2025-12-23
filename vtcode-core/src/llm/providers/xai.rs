@@ -86,10 +86,17 @@ impl LLMProvider for XAIProvider {
             || requested == models::xai::GROK_4_CODE_LATEST
             || requested == models::xai::GROK_4_1_FAST
             || requested == models::xai::GROK_CODE_FAST_1
+            || requested == models::xai::GROK_4_FAST
+            || requested == models::xai::GROK_3
+            || requested == models::xai::GROK_3_MINI
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
-        false
+        false // xAI reasoning is built-in and automatic for reasoning-capable models
+    }
+
+    fn supports_parallel_tool_config(&self, _model: &str) -> bool {
+        false // xAI follows standard OpenAI tool calling, not yet confirmed for parallel_tool_config payload
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
