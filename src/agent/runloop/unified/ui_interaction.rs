@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::progress::{ProgressReporter, ProgressState};
 #[allow(unused_imports)]
-use super::reasoning;
+use super::reasoning::{self, get_constructive_reasoning, is_giving_up_reasoning};
 
 use anyhow::{Error, Result};
 use futures::StreamExt;

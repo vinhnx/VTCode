@@ -56,8 +56,7 @@ use std::pin::Pin;
 use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 
 /// Universal LLM request structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LLMRequest {
     pub messages: Vec<Message>,
     pub system_prompt: Option<String>,
@@ -97,7 +96,6 @@ pub struct LLMRequest {
     pub stop_sequences: Option<Vec<String>>,
 }
 
-
 /// Tool choice configuration that works across different providers
 /// Based on OpenAI, Anthropic, and Gemini API specifications
 /// Follows Anthropic's tool use best practices for optimal performance
@@ -122,7 +120,6 @@ pub enum ToolChoice {
     /// Useful for directing model to use particular functionality
     Specific(SpecificToolChoice),
 }
-
 
 /// Specific tool choice for forcing a particular function call
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -334,8 +331,7 @@ impl ContentPart {
 }
 
 /// Universal message structure supporting both text and image content
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Message {
     #[serde(default)]
     pub role: MessageRole,
@@ -355,7 +351,6 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin_tool: Option<String>,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
