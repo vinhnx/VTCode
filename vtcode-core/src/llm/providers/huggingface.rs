@@ -12,6 +12,31 @@ use super::openai::OpenAIProvider;
 ///
 /// This provider reuses the OpenAI client but points to the Hugging Face router
 /// (`https://router.huggingface.co/v1`) and validates against the HF model list.
+///
+/// ## API Compatibility
+/// Implements both the Chat Completion API and the Responses API (beta):
+/// - Chat Completions: https://huggingface.co/docs/inference-providers/tasks/chat-completion
+/// - Responses API: https://huggingface.co/docs/inference-providers/guides/responses_api
+///
+/// ## Supported Features
+///
+/// ### Chat Completions API
+/// - Conversational LLMs and VLMs (Vision-Language Models)
+/// - Streaming with Server-Sent Events (SSE)
+/// - Tool calling and parallel tool execution
+/// - Structured output (JSON mode with `response_format`)
+/// - Grammars and constraints
+/// - Context caching (model-dependent)
+///
+/// ### Responses API (Beta)
+/// - **Built-in tool orchestration** - Invoke functions, server-side MCP tools, and schema-validated outputs
+/// - **Event-driven streaming** - Semantic events like `response.created`, `output_text.delta`, `response.completed`
+/// - **Reasoning controls** - Dial up or down reasoning effort with `reasoning.effort` parameter
+/// - **Structured outputs** - Require models to return schema-compliant JSON every time
+/// - **Remote MCP tools** - Call server-hosted tools that implement the Model Context Protocol
+///
+/// ## Recommended Models
+/// See: https://huggingface.co/docs/inference-providers/tasks/chat-completion#recommended-models
 pub struct HuggingFaceProvider {
     inner: OpenAIProvider,
 }
