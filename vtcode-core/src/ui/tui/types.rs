@@ -362,11 +362,9 @@ impl InlineHandle {
     }
 
     pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
-        let segments = if segments.is_empty() {
-            vec![InlineSegment::default()]
-        } else {
-            segments
-        };
+        if segments.is_empty() {
+            return;
+        }
         let _ = self
             .sender
             .send(InlineCommand::AppendLine { kind, segments });

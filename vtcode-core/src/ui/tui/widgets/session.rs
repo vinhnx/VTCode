@@ -81,19 +81,7 @@ impl<'a> Widget for &'a mut SessionWidget<'_> {
         self.session.thinking_spinner.update();
         if self.session.thinking_spinner.is_active {
             self.session.needs_redraw = true;
-            if let Some(spinner_idx) = self.session.thinking_spinner.spinner_line_index {
-                if spinner_idx < self.session.lines.len() {
-                    let frame = self.session.thinking_spinner.current_frame();
-                    let revision = self.session.next_revision();
-                    if let Some(line) = self.session.lines.get_mut(spinner_idx) {
-                        if !line.segments.is_empty() {
-                            line.segments[0].text = format!("{} Thinking...", frame);
-                            line.revision = revision;
-                            self.session.mark_line_dirty(spinner_idx);
-                        }
-                    }
-                }
-            }
+            // Note: The spinner is displayed in the status bar, not in transcript lines
         }
 
         // Handle deferred triggers

@@ -48,7 +48,6 @@ pub enum TurnResultKind {
 pub struct TurnLoopOutcome {
     pub result: TurnLoopResult,
     pub working_history: Vec<uni::Message>,
-    pub any_write_effect: bool,
     pub turn_modified_files: BTreeSet<PathBuf>,
 }
 
@@ -139,21 +138,6 @@ pub async fn apply_turn_outcome(
                     ),
                 }
             }
-            if let Some(last) = outcome.working_history.last()
-                && last.role == uni::MessageRole::Assistant
-            {
-                let text = last.content.as_text();
-                let claims_write = text.contains("I've updated")
-                    || text.contains("I have updated")
-                    || text.contains("updated the `");
-                if claims_write && !outcome.any_write_effect {
-                    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        "Note: The assistant mentioned edits but no write tool ran.",
-                    )?;
-                }
-            }
             Ok(())
         }
     }
@@ -210,7 +194,6 @@ pub async fn run_turn_loop(
 
     // Initialize the outcome result
     let mut result = TurnLoopResult::Completed;
-    let mut any_write_effect = false;
     let mut turn_modified_files = BTreeSet::new();
 
     // NOTE: The user input is already in working_history from the caller (session_loop or run_loop)
@@ -223,30 +206,10 @@ pub async fn run_turn_loop(
         .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS);
 
     let mut step_count = 0;
-    let mut consecutive_thinking_steps = 0;
-    let mut last_tool_call: Option<(String, serde_json::Value)> = None;
-    let mut repetitive_tool_count = 0;
 
     loop {
         step_count += 1;
 
-        // Display plan status at the start of the turn if a plan exists
-        if step_count == 1 {
-            let plan = ctx.tool_registry.current_plan();
-            if plan.summary.total_steps > 0
-                && let Some(step) = plan.current_step()
-            {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!(
-                        "[plan] Working on step {}/{}: {}",
-                        plan.summary.completed_steps + 1,
-                        plan.summary.total_steps,
-                        step.step
-                    ),
-                )?;
-            }
-        }
 
         // Check if we've reached the maximum number of tool loops
         if step_count > max_tool_loops {
@@ -259,32 +222,6 @@ pub async fn run_turn_loop(
             break;
         }
 
-        // Loop protection: prevent infinite thinking without action
-        if consecutive_thinking_steps >= 3 {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Agent is thinking without taking action. Nudging for a concrete step...",
-            )?;
-            // Add a nudge message to the history
-            working_history.push(uni::Message::user(
-                "You've been thinking/planning for several steps. Please take a concrete action using a tool to move the task forward. If you are stuck, try a different approach (e.g., search instead of read).".to_string()
-            ));
-            consecutive_thinking_steps = 0; // Reset after nudge
-            continue;
-        }
-
-        // Loop protection: prevent repetitive tool calls with same arguments
-        if repetitive_tool_count >= 2 {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Agent is repeating the same tool call. Nudging for a different approach...",
-            )?;
-            working_history.push(uni::Message::user(
-                "You are repeating the same tool call with the same arguments. This is not making progress. Please try a different tool or a different search pattern to find what you need.".to_string()
-            ));
-            repetitive_tool_count = 0;
-            continue;
-        }
 
         // Prepare turn processing context
         let local_token_budget = ctx.token_budget.clone();
@@ -377,7 +314,6 @@ pub async fn run_turn_loop(
 
                 // Handle tool calls if any exist
                 if !tool_calls.is_empty() {
-                    consecutive_thinking_steps = 0; // Reset on tool call
                 }
 
                 for tool_call in &tool_calls {
@@ -390,15 +326,6 @@ pub async fn run_turn_loop(
                         .parsed_arguments()
                         .unwrap_or_else(|_| serde_json::json!({}));
 
-                    // Track repetitive tool calls
-                    if let Some((ref last_name, ref last_args)) = last_tool_call {
-                        if last_name == tool_name && last_args == &args_val {
-                            repetitive_tool_count += 1;
-                        } else {
-                            repetitive_tool_count = 0;
-                        }
-                    }
-                    last_tool_call = Some((tool_name.clone(), args_val.clone()));
 
                     // Ensure tool permission
                     match ensure_tool_permission(
@@ -468,7 +395,6 @@ pub async fn run_turn_loop(
                                 &tool_result,
                                 &mut working_history,
                                 &mut turn_modified_files,
-                                &mut any_write_effect,
                                 vt_cfg,
                                 &local_token_budget,
                                 traj,
@@ -550,15 +476,6 @@ pub async fn run_turn_loop(
                         .parsed_arguments()
                         .unwrap_or_else(|_| serde_json::json!({}));
 
-                    // Track repetitive tool calls
-                    if let Some((ref last_name, ref last_args)) = last_tool_call {
-                        if last_name == call_tool_name && last_args == &call_args_val {
-                            repetitive_tool_count += 1;
-                        } else {
-                            repetitive_tool_count = 0;
-                        }
-                    }
-                    last_tool_call = Some((call_tool_name.clone(), call_args_val.clone()));
 
                     // Render information about the detected tool call
                     use crate::agent::runloop::unified::tool_summary::{
@@ -610,7 +527,6 @@ pub async fn run_turn_loop(
                                 &tool_result,
                                 &mut working_history,
                                 &mut turn_modified_files,
-                                &mut any_write_effect,
                                 vt_cfg,
                                 &local_token_budget,
                                 traj,
@@ -653,7 +569,6 @@ pub async fn run_turn_loop(
                     }
                 } else {
                     // If no tool call was detected in the text, check if it's just thinking/planning
-                    let is_thinking = crate::agent::runloop::unified::turn::turn_processing::is_thinking_only_content(&text);
 
                     let msg = uni::Message::assistant(text.clone());
                     let msg_with_reasoning = if let Some(reasoning_text) = reasoning {
@@ -661,73 +576,11 @@ pub async fn run_turn_loop(
                     } else {
                         msg
                     };
-                    working_history.push(msg_with_reasoning);
-
-                    if is_thinking && step_count < max_tool_loops {
-                        consecutive_thinking_steps += 1;
-                        // If it's just thinking, continue the loop to get an actual action
-                        continue;
+                    
+                    if !text.is_empty() || msg_with_reasoning.reasoning.is_some() {
+                        working_history.push(msg_with_reasoning);
                     }
 
-                    // Lazy Agent Check: if the agent is asking the user to do something it can do itself
-                    let lower_text = text.to_lowercase();
-                    let lazy_patterns = [
-                        "let me know",
-                        "please run",
-                        "waiting for",
-                        "tell me when",
-                        "can you run",
-                        "run cargo check",
-                        "run cargo test",
-                        "run npm test",
-                        "run pytest",
-                        "you should run",
-                        "i'll wait for you",
-                        "let me know if",
-                        "provide the result",
-                        "give me the output",
-                        "i need the output of",
-                    ];
-
-                    if lazy_patterns.iter().any(|p| lower_text.contains(p))
-                        && step_count < max_tool_loops
-                    {
-                        consecutive_thinking_steps += 1;
-                        working_history.push(uni::Message::user(
-                            "You have the tools to run these commands yourself. Please execute the necessary commands and continue with the task autonomously. Do not ask me to run verification commands or provide output that you can generate yourself.".to_string()
-                        ));
-                        continue;
-                    }
-
-                    // Nudging Strategy: if response is very short and we are in autonomous mode, nudge
-                    if text.trim().len() < 50 && step_count < max_tool_loops {
-                        consecutive_thinking_steps += 1;
-                        working_history.push(uni::Message::user(
-                            "Please continue with the next step.".to_string(),
-                        ));
-                        continue;
-                    }
-
-                    // Plan Enforcement: if there's an active plan with remaining steps, nudge
-                    let plan = ctx.tool_registry.current_plan();
-                    if plan.summary.status == vtcode_core::tools::PlanCompletionState::InProgress
-                        && step_count < max_tool_loops
-                    {
-                        consecutive_thinking_steps += 1;
-                        let nudge_msg = if let Some(step) = plan.current_step() {
-                            format!(
-                                "You have an active plan with remaining steps. The next step is: \"{}\". Please continue with this step autonomously. If you have already completed it, use `update_plan` to mark it as done and move to the next one. Do not stop until the plan is complete or you are blocked.",
-                                step.step
-                            )
-                        } else {
-                            "You have an active plan with remaining steps. Please continue with the next step in your plan autonomously. Do not stop until the plan is complete or you are blocked.".to_string()
-                        };
-                        working_history.push(uni::Message::user(nudge_msg));
-
-                        // If we are in full-auto mode, we should continue immediately
-                        // without waiting for user input in the session loop.
-                        continue;
-                    }
 
                     break; // If we get a real text response that's not a tool call, the turn is done
                 }
@@ -759,7 +612,6 @@ pub async fn run_turn_loop(
     Ok(TurnLoopOutcome {
         result,
         working_history,
-        any_write_effect,
         turn_modified_files,
     })
 }

@@ -86,7 +86,7 @@ static MESSAGE_QUEUE: Lazy<RwLock<VecDeque<QueuedMessage>>> =
     Lazy::new(|| RwLock::new(VecDeque::new()));
 
 pub fn append(line: &str) {
-    if is_suppressed() {
+    if is_suppressed() || line.trim().is_empty() {
         return;
     }
     let mut log = TRANSCRIPT.write();
@@ -162,6 +162,10 @@ pub fn enqueue_message_with_kind(
     kind: InlineMessageKind,
     text_style: InlineTextStyle,
 ) {
+    if message.trim().is_empty() {
+        return;
+    }
+
     let queued = QueuedMessage {
         text: message.to_string(),
         kind,

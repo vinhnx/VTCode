@@ -167,6 +167,15 @@ cargo test -- --nocapture
 
 ## Important Development Notes
 
+### Git Operations
+
+**Agent Must Not Perform Git Operations Automatically**
+
+-   Do NOT run `git commit`, `git push`, `git merge`, or any destructive git operations on behalf of the user
+-   Inform the user when changes need to be committed and let them handle git operations
+-   Use `git status`, `git diff`, and `git log` only for diagnostic/informational purposes
+-   Always inform the user before making changes that would affect git history
+
 ### Security & Safety
 
 -   Validate all file paths (workspace boundary enforcement)

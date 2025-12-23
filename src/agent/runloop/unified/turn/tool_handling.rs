@@ -22,7 +22,6 @@ pub(crate) async fn handle_tool_execution_result(
     tool_result: &ToolExecutionStatus,
     working_history: &mut Vec<uni::Message>,
     turn_modified_files: &mut BTreeSet<PathBuf>,
-    any_write_effect: &mut bool,
     vt_cfg: Option<&VTCodeConfig>,
     local_token_budget: &Arc<TokenBudgetManager>,
     traj: &TrajectoryLogger,
@@ -93,7 +92,7 @@ pub(crate) async fn handle_tool_execution_result(
             });
 
             // Build a small RunLoopContext to reuse the generic `handle_pipeline_output`
-            let (any_write, mod_files, last_stdout) = crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
+            let (_any_write, mod_files, last_stdout) = crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
                 ctx,
                 tool_name,
                 args_val,
@@ -104,9 +103,6 @@ pub(crate) async fn handle_tool_execution_result(
             )
             .await?;
 
-            if any_write {
-                *any_write_effect = true;
-            }
             for f in mod_files {
                 turn_modified_files.insert(f);
             }
@@ -138,12 +134,6 @@ pub(crate) async fn handle_tool_execution_result(
                 }
             }
 
-            if matches!(
-                tool_name,
-                "write_file" | "edit_file" | "create_file" | "delete_file"
-            ) {
-                *any_write_effect = true;
-            }
         }
         ToolExecutionStatus::Failure { error } => {
             // Add error result to history

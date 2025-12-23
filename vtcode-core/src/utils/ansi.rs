@@ -874,7 +874,6 @@ impl InlineSink {
 
         if text.is_empty() {
             self.handle.append_line(kind, Vec::new());
-            crate::utils::transcript::append("");
             return Ok(());
         }
 

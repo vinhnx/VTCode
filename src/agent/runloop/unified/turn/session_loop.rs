@@ -1023,7 +1023,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     TurnLoopOutcome {
                         result: RunLoopTurnLoopResult::Aborted,
                         working_history,
-                        any_write_effect: false,
                         turn_modified_files: std::collections::BTreeSet::new(),
                     }
                 }

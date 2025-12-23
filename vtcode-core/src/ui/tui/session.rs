@@ -297,19 +297,19 @@ impl Session {
         session
     }
 
-    /// Clears the thinking spinner message when agent response or error arrives
+    /// Clears the thinking spinner state when agent response, reasoning, tool output, or error arrives
     pub(super) fn clear_thinking_spinner_if_active(&mut self, kind: InlineMessageKind) {
-        if matches!(kind, InlineMessageKind::Agent | InlineMessageKind::Error)
-            && self.thinking_spinner.is_active
+        // Clear spinner when any substantive agent output arrives
+        if matches!(
+            kind,
+            InlineMessageKind::Agent
+                | InlineMessageKind::Policy
+                | InlineMessageKind::Tool
+                | InlineMessageKind::Error
+        ) && self.thinking_spinner.is_active
         {
-            if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index
-                && spinner_idx < self.lines.len()
-            {
-                self.lines.remove(spinner_idx);
-                // Mark as dirty from the removed line index onwards
-                self.mark_line_dirty(spinner_idx);
-            }
             self.thinking_spinner.stop();
+            self.needs_redraw = true;
         }
     }
 

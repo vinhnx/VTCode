@@ -56,9 +56,9 @@ impl Session {
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
 
-        // Start thinking spinner after user message
+        // Mark thinking spinner as active after user message (no placeholder line - just state)
         if kind == InlineMessageKind::User {
-            self.thinking_spinner.start(self.lines.len());
+            self.thinking_spinner.start();
         }
     }
 
