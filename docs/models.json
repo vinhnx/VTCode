@@ -450,6 +450,22 @@
         },
         "context": 131072
       },
+      "zai-org/GLM-4.7": {
+        "id": "zai-org/GLM-4.7",
+        "name": "GLM-4.7",
+        "description": "Z.AI GLM-4.7 reasoning model available via Hugging Face router.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
       "moonshotai/Kimi-K2-Thinking": {
         "id": "moonshotai/Kimi-K2-Thinking",
         "name": "Kimi K2 Thinking",
