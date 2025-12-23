@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "huggingface"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-oss:120b-cloud"
+default_model = "moonshotai/Kimi-K2-Thinking"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -28,7 +28,7 @@ system_prompt_mode = "minimal"
 # # Streamlined (good middle ground)
 # system_prompt_mode = "lightweight" # ~1.8K tokens, 67% savings
 # # Current behavior (no change for existing users)
-system_prompt_mode = "default" # ~6.5K tokens, baseline
+# system_prompt_mode = "default" # ~6.5K tokens, baseline
 # # Enhanced for complex work
 # system_prompt_mode = "specialized"  # ~7K tokens, deep guidance
 

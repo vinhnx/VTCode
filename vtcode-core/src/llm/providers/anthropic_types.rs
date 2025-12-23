@@ -15,8 +15,17 @@ pub struct AnthropicRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<Value>, // For reasoning scale/effort
+    pub thinking: Option<ThinkingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<Value>, // Deprecated in favor of thinking, but kept for backward compat or direct effort passing
     pub stream: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ThinkingConfig {
+    Enabled { budget_tokens: u32 },
+    Disabled,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,12 +34,14 @@ pub struct AnthropicMessage {
     pub content: Vec<AnthropicContentBlock>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum AnthropicContentBlock {
     #[serde(rename = "text")]
     Text {
         text: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        citations: Option<Vec<TextCitation>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         cache_control: Option<CacheControl>,
     },
@@ -64,9 +75,44 @@ pub enum AnthropicContentBlock {
         #[serde(skip_serializing_if = "Option::is_none")]
         cache_control: Option<CacheControl>,
     },
+    #[serde(rename = "redacted_thinking")]
+    RedactedThinking {
+        data: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+    },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum TextCitation {
+    #[serde(rename = "char_location")]
+    CharLocation {
+        cited_text: String,
+        document_index: usize,
+        document_title: Option<String>,
+        start_char_index: usize,
+        end_char_index: usize,
+    },
+    #[serde(rename = "page_location")]
+    PageLocation {
+        cited_text: String,
+        document_index: usize,
+        document_title: Option<String>,
+        start_page_number: usize,
+        end_page_number: usize,
+    },
+    #[serde(rename = "content_block_location")]
+    ContentBlockLocation {
+        cited_text: String,
+        document_index: usize,
+        document_title: Option<String>,
+        start_block_index: usize,
+        end_block_index: usize,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImageSource {
     #[serde(rename = "type")]
     pub source_type: String, // "base64"
@@ -82,7 +128,7 @@ pub struct CacheControl {
     pub ttl: Option<String>, // "5m" or "1h"
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicTool {
     pub name: String,
     pub description: String,
@@ -91,7 +137,8 @@ pub struct AnthropicTool {
     pub cache_control: Option<CacheControl>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+// Kept for backward compatibility or internal usage if needed, but AnthropicContentBlock::Thinking is preferred
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicThinkingBlock {
     #[serde(rename = "type")]
     pub block_type: String, // "thinking"

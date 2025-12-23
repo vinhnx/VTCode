@@ -2,7 +2,7 @@
 //! Eliminates duplicate error handling code across providers
 
 use crate::llm::error_display;
-use crate::llm::provider::LLMError;
+use crate::llm::provider::{LLMError, LLMErrorMetadata};
 use reqwest::Response;
 use serde_json::Value;
 
@@ -75,6 +75,39 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
     }
 
     let status = response.status();
+    let headers = response.headers();
+
+    let retry_after = headers
+        .get("retry-after")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    let request_id = headers
+        .get("request-id")
+        .or_else(|| headers.get("x-request-id"))
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    // Capture rate limit reset info for debugging/user feedback
+    let mut rate_limit_info = Vec::new();
+    if let Some(reset) = headers
+        .get("anthropic-ratelimit-requests-reset")
+        .and_then(|h| h.to_str().ok())
+    {
+        rate_limit_info.push(format!("Requests reset in {}", reset));
+    }
+    if let Some(reset) = headers
+        .get("anthropic-ratelimit-tokens-reset")
+        .and_then(|h| h.to_str().ok())
+    {
+        rate_limit_info.push(format!("Tokens reset in {}", reset));
+    }
+    let rate_limit_message = if rate_limit_info.is_empty() {
+        None
+    } else {
+        Some(rate_limit_info.join("; "))
+    };
+
     let error_text = response.text().await.unwrap_or_default();
 
     // Authentication errors
@@ -85,13 +118,29 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
         );
         return Err(LLMError::Authentication {
             message: formatted_error,
-            metadata: None,
+            metadata: Some(LLMErrorMetadata::new(
+                "Anthropic",
+                Some(status.as_u16()),
+                Some("authentication_error".to_string()),
+                request_id,
+                None,
+                Some(error_text),
+            )),
         });
     }
 
     // Rate limit errors
     if is_rate_limit_error(status.as_u16(), &error_text) {
-        return Err(LLMError::RateLimit { metadata: None });
+        return Err(LLMError::RateLimit {
+            metadata: Some(LLMErrorMetadata::new(
+                "Anthropic",
+                Some(status.as_u16()),
+                Some("rate_limit_error".to_string()),
+                request_id,
+                retry_after,
+                rate_limit_message,
+            )),
+        });
     }
 
     // Parse error message from Anthropic's JSON error format
@@ -106,7 +155,14 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
     let formatted_error = error_display::format_llm_error("Anthropic", &error_message);
     Err(LLMError::Provider {
         message: formatted_error,
-        metadata: None,
+        metadata: Some(LLMErrorMetadata::new(
+            "Anthropic",
+            Some(status.as_u16()),
+            None,
+            request_id,
+            retry_after,
+            Some(error_text),
+        )),
     })
 }
 

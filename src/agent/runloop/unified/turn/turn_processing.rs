@@ -7,6 +7,8 @@ use tokio::task;
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::extract_action_from_messages;
+#[allow(unused_imports)]
+use crate::agent::runloop::unified::reasoning;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, stream_and_render_response,
@@ -162,7 +164,7 @@ pub(crate) async fn execute_llm_request(
         return Err(anyhow::Error::new(err));
     }
 
-    let mut llm_result = if use_streaming {
+    let llm_result = if use_streaming {
         stream_and_render_response(
             provider_client,
             request,
@@ -209,27 +211,7 @@ pub(crate) async fn execute_llm_request(
         }
     };
 
-    // Prevent agent from giving up with "Complex. Probably stop." or similar
-    if let Ok((response, _)) = &mut llm_result
-        && let Some(reasoning) = &response.reasoning
-        && is_giving_up_reasoning(reasoning)
-    {
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "Detected giving-up reasoning '{}', replacing with constructive reasoning",
-            reasoning
-        );
-
-        // Log the original reasoning for debugging
-        tracing::warn!(
-            target = "vtcode::agent::reasoning",
-            original_reasoning = %reasoning,
-            "Agent attempted to give up, replacing with constructive reasoning"
-        );
-
-        // Replace with constructive reasoning that encourages continuation
-        response.reasoning = Some(get_constructive_reasoning(reasoning));
-    }
+    // Finalize response
 
     #[cfg(debug_assertions)]
     {
@@ -258,106 +240,8 @@ pub(crate) async fn execute_llm_request(
 
 // Use `strip_harmony_syntax` and `derive_recent_tool_output` helpers from other modules
 
-/// Check if reasoning contains giving-up language
-fn is_giving_up_reasoning(reasoning: &str) -> bool {
-    let lower = reasoning.to_lowercase();
-    // Check for explicit giving-up phrases; avoid generic "stop" matches to reduce false positives.
-    const PATTERNS: &[&str] = &[
-        "probably stop",
-        "let's stop",
-        "stop here",
-        "give up",
-        "can't continue",
-        "cannot continue",
-        "unable to continue",
-        "too complex to continue",
-        "too complex, stopping",
-        "not making progress",
-        "we should stop",
-    ];
-    PATTERNS.iter().any(|p| lower.contains(p))
-}
-
-/// Replace giving-up reasoning with constructive reasoning
-fn get_constructive_reasoning(original: &str) -> String {
-    // Analyze what the agent was trying to do
-    let lower = original.to_lowercase();
-
-    if lower.contains("pdf") || lower.contains("file") || lower.contains("path") {
-        "Analyzing file system issue and exploring alternative approaches to generate the PDF successfully.".to_string()
-    } else if lower.contains("tool") || lower.contains("execute") || lower.contains("code") {
-        "Encountered tool execution challenges, switching to alternative strategies and verifying environment setup.".to_string()
-    } else if lower.contains("permission") || lower.contains("access") {
-        "Addressing permission/access issues and finding workable solutions within constraints."
-            .to_string()
-    } else {
-        "Encountered complexity but continuing with systematic problem-solving approach."
-            .to_string()
-    }
-}
-
-/// Check if content is likely just internal monologue/thinking without actionable output
-pub(crate) fn is_thinking_only_content(text: &str) -> bool {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return true;
-    }
-
-    let lower = trimmed.to_lowercase();
-
-    // Patterns that indicate the agent is just thinking or planning
-    let thinking_patterns = [
-        "thinking:",
-        "i need to",
-        "i will",
-        "let me",
-        "probably",
-        "maybe",
-        "i should",
-        "next steps:",
-        "plan:",
-        "i'll start by",
-        "i'll begin by",
-        "first, i'll",
-        "i'm going to",
-        "let's look at",
-        "i'll check",
-        "i'll search",
-        "i'll read",
-    ];
-
-    // If it's short and contains thinking patterns, it's likely just thinking
-    if trimmed.len() < 300 && thinking_patterns.iter().any(|p| lower.contains(p)) {
-        return true;
-    }
-
-    // If it's just a list of steps without any other content
-    if trimmed.lines().all(|l| {
-        let t = l.trim();
-        t.is_empty()
-            || t.starts_with(|c: char| c.is_numeric() || c == '-' || c == '*' || c == '[')
-            || (t.starts_with('(') && t.ends_with(')'))
-    }) {
-        // But only if it's not too long (long lists might be actual answers)
-        if trimmed.len() < 500 {
-            return true;
-        }
-    }
-
-    // Check for "stalling" phrases where the agent is just narrating without acting
-    let stalling_phrases = [
-        "i am reviewing the code",
-        "i am analyzing the files",
-        "i am looking for optimization",
-        "i am systematically identifying",
-    ];
-
-    if trimmed.len() < 200 && stalling_phrases.iter().any(|p| lower.contains(p)) {
-        return true;
-    }
-
-    false
-}
+// NOTE: is_giving_up_reasoning, get_constructive_reasoning, and is_thinking_only_content
+// are now imported from crate::agent::runloop::unified::reasoning
 
 /// Result of processing a single turn
 #[allow(dead_code)]

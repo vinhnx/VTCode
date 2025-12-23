@@ -32,6 +32,9 @@ pub mod turn;
 mod ui_interaction;
 mod workspace_links;
 
+// Reasoning utilities (centralized)
+pub(crate) mod reasoning;
+
 // Optimization and safety modules
 pub mod tool_call_safety;
 

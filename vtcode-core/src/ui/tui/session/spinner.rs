@@ -7,7 +7,6 @@ pub(crate) struct ThinkingSpinner {
     started_at: Instant,
     spinner_index: usize,
     last_update: Instant,
-    pub(crate) spinner_line_index: Option<usize>,
     #[allow(dead_code)]
     pub(crate) label: String,
 }
@@ -19,14 +18,12 @@ impl ThinkingSpinner {
             started_at: Instant::now(),
             spinner_index: 0,
             last_update: Instant::now(),
-            spinner_line_index: None,
             label: String::new(),
         }
     }
 
-    pub fn start(&mut self, line_index: usize) {
+    pub fn start(&mut self) {
         self.is_active = true;
-        self.spinner_line_index = Some(line_index);
         self.started_at = Instant::now();
         self.last_update = Instant::now();
         self.spinner_index = 0;
@@ -34,7 +31,6 @@ impl ThinkingSpinner {
 
     pub fn stop(&mut self) {
         self.is_active = false;
-        self.spinner_line_index = None;
     }
 
     pub fn update(&mut self) {
@@ -44,25 +40,14 @@ impl ThinkingSpinner {
         }
     }
 
-    pub fn current_frame(&self) -> &'static str {
-        match self.spinner_index {
-            0 => "⠋",
-            1 => "⠙",
-            2 => "⠹",
-            3 => "⠸",
-            _ => "⠋",
-        }
-    }
+
 
     #[allow(dead_code)]
     pub fn is_active(&self) -> bool {
         self.is_active
     }
 
-    #[allow(dead_code)]
-    pub fn spinner_line_index(&self) -> Option<usize> {
-        self.spinner_line_index
-    }
+
 }
 
 impl Default for ThinkingSpinner {

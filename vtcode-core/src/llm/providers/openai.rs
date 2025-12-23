@@ -2762,8 +2762,153 @@ impl provider::LLMProvider for OpenAIProvider {
                 && request.tools.as_ref().is_none_or(Vec::is_empty));
 
         if !prefer_responses_stream {
-            // For now, we'll continue with the responses stream logic
-            // In a full implementation, this would delegate to a chat completions streaming method
+            #[cfg(debug_assertions)]
+            debug!(
+                target = "vtcode::llm::openai",
+                model = %request.model,
+                "Using standard Chat Completions for streaming"
+            );
+            let openai_request = self.convert_to_openai_format(&request)?;
+            let url = format!("{}/chat/completions", self.base_url);
+
+            let response = self
+                .authorize(self.http_client.post(&url))
+                .json(&openai_request)
+                .send()
+                .await
+                .map_err(|e| {
+                    let formatted_error =
+                        error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
+                    provider::LLMError::Network {
+                        message: formatted_error,
+                        metadata: None,
+                    }
+                })?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_default();
+
+                if status.as_u16() == 429
+                    || error_text.contains("insufficient_quota")
+                    || error_text.contains("quota")
+                    || error_text.contains("rate limit")
+                {
+                    return Err(provider::LLMError::RateLimit { metadata: None });
+                }
+
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("HTTP {}: {}", status, error_text),
+                );
+                return Err(provider::LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                });
+            }
+
+            let stream = try_stream! {
+                let mut body_stream = response.bytes_stream();
+                let mut buffer = String::new();
+                let mut aggregated_content = String::new();
+                let mut reasoning_buffer = ReasoningBuffer::default();
+                let mut sanitizer = TagStreamSanitizer::new();
+                let mut tool_builders = Vec::new();
+                let mut finish_reason = provider::FinishReason::Stop;
+                let telemetry = OpenAIStreamTelemetry;
+
+                while let Some(chunk_result) = body_stream.next().await {
+                    let chunk = chunk_result.map_err(|err| {
+                        let formatted_error = error_display::format_llm_error(
+                            "OpenAI",
+                            &format!("Streaming error: {}", err),
+                        );
+                        provider::LLMError::Network { message: formatted_error, metadata: None }
+                    })?;
+
+                    buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+                    while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
+                        let event = buffer[..split_idx].to_string();
+                        buffer.drain(..split_idx + delimiter_len);
+
+                        if let Some(data_payload) = extract_data_payload(&event) {
+                            let trimmed_payload = data_payload.trim();
+                            if trimmed_payload.is_empty() || trimmed_payload == "[DONE]" {
+                                continue;
+                            }
+
+                            let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
+                                StreamAssemblyError::InvalidPayload(err.to_string())
+                                    .into_llm_error("OpenAI")
+                            })?;
+
+                            if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
+                                if let Some(choice) = choices.first() {
+                                    if let Some(delta) = choice.get("delta") {
+                                        // 1. Content
+                                        if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
+                                            aggregated_content.push_str(content);
+                                            telemetry.on_content_delta(content);
+                                            for event in sanitizer.process_chunk(content) {
+                                                match &event {
+                                                    provider::LLMStreamEvent::Token { delta } => {
+                                                        yield provider::LLMStreamEvent::Token { delta: delta.clone() };
+                                                    }
+                                                    provider::LLMStreamEvent::Reasoning { delta } => {
+                                                        yield provider::LLMStreamEvent::Reasoning { delta: delta.clone() };
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+
+                                        // 2. Reasoning (DeepSeek / O1 format)
+                                        if let Some(reasoning) = delta.get("reasoning_content").and_then(|v| v.as_str()) {
+                                            for fragment in append_reasoning_segments(&mut reasoning_buffer, reasoning, &telemetry) {
+                                                yield provider::LLMStreamEvent::Reasoning { delta: fragment };
+                                            }
+                                        }
+
+                                        // 3. Tool Calls
+                                        if let Some(tool_deltas) = delta.get("tool_calls").and_then(|v| v.as_array()) {
+                                            crate::llm::providers::shared::update_tool_calls(&mut tool_builders, tool_deltas);
+                                            telemetry.on_tool_call_delta();
+                                        }
+                                    }
+
+                                    if let Some(reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
+                                        finish_reason = match reason {
+                                            "stop" => provider::FinishReason::Stop,
+                                            "length" => provider::FinishReason::Length,
+                                            "tool_calls" => provider::FinishReason::ToolCalls,
+                                            "content_filter" => provider::FinishReason::ContentFilter,
+                                            _ => provider::FinishReason::Stop,
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for event in sanitizer.finalize() {
+                    yield event;
+                }
+
+                let response = provider::LLMResponse {
+                    content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
+                    tool_calls: crate::llm::providers::shared::finalize_tool_calls(tool_builders),
+                    usage: None,
+                    finish_reason,
+                    reasoning: reasoning_buffer.finalize(),
+                    reasoning_details: None,
+                };
+
+                yield provider::LLMStreamEvent::Completed { response };
+            };
+
+            return Ok(Box::pin(stream));
         }
 
         let include_metrics =
@@ -2820,12 +2965,8 @@ impl provider::LLMProvider for OpenAIProvider {
                     "Responses API unsupported; falling back to Chat Completions for streaming"
                 );
                 self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
-                request.stream = false;
-                let response = self.generate(request).await?;
-                let stream = try_stream! {
-                    yield provider::LLMStreamEvent::Completed { response };
-                };
-                return Ok(Box::pin(stream));
+                request.stream = true;
+                return self.stream(request).await;
             }
 
             if status.as_u16() == 429

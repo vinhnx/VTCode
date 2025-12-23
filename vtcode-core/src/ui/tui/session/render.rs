@@ -33,25 +33,12 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
         return;
     }
 
-    // Update spinner animation frame and message
+    // Update spinner animation frame
     session.thinking_spinner.update();
     if session.thinking_spinner.is_active {
         // Request continuous redraws while thinking
         session.needs_redraw = true;
-        // Update spinner message with current frame
-        if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index
-            && spinner_idx < session.lines.len()
-        {
-            let frame = session.thinking_spinner.current_frame();
-            let revision = session.next_revision();
-            if let Some(line) = session.lines.get_mut(spinner_idx)
-                && !line.segments.is_empty()
-            {
-                line.segments[0].text = format!("{} Thinking...", frame);
-                line.revision = revision;
-                session.mark_line_dirty(spinner_idx);
-            }
-        }
+        // Note: The spinner is displayed in the status bar, not in transcript lines
     }
 
     // Clear entire frame if modal was just closed to remove artifacts

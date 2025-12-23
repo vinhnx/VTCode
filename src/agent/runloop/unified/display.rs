@@ -31,6 +31,5 @@ pub(crate) fn ensure_turn_bottom_gap(
 /// Display a user message using the active user styling
 pub(crate) fn display_user_message(renderer: &mut AnsiRenderer, message: &str) -> Result<()> {
     renderer.line(MessageStyle::User, message)?;
-    renderer.line(MessageStyle::Output, "")?;
     Ok(())
 }

@@ -25,6 +25,7 @@ use super::{
     error_handling::{format_network_error, format_parse_error, handle_anthropic_http_error},
     extract_reasoning_trace,
 };
+use super::anthropic_types::ThinkingConfig;
 
 pub struct AnthropicProvider {
     api_key: String,
@@ -626,6 +627,16 @@ impl AnthropicProvider {
                                         cache_control: None,
                                     });
                                 }
+                            } else if detail.get("type").and_then(|t| t.as_str()) == Some("redacted_thinking") {
+                                let data = detail
+                                    .get("data")
+                                    .and_then(|d| d.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                blocks.push(AnthropicContentBlock::RedactedThinking {
+                                    data,
+                                    cache_control: None,
+                                });
                             }
                         }
                     }
@@ -633,6 +644,7 @@ impl AnthropicProvider {
                     if !msg.content.is_empty() {
                         blocks.push(AnthropicContentBlock::Text {
                             text: content_text.to_string(),
+                            citations: None,
                             cache_control: None,
                         });
                     }
@@ -653,6 +665,7 @@ impl AnthropicProvider {
                     if blocks.is_empty() {
                         blocks.push(AnthropicContentBlock::Text {
                             text: String::new(),
+                            citations: None,
                             cache_control: None,
                         });
                     }
@@ -686,6 +699,7 @@ impl AnthropicProvider {
                             role: "user".to_string(),
                             content: vec![AnthropicContentBlock::Text {
                                 text: content_text.to_string(),
+                                citations: None,
                                 cache_control: None,
                             }],
                         });
@@ -710,6 +724,7 @@ impl AnthropicProvider {
                         role: msg.role.as_anthropic_str().to_string(),
                         content: vec![AnthropicContentBlock::Text {
                             text: content_text.to_string(),
+                            citations: None,
                             cache_control: cache_ctrl,
                         }],
                     });
@@ -729,14 +744,17 @@ impl AnthropicProvider {
         }
 
         // Enable interleaved thinking by default for all Anthropic models
+        // Enable interleaved thinking by default for all Anthropic models
+        let mut thinking_val = None;
         let mut reasoning_val = None;
+
         if self.supports_reasoning_effort(&request.model) {
-            // Always enable thinking with configured budget tokens for all supported models
-            reasoning_val = Some(super::common::make_anthropic_thinking_config(
-                &self.anthropic_config,
-            ));
+            // New "thinking" parameter for models supporting extended thinking (e.g. Sonnet 3.7)
+            thinking_val = Some(ThinkingConfig::Enabled {
+                budget_tokens: self.anthropic_config.interleaved_thinking_budget_tokens,
+            });
         } else if let Some(effort) = request.reasoning_effort {
-            // Fallback to effort-based reasoning if model doesn't support interleaved thinking
+            // Fallback to "reasoning" parameter for older models or if explicitly requested
             if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {
                 reasoning_val = Some(payload);
             } else {
@@ -786,6 +804,7 @@ impl AnthropicProvider {
             },
             tools,
             tool_choice: final_tool_choice,
+            thinking: thinking_val,
             reasoning: reasoning_val,
             stream: request.stream,
         };
@@ -825,14 +844,16 @@ impl AnthropicProvider {
                     }
                 }
                 Some("thinking") => {
-                    // Store the raw block (including signature) for hydration
+                    // Store the raw block (including potentially signature) for hydration
                     reasoning_details_vec.push(block.clone());
 
                     if let Some(thinking) = block.get("thinking").and_then(|t| t.as_str()) {
                         reasoning_parts.push(thinking.to_string());
-                    } else if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
-                        reasoning_parts.push(text.to_string());
                     }
+                }
+                Some("redacted_thinking") => {
+                     // Handle redacted thinking blocks (store raw block)
+                     reasoning_details_vec.push(block.clone());
                 }
                 Some("tool_use") => {
                     let id = block
@@ -1625,5 +1646,96 @@ impl AnthropicProvider {
             value,
             Value::String(_) | Value::Number(_) | Value::Bool(_) | Value::Null
         )
+    }
+}
+
+#[cfg(test)]
+#[cfg(test)]
+mod tests_refinement {
+    use super::*;
+    use crate::llm::provider::Message;
+    use crate::llm::providers::anthropic_types::{AnthropicRequest, ThinkingConfig};
+    use serde_json::json;
+
+    #[test]
+    fn test_new_thinking_block_deserialization() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        
+        let response_json = json!({
+            "id": "msg_123",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-3-5-sonnet-20241022",
+            "content": [
+                {
+                    "type": "thinking",
+                    "thinking": "I need to calculate the factorial of 5...",
+                    "signature": "sig_12345"
+                },
+                {
+                    "type": "redacted_thinking",
+                    "data": "redacted_data_base64..."
+                },
+                {
+                    "type": "text",
+                    "text": "The answer is 120."
+                }
+            ],
+            "stop_reason": "end_turn",
+            "usage": {
+                "input_tokens": 10,
+                "output_tokens": 20
+            }
+        });
+
+        let response = provider.parse_anthropic_response(response_json).expect("Failed to parse response");
+
+        // Verify text content mapping
+        assert_eq!(response.content.as_deref(), Some("The answer is 120."));
+
+        // Verify reasoning details hydration
+        assert!(response.reasoning.is_some());
+        
+        let reasoning_str = response.reasoning.unwrap();
+        assert!(reasoning_str.contains("I need to calculate the factorial of 5..."));
+    }
+
+    #[test]
+    fn test_request_serialization_with_thinking() {
+        // Setup provider with thinking config
+        let mut config = AnthropicConfig::default();
+        config.interleaved_thinking_budget_tokens = 4096;
+        
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some("claude-sonnet-4-5-20250929".to_string()), // A model that supports reasoning
+            None,
+            None,
+            None,
+            Some(config)
+        );
+
+        let request = LLMRequest {
+            messages: vec![Message::user("Hello".to_string())],
+            model: "claude-sonnet-4-5-20250929".to_string(),
+            ..Default::default()
+        };
+
+        // Convert
+        let val = provider.convert_to_anthropic_format(&request).expect("Serialization failed");
+        
+        // Assertions
+        let anthropic_req: AnthropicRequest = serde_json::from_value(val).expect("Failed to deserialize to AnthropicRequest");
+        
+        assert!(anthropic_req.thinking.is_some());
+        
+        if let Some(ThinkingConfig::Enabled { budget_tokens }) = anthropic_req.thinking {
+            assert_eq!(budget_tokens, 4096);
+        } else {
+            panic!("Expected ThinkingConfig::Enabled");
+        }
+        
+        // Ensure legacy reasoning is NOT present if thinking is used (based on logic)
+        assert!(anthropic_req.reasoning.is_none());
     }
 }
