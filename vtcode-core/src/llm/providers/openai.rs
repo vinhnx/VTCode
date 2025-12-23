@@ -881,8 +881,9 @@ impl OpenAIProvider {
         let is_huggingface = resolved_base_url.contains("huggingface.co");
         let is_xai = resolved_base_url.contains("api.x.ai");
 
-        // Hugging Face and xAI only support the Chat Completions-compatible surface; disable Responses API.
-        let initial_state = if is_huggingface || is_xai {
+        // Hugging Face now supports the Responses API at /v1/responses
+        // xAI only supports the Chat Completions-compatible surface; disable Responses API.
+        let initial_state = if is_xai {
             ResponsesApiState::Disabled
         } else {
             default_state
@@ -2862,9 +2863,10 @@ impl provider::LLMProvider for OpenAIProvider {
         }
 
         let responses_state = self.responses_api_state(&request.model);
+        let is_huggingface = self.is_huggingface_router;
         let prefer_responses_stream = matches!(responses_state, ResponsesApiState::Required)
             || (matches!(responses_state, ResponsesApiState::Allowed)
-                && request.tools.as_ref().is_none_or(Vec::is_empty));
+                && (request.tools.as_ref().is_none_or(Vec::is_empty) || is_huggingface));
 
         if !prefer_responses_stream {
             #[cfg(debug_assertions)]
@@ -3031,6 +3033,22 @@ impl provider::LLMProvider for OpenAIProvider {
             self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
 
         let mut openai_request = self.convert_to_openai_responses_format(&request)?;
+
+        // Per Hugging Face Responses API documentation:
+        // "include a brief instruction to return JSON. Without it the model may emit markdown even when a schema is provided."
+        if is_huggingface && (request.output_format.is_some() || request.tools.as_ref().is_some_and(|t| !t.is_empty())) {
+            let json_instruction = "Return JSON that matches the provided schema.";
+            if let Some(instructions) = openai_request.get_mut("instructions") {
+                if let Some(instr_str) = instructions.as_str() {
+                    if !instr_str.contains("Return JSON") {
+                        *instructions = json!(format!("{}\n\n{}", instr_str, json_instruction));
+                    }
+                }
+            } else {
+                openai_request["instructions"] = json!(json_instruction);
+            }
+        }
+
         openai_request["stream"] = Value::Bool(true);
         #[cfg(debug_assertions)]
         let debug_model = request.model.clone();
@@ -3368,7 +3386,8 @@ impl provider::LLMProvider for OpenAIProvider {
         let is_glm = request.model.to_ascii_lowercase().contains("glm");
 
         // Normalize Hugging Face model ids that include a trailing provider suffix (e.g., "zai-org/GLM-4.6:zai-org").
-        if is_huggingface {
+        // NOTE: The Responses API supports suffixes for explicit provider selection. Only strip if NOT using Responses API.
+        if is_huggingface && matches!(self.responses_api_state(&request.model), ResponsesApiState::Disabled) {
             if let Some((base, _)) = request.model.split_once(':') {
                 request.model = base.to_string();
             }
@@ -3385,6 +3404,7 @@ impl provider::LLMProvider for OpenAIProvider {
                 });
             }
         }
+
         if request.model.trim().is_empty() {
             request.model = self.model.to_string();
         }
@@ -3394,12 +3414,14 @@ impl provider::LLMProvider for OpenAIProvider {
         }
 
         // Some Hugging Face GLM routes reject OpenAI tool payloads; disable tools for those models to avoid 400 errors.
-        if is_huggingface && is_glm {
+        // NOTE: The Responses API handles tool orchestration correctly for GLM models. Only disable if NOT using Responses API.
+        if is_huggingface && is_glm && matches!(self.responses_api_state(&request.model), ResponsesApiState::Disabled) {
             request.tools = None;
             request.tool_choice = None;
             request.parallel_tool_calls = None;
             request.parallel_tool_config = None;
         }
+
 
         // Check if this is a harmony model (GPT-OSS). Skip Harmony path when provider base URL is not the Harmony server (e.g., HF router).
         if Self::uses_harmony(&request.model) && !self.disable_harmony {
@@ -3409,7 +3431,8 @@ impl provider::LLMProvider for OpenAIProvider {
         let responses_state = self.responses_api_state(&request.model);
         let attempt_responses = !matches!(responses_state, ResponsesApiState::Disabled)
             && (matches!(responses_state, ResponsesApiState::Required)
-                || request.tools.as_ref().is_none_or(Vec::is_empty));
+                || request.tools.as_ref().is_none_or(Vec::is_empty)
+                || is_huggingface);
         #[cfg(debug_assertions)]
         let request_timer = Instant::now();
         #[cfg(debug_assertions)]
@@ -3426,8 +3449,23 @@ impl provider::LLMProvider for OpenAIProvider {
         }
 
         if attempt_responses {
-            let openai_request = self.convert_to_openai_responses_format(&request)?;
+            let mut openai_request = self.convert_to_openai_responses_format(&request)?;
             let url = format!("{}/responses", self.base_url);
+
+            // Per Hugging Face Responses API documentation:
+            // "include a brief instruction to return JSON. Without it the model may emit markdown even when a schema is provided."
+            if is_huggingface && (request.output_format.is_some() || request.tools.as_ref().is_some_and(|t| !t.is_empty())) {
+                let json_instruction = "Return JSON that matches the provided schema.";
+                if let Some(instructions) = openai_request.get_mut("instructions") {
+                    if let Some(instr_str) = instructions.as_str() {
+                        if !instr_str.contains("Return JSON") {
+                            *instructions = json!(format!("{}\n\n{}", instr_str, json_instruction));
+                        }
+                    }
+                } else {
+                    openai_request["instructions"] = json!(json_instruction);
+                }
+            }
 
             let response = self
                 .authorize(self.http_client.post(&url))

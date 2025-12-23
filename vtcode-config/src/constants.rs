@@ -174,30 +174,61 @@ pub mod models {
 
     // Hugging Face Inference Providers (OpenAI-compatible router)
     pub mod huggingface {
-        pub const DEFAULT_MODEL: &str = OPENAI_GPT_OSS_20B;
+        pub const DEFAULT_MODEL: &str = OPENAI_GPT_OSS_120B;
         pub const SUPPORTED_MODELS: &[&str] = &[
+            // Recommended conversational LLMs from HF docs
+            GOOGLE_GEMMA_2_2B_IT,
+            QWEN3_CODER_480B_A35B_INSTRUCT,
+            OPENAI_GPT_OSS_120B,
+            ZAI_GLM_45,
+            QWEN3_4B_THINKING_2507,
+            QWEN25_7B_INSTRUCT_1M,
+            QWEN25_CODER_32B_INSTRUCT,
+            DEEPSEEK_R1,
+            // Additional supported models
             DEEPSEEK_V32,
             OPENAI_GPT_OSS_20B,
-            OPENAI_GPT_OSS_120B,
             ZAI_GLM_46,
             ZAI_GLM_47,
             MOONSHOT_KIMI_K2_THINKING,
+            // Recommended VLM
+            ZAI_GLM_45V,
         ];
 
+        // Recommended conversational LLMs
+        pub const GOOGLE_GEMMA_2_2B_IT: &str = "google/gemma-2-2b-it";
+        pub const QWEN3_CODER_480B_A35B_INSTRUCT: &str = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+        pub const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b";
+        pub const ZAI_GLM_45: &str = "zai-org/GLM-4.5";
+        pub const QWEN3_4B_THINKING_2507: &str = "Qwen/Qwen3-4B-Thinking-2507";
+        pub const QWEN25_7B_INSTRUCT_1M: &str = "Qwen/Qwen2.5-7B-Instruct-1M";
+        pub const QWEN25_CODER_32B_INSTRUCT: &str = "Qwen/Qwen2.5-Coder-32B-Instruct";
+        pub const DEEPSEEK_R1: &str = "deepseek-ai/DeepSeek-R1";
+
+        // Additional supported models
         pub const DEEPSEEK_V32: &str = "deepseek-ai/DeepSeek-V3.2";
         pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b";
-        pub const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b";
         pub const ZAI_GLM_46: &str = "zai-org/GLM-4.6";
         pub const ZAI_GLM_47: &str = "zai-org/GLM-4.7";
         pub const MOONSHOT_KIMI_K2_THINKING: &str = "moonshotai/Kimi-K2-Thinking";
 
+        // Recommended VLM
+        pub const ZAI_GLM_45V: &str = "zai-org/GLM-4.5V";
+
         pub const REASONING_MODELS: &[&str] = &[
+            // All recommended models support reasoning
+            QWEN3_CODER_480B_A35B_INSTRUCT,
+            OPENAI_GPT_OSS_120B,
+            ZAI_GLM_45,
+            QWEN3_4B_THINKING_2507,
+            DEEPSEEK_R1,
+            // Additional reasoning models
             DEEPSEEK_V32,
             OPENAI_GPT_OSS_20B,
-            OPENAI_GPT_OSS_120B,
             ZAI_GLM_46,
             ZAI_GLM_47,
             MOONSHOT_KIMI_K2_THINKING,
+            ZAI_GLM_45V,
         ];
     }
 

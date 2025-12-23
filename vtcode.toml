@@ -11,7 +11,7 @@ provider = "huggingface"
 api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "zai-org/GLM-4.7"
+default_model = "moonshotai/Kimi-K2-Thinking"
 
 # Visual theme for the terminal interface
 theme = "vitesse-black"
@@ -46,7 +46,7 @@ max_conversation_turns = 50
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 # For Gemini 3 Pro: Use "low" for fast responses, "high" for maximum reasoning depth, "medium" defaults to high (not yet generally available)
-reasoning_effort = "low"
+reasoning_effort = "medium"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
