@@ -260,10 +260,6 @@ pub enum ModelId {
     XaiGrok4Vision,
 
     // Z.AI models
-    /// GLM-4-Plus - Newest flagship GLM model with enhanced tool use
-    ZaiGlm4Plus,
-    /// GLM-4-Plus (Deep Thinking) - Newest flagship GLM reasoning model with forced deep thinking
-    ZaiGlm4PlusDeepThinking,
     /// GLM-4.7 - Latest flagship GLM reasoning model
     ZaiGlm47,
     /// GLM-4.7 (Deep Thinking) - Latest flagship GLM reasoning model with forced deep thinking
@@ -498,8 +494,6 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest => models::xai::GROK_4_CODE_LATEST,
             ModelId::XaiGrok4Vision => models::xai::GROK_4_VISION,
             // Z.AI models
-            ModelId::ZaiGlm4Plus => models::zai::GLM_4_PLUS,
-            ModelId::ZaiGlm4PlusDeepThinking => models::zai::GLM_4_PLUS_DEEP_THINKING,
             ModelId::ZaiGlm47 => models::zai::GLM_4_7,
              ModelId::ZaiGlm47DeepThinking => models::zai::GLM_4_7_DEEP_THINKING,
             ModelId::ZaiGlm46 => models::zai::GLM_4_6,
@@ -626,9 +620,7 @@ impl ModelId {
             | ModelId::XaiGrok4Code
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => Provider::XAI,
-            ModelId::ZaiGlm4Plus
-            | ModelId::ZaiGlm4PlusDeepThinking
-            | ModelId::ZaiGlm47
+            ModelId::ZaiGlm47
             | ModelId::ZaiGlm47DeepThinking
             | ModelId::ZaiGlm46
             | ModelId::ZaiGlm46DeepThinking
@@ -804,6 +796,8 @@ impl ModelId {
             ModelId::GPT51CodexMax => "GPT-5.1 Codex Max",
             ModelId::GPT51Mini => "GPT-5.1 Mini",
             ModelId::CodexMiniLatest => "Codex Mini Latest",
+            ModelId::OpenAIGptOss20b => "GPT-OSS 20B",
+            ModelId::OpenAIGptOss120b => "GPT-OSS 120B",
             // Anthropic models
             ModelId::ClaudeOpus41 => "Claude Opus 4.5",
             ModelId::ClaudeOpus45 => "Claude Opus 4.5",
@@ -827,8 +821,11 @@ impl ModelId {
             ModelId::XaiGrok4Vision => "Grok-4 Vision",
             // Z.AI models
             ModelId::ZaiGlm47 => "GLM 4.7",
+            ModelId::ZaiGlm47DeepThinking => "GLM 4.7 (Deep Thinking)",
             ModelId::ZaiGlm46 => "GLM 4.6",
+            ModelId::ZaiGlm46DeepThinking => "GLM 4.6 (Deep Thinking)",
             ModelId::ZaiGlm45 => "GLM 4.5",
+            ModelId::ZaiGlm45DeepThinking => "GLM 4.5 (Deep Thinking)",
             ModelId::ZaiGlm45Air => "GLM 4.5 Air",
             ModelId::ZaiGlm45X => "GLM 4.5 X",
             ModelId::ZaiGlm45Airx => "GLM 4.5 AirX",
@@ -958,12 +955,6 @@ impl ModelId {
             }
             ModelId::XaiGrok4Vision => "Multimodal Grok 4 model with image understanding",
             // Z.AI models
-            ModelId::ZaiGlm4Plus => {
-                "Newest Z.AI GLM flagship with enhanced tool use and reasoning"
-            }
-            ModelId::ZaiGlm4PlusDeepThinking => {
-                "Newest Z.AI GLM flagship with forced Deep Thinking mode for tool-heavy reasoning"
-            }
             ModelId::ZaiGlm47 => {
                 "Latest Z.AI GLM flagship reasoning model with improved capabilities and 200K context"
             }
@@ -1151,8 +1142,6 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest,
             ModelId::XaiGrok4Vision,
             // Z.AI models
-            ModelId::ZaiGlm4Plus,
-            ModelId::ZaiGlm4PlusDeepThinking,
             ModelId::ZaiGlm47,
             ModelId::ZaiGlm47DeepThinking,
             ModelId::ZaiGlm46,
@@ -1316,8 +1305,6 @@ impl ModelId {
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
-                | ModelId::ZaiGlm4Plus
-                | ModelId::ZaiGlm4PlusDeepThinking
                 | ModelId::ZaiGlm47
                 | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm46
@@ -1366,8 +1353,6 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
-                | ModelId::ZaiGlm4Plus
-                | ModelId::ZaiGlm4PlusDeepThinking
                 | ModelId::ZaiGlm47
                 | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm46
@@ -1435,7 +1420,6 @@ impl ModelId {
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => "4",
             // Z.AI generations
-            ModelId::ZaiGlm4Plus | ModelId::ZaiGlm4PlusDeepThinking => "Plus",
             ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking => "4.7",
             ModelId::ZaiGlm46 | ModelId::ZaiGlm46DeepThinking => "4.6",
             ModelId::ZaiGlm45
@@ -1601,8 +1585,6 @@ impl FromStr for ModelId {
             s if s == models::xai::GROK_4_CODE_LATEST => Ok(ModelId::XaiGrok4CodeLatest),
             s if s == models::xai::GROK_4_VISION => Ok(ModelId::XaiGrok4Vision),
             // Z.AI models
-            s if s == models::zai::GLM_4_PLUS => Ok(ModelId::ZaiGlm4Plus),
-            s if s == models::zai::GLM_4_PLUS_DEEP_THINKING => Ok(ModelId::ZaiGlm4PlusDeepThinking),
             s if s == models::zai::GLM_4_7 => Ok(ModelId::ZaiGlm47),
             s if s == models::zai::GLM_4_7_DEEP_THINKING => Ok(ModelId::ZaiGlm47DeepThinking),
             s if s == models::zai::GLM_4_6 => Ok(ModelId::ZaiGlm46),

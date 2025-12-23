@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "zai"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "ZAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "moonshotai/Kimi-K2-Thinking"
+default_model = "glm-4.7"
 
 # Visual theme for the terminal interface
 theme = "vitesse-black"
@@ -182,6 +182,7 @@ max_file_size_kb = 64
 
 # Custom API keys for specific providers
 [agent.custom_api_keys]
+zai = "19fec89b0bb345b1af4734e7db1cb658.qhb1sd8r0oWB08oA"
 # Moonshot AI API key (for specific provider access)
 # moonshot = ""
 

@@ -202,9 +202,7 @@ fn parse_responses_payload(
         });
     }
 
-    let mut content_fragments = Vec::new();
-    let mut reasoning_fragments = Vec::new();
-    let mut tool_calls_vec = Vec::new();
+
 
     // Per spec: output array contains items like:
     // { "type": "message", "content": [...] } where content has items like:
@@ -212,6 +210,21 @@ fn parse_responses_payload(
     // - { "type": "reasoning", "text": "..." }
     // - { "type": "function_call", "id": "...", "function": {"name": "...", "arguments": "..."} }
     // - { "type": "refusal", "text": "..." }
+
+    let mut content_fragments: Vec<String> = Vec::new();
+    let mut reasoning_text_fragments: Vec<String> = Vec::new();
+    let mut reasoning_items: Vec<Value> = Vec::new();
+    let mut tool_calls_vec: Vec<provider::ToolCall> = Vec::new();
+
+    // Per spec: output array contains items like:
+    // { "type": "message", "content": [...] } where content has items like:
+    // - { "type": "text", "text": "..." }
+    // - { "type": "reasoning", "text": "..." }
+    // - { "type": "function_call", "id": "...", "function": {"name": "...", "arguments": "..."} }
+    // - { "type": "refusal", "text": "..." }
+    //
+    // And top-level items:
+    // - { "type": "reasoning", "id": "rs_...", ... } (Reasoning persistence item)
 
     for item in output {
         let item_type = item
@@ -237,12 +250,12 @@ fn parse_responses_payload(
                                     content_fragments.push(text.to_string());
                                 }
                             }
-                            // Reasoning content (thinking/reasoning models)
+                            // Reasoning content (thinking/reasoning models) - text delta
                             "reasoning" => {
                                 if let Some(text) = entry.get("text").and_then(|value| value.as_str())
                                     && !text.is_empty()
                                 {
-                                    reasoning_fragments.push(text.to_string());
+                                    reasoning_text_fragments.push(text.to_string());
                                 }
                             }
                             // Function/tool calls (nested inside message)
@@ -291,6 +304,23 @@ fn parse_responses_payload(
                     }
                 }
             }
+            // Top-level reasoning item (for persistence/history)
+            "reasoning" => {
+                // Capture the entire item to preserve ID or encrypted content for next turn
+                reasoning_items.push(item.clone());
+
+                // Also try to extract summary if available (for display)
+                if let Some(summary_array) = item.get("summary").and_then(|v| v.as_array()) {
+                    for summary_part in summary_array {
+                        if let Some(text) = summary_part.get("text").and_then(|v| v.as_str()) {
+                            if !text.is_empty() {
+                                reasoning_text_fragments.push(text.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
             _ => {}
         }
     }
@@ -301,10 +331,16 @@ fn parse_responses_payload(
         Some(content_fragments.join(""))
     };
 
-    let reasoning = if reasoning_fragments.is_empty() {
+    let reasoning = if reasoning_text_fragments.is_empty() {
         None
     } else {
-        Some(reasoning_fragments.join(""))
+        Some(reasoning_text_fragments.join("\n\n"))
+    };
+
+    let reasoning_details = if reasoning_items.is_empty() {
+        None
+    } else {
+        Some(reasoning_items)
     };
 
     // Determine finish reason from the response status
@@ -365,7 +401,7 @@ fn parse_responses_payload(
         usage,
         finish_reason,
         reasoning,
-        reasoning_details: None,
+        reasoning_details,
     })
 }
 
@@ -1383,22 +1419,30 @@ impl OpenAIProvider {
             }
         }
 
-        if let Some(effort) = request.reasoning_effort {
-            if self.supports_reasoning_effort(&request.model) {
+        if self.supports_reasoning_effort(&request.model) {
+            if let Some(effort) = request.reasoning_effort {
                 if let Some(payload) = reasoning_parameters_for(ModelProvider::OpenAI, effort) {
                     openai_request["reasoning"] = payload;
                 } else {
                     openai_request["reasoning"] = json!({ "effort": effort.as_str() });
                 }
+            } else if openai_request.get("reasoning").is_none() {
+                // Use the default reasoning effort level (medium)
+                let default_effort = ReasoningEffortLevel::default().as_str();
+                openai_request["reasoning"] = json!({ "effort": default_effort });
             }
         }
 
-        if self.supports_reasoning_effort(&request.model)
-            && openai_request.get("reasoning").is_none()
-        {
-            // Use the default reasoning effort level (medium)
-            let default_effort = ReasoningEffortLevel::default().as_str();
-            openai_request["reasoning"] = json!({ "effort": default_effort });
+        // Enable reasoning summaries if supported
+        if self.supports_reasoning(&request.model) {
+            if let Some(map) = openai_request.as_object_mut() {
+                let reasoning_value = map.entry("reasoning").or_insert(json!({}));
+                if let Some(reasoning_obj) = reasoning_value.as_object_mut() {
+                    if !reasoning_obj.contains_key("summary") {
+                        reasoning_obj.insert("summary".to_string(), json!("auto"));
+                    }
+                }
+            }
         }
 
         // Add text formatting options for GPT-5 and compatible models, including verbosity and grammar
@@ -2532,6 +2576,13 @@ fn build_standard_responses_payload(
                 }));
             }
             provider::MessageRole::Assistant => {
+                // Inject any persisted reasoning items from previous turns (required for tool use performance)
+                if let Some(reasoning_details) = &msg.reasoning_details {
+                    for item in reasoning_details {
+                        input.push(item.clone());
+                    }
+                }
+
                 let mut content_parts = Vec::new();
                 if !msg.content.is_empty() {
                     content_parts.push(json!({
@@ -2824,6 +2875,8 @@ impl provider::LLMProvider for OpenAIProvider {
             );
             let mut openai_request = self.convert_to_openai_format(&request)?;
             openai_request["stream"] = Value::Bool(true);
+            // Request usage stats in the stream (compatible with newer OpenAI models)
+            openai_request["stream_options"] = json!({ "include_usage": true });
             let url = format!("{}/chat/completions", self.base_url);
 
             let response = self
@@ -2870,6 +2923,7 @@ impl provider::LLMProvider for OpenAIProvider {
                 let mut sanitizer = TagStreamSanitizer::new();
                 let mut tool_builders = Vec::new();
                 let mut finish_reason = provider::FinishReason::Stop;
+                let mut accumulated_usage = None;
                 let telemetry = OpenAIStreamTelemetry;
 
                 while let Some(chunk_result) = body_stream.next().await {
@@ -2897,6 +2951,13 @@ impl provider::LLMProvider for OpenAIProvider {
                                 StreamAssemblyError::InvalidPayload(err.to_string())
                                     .into_llm_error("OpenAI")
                             })?;
+
+                            // Capture usage if present (stream_options: include_usage)
+                            if let Some(usage_val) = payload.get("usage") {
+                                if let Ok(u) = serde_json::from_value::<provider::Usage>(usage_val.clone()) {
+                                    accumulated_usage = Some(u);
+                                }
+                            }
 
                             if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
                                 if let Some(choice) = choices.first() {
@@ -2954,7 +3015,7 @@ impl provider::LLMProvider for OpenAIProvider {
                 let response = provider::LLMResponse {
                     content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
                     tool_calls: crate::llm::providers::shared::finalize_tool_calls(tool_builders),
-                    usage: None,
+                    usage: accumulated_usage,
                     finish_reason,
                     reasoning: reasoning_buffer.finalize(),
                     reasoning_details: None,
@@ -3210,14 +3271,9 @@ impl provider::LLMProvider for OpenAIProvider {
                                 }
                                 // Function/tool call arguments streaming
                                 "response.function_call_arguments.delta" => {
-                                    // Tool arguments are streamed but we accumulate in aggregated_content
-                                    // (could be enhanced to emit special token events)
-                                    if let Some(delta) = payload
-                                        .get("delta")
-                                        .and_then(|value| value.as_str())
-                                    {
-                                        aggregated_content.push_str(delta);
-                                    }
+                                    // Tool arguments are streamed but we accumulate in response.completed's final object only.
+                                    // We DO NOT push to aggregated_content to avoid polluting the text stream.
+                                    // If strict tool call streaming is needed later, we can implement LLMStreamEvent::ToolCall here.
                                 }
                                 // Response completion with final state
                                 "response.completed" => {
