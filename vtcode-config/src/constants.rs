@@ -416,6 +416,12 @@ pub mod models {
             "grok-4-vision",
             "grok-4-1-fast",
             "grok-code-fast-1",
+            "grok-4-fast",
+            "grok-3",
+            "grok-3-mini",
+            "grok-2-1212",
+            "grok-2-vision-1212",
+            "grok-beta",
         ];
 
         pub const GROK_4: &str = "grok-4";
@@ -425,6 +431,12 @@ pub mod models {
         pub const GROK_4_VISION: &str = "grok-4-vision";
         pub const GROK_4_1_FAST: &str = "grok-4-1-fast";
         pub const GROK_CODE_FAST_1: &str = "grok-code-fast-1";
+        pub const GROK_4_FAST: &str = "grok-4-fast";
+        pub const GROK_3: &str = "grok-3";
+        pub const GROK_3_MINI: &str = "grok-3-mini";
+        pub const GROK_2_1212: &str = "grok-2-1212";
+        pub const GROK_2_VISION_1212: &str = "grok-2-vision-1212";
+        pub const GROK_BETA: &str = "grok-beta";
     }
 
     // Backwards compatibility - keep old constants working
@@ -460,6 +472,9 @@ pub mod models {
     pub const XAI_GROK_4_CODE: &str = xai::GROK_4_CODE;
     pub const XAI_GROK_4_CODE_LATEST: &str = xai::GROK_4_CODE_LATEST;
     pub const XAI_GROK_4_VISION: &str = xai::GROK_4_VISION;
+    pub const XAI_GROK_3: &str = xai::GROK_3;
+    pub const XAI_GROK_2: &str = xai::GROK_2_1212;
+    pub const XAI_GROK_BETA: &str = xai::GROK_BETA;
     pub const DEEPSEEK_CHAT: &str = deepseek::DEEPSEEK_CHAT;
     pub const DEEPSEEK_REASONER: &str = deepseek::DEEPSEEK_REASONER;
     #[cfg(not(docsrs))]
