@@ -193,6 +193,10 @@ pub mod models {
             MOONSHOT_KIMI_K2_THINKING,
             // Recommended VLM
             ZAI_GLM_45V,
+            // Novita inference provider models
+            MINIMAX_M2_NOVITA,
+            DEEPSEEK_V32_NOVITA,
+            XIAOMI_MIMO_V2_FLASH_NOVITA,
         ];
 
         // Recommended conversational LLMs
@@ -214,6 +218,10 @@ pub mod models {
 
         // Recommended VLM
         pub const ZAI_GLM_45V: &str = "zai-org/GLM-4.5V";
+        // Novita inference provider models
+        pub const MINIMAX_M2_NOVITA: &str = "MiniMaxAI/MiniMax-M2:novita";
+        pub const DEEPSEEK_V32_NOVITA: &str = "deepseek-ai/DeepSeek-V3.2:novita";
+        pub const XIAOMI_MIMO_V2_FLASH_NOVITA: &str = "XiaomiMiMo/MiMo-V2-Flash:novita";
 
         pub const REASONING_MODELS: &[&str] = &[
             // All recommended models support reasoning
@@ -229,6 +237,8 @@ pub mod models {
             ZAI_GLM_47,
             MOONSHOT_KIMI_K2_THINKING,
             ZAI_GLM_45V,
+            DEEPSEEK_V32_NOVITA,
+            XIAOMI_MIMO_V2_FLASH_NOVITA,
         ];
     }
 
@@ -431,8 +441,10 @@ pub mod models {
 
     // MiniMax models (Anthropic-compatible API, standalone provider)
     pub mod minimax {
-        pub const DEFAULT_MODEL: &str = MINIMAX_M2;
-        pub const SUPPORTED_MODELS: &[&str] = &[MINIMAX_M2];
+        pub const DEFAULT_MODEL: &str = MINIMAX_M2_1;
+        pub const SUPPORTED_MODELS: &[&str] = &[MINIMAX_M2_1, MINIMAX_M2_1_LIGHTNING, MINIMAX_M2];
+        pub const MINIMAX_M2_1: &str = "MiniMax-M2.1";
+        pub const MINIMAX_M2_1_LIGHTNING: &str = "MiniMax-M2.1-lightning";
         pub const MINIMAX_M2: &str = "MiniMax-M2";
     }
 

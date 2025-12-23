@@ -86,7 +86,7 @@ impl AnthropicProvider {
             |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
         );
 
-        let base_url_value = if model.as_str() == models::minimax::MINIMAX_M2 {
+        let base_url_value = if models::minimax::SUPPORTED_MODELS.contains(&model.as_str()) {
             Self::resolve_minimax_base_url(base_url)
         } else {
             override_base_url(
@@ -990,7 +990,7 @@ impl LLMProvider for AnthropicProvider {
             model
         };
 
-        if requested == models::minimax::MINIMAX_M2 {
+        if models::minimax::SUPPORTED_MODELS.contains(&requested) {
             return true;
         }
 

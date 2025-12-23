@@ -3424,15 +3424,25 @@ impl provider::LLMProvider for OpenAIProvider {
         let is_glm = request.model.to_ascii_lowercase().contains("glm");
 
         // Normalize Hugging Face model ids.
-        // NOTE: We keep trailing provider suffixes (e.g., ":zai-org") to allow explicit provider selection on the HF router.
+        // HuggingFace router supports automatic and explicit provider selection:
+        // - No suffix: Auto-selects first available provider (recommended)
+        // - :provider-name: Force specific provider (e.g., :novita, :together, :groq)
+        // - :fastest: Select provider with highest throughput
+        // - :cheapest: Select provider with lowest cost
+        // See: https://huggingface.co/docs/inference-providers/en/guide
         if is_huggingface {
-            // Fail fast for models we explicitly do not support on HF router (e.g., MiniMax M2) with a clear message.
+            // Preserve all valid provider selection suffixes. Do NOT strip them.
+            // The HuggingFace router will handle provider selection based on the suffix.
+            
+            // Fail fast for models we explicitly do not support on HF router (e.g., MiniMax M2 without :novita).
             let lower_model = request.model.to_ascii_lowercase();
-            if lower_model.contains("minimax-m2") {
+            // Only reject MiniMax-M2 if no provider suffix (it requires :novita on HF router)
+            if lower_model.contains("minimax-m2") && !request.model.contains(':') {
                 return Err(provider::LLMError::Provider {
                     message: error_display::format_llm_error(
                         "HuggingFace",
-                        "Model 'MiniMax-M2' is not supported on the Hugging Face router in this client.",
+                        "Model 'MiniMax-M2' is not supported on the default HuggingFace router. \
+                        Use 'MiniMaxAI/MiniMax-M2:novita' to access it via Novita inference provider.",
                     ),
                     metadata: None,
                 });

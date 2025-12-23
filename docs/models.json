@@ -633,6 +633,63 @@
           "structured_output": true
         }
       },
+      "MiniMaxAI/MiniMax-M2:novita": {
+        "id": "MiniMaxAI/MiniMax-M2:novita",
+        "name": "MiniMax-M2 (Novita)",
+        "description": "MiniMax-M2 model via Novita inference provider on HuggingFace router.",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 204800,
+        "capabilities": {
+          "structured_output": false
+        }
+      },
+      "deepseek-ai/DeepSeek-V3.2:novita": {
+        "id": "deepseek-ai/DeepSeek-V3.2:novita",
+        "name": "DeepSeek-V3.2 (Novita)",
+        "description": "DeepSeek-V3.2 via Novita inference provider on HuggingFace router. Cost-optimized option.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 163840,
+        "capabilities": {
+          "structured_output": true
+        }
+      },
+      "XiaomiMiMo/MiMo-V2-Flash:novita": {
+        "id": "XiaomiMiMo/MiMo-V2-Flash:novita",
+        "name": "MiMo-V2-Flash (Novita)",
+        "description": "Xiaomi MiMo-V2-Flash via Novita on HuggingFace router. High-speed MoE model with 309B params, 15B active.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "capabilities": {
+          "structured_output": true
+        }
+      },
       "zai-org/GLM-4.5V": {
         "id": "zai-org/GLM-4.5V",
         "name": "GLM-4.5V",
@@ -817,6 +874,65 @@
         },
         "context": 200000,
         "status": "stable"
+      }
+    }
+  },
+  "minimax": {
+    "id": "minimax",
+    "name": "MiniMax",
+    "env": [
+      "MINIMAX_API_KEY"
+    ],
+    "api": "https://api.minimax.chat/v1",
+    "doc": "https://platform.minimaxi.com/document/ChatCompletion%20V2",
+    "models": {
+      "MiniMax-M2.1": {
+        "id": "MiniMax-M2.1",
+        "name": "MiniMax-M2.1",
+        "description": "Latest MiniMax-M2.1 model with enhanced code understanding and reasoning",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 204800
+      },
+      "MiniMax-M2.1-lightning": {
+        "id": "MiniMax-M2.1-lightning",
+        "name": "MiniMax-M2.1-lightning",
+        "description": "Fast version of MiniMax-M2.1 for rapid conversational tasks",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 204800
+      },
+      "MiniMax-M2": {
+        "id": "MiniMax-M2",
+        "name": "MiniMax-M2",
+        "description": "MiniMax reasoning-focused model optimized for dialogue",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
       }
     }
   },

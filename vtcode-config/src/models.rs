@@ -46,6 +46,8 @@ pub enum Provider {
     XAI,
     /// Z.AI GLM models
     ZAI,
+    /// MiniMax models
+    Minimax,
 }
 
 impl Provider {
@@ -62,6 +64,7 @@ impl Provider {
             Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::XAI => "XAI_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
+            Provider::Minimax => "MINIMAX_API_KEY",
         }
     }
 
@@ -78,6 +81,7 @@ impl Provider {
             Provider::Moonshot,
             Provider::XAI,
             Provider::ZAI,
+            Provider::Minimax,
         ]
     }
 
@@ -94,6 +98,7 @@ impl Provider {
             Provider::Moonshot => "Moonshot",
             Provider::XAI => "xAI",
             Provider::ZAI => "Z.AI",
+            Provider::Minimax => "MiniMax",
         }
     }
 
@@ -117,6 +122,11 @@ impl Provider {
             Provider::Moonshot => false,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
+            Provider::Minimax => {
+                model == models::minimax::MINIMAX_M2_1
+                    || model == models::minimax::MINIMAX_M2_1_LIGHTNING
+                    || model == models::minimax::MINIMAX_M2
+            }
         }
     }
 }
@@ -134,6 +144,7 @@ impl fmt::Display for Provider {
             Provider::Moonshot => write!(f, "moonshot"),
             Provider::XAI => write!(f, "xai"),
             Provider::ZAI => write!(f, "zai"),
+            Provider::Minimax => write!(f, "minimax"),
         }
     }
 }
@@ -153,6 +164,7 @@ impl FromStr for Provider {
             "moonshot" => Ok(Provider::Moonshot),
             "xai" => Ok(Provider::XAI),
             "zai" => Ok(Provider::ZAI),
+            "minimax" => Ok(Provider::Minimax),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }
     }
@@ -264,6 +276,14 @@ pub enum ModelId {
     OllamaDevstral2123bCloud,
     /// MiniMax-M2 Cloud - Cloud-hosted MiniMax-M2 model served via Ollama Cloud
     OllamaMinimaxM2Cloud,
+
+    // MiniMax models
+    /// MiniMax-M2.1 - Latest MiniMax model with enhanced code understanding and reasoning
+    MinimaxM21,
+    /// MiniMax-M2.1-lightning - Fast version of MiniMax-M2.1
+    MinimaxM21Lightning,
+    /// MiniMax-M2 - MiniMax reasoning-focused model
+    MinimaxM2,
 
     // LM Studio models
     /// Meta Llama 3 8B Instruct served locally via LM Studio
@@ -519,6 +539,10 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => models::lmstudio::GEMMA_2_2B_IT,
             ModelId::LmStudioGemma29BIt => models::lmstudio::GEMMA_2_9B_IT,
             ModelId::LmStudioPhi31Mini4kInstruct => models::lmstudio::PHI_31_MINI_4K_INSTRUCT,
+            // MiniMax models
+            ModelId::MinimaxM21 => models::minimax::MINIMAX_M2_1,
+            ModelId::MinimaxM21Lightning => models::minimax::MINIMAX_M2_1_LIGHTNING,
+            ModelId::MinimaxM2 => models::minimax::MINIMAX_M2,
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -579,6 +603,9 @@ impl ModelId {
             | ModelId::LmStudioGemma22BIt
             | ModelId::LmStudioGemma29BIt
             | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
+            ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning | ModelId::MinimaxM2 => {
+                Provider::Minimax
+            }
             _ => unreachable!(),
         }
     }
@@ -650,6 +677,10 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => "Gemma 2 2B (LM Studio)",
             ModelId::LmStudioGemma29BIt => "Gemma 2 9B (LM Studio)",
             ModelId::LmStudioPhi31Mini4kInstruct => "Phi-3.1 Mini 4K (LM Studio)",
+            // MiniMax models
+            ModelId::MinimaxM21 => "MiniMax-M2.1",
+            ModelId::MinimaxM21Lightning => "MiniMax-M2.1-lightning",
+            ModelId::MinimaxM2 => "MiniMax-M2",
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -782,6 +813,11 @@ impl ModelId {
             ModelId::LmStudioPhi31Mini4kInstruct => {
                 "Phi-3.1 Mini 4K hosted in LM Studio for compact reasoning and experimentation"
             }
+            ModelId::MinimaxM21 => {
+                "Latest MiniMax-M2.1 model with enhanced code understanding and reasoning"
+            }
+            ModelId::MinimaxM21Lightning => "Fast version of MiniMax-M2.1 for rapid conversational tasks",
+            ModelId::MinimaxM2 => "MiniMax-M2 reasoning-focused model optimized for dialogue",
             _ => unreachable!(),
         }
     }
@@ -849,6 +885,9 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt,
             ModelId::LmStudioGemma29BIt,
             ModelId::LmStudioPhi31Mini4kInstruct,
+            ModelId::MinimaxM21,
+            ModelId::MinimaxM21Lightning,
+            ModelId::MinimaxM2,
         ];
         models.extend(Self::openrouter_models());
         models
@@ -902,6 +941,7 @@ impl ModelId {
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm46,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
+            Provider::Minimax => ModelId::MinimaxM21,
         }
     }
 
@@ -918,6 +958,7 @@ impl ModelId {
             Provider::LmStudio => ModelId::LmStudioQwen257BInstruct,
             Provider::ZAI => ModelId::ZaiGlm45Flash,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
+            Provider::Minimax => ModelId::MinimaxM21Lightning,
         }
     }
 
@@ -934,6 +975,7 @@ impl ModelId {
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm46,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
+            Provider::Minimax => ModelId::MinimaxM21,
         }
     }
 
@@ -945,6 +987,7 @@ impl ModelId {
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
                 | ModelId::ZaiGlm45Flash
+                | ModelId::MinimaxM21Lightning
         )
     }
 
@@ -959,6 +1002,7 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::ZaiGlm46
+                | ModelId::MinimaxM21
         )
     }
 
@@ -1075,6 +1119,8 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => "gemma-2",
             ModelId::LmStudioGemma29BIt => "gemma-2",
             ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
+            ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning => "M2.1",
+            ModelId::MinimaxM2 => "M2",
             _ => unreachable!(),
         }
     }
@@ -1159,6 +1205,9 @@ impl FromStr for ModelId {
             s if s == models::lmstudio::PHI_31_MINI_4K_INSTRUCT => {
                 Ok(ModelId::LmStudioPhi31Mini4kInstruct)
             }
+            s if s == models::minimax::MINIMAX_M2_1 => Ok(ModelId::MinimaxM21),
+            s if s == models::minimax::MINIMAX_M2_1_LIGHTNING => Ok(ModelId::MinimaxM21Lightning),
+            s if s == models::minimax::MINIMAX_M2 => Ok(ModelId::MinimaxM2),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)
