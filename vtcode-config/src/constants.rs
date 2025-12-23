@@ -178,6 +178,7 @@ pub mod models {
             OPENAI_GPT_OSS_20B,
             OPENAI_GPT_OSS_120B,
             ZAI_GLM_46,
+            ZAI_GLM_47,
             MOONSHOT_KIMI_K2_THINKING,
         ];
 
@@ -185,6 +186,7 @@ pub mod models {
         pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b";
         pub const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b";
         pub const ZAI_GLM_46: &str = "zai-org/GLM-4.6";
+        pub const ZAI_GLM_47: &str = "zai-org/GLM-4.7";
         pub const MOONSHOT_KIMI_K2_THINKING: &str = "moonshotai/Kimi-K2-Thinking";
 
         pub const REASONING_MODELS: &[&str] = &[
@@ -192,6 +194,7 @@ pub mod models {
             OPENAI_GPT_OSS_20B,
             OPENAI_GPT_OSS_120B,
             ZAI_GLM_46,
+            ZAI_GLM_47,
             MOONSHOT_KIMI_K2_THINKING,
         ];
     }
