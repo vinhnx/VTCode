@@ -160,9 +160,9 @@
           "thinking": true
         }
       }
-      }
-      },
-      "openai": {
+    }
+  },
+  "openai": {
     "id": "openai",
     "env": [
       "OPENAI_API_KEY"
@@ -803,6 +803,32 @@
     "name": "Z.AI",
     "doc": "https://docs.z.ai/guides/llm/glm-4.6",
     "models": {
+      "glm-4.7": {
+        "id": "glm-4.7",
+        "name": "GLM 4.7",
+        "description": "Z.AI's latest flagship model with enhanced programming, reasoning, and frontend aesthetics. Supports thinking mode and has 200K context length.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
+      },
       "glm-4.6": {
         "id": "glm-4.6",
         "name": "GLM 4.6",
@@ -886,7 +912,7 @@
       "glm-4.5-flash": {
         "id": "glm-4.5-flash",
         "name": "GLM 4.5 Flash",
-        "reasoning": false,
+        "reasoning": true,
         "tool_call": true,
         "modalities": {
           "input": [
