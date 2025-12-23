@@ -3,6 +3,35 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.52.1] - 2025-12-23
+
+
+### Features
+    - feat: add keyboard protocol configuration and documentation for enhanced keyboard event handling
+    - feat: Introduce advanced LLM parameters, add default implementations for LLMRequest, Message, and ToolChoice, and remove nextest.toml.
+
+
+### Refactors
+    - refactor: simplify configuration handling and update tool permissions in multiple files
+    - refactor: apply clippy fixes for code quality improvements
+    - refactor: clean up whitespace and formatting across multiple files for improved readability
+    - refactor: Migrate testing from `cargo nextest` to `cargo test` and enhance Anthropic LLM configuration with new parameters.
+
+
+### Documentation
+    - docs: update changelog for v0.52.0 [skip ci]
+    - docs: Add guidelines for git operations in AGENTS.md and update LLM provider configuration in vtcode.toml
+    - docs: Replace all cargo nextest references with cargo test across documentation and agent rules
+
+
+### Tests
+    - test: add missing fields to LLMRequest initializers
+
+
+### Chores
+    - chore: update npm package.json to v0.52.0 [skip ci]
+    - chore: release v0.52.0
+    - chore: update npm package.json to v0.51.2 [skip ci]
 # [Version 0.52.0] - 2025-12-23
 
 
