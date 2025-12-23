@@ -519,17 +519,6 @@ impl ModelId {
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
-            // Hugging Face models
-            ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
-            ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
-            ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
-            ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
-            ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
-            ModelId::HuggingFaceMinimaxM2Novita => models::huggingface::MINIMAX_M2_NOVITA,
-            ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
-            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
-                models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
-            }
             // Anthropic models
             ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_5,
@@ -577,6 +566,17 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => models::lmstudio::GEMMA_2_2B_IT,
             ModelId::LmStudioGemma29BIt => models::lmstudio::GEMMA_2_9B_IT,
             ModelId::LmStudioPhi31Mini4kInstruct => models::lmstudio::PHI_31_MINI_4K_INSTRUCT,
+            // Hugging Face models
+            ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
+            ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
+            ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
+            ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
+            ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
+            ModelId::HuggingFaceMinimaxM2Novita => models::huggingface::MINIMAX_M2_NOVITA,
+            ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
+                models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
+            }
             // MiniMax models
             ModelId::MinimaxM21 => models::minimax::MINIMAX_M2_1,
             ModelId::MinimaxM21Lightning => models::minimax::MINIMAX_M2_1_LIGHTNING,
@@ -723,6 +723,15 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => "Gemma 2 2B (LM Studio)",
             ModelId::LmStudioGemma29BIt => "Gemma 2 9B (LM Studio)",
             ModelId::LmStudioPhi31Mini4kInstruct => "Phi-3.1 Mini 4K (LM Studio)",
+            // Hugging Face models
+            ModelId::HuggingFaceDeepseekV32 => "DeepSeek V3.2 (HF)",
+            ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
+            ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
+            ModelId::HuggingFaceGlm47 => "GLM-4.7 (HF)",
+            ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
+            ModelId::HuggingFaceMinimaxM2Novita => "MiniMax-M2 (Novita)",
+            ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
             // MiniMax models
             ModelId::MinimaxM21 => "MiniMax-M2.1",
             ModelId::MinimaxM21Lightning => "MiniMax-M2.1-lightning",
@@ -1026,6 +1035,7 @@ impl ModelId {
             Provider::ZAI => ModelId::ZaiGlm46,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
             Provider::Minimax => ModelId::MinimaxM21,
+            Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
         }
     }
 
@@ -1043,6 +1053,7 @@ impl ModelId {
             Provider::ZAI => ModelId::ZaiGlm45Flash,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
             Provider::Minimax => ModelId::MinimaxM21Lightning,
+            Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss20b,
         }
     }
 
@@ -1060,6 +1071,7 @@ impl ModelId {
             Provider::ZAI => ModelId::ZaiGlm46,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
             Provider::Minimax => ModelId::MinimaxM21,
+            Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
         }
     }
 
@@ -1205,6 +1217,13 @@ impl ModelId {
             ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
             ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning => "M2.1",
             ModelId::MinimaxM2 => "M2",
+            ModelId::HuggingFaceDeepseekV32
+            | ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
+            ModelId::HuggingFaceMinimaxM2Novita => "m2",
+            ModelId::HuggingFaceGlm47 => "4.7",
+            ModelId::HuggingFaceKimiK2Thinking => "k2",
+            ModelId::HuggingFaceOpenAIGptOss20b | ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             _ => unreachable!(),
         }
     }
@@ -1292,6 +1311,17 @@ impl FromStr for ModelId {
             s if s == models::minimax::MINIMAX_M2_1 => Ok(ModelId::MinimaxM21),
             s if s == models::minimax::MINIMAX_M2_1_LIGHTNING => Ok(ModelId::MinimaxM21Lightning),
             s if s == models::minimax::MINIMAX_M2 => Ok(ModelId::MinimaxM2),
+            // Hugging Face models
+            s if s == models::huggingface::DEEPSEEK_V32 => Ok(ModelId::HuggingFaceDeepseekV32),
+            s if s == models::huggingface::OPENAI_GPT_OSS_20B => Ok(ModelId::HuggingFaceOpenAIGptOss20b),
+            s if s == models::huggingface::OPENAI_GPT_OSS_120B => Ok(ModelId::HuggingFaceOpenAIGptOss120b),
+            s if s == models::huggingface::ZAI_GLM_47 => Ok(ModelId::HuggingFaceGlm47),
+            s if s == models::huggingface::MOONSHOT_KIMI_K2_THINKING => Ok(ModelId::HuggingFaceKimiK2Thinking),
+            s if s == models::huggingface::MINIMAX_M2_NOVITA => Ok(ModelId::HuggingFaceMinimaxM2Novita),
+            s if s == models::huggingface::DEEPSEEK_V32_NOVITA => Ok(ModelId::HuggingFaceDeepseekV32Novita),
+            s if s == models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA => {
+                Ok(ModelId::HuggingFaceXiaomiMimoV2FlashNovita)
+            }
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)

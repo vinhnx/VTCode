@@ -1085,6 +1085,9 @@ impl LLMProvider for AnthropicProvider {
         if !models::anthropic::SUPPORTED_MODELS
             .iter()
             .any(|m| *m == request.model)
+            && !models::minimax::SUPPORTED_MODELS
+                .iter()
+                .any(|m| *m == request.model)
         {
             let formatted_error = error_display::format_llm_error(
                 "Anthropic",
