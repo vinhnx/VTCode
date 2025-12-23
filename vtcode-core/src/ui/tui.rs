@@ -72,6 +72,7 @@ pub fn spawn_session_with_prompts(
                 log_theme: None,
                 event_callback,
                 custom_prompts,
+                keyboard_flags: None, // Use default flags
             },
         )
         .await

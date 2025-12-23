@@ -60,7 +60,7 @@ impl AlternateScreenSession {
     /// # Errors
     ///
     /// Returns an error if any terminal operation fails.
-    pub fn enter() -> Result<Self> {
+    pub fn enter(keyboard_flags: Option<KeyboardEnhancementFlags>) -> Result<Self> {
         let mut stdout = io::stdout();
 
         // Save current state
@@ -95,19 +95,22 @@ impl AlternateScreenSession {
         }
 
         // Enable keyboard enhancements if supported
-        if supports_keyboard_enhancement()
-            .context("failed to query keyboard enhancement support")?
-            && execute!(
-                stdout,
-                PushKeyboardEnhancementFlags(
-                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                        | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
-                )
-            )
-            .is_ok()
+        let flags = keyboard_flags.unwrap_or_else(|| {
+            // Default flags match current hardcoded behavior
+            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+        });
+
+        if !flags.is_empty()
+            && supports_keyboard_enhancement()
+                .context("failed to query keyboard enhancement support")?
+            && execute!(stdout, PushKeyboardEnhancementFlags(flags)).is_ok()
         {
             session.original_state.keyboard_enhancements_pushed = true;
+            tracing::debug!(?flags, "enabled keyboard enhancement flags");
+        } else if flags.is_empty() {
+            tracing::debug!("keyboard protocol disabled via configuration");
         }
 
         Ok(session)
@@ -145,7 +148,7 @@ impl AlternateScreenSession {
     where
         F: FnOnce() -> Result<T>,
     {
-        let session = Self::enter()?;
+        let session = Self::enter(None)?;
         let result = f();
         session.exit()?;
         result
@@ -242,7 +245,7 @@ mod tests {
         // This test verifies that we can enter and exit alternate screen
         // without panicking. We can't easily verify the actual terminal state
         // in a unit test, but we can at least ensure the code doesn't crash.
-        let session = AlternateScreenSession::enter();
+        let session = AlternateScreenSession::enter(None);
         assert!(session.is_ok());
 
         if let Ok(session) = session {
@@ -273,7 +276,7 @@ mod tests {
     fn test_drop_cleanup() {
         // Verify that Drop properly cleans up
         {
-            let _session = AlternateScreenSession::enter();
+            let _session = AlternateScreenSession::enter(None);
             // Session dropped here
         }
         // If we get here without hanging, Drop worked

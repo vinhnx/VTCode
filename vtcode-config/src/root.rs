@@ -64,6 +64,8 @@ pub struct UiConfig {
     pub show_timeline_pane: bool,
     #[serde(default)]
     pub status_line: StatusLineConfig,
+    #[serde(default)]
+    pub keyboard_protocol: KeyboardProtocolConfig,
 }
 
 impl Default for UiConfig {
@@ -77,6 +79,7 @@ impl Default for UiConfig {
             inline_viewport_rows: default_inline_viewport_rows(),
             show_timeline_pane: default_show_timeline_pane(),
             status_line: StatusLineConfig::default(),
+            keyboard_protocol: KeyboardProtocolConfig::default(),
         }
     }
 }
@@ -213,4 +216,88 @@ fn default_status_line_refresh_interval_ms() -> u64 {
 
 fn default_status_line_command_timeout_ms() -> u64 {
     crate::constants::ui::STATUS_LINE_COMMAND_TIMEOUT_MS
+}
+
+/// Kitty keyboard protocol configuration
+/// Reference: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct KeyboardProtocolConfig {
+    /// Enable keyboard protocol enhancements (master toggle)
+    #[serde(default = "default_keyboard_protocol_enabled")]
+    pub enabled: bool,
+
+    /// Preset mode: "default", "full", "minimal", "custom"
+    #[serde(default = "default_keyboard_protocol_mode")]
+    pub mode: String,
+
+    /// Individual flag controls (used when mode = "custom")
+    /// Resolve Esc key ambiguity (recommended)
+    #[serde(default = "default_disambiguate_escape_codes")]
+    pub disambiguate_escape_codes: bool,
+
+    /// Report press/release/repeat events
+    #[serde(default = "default_report_event_types")]
+    pub report_event_types: bool,
+
+    /// Report alternate key layouts
+    #[serde(default = "default_report_alternate_keys")]
+    pub report_alternate_keys: bool,
+
+    /// Report modifier-only keys (Shift, Ctrl, Alt alone)
+    #[serde(default = "default_report_all_keys")]
+    pub report_all_keys: bool,
+}
+
+impl Default for KeyboardProtocolConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_keyboard_protocol_enabled(),
+            mode: default_keyboard_protocol_mode(),
+            disambiguate_escape_codes: default_disambiguate_escape_codes(),
+            report_event_types: default_report_event_types(),
+            report_alternate_keys: default_report_alternate_keys(),
+            report_all_keys: default_report_all_keys(),
+        }
+    }
+}
+
+impl KeyboardProtocolConfig {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        match self.mode.as_str() {
+            "default" | "full" | "minimal" | "custom" => Ok(()),
+            _ => anyhow::bail!(
+                "Invalid keyboard protocol mode '{}'. Must be: default, full, minimal, or custom",
+                self.mode
+            ),
+        }
+    }
+}
+
+fn default_keyboard_protocol_enabled() -> bool {
+    std::env::var("VTCODE_KEYBOARD_PROTOCOL_ENABLED")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(true)
+}
+
+fn default_keyboard_protocol_mode() -> String {
+    std::env::var("VTCODE_KEYBOARD_PROTOCOL_MODE")
+        .unwrap_or_else(|_| "default".to_string())
+}
+
+fn default_disambiguate_escape_codes() -> bool {
+    true
+}
+
+fn default_report_event_types() -> bool {
+    true
+}
+
+fn default_report_alternate_keys() -> bool {
+    true
+}
+
+fn default_report_all_keys() -> bool {
+    false
 }

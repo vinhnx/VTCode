@@ -211,6 +211,11 @@ impl VTCodeConfig {
             .validate()
             .context("Invalid prompt_cache configuration")?;
 
+        self.ui
+            .keyboard_protocol
+            .validate()
+            .context("Invalid keyboard_protocol configuration")?;
+
         Ok(())
     }
 

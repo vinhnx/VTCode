@@ -205,6 +205,7 @@ pub struct TuiOptions {
     pub log_theme: Option<String>,
     pub event_callback: Option<InlineEventCallback>,
     pub custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
+    pub keyboard_flags: Option<KeyboardEnhancementFlags>,
 }
 
 pub async fn run_tui(
@@ -252,7 +253,13 @@ pub async fn run_tui(
     });
 
     let mut stderr = io::stderr();
-    let mode_state = enable_terminal_modes(&mut stderr)?;
+    let keyboard_flags = options.keyboard_flags.unwrap_or_else(|| {
+        // Default flags match current hardcoded behavior
+        KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+            | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+            | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+    });
+    let mode_state = enable_terminal_modes(&mut stderr, keyboard_flags)?;
     if surface.use_alternate() {
         execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
     }
@@ -301,7 +308,10 @@ pub async fn run_tui(
     Ok(())
 }
 
-fn enable_terminal_modes(stderr: &mut io::Stderr) -> Result<TerminalModeState> {
+fn enable_terminal_modes(
+    stderr: &mut io::Stderr,
+    keyboard_flags: KeyboardEnhancementFlags,
+) -> Result<TerminalModeState> {
     execute!(stderr, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
     enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
 
@@ -313,28 +323,25 @@ fn enable_terminal_modes(stderr: &mut io::Stderr) -> Result<TerminalModeState> {
         }
     };
 
-    let keyboard_enhancements_pushed =
-        if supports_keyboard_enhancement().context(KEYBOARD_ENHANCEMENT_QUERY_ERROR)? {
-            match execute!(
-                stderr,
-                PushKeyboardEnhancementFlags(
-                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                        | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
-                ),
-            ) {
-                Ok(_) => true,
-                Err(error) => {
-                    tracing::debug!(
-                        %error,
-                        "failed to enable keyboard enhancement flags for inline terminal"
-                    );
-                    false
-                }
+    let keyboard_enhancements_pushed = if !keyboard_flags.is_empty()
+        && supports_keyboard_enhancement().context(KEYBOARD_ENHANCEMENT_QUERY_ERROR)?
+    {
+        match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
+            Ok(_) => {
+                tracing::debug!(?keyboard_flags, "enabled keyboard enhancement flags");
+                true
             }
-        } else {
-            false
-        };
+            Err(error) => {
+                tracing::debug!(%error, "failed to enable keyboard enhancement flags");
+                false
+            }
+        }
+    } else {
+        if keyboard_flags.is_empty() {
+            tracing::debug!("keyboard protocol disabled via configuration");
+        }
+        false
+    };
 
     Ok(TerminalModeState {
         focus_change_enabled,
