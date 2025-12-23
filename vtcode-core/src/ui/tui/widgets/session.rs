@@ -191,15 +191,17 @@ impl<'a> SessionWidget<'a> {
 
         // Render file palette using builder pattern
         if self.session.file_palette_active
-            && let Some(palette) = self.session.file_palette.as_ref() {
-                FilePaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
-            }
+            && let Some(palette) = self.session.file_palette.as_ref()
+        {
+            FilePaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
+        }
 
         // Render prompt palette using builder pattern
         if self.session.prompt_palette_active
-            && let Some(palette) = self.session.prompt_palette.as_ref() {
-                PromptPaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
-            }
+            && let Some(palette) = self.session.prompt_palette.as_ref()
+        {
+            PromptPaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
+        }
     }
 }
 

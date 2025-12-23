@@ -264,9 +264,10 @@ impl<'a> ModalWidget<'a> {
 
         // Render instructions if present
         if let Some(text_area) = layout.text_area
-            && !lines.is_empty() {
-                self.render_instructions(text_area, buf, lines);
-            }
+            && !lines.is_empty()
+        {
+            self.render_instructions(text_area, buf, lines);
+        }
 
         // Render list
         self.render_modal_list(layout.list_area, buf, list_state);

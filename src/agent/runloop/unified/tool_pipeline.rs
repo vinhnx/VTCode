@@ -209,7 +209,8 @@ pub(crate) async fn run_tool_call(
         Some(ctx.approval_recorder),
         Some(ctx.decision_ledger),
         Some(ctx.tool_permission_cache),
-        vt_cfg.map(|cfg| cfg.security.hitl_notification_bell)
+        vt_cfg
+            .map(|cfg| cfg.security.hitl_notification_bell)
             .unwrap_or(true),
     )
     .await
