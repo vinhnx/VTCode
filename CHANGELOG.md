@@ -3,6 +3,28 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.52.0] - 2025-12-23
+
+
+### Features
+    - feat: Introduce advanced LLM parameters, add default implementations for LLMRequest, Message, and ToolChoice, and remove nextest.toml.
+    - feat: Add new model constants for grok-4-1-fast and grok-code-fast-1
+
+
+### Refactors
+    - refactor: Migrate testing from `cargo nextest` to `cargo test` and enhance Anthropic LLM configuration with new parameters.
+
+
+### Documentation
+    - docs: Add guidelines for git operations in AGENTS.md and update LLM provider configuration in vtcode.toml
+    - docs: Replace all cargo nextest references with cargo test across documentation and agent rules
+    - docs: update changelog for v0.51.2 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.51.2 [skip ci]
+    - chore: release v0.51.2
+    - chore: update npm package.json to v0.51.1 [skip ci]
 # [Version 0.51.2] - 2025-12-22
 
 
