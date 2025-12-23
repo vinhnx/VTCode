@@ -277,7 +277,9 @@ impl ConfigPalette {
                     "custom".to_string(),
                 ],
             },
-            description: Some("Keyboard enhancement preset (default/full/minimal/custom)".to_string()),
+            description: Some(
+                "Keyboard enhancement preset (default/full/minimal/custom)".to_string(),
+            ),
         });
 
         // -- Internal Section --
@@ -391,24 +393,32 @@ impl ConfigPalette {
                         changed = true;
                     }
                     "pty.command_timeout_seconds" => {
-                        let val = (self.config.pty.command_timeout_seconds as i64 + delta).clamp(10, 3600);
+                        let val = (self.config.pty.command_timeout_seconds as i64 + delta)
+                            .clamp(10, 3600);
                         self.config.pty.command_timeout_seconds = val as u64;
                         changed = true;
                     }
                     "context.max_context_tokens" => {
                         // Use larger step for tokens: 1024 if small delta, otherwise as is
-                        let step = if delta.abs() == 1 { 1024 * delta } else { delta };
-                        let val = (self.config.context.max_context_tokens as i64 + step).clamp(4096, 200000);
+                        let step = if delta.abs() == 1 {
+                            1024 * delta
+                        } else {
+                            delta
+                        };
+                        let val = (self.config.context.max_context_tokens as i64 + step)
+                            .clamp(4096, 200000);
                         self.config.context.max_context_tokens = val as usize;
                         changed = true;
                     }
                     "context.trim_to_percent" => {
-                        let val = (self.config.context.trim_to_percent as i64 + delta).clamp(10, 95);
+                        let val =
+                            (self.config.context.trim_to_percent as i64 + delta).clamp(10, 95);
                         self.config.context.trim_to_percent = val as u8;
                         changed = true;
                     }
                     "agent.max_conversation_turns" => {
-                        let val = (self.config.agent.max_conversation_turns as i64 + delta).clamp(10, 500);
+                        let val = (self.config.agent.max_conversation_turns as i64 + delta)
+                            .clamp(10, 500);
                         self.config.agent.max_conversation_turns = val as usize;
                         changed = true;
                     }
@@ -511,7 +521,9 @@ impl ConfigPalette {
                     "agent.tool_documentation_mode" => {
                         self.config.agent.tool_documentation_mode =
                             match self.config.agent.tool_documentation_mode {
-                                ToolDocumentationMode::Minimal => ToolDocumentationMode::Progressive,
+                                ToolDocumentationMode::Minimal => {
+                                    ToolDocumentationMode::Progressive
+                                }
                                 ToolDocumentationMode::Progressive => ToolDocumentationMode::Full,
                                 ToolDocumentationMode::Full => ToolDocumentationMode::Minimal,
                             };
@@ -526,7 +538,8 @@ impl ConfigPalette {
                         changed = true;
                     }
                     "agent.todo_planning_mode" => {
-                        self.config.agent.todo_planning_mode = !self.config.agent.todo_planning_mode;
+                        self.config.agent.todo_planning_mode =
+                            !self.config.agent.todo_planning_mode;
                         changed = true;
                     }
                     "agent.checkpointing.enabled" => {
@@ -598,15 +611,23 @@ mod tests {
 
     fn setup_palette() -> ConfigPalette {
         let temp_dir = std::env::temp_dir();
-        let manager = ConfigManager::load_from_workspace(temp_dir).expect("Failed to create test config manager");
+        let manager = ConfigManager::load_from_workspace(temp_dir)
+            .expect("Failed to create test config manager");
         ConfigPalette::new(manager)
     }
 
     #[test]
     fn test_initialization() {
         let palette = setup_palette();
-        assert!(!palette.items.is_empty(), "Palette should have items loaded");
-        assert_eq!(palette.selected(), Some(0), "First item should be selected by default");
+        assert!(
+            !palette.items.is_empty(),
+            "Palette should have items loaded"
+        );
+        assert_eq!(
+            palette.selected(),
+            Some(0),
+            "First item should be selected by default"
+        );
         assert!(!palette.modified, "Modified flag should be false initially");
     }
 
@@ -614,7 +635,7 @@ mod tests {
     fn test_navigation() {
         let mut palette = setup_palette();
         let item_count = palette.items.len();
-        
+
         // Test Down navigation
         palette.list_state.select(Some(0));
         palette.move_down();
@@ -633,46 +654,65 @@ mod tests {
         // Test Wrap around Up
         palette.list_state.select(Some(0));
         palette.move_up();
-        assert_eq!(palette.selected(), Some(item_count - 1), "Should wrap around to last item");
+        assert_eq!(
+            palette.selected(),
+            Some(item_count - 1),
+            "Should wrap around to last item"
+        );
     }
 
     #[test]
     fn test_toggle_bool() {
         let mut palette = setup_palette();
-        
+
         // Find a boolean item index (e.g., ui.show_timeline_pane)
-        let index = palette.items.iter().position(|i| i.key == "ui.show_timeline_pane");
+        let index = palette
+            .items
+            .iter()
+            .position(|i| i.key == "ui.show_timeline_pane");
         assert!(index.is_some(), "Should have ui.show_timeline_pane item");
         let index = index.unwrap();
 
         palette.list_state.select(Some(index));
-        
+
         let initial_value = palette.config.ui.show_timeline_pane;
-        
+
         palette.toggle_selected();
-        
-        assert_ne!(palette.config.ui.show_timeline_pane, initial_value, "Value should create toggled");
+
+        assert_ne!(
+            palette.config.ui.show_timeline_pane, initial_value,
+            "Value should create toggled"
+        );
         assert!(palette.modified, "Modified flag should be true");
-        
+
         // Toggle back
         palette.toggle_selected();
-        assert_eq!(palette.config.ui.show_timeline_pane, initial_value, "Value should default back");
+        assert_eq!(
+            palette.config.ui.show_timeline_pane, initial_value,
+            "Value should default back"
+        );
     }
 
     #[test]
     fn test_cycle_enum() {
         let mut palette = setup_palette();
-        
+
         // Find enum item (e.g., ui.tool_output_mode)
-        let index = palette.items.iter().position(|i| i.key == "ui.tool_output_mode");
+        let index = palette
+            .items
+            .iter()
+            .position(|i| i.key == "ui.tool_output_mode");
         if let Some(idx) = index {
-             palette.list_state.select(Some(idx));
-             let initial = palette.config.ui.tool_output_mode.clone();
-             
-             palette.toggle_selected();
-             
-             assert_ne!(palette.config.ui.tool_output_mode, initial, "Enum should cycle");
-             assert!(palette.modified, "Modified flag should be true");
+            palette.list_state.select(Some(idx));
+            let initial = palette.config.ui.tool_output_mode.clone();
+
+            palette.toggle_selected();
+
+            assert_ne!(
+                palette.config.ui.tool_output_mode, initial,
+                "Enum should cycle"
+            );
+            assert!(palette.modified, "Modified flag should be true");
         }
     }
 }

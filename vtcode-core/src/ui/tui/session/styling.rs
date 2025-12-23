@@ -27,7 +27,6 @@ impl SessionStyles {
         self.theme = theme;
     }
 
-
     /// Get the modal list highlight style
     pub fn modal_list_highlight_style(&self) -> Style {
         let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);

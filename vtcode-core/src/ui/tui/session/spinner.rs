@@ -40,14 +40,10 @@ impl ThinkingSpinner {
         }
     }
 
-
-
     #[allow(dead_code)]
     pub fn is_active(&self) -> bool {
         self.is_active
     }
-
-
 }
 
 impl Default for ThinkingSpinner {

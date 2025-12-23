@@ -210,7 +210,6 @@ pub async fn run_turn_loop(
     loop {
         step_count += 1;
 
-
         // Check if we've reached the maximum number of tool loops
         if step_count > max_tool_loops {
             ctx.renderer.line(
@@ -221,7 +220,6 @@ pub async fn run_turn_loop(
             // (the turn ended normally, just reached the loop limit)
             break;
         }
-
 
         // Prepare turn processing context
         let local_token_budget = ctx.token_budget.clone();
@@ -313,8 +311,7 @@ pub async fn run_turn_loop(
                 }
 
                 // Handle tool calls if any exist
-                if !tool_calls.is_empty() {
-                }
+                if !tool_calls.is_empty() {}
 
                 for tool_call in &tool_calls {
                     let function = tool_call
@@ -325,7 +322,6 @@ pub async fn run_turn_loop(
                     let args_val = tool_call
                         .parsed_arguments()
                         .unwrap_or_else(|_| serde_json::json!({}));
-
 
                     // Ensure tool permission
                     match ensure_tool_permission(
@@ -476,7 +472,6 @@ pub async fn run_turn_loop(
                         .parsed_arguments()
                         .unwrap_or_else(|_| serde_json::json!({}));
 
-
                     // Render information about the detected tool call
                     use crate::agent::runloop::unified::tool_summary::{
                         describe_tool_action, humanize_tool_name,
@@ -576,11 +571,10 @@ pub async fn run_turn_loop(
                     } else {
                         msg
                     };
-                    
+
                     if !text.is_empty() || msg_with_reasoning.reasoning.is_some() {
                         working_history.push(msg_with_reasoning);
                     }
-
 
                     break; // If we get a real text response that's not a tool call, the turn is done
                 }

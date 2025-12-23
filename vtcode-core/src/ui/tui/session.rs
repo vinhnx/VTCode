@@ -741,9 +741,6 @@ impl Session {
         self.apply_view_rows(rows);
     }
 
-
-
-
     fn recalculate_transcript_rows(&mut self) {
         // Calculate reserved rows: header + input + borders (2)
         let header_rows = self.header_rows.max(ui::INLINE_HEADER_HEIGHT);

@@ -81,7 +81,6 @@ impl Session {
         self.mark_dirty();
     }
 
-
     /// Toggle both timeline pane and logs panel visibility
     pub(super) fn toggle_timeline_and_logs(&mut self) {
         self.show_timeline_pane = !self.show_timeline_pane;

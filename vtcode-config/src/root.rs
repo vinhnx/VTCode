@@ -282,8 +282,7 @@ fn default_keyboard_protocol_enabled() -> bool {
 }
 
 fn default_keyboard_protocol_mode() -> String {
-    std::env::var("VTCODE_KEYBOARD_PROTOCOL_MODE")
-        .unwrap_or_else(|_| "default".to_string())
+    std::env::var("VTCODE_KEYBOARD_PROTOCOL_MODE").unwrap_or_else(|_| "default".to_string())
 }
 
 fn default_disambiguate_escape_codes() -> bool {

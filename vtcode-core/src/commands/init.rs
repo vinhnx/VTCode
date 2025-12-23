@@ -671,7 +671,9 @@ fn build_testing_section(analysis: &ProjectAnalysis) -> String {
     let systems = unique_preserving_order(&analysis.build_systems);
 
     if systems.iter().any(|system| system == "Cargo") {
-        lines.push("Full suite: `cargo test`. Single test: `cargo test <name> -- --nocapture`.".to_owned());
+        lines.push(
+            "Full suite: `cargo test`. Single test: `cargo test <name> -- --nocapture`.".to_owned(),
+        );
         lines.push("Lint before commit with `cargo clippy` and fix issues proactively.".to_owned());
     }
 

@@ -376,25 +376,20 @@ pub fn render_config_palette(session: &mut Session, frame: &mut Frame<'_>, viewp
         .map(|(i, item)| {
             let is_selected = palette.list_state.selected() == Some(i);
             let value_str = match &item.kind {
-                ConfigItemKind::Bool { value } => {
-                    if *value { "[X]" } else { "[ ]" }.to_string()
-                }
+                ConfigItemKind::Bool { value } => if *value { "[X]" } else { "[ ]" }.to_string(),
                 ConfigItemKind::Enum { value, .. } => format!("< {} >", value),
                 ConfigItemKind::Number { value, .. } => value.to_string(),
                 ConfigItemKind::Display { value } => value.clone(),
             };
 
-            let style = if is_selected { modal_hl_style } else { def_style };
+            let style = if is_selected {
+                modal_hl_style
+            } else {
+                def_style
+            };
 
             let label_span = Span::styled(format!("{:<30}", item.label), style);
-            let value_span = Span::styled(
-                value_str,
-                if is_selected {
-                    style
-                } else {
-                    acc_style
-                },
-            );
+            let value_span = Span::styled(value_str, if is_selected { style } else { acc_style });
 
             let mut label_line = vec![label_span, Span::raw(" "), value_span];
             if is_selected {
