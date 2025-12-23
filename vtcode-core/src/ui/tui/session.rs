@@ -599,7 +599,7 @@ impl Session {
         self.show_timeline_pane = config.ui.show_timeline_pane;
 
         // Apply theme changes in real-time
-        if let Ok(_) = crate::ui::theme::set_active_theme(&config.agent.theme) {
+        if crate::ui::theme::set_active_theme(&config.agent.theme).is_ok() {
             let active_styles = crate::ui::theme::active_styles();
             let inline_theme = crate::ui::tui::style::theme_from_styles(&active_styles);
 

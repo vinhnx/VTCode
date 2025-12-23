@@ -197,11 +197,10 @@ fn parse_list_output(output: &str) -> ListStats {
         } else {
             stats.file_count += 1;
             // Extract simple filename
-            if let Some(name) = line.split('/').last() {
-                if name.len() > 0 && name.len() < 50 {
+            if let Some(name) = line.split('/').next_back()
+                && !name.is_empty() && name.len() < 50 {
                     stats.sample_files.push(name.to_string());
                 }
-            }
         }
     }
 
@@ -225,11 +224,10 @@ fn extract_symbols(line: &str, symbols: &mut std::collections::HashSet<String>) 
     for keyword in &["struct ", "impl ", "trait ", "enum "] {
         if let Some(pos) = line.find(keyword) {
             let after_kw = &line[pos + keyword.len()..];
-            if let Some(first_word) = after_kw.split_whitespace().next() {
-                if first_word.len() < 30 && !first_word.contains('{') {
+            if let Some(first_word) = after_kw.split_whitespace().next()
+                && first_word.len() < 30 && !first_word.contains('{') {
                     symbols.insert(first_word.to_string());
                 }
-            }
         }
     }
 }

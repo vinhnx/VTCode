@@ -71,7 +71,7 @@ impl<'a> SessionWidget<'a> {
     }
 }
 
-impl<'a> Widget for &'a mut SessionWidget<'_> {
+impl Widget for &mut SessionWidget<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         if area.width == 0 || area.height == 0 {
             return;
@@ -190,18 +190,16 @@ impl<'a> SessionWidget<'a> {
         // Only render the palette widgets that work with Buffer
 
         // Render file palette using builder pattern
-        if self.session.file_palette_active {
-            if let Some(palette) = self.session.file_palette.as_ref() {
+        if self.session.file_palette_active
+            && let Some(palette) = self.session.file_palette.as_ref() {
                 FilePaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
             }
-        }
 
         // Render prompt palette using builder pattern
-        if self.session.prompt_palette_active {
-            if let Some(palette) = self.session.prompt_palette.as_ref() {
+        if self.session.prompt_palette_active
+            && let Some(palette) = self.session.prompt_palette.as_ref() {
                 PromptPaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
             }
-        }
     }
 }
 

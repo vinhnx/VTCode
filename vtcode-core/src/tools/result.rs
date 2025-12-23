@@ -96,11 +96,7 @@ impl ToolResult {
 
         let llm_tokens = estimate_tokens(&llm_str);
         let ui_tokens = estimate_tokens(&ui_str);
-        let savings = if ui_tokens > llm_tokens {
-            ui_tokens - llm_tokens
-        } else {
-            0
-        };
+        let savings = ui_tokens.saturating_sub(llm_tokens);
         let savings_pct = if ui_tokens > 0 {
             (savings as f32 / ui_tokens as f32) * 100.0
         } else {

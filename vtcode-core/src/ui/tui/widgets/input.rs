@@ -57,14 +57,13 @@ impl<'a> Widget for InputWidget<'a> {
         let mut status_line = None;
 
         // Calculate areas for input and status line
-        if area.height >= 2 {
-            if let Some(spans) = self.session.build_input_status_widget_data(area.width) {
+        if area.height >= 2
+            && let Some(spans) = self.session.build_input_status_widget_data(area.width) {
                 let block_height = area.height.saturating_sub(1).max(1);
                 input_area.height = block_height;
                 status_area = Some(Rect::new(area.x, area.y + block_height, area.width, 1));
                 status_line = Some(Line::from(spans));
             }
-        }
 
         // Create the border block first to get the inner area
         let temp_data = self.session.build_input_widget_data(1, 1); // Temporary data for style access
