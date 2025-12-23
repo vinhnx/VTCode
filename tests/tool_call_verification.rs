@@ -59,6 +59,11 @@ fn test_openai_tool_call_format() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -113,6 +118,11 @@ fn test_anthropic_tool_call_format() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -167,6 +177,11 @@ fn test_gemini_tool_call_format() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());
@@ -202,6 +217,11 @@ fn test_all_providers_tool_validation() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     let openai_request = LLMRequest {
@@ -218,6 +238,11 @@ fn test_all_providers_tool_validation() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     let anthropic_request = LLMRequest {
@@ -234,6 +259,11 @@ fn test_all_providers_tool_validation() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     let openrouter_request = LLMRequest {
@@ -250,6 +280,11 @@ fn test_all_providers_tool_validation() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     assert!(gemini.validate_request(&gemini_request).is_ok());
@@ -271,6 +306,11 @@ fn test_all_providers_tool_validation() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     assert!(lmstudio.validate_request(&lmstudio_request).is_ok());
@@ -289,6 +329,11 @@ fn test_all_providers_tool_validation() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     assert!(
@@ -342,6 +387,11 @@ fn test_openrouter_tool_call_format() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());

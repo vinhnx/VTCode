@@ -44,6 +44,7 @@ impl HuggingFaceProvider {
         Self { inner }
     }
 
+    #[allow(clippy::result_large_err)]
     fn validate_model(&self, model: &str) -> Result<(), LLMError> {
         if model.trim().is_empty() {
             let formatted_error =
