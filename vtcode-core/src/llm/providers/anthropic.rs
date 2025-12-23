@@ -979,8 +979,14 @@ impl LLMProvider for AnthropicProvider {
         "anthropic"
     }
 
-    fn supports_reasoning(&self, _model: &str) -> bool {
-        false
+    fn supports_reasoning(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+
+        models::minimax::SUPPORTED_MODELS.contains(&requested)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
@@ -1082,16 +1088,18 @@ impl LLMProvider for AnthropicProvider {
             });
         }
 
-        if !models::anthropic::SUPPORTED_MODELS
-            .iter()
-            .any(|m| *m == request.model)
-            && !models::minimax::SUPPORTED_MODELS
-                .iter()
-                .any(|m| *m == request.model)
-        {
+        let is_anthropic = models::anthropic::SUPPORTED_MODELS.contains(&request.model.as_str());
+        let is_minimax = models::minimax::SUPPORTED_MODELS.contains(&request.model.as_str());
+
+        if !is_anthropic && !is_minimax {
             let formatted_error = error_display::format_llm_error(
                 "Anthropic",
-                &format!("Unsupported model: {}", request.model),
+                &format!(
+                    "Unsupported model: {}. Supported Anthropic models: {:?}. Supported MiniMax models: {:?}",
+                    request.model,
+                    models::anthropic::SUPPORTED_MODELS,
+                    models::minimax::SUPPORTED_MODELS
+                ),
             );
             return Err(LLMError::InvalidRequest {
                 message: formatted_error,
@@ -1146,6 +1154,50 @@ mod tests {
     use crate::config::core::PromptCachingConfig;
     use crate::llm::provider::{Message, ToolDefinition};
     use serde_json::{Value, json};
+
+    #[test]
+    fn test_minimax_model_validation() {
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some(models::minimax::MINIMAX_M2_1.to_string()),
+            None,
+            None,
+            None,
+            None,
+        );
+
+        let mut request = LLMRequest::default();
+        request.messages = vec![Message::user("hi".to_string())];
+        request.model = models::minimax::MINIMAX_M2_1.to_string();
+
+        assert!(provider.validate_request(&request).is_ok());
+
+        request.model = "UnsupportedModel".to_string();
+        assert!(provider.validate_request(&request).is_err());
+    }
+
+    #[test]
+    fn test_minimax_base_url_resolution() {
+        // Default base URL
+        let url = AnthropicProvider::resolve_minimax_base_url(None);
+        assert!(url.contains("api.minimax.io/anthropic/v1") || url.contains("api.minimaxi.com/anthropic/v1"));
+
+        // Override with custom base URL
+        let url = AnthropicProvider::resolve_minimax_base_url(Some("https://custom.repo/minimax".to_string()));
+        assert_eq!(url, "https://custom.repo/minimax/v1");
+
+        // Already has v1
+        let url = AnthropicProvider::resolve_minimax_base_url(Some("https://custom.repo/minimax/v1".to_string()));
+        assert_eq!(url, "https://custom.repo/minimax/v1");
+
+        // Already has v1 but ends with slash
+        let url = AnthropicProvider::resolve_minimax_base_url(Some("https://custom.repo/minimax/v1/".to_string()));
+        assert_eq!(url, "https://custom.repo/minimax/v1");
+
+        // Ends with /messages
+        let url = AnthropicProvider::resolve_minimax_base_url(Some("https://custom.repo/minimax/messages".to_string()));
+        assert_eq!(url, "https://custom.repo/minimax/v1");
+    }
 
     fn base_prompt_cache_config() -> PromptCachingConfig {
         let mut config = PromptCachingConfig::default();

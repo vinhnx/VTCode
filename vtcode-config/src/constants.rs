@@ -861,7 +861,7 @@ pub mod urls {
     pub const HUGGINGFACE_API_BASE: &str = "https://router.huggingface.co/v1";
     pub const ANTHROPIC_API_BASE: &str = "https://api.anthropic.com/v1";
     pub const ANTHROPIC_API_VERSION: &str = "2023-06-01";
-    pub const MINIMAX_API_BASE: &str = "https://api.minimax.io/anthropic/v1";
+    pub const MINIMAX_API_BASE: &str = "https://api.minimax.io/anthropic";
     pub const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
     pub const XAI_API_BASE: &str = "https://api.x.ai/v1";
     pub const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
