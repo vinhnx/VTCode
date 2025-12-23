@@ -48,6 +48,8 @@ pub enum Provider {
     ZAI,
     /// MiniMax models
     Minimax,
+    /// Hugging Face Inference Providers
+    HuggingFace,
 }
 
 impl Provider {
@@ -65,6 +67,7 @@ impl Provider {
             Provider::XAI => "XAI_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
             Provider::Minimax => "MINIMAX_API_KEY",
+            Provider::HuggingFace => "HF_TOKEN",
         }
     }
 
@@ -82,6 +85,7 @@ impl Provider {
             Provider::XAI,
             Provider::ZAI,
             Provider::Minimax,
+            Provider::HuggingFace,
         ]
     }
 
@@ -99,6 +103,7 @@ impl Provider {
             Provider::XAI => "xAI",
             Provider::ZAI => "Z.AI",
             Provider::Minimax => "MiniMax",
+            Provider::HuggingFace => "Hugging Face",
         }
     }
 
@@ -127,6 +132,7 @@ impl Provider {
                     || model == models::minimax::MINIMAX_M2_1_LIGHTNING
                     || model == models::minimax::MINIMAX_M2
             }
+            Provider::HuggingFace => models::huggingface::REASONING_MODELS.contains(&model),
         }
     }
 }
@@ -145,6 +151,7 @@ impl fmt::Display for Provider {
             Provider::XAI => write!(f, "xai"),
             Provider::ZAI => write!(f, "zai"),
             Provider::Minimax => write!(f, "minimax"),
+            Provider::HuggingFace => write!(f, "huggingface"),
         }
     }
 }
@@ -165,6 +172,7 @@ impl FromStr for Provider {
             "xai" => Ok(Provider::XAI),
             "zai" => Ok(Provider::ZAI),
             "minimax" => Ok(Provider::Minimax),
+            "huggingface" => Ok(Provider::HuggingFace),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }
     }
@@ -220,6 +228,23 @@ pub enum ModelId {
     DeepSeekChat,
     /// DeepSeek V3.2 Reasoner - Thinking mode with structured reasoning output
     DeepSeekReasoner,
+    // Hugging Face models
+    /// DeepSeek V3.2 via Hugging Face router
+    HuggingFaceDeepseekV32,
+    /// OpenAI GPT-OSS 20B via Hugging Face router
+    HuggingFaceOpenAIGptOss20b,
+    /// OpenAI GPT-OSS 120B via Hugging Face router
+    HuggingFaceOpenAIGptOss120b,
+    /// Z.AI GLM-4.7 via Hugging Face router
+    HuggingFaceGlm47,
+    /// MoonshotAI Kimi K2 Thinking via Hugging Face router
+    HuggingFaceKimiK2Thinking,
+    /// MiniMax M2 via Novita on Hugging Face router
+    HuggingFaceMinimaxM2Novita,
+    /// DeepSeek V3.2 via Novita on Hugging Face router
+    HuggingFaceDeepseekV32Novita,
+    /// Xiaomi MiMo-V2-Flash via Novita on Hugging Face router
+    HuggingFaceXiaomiMimoV2FlashNovita,
 
     // xAI models
     /// Grok-4 - Flagship xAI model with advanced reasoning
@@ -492,6 +517,19 @@ impl ModelId {
             ModelId::GPT5Mini => models::GPT_5_MINI,
             ModelId::GPT5Nano => models::GPT_5_NANO,
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
+            ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
+            ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
+            // Hugging Face models
+            ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
+            ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
+            ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
+            ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
+            ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
+            ModelId::HuggingFaceMinimaxM2Novita => models::huggingface::MINIMAX_M2_NOVITA,
+            ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
+                models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
+            }
             // Anthropic models
             ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_5,
@@ -572,6 +610,14 @@ impl ModelId {
             | ModelId::ClaudeHaiku45
             | ModelId::ClaudeSonnet4 => Provider::Anthropic,
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
+            ModelId::HuggingFaceDeepseekV32
+            | ModelId::HuggingFaceOpenAIGptOss20b
+            | ModelId::HuggingFaceOpenAIGptOss120b
+            | ModelId::HuggingFaceGlm47
+            | ModelId::HuggingFaceKimiK2Thinking
+            | ModelId::HuggingFaceMinimaxM2Novita
+            | ModelId::HuggingFaceDeepseekV32Novita
+            | ModelId::HuggingFaceXiaomiMimoV2FlashNovita => Provider::HuggingFace,
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
             | ModelId::XaiGrok4Code
@@ -816,8 +862,36 @@ impl ModelId {
             ModelId::MinimaxM21 => {
                 "Latest MiniMax-M2.1 model with enhanced code understanding and reasoning"
             }
-            ModelId::MinimaxM21Lightning => "Fast version of MiniMax-M2.1 for rapid conversational tasks",
-            ModelId::MinimaxM2 => "MiniMax-M2 reasoning-focused model optimized for dialogue",
+            ModelId::MinimaxM21Lightning => {
+                "Fast version of MiniMax-M2.1 for rapid conversational tasks"
+            }
+            ModelId::MinimaxM2 => {
+                "MiniMax-M2 via Anthropic-compatible API with reasoning and tool use"
+            }
+            ModelId::HuggingFaceDeepseekV32 => {
+                "DeepSeek-V3.2 via Hugging Face router for advanced reasoning"
+            }
+            ModelId::HuggingFaceOpenAIGptOss20b => {
+                "OpenAI GPT-OSS 20B via Hugging Face router"
+            }
+            ModelId::HuggingFaceOpenAIGptOss120b => {
+                "OpenAI GPT-OSS 120B via Hugging Face router"
+            }
+            ModelId::HuggingFaceGlm47 => {
+                "Z.AI GLM-4.7 via Hugging Face router"
+            }
+            ModelId::HuggingFaceKimiK2Thinking => {
+                "MoonshotAI Kimi K2 Thinking via Hugging Face router"
+            }
+            ModelId::HuggingFaceMinimaxM2Novita => {
+                "MiniMax-M2 model via Novita inference provider on HuggingFace router."
+            }
+            ModelId::HuggingFaceDeepseekV32Novita => {
+                "DeepSeek-V3.2 via Novita inference provider on HuggingFace router."
+            }
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
+                "Xiaomi MiMo-V2-Flash via Novita on HuggingFace router."
+            }
             _ => unreachable!(),
         }
     }
@@ -885,9 +959,19 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt,
             ModelId::LmStudioGemma29BIt,
             ModelId::LmStudioPhi31Mini4kInstruct,
+            // MiniMax models
             ModelId::MinimaxM21,
             ModelId::MinimaxM21Lightning,
             ModelId::MinimaxM2,
+            // Hugging Face models
+            ModelId::HuggingFaceDeepseekV32,
+            ModelId::HuggingFaceOpenAIGptOss20b,
+            ModelId::HuggingFaceOpenAIGptOss120b,
+            ModelId::HuggingFaceGlm47,
+            ModelId::HuggingFaceKimiK2Thinking,
+            ModelId::HuggingFaceMinimaxM2Novita,
+            ModelId::HuggingFaceDeepseekV32Novita,
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
         ];
         models.extend(Self::openrouter_models());
         models

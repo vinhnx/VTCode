@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "minimax"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "MINIMAX_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "deepseek-ai/DeepSeek-V3.2"
+default_model = "MiniMax-M2.1"
 
 # Visual theme for the terminal interface
 theme = "vitesse-black"
@@ -183,6 +183,7 @@ max_file_size_kb = 64
 # Custom API keys for specific providers
 [agent.custom_api_keys]
 zai = "19fec89b0bb345b1af4734e7db1cb658.qhb1sd8r0oWB08oA"
+minimax = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJWaW5oIE5ndXllbiIsIlVzZXJOYW1lIjoiVmluaCBOZ3V5ZW4iLCJBY2NvdW50IjoiIiwiU3ViamVjdElEIjoiMTk4MjA1NTE5Njk5MzI2MjQ5NyIsIlBob25lIjoiIiwiR3JvdXBJRCI6IjE5ODIwNTUxNTA1NjY1MTU2MTgiLCJQYWdlTmFtZSI6IiIsIk1haWwiOiJ2aW5obmd1eWVuMjMwOEBnbWFpbC5jb20iLCJDcmVhdGVUaW1lIjoiMjAyNS0xMC0yNSAyMjowOTowNSIsIlRva2VuVHlwZSI6MSwiaXNzIjoibWluaW1heCJ9.TUKz1QXvLQDbZQdDbsiD-vGs3SUKRI6vwbLFeeG7F-u8lhGAyuUg6WECHzNDmDHr_gEGju0JXxnVP1ykKxEX8Tm2olIHCzGyxdqvWBm-MIyaUJ7V7P1Dtw1biVTlCJHhFFYxJ8yQQCYg9oGgZhs3-Ig3cwOeqWZp1j6MXm-NZVa59R9QIbZVcMzdC3p144ZHyzsDJ-YD-yPlkNHZqWkYsPc0CGod4crQ1CsQMCeESh42gZ06bnkdkX6mON_Qciq_HUBrmcf_qvg8uT2v5lzqRJLm7YVeKKlUEHgb-k1ysEzQeY6H6-1JV2eHAmuhpELGKfdhKMET0FmjAWYKT-m_dA"
 # Moonshot AI API key (for specific provider access)
 # moonshot = ""
 
