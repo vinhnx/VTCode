@@ -127,7 +127,7 @@ impl<'a> ModalWidget<'a> {
             ModalType::Text { lines } => {
                 let width = lines
                     .iter()
-                    .map(|line| crate::ui::tui::style::measure_text_width(line) as u16)
+                    .map(|line| crate::ui::tui::style::measure_text_width(line))
                     .max()
                     .unwrap_or(40);
                 (width, lines.len(), 0, 0, false)
@@ -162,7 +162,7 @@ impl<'a> ModalWidget<'a> {
             ModalType::SecurePrompt { lines, .. } => {
                 let width = lines
                     .iter()
-                    .map(|line| crate::ui::tui::style::measure_text_width(line) as u16)
+                    .map(|line| crate::ui::tui::style::measure_text_width(line))
                     .max()
                     .unwrap_or(40)
                     .max(ui::MODAL_MIN_WIDTH);
@@ -263,14 +263,13 @@ impl<'a> ModalWidget<'a> {
         let layout = ModalListLayout::new(area, lines.len());
 
         // Render instructions if present
-        if let Some(text_area) = layout.text_area {
-            if !lines.is_empty() {
+        if let Some(text_area) = layout.text_area
+            && !lines.is_empty() {
                 self.render_instructions(text_area, buf, lines);
             }
-        }
 
         // Render list
-        self.render_modal_list(layout.list_area, buf, &*list_state);
+        self.render_modal_list(layout.list_area, buf, list_state);
     }
 
     fn render_wizard_modal(&self, area: Rect, buf: &mut Buffer, wizard_state: &WizardModalState) {

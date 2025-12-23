@@ -20,6 +20,12 @@ pub struct PromptPalette {
     filter_cache: std::collections::HashMap<String, Vec<PromptEntry>>,
 }
 
+impl Default for PromptPalette {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PromptPalette {
     pub fn new() -> Self {
         Self {

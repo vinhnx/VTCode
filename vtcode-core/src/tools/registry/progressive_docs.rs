@@ -35,6 +35,7 @@ use std::collections::HashMap;
 /// Documentation mode for tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ToolDocumentationMode {
     /// Minimal signatures only (~800 tokens total)
     /// Best for: Power users, token-constrained contexts
@@ -46,14 +47,10 @@ pub enum ToolDocumentationMode {
 
     /// Full documentation upfront (~3,000 tokens total)
     /// Best for: Maximum hand-holding, current behavior
+    #[default]
     Full,
 }
 
-impl Default for ToolDocumentationMode {
-    fn default() -> Self {
-        Self::Full // Backward compatibility - current behavior
-    }
-}
 
 impl ToolDocumentationMode {
     pub fn as_str(self) -> &'static str {

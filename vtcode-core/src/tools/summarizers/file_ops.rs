@@ -135,7 +135,7 @@ impl Summarizer for EditSummarizer {
                 .take(5)
                 .map(|f| {
                     // Extract just filename from path
-                    f.split('/').last().unwrap_or(f)
+                    f.split('/').next_back().unwrap_or(f)
                 })
                 .collect::<Vec<_>>()
                 .join(", ");

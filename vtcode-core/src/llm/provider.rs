@@ -57,6 +57,7 @@ use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 
 /// Universal LLM request structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct LLMRequest {
     pub messages: Vec<Message>,
     pub system_prompt: Option<String>,
@@ -96,39 +97,17 @@ pub struct LLMRequest {
     pub stop_sequences: Option<Vec<String>>,
 }
 
-impl Default for LLMRequest {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            system_prompt: None,
-            tools: None,
-            model: String::new(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
-            output_format: None,
-            tool_choice: None, // Default to None, allowing provider to decide or be explicitly set
-            parallel_tool_calls: None, // Default to None, allowing provider to decide or be explicitly set
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
-            top_p: None,
-            top_k: None,
-            presence_penalty: None,
-            frequency_penalty: None,
-            stop_sequences: None,
-        }
-    }
-}
 
 /// Tool choice configuration that works across different providers
 /// Based on OpenAI, Anthropic, and Gemini API specifications
 /// Follows Anthropic's tool use best practices for optimal performance
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
+#[derive(Default)]
 pub enum ToolChoice {
     /// Let the model decide whether to call tools ("auto")
     /// Default behavior - allows model to use tools when appropriate
+    #[default]
     Auto,
 
     /// Force the model to not call any tools ("none")
@@ -144,11 +123,6 @@ pub enum ToolChoice {
     Specific(SpecificToolChoice),
 }
 
-impl Default for ToolChoice {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
 
 /// Specific tool choice for forcing a particular function call
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -361,6 +335,7 @@ impl ContentPart {
 
 /// Universal message structure supporting both text and image content
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct Message {
     #[serde(default)]
     pub role: MessageRole,
@@ -381,19 +356,6 @@ pub struct Message {
     pub origin_tool: Option<String>,
 }
 
-impl Default for Message {
-    fn default() -> Self {
-        Self {
-            role: MessageRole::default(),
-            content: MessageContent::default(),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
-            tool_call_id: None,
-            origin_tool: None,
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]

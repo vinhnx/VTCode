@@ -409,7 +409,7 @@ pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
             new_input.push(' ');
         }
         let position = new_input.len();
-        new_input.push_str(&suffix);
+        new_input.push_str(suffix);
         position
     };
 

@@ -38,11 +38,7 @@ pub trait Summarizer {
     fn estimate_savings(&self, full_output: &str, summary: &str) -> (usize, usize, f32) {
         let ui_tokens = estimate_tokens(full_output);
         let llm_tokens = estimate_tokens(summary);
-        let savings = if ui_tokens > llm_tokens {
-            ui_tokens - llm_tokens
-        } else {
-            0
-        };
+        let savings = ui_tokens.saturating_sub(llm_tokens);
         let savings_pct = if ui_tokens > 0 {
             (savings as f32 / ui_tokens as f32) * 100.0
         } else {

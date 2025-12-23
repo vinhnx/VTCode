@@ -371,8 +371,8 @@ impl ConfigPalette {
     }
 
     pub fn adjust_numeric_val(&mut self, delta: i64) {
-        if let Some(index) = self.selected() {
-            if let Some(item) = self.items.get(index) {
+        if let Some(index) = self.selected()
+            && let Some(item) = self.items.get(index) {
                 let key = item.key.clone();
                 let mut changed = false;
 
@@ -430,12 +430,11 @@ impl ConfigPalette {
                     self.reload_items_from_config();
                 }
             }
-        }
     }
 
     pub fn toggle_selected(&mut self) {
-        if let Some(index) = self.selected() {
-            if let Some(item) = self.items.get(index) {
+        if let Some(index) = self.selected()
+            && let Some(item) = self.items.get(index) {
                 let key = item.key.clone();
                 let mut changed = false;
 
@@ -592,7 +591,6 @@ impl ConfigPalette {
                     self.reload_items_from_config();
                 }
             }
-        }
     }
 
     pub fn apply_changes(&mut self) -> anyhow::Result<()> {

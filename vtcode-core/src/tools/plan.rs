@@ -367,11 +367,10 @@ fn render_plan_markdown(plan: &TaskPlan) -> String {
         );
     }
 
-    if let Some(explanation) = &plan.explanation {
-        if !explanation.is_empty() {
+    if let Some(explanation) = &plan.explanation
+        && !explanation.is_empty() {
             let _ = writeln!(output, "\nFocus: {}", explanation);
         }
-    }
 
     let _ = writeln!(output, "\n## Steps");
     for (idx, step) in plan.steps.iter().enumerate() {
