@@ -3,6 +3,48 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.52.2] - 2025-12-24
+
+
+### Features
+    - feat: Add MiniMax model support to the Anthropic provider and adjust its API base URL.
+    - feat: Reorganize Hugging Face model identifiers and enhance Anthropic model validation
+    - feat: Add Hugging Face provider support and update configuration
+    - feat: Update model provider to OpenAI and enhance Responses API handling
+    - feat: Expand Hugging Face model support and update provider implementation
+    - feat: Update model references and configuration for Z.AI GLM-4.7
+    - feat: Add missing OpenRouter model entries and update reasoning handling
+    - feat: Enhance OpenAI responses handling with tool call parsing and sampling parameters
+    - feat: Update tool policies and add new Grok models to configuration
+    - feat: Add Z.AI GLM-4.7 model to models.json and update constants
+    - feat: Include Claude agent configurations and GitHub workflows in version control, and update existing agent definitions, skills, commands, hooks, and CI/CD configurations.
+    - feat: Introduce agent giving-up reasoning detection and constructive responses, and set `execute_code` tool policy to prompt.
+    - feat: add keyboard protocol configuration and documentation for enhanced keyboard event handling
+
+
+### Bug Fixes
+    - fix: add missing package-lock.json      r npm CI workflow
+
+
+### Refactors
+    - refactor: simplify configuration handling and update tool permissions in multiple files
+    - refactor: apply clippy fixes for code quality improvements
+    - refactor: clean up whitespace and formatting across multiple files for improved readability
+
+
+### Documentation
+    - docs: update changelog for v0.52.1 [skip ci]
+
+
+### Tests
+    - test: add missing fields to LLMRequest initializers
+
+
+### Chores
+    - chore: remove temporary file `temp_check.rs`
+    - chore: update npm package.json to v0.52.1 [skip ci]
+    - chore: release v0.52.1
+    - chore: update npm package.json to v0.52.0 [skip ci]
 # [Version 0.52.1] - 2025-12-23
 
 
