@@ -133,7 +133,6 @@ pub(crate) async fn handle_tool_execution_result(
                     }
                 }
             }
-
         }
         ToolExecutionStatus::Failure { error } => {
             // Add error result to history

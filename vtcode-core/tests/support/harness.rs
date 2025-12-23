@@ -66,5 +66,3 @@ fn next_session_id() -> String {
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("harness_session_{}", id)
 }
-
-

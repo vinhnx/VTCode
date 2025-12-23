@@ -17,6 +17,7 @@ use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 use std::env;
 
+use super::anthropic_types::ThinkingConfig;
 use super::{
     common::{
         convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url,
@@ -25,7 +26,6 @@ use super::{
     error_handling::{format_network_error, format_parse_error, handle_anthropic_http_error},
     extract_reasoning_trace,
 };
-use super::anthropic_types::ThinkingConfig;
 
 pub struct AnthropicProvider {
     api_key: String,
@@ -627,7 +627,9 @@ impl AnthropicProvider {
                                         cache_control: None,
                                     });
                                 }
-                            } else if detail.get("type").and_then(|t| t.as_str()) == Some("redacted_thinking") {
+                            } else if detail.get("type").and_then(|t| t.as_str())
+                                == Some("redacted_thinking")
+                            {
                                 let data = detail
                                     .get("data")
                                     .and_then(|d| d.as_str())
@@ -852,8 +854,8 @@ impl AnthropicProvider {
                     }
                 }
                 Some("redacted_thinking") => {
-                     // Handle redacted thinking blocks (store raw block)
-                     reasoning_details_vec.push(block.clone());
+                    // Handle redacted thinking blocks (store raw block)
+                    reasoning_details_vec.push(block.clone());
                 }
                 Some("tool_use") => {
                     let id = block
@@ -1660,7 +1662,7 @@ mod tests_refinement {
     #[test]
     fn test_new_thinking_block_deserialization() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let response_json = json!({
             "id": "msg_123",
             "type": "message",
@@ -1688,14 +1690,16 @@ mod tests_refinement {
             }
         });
 
-        let response = provider.parse_anthropic_response(response_json).expect("Failed to parse response");
+        let response = provider
+            .parse_anthropic_response(response_json)
+            .expect("Failed to parse response");
 
         // Verify text content mapping
         assert_eq!(response.content.as_deref(), Some("The answer is 120."));
 
         // Verify reasoning details hydration
         assert!(response.reasoning.is_some());
-        
+
         let reasoning_str = response.reasoning.unwrap();
         assert!(reasoning_str.contains("I need to calculate the factorial of 5..."));
     }
@@ -1705,14 +1709,14 @@ mod tests_refinement {
         // Setup provider with thinking config
         let mut config = AnthropicConfig::default();
         config.interleaved_thinking_budget_tokens = 4096;
-        
+
         let provider = AnthropicProvider::from_config(
             Some("key".to_string()),
             Some("claude-sonnet-4-5-20250929".to_string()), // A model that supports reasoning
             None,
             None,
             None,
-            Some(config)
+            Some(config),
         );
 
         let request = LLMRequest {
@@ -1722,19 +1726,22 @@ mod tests_refinement {
         };
 
         // Convert
-        let val = provider.convert_to_anthropic_format(&request).expect("Serialization failed");
-        
+        let val = provider
+            .convert_to_anthropic_format(&request)
+            .expect("Serialization failed");
+
         // Assertions
-        let anthropic_req: AnthropicRequest = serde_json::from_value(val).expect("Failed to deserialize to AnthropicRequest");
-        
+        let anthropic_req: AnthropicRequest =
+            serde_json::from_value(val).expect("Failed to deserialize to AnthropicRequest");
+
         assert!(anthropic_req.thinking.is_some());
-        
+
         if let Some(ThinkingConfig::Enabled { budget_tokens }) = anthropic_req.thinking {
             assert_eq!(budget_tokens, 4096);
         } else {
             panic!("Expected ThinkingConfig::Enabled");
         }
-        
+
         // Ensure legacy reasoning is NOT present if thinking is used (based on logic)
         assert!(anthropic_req.reasoning.is_none());
     }

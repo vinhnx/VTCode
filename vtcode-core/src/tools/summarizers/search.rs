@@ -236,8 +236,8 @@ fn extract_symbols(line: &str, symbols: &mut std::collections::HashSet<String>) 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::estimate_tokens;
+    use super::*;
 
     #[test]
     fn test_grep_summarizer() {

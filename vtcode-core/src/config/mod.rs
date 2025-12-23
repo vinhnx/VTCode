@@ -102,7 +102,10 @@ pub fn keyboard_protocol_to_flags(
             flags
         }
         _ => {
-            tracing::warn!("Invalid keyboard protocol mode '{}', using default", config.mode);
+            tracing::warn!(
+                "Invalid keyboard protocol mode '{}', using default",
+                config.mode
+            );
             KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
                 | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
                 | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS

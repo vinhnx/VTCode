@@ -218,7 +218,11 @@ impl LLMProvider for GeminiProvider {
 
     fn effective_context_size(&self, model: &str) -> usize {
         // Gemini 3 and Gemini 2.5 models have 1M input context window
-        if model.contains("2.5") || model.contains("3") || model.contains("2.0") || model.contains("1.5-pro") {
+        if model.contains("2.5")
+            || model.contains("3")
+            || model.contains("2.0")
+            || model.contains("1.5-pro")
+        {
             2_097_152 // 2M tokens for Gemini 1.5 Pro, 2.x and 3.x models
         } else {
             1_048_576 // 1M tokens for other current models
@@ -228,10 +232,7 @@ impl LLMProvider for GeminiProvider {
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let gemini_request = self.convert_to_gemini_request(&request)?;
 
-        let url = format!(
-            "{}/models/{}:generateContent",
-            self.base_url, request.model
-        );
+        let url = format!("{}/models/{}:generateContent", self.base_url, request.model);
 
         let response = self
             .http_client
@@ -448,7 +449,11 @@ impl GeminiProvider {
 
     /// Get maximum input token limit for a model
     pub fn max_input_tokens(model: &str) -> usize {
-        if model.contains("2.5") || model.contains("3") || model.contains("2.0") || model.contains("1.5-pro") {
+        if model.contains("2.5")
+            || model.contains("3")
+            || model.contains("2.0")
+            || model.contains("1.5-pro")
+        {
             2_097_152 // 2M tokens for Gemini 1.5 Pro, 2.x and 3.x models
         } else {
             1_048_576 // 1M tokens for other current models
@@ -698,20 +703,29 @@ impl GeminiProvider {
                 let thinking_level = match effort {
                     ReasoningEffortLevel::None => Some("low"),
                     ReasoningEffortLevel::Minimal => {
-                        if is_gemini3_flash { Some("minimal") } else { Some("low") }
+                        if is_gemini3_flash {
+                            Some("minimal")
+                        } else {
+                            Some("low")
+                        }
                     }
                     ReasoningEffortLevel::Low => Some("low"),
                     ReasoningEffortLevel::Medium => {
-                        if is_gemini3_flash { Some("medium") } else { Some("high") }
+                        if is_gemini3_flash {
+                            Some("medium")
+                        } else {
+                            Some("high")
+                        }
                     }
                     ReasoningEffortLevel::High => Some("high"),
                     ReasoningEffortLevel::XHigh => Some("high"),
                 };
 
                 if let Some(level) = thinking_level {
-                    generation_config.thinking_config = Some(crate::gemini::models::ThinkingConfig {
-                        thinking_level: Some(level.to_string()),
-                    });
+                    generation_config.thinking_config =
+                        Some(crate::gemini::models::ThinkingConfig {
+                            thinking_level: Some(level.to_string()),
+                        });
                 }
             }
         }
@@ -1490,7 +1504,10 @@ mod tests {
             .thinking_config
             .as_ref()
             .expect("thinking_config should be present");
-        assert_eq!(thinking_config_low.thinking_level.as_deref().unwrap(), "low");
+        assert_eq!(
+            thinking_config_low.thinking_level.as_deref().unwrap(),
+            "low"
+        );
 
         // Test that None effort results in low reasoning_config for Gemini (none is treated as low)
         let request_none = LLMRequest {
@@ -1512,7 +1529,10 @@ mod tests {
             .thinking_config
             .as_ref()
             .expect("thinking_config should be present");
-        assert_eq!(thinking_config_none.thinking_level.as_deref().unwrap(), "low");
+        assert_eq!(
+            thinking_config_none.thinking_level.as_deref().unwrap(),
+            "low"
+        );
     }
 
     #[test]
@@ -1828,7 +1848,10 @@ mod tests {
         assert_eq!(config.presence_penalty, Some(0.6));
         assert_eq!(config.frequency_penalty, Some(0.5));
         assert_eq!(
-            config.stop_sequences.as_ref().and_then(|s| s.first().cloned()),
+            config
+                .stop_sequences
+                .as_ref()
+                .and_then(|s| s.first().cloned()),
             Some("STOP".to_string())
         );
     }
