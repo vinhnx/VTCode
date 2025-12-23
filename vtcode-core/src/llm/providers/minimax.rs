@@ -35,7 +35,7 @@ impl MinimaxProvider {
         timeouts: Option<TimeoutsConfig>,
         anthropic: Option<AnthropicConfig>,
     ) -> Self {
-        let effective_model = model.unwrap_or_else(|| models::minimax::MINIMAX_M2.to_string());
+        let effective_model = model.unwrap_or_else(|| models::minimax::MINIMAX_M2_1.to_string());
 
         let inner = AnthropicProvider::from_config(
             api_key,
@@ -108,7 +108,10 @@ impl LLMProvider for MinimaxProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        vec![models::minimax::MINIMAX_M2.to_string()]
+        models::minimax::SUPPORTED_MODELS
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {

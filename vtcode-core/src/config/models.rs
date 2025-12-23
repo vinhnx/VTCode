@@ -128,7 +128,11 @@ impl Provider {
             Provider::Moonshot => false,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6 || model == models::zai::GLM_4_7,
-            Provider::Minimax => model == models::minimax::MINIMAX_M2,
+            Provider::Minimax => {
+                model == models::minimax::MINIMAX_M2_1
+                    || model == models::minimax::MINIMAX_M2_1_LIGHTNING
+                    || model == models::minimax::MINIMAX_M2
+            }
         }
     }
 }
@@ -246,6 +250,12 @@ pub enum ModelId {
     HuggingFaceGlm47,
     /// MoonshotAI Kimi K2 Thinking via Hugging Face router
     HuggingFaceKimiK2Thinking,
+    /// MiniMax M2 via Novita on Hugging Face router
+    HuggingFaceMinimaxM2Novita,
+    /// DeepSeek V3.2 via Novita on Hugging Face router
+    HuggingFaceDeepseekV32Novita,
+    /// Xiaomi MiMo-V2-Flash via Novita on Hugging Face router
+    HuggingFaceXiaomiMimoV2FlashNovita,
 
     // xAI models
     /// Grok-4 - Flagship xAI model with advanced reasoning
@@ -329,6 +339,10 @@ pub enum ModelId {
     LmStudioPhi31Mini4kInstruct,
 
     // MiniMax models
+    /// MiniMax-M2.1 - Latest MiniMax model with enhanced code understanding and reasoning
+    MinimaxM21,
+    /// MiniMax-M2.1-lightning - Fast version of MiniMax-M2.1
+    MinimaxM21Lightning,
     /// MiniMax-M2 - MiniMax reasoning-focused model via Anthropic-compatible API
     MinimaxM2,
 
@@ -487,6 +501,11 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
             ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
             ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
+            ModelId::HuggingFaceMinimaxM2Novita => models::huggingface::MINIMAX_M2_NOVITA,
+            ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
+                models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
+            }
             // xAI models
             ModelId::XaiGrok4 => models::xai::GROK_4,
             ModelId::XaiGrok4Mini => models::xai::GROK_4_MINI,
@@ -530,6 +549,8 @@ impl ModelId {
             ModelId::LmStudioGemma29BIt => models::lmstudio::GEMMA_2_9B_IT,
             ModelId::LmStudioPhi31Mini4kInstruct => models::lmstudio::PHI_31_MINI_4K_INSTRUCT,
             // MiniMax models
+            ModelId::MinimaxM21 => models::minimax::MINIMAX_M2_1,
+            ModelId::MinimaxM21Lightning => models::minimax::MINIMAX_M2_1_LIGHTNING,
             ModelId::MinimaxM2 => models::minimax::MINIMAX_M2,
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
@@ -614,7 +635,10 @@ impl ModelId {
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
             | ModelId::HuggingFaceGlm47
-            | ModelId::HuggingFaceKimiK2Thinking => Provider::HuggingFace,
+            | ModelId::HuggingFaceKimiK2Thinking
+            | ModelId::HuggingFaceMinimaxM2Novita
+            | ModelId::HuggingFaceDeepseekV32Novita
+            | ModelId::HuggingFaceXiaomiMimoV2FlashNovita => Provider::HuggingFace,
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
             | ModelId::XaiGrok4Code
@@ -651,7 +675,9 @@ impl ModelId {
             | ModelId::LmStudioGemma22BIt
             | ModelId::LmStudioGemma29BIt
             | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
-            ModelId::MinimaxM2 => Provider::Minimax,
+            ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning | ModelId::MinimaxM2 => {
+                Provider::Minimax
+            }
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
             | ModelId::OpenRouterGrok4Fast
@@ -760,6 +786,7 @@ impl ModelId {
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
             ModelId::ZaiGlm47 => Some(ModelId::ZaiGlm45Flash),
             ModelId::ZaiGlm46 => Some(ModelId::ZaiGlm45Flash),
+            ModelId::MinimaxM21 => Some(ModelId::MinimaxM21Lightning),
             _ => None,
         };
 
@@ -813,6 +840,9 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
             ModelId::HuggingFaceGlm47 => "GLM-4.7 (HF)",
             ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
+            ModelId::HuggingFaceMinimaxM2Novita => "MiniMax-M2 (Novita)",
+            ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
             // xAI models
             ModelId::XaiGrok4 => "Grok-4",
             ModelId::XaiGrok4Mini => "Grok-4 Mini",
@@ -855,6 +885,8 @@ impl ModelId {
             ModelId::LmStudioGemma29BIt => "Gemma 2 9B (LM Studio)",
             ModelId::LmStudioPhi31Mini4kInstruct => "Phi-3.1 Mini 4K (LM Studio)",
             // MiniMax models
+            ModelId::MinimaxM21 => "MiniMax-M2.1",
+            ModelId::MinimaxM21Lightning => "MiniMax-M2.1-lightning",
             ModelId::MinimaxM2 => "MiniMax-M2",
             // OpenRouter models
             _ => unreachable!(),
@@ -945,6 +977,15 @@ impl ModelId {
             }
             ModelId::HuggingFaceKimiK2Thinking => {
                 "MoonshotAI Kimi K2 Thinking routed through Hugging Face"
+            }
+            ModelId::HuggingFaceMinimaxM2Novita => {
+                "MiniMax-M2 model via Novita inference provider on HuggingFace router."
+            }
+            ModelId::HuggingFaceDeepseekV32Novita => {
+                "DeepSeek-V3.2 via Novita inference provider on HuggingFace router."
+            }
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
+                "Xiaomi MiMo-V2-Flash via Novita on HuggingFace router."
             }
             // xAI models
             ModelId::XaiGrok4 => "Flagship Grok 4 model with long context and tool use",
@@ -1042,6 +1083,12 @@ impl ModelId {
                 "Phi-3.1 Mini 4K hosted in LM Studio for compact reasoning and experimentation"
             }
             // MiniMax models
+            ModelId::MinimaxM21 => {
+                "Latest MiniMax-M2.1 model with enhanced code understanding and reasoning"
+            }
+            ModelId::MinimaxM21Lightning => {
+                "Fast version of MiniMax-M2.1 for rapid conversational tasks"
+            }
             ModelId::MinimaxM2 => {
                 "MiniMax-M2 via Anthropic-compatible API with reasoning and tool use"
             }
@@ -1135,6 +1182,9 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b,
             ModelId::HuggingFaceGlm47,
             ModelId::HuggingFaceKimiK2Thinking,
+            ModelId::HuggingFaceMinimaxM2Novita,
+            ModelId::HuggingFaceDeepseekV32Novita,
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
             // xAI models
             ModelId::XaiGrok4,
             ModelId::XaiGrok4Mini,
@@ -1178,6 +1228,8 @@ impl ModelId {
             ModelId::LmStudioGemma29BIt,
             ModelId::LmStudioPhi31Mini4kInstruct,
             // MiniMax models
+            ModelId::MinimaxM21,
+            ModelId::MinimaxM21Lightning,
             ModelId::MinimaxM2,
         ];
         models.extend(Self::openrouter_models());
@@ -1234,7 +1286,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25Pro,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus45,
-            Provider::Minimax => ModelId::MinimaxM2,
+            Provider::Minimax => ModelId::MinimaxM21,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
@@ -1252,7 +1304,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5Mini,
             Provider::Anthropic => ModelId::ClaudeSonnet45,
-            Provider::Minimax => ModelId::MinimaxM2,
+            Provider::Minimax => ModelId::MinimaxM21Lightning,
             Provider::DeepSeek => ModelId::DeepSeekChat,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss20b,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
@@ -1270,7 +1322,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
-            Provider::Minimax => ModelId::MinimaxM2,
+            Provider::Minimax => ModelId::MinimaxM21,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
             Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
@@ -1291,6 +1343,7 @@ impl ModelId {
                 | ModelId::Gemini25FlashLite
                 | ModelId::Gemini3FlashPreview
                 | ModelId::ZaiGlm45Flash
+                | ModelId::MinimaxM21Lightning
         )
     }
 
@@ -1310,6 +1363,7 @@ impl ModelId {
                 | ModelId::ZaiGlm46
                 | ModelId::ZaiGlm46DeepThinking
                 | ModelId::ZaiGlm45DeepThinking
+                | ModelId::MinimaxM21
         )
     }
 
@@ -1413,6 +1467,9 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             ModelId::HuggingFaceGlm47 => "4.7",
             ModelId::HuggingFaceKimiK2Thinking => "k2",
+            ModelId::HuggingFaceMinimaxM2Novita => "m2",
+            ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
+            ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
             // xAI generations
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
@@ -1452,6 +1509,7 @@ impl ModelId {
             ModelId::LmStudioGemma29BIt => "gemma-2",
             ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
             // MiniMax models
+            ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning => "M2.1",
             ModelId::MinimaxM2 => "m2",
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
@@ -1578,6 +1636,15 @@ impl FromStr for ModelId {
             s if s == models::huggingface::MOONSHOT_KIMI_K2_THINKING => {
                 Ok(ModelId::HuggingFaceKimiK2Thinking)
             }
+            s if s == models::huggingface::MINIMAX_M2_NOVITA => {
+                Ok(ModelId::HuggingFaceMinimaxM2Novita)
+            }
+            s if s == models::huggingface::DEEPSEEK_V32_NOVITA => {
+                Ok(ModelId::HuggingFaceDeepseekV32Novita)
+            }
+            s if s == models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA => {
+                Ok(ModelId::HuggingFaceXiaomiMimoV2FlashNovita)
+            }
             // xAI models
             s if s == models::xai::GROK_4 => Ok(ModelId::XaiGrok4),
             s if s == models::xai::GROK_4_MINI => Ok(ModelId::XaiGrok4Mini),
@@ -1637,6 +1704,8 @@ impl FromStr for ModelId {
                 Ok(ModelId::LmStudioPhi31Mini4kInstruct)
             }
             // MiniMax models
+            s if s == models::minimax::MINIMAX_M2_1 => Ok(ModelId::MinimaxM21),
+            s if s == models::minimax::MINIMAX_M2_1_LIGHTNING => Ok(ModelId::MinimaxM21Lightning),
             s if s == models::minimax::MINIMAX_M2 => Ok(ModelId::MinimaxM2),
             _ => Err(ModelParseError::InvalidModel(s.into())),
         }
