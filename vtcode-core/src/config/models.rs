@@ -242,8 +242,8 @@ pub enum ModelId {
     HuggingFaceOpenAIGptOss20b,
     /// OpenAI GPT-OSS 120B via Hugging Face router
     HuggingFaceOpenAIGptOss120b,
-    /// Z.AI GLM-4.6 via Hugging Face router
-    HuggingFaceGlm46,
+    /// Z.AI GLM-4.7 via Hugging Face router
+    HuggingFaceGlm47,
     /// MoonshotAI Kimi K2 Thinking via Hugging Face router
     HuggingFaceKimiK2Thinking,
 
@@ -485,7 +485,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
-            ModelId::HuggingFaceGlm46 => models::huggingface::ZAI_GLM_46,
+            ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
             ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
             // xAI models
             ModelId::XaiGrok4 => models::xai::GROK_4,
@@ -613,7 +613,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
-            | ModelId::HuggingFaceGlm46
+            | ModelId::HuggingFaceGlm47
             | ModelId::HuggingFaceKimiK2Thinking => Provider::HuggingFace,
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
@@ -811,7 +811,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => "DeepSeek V3.2 (HF)",
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
-            ModelId::HuggingFaceGlm46 => "GLM-4.6 (HF)",
+            ModelId::HuggingFaceGlm47 => "GLM-4.7 (HF)",
             ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
             // xAI models
             ModelId::XaiGrok4 => "Grok-4",
@@ -940,8 +940,8 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => {
                 "OpenAI GPT-OSS 120B available through Hugging Face Inference Providers"
             }
-            ModelId::HuggingFaceGlm46 => {
-                "Z.AI GLM-4.6 long-context reasoning model served via Hugging Face router"
+            ModelId::HuggingFaceGlm47 => {
+                "Z.AI GLM-4.7 long-context reasoning model served via Hugging Face router"
             }
             ModelId::HuggingFaceKimiK2Thinking => {
                 "MoonshotAI Kimi K2 Thinking routed through Hugging Face"
@@ -1133,7 +1133,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32,
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
-            ModelId::HuggingFaceGlm46,
+            ModelId::HuggingFaceGlm47,
             ModelId::HuggingFaceKimiK2Thinking,
             // xAI models
             ModelId::XaiGrok4,
@@ -1411,7 +1411,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => "V3.2-Exp",
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
-            ModelId::HuggingFaceGlm46 => "4.6",
+            ModelId::HuggingFaceGlm47 => "4.7",
             ModelId::HuggingFaceKimiK2Thinking => "k2",
             // xAI generations
             ModelId::XaiGrok4
@@ -1574,7 +1574,7 @@ impl FromStr for ModelId {
             s if s == models::huggingface::OPENAI_GPT_OSS_120B => {
                 Ok(ModelId::HuggingFaceOpenAIGptOss120b)
             }
-            s if s == models::huggingface::ZAI_GLM_46 => Ok(ModelId::HuggingFaceGlm46),
+            s if s == models::huggingface::ZAI_GLM_47 => Ok(ModelId::HuggingFaceGlm47),
             s if s == models::huggingface::MOONSHOT_KIMI_K2_THINKING => {
                 Ok(ModelId::HuggingFaceKimiK2Thinking)
             }
