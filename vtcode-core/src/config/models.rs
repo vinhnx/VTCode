@@ -127,7 +127,7 @@ impl Provider {
             Provider::LmStudio => false,
             Provider::Moonshot => false,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
-            Provider::ZAI => model == models::zai::GLM_4_6,
+            Provider::ZAI => model == models::zai::GLM_4_6 || model == models::zai::GLM_4_7,
             Provider::Minimax => model == models::minimax::MINIMAX_M2,
         }
     }
@@ -260,10 +260,22 @@ pub enum ModelId {
     XaiGrok4Vision,
 
     // Z.AI models
+    /// GLM-4-Plus - Newest flagship GLM model with enhanced tool use
+    ZaiGlm4Plus,
+    /// GLM-4-Plus (Deep Thinking) - Newest flagship GLM reasoning model with forced deep thinking
+    ZaiGlm4PlusDeepThinking,
+    /// GLM-4.7 - Latest flagship GLM reasoning model
+    ZaiGlm47,
+    /// GLM-4.7 (Deep Thinking) - Latest flagship GLM reasoning model with forced deep thinking
+    ZaiGlm47DeepThinking,
     /// GLM-4.6 - Latest flagship GLM reasoning model
     ZaiGlm46,
+    /// GLM-4.6 (Deep Thinking) - Latest flagship GLM reasoning model with forced deep thinking
+    ZaiGlm46DeepThinking,
     /// GLM-4.5 - Balanced GLM release for general tasks
     ZaiGlm45,
+    /// GLM-4.5 (Deep Thinking) - Balanced GLM reasoning model with forced deep thinking
+    ZaiGlm45DeepThinking,
     /// GLM-4.5-Air - Efficient GLM variant
     ZaiGlm45Air,
     /// GLM-4.5-X - Enhanced capability GLM variant
@@ -486,8 +498,14 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest => models::xai::GROK_4_CODE_LATEST,
             ModelId::XaiGrok4Vision => models::xai::GROK_4_VISION,
             // Z.AI models
+            ModelId::ZaiGlm4Plus => models::zai::GLM_4_PLUS,
+            ModelId::ZaiGlm4PlusDeepThinking => models::zai::GLM_4_PLUS_DEEP_THINKING,
+            ModelId::ZaiGlm47 => models::zai::GLM_4_7,
+             ModelId::ZaiGlm47DeepThinking => models::zai::GLM_4_7_DEEP_THINKING,
             ModelId::ZaiGlm46 => models::zai::GLM_4_6,
+            ModelId::ZaiGlm46DeepThinking => models::zai::GLM_4_6_DEEP_THINKING,
             ModelId::ZaiGlm45 => models::zai::GLM_4_5,
+            ModelId::ZaiGlm45DeepThinking => models::zai::GLM_4_5_DEEP_THINKING,
             ModelId::ZaiGlm45Air => models::zai::GLM_4_5_AIR,
             ModelId::ZaiGlm45X => models::zai::GLM_4_5_X,
             ModelId::ZaiGlm45Airx => models::zai::GLM_4_5_AIRX,
@@ -608,8 +626,14 @@ impl ModelId {
             | ModelId::XaiGrok4Code
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => Provider::XAI,
-            ModelId::ZaiGlm46
+            ModelId::ZaiGlm4Plus
+            | ModelId::ZaiGlm4PlusDeepThinking
+            | ModelId::ZaiGlm47
+            | ModelId::ZaiGlm47DeepThinking
+            | ModelId::ZaiGlm46
+            | ModelId::ZaiGlm46DeepThinking
             | ModelId::ZaiGlm45
+            | ModelId::ZaiGlm45DeepThinking
             | ModelId::ZaiGlm45Air
             | ModelId::ZaiGlm45X
             | ModelId::ZaiGlm45Airx
@@ -742,6 +766,7 @@ impl ModelId {
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::XaiGrok4 => Some(ModelId::XaiGrok4Mini),
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
+            ModelId::ZaiGlm47 => Some(ModelId::ZaiGlm45Flash),
             ModelId::ZaiGlm46 => Some(ModelId::ZaiGlm45Flash),
             _ => None,
         };
@@ -801,6 +826,7 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest => "Grok-4 Code Latest",
             ModelId::XaiGrok4Vision => "Grok-4 Vision",
             // Z.AI models
+            ModelId::ZaiGlm47 => "GLM 4.7",
             ModelId::ZaiGlm46 => "GLM 4.6",
             ModelId::ZaiGlm45 => "GLM 4.5",
             ModelId::ZaiGlm45Air => "GLM 4.5 Air",
@@ -932,10 +958,28 @@ impl ModelId {
             }
             ModelId::XaiGrok4Vision => "Multimodal Grok 4 model with image understanding",
             // Z.AI models
+            ModelId::ZaiGlm4Plus => {
+                "Newest Z.AI GLM flagship with enhanced tool use and reasoning"
+            }
+            ModelId::ZaiGlm4PlusDeepThinking => {
+                "Newest Z.AI GLM flagship with forced Deep Thinking mode for tool-heavy reasoning"
+            }
+            ModelId::ZaiGlm47 => {
+                "Latest Z.AI GLM flagship reasoning model with improved capabilities and 200K context"
+            }
+            ModelId::ZaiGlm47DeepThinking => {
+                "Latest Z.AI GLM flagship with forced Deep Thinking mode for complex reasoning tasks"
+            }
             ModelId::ZaiGlm46 => {
                 "Latest Z.AI GLM flagship with long-context reasoning and coding strengths"
             }
+            ModelId::ZaiGlm46DeepThinking => {
+                "Latest Z.AI GLM flagship with forced Deep Thinking mode for enhanced logical analysis"
+            }
             ModelId::ZaiGlm45 => "Balanced GLM 4.5 release for general assistant tasks",
+            ModelId::ZaiGlm45DeepThinking => {
+                "Balanced GLM 4.5 model with forced Deep Thinking for multi-step problem solving"
+            }
             ModelId::ZaiGlm45Air => "Efficient GLM 4.5 Air variant tuned for lower latency",
             ModelId::ZaiGlm45X => "Enhanced GLM 4.5 X variant with improved reasoning",
             ModelId::ZaiGlm45Airx => "Hybrid GLM 4.5 AirX variant blending efficiency with quality",
@@ -1107,8 +1151,14 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest,
             ModelId::XaiGrok4Vision,
             // Z.AI models
+            ModelId::ZaiGlm4Plus,
+            ModelId::ZaiGlm4PlusDeepThinking,
+            ModelId::ZaiGlm47,
+            ModelId::ZaiGlm47DeepThinking,
             ModelId::ZaiGlm46,
+            ModelId::ZaiGlm46DeepThinking,
             ModelId::ZaiGlm45,
+            ModelId::ZaiGlm45DeepThinking,
             ModelId::ZaiGlm45Air,
             ModelId::ZaiGlm45X,
             ModelId::ZaiGlm45Airx,
@@ -1167,6 +1217,7 @@ impl ModelId {
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,
             ModelId::XaiGrok4,
+            ModelId::ZaiGlm47,
             ModelId::ZaiGlm46,
             ModelId::OpenRouterGrokCodeFast1,
         ]
@@ -1202,7 +1253,7 @@ impl ModelId {
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
-            Provider::ZAI => ModelId::ZaiGlm46,
+            Provider::ZAI => ModelId::ZaiGlm47,
         }
     }
 
@@ -1238,7 +1289,7 @@ impl ModelId {
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
-            Provider::ZAI => ModelId::ZaiGlm46,
+            Provider::ZAI => ModelId::ZaiGlm47,
         }
     }
 
@@ -1265,7 +1316,13 @@ impl ModelId {
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
+                | ModelId::ZaiGlm4Plus
+                | ModelId::ZaiGlm4PlusDeepThinking
+                | ModelId::ZaiGlm47
+                | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm46
+                | ModelId::ZaiGlm46DeepThinking
+                | ModelId::ZaiGlm45DeepThinking
         )
     }
 
@@ -1309,7 +1366,12 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
+                | ModelId::ZaiGlm4Plus
+                | ModelId::ZaiGlm4PlusDeepThinking
+                | ModelId::ZaiGlm47
+                | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm46
+                | ModelId::ZaiGlm46DeepThinking
         )
     }
 
@@ -1355,10 +1417,8 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
-            ModelId::ClaudeOpus45
-            | ModelId::ClaudeOpus41
-            | ModelId::ClaudeSonnet45
-            | ModelId::ClaudeHaiku45 => "4.5",
+            ModelId::ClaudeOpus45 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
+            ModelId::ClaudeOpus41 => "4.1",
             ModelId::ClaudeSonnet4 => "4",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
@@ -1375,8 +1435,11 @@ impl ModelId {
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => "4",
             // Z.AI generations
-            ModelId::ZaiGlm46 => "4.6",
+            ModelId::ZaiGlm4Plus | ModelId::ZaiGlm4PlusDeepThinking => "Plus",
+            ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking => "4.7",
+            ModelId::ZaiGlm46 | ModelId::ZaiGlm46DeepThinking => "4.6",
             ModelId::ZaiGlm45
+            | ModelId::ZaiGlm45DeepThinking
             | ModelId::ZaiGlm45Air
             | ModelId::ZaiGlm45X
             | ModelId::ZaiGlm45Airx
@@ -1485,6 +1548,9 @@ impl FromStr for ModelId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use crate::config::constants::models;
+        if let Some(model) = Self::parse_openrouter_model(s) {
+            return Ok(model);
+        }
         match s {
             // Gemini models
             s if s == models::GEMINI_2_5_FLASH_PREVIEW => Ok(ModelId::Gemini25FlashPreview),
@@ -1535,8 +1601,14 @@ impl FromStr for ModelId {
             s if s == models::xai::GROK_4_CODE_LATEST => Ok(ModelId::XaiGrok4CodeLatest),
             s if s == models::xai::GROK_4_VISION => Ok(ModelId::XaiGrok4Vision),
             // Z.AI models
+            s if s == models::zai::GLM_4_PLUS => Ok(ModelId::ZaiGlm4Plus),
+            s if s == models::zai::GLM_4_PLUS_DEEP_THINKING => Ok(ModelId::ZaiGlm4PlusDeepThinking),
+            s if s == models::zai::GLM_4_7 => Ok(ModelId::ZaiGlm47),
+            s if s == models::zai::GLM_4_7_DEEP_THINKING => Ok(ModelId::ZaiGlm47DeepThinking),
             s if s == models::zai::GLM_4_6 => Ok(ModelId::ZaiGlm46),
+            s if s == models::zai::GLM_4_6_DEEP_THINKING => Ok(ModelId::ZaiGlm46DeepThinking),
             s if s == models::zai::GLM_4_5 => Ok(ModelId::ZaiGlm45),
+            s if s == models::zai::GLM_4_5_DEEP_THINKING => Ok(ModelId::ZaiGlm45DeepThinking),
             s if s == models::zai::GLM_4_5_AIR => Ok(ModelId::ZaiGlm45Air),
             s if s == models::zai::GLM_4_5_X => Ok(ModelId::ZaiGlm45X),
             s if s == models::zai::GLM_4_5_AIRX => Ok(ModelId::ZaiGlm45Airx),
@@ -1584,13 +1656,7 @@ impl FromStr for ModelId {
             }
             // MiniMax models
             s if s == models::minimax::MINIMAX_M2 => Ok(ModelId::MinimaxM2),
-            _ => {
-                if let Some(model) = Self::parse_openrouter_model(s) {
-                    Ok(model)
-                } else {
-                    Err(ModelParseError::InvalidModel(s.into()))
-                }
-            }
+            _ => Err(ModelParseError::InvalidModel(s.into())),
         }
     }
 }
@@ -1824,6 +1890,10 @@ mod tests {
         );
         // Z.AI models
         assert_eq!(
+            models::zai::GLM_4_7.parse::<ModelId>().unwrap(),
+            ModelId::ZaiGlm47
+        );
+        assert_eq!(
             models::zai::GLM_4_6.parse::<ModelId>().unwrap(),
             ModelId::ZaiGlm46
         );
@@ -1889,6 +1959,7 @@ mod tests {
         assert_eq!(ModelId::ClaudeSonnet4.provider(), Provider::Anthropic);
         assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
         assert_eq!(ModelId::XaiGrok4.provider(), Provider::XAI);
+        assert_eq!(ModelId::ZaiGlm47.provider(), Provider::ZAI);
         assert_eq!(ModelId::ZaiGlm46.provider(), Provider::ZAI);
         assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
@@ -1961,7 +2032,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::ZAI),
-            ModelId::ZaiGlm46
+            ModelId::ZaiGlm47
         );
 
         assert_eq!(
@@ -2021,6 +2092,10 @@ mod tests {
             ModelId::default_single_for_provider(Provider::LmStudio),
             ModelId::LmStudioMetaLlama318BInstruct
         );
+        assert_eq!(
+            ModelId::default_single_for_provider(Provider::ZAI),
+            ModelId::ZaiGlm47
+        );
     }
 
     #[test]
@@ -2045,6 +2120,7 @@ mod tests {
         assert!(ModelId::GPT5.is_pro_variant());
         assert!(ModelId::GPT5Codex.is_pro_variant());
         assert!(ModelId::DeepSeekReasoner.is_pro_variant());
+        assert!(ModelId::ZaiGlm47.is_pro_variant());
         assert!(ModelId::ZaiGlm46.is_pro_variant());
         assert!(!ModelId::Gemini25FlashPreview.is_pro_variant());
 
@@ -2075,6 +2151,7 @@ mod tests {
         assert!(ModelId::XaiGrok4.is_top_tier());
         assert!(ModelId::XaiGrok4CodeLatest.is_top_tier());
         assert!(ModelId::DeepSeekReasoner.is_top_tier());
+        assert!(ModelId::ZaiGlm47.is_top_tier());
         assert!(ModelId::ZaiGlm46.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
         assert!(!ModelId::ClaudeHaiku45.is_top_tier());
@@ -2117,6 +2194,7 @@ mod tests {
         assert_eq!(ModelId::XaiGrok4CodeLatest.generation(), "4");
         assert_eq!(ModelId::XaiGrok4Vision.generation(), "4");
         // Z.AI generations
+        assert_eq!(ModelId::ZaiGlm47.generation(), "4.7");
         assert_eq!(ModelId::ZaiGlm46.generation(), "4.6");
         assert_eq!(ModelId::ZaiGlm45.generation(), "4.5");
         assert_eq!(ModelId::ZaiGlm45Air.generation(), "4.5");

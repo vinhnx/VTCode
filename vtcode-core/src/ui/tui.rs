@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::config::types::UiSurfacePreference;
@@ -33,6 +34,7 @@ pub fn spawn_session(
     inline_rows: u16,
     show_timeline_pane: bool,
     event_callback: Option<InlineEventCallback>,
+    active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
 ) -> Result<InlineSession> {
     spawn_session_with_prompts(
         theme,
@@ -42,6 +44,7 @@ pub fn spawn_session(
         show_timeline_pane,
         event_callback,
         None,
+        active_pty_sessions,
     )
 }
 
@@ -54,6 +57,7 @@ pub fn spawn_session_with_prompts(
     show_timeline_pane: bool,
     event_callback: Option<InlineEventCallback>,
     custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
+    active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
 ) -> Result<InlineSession> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
@@ -73,6 +77,7 @@ pub fn spawn_session_with_prompts(
                 event_callback,
                 custom_prompts,
                 keyboard_flags: None, // Use default flags
+                active_pty_sessions: active_pty_sessions,
             },
         )
         .await

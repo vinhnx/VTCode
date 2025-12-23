@@ -347,6 +347,7 @@ pub enum InlineEvent {
     ScrollPageDown,
     FileSelected(String),
     LaunchEditor,
+    ForceCancelPtySession,
 }
 
 pub type InlineEventCallback = Arc<dyn Fn(&InlineEvent) + Send + Sync + 'static>;

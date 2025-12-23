@@ -147,6 +147,7 @@ mod tests {
             10,
             false,
             None,
+            None,
         )
         .expect("spawn inline session");
         let handle = session.clone_inline_handle();

@@ -266,6 +266,14 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 return Ok(HitlDecision::Denied);
             }
+            InlineEvent::ForceCancelPtySession => {
+                ctrl_c_state.disarm_exit();
+                handle.close_modal();
+                handle.force_redraw();
+                task::yield_now().await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                return Ok(HitlDecision::Denied);
+            }
             InlineEvent::Exit => {
                 ctrl_c_state.disarm_exit();
                 handle.close_modal();

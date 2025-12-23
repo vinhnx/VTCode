@@ -640,6 +640,8 @@ pub struct ToolRegistry {
     // Security & Identity
     shell_policy: Arc<RwLock<ShellPolicyChecker>>,
     agent_type: Cow<'static, str>,
+    // PTY Session Management
+    active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     // Caching
     cached_available_tools: Arc<RwLock<Option<Vec<String>>>>,
     /// Callback for streaming tool output and progress
@@ -747,6 +749,7 @@ impl ToolRegistry {
             agent_type: Cow::Borrowed("unknown"),
             cached_available_tools: Arc::new(RwLock::new(None)),
             progress_callback: None,
+            active_pty_sessions: None,
         };
 
         registry.sync_policy_catalog().await;
@@ -1025,6 +1028,34 @@ impl ToolRegistry {
     /// Update current task identifier used for structured tool telemetry
     pub fn set_harness_task(&mut self, task_id: Option<String>) {
         self.harness_context.set_task_id(task_id);
+    }
+
+    /// Set the active PTY sessions counter for tracking
+    pub fn set_active_pty_sessions(&mut self, counter: Arc<std::sync::atomic::AtomicUsize>) {
+        self.active_pty_sessions = Some(counter);
+    }
+
+    /// Increment active PTY sessions count
+    pub fn increment_active_pty_sessions(&self) {
+        if let Some(counter) = &self.active_pty_sessions {
+            counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Decrement active PTY sessions count
+    pub fn decrement_active_pty_sessions(&self) {
+        if let Some(counter) = &self.active_pty_sessions {
+            counter.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Get the current active PTY sessions count
+    pub fn active_pty_sessions_count(&self) -> usize {
+        if let Some(counter) = &self.active_pty_sessions {
+            counter.load(std::sync::atomic::Ordering::Relaxed)
+        } else {
+            0
+        }
     }
 
     /// Snapshot harness context including current plan metadata

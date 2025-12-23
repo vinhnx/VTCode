@@ -198,8 +198,9 @@ pub mod models {
 
     // Z.AI models (direct API)
     pub mod zai {
-        pub const DEFAULT_MODEL: &str = "glm-4.6";
+        pub const DEFAULT_MODEL: &str = "glm-4.7";
         pub const SUPPORTED_MODELS: &[&str] = &[
+            "glm-4.7",
             "glm-4.6",
             "glm-4.5",
             "glm-4.5-air",
@@ -209,8 +210,14 @@ pub mod models {
             "glm-4-32b-0414-128k",
         ];
 
+        pub const GLM_4_PLUS: &str = "glm-4-plus";
+        pub const GLM_4_PLUS_DEEP_THINKING: &str = "glm-4-plus:thinking";
+        pub const GLM_4_7: &str = "glm-4.7";
+        pub const GLM_4_7_DEEP_THINKING: &str = "glm-4.7:thinking";
         pub const GLM_4_6: &str = "glm-4.6";
+        pub const GLM_4_6_DEEP_THINKING: &str = "glm-4.6:thinking";
         pub const GLM_4_5: &str = "glm-4.5";
+        pub const GLM_4_5_DEEP_THINKING: &str = "glm-4.5:thinking";
         pub const GLM_4_5_AIR: &str = "glm-4.5-air";
         pub const GLM_4_5_X: &str = "glm-4.5-x";
         pub const GLM_4_5_AIRX: &str = "glm-4.5-airx";
@@ -797,7 +804,7 @@ pub mod urls {
     pub const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
     pub const XAI_API_BASE: &str = "https://api.x.ai/v1";
     pub const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
-    pub const Z_AI_API_BASE: &str = "https://api.z.ai/api";
+    pub const Z_AI_API_BASE: &str = "https://api.z.ai/api/paas/v4";
     pub const MOONSHOT_API_BASE: &str = "https://api.moonshot.cn/v1";
     pub const LMSTUDIO_API_BASE: &str = "http://localhost:1234/v1";
     pub const OLLAMA_API_BASE: &str = "http://localhost:11434";

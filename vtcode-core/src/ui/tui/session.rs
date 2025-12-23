@@ -166,6 +166,9 @@ pub struct Session {
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,
+    
+    // --- PTY Session Management ---
+    pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
 }
 
 impl Session {
@@ -292,6 +295,9 @@ impl Session {
 
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),
+            
+            // --- PTY Session Management ---
+            active_pty_sessions: None,
         };
         session.ensure_prompt_style_color();
         session

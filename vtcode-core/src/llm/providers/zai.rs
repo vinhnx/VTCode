@@ -9,7 +9,7 @@ use crate::llm::provider::{
     LLMStreamEvent, MessageRole, ToolChoice, Usage,
 };
 use crate::llm::providers::shared::{
-    NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls, update_tool_calls,
+    NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls,
 };
 use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use crate::llm::types as llm_types;
@@ -126,6 +126,11 @@ impl ZAIProvider {
                 "role": role,
                 "content": msg.content
             });
+
+            if let Some(reasoning) = &msg.reasoning {
+                message["reasoning_content"] = json!(reasoning);
+            }
+
             let mut skip_message = false;
 
             if msg.role == MessageRole::Assistant
@@ -178,8 +183,15 @@ impl ZAIProvider {
             });
         }
 
+        let mut is_deep_thinking = false;
+        let mut api_model = request.model.clone();
+        if api_model.ends_with(":thinking") {
+            is_deep_thinking = true;
+            api_model = api_model.strip_suffix(":thinking").unwrap().to_string();
+        }
+
         let mut payload = json!({
-            "model": request.model,
+            "model": api_model,
             "messages": messages,
             "stream": request.stream,
         });
@@ -202,10 +214,28 @@ impl ZAIProvider {
             payload["tool_choice"] = choice.to_provider_format("openai");
         }
 
-        if self.supports_reasoning(&request.model) || request.reasoning_effort.is_some() {
-            payload["thinking"] = json!({ "type": "enabled" });
+        // Enable tool streaming for models that support it (4.6, 4.7+)
+        if request.stream && request.tools.is_some() {
+            payload["tool_stream"] = json!(true);
         }
 
+        if self.supports_reasoning(&request.model) {
+            if !is_deep_thinking
+                && let Some(effort) = request.reasoning_effort
+                && effort == crate::config::types::ReasoningEffortLevel::None
+            {
+                payload["thinking"] = json!({ "type": "disabled" });
+            } else {
+                payload["thinking"] = if api_model == models::zai::GLM_4_7 {
+                    json!({ "type": "enabled", "clear_thinking": false })
+                } else {
+                    json!({ "type": "enabled" })
+                };
+            }
+        }        if request.output_format.is_some() {
+            payload["response_format"] = json!({ "type": "json_object" });
+        }
+ 
         Ok(payload)
     }
 
@@ -407,16 +437,27 @@ impl LLMProvider for ZAIProvider {
     fn supports_reasoning(&self, model: &str) -> bool {
         matches!(
             model,
-            models::zai::GLM_4_6
+            models::zai::GLM_4_PLUS
+                | models::zai::GLM_4_PLUS_DEEP_THINKING
+                | models::zai::GLM_4_7
+                | models::zai::GLM_4_7_DEEP_THINKING
+                | models::zai::GLM_4_6
+                | models::zai::GLM_4_6_DEEP_THINKING
                 | models::zai::GLM_4_5
+                | models::zai::GLM_4_5_DEEP_THINKING
                 | models::zai::GLM_4_5_AIR
                 | models::zai::GLM_4_5_X
                 | models::zai::GLM_4_5_AIRX
+                | models::zai::GLM_4_5_FLASH
         )
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
         false
+    }
+ 
+    fn supports_structured_output(&self, _model: &str) -> bool {
+        true // Supported by all mainstream GLM-4.5/4.6/4.7 models
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -693,8 +734,15 @@ impl LLMProvider for ZAIProvider {
 
                                         // Handle tool calls
                                         if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
-                                            update_tool_calls(&mut tool_call_builders, tool_calls);
-                                            telemetry.on_tool_call_delta();
+                                            for tool_call in tool_calls {
+                                                if let Some(tc_obj) = tool_call.as_object() {
+                                                    crate::llm::providers::shared::apply_tool_call_delta_from_content(
+                                                        &mut tool_call_builders,
+                                                        tc_obj,
+                                                        &telemetry,
+                                                    );
+                                                }
+                                            }
                                         }
                                     }
 
