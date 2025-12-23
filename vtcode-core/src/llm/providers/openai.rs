@@ -148,6 +148,9 @@ fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
     ) || body.contains("model does not exist")
         || body.contains("model not found")
         || body.contains("not enabled for the Responses API")
+        || body.contains("Invalid API parameter")
+        || body.contains("1210")
+        || body.contains("invalid_request_error")
 }
 
 fn parse_responses_tool_call(item: &Value) -> Option<provider::ToolCall> {
@@ -878,21 +881,22 @@ impl OpenAIProvider {
 
         let mut responses_api_modes = HashMap::new();
         let default_state = Self::default_responses_state(&model);
-        let is_huggingface = resolved_base_url.contains("huggingface.co");
+        let is_native_openai = resolved_base_url.contains("api.openai.com");
+        let is_huggingface = resolved_base_url.contains("huggingface.co") || model.contains("/");
         let is_xai = resolved_base_url.contains("api.x.ai");
 
-        // Hugging Face now supports the Responses API at /v1/responses
-        // xAI only supports the Chat Completions-compatible surface; disable Responses API.
-        let initial_state = if is_xai {
+        // Hugging Face now supports the Responses API at /v1/responses, but it is still beta
+        // and many backends (like Z.AI) fail with 400 on GPT-5 parameters. Default to Disabled.
+        let initial_state = if is_xai || is_huggingface || !is_native_openai {
             ResponsesApiState::Disabled
         } else {
             default_state
         };
         responses_api_modes.insert(model.clone(), initial_state);
-        let is_huggingface_router = is_huggingface;
+        let is_huggingface_router = is_huggingface || !is_native_openai;
         let strict_tool_schema = is_huggingface;
-        let disable_harmony = is_huggingface || is_xai;
-        let disable_model_fallback = is_huggingface || is_xai;
+        let disable_harmony = is_huggingface || is_xai || !is_native_openai;
+        let disable_model_fallback = is_huggingface || is_xai || !is_native_openai;
 
         Self {
             api_key: Arc::from(api_key.as_str()),
@@ -1258,8 +1262,16 @@ impl OpenAIProvider {
             "stream": request.stream
         });
 
+        let is_huggingface = self.is_huggingface_router;
+        let is_native_openai = self.base_url.contains("api.openai.com");
+        let max_tokens_field = if is_huggingface || !is_native_openai {
+            "max_tokens"
+        } else {
+            MAX_COMPLETION_TOKENS_FIELD
+        };
+
         if let Some(max_tokens) = request.max_tokens {
-            openai_request[MAX_COMPLETION_TOKENS_FIELD] = json!(max_tokens);
+            openai_request[max_tokens_field] = json!(max_tokens);
         }
 
         if let Some(temperature) = request.temperature
@@ -1338,8 +1350,14 @@ impl OpenAIProvider {
             "model": request.model,
             "input": responses_payload.input,
             "stream": request.stream,
-            "output_types": ["message", "tool_call"]
         });
+
+        // 'output_types' is part of the GPT-5 Responses API spec but many HF providers (like zai-org)
+        // fail with 400 "Invalid API parameter" if it's included.
+        if !self.is_huggingface_router {
+            openai_request["output_types"] = json!(["message", "tool_call"]);
+        }
+
 
         if let Some(instructions) = responses_payload.instructions {
             if !instructions.trim().is_empty() {
@@ -1378,8 +1396,22 @@ impl OpenAIProvider {
         }
 
         if has_sampling {
-            openai_request["sampling_parameters"] = sampling_parameters;
+            if self.is_huggingface_router {
+                // For Hugging Face, merge sampling parameters into the top level for better compatibility
+                if let Some(obj) = openai_request.as_object_mut() {
+                    if let Some(sampling_obj) = sampling_parameters.as_object() {
+                        for (k, v) in sampling_obj {
+                            // Map max_output_tokens back to max_tokens for HF top-level compatibility if needed
+                            let key = if k == "max_output_tokens" { "max_tokens" } else { k };
+                            obj.insert(key.to_string(), v.clone());
+                        }
+                    }
+                }
+            } else {
+                openai_request["sampling_parameters"] = sampling_parameters;
+            }
         }
+
 
         if self.supports_tools(&request.model) {
             if let Some(tools) = &request.tools {
@@ -1427,15 +1459,16 @@ impl OpenAIProvider {
                 } else {
                     openai_request["reasoning"] = json!({ "effort": effort.as_str() });
                 }
-            } else if openai_request.get("reasoning").is_none() {
-                // Use the default reasoning effort level (medium)
+            } else if openai_request.get("reasoning").is_none() && !self.is_huggingface_router {
+                // Use the default reasoning effort level (medium) for native OpenAI models
                 let default_effort = ReasoningEffortLevel::default().as_str();
                 openai_request["reasoning"] = json!({ "effort": default_effort });
             }
         }
 
-        // Enable reasoning summaries if supported
-        if self.supports_reasoning(&request.model) {
+
+        // Enable reasoning summaries if supported (OpenAI GPT-5 only)
+        if self.supports_reasoning(&request.model) && !self.is_huggingface_router {
             if let Some(map) = openai_request.as_object_mut() {
                 let reasoning_value = map.entry("reasoning").or_insert(json!({}));
                 if let Some(reasoning_obj) = reasoning_value.as_object_mut() {
@@ -1445,6 +1478,7 @@ impl OpenAIProvider {
                 }
             }
         }
+
 
         // Add text formatting options for GPT-5 and compatible models, including verbosity and grammar
         let mut text_format = json!({});
@@ -2878,7 +2912,11 @@ impl provider::LLMProvider for OpenAIProvider {
             let mut openai_request = self.convert_to_openai_format(&request)?;
             openai_request["stream"] = Value::Bool(true);
             // Request usage stats in the stream (compatible with newer OpenAI models)
-            openai_request["stream_options"] = json!({ "include_usage": true });
+            // Note: Hugging Face router and other proxies do not support stream_options and will return 400.
+            let is_native_openai = self.base_url.contains("api.openai.com");
+            if is_native_openai && !is_huggingface {
+                openai_request["stream_options"] = json!({ "include_usage": true });
+            }
             let url = format!("{}/chat/completions", self.base_url);
 
             let response = self
@@ -3385,13 +3423,9 @@ impl provider::LLMProvider for OpenAIProvider {
         let is_huggingface = self.is_huggingface_router;
         let is_glm = request.model.to_ascii_lowercase().contains("glm");
 
-        // Normalize Hugging Face model ids that include a trailing provider suffix (e.g., "zai-org/GLM-4.6:zai-org").
-        // NOTE: The Responses API supports suffixes for explicit provider selection. Only strip if NOT using Responses API.
-        if is_huggingface && matches!(self.responses_api_state(&request.model), ResponsesApiState::Disabled) {
-            if let Some((base, _)) = request.model.split_once(':') {
-                request.model = base.to_string();
-            }
-
+        // Normalize Hugging Face model ids.
+        // NOTE: We keep trailing provider suffixes (e.g., ":zai-org") to allow explicit provider selection on the HF router.
+        if is_huggingface {
             // Fail fast for models we explicitly do not support on HF router (e.g., MiniMax M2) with a clear message.
             let lower_model = request.model.to_ascii_lowercase();
             if lower_model.contains("minimax-m2") {
@@ -3494,9 +3528,10 @@ impl provider::LLMProvider for OpenAIProvider {
                     debug!(
                         target = "vtcode::llm::openai",
                         model = %request.model,
-                        "Responses API unsupported; disabling for future requests"
+                        "Responses API unsupported; falling back to Chat Completions"
                     );
                     self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
+                    return self.generate(request).await;
                 } else if status.as_u16() == 429
                     || error_text.contains("insufficient_quota")
                     || error_text.contains("quota")

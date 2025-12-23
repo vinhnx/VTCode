@@ -785,7 +785,6 @@ TODO2.md
 .vtcode/index/
 .vtcode/checkpoints/
 .vtcode/
-vtcode.toml
 .claude/
 .agent/
 .github/
