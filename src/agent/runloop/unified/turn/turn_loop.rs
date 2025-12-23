@@ -311,8 +311,6 @@ pub async fn run_turn_loop(
                 }
 
                 // Handle tool calls if any exist
-                if !tool_calls.is_empty() {}
-
                 for tool_call in &tool_calls {
                     let function = tool_call
                         .function
@@ -339,7 +337,7 @@ pub async fn run_turn_loop(
                         Some(ctx.approval_recorder.as_ref()),
                         Some(ctx.decision_ledger),
                         Some(ctx.tool_permission_cache),
-                        vt_cfg.and_then(|cfg| Some(cfg.security.hitl_notification_bell)).unwrap_or(true),
+                        vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
                     ).await {
                         Ok(crate::agent::runloop::unified::tool_routing::ToolPermissionFlow::Approved) => {
                             // Create progress reporter and spinner for the tool execution
@@ -500,7 +498,7 @@ pub async fn run_turn_loop(
                         Some(ctx.approval_recorder.as_ref()),
                         Some(ctx.decision_ledger),
                         Some(ctx.tool_permission_cache),
-                        vt_cfg.and_then(|cfg| Some(cfg.security.hitl_notification_bell)).unwrap_or(true),
+                        vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
                     ).await {
                         Ok(crate::agent::runloop::unified::tool_routing::ToolPermissionFlow::Approved) => {
                             // Execute the detected tool

@@ -165,6 +165,11 @@ fn test_anthropic_tool_message_handling() {
         reasoning_effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        stop_sequences: None,
     };
 
     // Validate request shape instead of internal conversion

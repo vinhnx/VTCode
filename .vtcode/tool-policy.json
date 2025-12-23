@@ -35,7 +35,7 @@
     "debug_agent": "allow",
     "delete_file": "prompt",
     "edit_file": "allow",
-    "execute_code": "prompt",
+    "execute_code": "allow",
     "grep_file": "allow",
     "list_files": "allow",
     "list_pty_sessions": "allow",
