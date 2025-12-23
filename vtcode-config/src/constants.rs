@@ -141,6 +141,8 @@ pub mod models {
         pub const REASONING_MODELS: &[&str] = &[
             GPT_5,
             GPT_5_CODEX,
+            GPT_5_MINI,
+            GPT_5_NANO,
             GPT_5_2,
             GPT_5_2_ALIAS,
             GPT_5_1,
@@ -213,8 +215,6 @@ pub mod models {
             "glm-4-32b-0414-128k",
         ];
 
-        pub const GLM_4_PLUS: &str = "glm-4-plus";
-        pub const GLM_4_PLUS_DEEP_THINKING: &str = "glm-4-plus:thinking";
         pub const GLM_4_7: &str = "glm-4.7";
         pub const GLM_4_7_DEEP_THINKING: &str = "glm-4.7:thinking";
         pub const GLM_4_6: &str = "glm-4.6";
@@ -794,7 +794,7 @@ pub mod reasoning {
     pub const LOW: &str = "low";
     pub const MEDIUM: &str = "medium";
     pub const HIGH: &str = "high";
-    pub const ALLOWED_LEVELS: &[&str] = &[LOW, MEDIUM, HIGH, "xhigh"];
+    pub const ALLOWED_LEVELS: &[&str] = &["minimal", LOW, MEDIUM, HIGH, "xhigh"];
     pub const LABEL_LOW: &str = "Low";
     pub const LABEL_MEDIUM: &str = "Medium";
     pub const LABEL_HIGH: &str = "High";

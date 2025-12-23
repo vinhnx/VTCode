@@ -173,3 +173,50 @@ async fn mock_responses_api_top_level_tool_calls() {
     assert_eq!(calls[0].id, "call_123");
     assert_eq!(calls[0].function.as_ref().unwrap().name, "get_weather");
 }
+
+#[tokio::test]
+async fn mock_responses_api_minimal_reasoning_effort() {
+    use vtcode_core::config::types::ReasoningEffortLevel;
+    // Test that minimal reasoning effort is correctly serialized
+    let expect_body = json!({
+        "model": "gpt-5",
+        "reasoning": {
+            "effort": "minimal"
+        }
+    });
+
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/responses")
+        .match_body(Matcher::PartialJson(expect_body))
+        .with_status(200)
+        .with_body(
+            r#"{"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}"#,
+        )
+        .create_async()
+        .await;
+
+    let base_url = server.url();
+    let provider = OpenAIProvider::from_config(
+        Some("testkey".to_string()),
+        Some("gpt-5".to_string()),
+        Some(base_url.to_string()),
+        None,
+        None,
+        None,
+    );
+
+    let request = LLMRequest {
+        messages: vec![Message::user("Hello".to_string())],
+        model: "gpt-5".to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::Minimal),
+        ..Default::default()
+    };
+
+    let response = LLMProvider::generate(&provider, request)
+        .await
+        .expect("provider should return");
+
+    mock.assert_async().await;
+    assert!(response.content.is_some());
+}

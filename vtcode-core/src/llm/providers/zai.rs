@@ -437,9 +437,7 @@ impl LLMProvider for ZAIProvider {
     fn supports_reasoning(&self, model: &str) -> bool {
         matches!(
             model,
-            models::zai::GLM_4_PLUS
-                | models::zai::GLM_4_PLUS_DEEP_THINKING
-                | models::zai::GLM_4_7
+            models::zai::GLM_4_7
                 | models::zai::GLM_4_7_DEEP_THINKING
                 | models::zai::GLM_4_6
                 | models::zai::GLM_4_6_DEEP_THINKING
