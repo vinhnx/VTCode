@@ -523,21 +523,6 @@ pub(super) fn handle_config_palette_key(session: &mut Session, key: &KeyEvent) -
             session.mark_dirty();
             true
         }
-        KeyCode::Char(ch) => {
-            palette.push_char(ch);
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Backspace => {
-            palette.backspace();
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Delete => {
-            palette.clear_search();
-            session.mark_dirty();
-            true
-        }
         KeyCode::Left => {
             palette.adjust_numeric_val(-1);
             let config = palette.config.clone();
@@ -559,12 +544,6 @@ pub(super) fn handle_config_palette_key(session: &mut Session, key: &KeyEvent) -
             true
         }
         KeyCode::Esc => {
-            if !palette.search_query.is_empty() {
-                palette.clear_search();
-                session.mark_dirty();
-                return true;
-            }
-
             // Extract config before closing to apply changes to session
             let config = palette.config.clone();
 

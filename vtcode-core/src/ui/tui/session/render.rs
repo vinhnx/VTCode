@@ -421,11 +421,7 @@ pub fn render_config_palette(session: &mut Session, frame: &mut Frame<'_>, viewp
 
     frame.render_widget(Clear, area);
 
-    let title = if palette.search_query.is_empty() {
-        "Configuration (Type to search)".to_string()
-    } else {
-        format!("Configuration (Filter: {})", palette.search_query)
-    };
+    let title = "Configuration".to_string();
 
     let instructions = " ↑↓ Navigate · Space/Enter Toggle · ←→ Adjust · Esc Close/Save ";
     let block = Block::bordered()

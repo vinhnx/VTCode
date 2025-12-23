@@ -28,7 +28,6 @@ pub struct ConfigPalette {
     // Keep a local copy to modify before saving
     pub config: VTCodeConfig,
     pub modified: bool,
-    pub search_query: String,
 }
 
 impl ConfigPalette {
@@ -40,7 +39,6 @@ impl ConfigPalette {
             config_manager: manager,
             config,
             modified: false,
-            search_query: String::new(),
         };
         palette.reload_items_from_config();
 
@@ -254,6 +252,34 @@ impl ConfigPalette {
             description: Some("Preserve ANSI color codes from tool output".to_string()),
         });
 
+        // -- Keyboard Protocol Section --
+
+        // Keyboard Protocol Enabled
+        items.push(ConfigItem {
+            key: "ui.keyboard_protocol.enabled".to_string(),
+            label: "Keyboard Protocol".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.keyboard_protocol.enabled,
+            },
+            description: Some("Enable kitty keyboard protocol enhancements".to_string()),
+        });
+
+        // Keyboard Protocol Mode
+        items.push(ConfigItem {
+            key: "ui.keyboard_protocol.mode".to_string(),
+            label: "Keyboard Mode".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: config.ui.keyboard_protocol.mode.clone(),
+                options: vec![
+                    "default".to_string(),
+                    "full".to_string(),
+                    "minimal".to_string(),
+                    "custom".to_string(),
+                ],
+            },
+            description: Some("Keyboard enhancement preset (default/full/minimal/custom)".to_string()),
+        });
+
         // -- Internal Section --
 
         // Inline Viewport Rows
@@ -290,18 +316,9 @@ impl ConfigPalette {
             description: Some("Main AI model (read-only)".to_string()),
         });
 
-        // Apply fuzzy search filter if query is present
-        if !self.search_query.is_empty() {
-            let normalized = crate::ui::search::normalize_query(&self.search_query);
-            items.retain(|item| {
-                crate::ui::search::fuzzy_match(&normalized, &item.label)
-                    || crate::ui::search::fuzzy_match(&normalized, &item.key)
-            });
-        }
-
         self.items = items;
 
-        // Ensure selection is within bounds after filtering
+        // Ensure selection is within bounds
         if let Some(selected) = self.list_state.selected() {
             if selected >= self.items.len() && !self.items.is_empty() {
                 self.list_state.select(Some(self.items.len() - 1));
@@ -310,23 +327,6 @@ impl ConfigPalette {
             }
         } else if !self.items.is_empty() {
             self.list_state.select(Some(0));
-        }
-    }
-
-    pub fn push_char(&mut self, ch: char) {
-        self.search_query.push(ch);
-        self.reload_items_from_config();
-    }
-
-    pub fn backspace(&mut self) {
-        self.search_query.pop();
-        self.reload_items_from_config();
-    }
-
-    pub fn clear_search(&mut self) {
-        if !self.search_query.is_empty() {
-            self.search_query.clear();
-            self.reload_items_from_config();
         }
     }
 
@@ -443,6 +443,22 @@ impl ConfigPalette {
                     }
                     "ui.allow_tool_ansi" => {
                         self.config.ui.allow_tool_ansi = !self.config.ui.allow_tool_ansi;
+                        changed = true;
+                    }
+                    "ui.keyboard_protocol.enabled" => {
+                        self.config.ui.keyboard_protocol.enabled =
+                            !self.config.ui.keyboard_protocol.enabled;
+                        changed = true;
+                    }
+                    "ui.keyboard_protocol.mode" => {
+                        self.config.ui.keyboard_protocol.mode =
+                            match self.config.ui.keyboard_protocol.mode.as_str() {
+                                "default" => "full".to_string(),
+                                "full" => "minimal".to_string(),
+                                "minimal" => "custom".to_string(),
+                                "custom" => "default".to_string(),
+                                _ => "default".to_string(),
+                            };
                         changed = true;
                     }
                     "agent.theme" => {

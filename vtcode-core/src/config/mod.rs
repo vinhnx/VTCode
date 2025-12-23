@@ -56,5 +56,150 @@ pub use validation::{ValidationResult, validate_config, validate_model_exists};
 pub use validator::{ConfigValidator, ModelsDatabase, ValidationResult as ConfigValidationResult};
 pub use vtcode_config::TimeoutsConfig;
 pub use vtcode_config::root::{
-    PtyConfig, StatusLineConfig, StatusLineMode, ToolOutputMode, UiConfig,
+    KeyboardProtocolConfig, PtyConfig, StatusLineConfig, StatusLineMode, ToolOutputMode, UiConfig,
 };
+
+/// Convert KeyboardProtocolConfig to KeyboardEnhancementFlags
+pub fn keyboard_protocol_to_flags(
+    config: &KeyboardProtocolConfig,
+) -> ratatui::crossterm::event::KeyboardEnhancementFlags {
+    use ratatui::crossterm::event::KeyboardEnhancementFlags;
+
+    if !config.enabled {
+        return KeyboardEnhancementFlags::empty();
+    }
+
+    match config.mode.as_str() {
+        "default" => {
+            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+        }
+        "full" => {
+            // NOTE: REPORT_ALL_KEYS is not available in crossterm 0.28.1
+            // For now, "full" mode uses the same flags as "default"
+            // TODO: Add REPORT_ALL_KEYS when crossterm is upgraded
+            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+        }
+        "minimal" => KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,
+        "custom" => {
+            let mut flags = KeyboardEnhancementFlags::empty();
+            if config.disambiguate_escape_codes {
+                flags |= KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES;
+            }
+            if config.report_event_types {
+                flags |= KeyboardEnhancementFlags::REPORT_EVENT_TYPES;
+            }
+            if config.report_alternate_keys {
+                flags |= KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS;
+            }
+            // NOTE: report_all_keys is not supported in crossterm 0.28.1
+            if config.report_all_keys {
+                tracing::warn!("report_all_keys is not supported in crossterm 0.28.1, ignoring");
+            }
+            flags
+        }
+        _ => {
+            tracing::warn!("Invalid keyboard protocol mode '{}', using default", config.mode);
+            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+        }
+    }
+}
+
+#[cfg(test)]
+mod keyboard_protocol_tests {
+    use super::*;
+
+    #[test]
+    fn test_keyboard_protocol_default_mode() {
+        let config = KeyboardProtocolConfig {
+            enabled: true,
+            mode: "default".to_string(),
+            disambiguate_escape_codes: true,
+            report_event_types: true,
+            report_alternate_keys: true,
+            report_all_keys: false,
+        };
+
+        let flags = keyboard_protocol_to_flags(&config);
+        use ratatui::crossterm::event::KeyboardEnhancementFlags;
+
+        assert!(flags.contains(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
+        assert!(flags.contains(KeyboardEnhancementFlags::REPORT_EVENT_TYPES));
+        assert!(flags.contains(KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS));
+    }
+
+    #[test]
+    fn test_keyboard_protocol_minimal_mode() {
+        let config = KeyboardProtocolConfig {
+            enabled: true,
+            mode: "minimal".to_string(),
+            disambiguate_escape_codes: true,
+            report_event_types: true,
+            report_alternate_keys: true,
+            report_all_keys: false,
+        };
+
+        let flags = keyboard_protocol_to_flags(&config);
+        use ratatui::crossterm::event::KeyboardEnhancementFlags;
+
+        assert!(flags.contains(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
+        assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_EVENT_TYPES));
+        assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS));
+    }
+
+    #[test]
+    fn test_keyboard_protocol_disabled() {
+        let config = KeyboardProtocolConfig {
+            enabled: false,
+            mode: "default".to_string(),
+            disambiguate_escape_codes: true,
+            report_event_types: true,
+            report_alternate_keys: true,
+            report_all_keys: false,
+        };
+
+        let flags = keyboard_protocol_to_flags(&config);
+        assert!(flags.is_empty());
+    }
+
+    #[test]
+    fn test_keyboard_protocol_custom_mode() {
+        let config = KeyboardProtocolConfig {
+            enabled: true,
+            mode: "custom".to_string(),
+            disambiguate_escape_codes: true,
+            report_event_types: false,
+            report_alternate_keys: true,
+            report_all_keys: false,
+        };
+
+        let flags = keyboard_protocol_to_flags(&config);
+        use ratatui::crossterm::event::KeyboardEnhancementFlags;
+
+        assert!(flags.contains(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
+        assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_EVENT_TYPES));
+        assert!(flags.contains(KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS));
+    }
+
+    #[test]
+    fn test_keyboard_protocol_validation() {
+        let mut config = KeyboardProtocolConfig {
+            enabled: true,
+            mode: "invalid".to_string(),
+            disambiguate_escape_codes: true,
+            report_event_types: true,
+            report_alternate_keys: true,
+            report_all_keys: false,
+        };
+
+        assert!(config.validate().is_err());
+
+        config.mode = "default".to_string();
+        assert!(config.validate().is_ok());
+    }
+}

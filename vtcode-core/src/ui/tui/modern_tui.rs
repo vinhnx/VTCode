@@ -57,6 +57,7 @@ pub struct ModernTui {
     pub mouse: bool,
     pub paste: bool,
     pub panic_guard: Option<TuiPanicGuard>,
+    keyboard_flags: KeyboardEnhancementFlags,
 }
 
 // A trait to allow both old and new TUI implementations to work with the same interface
@@ -94,6 +95,9 @@ impl ModernTui {
             mouse: false,
             paste: false,
             panic_guard: None,
+            keyboard_flags: KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
         })
     }
 
@@ -117,6 +121,11 @@ impl ModernTui {
         self
     }
 
+    pub fn keyboard_flags(mut self, flags: KeyboardEnhancementFlags) -> Self {
+        self.keyboard_flags = flags;
+        self
+    }
+
     pub async fn enter(&mut self) -> Result<()> {
         self.panic_guard = Some(TuiPanicGuard::new());
         terminal::enable_raw_mode().context("failed to enable raw mode")?;
@@ -135,15 +144,11 @@ impl ModernTui {
         let _ = execute!(stderr, EnableFocusChange);
 
         // Enable keyboard enhancements if supported
-        if supports_keyboard_enhancement().unwrap_or(false) {
-            let _ = execute!(
-                stderr,
-                PushKeyboardEnhancementFlags(
-                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                        | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
-                )
-            );
+        if supports_keyboard_enhancement().unwrap_or(false) && !self.keyboard_flags.is_empty() {
+            let _ = execute!(stderr, PushKeyboardEnhancementFlags(self.keyboard_flags));
+            tracing::debug!(?self.keyboard_flags, "enabled keyboard enhancement flags");
+        } else if self.keyboard_flags.is_empty() {
+            tracing::debug!("keyboard protocol disabled via configuration");
         }
 
         self.start_event_task();

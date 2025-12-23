@@ -437,6 +437,33 @@ refresh_interval_ms = 2000
 # Timeout for command execution in status line (milliseconds)
 command_timeout_ms = 200
 
+# Keyboard protocol configuration - Enhanced keyboard event handling
+# Reference: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+[ui.keyboard_protocol]
+# Enable keyboard protocol enhancements (master toggle)
+enabled = true
+
+# Preset mode: "default", "full", "minimal", "custom"
+# - "default": Current behavior (disambiguate escapes + event types + alternate keys)
+# - "full": All features (same as default in crossterm 0.28.1, REPORT_ALL_KEYS not yet supported)
+# - "minimal": Only disambiguate escape sequences
+# - "custom": Use individual flag settings below
+mode = "default"
+
+# Individual flag controls (only used when mode = "custom")
+# Resolve Esc key ambiguity (recommended)
+disambiguate_escape_codes = true
+
+# Report press/release/repeat events
+report_event_types = true
+
+# Report alternate key layouts
+report_alternate_keys = true
+
+# Report modifier-only keys (Shift, Ctrl, Alt alone)
+# Note: Not supported in crossterm 0.28.1, will be ignored
+report_all_keys = false
+
 # Timeout ceilings and warnings for tool execution
 [timeouts]
 # Maximum duration for standard (non-PTY) tools in seconds. Set to 0 to disable.
