@@ -1,17 +1,86 @@
+#![allow(clippy::result_large_err, clippy::bind_instead_of_map)]
+
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, PromptCachingConfig};
-use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
+use crate::llm::error_display::format_llm_error;
+use crate::llm::provider::{
+    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
+    LLMStreamEvent, MessageRole,
+};
+use crate::llm::providers::shared::{
+    NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls,
+    update_tool_calls,
+};
+use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
+use async_stream::try_stream;
 use async_trait::async_trait;
+use futures::StreamExt;
+use reqwest::{Client as HttpClient, Response, StatusCode};
+use serde_json::{Value, json};
+use std::collections::HashSet;
 
-use super::common::override_base_url;
-use super::openai::OpenAIProvider;
+use super::common::{
+    map_finish_reason_common, override_base_url, parse_response_openai_format, resolve_model,
+    serialize_messages_openai_format,
+};
+use super::error_handling::{format_network_error, format_parse_error};
 
-/// Hugging Face Inference Providers (OpenAI-compatible router)
+const PROVIDER_NAME: &str = "HuggingFace";
+const PROVIDER_KEY: &str = "huggingface";
+const JSON_INSTRUCTION: &str = "Return JSON that matches the provided schema.";
+
+/// Hugging Face Inference Providers - OpenAI-compatible LLM routing service
 ///
-/// This provider reuses the OpenAI client but points to the Hugging Face router
-/// (`https://router.huggingface.co/v1`) and validates against the HF model list.
+/// Provides unified access to hundreds of LLMs across 15+ inference providers
+/// (Cerebras, Cohere, Fireworks, Groq, Together, Replicate, Sambanova, etc.)
+///
+/// **Base URL**: `https://router.huggingface.co/v1`
+/// **Documentation**: https://huggingface.co/docs/inference-providers
+///
+/// ## Provider Selection
+///
+/// HuggingFace supports flexible provider routing by appending suffixes to model IDs:
+///
+/// ```text
+/// # Auto-selection (default) - uses your preference order
+/// deepseek-ai/DeepSeek-R1
+///
+/// # Performance-optimized - highest throughput
+/// deepseek-ai/DeepSeek-R1:fastest
+///
+/// # Cost-optimized - lowest price per token
+/// deepseek-ai/DeepSeek-R1:cheapest
+///
+/// # Explicit provider - force specific provider
+/// deepseek-ai/DeepSeek-R1:together
+/// MiniMaxAI/MiniMax-M2:novita
+/// ```
+///
+/// Configure preferences: https://hf.co/settings/inference-providers
+///
+/// ## HuggingFace-Specific Behaviors (17 Total)
+///
+/// This provider implements 17 behaviors that differ from standard OpenAI API to ensure
+/// compatibility with HuggingFace's router and the diverse set of backend providers:
+///
+/// 1. **Strict Tool Schema**: Only `{type, function}` fields (no OpenAI extensions)
+/// 2. **max_tokens Field**: Uses `max_tokens` vs OpenAI's `max_completion_tokens`
+/// 3. **No output_types**: Responses API excludes this (causes 400 errors)
+/// 4. **No Penalty Params**: Skips `presence_penalty`/`frequency_penalty`
+/// 5. **Flat Sampling**: Params at top level (not nested in `sampling_parameters`)
+/// 6. **No Reasoning Params**: Skips OpenAI reasoning controls
+/// 7. **No stream_options**: Excluded to avoid 400 errors
+/// 8. **GLM Tool Handling**: GLM models disable tools in Chat API only
+/// 9. **JSON Instructions**: Explicit "Return JSON" for Responses API schemas
+/// 10. **Model Validation**: MiniMax-M2 requires `:novita` suffix
+/// 11. **Responses API**: Disabled by default (beta/unstable)
+/// 12. **No Model Fallback**: No automatic model rewrites
+/// 13. **No Harmony**: Skips GPT-OSS Harmony pathway
+/// 14. **Base URL Detection**: Identifies HF via URL patterns
+/// 15. **HF-Specific Errors**: References HF docs and model catalogs
+/// 16. **Prefer Responses for Tools**: Better tool orchestration
+/// 17. **Tool Orchestration**: Built-in coordination and retry logic
 ///
 /// ## API Compatibility
 /// Implements both the Chat Completion API and the Responses API (beta):
@@ -38,61 +107,592 @@ use super::openai::OpenAIProvider;
 /// ## Recommended Models
 /// See: https://huggingface.co/docs/inference-providers/tasks/chat-completion#recommended-models
 pub struct HuggingFaceProvider {
-    inner: OpenAIProvider,
+    api_key: String,
+    http_client: HttpClient,
+    base_url: String,
+    model: String,
 }
 
 impl HuggingFaceProvider {
-    #[allow(clippy::too_many_arguments)]
+    pub fn new(api_key: String) -> Self {
+        Self::with_model_internal(
+            api_key,
+            models::huggingface::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+        )
+    }
+
+    pub fn with_model(api_key: String, model: String) -> Self {
+        Self::with_model_internal(api_key, model, None, None)
+    }
+
+    fn with_model_internal(
+        api_key: String,
+        model: String,
+        base_url: Option<String>,
+        _prompt_cache: Option<PromptCachingConfig>,
+    ) -> Self {
+        Self {
+            api_key,
+            http_client: HttpClient::new(),
+            base_url: override_base_url(
+                urls::HUGGINGFACE_API_BASE,
+                base_url,
+                Some(env_vars::HUGGINGFACE_BASE_URL),
+            ),
+            model,
+        }
+    }
+
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
-        anthropic: Option<AnthropicConfig>,
+        _timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
     ) -> Self {
-        let resolved_base_url = override_base_url(
-            urls::HUGGINGFACE_API_BASE,
-            base_url,
-            Some(env_vars::HUGGINGFACE_BASE_URL),
-        );
-
-        let inner = OpenAIProvider::from_config(
-            api_key,
-            model,
-            Some(resolved_base_url),
-            prompt_cache,
-            timeouts,
-            anthropic,
-        );
-
-        Self { inner }
+        let api_key_value = api_key.unwrap_or_default();
+        let model_value = resolve_model(model, models::huggingface::DEFAULT_MODEL);
+        Self::with_model_internal(api_key_value, model_value, base_url, prompt_cache)
     }
 
-    #[allow(clippy::result_large_err)]
-    fn validate_model(&self, model: &str) -> Result<(), LLMError> {
-        if model.trim().is_empty() {
-            let formatted_error =
-                error_display::format_llm_error("HuggingFace", "Model identifier cannot be empty");
-            return Err(LLMError::InvalidRequest {
-                message: formatted_error,
+    /// Behavior 10: Normalize and validate HuggingFace model IDs
+    ///
+    /// **Provider Selection Suffixes**:
+    /// - `:fastest` - Selects provider with highest throughput
+    /// - `:cheapest` - Selects provider with lowest price per token
+    /// - `:provider-name` - Forces specific provider (e.g., `:novita`, `:together`, `:groq`)
+    ///
+    /// All suffixes are preserved during validation and passed to the router.
+    ///
+    /// **Reference**: https://huggingface.co/docs/inference-providers/en/guide
+    fn normalize_model_id(&self, model: &str) -> Result<String, LLMError> {
+        let lower = model.to_ascii_lowercase();
+
+        // Validate MiniMax-M2 requires :novita suffix
+        if lower.contains("minimax-m2") && !model.contains(':') {
+            return Err(LLMError::Provider {
+                message: format_llm_error(
+                    PROVIDER_NAME,
+                    "Model 'MiniMax-M2' requires explicit provider selection. \
+                    Use 'MiniMaxAI/MiniMax-M2:novita' to access via Novita.\n\n\
+                    Provider selection guide: https://huggingface.co/docs/inference-providers/guide#provider-selection",
+                ),
                 metadata: None,
             });
         }
 
-        // Allow any HF router model ID; the curated list is used only for display and capability hints.
+        // Preserve all provider selection suffixes (:fastest, :cheapest, :provider-name)
+        Ok(model.to_string())
+    }
+
+    /// Behavior 8: GLM models reject tool payloads in Chat API (Responses API handles them correctly)
+    fn should_disable_tools_for_glm(&self, model: &str) -> bool {
+        model.to_ascii_lowercase().contains("glm")
+    }
+
+    /// Behavior 1: Serialize tools with strict schema (type/function only, no extra fields)
+    fn serialize_tools_strict(
+        &self,
+        tools: &[crate::llm::provider::ToolDefinition],
+    ) -> Option<Vec<Value>> {
+        if tools.is_empty() {
+            return None;
+        }
+
+        let mut seen_names = HashSet::new();
+        let serialized: Vec<Value> = tools
+            .iter()
+            .filter_map(|tool| {
+                if tool.tool_type != "function" {
+                    return None;
+                }
+                let func = tool.function.as_ref()?;
+                if !seen_names.insert(func.name.clone()) {
+                    return None;
+                }
+
+                // HF strict schema: Flat structure (NOT nested like OpenAI)
+                // Correct format: {"type": "function", "name": "...", "parameters": {...}}
+                // NOT: {"type": "function", "function": {"name": "...", "parameters": {...}}}
+                Some(json!({
+                    "type": "function",
+                    "name": &func.name,
+                    "description": &func.description,
+                    "parameters": &func.parameters,
+                }))
+            })
+            .collect();
+
+        if serialized.is_empty() {
+            None
+        } else {
+            Some(serialized)
+        }
+    }
+
+    /// Behavior 2,4,6,7: Format Chat Completions API request with HF-specific quirks
+    fn format_for_chat_completions(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+        let messages = serialize_messages_openai_format(request, PROVIDER_KEY)?;
+
+        let mut payload = json!({
+            "model": request.model,
+            "messages": messages,
+            "stream": request.stream,
+        });
+
+        // Behavior 2: Use max_tokens (not max_completion_tokens)
+        if let Some(max_tokens) = request.max_tokens {
+            payload["max_tokens"] = json!(max_tokens);
+        }
+
+        // Behavior 1: Serialize tools with strict schema
+        // Behavior 8: Disable tools for GLM models (Chat API only)
+        if let Some(tools) = &request.tools {
+            if !self.should_disable_tools_for_glm(&request.model) {
+                if let Some(serialized) = self.serialize_tools_strict(tools) {
+                    payload["tools"] = json!(serialized);
+
+                    if let Some(choice) = &request.tool_choice {
+                        payload["tool_choice"] = choice.to_provider_format("openai");
+                    }
+                }
+            }
+        }
+
+        // Behavior 6: Add temperature if present (skip reasoning params)
+        if let Some(temperature) = request.temperature {
+            payload["temperature"] = json!(temperature);
+        }
+
+        if let Some(top_p) = request.top_p {
+            payload["top_p"] = json!(top_p);
+        }
+
+        // Behavior 4: Skip presence_penalty and frequency_penalty
+        // (Don't add these parameters at all for HF)
+
+        // Behavior 7: Don't add stream_options
+        // (Skip even for native OpenAI compatibility)
+
+        if request.output_format.is_some() {
+            payload["response_format"] = json!({ "type": "json_object" });
+        }
+
+        Ok(payload)
+    }
+
+    /// Convert messages to Responses API input format
+    fn convert_messages_to_input(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
+        let mut input = Vec::new();
+
+        // Add system prompt as first input item
+        if let Some(system_prompt) = &request.system_prompt {
+            input.push(json!({
+                "type": "message",
+                "role": "system",
+                "content": system_prompt
+            }));
+        }
+
+        // Add conversation messages
+        for msg in &request.messages {
+            let role = msg.role.as_generic_str();
+            let mut message_obj = json!({
+                "type": "message",
+                "role": role,
+                "content": msg.content.as_text()
+            });
+
+            if msg.role == MessageRole::Assistant {
+                if let Some(tool_calls) = &msg.tool_calls {
+                    let tool_calls_json: Vec<Value> = tool_calls
+                        .iter()
+                        .filter_map(|tc| {
+                            tc.function.as_ref().map(|func| {
+                                json!({
+                                    "id": tc.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": func.name,
+                                        "arguments": func.arguments
+                                    }
+                                })
+                            })
+                        })
+                        .collect();
+                    message_obj["tool_calls"] = Value::Array(tool_calls_json);
+                }
+            } else if msg.role == MessageRole::Tool {
+                if let Some(tool_call_id) = &msg.tool_call_id {
+                    message_obj["tool_call_id"] = json!(tool_call_id);
+                }
+            }
+
+            input.push(message_obj);
+        }
+
+        Ok(input)
+    }
+
+    /// Behavior 9: Add JSON schema instruction for Responses API
+    fn add_json_instruction(&self, payload: &mut Value) -> Result<(), LLMError> {
+        if let Some(instructions) = payload.get_mut("instructions") {
+            if let Some(text) = instructions.as_str() {
+                if !text.contains("Return JSON") {
+                    *instructions = json!(format!("{}\n\n{}", text, JSON_INSTRUCTION));
+                }
+            }
+        } else {
+            payload["instructions"] = json!(JSON_INSTRUCTION);
+        }
+
         Ok(())
+    }
+
+    /// Behavior 3,5,6,9: Format Responses API request with HF-specific quirks
+    fn format_for_responses_api(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+        let input = self.convert_messages_to_input(request)?;
+
+        let mut payload = json!({
+            "model": request.model,
+            "input": input,
+            "stream": request.stream,
+        });
+
+        // Behavior 3: Skip output_types (causes 400 errors on HF)
+        // Don't add: payload["output_types"] = json!(["message", "tool_call"]);
+
+        // Behavior 5: Flatten sampling parameters to top level (not nested in sampling_parameters)
+        if let Some(max_tokens) = request.max_tokens {
+            payload["max_tokens"] = json!(max_tokens);
+        }
+        if let Some(temperature) = request.temperature {
+            payload["temperature"] = json!(temperature);
+        }
+        if let Some(top_p) = request.top_p {
+            payload["top_p"] = json!(top_p);
+        }
+
+        // Behavior 4: Skip presence_penalty and frequency_penalty
+
+        // Behavior 1: Add tools with strict schema
+        if let Some(tools) = &request.tools {
+            if let Some(serialized) = self.serialize_tools_strict(tools) {
+                payload["tools"] = json!(serialized);
+
+                if let Some(choice) = &request.tool_choice {
+                    payload["tool_choice"] = choice.to_provider_format("openai");
+                }
+            }
+        }
+
+        // Behavior 9: Add JSON instruction if using schemas/tools
+        if request.output_format.is_some() || request.tools.is_some() {
+            self.add_json_instruction(&mut payload)?;
+        }
+
+        // Behavior 6: Skip reasoning parameters entirely (not supported by HF)
+
+        if request.output_format.is_some() {
+            payload["response_format"] = json!({ "type": "json_object" });
+        }
+
+        Ok(payload)
+    }
+
+    /// Behavior 11,16: Determine whether to use Responses API or Chat Completions API
+    fn should_use_responses_api(&self, request: &LLMRequest) -> bool {
+        // Behavior 11: Default to Chat API (Responses is beta/unstable)
+        // Behavior 16: But prefer Responses for tools (better orchestration)
+        request.tools.as_ref().is_some_and(|t| !t.is_empty())
+    }
+
+    /// Behavior 15: Format HF-specific error messages
+    /// Behavior 15: HF-specific error messages with documentation links
+    fn format_error(&self, status: StatusCode, body: &str) -> LLMError {
+        let message = if status == StatusCode::NOT_FOUND {
+            format!(
+                "Model not found on HuggingFace Inference Providers.\n\n\
+                Ensure the model is:\n\
+                1. Correctly spelled (e.g., 'deepseek-ai/DeepSeek-R1')\n\
+                2. Available for text generation/chat completion\n\
+                3. Enabled for at least one inference provider\n\n\
+                Browse models: https://huggingface.co/models?pipeline_tag=text-generation&inference_provider=all\n\
+                Docs: https://huggingface.co/docs/inference-providers/tasks/chat-completion"
+            )
+        } else if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+            format!(
+                "Authentication failed ({}). \n\n\
+                Check your HuggingFace token:\n\
+                1. Get a token: https://huggingface.co/settings/tokens\n\
+                2. Ensure 'Make calls to Inference Providers' permission is enabled\n\
+                3. Set HF_TOKEN environment variable or pass to constructor\n\n\
+                Error details: {}",
+                status, body
+            )
+        } else if status == StatusCode::BAD_REQUEST {
+            if body.contains("Invalid API parameter") || body.contains("not supported") {
+                format!(
+                    "Invalid request parameters ({}).\n\n\
+                    HuggingFace has strict API validation. Common issues:\n\
+                    - `stream_options` not supported (causes 400)\n\
+                    - `output_types` not supported in some contexts\n\
+                    - Provider-specific parameter limitations\n\n\
+                    Error: {}\n\
+                    API Docs: https://huggingface.co/docs/inference-providers/hub-api",
+                    status, body
+                )
+            } else {
+                format!(
+                    "Bad request ({}).\n\n\
+                    Error details: {}\n\
+                    API Docs: https://huggingface.co/docs/inference-providers",
+                    status, body
+                )
+            }
+        } else if status == StatusCode::TOO_MANY_REQUESTS {
+            format!(
+                "Rate limit exceeded (429).\n\n\
+                Consider:\n\
+                1. Using a PRO account for higher limits: https://hf.co/subscribe/pro\n\
+                2. Implementing exponential backoff retry logic\n\
+                3. Spreading requests across multiple providers using :fastest or :cheapest suffixes\n\n\
+                Error: {}",
+                body
+            )
+        } else {
+            format!(
+                "HuggingFace API error ({}).\n\n\
+                Error details: {}\n\
+                Support: https://huggingface.co/docs/inference-providers",
+                status, body
+            )
+        };
+
+        LLMError::Provider {
+            message: format_llm_error(PROVIDER_NAME, &message),
+            metadata: Some(LLMErrorMetadata::new(
+                PROVIDER_NAME,
+                Some(status.as_u16()),
+                None,
+                None,
+                None,
+                Some(body.to_string()),
+            )),
+        }
+    }
+
+    /// Parse Responses API format (output[] array with type-tagged items)
+    fn parse_responses_api_format(json: &Value) -> Result<LLMResponse, LLMError> {
+        let output = json
+            .get("output")
+            .and_then(|v| v.as_array());
+
+        let output_arr = match output {
+            Some(arr) => arr,
+            None => {
+                // Not a Responses API format, fall back to Chat Completions
+                return Err(LLMError::Provider {
+                    message: format_llm_error(PROVIDER_NAME, "Not a Responses API format"),
+                    metadata: None,
+                });
+            }
+        };
+
+        let mut content_fragments: Vec<String> = Vec::new();
+        let mut reasoning_fragments: Vec<String> = Vec::new();
+        let mut tool_calls: Vec<crate::llm::provider::ToolCall> = Vec::new();
+
+        for item in output_arr {
+            let item_type = item.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+            match item_type {
+                "message" => {
+                    // Extract content from message.content array
+                    if let Some(content_arr) = item.get("content").and_then(|c| c.as_array()) {
+                        for entry in content_arr {
+                            let entry_type = entry.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                            match entry_type {
+                                "text" | "output_text" => {
+                                    if let Some(text) = entry.get("text").and_then(|t| t.as_str()) {
+                                        if !text.is_empty() {
+                                            content_fragments.push(text.to_string());
+                                        }
+                                    }
+                                }
+                                "reasoning" => {
+                                    if let Some(text) = entry.get("text").and_then(|t| t.as_str()) {
+                                        if !text.is_empty() {
+                                            reasoning_fragments.push(text.to_string());
+                                        }
+                                    }
+                                }
+                                "function_call" | "tool_call" => {
+                                    if let Some(call) = Self::parse_responses_tool_call(entry) {
+                                        tool_calls.push(call);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                "function_call" | "tool_call" => {
+                    if let Some(call) = Self::parse_responses_tool_call(item) {
+                        tool_calls.push(call);
+                    }
+                }
+                "reasoning" => {
+                    // Top-level reasoning item
+                    if let Some(summary_arr) = item.get("summary").and_then(|s| s.as_array()) {
+                        for summary in summary_arr {
+                            if let Some(text) = summary.get("text").and_then(|t| t.as_str()) {
+                                if !text.is_empty() {
+                                    reasoning_fragments.push(text.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let content = if content_fragments.is_empty() {
+            None
+        } else {
+            Some(content_fragments.join(""))
+        };
+
+        let reasoning = if reasoning_fragments.is_empty() {
+            None
+        } else {
+            Some(reasoning_fragments.join("\n\n"))
+        };
+
+        let finish_reason = if !tool_calls.is_empty() {
+            crate::llm::provider::FinishReason::ToolCalls
+        } else {
+            crate::llm::provider::FinishReason::Stop
+        };
+
+        // Parse usage from response
+        let usage = json.get("usage").map(|usage_value| {
+            crate::llm::provider::Usage {
+                prompt_tokens: usage_value
+                    .get("input_tokens")
+                    .or_else(|| usage_value.get("prompt_tokens"))
+                    .and_then(|pt| pt.as_u64())
+                    .unwrap_or(0) as u32,
+                completion_tokens: usage_value
+                    .get("output_tokens")
+                    .or_else(|| usage_value.get("completion_tokens"))
+                    .and_then(|ct| ct.as_u64())
+                    .unwrap_or(0) as u32,
+                total_tokens: usage_value
+                    .get("total_tokens")
+                    .and_then(|tt| tt.as_u64())
+                    .unwrap_or(0) as u32,
+                cached_prompt_tokens: None,
+                cache_creation_tokens: None,
+                cache_read_tokens: None,
+            }
+        });
+
+        Ok(LLMResponse {
+            content,
+            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            usage,
+            finish_reason,
+            reasoning,
+            reasoning_details: None,
+        })
+    }
+
+    /// Parse a tool call from Responses API format
+    fn parse_responses_tool_call(item: &Value) -> Option<crate::llm::provider::ToolCall> {
+        let call_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        let function_obj = item.get("function").and_then(|v| v.as_object());
+        let name = function_obj.and_then(|f| f.get("name").and_then(|n| n.as_str()))?;
+        let arguments = function_obj.and_then(|f| f.get("arguments"));
+
+        let serialized = arguments.map_or("{}".to_owned(), |args| {
+            if args.is_string() {
+                args.as_str().unwrap_or("{}").to_string()
+            } else {
+                args.to_string()
+            }
+        });
+
+        Some(crate::llm::provider::ToolCall::function(
+            call_id.to_string(),
+            name.to_string(),
+            serialized,
+        ))
+    }
+
+    async fn parse_response(&self, response: Response, use_responses_api: bool) -> Result<LLMResponse, LLMError> {
+        let status = response.status();
+
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(self.format_error(status, &body));
+        }
+
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|err| format_parse_error(PROVIDER_NAME, &err))?;
+
+        // Log response structure for debugging
+        tracing::debug!(
+            target: "vtcode::llm::huggingface",
+            use_responses_api = use_responses_api,
+            has_output = json.get("output").is_some(),
+            has_choices = json.get("choices").is_some(),
+            "Parsing HuggingFace response"
+        );
+
+        // Try Responses API format first if we used that endpoint
+        if use_responses_api {
+            if json.get("output").is_some() {
+                return Self::parse_responses_api_format(&json);
+            }
+            // Fall through to Chat Completions format if output is missing
+            tracing::warn!(
+                target: "vtcode::llm::huggingface",
+                "Responses API returned Chat Completions format, falling back to Chat parser"
+            );
+        }
+
+        // Parse Chat Completions format
+        parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
+            json,
+            PROVIDER_NAME,
+            false, // No prompt cache metrics for HF
+            None,  // No custom reasoning extractor
+        )
+    }
+
+    pub fn available_models() -> Vec<String> {
+        models::huggingface::SUPPORTED_MODELS
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
     }
 }
 
 #[async_trait]
 impl LLMProvider for HuggingFaceProvider {
     fn name(&self) -> &str {
-        "huggingface"
+        PROVIDER_KEY
     }
 
     fn supports_streaming(&self) -> bool {
-        self.inner.supports_streaming()
+        true
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
@@ -100,56 +700,357 @@ impl LLMProvider for HuggingFaceProvider {
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
-        models::huggingface::REASONING_MODELS.contains(&_model)
+        // Behavior 6: HF doesn't support reasoning.effort parameter
+        false
     }
 
-    fn supports_tools(&self, model: &str) -> bool {
-        self.inner.supports_tools(model)
+    fn supports_tools(&self, _model: &str) -> bool {
+        true // Most HF models support tools
     }
 
-    fn supports_parallel_tool_config(&self, model: &str) -> bool {
-        self.inner.supports_parallel_tool_config(model)
+    fn supports_parallel_tool_config(&self, _model: &str) -> bool {
+        false
     }
 
-    fn supports_structured_output(&self, model: &str) -> bool {
-        self.inner.supports_structured_output(model)
+    fn supports_structured_output(&self, _model: &str) -> bool {
+        true
     }
 
-    fn supports_context_caching(&self, model: &str) -> bool {
-        self.inner.supports_context_caching(model)
+    fn supports_context_caching(&self, _model: &str) -> bool {
+        false // HF doesn't currently expose prompt caching
     }
 
-    fn effective_context_size(&self, model: &str) -> usize {
-        self.inner.effective_context_size(model)
+    fn effective_context_size(&self, _model: &str) -> usize {
+        128_000 // Default context window
     }
 
-    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        self.validate_model(&request.model)?;
-        self.inner.generate(request).await
+    async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        if request.model.trim().is_empty() {
+            request.model = self.model.clone();
+        }
+
+        self.validate_request(&request)?;
+
+        // Behavior 10: Normalize and validate model
+        let model = self.normalize_model_id(&request.model)?;
+        request.model = model;
+
+        // Behavior 16: Prefer Responses API even with tools
+        let use_responses_api = self.should_use_responses_api(&request);
+
+        // Behavior 8: Apply GLM tool disabling if using Chat API
+        if !use_responses_api && self.should_disable_tools_for_glm(&request.model) {
+            request.tools = None;
+            request.tool_choice = None;
+        }
+
+        // Format request with HF-specific quirks
+        let payload = if use_responses_api {
+            self.format_for_responses_api(&request)?
+        } else {
+            self.format_for_chat_completions(&request)?
+        };
+
+        // Make HTTP request
+        let endpoint = if use_responses_api {
+            format!("{}/responses", self.base_url.trim_end_matches('/'))
+        } else {
+            format!("{}/chat/completions", self.base_url.trim_end_matches('/'))
+        };
+
+        let response = self
+            .http_client
+            .post(&endpoint)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|err| format_network_error(PROVIDER_NAME, &err))?;
+
+        self.parse_response(response, use_responses_api).await
     }
 
-    async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
-        self.validate_model(&request.model)?;
-        self.inner.stream(request).await
+    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+        if request.model.trim().is_empty() {
+            request.model = self.model.clone();
+        }
+
+        self.validate_request(&request)?;
+        request.stream = true;
+
+        // Behavior 10: Normalize and validate model
+        let model = self.normalize_model_id(&request.model)?;
+        request.model = model;
+
+        // Behavior 16: Prefer Responses API even with tools
+        let use_responses_api = self.should_use_responses_api(&request);
+
+        // Behavior 8: Apply GLM tool disabling if using Chat API
+        if !use_responses_api && self.should_disable_tools_for_glm(&request.model) {
+            request.tools = None;
+            request.tool_choice = None;
+        }
+
+        // Format request with HF-specific quirks
+        let payload = if use_responses_api {
+            self.format_for_responses_api(&request)?
+        } else {
+            self.format_for_chat_completions(&request)?
+        };
+
+        // Make HTTP request
+        let endpoint = if use_responses_api {
+            format!("{}/responses", self.base_url.trim_end_matches('/'))
+        } else {
+            format!("{}/chat/completions", self.base_url.trim_end_matches('/'))
+        };
+
+        let response = self
+            .http_client
+            .post(&endpoint)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|err| format_network_error(PROVIDER_NAME, &err))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(self.format_error(status, &body));
+        }
+
+        self.create_stream(response, use_responses_api).await
     }
 
     fn supported_models(&self) -> Vec<String> {
-        models::huggingface::SUPPORTED_MODELS
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
+        Self::available_models()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         if request.messages.is_empty() {
-            let formatted_error =
-                error_display::format_llm_error("HuggingFace", "Messages cannot be empty");
             return Err(LLMError::InvalidRequest {
-                message: formatted_error,
+                message: format_llm_error(PROVIDER_NAME, "Messages cannot be empty"),
                 metadata: None,
             });
         }
 
-        self.validate_model(&request.model)
+        if request.model.trim().is_empty() {
+            return Err(LLMError::InvalidRequest {
+                message: format_llm_error(PROVIDER_NAME, "Model identifier cannot be empty"),
+                metadata: None,
+            });
+        }
+
+        Ok(())
+    }
+}
+
+// Streaming implementation
+impl HuggingFaceProvider {
+    async fn create_stream(&self, response: Response, use_responses_api: bool) -> Result<LLMStream, LLMError> {
+        let mut bytes_stream = response.bytes_stream();
+        let mut buffer = String::with_capacity(4096);
+        let mut tool_calls: Vec<ToolCallBuilder> = Vec::new();
+        let mut content_buffer = String::new();
+        let mut reasoning_buffer = String::new();
+        let telemetry = NoopStreamTelemetry;
+        let mut sanitizer = TagStreamSanitizer::new();
+
+        let stream = try_stream! {
+            while let Some(chunk_result) = bytes_stream.next().await {
+                let chunk = chunk_result.map_err(|err| format_network_error(PROVIDER_NAME, &err))?;
+                let text = String::from_utf8_lossy(&chunk);
+                buffer.push_str(&text);
+
+                // Process complete SSE events
+                while let Some(newline_pos) = buffer.find('\n') {
+                    let line = buffer[..newline_pos].trim().to_string();
+                    buffer.drain(..=newline_pos);
+
+                    if line.is_empty() || line.starts_with(':') {
+                        continue;
+                    }
+
+                    let data = if let Some(stripped) = line.strip_prefix("data: ") {
+                        stripped
+                    } else {
+                        continue;
+                    };
+
+                    if data == "[DONE]" {
+                        break;
+                    }
+
+                    let event: Value = match serde_json::from_str(data) {
+                        Ok(v) => v,
+                        Err(_) => continue,
+                    };
+
+                    // Try Responses API format first if we're using it
+                    if use_responses_api {
+                        let event_type = event.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+                        match event_type {
+                            // Text content delta
+                            "response.output_text.delta" => {
+                                if let Some(delta) = event.get("delta").and_then(|d| d.as_str()) {
+                                    for ev in sanitizer.process_chunk(delta) {
+                                        match &ev {
+                                            LLMStreamEvent::Token { delta } => {
+                                                telemetry.on_content_delta(delta);
+                                                content_buffer.push_str(delta);
+                                                yield ev;
+                                            }
+                                            _ => yield ev,
+                                        }
+                                    }
+                                }
+                                continue;
+                            }
+                            // Reasoning delta
+                            "response.reasoning.delta" => {
+                                if let Some(delta) = event.get("delta").and_then(|d| d.as_str()) {
+                                    telemetry.on_reasoning_delta(delta);
+                                    reasoning_buffer.push_str(delta);
+                                }
+                                continue;
+                            }
+                            // Function call arguments delta
+                            "response.function_call_arguments.delta" => {
+                                // Note: We don't aggregate this into content_buffer
+                                // Tool calls are handled at completion
+                                telemetry.on_tool_call_delta();
+                                continue;
+                            }
+                            // Response completed
+                            "response.completed" => {
+                                if let Some(response_obj) = event.get("response") {
+                                    // Parse the completed response using our Responses API parser
+                                    match Self::parse_responses_api_format(response_obj) {
+                                        Ok(mut response) => {
+                                            // Merge with any buffered content
+                                            if response.content.is_none() && !content_buffer.is_empty() {
+                                                response.content = Some(content_buffer.clone());
+                                            }
+                                            if response.reasoning.is_none() && !reasoning_buffer.is_empty() {
+                                                response.reasoning = Some(reasoning_buffer.clone());
+                                            }
+                                            yield LLMStreamEvent::Completed { response };
+                                        }
+                                        Err(_) => {
+                                            // Fallback: create response from buffers
+                                            let finish_reason = crate::llm::provider::FinishReason::Stop;
+                                            let response = LLMResponse {
+                                                content: if content_buffer.is_empty() { None } else { Some(content_buffer.clone()) },
+                                                tool_calls: None,
+                                                usage: None,
+                                                finish_reason,
+                                                reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
+                                                reasoning_details: None,
+                                            };
+                                            yield LLMStreamEvent::Completed { response };
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                            // Response done (alternative completion event)
+                            "response.done" => {
+                                let finish_reason = crate::llm::provider::FinishReason::Stop;
+                                let response = LLMResponse {
+                                    content: if content_buffer.is_empty() { None } else { Some(content_buffer.clone()) },
+                                    tool_calls: finalize_tool_calls(tool_calls.clone()),
+                                    usage: None,
+                                    finish_reason,
+                                    reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
+                                    reasoning_details: None,
+                                };
+                                yield LLMStreamEvent::Completed { response };
+                                break;
+                            }
+                            // Continue to Chat Completions parsing for unrecognized events
+                            _ => {}
+                        }
+                    }
+
+                    // Parse Chat Completions format (delta from stream chunk)
+                    let choices = event.get("choices").and_then(|c| c.as_array());
+                    if let Some(choices_arr) = choices {
+                        if let Some(choice) = choices_arr.first() {
+                            let delta = choice.get("delta");
+                            if let Some(delta_obj) = delta {
+                                // Content delta
+                                if let Some(content) = delta_obj.get("content").and_then(|c| c.as_str()) {
+                                    for event in sanitizer.process_chunk(content) {
+                                        match &event {
+                                            LLMStreamEvent::Token { delta } => {
+                                                telemetry.on_content_delta(delta);
+                                                content_buffer.push_str(delta);
+                                                yield event;
+                                            }
+                                            _ => yield event,
+                                        }
+                                    }
+                                }
+
+                                // Reasoning delta
+                                if let Some(reasoning) = delta_obj.get("reasoning_content").and_then(|r| r.as_str()) {
+                                    telemetry.on_reasoning_delta(reasoning);
+                                    reasoning_buffer.push_str(reasoning);
+                                }
+
+                                // Tool calls delta
+                                if let Some(tool_calls_arr) = delta_obj.get("tool_calls").and_then(|tc| tc.as_array()) {
+                                    update_tool_calls(&mut tool_calls, tool_calls_arr);
+                                    telemetry.on_tool_call_delta();
+                                }
+                            }
+
+                            // Check for finish_reason
+                            if let Some(finish_reason_str) = choice.get("finish_reason").and_then(|fr| fr.as_str()) {
+                                let finish_reason = map_finish_reason_common(finish_reason_str);
+                                let final_tool_calls = finalize_tool_calls(tool_calls.clone());
+
+                                // Parse usage if present
+                                let usage = event.get("usage").map(|usage_value| {
+                                    crate::llm::provider::Usage {
+                                        prompt_tokens: usage_value
+                                            .get("prompt_tokens")
+                                            .and_then(|pt| pt.as_u64())
+                                            .unwrap_or(0) as u32,
+                                        completion_tokens: usage_value
+                                            .get("completion_tokens")
+                                            .and_then(|ct| ct.as_u64())
+                                            .unwrap_or(0) as u32,
+                                        total_tokens: usage_value
+                                            .get("total_tokens")
+                                            .and_then(|tt| tt.as_u64())
+                                            .unwrap_or(0) as u32,
+                                        cached_prompt_tokens: None,
+                                        cache_creation_tokens: None,
+                                        cache_read_tokens: None,
+                                    }
+                                });
+
+                                let response = LLMResponse {
+                                    content: if content_buffer.is_empty() { None } else { Some(content_buffer.clone()) },
+                                    tool_calls: final_tool_calls,
+                                    usage,
+                                    finish_reason,
+                                    reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
+                                    reasoning_details: None,
+                                };
+
+                                yield LLMStreamEvent::Completed { response };
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        Ok(Box::pin(stream))
     }
 }

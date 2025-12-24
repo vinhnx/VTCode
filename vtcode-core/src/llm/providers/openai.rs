@@ -421,14 +421,6 @@ pub struct OpenAIProvider {
     responses_api_modes: Mutex<HashMap<String, ResponsesApiState>>,
     prompt_cache_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
-    /// Use strict tool schema (only type/function) for providers that reject extra fields (e.g., Hugging Face router).
-    strict_tool_schema: bool,
-    /// Disable OpenAI fallback model rewrites for providers that expect exact IDs (e.g., Hugging Face router).
-    disable_model_fallback: bool,
-    /// Disable Harmony inference pathway when the provider base URL is not the Harmony server (e.g., HF router).
-    disable_harmony: bool,
-    /// Capability flag indicating the Hugging Face router (chat-only surface).
-    is_huggingface_router: bool,
 }
 
 impl OpenAIProvider {
@@ -458,28 +450,17 @@ impl OpenAIProvider {
                         let description = &func.description;
                         let parameters = &func.parameters;
 
-                        if self.strict_tool_schema {
-                            json!({
-                                "type": "function",
-                                "function": {
-                                    "name": name,
-                                    "description": description,
-                                    "parameters": parameters,
-                                }
-                            })
-                        } else {
-                            json!({
-                                "type": &tool.tool_type,
+                        json!({
+                            "type": &tool.tool_type,
+                            "name": name,
+                            "description": description,
+                            "parameters": parameters,
+                            "function": {
                                 "name": name,
                                 "description": description,
                                 "parameters": parameters,
-                                "function": {
-                                    "name": name,
-                                    "description": description,
-                                    "parameters": parameters,
-                                }
-                            })
-                        }
+                            }
+                        })
                     }
                     "apply_patch" | "shell" | "custom" | "grammar" => {
                         // For GPT-5.1 native tool types and GPT-5 features, use direct serialization
@@ -882,21 +863,15 @@ impl OpenAIProvider {
         let mut responses_api_modes = HashMap::new();
         let default_state = Self::default_responses_state(&model);
         let is_native_openai = resolved_base_url.contains("api.openai.com");
-        let is_huggingface = resolved_base_url.contains("huggingface.co") || model.contains("/");
         let is_xai = resolved_base_url.contains("api.x.ai");
 
-        // Hugging Face now supports the Responses API at /v1/responses, but it is still beta
-        // and many backends (like Z.AI) fail with 400 on GPT-5 parameters. Default to Disabled.
-        let initial_state = if is_xai || is_huggingface || !is_native_openai {
+        // Non-native OpenAI providers (like xAI) may not support all OpenAI features
+        let initial_state = if is_xai || !is_native_openai {
             ResponsesApiState::Disabled
         } else {
             default_state
         };
         responses_api_modes.insert(model.clone(), initial_state);
-        let is_huggingface_router = is_huggingface || !is_native_openai;
-        let strict_tool_schema = is_huggingface;
-        let disable_harmony = is_huggingface || is_xai || !is_native_openai;
-        let disable_model_fallback = is_huggingface || is_xai || !is_native_openai;
 
         Self {
             api_key: Arc::from(api_key.as_str()),
@@ -909,10 +884,6 @@ impl OpenAIProvider {
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
             prompt_cache_settings,
-            disable_model_fallback,
-            strict_tool_schema,
-            disable_harmony,
-            is_huggingface_router,
         }
     }
 
@@ -1262,9 +1233,8 @@ impl OpenAIProvider {
             "stream": request.stream
         });
 
-        let is_huggingface = self.is_huggingface_router;
         let is_native_openai = self.base_url.contains("api.openai.com");
-        let max_tokens_field = if is_huggingface || !is_native_openai {
+        let max_tokens_field = if !is_native_openai {
             "max_tokens"
         } else {
             MAX_COMPLETION_TOKENS_FIELD
@@ -1352,11 +1322,8 @@ impl OpenAIProvider {
             "stream": request.stream,
         });
 
-        // 'output_types' is part of the GPT-5 Responses API spec but many HF providers (like zai-org)
-        // fail with 400 "Invalid API parameter" if it's included.
-        if !self.is_huggingface_router {
-            openai_request["output_types"] = json!(["message", "tool_call"]);
-        }
+        // 'output_types' is part of the GPT-5 Responses API spec
+        openai_request["output_types"] = json!(["message", "tool_call"]);
 
 
         if let Some(instructions) = responses_payload.instructions {
@@ -1396,20 +1363,7 @@ impl OpenAIProvider {
         }
 
         if has_sampling {
-            if self.is_huggingface_router {
-                // For Hugging Face, merge sampling parameters into the top level for better compatibility
-                if let Some(obj) = openai_request.as_object_mut() {
-                    if let Some(sampling_obj) = sampling_parameters.as_object() {
-                        for (k, v) in sampling_obj {
-                            // Map max_output_tokens back to max_tokens for HF top-level compatibility if needed
-                            let key = if k == "max_output_tokens" { "max_tokens" } else { k };
-                            obj.insert(key.to_string(), v.clone());
-                        }
-                    }
-                }
-            } else {
-                openai_request["sampling_parameters"] = sampling_parameters;
-            }
+            openai_request["sampling_parameters"] = sampling_parameters;
         }
 
 
@@ -1459,7 +1413,7 @@ impl OpenAIProvider {
                 } else {
                     openai_request["reasoning"] = json!({ "effort": effort.as_str() });
                 }
-            } else if openai_request.get("reasoning").is_none() && !self.is_huggingface_router {
+            } else if openai_request.get("reasoning").is_none() {
                 // Use the default reasoning effort level (medium) for native OpenAI models
                 let default_effort = ReasoningEffortLevel::default().as_str();
                 openai_request["reasoning"] = json!({ "effort": default_effort });
@@ -1468,7 +1422,7 @@ impl OpenAIProvider {
 
 
         // Enable reasoning summaries if supported (OpenAI GPT-5 only)
-        if self.supports_reasoning(&request.model) && !self.is_huggingface_router {
+        if self.supports_reasoning(&request.model) {
             if let Some(map) = openai_request.as_object_mut() {
                 let reasoning_value = map.entry("reasoning").or_insert(json!({}));
                 if let Some(reasoning_obj) = reasoning_value.as_object_mut() {
@@ -2325,34 +2279,6 @@ mod tests {
         assert!(!OpenAIProvider::uses_harmony("gpt-oss:20b"));
     }
 
-    #[test]
-    fn responses_api_state_respects_huggingface_router() {
-        let hf_provider = OpenAIProvider::from_config(
-            Some("key".to_string()),
-            Some(models::openai::DEFAULT_MODEL.to_string()),
-            Some("https://router.huggingface.co/v1".to_string()),
-            None,
-            None,
-            None,
-        );
-        assert_eq!(
-            hf_provider.responses_api_state(models::openai::DEFAULT_MODEL),
-            ResponsesApiState::Disabled
-        );
-
-        let openai_provider = OpenAIProvider::from_config(
-            Some("key".to_string()),
-            Some(models::openai::DEFAULT_MODEL.to_string()),
-            Some("https://api.openai.com/v1".to_string()),
-            None,
-            None,
-            None,
-        );
-        assert_eq!(
-            openai_provider.responses_api_state(models::openai::DEFAULT_MODEL),
-            ResponsesApiState::Required
-        );
-    }
 
     #[test]
     fn responses_payload_includes_prompt_cache_retention() {
@@ -2897,10 +2823,10 @@ impl provider::LLMProvider for OpenAIProvider {
         }
 
         let responses_state = self.responses_api_state(&request.model);
-        let is_huggingface = self.is_huggingface_router;
+
         let prefer_responses_stream = matches!(responses_state, ResponsesApiState::Required)
             || (matches!(responses_state, ResponsesApiState::Allowed)
-                && (request.tools.as_ref().is_none_or(Vec::is_empty) || is_huggingface));
+                && request.tools.as_ref().is_none_or(Vec::is_empty));
 
         if !prefer_responses_stream {
             #[cfg(debug_assertions)]
@@ -2912,9 +2838,9 @@ impl provider::LLMProvider for OpenAIProvider {
             let mut openai_request = self.convert_to_openai_format(&request)?;
             openai_request["stream"] = Value::Bool(true);
             // Request usage stats in the stream (compatible with newer OpenAI models)
-            // Note: Hugging Face router and other proxies do not support stream_options and will return 400.
+            // Note: Some proxies do not support stream_options and will return 400.
             let is_native_openai = self.base_url.contains("api.openai.com");
-            if is_native_openai && !is_huggingface {
+            if is_native_openai {
                 openai_request["stream_options"] = json!({ "include_usage": true });
             }
             let url = format!("{}/chat/completions", self.base_url);
@@ -3072,21 +2998,6 @@ impl provider::LLMProvider for OpenAIProvider {
 
         let mut openai_request = self.convert_to_openai_responses_format(&request)?;
 
-        // Per Hugging Face Responses API documentation:
-        // "include a brief instruction to return JSON. Without it the model may emit markdown even when a schema is provided."
-        if is_huggingface && (request.output_format.is_some() || request.tools.as_ref().is_some_and(|t| !t.is_empty())) {
-            let json_instruction = "Return JSON that matches the provided schema.";
-            if let Some(instructions) = openai_request.get_mut("instructions") {
-                if let Some(instr_str) = instructions.as_str() {
-                    if !instr_str.contains("Return JSON") {
-                        *instructions = json!(format!("{}\n\n{}", instr_str, json_instruction));
-                    }
-                }
-            } else {
-                openai_request["instructions"] = json!(json_instruction);
-            }
-        }
-
         openai_request["stream"] = Value::Bool(true);
         #[cfg(debug_assertions)]
         let debug_model = request.model.clone();
@@ -3150,20 +3061,6 @@ impl provider::LLMProvider for OpenAIProvider {
             }
 
             if is_model_not_found(status, &error_text) {
-                if self.disable_model_fallback {
-                    let formatted_error = error_display::format_llm_error(
-                        "OpenAI",
-                        &format!(
-                            "Model '{}' not found on provider {}. Ensure the Hugging Face Inference Providers model id is correct and available for text-generation/chat (e.g., https://huggingface.co/models?pipeline_tag=text-generation&inference_provider=all&other=conversational).",
-                            request.model, self.base_url
-                        ),
-                    );
-                    return Err(provider::LLMError::Provider {
-                        message: formatted_error,
-                        metadata: None,
-                    });
-                }
-
                 if let Some(fallback_model) = fallback_model_if_not_found(&request.model)
                     && fallback_model != request.model
                 {
@@ -3420,34 +3317,6 @@ impl provider::LLMProvider for OpenAIProvider {
         request: provider::LLMRequest,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let mut request = request;
-        let is_huggingface = self.is_huggingface_router;
-        let is_glm = request.model.to_ascii_lowercase().contains("glm");
-
-        // Normalize Hugging Face model ids.
-        // HuggingFace router supports automatic and explicit provider selection:
-        // - No suffix: Auto-selects first available provider (recommended)
-        // - :provider-name: Force specific provider (e.g., :novita, :together, :groq)
-        // - :fastest: Select provider with highest throughput
-        // - :cheapest: Select provider with lowest cost
-        // See: https://huggingface.co/docs/inference-providers/en/guide
-        if is_huggingface {
-            // Preserve all valid provider selection suffixes. Do NOT strip them.
-            // The HuggingFace router will handle provider selection based on the suffix.
-            
-            // Fail fast for models we explicitly do not support on HF router (e.g., MiniMax M2 without :novita).
-            let lower_model = request.model.to_ascii_lowercase();
-            // Only reject MiniMax-M2 if no provider suffix (it requires :novita on HF router)
-            if lower_model.contains("minimax-m2") && !request.model.contains(':') {
-                return Err(provider::LLMError::Provider {
-                    message: error_display::format_llm_error(
-                        "HuggingFace",
-                        "Model 'MiniMax-M2' is not supported on the default HuggingFace router. \
-                        Use 'MiniMaxAI/MiniMax-M2:novita' to access it via Novita inference provider.",
-                    ),
-                    metadata: None,
-                });
-            }
-        }
 
         if request.model.trim().is_empty() {
             request.model = self.model.to_string();
@@ -3457,26 +3326,15 @@ impl provider::LLMProvider for OpenAIProvider {
             request.parallel_tool_config = None;
         }
 
-        // Some Hugging Face GLM routes reject OpenAI tool payloads; disable tools for those models to avoid 400 errors.
-        // NOTE: The Responses API handles tool orchestration correctly for GLM models. Only disable if NOT using Responses API.
-        if is_huggingface && is_glm && matches!(self.responses_api_state(&request.model), ResponsesApiState::Disabled) {
-            request.tools = None;
-            request.tool_choice = None;
-            request.parallel_tool_calls = None;
-            request.parallel_tool_config = None;
-        }
-
-
-        // Check if this is a harmony model (GPT-OSS). Skip Harmony path when provider base URL is not the Harmony server (e.g., HF router).
-        if Self::uses_harmony(&request.model) && !self.disable_harmony {
+        // Check if this is a harmony model (GPT-OSS)
+        if Self::uses_harmony(&request.model) {
             return self.generate_with_harmony(request).await;
         }
 
         let responses_state = self.responses_api_state(&request.model);
         let attempt_responses = !matches!(responses_state, ResponsesApiState::Disabled)
             && (matches!(responses_state, ResponsesApiState::Required)
-                || request.tools.as_ref().is_none_or(Vec::is_empty)
-                || is_huggingface);
+                || request.tools.as_ref().is_none_or(Vec::is_empty));
         #[cfg(debug_assertions)]
         let request_timer = Instant::now();
         #[cfg(debug_assertions)]
@@ -3493,23 +3351,8 @@ impl provider::LLMProvider for OpenAIProvider {
         }
 
         if attempt_responses {
-            let mut openai_request = self.convert_to_openai_responses_format(&request)?;
+            let openai_request = self.convert_to_openai_responses_format(&request)?;
             let url = format!("{}/responses", self.base_url);
-
-            // Per Hugging Face Responses API documentation:
-            // "include a brief instruction to return JSON. Without it the model may emit markdown even when a schema is provided."
-            if is_huggingface && (request.output_format.is_some() || request.tools.as_ref().is_some_and(|t| !t.is_empty())) {
-                let json_instruction = "Return JSON that matches the provided schema.";
-                if let Some(instructions) = openai_request.get_mut("instructions") {
-                    if let Some(instr_str) = instructions.as_str() {
-                        if !instr_str.contains("Return JSON") {
-                            *instructions = json!(format!("{}\n\n{}", instr_str, json_instruction));
-                        }
-                    }
-                } else {
-                    openai_request["instructions"] = json!(json_instruction);
-                }
-            }
 
             let response = self
                 .authorize(self.http_client.post(&url))
@@ -3549,20 +3392,6 @@ impl provider::LLMProvider for OpenAIProvider {
                 {
                     return Err(provider::LLMError::RateLimit { metadata: None });
                 } else if is_model_not_found(status, &error_text) {
-                    if self.disable_model_fallback {
-                        let formatted_error = error_display::format_llm_error(
-                            "OpenAI",
-                            &format!(
-                                "Model '{}' not found on provider {}. Ensure the Hugging Face Inference Providers model id is correct and available for text-generation/chat (https://huggingface.co/models?pipeline_tag=text-generation&inference_provider=all&other=conversational).",
-                                request.model, self.base_url
-                            ),
-                        );
-                        return Err(provider::LLMError::Provider {
-                            message: formatted_error,
-                            metadata: None,
-                        });
-                    }
-
                     if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
                         if fallback_model != request.model {
                             #[cfg(debug_assertions)]
@@ -3838,3 +3667,7 @@ mod streaming_tests {
         }
     }
 }
+
+
+
+
