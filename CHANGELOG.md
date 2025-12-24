@@ -3,6 +3,27 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.52.4] - 2025-12-24
+
+
+### Features
+    - feat: Add new Z.AI GLM models, refine reasoning support, and update Hugging Face model naming conventions.
+    - feat: reimplement HuggingFace LLM provider with dedicated logic to handle its unique API behaviors and compatibility.
+    - feat: Add Hugging Face integration documentation and update tool policies to include git and cargo commands while removing some mcp time-related tools.
+
+
+### Bug Fixes
+    - fix: unignore .github directory to enable GitHub Actions CI/CD workflows
+
+
+### Documentation
+    - docs: update changelog for v0.52.3 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.52.3 [skip ci]
+    - chore: release v0.52.3
+    - chore: update npm package.json to v0.52.2 [skip ci]
 # [Version 0.52.3] - 2025-12-24
 
 
