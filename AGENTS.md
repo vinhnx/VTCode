@@ -61,7 +61,20 @@ Understanding these patterns requires reading multiple files across the codebase
 -   **Location**: `vtcode-tools/`, `vtcode-core/src/tools/`
 -   **Pattern**: Trait-driven composition (`Tool`, `ModeTool`, `CacheableTool`)
 -   **Key**: Single source of truth for content search (grep_file) and file operations
--   **Tools**: 53+ specialized handlers with workspace-scoped isolation
+-   **Tools**: 54+ specialized handlers with workspace-scoped isolation
+
+### Code Intelligence Tool
+
+-   **Location**: `vtcode-core/src/tools/code_intelligence.rs`
+-   **Purpose**: LSP-like code navigation using tree-sitter
+-   **Operations**:
+    -   `goto_definition`: Find where a symbol is defined
+    -   `find_references`: Find all references to a symbol
+    -   `hover`: Get documentation and type info for a symbol
+    -   `document_symbol`: Get all symbols in a file
+    -   `workspace_symbol`: Search for symbols across the workspace
+-   **Languages**: Rust, Python, JavaScript, TypeScript, Go, Java, Bash, Swift
+-   **Usage**: Call `code_intelligence` tool with operation, file_path, line, and character parameters
 
 ### Configuration Precedence
 

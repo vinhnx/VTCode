@@ -146,6 +146,73 @@ for operation in &operations {
 }
 ```
 
+## Code Intelligence Tool
+
+The `code_intelligence` tool exposes tree-sitter code navigation features to the LLM agent, providing LSP-like capabilities without requiring external language servers.
+
+### Available Operations
+
+| Operation | Description | Required Parameters |
+|-----------|-------------|---------------------|
+| `goto_definition` | Find where a symbol is defined | `file_path`, `line`, `character` |
+| `find_references` | Find all references to a symbol | `file_path`, `line`, `character` |
+| `hover` | Get documentation and type info | `file_path`, `line`, `character` |
+| `document_symbol` | Get all symbols in a file | `file_path` |
+| `workspace_symbol` | Search for symbols across workspace | `query` |
+
+### Usage Examples
+
+```json
+// Go to definition at line 42, column 15
+{
+  "operation": "goto_definition",
+  "file_path": "src/main.rs",
+  "line": 42,
+  "character": 15
+}
+
+// Get all symbols in a file
+{
+  "operation": "document_symbol",
+  "file_path": "src/lib.rs"
+}
+
+// Search for symbols matching "Config"
+{
+  "operation": "workspace_symbol",
+  "query": "Config"
+}
+```
+
+### Response Format
+
+```json
+{
+  "success": true,
+  "operation": "goto_definition",
+  "result": {
+    "locations": [
+      {
+        "file_path": "/path/to/file.rs",
+        "line": 10,
+        "character": 5,
+        "symbol": {
+          "name": "my_function",
+          "kind": "Function",
+          "signature": "(x: i32) -> bool",
+          "documentation": "/// Returns true if x is positive"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Supported Languages
+
+The code intelligence tool supports the same languages as the tree-sitter integration:
+- Rust, Python, JavaScript, TypeScript, Go, Java, Bash, Swift
+
 ## Integration with Existing Tools
 
 ### Enhanced Analyze Command

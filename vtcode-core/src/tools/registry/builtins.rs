@@ -157,5 +157,11 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             false,
             ToolRegistry::analyze_agent_executor,
         ),
+        ToolRegistration::new(
+            tools::CODE_INTELLIGENCE,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::code_intelligence_executor,
+        ),
     ]
 }
