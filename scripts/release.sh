@@ -491,8 +491,8 @@ EOF
     local temp_npm_dir=$(mktemp -d)
     cp -r npm/* "$temp_npm_dir/"
 
-    # Modify the package name for npmjs.com (since 'vtcode' is already taken)
-    jq --arg new_name "vtcode-bin" '.name = $new_name' "$temp_npm_dir/package.json" > "$temp_npm_dir/package.json.tmp" && mv "$temp_npm_dir/package.json.tmp" "$temp_npm_dir/package.json"
+    # Modify the package name for npmjs.com (unscoped vtcode)
+    jq --arg new_name "vtcode" '.name = $new_name' "$temp_npm_dir/package.json" > "$temp_npm_dir/package.json.tmp" && mv "$temp_npm_dir/package.json.tmp" "$temp_npm_dir/package.json"
 
     # Remove the scoped registry config for npmjs.com publish
     if jq 'del(.publishConfig)' "$temp_npm_dir/package.json" > "$temp_npm_dir/package.json.tmp" 2>/dev/null; then
@@ -506,7 +506,7 @@ EOF
         # npm will automatically use OIDC tokens provided by the CI/CD environment
         # In local environments, this may fallback to configured tokens
         if npm publish; then
-            print_success "npm package v$version published to npmjs.com as vtcode-bin using trusted publishers"
+            print_success "npm package v$version published to npmjs.com as vtcode using trusted publishers"
             return 0
         else
             print_warning "npm publish to npmjs.com failed"
@@ -1058,7 +1058,7 @@ main() {
 
     if [[ "$skip_npm" == 'false' ]]; then
         print_success "npm package published to npmjs.com:"
-        print_success "  - https://www.npmjs.com/package/vtcode-bin"
+        print_success "  - https://www.npmjs.com/package/vtcode"
     else
         print_info "npm package publishing was skipped as requested"
     fi
