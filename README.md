@@ -69,14 +69,14 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 **Other Distribution Channels:**
 
 ```bash
-# Cargo
+# Cargo (Rust package manager)
 cargo install vtcode
 
-# Homebrew
+# Homebrew (macOS/Linux)
 brew install vinhnx/tap/vtcode
 
-# NPM (GitHub Registry)
-npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
+# NPM (Node.js - Recommended)
+npm install -g vtcode
 ```
 
 **See [Installation Guide](./docs/installation/) for more options and troubleshooting.**
