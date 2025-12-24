@@ -203,7 +203,7 @@ pub mod models {
         pub const GOOGLE_GEMMA_2_2B_IT: &str = "google/gemma-2-2b-it";
         pub const QWEN3_CODER_480B_A35B_INSTRUCT: &str = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
         pub const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b";
-        pub const ZAI_GLM_45: &str = "zai-org/GLM-4.5";
+        pub const ZAI_GLM_45: &str = "zai-org/GLM-4.5:zai-org";
         pub const QWEN3_4B_THINKING_2507: &str = "Qwen/Qwen3-4B-Thinking-2507";
         pub const QWEN25_7B_INSTRUCT_1M: &str = "Qwen/Qwen2.5-7B-Instruct-1M";
         pub const QWEN25_CODER_32B_INSTRUCT: &str = "Qwen/Qwen2.5-Coder-32B-Instruct";
@@ -212,12 +212,12 @@ pub mod models {
         // Additional supported models
         pub const DEEPSEEK_V32: &str = "deepseek-ai/DeepSeek-V3.2";
         pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b";
-        pub const ZAI_GLM_46: &str = "zai-org/GLM-4.6";
-        pub const ZAI_GLM_47: &str = "zai-org/GLM-4.7";
+        pub const ZAI_GLM_46: &str = "zai-org/GLM-4.6:zai-org";
+        pub const ZAI_GLM_47: &str = "zai-org/GLM-4.7:zai-org";
         pub const MOONSHOT_KIMI_K2_THINKING: &str = "moonshotai/Kimi-K2-Thinking";
 
         // Recommended VLM
-        pub const ZAI_GLM_45V: &str = "zai-org/GLM-4.5V";
+        pub const ZAI_GLM_45V: &str = "zai-org/GLM-4.5V:zai-org";
         // Novita inference provider models
         pub const MINIMAX_M2_NOVITA: &str = "MiniMaxAI/MiniMax-M2:novita";
         pub const DEEPSEEK_V32_NOVITA: &str = "deepseek-ai/DeepSeek-V3.2:novita";
@@ -246,6 +246,23 @@ pub mod models {
     pub mod zai {
         pub const DEFAULT_MODEL: &str = "glm-4.7";
         pub const SUPPORTED_MODELS: &[&str] = &[
+            "glm-4-plus",
+            "glm-4.7",
+            "glm-4.6",
+            "glm-4.6v",
+            "glm-4.6v-flash",
+            "glm-4.6v-flashx",
+            "glm-4.5",
+            "glm-4.5-air",
+            "glm-4.5-x",
+            "glm-4.5-airx",
+            "glm-4.5-flash",
+            "glm-4.5v",
+            "glm-4-32b-0414-128k",
+        ];
+
+        pub const REASONING_MODELS: &[&str] = &[
+            "glm-4-plus",
             "glm-4.7",
             "glm-4.6",
             "glm-4.5",
@@ -253,19 +270,24 @@ pub mod models {
             "glm-4.5-x",
             "glm-4.5-airx",
             "glm-4.5-flash",
-            "glm-4-32b-0414-128k",
         ];
 
+        pub const GLM_4_PLUS: &str = "glm-4-plus";
+        pub const GLM_4_PLUS_DEEP_THINKING: &str = "glm-4-plus:thinking";
         pub const GLM_4_7: &str = "glm-4.7";
         pub const GLM_4_7_DEEP_THINKING: &str = "glm-4.7:thinking";
         pub const GLM_4_6: &str = "glm-4.6";
         pub const GLM_4_6_DEEP_THINKING: &str = "glm-4.6:thinking";
+        pub const GLM_4_6V: &str = "glm-4.6v";
+        pub const GLM_4_6V_FLASH: &str = "glm-4.6v-flash";
+        pub const GLM_4_6V_FLASHX: &str = "glm-4.6v-flashx";
         pub const GLM_4_5: &str = "glm-4.5";
         pub const GLM_4_5_DEEP_THINKING: &str = "glm-4.5:thinking";
         pub const GLM_4_5_AIR: &str = "glm-4.5-air";
         pub const GLM_4_5_X: &str = "glm-4.5-x";
         pub const GLM_4_5_AIRX: &str = "glm-4.5-airx";
         pub const GLM_4_5_FLASH: &str = "glm-4.5-flash";
+        pub const GLM_4_5V: &str = "glm-4.5v";
         pub const GLM_4_32B_0414_128K: &str = "glm-4-32b-0414-128k";
     }
 

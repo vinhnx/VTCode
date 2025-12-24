@@ -11,10 +11,10 @@ provider = "huggingface"
 api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "MiniMaxAI/MiniMax-M2:novita"
+default_model = "deepseek-ai/DeepSeek-V3.2:novita"
 
 # Visual theme for the terminal interface
-theme = "ciapre-dark"
+theme = "vitesse-dark"
 
 # Enable split tool results for massive token savings (Phase 4: pi-coding-agent integration)
 # When enabled, tools send concise summaries to LLM (53-95% token reduction) while preserving full output for UI
@@ -46,7 +46,7 @@ max_conversation_turns = 80
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 # For Gemini 3 Pro: Use "low" for fast responses, "high" for maximum reasoning depth, "medium" defaults to high (not yet generally available)
-reasoning_effort = "low"
+reasoning_effort = "high"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative

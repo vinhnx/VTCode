@@ -74,7 +74,7 @@ if is_huggingface {
 
 ```bash
 # Default provider (auto-selected)
-vtcode ask "Hello" --provider huggingface --model "zai-org/GLM-4.7"
+vtcode ask "Hello" --provider huggingface --model "zai-org/GLM-4.7:zai-org"
 
 # Force Novita provider for cost-optimized reasoning
 vtcode ask "Solve this" --provider huggingface --model "deepseek-ai/DeepSeek-V3.2:novita"

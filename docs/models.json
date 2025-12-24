@@ -1180,7 +1180,7 @@
     ],
     "api": "https://api.z.ai/api",
     "name": "Z.AI",
-    "doc": "https://docs.z.ai/guides/llm/glm-4.6",
+    "doc": "https://docs.z.ai/guides/llm/glm-4.7",
     "models": {
       "glm-4-plus": {
         "id": "glm-4-plus",
@@ -1250,7 +1250,7 @@
           ]
         },
         "context": 200000,
-        "max_output_tokens": 128000,
+        "max_output_tokens": 131072,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1276,7 +1276,7 @@
           ]
         },
         "context": 200000,
-        "max_output_tokens": 128000,
+        "max_output_tokens": 131072,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1289,6 +1289,7 @@
       "glm-4.6": {
         "id": "glm-4.6",
         "name": "GLM 4.6",
+        "description": "Z.AI GLM 4.6 long-context reasoning model.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -1300,7 +1301,7 @@
           ]
         },
         "context": 200000,
-        "max_output_tokens": 128000,
+        "max_output_tokens": 131072,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1325,7 +1326,7 @@
           ]
         },
         "context": 200000,
-        "max_output_tokens": 128000,
+        "max_output_tokens": 131072,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1333,6 +1334,78 @@
           "context_caching": true,
           "structured_output": true,
           "tool_streaming": true
+        }
+      },
+      "glm-4.6v": {
+        "id": "glm-4.6v",
+        "name": "GLM 4.6V",
+        "description": "Vision-capable GLM 4.6 release.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 32768,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "vision": true
+        }
+      },
+      "glm-4.6v-flash": {
+        "id": "glm-4.6v-flash",
+        "name": "GLM 4.6V Flash",
+        "description": "Low-latency vision GLM 4.6 release.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 32768,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "vision": true
+        }
+      },
+      "glm-4.6v-flashx": {
+        "id": "glm-4.6v-flashx",
+        "name": "GLM 4.6V FlashX",
+        "description": "Hybrid vision GLM 4.6 release.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 32768,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "vision": true
         }
       },
       "glm-4.5": {
@@ -1349,7 +1422,7 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000,
+        "max_output_tokens": 98304,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1374,7 +1447,7 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000,
+        "max_output_tokens": 98304,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1398,7 +1471,7 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000,
+        "max_output_tokens": 98304,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1422,7 +1495,7 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000,
+        "max_output_tokens": 98304,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1446,7 +1519,7 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000,
+        "max_output_tokens": 98304,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1470,7 +1543,7 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": 96000,
+        "max_output_tokens": 98304,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1478,6 +1551,30 @@
           "context_caching": true,
           "structured_output": true,
           "tool_streaming": true
+        }
+      },
+      "glm-4.5v": {
+        "id": "glm-4.5v",
+        "name": "GLM 4.5V",
+        "description": "Vision-capable GLM 4.5 release.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 16384,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "vision": true
         }
       },
       "glm-4-32b-0414-128k": {
@@ -1494,7 +1591,7 @@
           ]
         },
         "context": 128000,
-        "max_output_tokens": null
+        "max_output_tokens": 16384
       }
     }
   },
