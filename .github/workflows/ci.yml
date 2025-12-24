@@ -129,7 +129,7 @@ jobs:
               - '**/*.md'
               - '!.github/workflows/*.yml'
               - '!target/**'
-      - uses: DavidAnson/markdownlint-cli2-action@v21
+      - uses: DavidAnson/markdownlint-cli2-action@v22
         if: steps.filter.outputs.markdown == 'true'
         with:
           globs: |
