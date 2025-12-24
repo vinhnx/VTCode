@@ -66,17 +66,14 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 ```
 
-**Other Distribution Channels:**
+**Alternative Installation Methods:**
 
 ```bash
-# Cargo (Rust package manager)
+# Cargo (Rust package manager - Recommended)
 cargo install vtcode
 
 # Homebrew (macOS/Linux)
 brew install vinhnx/tap/vtcode
-
-# NPM (Node.js - Recommended)
-npm install -g vtcode
 ```
 
 **See [Installation Guide](./docs/installation/) for more options and troubleshooting.**

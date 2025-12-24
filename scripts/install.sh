@@ -264,31 +264,6 @@ install_with_cargo() {
     fi
 }
 
-# Install with npm as primary option when available
-install_with_npm() {
-    if command -v npm >/dev/null 2>&1; then
-        log "Installing with npm (recommended)..."
-        log "Running: npm install -g vtcode"
-        
-        if npm install -g vtcode; then
-            success "Successfully installed vtcode via npm"
-            echo ""
-            echo "VT Code has been installed globally. You can now run: vtcode"
-            echo ""
-            echo "To get started:"
-            echo "  vtcode --help"
-            echo ""
-            exit 0
-        else
-            warn "NPM installation failed"
-            return 1
-        fi
-    else
-        verbose "npm not found, skipping npm installation"
-        return 1
-    fi
-}
-
 # Main logic
 main() {
     # Check dependencies first
@@ -312,13 +287,6 @@ main() {
     fi
     
     log "Installing VT Code v${VERSION}..."
-    
-    # Try npm first (recommended, fastest method)
-    if install_with_npm; then
-        exit 0
-    fi
-    
-    warn "NPM installation failed or npm not found, falling back to GitHub releases..."
     
     # Check if release has assets before proceeding with download
     if ! check_release_assets "$VERSION" "$PLATFORM"; then

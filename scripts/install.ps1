@@ -16,29 +16,6 @@ function Write-Error-Msg { Write-Host "✗ $args" -ForegroundColor Red }
 function Write-Warn { Write-Host "⚠ $args" -ForegroundColor Yellow }
 
 # Install with npm (recommended)
-function Install-WithNpm {
-    if (Get-Command npm -ErrorAction SilentlyContinue) {
-        Write-Log "Installing with npm (recommended)..."
-        try {
-            npm install -g vtcode
-            Write-Success "Successfully installed vtcode via npm"
-            Write-Host ""
-            Write-Host "VT Code has been installed globally. You can now run: vtcode"
-            Write-Host ""
-            Write-Host "To get started:"
-            Write-Host "  vtcode --help"
-            Write-Host ""
-            return $true
-        } catch {
-            Write-Warn "NPM installation failed: $_"
-            return $false
-        }
-    } else {
-        Write-Warn "npm not found, falling back to GitHub releases..."
-        return $false
-    }
-}
-
 # Get version
 function Get-Version {
     Write-Log "Checking latest version..."
@@ -183,15 +160,7 @@ Write-Host "VT Code Installer" -ForegroundColor Cyan
 Write-Host "=================" -ForegroundColor Cyan
 Write-Host ""
 
-# Try npm first (recommended)
-if (Install-WithNpm) {
-    exit 0
-}
-
-Write-Warn "NPM installation failed or npm not found, falling back to GitHub releases..."
-Write-Host ""
-
-# Fall back to GitHub releases
+# Install from GitHub releases
 $version = Get-Version
 $binInfo = Get-Binary -Version $version
 $binary = Install-Binary $binInfo

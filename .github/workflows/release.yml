@@ -60,65 +60,21 @@ jobs:
                   cd npm && npm run build --if-present
                 fi
 
-            # Publish to npmjs.com (supports both trusted publishing and token-based auth)
-            # Note: 
-            # 1. We change the package name to vtcode for npmjs.com (unscoped)
-            # 2. If NPM_TOKEN secret is set, use it. Otherwise rely on trusted publishing (OIDC)
-            # 3. We save the original package.json for the GitHub Packages step to restore
-            - name: Publish to npmjs.com
-              if: success() && startsWith(github.ref, 'refs/tags/v')
-              env:
-                NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+            # npm publishing disabled - GitHub Actions builds cost money
+            # Note: The npm package is deprecated. Install via:
+            # - cargo install vtcode
+            # - brew install vinhnx/tap/vtcode
+            # - Download binaries from GitHub releases
+            - name: npm publishing disabled
+              if: false  # Always skip to avoid build costs
               run: |
-                if [ -d "npm" ]; then
-                  cd npm
-                  # Save original package.json for GitHub Packages step
-                  cp package.json package-original.json
-                  
-                  # Create a temporary package.json with the npmjs.com package name (vtcode)
-                  if command -v jq >/dev/null 2>&1; then
-                    jq '.name = "vtcode" | del(.publishConfig)' package.json > package-npmjs.json
-                    mv package-npmjs.json package.json
-                    echo "Updated package name to vtcode for npmjs.com publishing"
-                  fi
-                  
-                  # Check if NPM_TOKEN is available for token-based auth
-                  if [[ -n "${NODE_AUTH_TOKEN:-}" ]]; then
-                    echo "Using npm token for authentication"
-                    # Create .npmrc for token-based auth
-                    echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
-                  else
-                    echo "No NPM_TOKEN found, attempting trusted publishing (OIDC)"
-                  fi
-                  
-                  # Publish with ignore-scripts to prevent postinstall failures
-                  npm publish --ignore-scripts
-                else
-                  echo "No npm directory found, skipping npm publishing"
-                fi
+                echo "npm publishing is disabled. Install VT Code via:"
+                echo "  - cargo install vtcode (Rust)"
+                echo "  - brew install vinhnx/tap/vtcode (macOS/Linux)"
+                echo "  - Download from: https://github.com/vinhnx/vtcode/releases"
 
-            # Publish to GitHub Packages
-            # Note: We need to configure npm to use GITHUB_TOKEN for GitHub Packages
-            - name: Publish to GitHub Packages
-              if: success() && startsWith(github.ref, 'refs/tags/v')
+            # GitHub Packages publishing disabled - avoid npm-related builds
+            - name: GitHub Packages publishing disabled
+              if: false  # Always skip
               run: |
-                if [ -d "npm" ]; then
-                  cd npm
-                  # Restore the original package name for GitHub Packages (using backup since we're in detached HEAD)
-                  if [ -f "package-original.json" ]; then
-                    cp package-original.json package.json
-                    rm package-original.json
-                  fi
-                  
-                  # Configure npm to use GITHUB_TOKEN for GitHub Packages
-                  echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" > .npmrc
-                  echo "@vinhnx:registry=https://npm.pkg.github.com" >> .npmrc
-                  echo "Configuring GitHub Packages authentication"
-                  
-                  # Publish to GitHub Packages registry
-                  npm publish --registry https://npm.pkg.github.com --ignore-scripts
-                else
-                  echo "No npm directory found, skipping GitHub Packages publishing"
-                fi
-              env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                echo "GitHub Packages publishing is disabled."
