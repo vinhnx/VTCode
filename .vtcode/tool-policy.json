@@ -13,7 +13,6 @@
     "grep_file",
     "list_files",
     "list_pty_sessions",
-    "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
@@ -24,7 +23,12 @@
     "skill",
     "update_plan",
     "web_fetch",
-    "write_file"
+    "write_file",
+    "cargo_check",
+    "cargo_test",
+    "git_status",
+    "git_diff",
+    "git_log"
   ],
   "policies": {
     "analyze_agent": "allow",
@@ -50,12 +54,11 @@
     "write_file": "allow",
     "search_replace": "prompt",
     "skill": "prompt",
-    "mcp_get_current_time": "prompt",
-    "mcp_time_get_current_time": "prompt",
-    "mcp_fetch": "prompt",
-    "mcp_fetch_fetch": "prompt",
-    "mcp_convert_time": "prompt",
-    "mcp_time_convert_time": "prompt"
+    "cargo_check": "allow",
+    "cargo_test": "allow",
+    "git_status": "allow",
+    "git_diff": "allow",
+    "git_log": "allow"
   },
   "constraints": {},
   "mcp": {
