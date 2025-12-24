@@ -64,6 +64,7 @@ jobs:
             # Note: 
             # 1. We change the package name to vtcode-bin for npmjs.com since @vinhnx/vtcode is scoped
             # 2. If NPM_TOKEN secret is set, use it. Otherwise rely on trusted publishing (OIDC)
+            # 3. We save the original package.json for the GitHub Packages step to restore
             - name: Publish to npmjs.com
               if: success() && startsWith(github.ref, 'refs/tags/v')
               env:
@@ -71,6 +72,9 @@ jobs:
               run: |
                 if [ -d "npm" ]; then
                   cd npm
+                  # Save original package.json for GitHub Packages step
+                  cp package.json package-original.json
+                  
                   # Create a temporary package.json with the npmjs.com package name (vtcode-bin)
                   if command -v jq >/dev/null 2>&1; then
                     jq '.name = "vtcode-bin" | del(.publishConfig)' package.json > package-npmjs.json
@@ -93,18 +97,28 @@ jobs:
                   echo "No npm directory found, skipping npm publishing"
                 fi
 
-            # Publish to GitHub Packages using trusted publishing (no token needed in most cases)
-            # Note: For GitHub Packages, we use the original scoped name @vinhnx/vtcode
-            - name: Publish to GitHub Packages using trusted publishing
+            # Publish to GitHub Packages
+            # Note: We need to configure npm to use GITHUB_TOKEN for GitHub Packages
+            - name: Publish to GitHub Packages
               if: success() && startsWith(github.ref, 'refs/tags/v')
               run: |
                 if [ -d "npm" ]; then
                   cd npm
-                  # Restore the original package name for GitHub Packages
-                  git checkout package.json
-                  # Publish to GitHub Packages registry using trusted publishing
+                  # Restore the original package name for GitHub Packages (using backup since we're in detached HEAD)
+                  if [ -f "package-original.json" ]; then
+                    cp package-original.json package.json
+                    rm package-original.json
+                  fi
+                  
+                  # Configure npm to use GITHUB_TOKEN for GitHub Packages
+                  echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" > .npmrc
+                  echo "@vinhnx:registry=https://npm.pkg.github.com" >> .npmrc
+                  echo "Configuring GitHub Packages authentication"
+                  
+                  # Publish to GitHub Packages registry
                   npm publish --registry https://npm.pkg.github.com --ignore-scripts
                 else
                   echo "No npm directory found, skipping GitHub Packages publishing"
                 fi
-              # GITHUB_TOKEN is available by default, but trusted publishing should work without explicit token in env
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
