@@ -1,6 +1,8 @@
 #!/bin/bash
 # VT Code Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash [version]
+# Usage: 
+#   Recommended: curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash [version]
+#   Alternative: npm install -g vtcode
 
 set -e
 
@@ -262,6 +264,31 @@ install_with_cargo() {
     fi
 }
 
+# Install with npm as primary option when available
+install_with_npm() {
+    if command -v npm >/dev/null 2>&1; then
+        log "Installing with npm (recommended)..."
+        log "Running: npm install -g vtcode"
+        
+        if npm install -g vtcode; then
+            success "Successfully installed vtcode via npm"
+            echo ""
+            echo "VT Code has been installed globally. You can now run: vtcode"
+            echo ""
+            echo "To get started:"
+            echo "  vtcode --help"
+            echo ""
+            exit 0
+        else
+            warn "NPM installation failed"
+            return 1
+        fi
+    else
+        verbose "npm not found, skipping npm installation"
+        return 1
+    fi
+}
+
 # Main logic
 main() {
     # Check dependencies first
@@ -284,7 +311,16 @@ main() {
         exit 1
     fi
     
-    # Check if release has assets before proceeding
+    log "Installing VT Code v${VERSION}..."
+    
+    # Try npm first (recommended, fastest method)
+    if install_with_npm; then
+        exit 0
+    fi
+    
+    warn "NPM installation failed or npm not found, falling back to GitHub releases..."
+    
+    # Check if release has assets before proceeding with download
     if ! check_release_assets "$VERSION" "$PLATFORM"; then
         warn "Missing pre-built binaries for v${VERSION} on $PLATFORM"
         warn ""
@@ -409,6 +445,7 @@ main() {
         echo "  Brew:  brew install vinhnx/tap/vtcode"
     fi
     echo "  NPM:   npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com"
+    echo "  NPM:   npm install -g vtcode (recommended)"
     echo "  GitHub: https://github.com/$GITHUB_REPO/releases"
     echo ""
     success "Installation complete!"
