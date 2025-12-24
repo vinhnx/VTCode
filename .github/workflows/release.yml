@@ -60,26 +60,38 @@ jobs:
                   cd npm && npm run build --if-present
                 fi
 
-            # Publish to npmjs.com using trusted publishing (no token needed)
-            # Note: We change the package name to vtcode-bin for npmjs.com since @vinhnx/vtcode is scoped
-            - name: Publish to npmjs.com using trusted publishing
+            # Publish to npmjs.com (supports both trusted publishing and token-based auth)
+            # Note: 
+            # 1. We change the package name to vtcode-bin for npmjs.com since @vinhnx/vtcode is scoped
+            # 2. If NPM_TOKEN secret is set, use it. Otherwise rely on trusted publishing (OIDC)
+            - name: Publish to npmjs.com
               if: success() && startsWith(github.ref, 'refs/tags/v')
+              env:
+                NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
               run: |
                 if [ -d "npm" ]; then
                   cd npm
                   # Create a temporary package.json with the npmjs.com package name (vtcode-bin)
-                  # This matches the logic in scripts/release.sh
                   if command -v jq >/dev/null 2>&1; then
                     jq '.name = "vtcode-bin" | del(.publishConfig)' package.json > package-npmjs.json
                     mv package-npmjs.json package.json
                     echo "Updated package name to vtcode-bin for npmjs.com publishing"
                   fi
-                  # Publish using trusted publishing - npm will use OIDC tokens provided by GitHub Actions
+                  
+                  # Check if NPM_TOKEN is available for token-based auth
+                  if [[ -n "${NODE_AUTH_TOKEN:-}" ]]; then
+                    echo "Using npm token for authentication"
+                    # Create .npmrc for token-based auth
+                    echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+                  else
+                    echo "No NPM_TOKEN found, attempting trusted publishing (OIDC)"
+                  fi
+                  
+                  # Publish with ignore-scripts to prevent postinstall failures
                   npm publish --ignore-scripts
                 else
                   echo "No npm directory found, skipping npm publishing"
                 fi
-              # No NODE_AUTH_TOKEN environment variable needed for trusted publishing
 
             # Publish to GitHub Packages using trusted publishing (no token needed in most cases)
             # Note: For GitHub Packages, we use the original scoped name @vinhnx/vtcode
