@@ -3,6 +3,22 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.52.5] - 2025-12-24
+
+
+### Bug Fixes
+    - fix: update release workflow to handle npm publishing correctly
+    - fix: unignore .github directory to enable GitHub Actions CI/CD workflows
+
+
+### Documentation
+    - docs: update changelog for v0.52.4 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.52.4 [skip ci]
+    - chore: release v0.52.4
+    - chore: update npm package.json to v0.52.3 [skip ci]
 # [Version 0.52.4] - 2025-12-24
 
 
