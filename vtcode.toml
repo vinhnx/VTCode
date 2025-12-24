@@ -5,16 +5,16 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "minimax"
+provider = "huggingface"
 
 # Environment variable containing the API key for the provider
-api_key_env = "MINIMAX_API_KEY"
+api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "MiniMax-M2.1"
+default_model = "MiniMaxAI/MiniMax-M2:novita"
 
 # Visual theme for the terminal interface
-theme = "vitesse-black"
+theme = "ciapre-dark"
 
 # Enable split tool results for massive token savings (Phase 4: pi-coding-agent integration)
 # When enabled, tools send concise summaries to LLM (53-95% token reduction) while preserving full output for UI
@@ -23,7 +23,7 @@ theme = "vitesse-black"
 # Default: true (recommended for production use)
 enable_split_tool_results = true
 
-system_prompt_mode = "minimal"
+system_prompt_mode = "default"
 # system_prompt_mode = "minimal" # ~700 tokens, 87% savings
 # # Streamlined (good middle ground)
 # system_prompt_mode = "lightweight" # ~1.8K tokens, 67% savings
@@ -42,11 +42,11 @@ ui_surface = "auto"
 
 # Maximum number of conversation turns before rotating context (affects memory usage)
 # Lower values reduce memory footprint but may lose context; higher values preserve context but use more memory
-max_conversation_turns = 50
+max_conversation_turns = 80
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 # For Gemini 3 Pro: Use "low" for fast responses, "high" for maximum reasoning depth, "medium" defaults to high (not yet generally available)
-reasoning_effort = "medium"
+reasoning_effort = "low"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -93,7 +93,7 @@ instruction_max_bytes = 16384
 
 # List of additional instruction files to include in context
 instruction_files = []
-verbosity = "medium"
+verbosity = "low"
 max_task_retries = 2
 
 # Ripgrep dependency management - Auto-install ripgrep on startup for faster file search
@@ -190,7 +190,7 @@ minimax = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJWaW5oIE5ndXll
 # Checkpointing configuration for session persistence
 [agent.checkpointing]
 # Enable automatic session checkpointing
-enabled = false
+enabled = true
 
 # Maximum number of checkpoints to keep on disk
 max_snapshots = 50
@@ -420,7 +420,7 @@ tool_output_spool_bytes = 200000
 # tool_output_spool_dir = "/path/to/custom/spool/dir"
 
 # Allow ANSI escape sequences in tool output (enables colors but may cause layout issues)
-allow_tool_ansi = true
+allow_tool_ansi = false
 
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
@@ -450,7 +450,7 @@ enabled = true
 # - "full": All features (same as default in crossterm 0.28.1, REPORT_ALL_KEYS not yet supported)
 # - "minimal": Only disambiguate escape sequences
 # - "custom": Use individual flag settings below
-mode = "default"
+mode = "minimal"
 
 # Individual flag controls (only used when mode = "custom")
 # Resolve Esc key ambiguity (recommended)
@@ -539,7 +539,7 @@ max_debug_log_age_days = 7
 
 # Context management configuration - Controls conversation memory
 [context]
-max_context_tokens = 128000
+max_context_tokens = 134144
 trim_to_percent = 90
 preserve_recent_turns = 12
 

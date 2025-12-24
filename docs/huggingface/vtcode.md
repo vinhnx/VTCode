@@ -41,7 +41,7 @@ Or add it to your `vtcode.toml` configuration file:
 [llm]
 provider = "huggingface"
 api_key = "hf_your_token_here"
-model = "zai-org/GLM-4.7:zai-org"
+model = "zai-org/GLM-4.7"
 ```
 
 ### Step 3: Configure Inference Provider
@@ -54,7 +54,7 @@ VT Code supports multiple Hugging Face Inference Provider types:
 [llm]
 provider = "huggingface"
 base_url = "https://api-inference.huggingface.co/v1"
-model = "zai-org/GLM-4.7:zai-org"
+model = "zai-org/GLM-4.7"
 ```
 
 #### Using Hugging Face Dedicated Endpoints
@@ -162,9 +162,9 @@ Dynamically switch models based on task complexity:
 
 ```toml
 [llm.task_models]
-code_review = "zai-org/GLM-4.7:zai-org"
-documentation = "zai-org/GLM-4.7:zai-org"
-testing = "zai-org/GLM-4.7:zai-org"
+code_review = "zai-org/GLM-4.7"
+documentation = "zai-org/GLM-4.7"
+testing = "zai-org/GLM-4.7"
 ```
 
 ### Prompt Caching
