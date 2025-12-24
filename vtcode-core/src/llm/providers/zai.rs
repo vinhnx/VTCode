@@ -226,11 +226,9 @@ impl ZAIProvider {
             {
                 payload["thinking"] = json!({ "type": "disabled" });
             } else {
-                payload["thinking"] = if api_model == models::zai::GLM_4_7 {
-                    json!({ "type": "enabled", "clear_thinking": false })
-                } else {
-                    json!({ "type": "enabled" })
-                };
+                // Enabled for reasoning models; GLM-4.6 and 4.5 determine automatically, 
+                // while GLM-4.5V (and potentially others) force it.
+                payload["thinking"] = json!({ "type": "enabled" });
             }
         }        if request.output_format.is_some() {
             payload["response_format"] = json!({ "type": "json_object" });
@@ -435,19 +433,8 @@ impl LLMProvider for ZAIProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
-        matches!(
-            model,
-            models::zai::GLM_4_7
-                | models::zai::GLM_4_7_DEEP_THINKING
-                | models::zai::GLM_4_6
-                | models::zai::GLM_4_6_DEEP_THINKING
-                | models::zai::GLM_4_5
-                | models::zai::GLM_4_5_DEEP_THINKING
-                | models::zai::GLM_4_5_AIR
-                | models::zai::GLM_4_5_X
-                | models::zai::GLM_4_5_AIRX
-                | models::zai::GLM_4_5_FLASH
-        )
+        let base_model = model.strip_suffix(":thinking").unwrap_or(model);
+        models::zai::REASONING_MODELS.contains(&base_model)
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
@@ -974,5 +961,25 @@ mod tests {
         assert_eq!(code, "1302");
         assert_eq!(message, "High concurrency usage of this API");
         assert!(matches!(code, "1302" | "1303" | "1304" | "1308" | "1309"));
+    }
+
+    #[test]
+    fn test_supports_reasoning() {
+        let provider = ZAIProvider::new("key".to_string());
+        
+        // Test base models
+        assert!(provider.supports_reasoning("glm-4-plus"));
+        assert!(provider.supports_reasoning("glm-4.7"));
+        assert!(provider.supports_reasoning("glm-4.6"));
+        assert!(provider.supports_reasoning("glm-4.5"));
+        assert!(provider.supports_reasoning("glm-4.5-air"));
+        
+        // Test thinking variants
+        assert!(provider.supports_reasoning("glm-4.7:thinking"));
+        assert!(provider.supports_reasoning("glm-4.6:thinking"));
+        
+        // Test legacy/non-reasoning
+        assert!(!provider.supports_reasoning("glm-4-32b-0414-128k"));
+        assert!(!provider.supports_reasoning("glm-4.5v"));
     }
 }

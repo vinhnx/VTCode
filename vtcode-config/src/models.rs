@@ -259,10 +259,28 @@ pub enum ModelId {
     XaiGrok4Vision,
 
     // Z.AI models
-    /// GLM-4.6 - Latest flagship GLM reasoning model
+    /// GLM-4-Plus - Flagship GLM model with top-tier reasoning
+    ZaiGlm4Plus,
+    /// GLM-4-Plus Deep Thinking - Flagship GLM with forced reasoning
+    ZaiGlm4PlusDeepThinking,
+    /// GLM-4.7 - Latest flagship GLM reasoning model
+    ZaiGlm47,
+    /// GLM-4.7 Deep Thinking - GLM-4.7 with forced reasoning
+    ZaiGlm47DeepThinking,
+    /// GLM-4.6 - Previous flagship GLM reasoning model
     ZaiGlm46,
+    /// GLM-4.6 Deep Thinking - GLM-4.6 with forced reasoning
+    ZaiGlm46DeepThinking,
+    /// GLM-4.6V - Vision-capable GLM release
+    ZaiGlm46V,
+    /// GLM-4.6V-Flash - Latency-optimised vision GLM
+    ZaiGlm46VFlash,
+    /// GLM-4.6V-FlashX - Hybrid vision GLM variant
+    ZaiGlm46VFlashX,
     /// GLM-4.5 - Balanced GLM release for general tasks
     ZaiGlm45,
+    /// GLM-4.5 Deep Thinking - GLM-4.5 with forced reasoning
+    ZaiGlm45DeepThinking,
     /// GLM-4.5-Air - Efficient GLM variant
     ZaiGlm45Air,
     /// GLM-4.5-X - Enhanced capability GLM variant
@@ -271,6 +289,8 @@ pub enum ModelId {
     ZaiGlm45Airx,
     /// GLM-4.5-Flash - Low-latency GLM variant
     ZaiGlm45Flash,
+    /// GLM-4.5V - Vision-capable GLM release
+    ZaiGlm45V,
     /// GLM-4-32B-0414-128K - Legacy long-context GLM deployment
     ZaiGlm432b0414128k,
 
@@ -535,12 +555,22 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest => models::xai::GROK_4_CODE_LATEST,
             ModelId::XaiGrok4Vision => models::xai::GROK_4_VISION,
             // Z.AI models
+            ModelId::ZaiGlm4Plus => models::zai::GLM_4_PLUS,
+            ModelId::ZaiGlm4PlusDeepThinking => models::zai::GLM_4_PLUS_DEEP_THINKING,
+            ModelId::ZaiGlm47 => models::zai::GLM_4_7,
+            ModelId::ZaiGlm47DeepThinking => models::zai::GLM_4_7_DEEP_THINKING,
             ModelId::ZaiGlm46 => models::zai::GLM_4_6,
+            ModelId::ZaiGlm46DeepThinking => models::zai::GLM_4_6_DEEP_THINKING,
+            ModelId::ZaiGlm46V => models::zai::GLM_4_6V,
+            ModelId::ZaiGlm46VFlash => models::zai::GLM_4_6V_FLASH,
+            ModelId::ZaiGlm46VFlashX => models::zai::GLM_4_6V_FLASHX,
             ModelId::ZaiGlm45 => models::zai::GLM_4_5,
+            ModelId::ZaiGlm45DeepThinking => models::zai::GLM_4_5_DEEP_THINKING,
             ModelId::ZaiGlm45Air => models::zai::GLM_4_5_AIR,
             ModelId::ZaiGlm45X => models::zai::GLM_4_5_X,
             ModelId::ZaiGlm45Airx => models::zai::GLM_4_5_AIRX,
             ModelId::ZaiGlm45Flash => models::zai::GLM_4_5_FLASH,
+            ModelId::ZaiGlm45V => models::zai::GLM_4_5V,
             ModelId::ZaiGlm432b0414128k => models::zai::GLM_4_32B_0414_128K,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
@@ -623,12 +653,22 @@ impl ModelId {
             | ModelId::XaiGrok4Code
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => Provider::XAI,
-            ModelId::ZaiGlm46
+            ModelId::ZaiGlm4Plus
+            | ModelId::ZaiGlm4PlusDeepThinking
+            | ModelId::ZaiGlm47
+            | ModelId::ZaiGlm47DeepThinking
+            | ModelId::ZaiGlm46
+            | ModelId::ZaiGlm46DeepThinking
+            | ModelId::ZaiGlm46V
+            | ModelId::ZaiGlm46VFlash
+            | ModelId::ZaiGlm46VFlashX
             | ModelId::ZaiGlm45
+            | ModelId::ZaiGlm45DeepThinking
             | ModelId::ZaiGlm45Air
             | ModelId::ZaiGlm45X
             | ModelId::ZaiGlm45Airx
             | ModelId::ZaiGlm45Flash
+            | ModelId::ZaiGlm45V
             | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
@@ -695,12 +735,22 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest => "Grok-4 Code Latest",
             ModelId::XaiGrok4Vision => "Grok-4 Vision",
             // Z.AI models
+            ModelId::ZaiGlm4Plus => "GLM 4 Plus",
+            ModelId::ZaiGlm4PlusDeepThinking => "GLM 4 Plus Deep Thinking",
+            ModelId::ZaiGlm47 => "GLM 4.7",
+            ModelId::ZaiGlm47DeepThinking => "GLM 4.7 Deep Thinking",
             ModelId::ZaiGlm46 => "GLM 4.6",
+            ModelId::ZaiGlm46DeepThinking => "GLM 4.6 Deep Thinking",
+            ModelId::ZaiGlm46V => "GLM 4.6V",
+            ModelId::ZaiGlm46VFlash => "GLM 4.6V Flash",
+            ModelId::ZaiGlm46VFlashX => "GLM 4.6V FlashX",
             ModelId::ZaiGlm45 => "GLM 4.5",
+            ModelId::ZaiGlm45DeepThinking => "GLM 4.5 Deep Thinking",
             ModelId::ZaiGlm45Air => "GLM 4.5 Air",
             ModelId::ZaiGlm45X => "GLM 4.5 X",
             ModelId::ZaiGlm45Airx => "GLM 4.5 AirX",
             ModelId::ZaiGlm45Flash => "GLM 4.5 Flash",
+            ModelId::ZaiGlm45V => "GLM 4.5V",
             ModelId::ZaiGlm432b0414128k => "GLM 4 32B 0414 128K",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
@@ -805,14 +855,26 @@ impl ModelId {
             }
             ModelId::XaiGrok4Vision => "Multimodal Grok 4 model with image understanding",
             // Z.AI models
-            ModelId::ZaiGlm46 => {
-                "Latest Z.AI GLM flagship with long-context reasoning and coding strengths"
+            ModelId::ZaiGlm4Plus | ModelId::ZaiGlm4PlusDeepThinking => {
+                "Z.AI flagship model with top-tier capability in reasoning, writing, and tool-use"
             }
-            ModelId::ZaiGlm45 => "Balanced GLM 4.5 release for general assistant tasks",
+            ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking => {
+                "Latest Z.AI GLM flagship with enhanced reasoning, 200k context and coding strengths"
+            }
+            ModelId::ZaiGlm46 | ModelId::ZaiGlm46DeepThinking => {
+                "Previous Z.AI GLM flagship with long-context reasoning and coding strengths"
+            }
+            ModelId::ZaiGlm46V | ModelId::ZaiGlm46VFlash | ModelId::ZaiGlm46VFlashX => {
+                "Vision-capable GLM 4.6 release optimized for multimodal understanding"
+            }
+            ModelId::ZaiGlm45 | ModelId::ZaiGlm45DeepThinking => {
+                "Balanced GLM 4.5 release for general assistant tasks"
+            }
             ModelId::ZaiGlm45Air => "Efficient GLM 4.5 Air variant tuned for lower latency",
             ModelId::ZaiGlm45X => "Enhanced GLM 4.5 X variant with improved reasoning",
             ModelId::ZaiGlm45Airx => "Hybrid GLM 4.5 AirX variant blending efficiency with quality",
             ModelId::ZaiGlm45Flash => "Low-latency GLM 4.5 Flash optimized for responsiveness",
+            ModelId::ZaiGlm45V => "Vision-capable GLM 4.5 release for multimodal tasks",
             ModelId::ZaiGlm432b0414128k => {
                 "Legacy GLM 4 32B deployment offering extended 128K context window"
             }
@@ -1083,6 +1145,8 @@ impl ModelId {
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
                 | ModelId::ZaiGlm45Flash
+                | ModelId::ZaiGlm46VFlash
+                | ModelId::ZaiGlm46VFlashX
                 | ModelId::MinimaxM21Lightning
         )
     }
@@ -1097,7 +1161,12 @@ impl ModelId {
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
+                | ModelId::ZaiGlm4Plus
+                | ModelId::ZaiGlm4PlusDeepThinking
+                | ModelId::ZaiGlm47
+                | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm46
+                | ModelId::ZaiGlm46DeepThinking
                 | ModelId::MinimaxM21
         )
     }
@@ -1120,6 +1189,8 @@ impl ModelId {
                 | ModelId::ZaiGlm45Air
                 | ModelId::ZaiGlm45Airx
                 | ModelId::ZaiGlm45Flash
+                | ModelId::ZaiGlm46VFlash
+                | ModelId::ZaiGlm46VFlashX
         )
     }
 
@@ -1139,7 +1210,12 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
+                | ModelId::ZaiGlm4Plus
+                | ModelId::ZaiGlm4PlusDeepThinking
+                | ModelId::ZaiGlm47
+                | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm46
+                | ModelId::ZaiGlm46DeepThinking
         )
     }
 
@@ -1148,7 +1224,13 @@ impl ModelId {
         if let Some(meta) = self.openrouter_metadata() {
             return meta.reasoning;
         }
-        self.provider().supports_reasoning_effort(self.as_str())
+        matches!(
+            self,
+            ModelId::ZaiGlm4PlusDeepThinking
+                | ModelId::ZaiGlm47DeepThinking
+                | ModelId::ZaiGlm46DeepThinking
+                | ModelId::ZaiGlm45DeepThinking
+        ) || self.provider().supports_reasoning_effort(self.as_str())
     }
 
     /// Determine whether the model supports tool calls/function execution
@@ -1191,12 +1273,17 @@ impl ModelId {
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => "4",
             // Z.AI generations
-            ModelId::ZaiGlm46 => "4.6",
+            ModelId::ZaiGlm4Plus | ModelId::ZaiGlm4PlusDeepThinking => "4-Plus",
+            ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking => "4.7",
+            ModelId::ZaiGlm46 | ModelId::ZaiGlm46DeepThinking => "4.6",
+            ModelId::ZaiGlm46V | ModelId::ZaiGlm46VFlash | ModelId::ZaiGlm46VFlashX => "4.6",
             ModelId::ZaiGlm45
+            | ModelId::ZaiGlm45DeepThinking
             | ModelId::ZaiGlm45Air
             | ModelId::ZaiGlm45X
             | ModelId::ZaiGlm45Airx
-            | ModelId::ZaiGlm45Flash => "4.5",
+            | ModelId::ZaiGlm45Flash
+            | ModelId::ZaiGlm45V => "4.5",
             ModelId::ZaiGlm432b0414128k => "4-32B",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
@@ -1271,12 +1358,22 @@ impl FromStr for ModelId {
             s if s == models::xai::GROK_4_CODE_LATEST => Ok(ModelId::XaiGrok4CodeLatest),
             s if s == models::xai::GROK_4_VISION => Ok(ModelId::XaiGrok4Vision),
             // Z.AI models
+            s if s == models::zai::GLM_4_PLUS => Ok(ModelId::ZaiGlm4Plus),
+            s if s == models::zai::GLM_4_PLUS_DEEP_THINKING => Ok(ModelId::ZaiGlm4PlusDeepThinking),
+            s if s == models::zai::GLM_4_7 => Ok(ModelId::ZaiGlm47),
+            s if s == models::zai::GLM_4_7_DEEP_THINKING => Ok(ModelId::ZaiGlm47DeepThinking),
             s if s == models::zai::GLM_4_6 => Ok(ModelId::ZaiGlm46),
+            s if s == models::zai::GLM_4_6_DEEP_THINKING => Ok(ModelId::ZaiGlm46DeepThinking),
+            s if s == models::zai::GLM_4_6V => Ok(ModelId::ZaiGlm46V),
+            s if s == models::zai::GLM_4_6V_FLASH => Ok(ModelId::ZaiGlm46VFlash),
+            s if s == models::zai::GLM_4_6V_FLASHX => Ok(ModelId::ZaiGlm46VFlashX),
             s if s == models::zai::GLM_4_5 => Ok(ModelId::ZaiGlm45),
+            s if s == models::zai::GLM_4_5_DEEP_THINKING => Ok(ModelId::ZaiGlm45DeepThinking),
             s if s == models::zai::GLM_4_5_AIR => Ok(ModelId::ZaiGlm45Air),
             s if s == models::zai::GLM_4_5_X => Ok(ModelId::ZaiGlm45X),
             s if s == models::zai::GLM_4_5_AIRX => Ok(ModelId::ZaiGlm45Airx),
             s if s == models::zai::GLM_4_5_FLASH => Ok(ModelId::ZaiGlm45Flash),
+            s if s == models::zai::GLM_4_5V => Ok(ModelId::ZaiGlm45V),
             s if s == models::zai::GLM_4_32B_0414_128K => Ok(ModelId::ZaiGlm432b0414128k),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
