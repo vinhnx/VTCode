@@ -36,10 +36,12 @@ jobs:
               run: npm install -g npm@latest
 
             # Install project dependencies for npm package (if npm directory exists)
+            # Note: We use --ignore-scripts to prevent postinstall from trying to download binaries
+            # that haven't been built yet (binaries are built by the build-release.yml workflow)
             - name: Install npm dependencies
               run: |
                 if [ -d "npm" ]; then
-                  cd npm && npm ci
+                  cd npm && npm ci --ignore-scripts
                 else
                   echo "No npm directory found, skipping npm operations"
                 fi
@@ -59,26 +61,37 @@ jobs:
                 fi
 
             # Publish to npmjs.com using trusted publishing (no token needed)
+            # Note: We change the package name to vtcode-bin for npmjs.com since @vinhnx/vtcode is scoped
             - name: Publish to npmjs.com using trusted publishing
               if: success() && startsWith(github.ref, 'refs/tags/v')
               run: |
                 if [ -d "npm" ]; then
                   cd npm
+                  # Create a temporary package.json with the npmjs.com package name (vtcode-bin)
+                  # This matches the logic in scripts/release.sh
+                  if command -v jq >/dev/null 2>&1; then
+                    jq '.name = "vtcode-bin" | del(.publishConfig)' package.json > package-npmjs.json
+                    mv package-npmjs.json package.json
+                    echo "Updated package name to vtcode-bin for npmjs.com publishing"
+                  fi
                   # Publish using trusted publishing - npm will use OIDC tokens provided by GitHub Actions
-                  npm publish
+                  npm publish --ignore-scripts
                 else
                   echo "No npm directory found, skipping npm publishing"
                 fi
               # No NODE_AUTH_TOKEN environment variable needed for trusted publishing
 
             # Publish to GitHub Packages using trusted publishing (no token needed in most cases)
+            # Note: For GitHub Packages, we use the original scoped name @vinhnx/vtcode
             - name: Publish to GitHub Packages using trusted publishing
               if: success() && startsWith(github.ref, 'refs/tags/v')
               run: |
                 if [ -d "npm" ]; then
                   cd npm
+                  # Restore the original package name for GitHub Packages
+                  git checkout package.json
                   # Publish to GitHub Packages registry using trusted publishing
-                  npm publish --registry https://npm.pkg.github.com
+                  npm publish --registry https://npm.pkg.github.com --ignore-scripts
                 else
                   echo "No npm directory found, skipping GitHub Packages publishing"
                 fi
