@@ -62,7 +62,7 @@ jobs:
 
             # Publish to npmjs.com (supports both trusted publishing and token-based auth)
             # Note: 
-            # 1. We change the package name to vtcode-bin for npmjs.com since @vinhnx/vtcode is scoped
+            # 1. We change the package name to vtcode for npmjs.com (unscoped)
             # 2. If NPM_TOKEN secret is set, use it. Otherwise rely on trusted publishing (OIDC)
             # 3. We save the original package.json for the GitHub Packages step to restore
             - name: Publish to npmjs.com
@@ -75,11 +75,11 @@ jobs:
                   # Save original package.json for GitHub Packages step
                   cp package.json package-original.json
                   
-                  # Create a temporary package.json with the npmjs.com package name (vtcode-bin)
+                  # Create a temporary package.json with the npmjs.com package name (vtcode)
                   if command -v jq >/dev/null 2>&1; then
-                    jq '.name = "vtcode-bin" | del(.publishConfig)' package.json > package-npmjs.json
+                    jq '.name = "vtcode" | del(.publishConfig)' package.json > package-npmjs.json
                     mv package-npmjs.json package.json
-                    echo "Updated package name to vtcode-bin for npmjs.com publishing"
+                    echo "Updated package name to vtcode for npmjs.com publishing"
                   fi
                   
                   # Check if NPM_TOKEN is available for token-based auth
