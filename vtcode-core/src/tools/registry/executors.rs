@@ -545,6 +545,18 @@ impl ToolRegistry {
             }))
         })
     }
+
+    pub(super) fn code_intelligence_executor(
+        &mut self,
+        args: Value,
+    ) -> BoxFuture<'_, Result<Value>> {
+        let workspace_root = self.workspace_root_owned();
+        Box::pin(async move {
+            use crate::tools::code_intelligence::CodeIntelligenceTool;
+            let tool = CodeIntelligenceTool::new(workspace_root);
+            tool.execute(args).await
+        })
+    }
 }
 
 impl ToolRegistry {

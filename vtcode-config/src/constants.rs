@@ -944,6 +944,7 @@ pub mod tools {
 
     pub const DEBUG_AGENT: &str = "debug_agent";
     pub const ANALYZE_AGENT: &str = "analyze_agent";
+    pub const CODE_INTELLIGENCE: &str = "code_intelligence";
 
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";

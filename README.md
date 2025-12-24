@@ -115,7 +115,7 @@ For full configuration options, see [Configuration](./docs/config/CONFIGURATION_
 
 -   **Security First**: Multi-layered security model with execution policy, tool policies, and argument injection protection
 -   **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
--   **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java, Swift
+-   **Code Intelligence**: Tree-sitter powered code navigation with go-to-definition, find-references, hover, and symbol search (Rust, Python, JavaScript/TypeScript, Go, Java, Swift, Bash)
 -   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
 -   **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling, aligned with the [open Agent Skills standard](http://agentskills.io/) ([docs](./docs/SKILLS_GUIDE.md))
 -   **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)

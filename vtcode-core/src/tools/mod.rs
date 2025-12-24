@@ -121,6 +121,7 @@
 //! the monolithic implementation into focused, reusable components.
 
 pub mod apply_patch;
+pub mod code_intelligence;
 pub mod constants;
 pub mod error_messages;
 
@@ -219,6 +220,7 @@ pub use tool_effectiveness::{
 pub use traits::{Tool, ToolExecutor};
 pub use types::*;
 pub use web_fetch::WebFetchTool;
+pub use code_intelligence::{CodeIntelligenceTool, CodeIntelligenceInput, CodeIntelligenceOutput};
 
 // Production-grade improvements re-exports
 pub use async_middleware::{
