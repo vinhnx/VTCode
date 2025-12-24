@@ -1,0 +1,206 @@
+name: "CI Pipeline"
+permissions:
+  contents: read
+
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+  push:
+    branches:
+      - main
+    paths:
+      - "**.rs"
+      - "**.toml"
+      - "**.lock"
+      - "**.yml"
+      - "**.yaml"
+      - "**.json"
+      - "**.js"
+      - "**.ts"
+      - "**.md" # Still run on markdown changes since we have markdown linting
+      - "scripts/**"
+      - "!.github/dependabot.yml" # Exclude dependabot changes
+      - "!.gitignore"
+      - "!.vtcodegitignore"
+      - "!.env*"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**.rs"
+      - "**.toml"
+      - "**.lock"
+      - "**.yml"
+      - "**.yaml"
+      - "**.json"
+      - "**.js"
+      - "**.ts"
+      - "**.md" # Still run on markdown changes since we have markdown linting
+      - "scripts/**"
+      - "!.github/dependabot.yml" # Exclude dependabot changes
+      - "!.gitignore"
+      - "!.vtcodegitignore"
+      - "!.env*"
+
+env:
+  CARGO_INCREMENTAL: 0 # Disable incremental compilation for faster from-scratch builds
+  CARGO_PROFILE_TEST_DEBUG: 0 # Disable debug info in test builds for faster compilation
+  RUSTFLAGS: "-D warnings" # Deny warnings in CI builds
+
+# Set default shell and working directory
+defaults:
+  run:
+    shell: bash
+
+# ensure that the workflow is only triggered once per PR,  subsequent pushes to the PR will cancel
+# and restart the workflow. See https://docs.github.com/en/actions/using-jobs/using-concurrency
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+# Make obvious and fast tests to run first, to catch issues as early as possible
+jobs:
+  large-files:
+    name: Enforce Large File Budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check tracked file sizes
+        run: python3 scripts/check_large_files.py 400000 --allow "resources/vhs/*.gif"
+
+  # Lint the formatting of the codebase.
+  formatting:
+    name: Check Formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  # Check for typos in the codebase.
+  # See <https://github.com/crate-ci/typos/>
+  # lint-typos:
+  #   name: Check Typos
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: crate-ci/typos@master
+
+  # Check for any disallowed dependencies in the codebase due to license / security issues.
+  # See <https://github.com/EmbarkStudios/cargo-deny>
+  # dependencies:
+  #   name: Check Dependencies
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: EmbarkStudios/cargo-deny-action@v2
+
+  # Run cargo clippy.
+  lint-clippy:
+    name: Check Clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --locked
+
+  # Run markdownlint on all markdown files in the repository.
+  lint-markdown:
+    name: Check Markdown
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            markdown:
+              - '**/*.md'
+              - '!.github/workflows/*.yml'
+              - '!target/**'
+      - uses: DavidAnson/markdownlint-cli2-action@v21
+        if: steps.filter.outputs.markdown == 'true'
+        with:
+          globs: |
+            '**/*.md'
+            '!target'
+
+    # Run cargo check. This is a fast way to catch any obvious errors in the code.
+  check:
+    name: Check code
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --locked
+
+  check-cross-platform:
+    name: Cross-platform check ${{ matrix.os }}
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        toolchain: ["stable"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --locked
+
+  test:
+    name: "Cargo test"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 20
+    steps:
+      - name: "Check out the repo"
+        uses: actions/checkout@v6
+
+      - uses: "dtolnay/rust-toolchain@stable"
+        with:
+          toolchain: "stable"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test --locked
+
+  # clippy:
+  #   name: "Cargo clippy"
+  #   runs-on: "ubuntu-latest"
+  #   steps:
+  #     - name: "Check out the repo"
+  #       uses: actions/checkout@v6
+
+  #     - uses: "actions-rs/toolchain@v1"
+  #       with:
+  #         profile: "minimal"
+  #         toolchain: "stable"
+  #         override: true
+
+  #     - run: "rustup component add clippy"
+
+  #     - uses: "actions-rs/cargo@v1"
+  #       with:
+  #         command: "clippy"
+  #         args: "-- -D warnings"

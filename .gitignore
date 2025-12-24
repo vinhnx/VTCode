@@ -103,7 +103,7 @@ venv.bak/
 .dockerignore
 
 # CI/CD
-.github/workflows/*.yml.bak
+workflows/*.yml.bak
 .gitlab-ci.yml
 
 # Local Configuration
@@ -787,4 +787,3 @@ TODO2.md
 .vtcode/
 .claude/
 .agent/
-.github/
