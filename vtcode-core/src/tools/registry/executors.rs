@@ -524,6 +524,7 @@ impl ToolRegistry {
     }
 
     pub(super) fn debug_agent_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
+        tracing::warn!("debug_agent is deprecated, use agent_info with mode=debug");
         Box::pin(async move {
             // Lightweight snapshot of registry state for diagnostics; this will not include full session context.
             let tools = self.available_tools().await;
@@ -537,6 +538,7 @@ impl ToolRegistry {
     }
 
     pub(super) fn analyze_agent_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
+        tracing::warn!("analyze_agent is deprecated, use agent_info with mode=analyze");
         Box::pin(async move {
             // Aggregate some simple analysis metrics for the agent's behavior
             let available_tools = self.available_tools().await;
@@ -544,6 +546,35 @@ impl ToolRegistry {
                 "available_tools_count": available_tools.len(),
                 "available_tools": available_tools,
             }))
+        })
+    }
+
+    /// Merged agent diagnostics tool (replaces debug_agent + analyze_agent)
+    pub(super) fn agent_info_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let mode = args
+                .get("mode")
+                .and_then(|v| v.as_str())
+                .unwrap_or("full");
+
+            let available_tools = self.available_tools().await;
+            let workspace_root = self.workspace_root_str();
+
+            match mode {
+                "debug" => Ok(json!({
+                    "tools_registered": available_tools,
+                    "workspace_root": workspace_root,
+                })),
+                "analyze" => Ok(json!({
+                    "available_tools_count": available_tools.len(),
+                    "available_tools": available_tools,
+                })),
+                "full" | _ => Ok(json!({
+                    "tools_registered": available_tools.clone(),
+                    "workspace_root": workspace_root,
+                    "available_tools_count": available_tools.len(),
+                })),
+            }
         })
     }
 

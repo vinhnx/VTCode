@@ -154,19 +154,7 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         },
     );
 
-    sigs.insert(
-        tools::CREATE_FILE,
-        ToolSignature {
-            name: tools::CREATE_FILE,
-            brief: "Create new file",
-            required_params: vec![
-                ("path", "string", "File path"),
-                ("content", "string", "File content"),
-            ],
-            common_params: vec![],
-            token_estimate: 30,
-        },
-    );
+    // NOTE: create_file removed - use write_file with mode=fail_if_exists
 
     sigs.insert(
         tools::DELETE_FILE,
@@ -222,20 +210,7 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         },
     );
 
-    sigs.insert(
-        tools::SEARCH_REPLACE,
-        ToolSignature {
-            name: tools::SEARCH_REPLACE,
-            brief: "Search and replace",
-            required_params: vec![
-                ("path", "string", "File path"),
-                ("search", "string", "Search pattern"),
-                ("replace", "string", "Replacement"),
-            ],
-            common_params: vec![("regex", "boolean", "Use regex")],
-            token_estimate: 45,
-        },
-    );
+    // NOTE: search_replace removed - use edit_file instead
 
     // TOOLS & SKILLS
     sigs.insert(
@@ -272,24 +247,14 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         },
     );
 
+    // Merged agent diagnostics tool
     sigs.insert(
-        tools::DEBUG_AGENT,
+        tools::AGENT_INFO,
         ToolSignature {
-            name: tools::DEBUG_AGENT,
-            brief: "Debug agent state",
+            name: tools::AGENT_INFO,
+            brief: "Agent diagnostics",
             required_params: vec![],
-            common_params: vec![("verbose", "boolean", "Detailed output")],
-            token_estimate: 30,
-        },
-    );
-
-    sigs.insert(
-        "analyze_agent",
-        ToolSignature {
-            name: "analyze_agent",
-            brief: "Analyze agent behavior",
-            required_params: vec![],
-            common_params: vec![],
+            common_params: vec![("mode", "string", "debug|analyze|full")],
             token_estimate: 30,
         },
     );
@@ -309,79 +274,7 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         },
     );
 
-    // PTY SESSION MANAGEMENT
-    sigs.insert(
-        "create_pty_session",
-        ToolSignature {
-            name: "create_pty_session",
-            brief: "Create PTY session",
-            required_params: vec![("command", "string", "Shell command")],
-            common_params: vec![],
-            token_estimate: 35,
-        },
-    );
-
-    sigs.insert(
-        "list_pty_sessions",
-        ToolSignature {
-            name: "list_pty_sessions",
-            brief: "List PTY sessions",
-            required_params: vec![],
-            common_params: vec![],
-            token_estimate: 25,
-        },
-    );
-
-    sigs.insert(
-        "close_pty_session",
-        ToolSignature {
-            name: "close_pty_session",
-            brief: "Close PTY session",
-            required_params: vec![("session_id", "string", "Session ID")],
-            common_params: vec![],
-            token_estimate: 30,
-        },
-    );
-
-    sigs.insert(
-        "send_pty_input",
-        ToolSignature {
-            name: "send_pty_input",
-            brief: "Send input to PTY",
-            required_params: vec![
-                ("session_id", "string", "Session ID"),
-                ("input", "string", "Input text"),
-            ],
-            common_params: vec![],
-            token_estimate: 35,
-        },
-    );
-
-    sigs.insert(
-        "read_pty_session",
-        ToolSignature {
-            name: "read_pty_session",
-            brief: "Read PTY output",
-            required_params: vec![("session_id", "string", "Session ID")],
-            common_params: vec![],
-            token_estimate: 30,
-        },
-    );
-
-    sigs.insert(
-        "resize_pty_session",
-        ToolSignature {
-            name: "resize_pty_session",
-            brief: "Resize PTY terminal",
-            required_params: vec![
-                ("session_id", "string", "Session ID"),
-                ("rows", "integer", "Rows"),
-                ("cols", "integer", "Columns"),
-            ],
-            common_params: vec![],
-            token_estimate: 40,
-        },
-    );
+    // NOTE: PTY session tools hidden from LLM - use run_pty_cmd
 
     // WEB
     sigs.insert(

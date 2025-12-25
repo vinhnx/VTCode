@@ -957,6 +957,9 @@ pub mod tools {
     pub const ANALYZE_AGENT: &str = "analyze_agent";
     pub const CODE_INTELLIGENCE: &str = "code_intelligence";
 
+    /// Merged agent diagnostics tool (replaces debug_agent + analyze_agent)
+    pub const AGENT_INFO: &str = "agent_info";
+
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";
 }
