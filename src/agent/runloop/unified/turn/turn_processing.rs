@@ -20,6 +20,7 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::llm::TokenCounter;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::result_cache::ToolResultCache;
@@ -301,31 +302,48 @@ pub(crate) fn process_llm_response(
         && let Some((name, args)) =
             crate::agent::runloop::text_tools::detect_textual_tool_call(&text)
     {
-        let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-        let code_blocks = crate::agent::runloop::text_tools::extract_code_fence_blocks(&text);
-        if !code_blocks.is_empty() {
-            crate::agent::runloop::tool_output::render_code_fence_blocks(renderer, &code_blocks)?;
-            renderer.line(MessageStyle::Output, "")?;
-        }
-        let (headline, _) =
-            crate::agent::runloop::unified::tool_summary::describe_tool_action(&name, &args);
-        let notice = if headline.is_empty() {
-            format!(
-                "Detected {} request",
-                crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name)
-            )
+        // Validate required arguments before adding the tool call.
+        // This prevents executing tools with empty args that will fail and trigger loop detection.
+        if let Some(missing_params) = validate_required_tool_args(&name, &args) {
+            // Show warning about missing parameters but don't add the tool call.
+            // This allows the model to continue naturally instead of failing execution.
+            let tool_display = crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name);
+            let missing_list = missing_params.join(", ");
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Detected {} but missing required params: {}",
+                    tool_display, missing_list
+                ),
+            )?;
+            // Don't set interpreted_textual_call = true, let it fall through to TextResponse
         } else {
-            format!("Detected {headline}")
-        };
-        renderer.line(MessageStyle::Info, &notice)?;
-        let call_id = format!("call_textual_{}", conversation_len);
-        tool_calls.push(uni::ToolCall::function(
-            call_id.clone(),
-            name.clone(),
-            args_json.clone(),
-        ));
-        interpreted_textual_call = true;
-        final_text = None;
+            let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+            let code_blocks = crate::agent::runloop::text_tools::extract_code_fence_blocks(&text);
+            if !code_blocks.is_empty() {
+                crate::agent::runloop::tool_output::render_code_fence_blocks(renderer, &code_blocks)?;
+                renderer.line(MessageStyle::Output, "")?;
+            }
+            let (headline, _) =
+                crate::agent::runloop::unified::tool_summary::describe_tool_action(&name, &args);
+            let notice = if headline.is_empty() {
+                format!(
+                    "Detected {} request",
+                    crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name)
+                )
+            } else {
+                format!("Detected {headline}")
+            };
+            renderer.line(MessageStyle::Info, &notice)?;
+            let call_id = format!("call_textual_{}", conversation_len);
+            tool_calls.push(uni::ToolCall::function(
+                call_id.clone(),
+                name.clone(),
+                args_json.clone(),
+            ));
+            interpreted_textual_call = true;
+            final_text = None;
+        }
     }
 
     // Build result
@@ -352,4 +370,42 @@ pub(crate) fn process_llm_response(
     }
 
     Ok(TurnProcessingResult::Empty)
+}
+
+/// Validates that a textual tool call has required arguments before execution.
+/// Returns `None` if valid, or `Some(missing_params)` if validation fails.
+///
+/// This prevents executing tools with empty args that will just fail,
+/// allowing the model to continue naturally instead of hitting loop detection.
+fn validate_required_tool_args(name: &str, args: &serde_json::Value) -> Option<Vec<&'static str>> {
+    let required: &[&str] = match name {
+        n if n == tool_names::READ_FILE => &["path"],
+        n if n == tool_names::WRITE_FILE => &["path", "content"],
+        n if n == tool_names::EDIT_FILE => &["path", "old_string", "new_string"],
+        n if n == tool_names::LIST_FILES => &["path"],
+        n if n == tool_names::GREP_FILE => &["pattern"],
+        n if n == tool_names::RUN_PTY_CMD => &["command"],
+        n if n == tool_names::APPLY_PATCH => &["patch"],
+        _ => &[],
+    };
+
+    if required.is_empty() {
+        return None;
+    }
+
+    let missing: Vec<&'static str> = required
+        .iter()
+        .filter(|key| {
+            args.get(*key)
+                .map(|v| v.is_null() || (v.is_string() && v.as_str().unwrap_or("").is_empty()))
+                .unwrap_or(true)
+        })
+        .copied()
+        .collect();
+
+    if missing.is_empty() {
+        None
+    } else {
+        Some(missing)
+    }
 }

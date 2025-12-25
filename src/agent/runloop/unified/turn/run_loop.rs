@@ -2843,14 +2843,26 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         tool_spinner.finish();
                                         autonomous_executor.record_execution(name, false);
 
-                                        // Increment failure counter for this tool signature
-                                        let failed_attempts = repeated_tool_attempts
-                                            .entry(signature_key.clone())
-                                            .or_insert(0);
-                                        *failed_attempts += 1;
+                                        // Check if this is a "missing required params" error
+                                        // These should not count toward loop detection since:
+                                        // 1. They all have the same signature (empty args)
+                                        // 2. The model needs guidance, not a loop detection abort
+                                        let error_str = format!("{:?}", error);
+                                        let is_missing_params_error = error_str.contains("Missing required")
+                                            || error_str.contains("Invalid") && error_str.contains("arguments");
+
+                                        if !is_missing_params_error {
+                                            // Only increment failure counter for non-param-validation errors
+                                            let failed_attempts = repeated_tool_attempts
+                                                .entry(signature_key.clone())
+                                                .or_insert(0);
+                                            *failed_attempts += 1;
+                                        }
+                                        // If it IS a missing params error, we don't increment the counter
+                                        // The enhanced error message will guide the model to correct format
 
                                         // Convert the tool error into anyhow for the helper
-                                        let any_err = anyhow::anyhow!(format!("{:?}", error));
+                                        let any_err = anyhow::anyhow!(error_str);
                                         // Call the centralized failure handler
                                         run_turn_handle_tool_failure(
                                             name,
