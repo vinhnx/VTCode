@@ -115,29 +115,20 @@ impl IncrementalSystemPrompt {
         let mut prompt = String::with_capacity(base_system_prompt.len() + 512);
         prompt.push_str(base_system_prompt);
 
-        // Reinforce anti-giving-up policy based on context (main policy is in system prompt)
-        if retry_attempts > 0 || context.error_count > 0 {
-            let _ = writeln!(prompt, "\n\n# Persistence Reminder");
+        // Concise retry/error context
+        if retry_attempts > 0 {
             let _ = writeln!(
                 prompt,
-                "Review the Anti-Giving-Up Policy in your system prompt. You MUST try multiple approaches before giving up."
+                "\n# Retry #{}: Try different approaches, not same steps.",
+                retry_attempts
             );
-
-            if retry_attempts > 0 {
-                let _ = writeln!(
-                    prompt,
-                    "\nThis is attempt #{}. Previous attempts failed. Focus on trying fundamentally DIFFERENT approaches, not repeating the same steps.",
-                    retry_attempts
-                );
-            }
-
-            if context.error_count > 0 {
-                let _ = writeln!(
-                    prompt,
-                    "\nError analysis: {} errors encountered. Look for patterns: file/path issues? permission problems? tool failures? Try solutions specific to the error type.",
-                    context.error_count
-                );
-            }
+        }
+        if context.error_count > 0 {
+            let _ = writeln!(
+                prompt,
+                "\n# {} errors: Check file paths, permissions, tool args.",
+                context.error_count
+            );
         }
 
         let has_context = context.conversation_length > 0
@@ -158,36 +149,27 @@ impl IncrementalSystemPrompt {
             let _ = writeln!(prompt, "- full_auto: {}", context.full_auto);
 
             if context.full_auto {
-                let _ = writeln!(prompt, "\n# FULL-AUTO MODE ENABLED");
-                let _ = writeln!(
-                    prompt,
-                    "You are running in autonomous mode. You are expected to complete the task without asking for permission or help unless you are completely blocked by something only a human can provide. Continue executing steps until the goal is reached."
-                );
+                let _ = writeln!(prompt, "\n# FULL-AUTO: Complete task autonomously until done or blocked.");
             }
 
             if let Some(plan) = &context.current_plan {
-                let _ = writeln!(prompt, "\n## CURRENT TASK PLAN (v{})", plan.version);
+                let _ = writeln!(
+                    prompt,
+                    "\n## PLAN (v{}) - {}/{} done",
+                    plan.version, plan.summary.completed_steps, plan.summary.total_steps
+                );
                 if let Some(explanation) = &plan.explanation {
                     let _ = writeln!(prompt, "Goal: {}", explanation);
                 }
-                let _ = writeln!(
-                    prompt,
-                    "Progress: {}/{} steps completed",
-                    plan.summary.completed_steps, plan.summary.total_steps
-                );
-                let _ = writeln!(prompt, "\nSteps:");
                 for (i, step) in plan.steps.iter().enumerate() {
-                    let status_mark = match step.status {
+                    let mark = match step.status {
                         vtcode_core::tools::StepStatus::Completed => "[x]",
                         vtcode_core::tools::StepStatus::InProgress => "[>]",
                         vtcode_core::tools::StepStatus::Pending => "[ ]",
                     };
-                    let _ = writeln!(prompt, "{}. {} {}", i + 1, status_mark, step.step);
+                    let _ = writeln!(prompt, "{}. {} {}", i + 1, mark, step.step);
                 }
-                let _ = writeln!(
-                    prompt,
-                    "\n**IMPORTANT**: You MUST continue with the next step in your plan autonomously. Do not stop until all steps are completed or you are blocked by something only a human can provide."
-                );
+                let _ = writeln!(prompt, "→ Continue to next step.");
             }
         }
 

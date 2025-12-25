@@ -43,26 +43,26 @@ impl PromptTemplates {
 
     /// Get tool usage prompt
     pub fn tool_usage_prompt() -> &'static str {
-        "You have tools for files, search, and shell. Plan before calling tools; choose the most specific tool. Prefer `grep_file` (ripgrep) and `list_files` with scoped paths (no root); avoid shell ls/find/grep unless explicitly requested or running builds/tests. Keep calls small (cap matches at 5) and targeted. Default to response_format='concise' and paginate long results with page/per_page (default per_page=50). Prefer MCP discovery tools first when enabled. If a tool truncates output or returns guidance, follow it. Use unambiguous args (e.g., path, max_results)."
+        "Tools: grep_file (search), list_files (explore), read_file (read), edit_file (modify), run_pty_cmd (shell). Use specific tools over shell ls/find/grep. Scoped paths, max_results≤5, response_format='concise', paginate with page/per_page. Follow truncation guidance."
     }
 
     /// Get workspace context prompt
     pub fn workspace_context_prompt() -> &'static str {
-        "You are working within a specific workspace. Consider the project structure and existing code when making suggestions."
+        "Work within project workspace. Consider existing code structure."
     }
 
     /// Get safety guidelines prompt
     pub fn safety_guidelines_prompt() -> &'static str {
-        "Prioritize safety. Follow scoped permissions and caps applied by policy. Ask confirmation for destructive operations. If a tool errors, read the message and retry with corrected arguments."
+        "Safety: Follow permissions, confirm destructive ops, retry tool errors with corrected args."
     }
 
     /// Get pagination guidelines prompt
     pub fn pagination_guidelines_prompt() -> &'static str {
-        "PAGINATION GUIDELINES: When working with large datasets, always use pagination to prevent timeouts and token overflow. Default per_page=50 for optimal performance. For edge cases: reduce per_page to 25 for very large directories, handle incomplete pages gracefully, and retry with smaller batches on API failures. Monitor 'has_more' flag and use 'page' parameter to continue pagination."
+        "Pagination: per_page=50 default, reduce to 25 for large dirs, check 'has_more' flag."
     }
 
     /// Get skills available prompt (inspired by OpenAI Codex)
     pub fn skills_available_prompt() -> &'static str {
-        "## Available Skills\nThe following skills are available for use. Each skill provides specialized capabilities that can be invoked when relevant to the task. Skills are loaded from .vtcode/skills/ directory."
+        "## Skills\nSpecialized capabilities from .vtcode/skills/. Use search_tools to discover."
     }
 }

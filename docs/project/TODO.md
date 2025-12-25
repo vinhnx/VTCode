@@ -59,3 +59,7 @@ REVIEW VTCODE TOOLS, REMOVE REDUNDANT TOOLS, AND IMPROVE TOOL DESCRIPTIONS FOR C
 --
 
 improve responsiveness when executing commands, tools, pty, and file operations. add a placeholder response while processing is ongoing.
+
+--
+
+revivew prompt caching strategy for better performance and lower latency

@@ -263,3 +263,9 @@ cargo run
 ## Agent Workflows
 
 This CLAUDE.md focuses on the **VT Code codebase itself**.
+
+## IMPORTANT:
+
+-   When working on VT Code features, ALWAYS follow the guidelines in this document to ensure code quality, maintainability, and security.
+
+-   Make sure the name is "VT Code" not "VTCODE" or "vtcode" in user-facing text.
