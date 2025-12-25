@@ -9,7 +9,7 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
 use crate::tools::tree_sitter::{
@@ -128,21 +128,11 @@ impl CodeIntelligenceTool {
             .with_context(|| "Failed to parse code intelligence input")?;
 
         let result = match input.operation {
-            CodeIntelligenceOperation::GotoDefinition => {
-                self.goto_definition(&input).await
-            }
-            CodeIntelligenceOperation::FindReferences => {
-                self.find_references(&input).await
-            }
-            CodeIntelligenceOperation::Hover => {
-                self.hover(&input).await
-            }
-            CodeIntelligenceOperation::DocumentSymbol => {
-                self.document_symbol(&input).await
-            }
-            CodeIntelligenceOperation::WorkspaceSymbol => {
-                self.workspace_symbol(&input).await
-            }
+            CodeIntelligenceOperation::GotoDefinition => self.goto_definition(&input).await,
+            CodeIntelligenceOperation::FindReferences => self.find_references(&input).await,
+            CodeIntelligenceOperation::Hover => self.hover(&input).await,
+            CodeIntelligenceOperation::DocumentSymbol => self.document_symbol(&input).await,
+            CodeIntelligenceOperation::WorkspaceSymbol => self.workspace_symbol(&input).await,
         };
 
         match result {
@@ -158,12 +148,19 @@ impl CodeIntelligenceTool {
     }
 
     /// Go to symbol definition
-    async fn goto_definition(&self, input: &CodeIntelligenceInput) -> Result<CodeIntelligenceOutput> {
-        let file_path = input.file_path.as_ref()
+    async fn goto_definition(
+        &self,
+        input: &CodeIntelligenceInput,
+    ) -> Result<CodeIntelligenceOutput> {
+        let file_path = input
+            .file_path
+            .as_ref()
             .with_context(|| "file_path is required for goto_definition")?;
-        let line = input.line
+        let line = input
+            .line
             .with_context(|| "line is required for goto_definition")?;
-        let character = input.character
+        let character = input
+            .character
             .with_context(|| "character is required for goto_definition")?;
 
         let full_path = self.resolve_path(file_path)?;
@@ -200,12 +197,19 @@ impl CodeIntelligenceTool {
     }
 
     /// Find all references to a symbol
-    async fn find_references(&self, input: &CodeIntelligenceInput) -> Result<CodeIntelligenceOutput> {
-        let file_path = input.file_path.as_ref()
+    async fn find_references(
+        &self,
+        input: &CodeIntelligenceInput,
+    ) -> Result<CodeIntelligenceOutput> {
+        let file_path = input
+            .file_path
+            .as_ref()
             .with_context(|| "file_path is required for find_references")?;
-        let line = input.line
+        let line = input
+            .line
             .with_context(|| "line is required for find_references")?;
-        let character = input.character
+        let character = input
+            .character
             .with_context(|| "character is required for find_references")?;
 
         let full_path = self.resolve_path(file_path)?;
@@ -251,11 +255,13 @@ impl CodeIntelligenceTool {
 
     /// Get hover information for a symbol
     async fn hover(&self, input: &CodeIntelligenceInput) -> Result<CodeIntelligenceOutput> {
-        let file_path = input.file_path.as_ref()
+        let file_path = input
+            .file_path
+            .as_ref()
             .with_context(|| "file_path is required for hover")?;
-        let line = input.line
-            .with_context(|| "line is required for hover")?;
-        let character = input.character
+        let line = input.line.with_context(|| "line is required for hover")?;
+        let character = input
+            .character
             .with_context(|| "character is required for hover")?;
 
         let full_path = self.resolve_path(file_path)?;
@@ -303,40 +309,53 @@ impl CodeIntelligenceTool {
     }
 
     /// Get all symbols in a document
-    async fn document_symbol(&self, input: &CodeIntelligenceInput) -> Result<CodeIntelligenceOutput> {
-        let file_path = input.file_path.as_ref()
+    async fn document_symbol(
+        &self,
+        input: &CodeIntelligenceInput,
+    ) -> Result<CodeIntelligenceOutput> {
+        let file_path = input
+            .file_path
+            .as_ref()
             .with_context(|| "file_path is required for document_symbol")?;
 
         let full_path = self.resolve_path(file_path)?;
         let (symbols, _source_code) = self.parse_file_and_extract_symbols(&full_path).await?;
 
-        let symbol_outputs: Vec<SymbolOutput> = symbols
-            .iter()
-            .map(SymbolOutput::from)
-            .collect();
+        let symbol_outputs: Vec<SymbolOutput> = symbols.iter().map(SymbolOutput::from).collect();
 
         Ok(CodeIntelligenceOutput {
             success: true,
             operation: "document_symbol".to_string(),
-            result: Some(CodeIntelligenceResult::Symbols { symbols: symbol_outputs }),
+            result: Some(CodeIntelligenceResult::Symbols {
+                symbols: symbol_outputs,
+            }),
             error: None,
         })
     }
 
     /// Search for symbols across the workspace
-    async fn workspace_symbol(&self, input: &CodeIntelligenceInput) -> Result<CodeIntelligenceOutput> {
-        let query = input.query.as_ref()
+    async fn workspace_symbol(
+        &self,
+        input: &CodeIntelligenceInput,
+    ) -> Result<CodeIntelligenceOutput> {
+        let query = input
+            .query
+            .as_ref()
             .with_context(|| "query is required for workspace_symbol")?;
 
         // Get source files in workspace
         let source_files = self.find_source_files().await?;
 
         let mut all_symbols: Vec<SymbolOutput> = Vec::new();
-        let mut analyzer = TreeSitterAnalyzer::new()
-            .with_context(|| "Failed to create tree-sitter analyzer")?;
+        let mut analyzer =
+            TreeSitterAnalyzer::new().with_context(|| "Failed to create tree-sitter analyzer")?;
 
-        for file_path in source_files.iter().take(100) { // Limit to 100 files for performance
-            if let Ok((symbols, _)) = self.parse_file_with_analyzer(&mut analyzer, file_path).await {
+        for file_path in source_files.iter().take(100) {
+            // Limit to 100 files for performance
+            if let Ok((symbols, _)) = self
+                .parse_file_with_analyzer(&mut analyzer, file_path)
+                .await
+            {
                 // Filter symbols by query
                 let matching_symbols: Vec<SymbolOutput> = symbols
                     .iter()
@@ -353,7 +372,9 @@ impl CodeIntelligenceTool {
         Ok(CodeIntelligenceOutput {
             success: true,
             operation: "workspace_symbol".to_string(),
-            result: Some(CodeIntelligenceResult::Symbols { symbols: all_symbols }),
+            result: Some(CodeIntelligenceResult::Symbols {
+                symbols: all_symbols,
+            }),
             error: None,
         })
     }
@@ -368,10 +389,13 @@ impl CodeIntelligenceTool {
         };
 
         // Validate path is within workspace
-        let canonical = full_path.canonicalize()
+        let canonical = full_path
+            .canonicalize()
             .with_context(|| format!("File not found: {}", file_path))?;
 
-        let workspace_canonical = self.workspace_root.canonicalize()
+        let workspace_canonical = self
+            .workspace_root
+            .canonicalize()
             .with_context(|| "Failed to resolve workspace root")?;
 
         if !canonical.starts_with(&workspace_canonical) {
@@ -382,10 +406,14 @@ impl CodeIntelligenceTool {
     }
 
     /// Parse a file and extract symbols
-    async fn parse_file_and_extract_symbols(&self, file_path: &Path) -> Result<(Vec<SymbolInfo>, String)> {
-        let mut analyzer = TreeSitterAnalyzer::new()
-            .with_context(|| "Failed to create tree-sitter analyzer")?;
-        self.parse_file_with_analyzer(&mut analyzer, file_path).await
+    async fn parse_file_and_extract_symbols(
+        &self,
+        file_path: &Path,
+    ) -> Result<(Vec<SymbolInfo>, String)> {
+        let mut analyzer =
+            TreeSitterAnalyzer::new().with_context(|| "Failed to create tree-sitter analyzer")?;
+        self.parse_file_with_analyzer(&mut analyzer, file_path)
+            .await
     }
 
     /// Parse a file with a given analyzer
@@ -398,10 +426,12 @@ impl CodeIntelligenceTool {
             .await
             .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
 
-        let language = analyzer.detect_language_from_path(file_path)
+        let language = analyzer
+            .detect_language_from_path(file_path)
             .with_context(|| format!("Unsupported language for: {}", file_path.display()))?;
 
-        let tree = analyzer.parse(&source_code, language)
+        let tree = analyzer
+            .parse(&source_code, language)
             .with_context(|| format!("Failed to parse: {}", file_path.display()))?;
 
         let syntax_tree = crate::tools::tree_sitter::SyntaxTree {
@@ -419,7 +449,9 @@ impl CodeIntelligenceTool {
 
     /// Find source files in workspace
     async fn find_source_files(&self) -> Result<Vec<PathBuf>> {
-        let extensions = ["rs", "py", "js", "ts", "tsx", "jsx", "go", "java", "sh", "bash"];
+        let extensions = [
+            "rs", "py", "js", "ts", "tsx", "jsx", "go", "java", "sh", "bash",
+        ];
         let mut files = Vec::new();
 
         let mut stack = vec![self.workspace_root.clone()];
@@ -428,9 +460,7 @@ impl CodeIntelligenceTool {
             if let Ok(mut entries) = tokio::fs::read_dir(&dir).await {
                 while let Ok(Some(entry)) = entries.next_entry().await {
                     let path = entry.path();
-                    let file_name = path.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("");
+                    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
                     // Skip hidden directories and common excludes
                     if file_name.starts_with('.')
@@ -542,7 +572,11 @@ mod tests {
         assert!(result.is_ok());
 
         let output: CodeIntelligenceOutput = serde_json::from_value(result.unwrap()).unwrap();
-        assert!(output.success, "Expected success but got error: {:?}", output.error);
+        assert!(
+            output.success,
+            "Expected success but got error: {:?}",
+            output.error
+        );
         assert_eq!(output.operation, "document_symbol");
     }
 
@@ -568,7 +602,11 @@ mod tests {
         assert!(result.is_ok());
 
         let output: CodeIntelligenceOutput = serde_json::from_value(result.unwrap()).unwrap();
-        assert!(output.success, "Expected success but got error: {:?}", output.error);
+        assert!(
+            output.success,
+            "Expected success but got error: {:?}",
+            output.error
+        );
     }
 
     #[test]

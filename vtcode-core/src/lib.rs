@@ -150,6 +150,7 @@ pub mod safety;
 pub mod security;
 pub mod skills;
 pub mod telemetry;
+pub mod terminal_setup;
 pub mod tool_policy;
 pub mod tools;
 pub mod types;

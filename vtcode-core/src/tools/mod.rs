@@ -184,6 +184,7 @@ mod improvements_real_workflow_tests;
 // Re-export main types and traits for backward compatibility
 pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
+pub use code_intelligence::{CodeIntelligenceInput, CodeIntelligenceOutput, CodeIntelligenceTool};
 pub use command_cache::PermissionCache;
 pub use command_resolver::CommandResolver;
 pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
@@ -220,7 +221,6 @@ pub use tool_effectiveness::{
 pub use traits::{Tool, ToolExecutor};
 pub use types::*;
 pub use web_fetch::WebFetchTool;
-pub use code_intelligence::{CodeIntelligenceTool, CodeIntelligenceInput, CodeIntelligenceOutput};
 
 // Production-grade improvements re-exports
 pub use async_middleware::{

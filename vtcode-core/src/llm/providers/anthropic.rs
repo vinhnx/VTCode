@@ -1180,22 +1180,33 @@ mod tests {
     fn test_minimax_base_url_resolution() {
         // Default base URL
         let url = AnthropicProvider::resolve_minimax_base_url(None);
-        assert!(url.contains("api.minimax.io/anthropic/v1") || url.contains("api.minimaxi.com/anthropic/v1"));
+        assert!(
+            url.contains("api.minimax.io/anthropic/v1")
+                || url.contains("api.minimaxi.com/anthropic/v1")
+        );
 
         // Override with custom base URL
-        let url = AnthropicProvider::resolve_minimax_base_url(Some("https://custom.repo/minimax".to_string()));
+        let url = AnthropicProvider::resolve_minimax_base_url(Some(
+            "https://custom.repo/minimax".to_string(),
+        ));
         assert_eq!(url, "https://custom.repo/minimax/v1");
 
         // Already has v1
-        let url = AnthropicProvider::resolve_minimax_base_url(Some("https://custom.repo/minimax/v1".to_string()));
+        let url = AnthropicProvider::resolve_minimax_base_url(Some(
+            "https://custom.repo/minimax/v1".to_string(),
+        ));
         assert_eq!(url, "https://custom.repo/minimax/v1");
 
         // Already has v1 but ends with slash
-        let url = AnthropicProvider::resolve_minimax_base_url(Some("https://custom.repo/minimax/v1/".to_string()));
+        let url = AnthropicProvider::resolve_minimax_base_url(Some(
+            "https://custom.repo/minimax/v1/".to_string(),
+        ));
         assert_eq!(url, "https://custom.repo/minimax/v1");
 
         // Ends with /messages
-        let url = AnthropicProvider::resolve_minimax_base_url(Some("https://custom.repo/minimax/messages".to_string()));
+        let url = AnthropicProvider::resolve_minimax_base_url(Some(
+            "https://custom.repo/minimax/messages".to_string(),
+        ));
         assert_eq!(url, "https://custom.repo/minimax/v1");
     }
 

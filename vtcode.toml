@@ -11,7 +11,7 @@ provider = "huggingface"
 api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "deepseek-ai/DeepSeek-V3.2:novita"
+default_model = "deepseek-ai/DeepSeek-V3.2"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"

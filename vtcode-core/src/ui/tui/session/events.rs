@@ -1,7 +1,6 @@
 use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 
-
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
 #[allow(dead_code)]

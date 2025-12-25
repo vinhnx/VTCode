@@ -351,4 +351,3 @@ mod tests {
         assert_ne!(read_group.unwrap().group_id, write_group.unwrap().group_id);
     }
 }
-

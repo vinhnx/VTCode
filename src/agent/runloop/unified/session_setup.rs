@@ -660,7 +660,9 @@ pub(crate) async fn initialize_session_ui(
 
     // Connect PTY session tracking from tool registry to session state
     let pty_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    session_state.tool_registry.set_active_pty_sessions(pty_counter.clone());
+    session_state
+        .tool_registry
+        .set_active_pty_sessions(pty_counter.clone());
 
     // Setup header context
     let mode_label = match (config.ui_surface, full_auto) {

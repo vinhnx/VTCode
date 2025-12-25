@@ -205,8 +205,6 @@ fn parse_responses_payload(
         });
     }
 
-
-
     // Per spec: output array contains items like:
     // { "type": "message", "content": [...] } where content has items like:
     // - { "type": "text", "text": "..." }
@@ -237,7 +235,8 @@ fn parse_responses_payload(
 
         match item_type {
             "message" => {
-                if let Some(content_array) = item.get("content").and_then(|value| value.as_array()) {
+                if let Some(content_array) = item.get("content").and_then(|value| value.as_array())
+                {
                     for entry in content_array {
                         let entry_type = entry
                             .get("type")
@@ -247,7 +246,8 @@ fn parse_responses_payload(
                         match entry_type {
                             // Text output from the model
                             "text" | "output_text" => {
-                                if let Some(text) = entry.get("text").and_then(|value| value.as_str())
+                                if let Some(text) =
+                                    entry.get("text").and_then(|value| value.as_str())
                                     && !text.is_empty()
                                 {
                                     content_fragments.push(text.to_string());
@@ -255,7 +255,8 @@ fn parse_responses_payload(
                             }
                             // Reasoning content (thinking/reasoning models) - text delta
                             "reasoning" => {
-                                if let Some(text) = entry.get("text").and_then(|value| value.as_str())
+                                if let Some(text) =
+                                    entry.get("text").and_then(|value| value.as_str())
                                     && !text.is_empty()
                                 {
                                     reasoning_text_fragments.push(text.to_string());
@@ -293,7 +294,10 @@ fn parse_responses_payload(
                     let citations: Vec<String> = results
                         .iter()
                         .filter_map(|r| {
-                            let title = r.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+                            let title = r
+                                .get("title")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Untitled");
                             let url = r.get("url").and_then(|v| v.as_str()).unwrap_or("");
                             if !url.is_empty() {
                                 Some(format!("[{}]({})", title, url))
@@ -1325,7 +1329,6 @@ impl OpenAIProvider {
         // 'output_types' is part of the GPT-5 Responses API spec
         openai_request["output_types"] = json!(["message", "tool_call"]);
 
-
         if let Some(instructions) = responses_payload.instructions {
             if !instructions.trim().is_empty() {
                 openai_request["instructions"] = json!(instructions);
@@ -1365,7 +1368,6 @@ impl OpenAIProvider {
         if has_sampling {
             openai_request["sampling_parameters"] = sampling_parameters;
         }
-
 
         if self.supports_tools(&request.model) {
             if let Some(tools) = &request.tools {
@@ -1420,7 +1422,6 @@ impl OpenAIProvider {
             }
         }
 
-
         // Enable reasoning summaries if supported (OpenAI GPT-5 only)
         if self.supports_reasoning(&request.model) {
             if let Some(map) = openai_request.as_object_mut() {
@@ -1432,7 +1433,6 @@ impl OpenAIProvider {
                 }
             }
         }
-
 
         // Add text formatting options for GPT-5 and compatible models, including verbosity and grammar
         let mut text_format = json!({});
@@ -2278,7 +2278,6 @@ mod tests {
         assert!(!OpenAIProvider::uses_harmony("gpt-5"));
         assert!(!OpenAIProvider::uses_harmony("gpt-oss:20b"));
     }
-
 
     #[test]
     fn responses_payload_includes_prompt_cache_retention() {
@@ -3667,7 +3666,3 @@ mod streaming_tests {
         }
     }
 }
-
-
-
-
