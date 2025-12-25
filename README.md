@@ -172,6 +172,8 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
 -   [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
 -   [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).
 -   [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation
+-   [**Keyboard Shortcuts**](./docs/guides/tui-event-handling.md)
+-   [**macOS Alt Shortcut Troubleshooting**](./docs/guides/macos-alt-shortcut-troubleshooting.md) - Solutions for when Alt/Option shortcuts don't work on macOS
 -   [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
 -   [**Exec Mode**](./docs/user-guide/exec-mode.md)
 -   [**Development**](./docs/development/README.md)
