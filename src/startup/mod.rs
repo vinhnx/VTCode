@@ -141,12 +141,16 @@ impl StartupContext {
             );
         }
 
-        let (model, model_source) = match args.model.clone() {
-            Some(value) => (value, ModelSelectionSource::CliOverride),
-            None => (
+        // Determine model: --agent flag takes precedence, then --model, then config
+        let (model, model_source) = if let Some(agent) = args.agent.clone() {
+            (agent, ModelSelectionSource::CliOverride)
+        } else if let Some(value) = args.model.clone() {
+            (value, ModelSelectionSource::CliOverride)
+        } else {
+            (
                 config.agent.default_model.clone(),
                 ModelSelectionSource::WorkspaceConfig,
-            ),
+            )
         };
 
         let provider = match args.provider.clone() {
