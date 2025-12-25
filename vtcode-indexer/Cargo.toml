@@ -24,5 +24,5 @@ serde = { version = "1.0", features = ["derive"] }
 ignore = "0.4"  # Respect .gitignore, .ignore, etc.
 
 [dev-dependencies]
-tempfile = "3.0"
+tempfile = "3.24"
 
