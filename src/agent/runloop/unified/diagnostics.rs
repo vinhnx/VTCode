@@ -125,14 +125,11 @@ pub(crate) async fn run_doctor_diagnostics(
         render_doctor_check(
             renderer,
             "  HITL Enabled",
-            Ok(format!(
-                "{}",
-                if cfg.security.human_in_the_loop {
+            Ok((if cfg.security.human_in_the_loop {
                     "Yes"
                 } else {
                     "No"
-                }
-            )),
+                }).to_string()),
         )?;
 
         // Tool default policy
@@ -147,7 +144,7 @@ pub(crate) async fn run_doctor_diagnostics(
         render_doctor_check(
             renderer,
             "  PTY Enabled",
-            Ok(format!("{}", if cfg.pty.enabled { "Yes" } else { "No" })),
+            Ok((if cfg.pty.enabled { "Yes" } else { "No" }).to_string()),
         )?;
     }
 
