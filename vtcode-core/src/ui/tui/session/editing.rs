@@ -342,17 +342,25 @@ impl Session {
         self.input_manager.add_to_history(submitted.to_owned());
     }
 
-    /// Navigate to previous history entry (disabled to prevent cursor flickering)
-    #[allow(dead_code)]
+    /// Navigate to previous history entry
     pub(super) fn navigate_history_previous(&mut self) -> bool {
-        // History navigation disabled to prevent cursor flickering
-        false
+        if let Some(entry) = self.input_manager.go_to_previous_history() {
+            self.input_manager.set_content_preserve_history(entry);
+            slash::update_slash_suggestions(self);
+            true
+        } else {
+            false
+        }
     }
 
-    /// Navigate to next history entry (disabled to prevent cursor flickering)
-    #[allow(dead_code)]
+    /// Navigate to next history entry
     pub(super) fn navigate_history_next(&mut self) -> bool {
-        // History navigation disabled to prevent cursor flickering
-        false
+        if let Some(entry) = self.input_manager.go_to_next_history() {
+            self.input_manager.set_content_preserve_history(entry);
+            slash::update_slash_suggestions(self);
+            true
+        } else {
+            false
+        }
     }
 }
