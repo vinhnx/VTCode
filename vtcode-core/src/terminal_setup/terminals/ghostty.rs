@@ -2,14 +2,16 @@
 //!
 //! Generates configuration for Ghostty terminal emulator.
 
-use anyhow::Result;
 use crate::terminal_setup::config_writer::{ConfigFormat, ConfigWriter};
+use crate::terminal_setup::detector::TerminalType;
 use crate::terminal_setup::features::multiline;
 use crate::terminal_setup::features::shell_integration;
-use crate::terminal_setup::detector::TerminalType;
+use anyhow::Result;
 
 /// Generate complete Ghostty configuration with all features
-pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
+pub fn generate_config(
+    features: &[crate::terminal_setup::detector::TerminalFeature],
+) -> Result<String> {
     let mut config_lines = Vec::new();
 
     // Add header comment

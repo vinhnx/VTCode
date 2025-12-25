@@ -149,9 +149,9 @@ impl HuggingFaceProvider {
         timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
-        
+
         let timeouts = timeouts.unwrap_or_default();
-        
+
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
@@ -469,7 +469,7 @@ impl HuggingFaceProvider {
                 payload["tools"] = json!(flattened_tools);
 
                 if let Some(choice) = &request.tool_choice {
-        // Responses API often takes string choice or specific format
+                    // Responses API often takes string choice or specific format
                     payload["tool_choice"] = choice.to_provider_format("openai");
                 }
             }
@@ -861,8 +861,6 @@ impl LLMProvider for HuggingFaceProvider {
     fn effective_context_size(&self, _model: &str) -> usize {
         128_000 // Default context window
     }
-
-
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
         if request.model.trim().is_empty() {

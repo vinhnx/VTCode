@@ -172,13 +172,13 @@ pub mod provider_base; // Shared provider utilities to eliminate duplicate code
 // TODO: provider_builder and provider_config are incomplete - disabled for now
 // pub mod provider_builder;
 // pub mod provider_config;
+pub mod http_client;
 pub mod providers;
 pub mod rig_adapter;
 pub mod token_metrics;
 pub mod tool_bridge;
 pub mod types;
-pub mod utils; // Shared utilities for request/response processing
-pub mod http_client; // Centralized HTTP client factory
+pub mod utils; // Shared utilities for request/response processing // Centralized HTTP client factory
 
 #[cfg(test)]
 mod error_display_test;

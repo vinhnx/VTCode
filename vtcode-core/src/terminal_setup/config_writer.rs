@@ -42,10 +42,13 @@ impl ConfigWriter {
         }
 
         // Create temp file in the same directory for atomic rename
-        let temp_file = NamedTempFile::new_in(
-            path.parent().unwrap_or_else(|| Path::new(".")),
-        )
-        .with_context(|| format!("Failed to create temp file in directory: {}", path.display()))?;
+        let temp_file = NamedTempFile::new_in(path.parent().unwrap_or_else(|| Path::new(".")))
+            .with_context(|| {
+                format!(
+                    "Failed to create temp file in directory: {}",
+                    path.display()
+                )
+            })?;
 
         // Write content to temp file
         temp_file
@@ -121,9 +124,7 @@ impl ConfigWriter {
     /// Wrap configuration content with VTCode markers
     fn wrap_with_markers(content: &str, format: ConfigFormat) -> String {
         let comment_prefix = match format {
-            ConfigFormat::PlainText
-            | ConfigFormat::Toml
-            | ConfigFormat::Yaml => "#",
+            ConfigFormat::PlainText | ConfigFormat::Toml | ConfigFormat::Yaml => "#",
             ConfigFormat::Json => "//", // JSON doesn't support comments, but some parsers allow them
             ConfigFormat::JavaScript => "//",
         };
@@ -201,12 +202,9 @@ user_setting = 1
 
         let new_section = "vtcode_setting = 2";
 
-        let result = ConfigWriter::merge_with_markers(
-            existing,
-            new_section,
-            ConfigFormat::PlainText,
-        )
-        .unwrap();
+        let result =
+            ConfigWriter::merge_with_markers(existing, new_section, ConfigFormat::PlainText)
+                .unwrap();
 
         assert!(result.contains("user_setting"));
         assert!(result.contains("vtcode_setting"));
@@ -218,12 +216,8 @@ user_setting = 1
     fn test_merge_empty_file() {
         let new_section = "vtcode_setting = 1";
 
-        let result = ConfigWriter::merge_with_markers(
-            "",
-            new_section,
-            ConfigFormat::PlainText,
-        )
-        .unwrap();
+        let result =
+            ConfigWriter::merge_with_markers("", new_section, ConfigFormat::PlainText).unwrap();
 
         assert!(result.contains("vtcode_setting"));
         assert!(result.contains(VTCODE_BEGIN_MARKER));

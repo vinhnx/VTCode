@@ -415,7 +415,11 @@ fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<PathBuf> {
     Ok(resolved)
 }
 
-fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path, quiet: bool) -> Result<()> {
+fn validate_startup_configuration(
+    config: &VTCodeConfig,
+    workspace: &Path,
+    quiet: bool,
+) -> Result<()> {
     // Check and optionally install ripgrep on startup
     check_ripgrep_availability(quiet);
 

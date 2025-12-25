@@ -30,10 +30,7 @@ impl ConfigBackupManager {
     pub fn backup_config(&self, config_path: &Path) -> Result<PathBuf> {
         // Check if config file exists
         if !config_path.exists() {
-            anyhow::bail!(
-                "Config file does not exist: {}",
-                config_path.display()
-            );
+            anyhow::bail!("Config file does not exist: {}", config_path.display());
         }
 
         // Generate backup path with timestamp
@@ -41,17 +38,19 @@ impl ConfigBackupManager {
 
         // Create parent directory if needed
         if let Some(parent) = backup_path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create backup directory: {}", parent.display()))?;
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create backup directory: {}", parent.display())
+            })?;
         }
 
         // Copy config to backup
-        fs::copy(config_path, &backup_path)
-            .with_context(|| format!(
+        fs::copy(config_path, &backup_path).with_context(|| {
+            format!(
                 "Failed to backup config from {} to {}",
                 config_path.display(),
                 backup_path.display()
-            ))?;
+            )
+        })?;
 
         // Cleanup old backups
         self.cleanup_old_backups(config_path)?;
@@ -62,24 +61,23 @@ impl ConfigBackupManager {
     /// Restore a config file from a backup
     pub fn restore_backup(&self, original_path: &Path, backup_path: &Path) -> Result<()> {
         if !backup_path.exists() {
-            anyhow::bail!(
-                "Backup file does not exist: {}",
-                backup_path.display()
-            );
+            anyhow::bail!("Backup file does not exist: {}", backup_path.display());
         }
 
         // Create parent directory if needed
         if let Some(parent) = original_path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create config directory: {}", parent.display()))?;
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create config directory: {}", parent.display())
+            })?;
         }
 
-        fs::copy(backup_path, original_path)
-            .with_context(|| format!(
+        fs::copy(backup_path, original_path).with_context(|| {
+            format!(
                 "Failed to restore backup from {} to {}",
                 backup_path.display(),
                 original_path.display()
-            ))?;
+            )
+        })?;
 
         Ok(())
     }
@@ -109,8 +107,7 @@ impl ConfigBackupManager {
             let file_name_str = file_name.to_string_lossy();
 
             // Match pattern: config_name.vtcode_backup_YYYYMMDD_HHMMSS
-            if file_name_str.starts_with(&*config_name)
-                && file_name_str.contains(".vtcode_backup_")
+            if file_name_str.starts_with(&*config_name) && file_name_str.contains(".vtcode_backup_")
             {
                 backups.push(entry.path());
             }
@@ -122,10 +119,13 @@ impl ConfigBackupManager {
             let b_meta = fs::metadata(b).ok();
 
             match (a_meta, b_meta) {
-                (Some(a_m), Some(b_m)) => {
-                    b_m.modified().unwrap_or_else(|_| std::time::SystemTime::now())
-                        .cmp(&a_m.modified().unwrap_or_else(|_| std::time::SystemTime::now()))
-                }
+                (Some(a_m), Some(b_m)) => b_m
+                    .modified()
+                    .unwrap_or_else(|_| std::time::SystemTime::now())
+                    .cmp(
+                        &a_m.modified()
+                            .unwrap_or_else(|_| std::time::SystemTime::now()),
+                    ),
                 _ => std::cmp::Ordering::Equal,
             }
         });
@@ -185,7 +185,10 @@ mod tests {
         let backup_path = manager.backup_config(&config_path).unwrap();
 
         assert!(backup_path.exists());
-        assert_eq!(fs::read_to_string(&backup_path).unwrap(), "original content");
+        assert_eq!(
+            fs::read_to_string(&backup_path).unwrap(),
+            "original content"
+        );
 
         // Modify original
         fs::write(&config_path, "modified content").unwrap();
@@ -193,7 +196,10 @@ mod tests {
         // Restore from backup
         manager.restore_backup(&config_path, &backup_path).unwrap();
 
-        assert_eq!(fs::read_to_string(&config_path).unwrap(), "original content");
+        assert_eq!(
+            fs::read_to_string(&config_path).unwrap(),
+            "original content"
+        );
     }
 
     #[test]

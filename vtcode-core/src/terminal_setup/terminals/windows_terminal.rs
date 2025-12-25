@@ -2,13 +2,15 @@
 //!
 //! Generates JSON configuration for Windows Terminal.
 
-use anyhow::Result;
 use crate::terminal_setup::config_writer::{ConfigFormat, ConfigWriter};
-use crate::terminal_setup::features::multiline;
 use crate::terminal_setup::detector::TerminalType;
+use crate::terminal_setup::features::multiline;
+use anyhow::Result;
 
 /// Generate complete Windows Terminal configuration with all features
-pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
+pub fn generate_config(
+    features: &[crate::terminal_setup::detector::TerminalFeature],
+) -> Result<String> {
     let mut config_sections = Vec::new();
 
     // Add header comment
@@ -25,19 +27,25 @@ pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeat
             }
             crate::terminal_setup::detector::TerminalFeature::CopyPaste => {
                 config_sections.push("// Enhanced copy/paste".to_string());
-                config_sections.push(r#"{
+                config_sections.push(
+                    r#"{
   "copyOnSelect": true,
   "copyFormatting": false
 }
-"#.to_string());
+"#
+                    .to_string(),
+                );
             }
             crate::terminal_setup::detector::TerminalFeature::ShellIntegration => {
                 config_sections.push("// Shell integration".to_string());
-                config_sections.push(r#"{
+                config_sections.push(
+                    r#"{
   "experimental.rendering.forceFullRepaint": false,
   "experimental.rendering.software": false
 }
-"#.to_string());
+"#
+                    .to_string(),
+                );
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
                 config_sections.push("// Theme colors will be configured separately".to_string());

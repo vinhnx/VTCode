@@ -5,34 +5,31 @@
 //! - Bracketed paste mode (safe paste with escape sequences)
 //! - Middle-click paste integration
 
-use anyhow::Result;
 use crate::terminal_setup::detector::TerminalType;
+use anyhow::Result;
 
 /// Generate copy/paste configuration for the specified terminal
 pub fn generate_config(terminal: TerminalType) -> Result<String> {
     let config = match terminal {
-        TerminalType::Ghostty => {
-            r#"# Copy on select
+        TerminalType::Ghostty => r#"# Copy on select
 copy-on-select = true
 
 # Clipboard integration
 clipboard-read = allow
 clipboard-write = allow
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Kitty => {
-            r#"# Enhanced copy/paste
+        TerminalType::Kitty => r#"# Enhanced copy/paste
 enable_bracketed_paste yes
 copy_on_select clipboard
 
 # Clipboard integration
 clipboard_control write-clipboard write-primary read-clipboard read-primary
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Alacritty => {
-            r#"[selection]
+        TerminalType::Alacritty => r#"[selection]
 save_to_clipboard = true
 
 [mouse]
@@ -40,21 +37,20 @@ save_to_clipboard = true
 bindings = [
     { mouse = "Middle", action = "PasteSelection" }
 ]
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Zed => {
-            r#"// Copy/paste is built into Zed
+        TerminalType::Zed => r#"// Copy/paste is built into Zed
 // No additional configuration needed
-"#.to_string()
-        }
+"#
+        .to_string(),
 
         TerminalType::Warp => {
-            "# Warp has built-in copy/paste support\n# No additional configuration needed\n".to_string()
+            "# Warp has built-in copy/paste support\n# No additional configuration needed\n"
+                .to_string()
         }
 
-        TerminalType::WindowsTerminal => {
-            r#"{
+        TerminalType::WindowsTerminal => r#"{
   "copyOnSelect": true,
   "copyFormatting": "none",
   "actions": [
@@ -68,27 +64,24 @@ bindings = [
     }
   ]
 }
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Hyper => {
-            r#"config: {
+        TerminalType::Hyper => r#"config: {
   copyOnSelect: true,
   quickEdit: true,
 }
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Tabby => {
-            r#"terminal:
+        TerminalType::Tabby => r#"terminal:
   copyOnSelect: true
   pasteOnMiddleClick: true
   rightClick: menu
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::ITerm2 => {
-            r#"Manual iTerm2 Copy/Paste Setup:
+        TerminalType::ITerm2 => r#"Manual iTerm2 Copy/Paste Setup:
 
 1. Open iTerm2 Preferences (Cmd+,)
 2. Go to General → Selection
@@ -96,11 +89,10 @@ bindings = [
 4. Go to Pointer tab
 5. Set middle-click action to "Paste from Clipboard"
 6. Under Advanced, search for "paste" to customize paste behavior
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::VSCode => {
-            r#"VS Code Copy/Paste Configuration:
+        TerminalType::VSCode => r#"VS Code Copy/Paste Configuration:
 
 Copy/paste is built-in to VS Code terminal.
 No additional configuration needed.
@@ -111,8 +103,8 @@ Default shortcuts:
 
 To customize, edit settings.json:
   "terminal.integrated.copyOnSelection": true
-"#.to_string()
-        }
+"#
+        .to_string(),
 
         TerminalType::Unknown => {
             anyhow::bail!("Cannot generate copy/paste config for unknown terminal type");

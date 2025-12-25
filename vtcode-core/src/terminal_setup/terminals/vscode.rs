@@ -2,12 +2,14 @@
 //!
 //! Generates instructions for configuring VS Code's integrated terminal.
 
-use anyhow::Result;
-use crate::terminal_setup::features::multiline;
 use crate::terminal_setup::detector::TerminalType;
+use crate::terminal_setup::features::multiline;
+use anyhow::Result;
 
 /// Generate VS Code setup instructions
-pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
+pub fn generate_config(
+    features: &[crate::terminal_setup::detector::TerminalFeature],
+) -> Result<String> {
     let mut instructions = vec![
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string(),
         "  VS Code Terminal Manual Configuration".to_string(),
@@ -44,14 +46,17 @@ pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeat
                 instructions.push("VS Code has built-in shell integration.".to_string());
                 instructions.push("To enable:".to_string());
                 instructions.push("1. Open Settings (Cmd+, or Ctrl+,)".to_string());
-                instructions.push("2. Search for 'terminal.integrated.shellIntegration.enabled'".to_string());
+                instructions.push(
+                    "2. Search for 'terminal.integrated.shellIntegration.enabled'".to_string(),
+                );
                 instructions.push("3. Check the box to enable".to_string());
                 instructions.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
                 instructions.push(format!("{}. THEME SYNCHRONIZATION", i + 1));
                 instructions.push(String::new());
-                instructions.push("VS Code terminal automatically matches your editor theme.".to_string());
+                instructions
+                    .push("VS Code terminal automatically matches your editor theme.".to_string());
                 instructions.push("To customize:".to_string());
                 instructions.push("1. Open Settings (Cmd+, or Ctrl+,)".to_string());
                 instructions.push("2. Search for 'workbench.colorCustomizations'".to_string());
@@ -62,7 +67,8 @@ pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeat
     }
 
     instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
-    instructions.push("After configuration, reload VS Code for changes to take effect.".to_string());
+    instructions
+        .push("After configuration, reload VS Code for changes to take effect.".to_string());
     instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
 
     Ok(instructions.join("\n"))

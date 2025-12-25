@@ -3,8 +3,8 @@
 //! Generates terminal-specific color scheme configuration to match VT Code themes.
 //! Supports dark and light theme variants.
 
-use anyhow::Result;
 use crate::terminal_setup::detector::TerminalType;
+use anyhow::Result;
 
 /// Default VT Code dark theme colors
 pub struct VTCodeDarkTheme {
@@ -67,7 +67,8 @@ pub fn generate_config(terminal: TerminalType) -> Result<String> {
 
     let config = match terminal {
         TerminalType::Ghostty => {
-            format!(r#"# VTCode Dark Theme for Ghostty
+            format!(
+                r#"# VTCode Dark Theme for Ghostty
 background = {background}
 foreground = {foreground}
 cursor-color = {cursor}
@@ -115,7 +116,8 @@ palette = 15={bright_white}
         }
 
         TerminalType::Kitty => {
-            format!(r#"# VTCode Dark Theme for Kitty
+            format!(
+                r#"# VTCode Dark Theme for Kitty
 background {background}
 foreground {foreground}
 cursor {cursor}
@@ -165,7 +167,8 @@ color15 {bright_white}
         }
 
         TerminalType::Alacritty => {
-            format!(r#"# VTCode Dark Theme for Alacritty
+            format!(
+                r#"# VTCode Dark Theme for Alacritty
 [colors.primary]
 background = '{background}'
 foreground = '{foreground}'
@@ -220,7 +223,8 @@ white = '{bright_white}'
         }
 
         TerminalType::Zed => {
-            format!(r#"// VTCode Dark Theme for Zed
+            format!(
+                r#"// VTCode Dark Theme for Zed
 {{
   "theme": {{
     "mode": "dark",
@@ -272,8 +276,7 @@ white = '{bright_white}'
             )
         }
 
-        TerminalType::Warp => {
-            r#"# Warp Theme Synchronization
+        TerminalType::Warp => r#"# Warp Theme Synchronization
 # Warp uses its own theme system
 # To create a custom theme:
 # 1. Open Warp Settings
@@ -283,11 +286,12 @@ white = '{bright_white}'
 
 # VTCode colors are displayed in the terminal setup output
 # You can manually configure them in Warp's theme editor
-"#.to_string()
-        }
+"#
+        .to_string(),
 
         TerminalType::WindowsTerminal => {
-            format!(r#"{{
+            format!(
+                r#"{{
   "schemes": [
     {{
       "name": "VTCode Dark",
@@ -344,7 +348,8 @@ white = '{bright_white}'
         }
 
         TerminalType::Hyper => {
-            format!(r#"// VTCode Dark Theme for Hyper
+            format!(
+                r#"// VTCode Dark Theme for Hyper
 module.exports = {{
   config: {{
     backgroundColor: '{background}',
@@ -396,7 +401,8 @@ module.exports = {{
         }
 
         TerminalType::Tabby => {
-            format!(r#"# VTCode Dark Theme for Tabby
+            format!(
+                r#"# VTCode Dark Theme for Tabby
 appearance:
   colorScheme:
     name: "VTCode Dark"
@@ -445,8 +451,7 @@ appearance:
             )
         }
 
-        TerminalType::ITerm2 => {
-            r#"Manual iTerm2 Theme Configuration:
+        TerminalType::ITerm2 => r#"Manual iTerm2 Theme Configuration:
 
 1. Open iTerm2 Preferences (Cmd+,)
 2. Go to Profiles → Colors
@@ -467,11 +472,12 @@ Black: #666666, Red: #f14c4c, Green: #23d18b, Yellow: #f5f543
 Blue: #3b8eea, Magenta: #d670d6, Cyan: #29b8db, White: #ffffff
 
 Alternative: Download VTCode.itermcolors file and import
-"#.to_string()
-        }
+"#
+        .to_string(),
 
         TerminalType::VSCode => {
-            format!(r#"VS Code Terminal Theme Configuration:
+            format!(
+                r#"VS Code Terminal Theme Configuration:
 
 The terminal automatically inherits your VS Code theme colors.
 

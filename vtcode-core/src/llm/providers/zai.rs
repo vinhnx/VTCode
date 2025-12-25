@@ -52,7 +52,7 @@ impl ZAIProvider {
         timeouts: TimeoutsConfig,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
-        
+
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),

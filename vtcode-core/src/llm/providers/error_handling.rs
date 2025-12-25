@@ -305,7 +305,7 @@ pub fn parse_api_error(
 
     // Categorize by status code
     let status_code = status.as_u16();
-    
+
     match status_code {
         401 | 403 => LLMError::Authentication {
             message: error_display::format_llm_error(

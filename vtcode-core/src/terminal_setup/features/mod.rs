@@ -2,8 +2,8 @@
 //!
 //! Each feature generates terminal-specific configuration snippets.
 
-pub mod multiline;
 pub mod copy_paste;
+pub mod multiline;
 pub mod shell_integration;
 pub mod theme_sync;
 
