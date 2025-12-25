@@ -21,6 +21,7 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
@@ -33,8 +34,19 @@ use perg::{SearchConfig, search_paths};
 /// Maximum number of search results to return - AGENTS.md requires max 5 results
 const MAX_SEARCH_RESULTS: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
-/// Number of threads to use for searching
-const NUM_SEARCH_THREADS: NonZeroUsize = NonZeroUsize::new(2).unwrap();
+/// Optimal number of threads for searching, calculated based on CPU count
+static OPTIMAL_SEARCH_THREADS: OnceLock<NonZeroUsize> = OnceLock::new();
+
+/// Calculate optimal number of search threads based on available CPU cores
+/// Uses 75% of cores, clamped between 2 and 8 threads
+fn optimal_search_threads() -> NonZeroUsize {
+    *OPTIMAL_SEARCH_THREADS.get_or_init(|| {
+        let cpu_count = num_cpus::get();
+        // Use 75% of cores for better parallelism, min 2, max 8
+        let threads = (cpu_count * 3 / 4).clamp(2, 8);
+        NonZeroUsize::new(threads).unwrap_or(NonZeroUsize::new(2).unwrap())
+    })
+}
 
 /// Maximum bytes to keep in a single grep response before truncation.
 const DEFAULT_MAX_RESULT_BYTES: usize = 32 * 1024;
@@ -328,7 +340,7 @@ impl GrepSearchManager {
         use std::process::Command;
 
         let mut cmd = Command::new("rg");
-        cmd.arg("-j").arg(NUM_SEARCH_THREADS.get().to_string());
+        cmd.arg("-j").arg(optimal_search_threads().get().to_string());
 
         // Add support for respecting ignore files (default is to respect them)
         if !input.respect_ignore_files.unwrap_or(true) {

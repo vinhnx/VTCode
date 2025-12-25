@@ -6,7 +6,7 @@ add support for custom session IDs when forking sessions with --session-id combi
 
 --
 
-agent skills execution performance is too slow when using tools with filesystem (create/edit files), improve performance when executing skills
+tools execution performance is too slow when using tools with filesystem (create/edit files), improve performance when executing tools
 
 --
 
