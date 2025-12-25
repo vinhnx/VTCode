@@ -1,6 +1,6 @@
 use std::io::{self, IsTerminal};
-
-use std::time::Duration;
+use std::sync::atomic::AtomicU64;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use futures::{FutureExt, StreamExt};
@@ -22,7 +22,6 @@ use ratatui::{
 };
 use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
-use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::{constants::ui, types::UiSurfacePreference};
@@ -32,6 +31,65 @@ use super::{
     session::Session,
     types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme},
 };
+
+/// Represents accumulated scroll events for coalescing
+#[derive(Default)]
+struct ScrollAccumulator {
+    line_delta: i32,
+    page_delta: i32,
+}
+
+impl ScrollAccumulator {
+    /// Try to accumulate a scroll event. Returns true if the event was a scroll event.
+    /// IMPORTANT: Only call this when no modal/palette is active, otherwise navigation breaks.
+    fn try_accumulate(&mut self, event: &CrosstermEvent) -> bool {
+        if let CrosstermEvent::Key(key) = event
+            && matches!(key.kind, ratatui::crossterm::event::KeyEventKind::Press)
+        {
+            match key.code {
+                ratatui::crossterm::event::KeyCode::Up => {
+                    self.line_delta -= 1;
+                    return true;
+                }
+                ratatui::crossterm::event::KeyCode::Down => {
+                    self.line_delta += 1;
+                    return true;
+                }
+                ratatui::crossterm::event::KeyCode::PageUp => {
+                    self.page_delta -= 1;
+                    return true;
+                }
+                ratatui::crossterm::event::KeyCode::PageDown => {
+                    self.page_delta += 1;
+                    return true;
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Check if there are any accumulated scroll events
+    fn has_scroll(&self) -> bool {
+        self.line_delta != 0 || self.page_delta != 0
+    }
+
+    /// Apply accumulated scroll to the session using the coalesced scroll method
+    fn apply(&self, session: &mut Session) {
+        if self.has_scroll() {
+            session.apply_coalesced_scroll(self.line_delta, self.page_delta);
+            session.mark_dirty();
+        }
+    }
+}
+
+/// Check if session has any modal or palette active that uses arrow key navigation
+fn has_active_navigation_ui(session: &Session) -> bool {
+    session.modal.is_some()
+        || session.file_palette_active
+        || session.prompt_palette_active
+        || session.config_palette_active
+}
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
 const ALTERNATE_SCREEN_ERROR: &str = "failed to enter alternate inline screen";
@@ -57,6 +115,10 @@ enum TerminalEvent {
 struct EventChannels {
     tx: UnboundedSender<TerminalEvent>,
     rx_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Tracks last input time for adaptive tick rate (milliseconds since session start)
+    last_input_elapsed_ms: std::sync::Arc<AtomicU64>,
+    /// Session start time for calculating elapsed time
+    session_start: Instant,
 }
 
 impl EventChannels {
@@ -64,6 +126,8 @@ impl EventChannels {
         Self {
             tx,
             rx_paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            last_input_elapsed_ms: std::sync::Arc::new(AtomicU64::new(0)),
+            session_start: Instant::now(),
         }
     }
 
@@ -75,6 +139,14 @@ impl EventChannels {
     fn resume(&self) {
         self.rx_paused
             .store(false, std::sync::atomic::Ordering::Release);
+    }
+
+    /// Record that user input was received (updates last input timestamp)
+    /// Uses Instant-based tracking for efficiency (no syscalls)
+    fn record_input(&self) {
+        let elapsed_ms = self.session_start.elapsed().as_millis() as u64;
+        self.last_input_elapsed_ms
+            .store(elapsed_ms, std::sync::atomic::Ordering::Release);
     }
 }
 
@@ -103,16 +175,41 @@ impl EventListener {
 
 // Spawn the async event loop with proper cancellation token support
 // Uses crossterm::event::EventStream for async-native event handling
+// Implements adaptive tick rate: 16Hz when active, 4Hz when idle
 async fn spawn_event_loop(
     event_tx: UnboundedSender<TerminalEvent>,
     cancellation_token: CancellationToken,
     rx_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    last_input_elapsed_ms: std::sync::Arc<AtomicU64>,
+    session_start: Instant,
 ) {
     let mut reader = crossterm::event::EventStream::new();
-    let mut tick_interval = interval(Duration::from_secs_f64(1.0 / 4.0)); // 4 ticks per second
+    let active_tick_duration = Duration::from_secs_f64(1.0 / ui::TUI_ACTIVE_TICK_RATE_HZ);
+    let idle_tick_duration = Duration::from_secs_f64(1.0 / ui::TUI_IDLE_TICK_RATE_HZ);
+    let active_timeout_ms = ui::TUI_ACTIVE_TIMEOUT_MS;
+
+    let mut last_tick = Instant::now();
 
     loop {
-        let tick_delay = tick_interval.tick();
+        // Determine current tick rate based on recent activity (using Instant, no syscalls)
+        let last_input = last_input_elapsed_ms.load(std::sync::atomic::Ordering::Acquire);
+        let is_active = if last_input == 0 {
+            false
+        } else {
+            let current_elapsed = session_start.elapsed().as_millis() as u64;
+            current_elapsed.saturating_sub(last_input) < active_timeout_ms
+        };
+
+        let tick_duration = if is_active {
+            active_tick_duration
+        } else {
+            idle_tick_duration
+        };
+
+        // Calculate remaining time until next tick
+        let elapsed = last_tick.elapsed();
+        let sleep_duration = tick_duration.saturating_sub(elapsed);
+
         let crossterm_event = reader.next().fuse();
 
         tokio::select! {
@@ -134,8 +231,9 @@ async fn spawn_event_loop(
                     None => {}
                 }
             }
-            _ = tick_delay => {
+            _ = tokio::time::sleep(sleep_duration) => {
                 let _ = event_tx.send(TerminalEvent::Tick);
+                last_tick = Instant::now();
             }
         }
 
@@ -244,13 +342,17 @@ pub async fn run_tui(
     let event_loop_token = cancellation_token.clone();
     let event_channels_for_loop = event_channels.clone();
     let rx_paused = event_channels.rx_paused.clone();
+    let last_input_elapsed_ms = event_channels.last_input_elapsed_ms.clone();
+    let session_start = event_channels.session_start;
 
-    // Spawn the async event loop
+    // Spawn the async event loop with adaptive tick rate
     let event_loop_handle = tokio::spawn(async move {
         spawn_event_loop(
             event_channels_for_loop.tx.clone(),
             event_loop_token,
             rx_paused,
+            last_input_elapsed_ms,
+            session_start,
         )
         .await;
     });
@@ -465,28 +567,59 @@ async fn drive_terminal<B: Backend>(
             result = inputs.recv() => {
                 match result {
                     Some(TerminalEvent::Crossterm(event)) => {
+                        // Record input for adaptive tick rate (switches to 16Hz)
+                        event_channels.record_input();
+
                         // Skip event processing if the TUI is suspended (e.g., external editor is running)
                         if !event_channels.rx_paused.load(std::sync::atomic::Ordering::Acquire) {
-                            session.handle_event(
-                                event,
-                                events,
-                                event_callback.as_ref().map(|callback| callback.as_ref()),
-                            );
+                            // Only coalesce scroll events when no modal/palette is active
+                            // (otherwise Up/Down should navigate the list, not scroll)
+                            let can_coalesce_scroll = !has_active_navigation_ui(session);
+                            let mut scroll_accum = ScrollAccumulator::default();
 
-                            // Process all other pending events to avoid redundant draws
+                            // Try to accumulate the first event as scroll (only if safe)
+                            let first_coalesced = can_coalesce_scroll
+                                && scroll_accum.try_accumulate(&event);
+                            if !first_coalesced {
+                                // Not coalesced, process normally
+                                session.handle_event(
+                                    event,
+                                    events,
+                                    event_callback.as_ref().map(|callback| callback.as_ref()),
+                                );
+                            }
+
+                            // Process all other pending events, coalescing scroll events when safe
                             while let Ok(next_event) = inputs.receiver.try_recv() {
                                 match next_event {
                                     TerminalEvent::Crossterm(evt) => {
-                                        session.handle_event(
-                                            evt,
-                                            events,
-                                            event_callback.as_ref().map(|callback| callback.as_ref()),
-                                        );
+                                        // Re-check modal state (it may have changed)
+                                        let can_coalesce = !has_active_navigation_ui(session);
+                                        let coalesced = can_coalesce
+                                            && scroll_accum.try_accumulate(&evt);
+                                        if !coalesced {
+                                            // Not a scroll event or can't coalesce - apply accumulated first
+                                            if scroll_accum.has_scroll() {
+                                                scroll_accum.apply(session);
+                                                scroll_accum = ScrollAccumulator::default();
+                                            }
+                                            // Then process this event
+                                            session.handle_event(
+                                                evt,
+                                                events,
+                                                event_callback.as_ref().map(|callback| callback.as_ref()),
+                                            );
+                                        }
                                     }
                                     TerminalEvent::Tick => {
                                         // Ticks are handled by the main loop's redraw check
                                     }
                                 }
+                            }
+
+                            // Apply any remaining accumulated scroll events
+                            if scroll_accum.has_scroll() {
+                                scroll_accum.apply(session);
                             }
                         }
                     }

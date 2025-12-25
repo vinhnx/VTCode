@@ -96,18 +96,22 @@ impl<'a> Widget for TranscriptWidget<'a> {
         let visible_start = vertical_offset;
         let scroll_area = inner;
 
-        // Use cached visible lines to avoid re-cloning on viewport-only scrolls
+        // Use cached visible lines to avoid rebuilding on every frame
         let cached_lines = self.session.collect_transcript_window_cached(
             content_width,
             visible_start,
             viewport_rows,
         );
 
-        // Only clone if we need to mutate (fill or overlay)
+        // Check if we need to mutate the lines (fill empty space or add queue overlay)
         let fill_count = viewport_rows.saturating_sub(cached_lines.len());
-        let visible_lines = if fill_count > 0 || !self.session.queued_inputs.is_empty() {
-            // Need to mutate, so clone from Arc
-            let mut lines = (*cached_lines).clone();
+        let needs_mutation = fill_count > 0 || !self.session.queued_inputs.is_empty();
+
+        // Build the lines Vec for Paragraph (which takes ownership)
+        // Note: Clone is unavoidable because the cache holds a reference to the Arc
+        let visible_lines = if needs_mutation {
+            // Need to mutate, so clone and modify
+            let mut lines = cached_lines.to_vec();
             if fill_count > 0 {
                 let target_len = lines.len() + fill_count;
                 lines.resize_with(target_len, ratatui::text::Line::default);
@@ -115,8 +119,8 @@ impl<'a> Widget for TranscriptWidget<'a> {
             self.session.overlay_queue_lines(&mut lines, content_width);
             lines
         } else {
-            // No mutation needed, use Arc directly
-            (*cached_lines).clone()
+            // No mutation needed, just clone for Paragraph
+            cached_lines.to_vec()
         };
 
         let paragraph = Paragraph::new(visible_lines)

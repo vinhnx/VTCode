@@ -149,15 +149,26 @@ fn heading_level_from_u8(level: u8) -> HeadingLevel {
     }
 }
 
-static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
+static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(|| {
+    // Attempt to load default syntaxes, but provide empty fallback if it fails
+    SyntaxSet::load_defaults_newlines()
+});
 static THEME_CACHE: Lazy<parking_lot::RwLock<HashMap<String, Theme>>> = Lazy::new(|| {
-    let defaults = ThemeSet::load_defaults();
-    let mut entries: Vec<(String, Theme)> = defaults.themes.into_iter().collect();
-    if entries.len() > MAX_THEME_CACHE_SIZE {
-        entries.truncate(MAX_THEME_CACHE_SIZE);
+    match ThemeSet::load_defaults() {
+        defaults if !defaults.themes.is_empty() => {
+            let mut entries: Vec<(String, Theme)> = defaults.themes.into_iter().collect();
+            if entries.len() > MAX_THEME_CACHE_SIZE {
+                entries.truncate(MAX_THEME_CACHE_SIZE);
+            }
+            let themes: HashMap<_, _> = entries.into_iter().collect();
+            parking_lot::RwLock::new(themes)
+        }
+        _ => {
+            // If theme loading fails, create empty cache and log warning
+            warn!("Failed to load default syntax highlighting themes; syntax highlighting will be disabled");
+            parking_lot::RwLock::new(HashMap::new())
+        }
     }
-    let themes: HashMap<_, _> = entries.into_iter().collect();
-    parking_lot::RwLock::new(themes)
 });
 
 /// A styled text segment.
@@ -1196,15 +1207,20 @@ fn load_theme(theme_name: &str, cache: bool) -> Theme {
         theme
     } else {
         warn!(
-            "theme" = theme_name,
-            "Falling back to default syntax highlighting theme"
+            theme = theme_name,
+            "Unknown syntax highlighting theme, falling back to first available theme"
         );
-        defaults
-            .themes
-            .into_iter()
-            .next()
-            .map(|(_, theme)| theme)
-            .unwrap_or_default()
+        if defaults.themes.is_empty() {
+            warn!("No syntax highlighting themes available at all");
+            Theme::default()
+        } else {
+            defaults
+                .themes
+                .into_iter()
+                .next()
+                .map(|(_, theme)| theme)
+                .unwrap_or_default()
+        }
     }
 }
 

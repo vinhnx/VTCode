@@ -204,8 +204,42 @@ impl Session {
         }
     }
 
-    pub(super) fn viewport_height(&self) -> usize {
+    pub(crate) fn viewport_height(&self) -> usize {
         self.transcript_rows.max(1) as usize
+    }
+
+    /// Apply coalesced scroll from accumulated scroll events
+    /// This is more efficient than calling scroll_line_up/down multiple times
+    pub(crate) fn apply_coalesced_scroll(&mut self, line_delta: i32, page_delta: i32) {
+        let previous_offset = self.scroll_manager.offset();
+
+        // Apply page scroll first (larger movements)
+        if page_delta != 0 {
+            let page_size = self.viewport_height().max(1);
+            if page_delta > 0 {
+                self.scroll_manager
+                    .scroll_down(page_size * page_delta.unsigned_abs() as usize);
+            } else {
+                self.scroll_manager
+                    .scroll_up(page_size * page_delta.unsigned_abs() as usize);
+            }
+        }
+
+        // Then apply line scroll
+        if line_delta != 0 {
+            if line_delta > 0 {
+                self.scroll_manager
+                    .scroll_down(line_delta.unsigned_abs() as usize);
+            } else {
+                self.scroll_manager
+                    .scroll_up(line_delta.unsigned_abs() as usize);
+            }
+        }
+
+        // Invalidate visible lines cache if offset actually changed
+        if self.scroll_manager.offset() != previous_offset {
+            self.visible_lines_cache = None;
+        }
     }
 
     /// Invalidate scroll metrics to force recalculation
