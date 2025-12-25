@@ -6,6 +6,10 @@ add support for custom session IDs when forking sessions with --session-id combi
 
 --
 
+agent skills execution performance is too slow when using tools with filesystem (create/edit files), improve performance when executing skills
+
+--
+
 implement input history cycling with up/down arrow keys in the terminal input box
 
 --

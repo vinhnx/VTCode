@@ -1055,8 +1055,18 @@ impl ToolRegistry {
     pub(super) fn update_plan_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let manager = self.inventory.plan_manager();
         Box::pin(async move {
-            let parsed: UpdatePlanArgs = serde_json::from_value(args)
-                .context("update_plan requires plan items with step and status")?;
+            let parsed: UpdatePlanArgs = serde_json::from_value(args.clone()).map_err(|error| {
+                anyhow!(
+                    "Error: Invalid 'update_plan' arguments. Provide an object like {{\"plan\": [\"step one\", {{\"step\": \"step two\", \"status\": \"in_progress\"}}], \"explanation\": \"optional focus\", \"phase\": \"understanding|design|review|final_plan\"}}. Deserialization failed: {}",
+                    error
+                )
+            })?;
+
+            if parsed.plan.is_empty() {
+                return Err(anyhow!(
+                    "Error: 'plan' must include at least one step. Example: {{\"plan\": [\"draft outline\", {{\"step\": \"implement fix\", \"status\": \"in_progress\"}}]}}"
+                ));
+            }
             let updated_plan = manager
                 .update_plan(parsed)
                 .context("failed to update plan state")?;
