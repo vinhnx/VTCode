@@ -23,16 +23,18 @@ mod process_hardening;
 mod workspace_trust;
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    panic_hook::init_panic_hook();
-
-    // Load .env (non-fatal if missing)
-    if let Err(err) = load_dotenv() {
-        eprintln!("warning: failed to load .env: {err}");
+async fn main() -> std::process::ExitCode {
+    match run().await {
+        Ok(_) => std::process::ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("vtcode: error: {:#}", err);
+            std::process::ExitCode::FAILURE
+        }
     }
+}
 
-    process_hardening::apply_process_hardening()
-        .context("failed to apply process hardening safeguards")?;
+async fn run() -> Result<()> {
+    panic_hook::init_panic_hook();
 
     // Build the CLI command with dynamic augmentations
     let mut cmd = Cli::command();
@@ -54,11 +56,23 @@ async fn main() -> Result<()> {
     let args = Cli::from_arg_matches(&matches)?;
     panic_hook::set_debug_mode(args.debug);
 
+    // Load .env (non-fatal if missing)
+    if let Err(err) = load_dotenv() {
+        if !args.quiet {
+            eprintln!("vtcode: warning: failed to load .env: {err}");
+        }
+    }
+
+    process_hardening::apply_process_hardening()
+        .context("failed to apply process hardening safeguards")?;
+
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = match initialize_tracing(&args).await {
         Ok(initialized) => initialized,
         Err(err) => {
-            eprintln!("warning: failed to initialize tracing from environment: {err}");
+            if !args.quiet {
+                eprintln!("vtcode: warning: failed to initialize tracing from environment: {err}");
+            }
             false
         }
     };
@@ -105,12 +119,13 @@ async fn main() -> Result<()> {
 
     cli::set_workspace_env(&startup.workspace);
 
-    // Initialize tracing based on config if enabled
     if startup.config.debug.enable_tracing
         && !env_tracing_initialized
         && let Err(err) = initialize_tracing_from_config(&startup.config)
     {
-        eprintln!("warning: failed to initialize tracing from config: {err}");
+        if !args.quiet {
+            eprintln!("vtcode: warning: failed to initialize tracing from config: {err}");
+        }
         tracing::warn!(error = %err, "failed to initialize tracing from config");
     }
 
@@ -121,14 +136,14 @@ async fn main() -> Result<()> {
 
     if let Some(print_value) = print_mode {
         let prompt = build_print_prompt(print_value)?;
-        cli::handle_ask_single_command(core_cfg, &prompt, cli::AskCommandOptions::default())
+        cli::handle_ask_single_command(core_cfg, Some(prompt), cli::AskCommandOptions::default())
             .await?;
         return Ok(());
     }
 
     // Handle potential prompt from workspace_path argument (when user runs `vtcode "prompt"`)
     if let Some(prompt) = potential_prompt {
-        cli::handle_ask_single_command(core_cfg, &prompt, cli::AskCommandOptions::default())
+        cli::handle_ask_single_command(core_cfg, Some(prompt), cli::AskCommandOptions::default())
             .await?;
         return Ok(());
     }
@@ -168,7 +183,7 @@ async fn main() -> Result<()> {
             let options = cli::AskCommandOptions {
                 output_format: *output_format,
             };
-            cli::handle_ask_single_command(core_cfg, prompt, options).await?;
+            cli::handle_ask_single_command(core_cfg, prompt.clone(), options).await?;
         }
         Some(Commands::Exec {
             json,

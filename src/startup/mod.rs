@@ -121,7 +121,7 @@ impl StartupContext {
         }
 
         // Validate configuration against models database
-        validate_startup_configuration(&config, &workspace)?;
+        validate_startup_configuration(&config, &workspace, args.quiet)?;
 
         let session_resume = if let Some(value) = args.resume_session.as_ref() {
             if value == "__interactive__" {
@@ -204,6 +204,7 @@ impl StartupContext {
             api_key_env,
             workspace: workspace.clone(),
             verbose: args.verbose,
+            quiet: args.quiet,
             theme: theme_selection,
             reasoning_effort: config.agent.reasoning_effort,
             ui_surface: config.agent.ui_surface,
@@ -348,10 +349,12 @@ async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
         if args.theme.is_some() {
             return Err(err.context(format!("Failed to activate theme '{}'", theme_selection)));
         }
-        eprintln!(
-            "Warning: {}. Falling back to default theme '{}'.",
-            err, DEFAULT_THEME_ID
-        );
+        if !args.quiet {
+            eprintln!(
+                "vtcode: warning: {}. Falling back to default theme '{}'.",
+                err, DEFAULT_THEME_ID
+            );
+        }
         theme_selection = DEFAULT_THEME_ID.to_owned();
         ui_theme::set_active_theme(&theme_selection)
             .with_context(|| format!("Failed to activate theme '{}'", theme_selection))?;
@@ -412,9 +415,9 @@ fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<PathBuf> {
     Ok(resolved)
 }
 
-fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path) -> Result<()> {
+fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path, quiet: bool) -> Result<()> {
     // Check and optionally install ripgrep on startup
-    check_ripgrep_availability();
+    check_ripgrep_availability(quiet);
 
     // Find models.json in workspace or standard locations
     let mut models_json_paths = vec![workspace.join("docs/models.json")];
@@ -434,22 +437,26 @@ fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path) -> Re
                 match validator.validate(config) {
                     Ok(result) => {
                         // Display warnings (errors would have been caught earlier)
-                        if !result.warnings.is_empty() {
+                        if !result.warnings.is_empty() && !quiet {
                             eprintln!("{}", result.format_for_display());
                         }
                     }
                     Err(e) => {
                         // Non-critical validation error - log but don't fail startup
-                        eprintln!("Warning: Configuration validation failed: {}", e);
+                        if !quiet {
+                            eprintln!("vtcode: warning: configuration validation failed: {}", e);
+                        }
                     }
                 }
             }
             Err(e) => {
                 // Non-critical validator creation error
-                eprintln!(
-                    "Warning: Could not load models database for validation: {}",
-                    e
-                );
+                if !quiet {
+                    eprintln!(
+                        "vtcode: warning: could not load models database for validation: {}",
+                        e
+                    );
+                }
             }
         }
     }
@@ -458,13 +465,16 @@ fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path) -> Re
 }
 
 /// Check ripgrep availability and attempt auto-installation if missing
-fn check_ripgrep_availability() {
+fn check_ripgrep_availability(quiet: bool) {
     match RipgrepStatus::check() {
         RipgrepStatus::Available { version } => {
             // Ripgrep is available, log silently at trace level only
             tracing::debug!("Ripgrep available: {}", version);
         }
         RipgrepStatus::NotFound => {
+            if quiet {
+                return;
+            }
             // Show warning and attempt auto-installation
             eprintln!(
                 "\n╭──────────────────────────────────────────────────────────────────────────────╮"

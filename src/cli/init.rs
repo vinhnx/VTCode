@@ -44,6 +44,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: workspace.to_path_buf(),
             verbose: false,
+            quiet: false,
             theme: DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::default(),

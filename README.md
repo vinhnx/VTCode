@@ -109,6 +109,17 @@ VT Code supports a rich set of configuration options, with preferences stored in
 
 For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
 
+### CLI Design Principles
+
+VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and standard UNIX principles to ensure a robust and pipe-friendly experience:
+
+-   **Output Streams**: Primary output (e.g., code from `ask`, events from `exec`) is sent to `stdout`. All logs, metadata, reasoning traces, and interaction prompts are sent to `stderr`. This allows you to safely pipe `vtcode` output to other tools.
+    ```bash
+    # Only the generated code is saved to file; metadata remains on screen
+    vtcode ask "factorial function in rust" > factorial.rs
+    ```
+-   **Standard Arguments**: Adheres to GNU/POSIX argument parsing standards using `clap`, supporting standard flags like `--help`, `--version`, and `--` separator for positional arguments.
+
 ---
 
 ### Key Features

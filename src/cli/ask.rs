@@ -73,6 +73,23 @@ fn print_final_response(printed_any: bool, response: Option<LLMResponse>) {
 /// Handle the ask command - single prompt, no tools
 pub async fn handle_ask_command(
     config: &CoreAgentConfig,
+    prompt_arg: Option<String>,
+    options: AskCommandOptions,
+) -> Result<()> {
+    let prompt = resolve_prompt(prompt_arg, config.quiet)?;
+    tokio::select! {
+        res = handle_ask_command_impl(config, &prompt, options) => res,
+        _ = tokio::signal::ctrl_c() => {
+            eprintln!("{}", style("\nCancelled by user.").yellow());
+            // Standard generic error (1) or specialized exit code logic would go here,
+            // but for now we bail which results in non-zero exit from main.
+            anyhow::bail!("Operation cancelled");
+        }
+    }
+}
+
+async fn handle_ask_command_impl(
+    config: &CoreAgentConfig,
     prompt: &str,
     options: AskCommandOptions,
 ) -> Result<()> {
@@ -81,7 +98,7 @@ pub async fn handle_ask_command(
     }
 
     let wants_json = options.wants_json();
-    if !wants_json {
+    if !wants_json && !config.quiet {
         eprintln!("{}", style("[ASK]").blue().bold());
         eprintln!("  {:16} {}", "provider", &config.provider);
         eprintln!("  {:16} {}\n", "model", &config.model);
@@ -279,5 +296,31 @@ fn finish_reason_json(reason: &FinishReason) -> Value {
         FinishReason::ToolCalls => json!({ "type": "tool_calls" }),
         FinishReason::ContentFilter => json!({ "type": "content_filter" }),
         FinishReason::Error(message) => json!({ "type": "error", "message": message }),
+    }
+}
+
+fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
+    match prompt_arg {
+        Some(p) if p != "-" => Ok(p),
+        maybe_dash => {
+            use std::io::{IsTerminal, Read, self};
+            let force_stdin = matches!(maybe_dash.as_deref(), Some("-"));
+            if io::stdin().is_terminal() && !force_stdin {
+                anyhow::bail!(
+                    "No prompt provided. Pass a prompt argument, pipe input, or use '-' to read from stdin."
+                );
+            }
+            if !force_stdin && !quiet {
+                eprintln!("Reading prompt from stdin...");
+            }
+            let mut buffer = String::with_capacity(1024);
+            io::stdin()
+                .read_to_string(&mut buffer)
+                .context("Failed to read prompt from stdin")?;
+            if buffer.trim().is_empty() {
+                anyhow::bail!("No prompt provided via stdin.");
+            }
+            Ok(buffer)
+        }
     }
 }
