@@ -8,7 +8,7 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::progress::ProgressReporter;
 use vtcode_core::exec::cancellation;
@@ -478,16 +478,30 @@ async fn execute_tool_with_progress(
 ) -> ToolExecutionStatus {
     // Execute first attempt
     let mut attempt = 0usize;
-    let mut status = run_single_tool_attempt(
-        registry,
-        name,
-        args,
-        ctrl_c_state,
-        ctrl_c_notify,
-        progress_reporter,
-        tool_timeout,
-    )
-    .await;
+    let mut status = {
+        let attempt_start = Instant::now();
+        let status = run_single_tool_attempt(
+            registry,
+            name,
+            args,
+            ctrl_c_state,
+            ctrl_c_notify,
+            progress_reporter,
+            tool_timeout,
+        )
+        .await;
+
+        debug!(
+            target: "vtcode.tool.exec",
+            tool = name,
+            attempt = attempt + 1,
+            status = status_label(&status),
+            elapsed_ms = attempt_start.elapsed().as_millis(),
+            "tool attempt finished"
+        );
+
+        status
+    };
 
     // Retry on recoverable errors with bounded backoff
     while let Some(delay) = retry_delay_for_status(&status, attempt) {
@@ -503,6 +517,7 @@ async fn execute_tool_with_progress(
             .await;
         tokio::time::sleep(delay).await;
 
+        let attempt_start = Instant::now();
         status = run_single_tool_attempt(
             registry,
             name,
@@ -513,6 +528,16 @@ async fn execute_tool_with_progress(
             tool_timeout,
         )
         .await;
+
+        debug!(
+            target: "vtcode.tool.exec",
+            tool = name,
+            attempt = attempt + 1,
+            status = status_label(&status),
+            elapsed_ms = attempt_start.elapsed().as_millis(),
+            retry_delay_ms = delay.as_millis(),
+            "tool attempt finished"
+        );
     }
 
     status
@@ -700,6 +725,16 @@ fn backoff_for_attempt(attempt: usize) -> Duration {
         .saturating_mul(exp as u32)
         .saturating_add(jitter);
     backoff.min(MAX_RETRY_BACKOFF)
+}
+
+fn status_label(status: &ToolExecutionStatus) -> &'static str {
+    match status {
+        ToolExecutionStatus::Success { .. } => "success",
+        ToolExecutionStatus::Failure { .. } => "failure",
+        ToolExecutionStatus::Timeout { .. } => "timeout",
+        ToolExecutionStatus::Cancelled => "cancelled",
+        ToolExecutionStatus::Progress(_) => "progress",
+    }
 }
 
 /// Process the output from a tool execution and convert it to a ToolExecutionStatus

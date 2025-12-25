@@ -5,6 +5,7 @@ use super::types::*;
 use crate::config::constants::diff;
 use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
 use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler};
+use crate::utils::diff::{compute_diff, DiffOptions};
 use crate::utils::image_processing::read_image_file;
 use crate::utils::path::canonicalize_workspace;
 use crate::utils::vtcodegitignore::should_exclude_file;
@@ -15,10 +16,9 @@ use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fmt::Write as FmtWrite;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::io::AsyncSeekExt;
 use tracing::{info, warn};
 use walkdir::WalkDir;
@@ -61,6 +61,8 @@ impl FileOpsTool {
 
     /// Execute basic directory listing
     async fn execute_basic_list(&self, input: &ListInput) -> Result<Value> {
+        use super::cache::FILE_CACHE;
+
         let base = self.workspace_root.join(&input.path);
 
         // Check if path exists before proceeding
@@ -77,6 +79,14 @@ impl FileOpsTool {
                 "Path '{}' is excluded by .vtcodegitignore",
                 input.path
             ));
+        }
+
+        // Try to get result from cache first for directories
+        let cache_key = format!("dir_list:{}:hidden={}", input.path, input.include_hidden);
+        if base.is_dir() {
+            if let Some(cached_result) = FILE_CACHE.get_directory(&cache_key).await {
+                return Ok(cached_result);
+            }
         }
 
         // Pre-allocate with reasonable estimate for directory entries
@@ -303,6 +313,12 @@ impl FileOpsTool {
         if let Some(msg) = guidance {
             out["message"] = json!(msg);
         }
+
+        // Cache the result for directories (TTL is 5 minutes in FILE_CACHE)
+        if base.is_dir() {
+            FILE_CACHE.put_directory(cache_key, out.clone()).await;
+        }
+
         Ok(out)
     }
 
@@ -720,56 +736,83 @@ impl FileOpsTool {
             })
         };
 
-        let mut entries = Vec::new();
-        for entry in WalkDir::new(&search_root).into_iter() {
-            let entry = entry.map_err(|e| anyhow!("Walk error: {}", e))?;
-            let path = entry.path();
+        // Perform directory traversal in a blocking task to avoid blocking the async executor
+        let search_root_clone = search_root.clone();
+        let workspace_root = self.workspace_root.clone();
+        let include_hidden = input.include_hidden;
+        let extension_filter_clone = extension_filter.clone();
 
-            if !path.is_file() {
-                continue;
-            }
+        let raw_entries = tokio::task::spawn_blocking(move || {
+            let mut entries = Vec::new();
+            for entry in WalkDir::new(&search_root_clone).into_iter() {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::warn!("Walk error: {}", e);
+                        continue;
+                    }
+                };
+                let path = entry.path();
 
-            if self.should_exclude(path).await {
-                continue;
-            }
-
-            if !input.include_hidden
-                && path_has_hidden(path.strip_prefix(&self.workspace_root).unwrap_or(path))
-            {
-                continue;
-            }
-
-            if let Some(ref filters) = extension_filter {
-                let extension = path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(normalize_extension);
-
-                match extension {
-                    Some(ext) if filters.contains(&ext) => {}
-                    _ => continue,
+                if !path.is_file() {
+                    continue;
                 }
-            }
 
-            let metadata = entry
-                .metadata()
-                .map_err(|e| anyhow!("Metadata error: {}", e))?;
-            let size_bytes = metadata.len();
-            if size_bytes == 0 {
+                if !include_hidden
+                    && path_has_hidden(path.strip_prefix(&workspace_root).unwrap_or(path))
+                {
+                    continue;
+                }
+
+                if let Some(ref filters) = extension_filter_clone {
+                    let extension = path
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(normalize_extension);
+
+                    match extension {
+                        Some(ext) if filters.contains(&ext) => {}
+                        _ => continue,
+                    }
+                }
+
+                let metadata = match entry.metadata() {
+                    Ok(m) => m,
+                    Err(e) => {
+                        tracing::warn!("Metadata error for {:?}: {}", path, e);
+                        continue;
+                    }
+                };
+                let size_bytes = metadata.len();
+                if size_bytes == 0 {
+                    continue;
+                }
+
+                let relative_path = path
+                    .strip_prefix(&workspace_root)
+                    .unwrap_or(path)
+                    .to_path_buf();
+                let modified = metadata
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
+
+                let absolute_path = path.to_path_buf();
+                entries.push((size_bytes, relative_path, modified, absolute_path));
+            }
+            entries
+        })
+        .await
+        .map_err(|e| anyhow!("Blocking task join error: {}", e))?;
+
+        // Filter excluded paths asynchronously
+        let mut entries = Vec::new();
+        for (size, rel_path, modified, abs_path) in raw_entries {
+            if self.should_exclude(&abs_path).await {
                 continue;
             }
-
-            let relative_path = path
-                .strip_prefix(&self.workspace_root)
-                .unwrap_or(path)
-                .to_path_buf();
-            let modified = metadata
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs());
-
-            entries.push((size_bytes, relative_path, modified));
+            entries.push((size, rel_path, modified));
         }
 
         if entries.is_empty() {
@@ -1558,16 +1601,37 @@ fn diff_preview_error_skip(reason: &str, detail: Option<&str>) -> Value {
 }
 
 fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
+    let started = Instant::now();
     let previous = before.unwrap_or("");
-    // Use format strings directly - Cow optimization not needed for short-lived strings
-    let old_header = format!("a/{path}");
-    let new_header = format!("b/{path}");
+    let old_label = format!("a/{path}");
+    let new_label = format!("b/{path}");
 
-    // Use git diff algorithm which provides better, unified output format
-    // This can be executed via run_pty_cmd for consistency
-    let diff_output = generate_git_style_diff(previous, after, &old_header, &new_header);
+    let diff_bundle = compute_diff(
+        previous,
+        after,
+        DiffOptions {
+            context_lines: diff::CONTEXT_RADIUS,
+            old_label: Some(old_label.as_str()),
+            new_label: Some(new_label.as_str()),
+            missing_newline_hint: true,
+        },
+    );
 
-    if diff_output.trim().is_empty() {
+    if diff_bundle.formatted.trim().is_empty() {
+        tracing::debug!(
+            target: "vtcode.tools.diff",
+            path,
+            before_bytes = previous.len(),
+            after_bytes = after.len(),
+            additions = 0,
+            deletions = 0,
+            line_count = 0,
+            truncated = false,
+            suppressed = false,
+            elapsed_ms = started.elapsed().as_millis(),
+            "diff preview generated"
+        );
+
         return json!({
             "content": "",
             "truncated": false,
@@ -1577,22 +1641,37 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
         });
     }
 
-    // Avoid collecting lines into Vec<String> - use line count directly
-    let line_count = diff_output.lines().count();
-
-    // Count additions and deletions for suppression check
-    let additions = diff_output.lines().filter(|l| l.starts_with('+')).count();
-    let deletions = diff_output.lines().filter(|l| l.starts_with('-')).count();
+    let line_count = diff_bundle.formatted.lines().count();
+    let (additions, deletions) = diff_bundle
+        .formatted
+        .lines()
+        .fold((0usize, 0usize), |(add, del), line| match line.chars().next() {
+            Some('+') => (add + 1, del),
+            Some('-') => (add, del + 1),
+            _ => (add, del),
+        });
     let total_changes = additions + deletions;
 
-    // Check if we should suppress the diff due to too many changes
     if total_changes > diff::MAX_SINGLE_FILE_CHANGES {
+        tracing::debug!(
+            target: "vtcode.tools.diff",
+            path,
+            before_bytes = previous.len(),
+            after_bytes = after.len(),
+            additions,
+            deletions,
+            line_count,
+            truncated = false,
+            suppressed = true,
+            elapsed_ms = started.elapsed().as_millis(),
+            "diff preview suppressed (too many changes)"
+        );
+
         return diff_preview_suppressed(additions, deletions, line_count);
     }
 
-    // Only collect lines if we need to truncate
     if line_count > diff::MAX_PREVIEW_LINES {
-        let lines: Vec<&str> = diff_output.lines().collect();
+        let lines: Vec<&str> = diff_bundle.formatted.lines().collect();
         let head_count = diff::HEAD_LINE_COUNT.min(lines.len());
         let tail_count = diff::TAIL_LINE_COUNT.min(lines.len().saturating_sub(head_count));
         let omitted = lines.len().saturating_sub(head_count + tail_count);
@@ -1600,8 +1679,7 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
         let mut condensed = Vec::with_capacity(head_count + tail_count + 1);
         condensed.extend(lines[..head_count].iter().copied());
         if omitted > 0 {
-            // Use a static format to avoid allocation in common case
-            condensed.push(""); // placeholder, will be replaced
+            condensed.push("");
         }
         if tail_count > 0 {
             let tail_start = lines.len().saturating_sub(tail_count);
@@ -1617,6 +1695,23 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
             condensed.join("\n")
         };
 
+        let elapsed = started.elapsed().as_millis();
+
+        tracing::debug!(
+            target: "vtcode.tools.diff",
+            path,
+            before_bytes = previous.len(),
+            after_bytes = after.len(),
+            additions,
+            deletions,
+            line_count,
+            omitted_lines = omitted,
+            truncated = true,
+            suppressed = false,
+            elapsed_ms = elapsed,
+            "diff preview generated"
+        );
+
         json!({
             "content": diff_output,
             "truncated": true,
@@ -1624,76 +1719,29 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
             "skipped": false
         })
     } else {
+        let elapsed = started.elapsed().as_millis();
+
+        tracing::debug!(
+            target: "vtcode.tools.diff",
+            path,
+            before_bytes = previous.len(),
+            after_bytes = after.len(),
+            additions,
+            deletions,
+            line_count,
+            truncated = false,
+            suppressed = false,
+            elapsed_ms = elapsed,
+            "diff preview generated"
+        );
+
         json!({
-            "content": diff_output,
+            "content": diff_bundle.formatted,
             "truncated": false,
             "omitted_line_count": 0,
             "skipped": false
         })
     }
-}
-
-/// Generate unified diff using git diff --no-index command.
-///
-/// Uses the optimized git diff rendering system unified with run_pty_cmd:
-/// - Produces standard unified diff format with file headers ("--- a/", "+++ b/")
-/// - Hunk headers with line counts ("@@ -1,3 +1,3 @@")
-/// - Line prefixes: '+' (additions), '-' (deletions), ' ' (context)
-///
-/// The rendering system in src/agent/runloop/tool_output/files.rs detects these
-/// markers and applies proper ANSI styling for terminal display.
-fn generate_git_style_diff(old: &str, new: &str, old_label: &str, new_label: &str) -> String {
-    match git_diff(old, new, old_label, new_label) {
-        Ok(output) => output,
-        Err(e) => {
-            warn!("git diff failed: {}, returning empty diff", e);
-            String::new()
-        }
-    }
-}
-
-/// Execute git diff --no-index using temporary files.
-///
-/// This is the unified approach for diff generation across write_files and run_pty_cmd.
-/// Returns standard unified diff format that matches what git shows in terminal.
-fn git_diff(old: &str, new: &str, old_label: &str, new_label: &str) -> Result<String> {
-    // Create temporary files for old and new content
-    let mut old_file = tempfile::NamedTempFile::new()
-        .with_context(|| "failed to create temp file for old content")?;
-    old_file
-        .write_all(old.as_bytes())
-        .with_context(|| "failed to write old content to temp file")?;
-
-    let mut new_file = tempfile::NamedTempFile::new()
-        .with_context(|| "failed to create temp file for new content")?;
-    new_file
-        .write_all(new.as_bytes())
-        .with_context(|| "failed to write new content to temp file")?;
-
-    let old_path = old_file.path().to_path_buf();
-    let new_path = new_file.path().to_path_buf();
-
-    // Execute git diff with context radius matching config
-    let output = Command::new("git")
-        .args([
-            "diff",
-            "--no-index",
-            &format!("--unified={}", diff::CONTEXT_RADIUS),
-        ])
-        .arg(&old_path)
-        .arg(&new_path)
-        .output()
-        .with_context(|| "git diff command execution failed")?;
-
-    let mut result = String::from_utf8_lossy(&output.stdout).to_string();
-
-    // Replace temporary file paths with actual labels
-    let old_str = old_path.display().to_string();
-    let new_str = new_path.display().to_string();
-    result = result.replace(&format!("a/{old_str}"), &format!("a/{old_label}"));
-    result = result.replace(&format!("b/{new_str}"), &format!("b/{new_label}"));
-
-    Ok(result)
 }
 
 impl FileOpsTool {
