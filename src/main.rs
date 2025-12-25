@@ -3,7 +3,7 @@
 //! Thin binary entry point that delegates to modular CLI handlers.
 
 use anyhow::{Context, Result};
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, FromArgMatches};
 use colorchoice::ColorChoice as GlobalColorChoice;
 use std::io::IsTerminal;
 use std::io::{self, Read};
@@ -34,26 +34,24 @@ async fn main() -> Result<()> {
     process_hardening::apply_process_hardening()
         .context("failed to apply process hardening safeguards")?;
 
-    // If user asked for version, print enhanced version with XDG directory info
-    if std::env::args().any(|a| a == "-V" || a == "--version") {
-        println!("{}", vtcode_core::cli::args::long_version());
-        return Ok(());
-    }
+    // Build the CLI command with dynamic augmentations
+    let mut cmd = Cli::command();
 
-    // If user asked for help, augment the help output with dynamic model list
-    // and print the help with the additional CLI details.
-    if std::env::args().any(|a| a == "-h" || a == "--help") {
-        let mut cmd = Cli::command();
-        let help_extra = vtcode_core::cli::help::openai_responses_models_help();
-        let help_box: Box<str> = help_extra.into_boxed_str();
-        let help_static: &'static str = Box::leak(help_box);
-        cmd = cmd.after_help(help_static);
-        cmd.print_help().ok();
-        println!();
-        return Ok(());
-    }
+    // Inject dynamic version info (XDG directories)
+    let version_info = vtcode_core::cli::args::long_version();
+    // We leak the string to get a 'static lifetime which clap often expects or handles better
+    // for runtime constructed strings passed to builder methods.
+    let version_leak: &'static str = Box::leak(version_info.into_boxed_str());
+    cmd = cmd.long_version(version_leak);
 
-    let args = Cli::parse();
+    // Inject extra help info
+    let help_extra = vtcode_core::cli::help::openai_responses_models_help();
+    let help_leak: &'static str = Box::leak(help_extra.into_boxed_str());
+    cmd = cmd.after_help(help_leak);
+
+    // Parse arguments using the augmented command
+    let matches = cmd.get_matches();
+    let args = Cli::from_arg_matches(&matches)?;
     panic_hook::set_debug_mode(args.debug);
 
     // Initialize tracing based on both RUST_LOG env var and config

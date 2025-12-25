@@ -50,11 +50,11 @@ fn print_final_response(printed_any: bool, response: Option<LLMResponse>) {
         {
             if printed_any {
                 // Ensure separation from previously streamed tokens.
-                println!();
+                eprintln!();
             }
-            println!("--- reasoning ---");
-            println!("{reasoning}");
-            println!("-----------------");
+            eprintln!("--- reasoning ---");
+            eprintln!("{reasoning}");
+            eprintln!("-----------------");
         }
 
         match (printed_any, response.content) {
@@ -82,9 +82,9 @@ pub async fn handle_ask_command(
 
     let wants_json = options.wants_json();
     if !wants_json {
-        println!("{}", style("[ASK]").blue().bold());
-        println!("  {:16} {}", "provider", &config.provider);
-        println!("  {:16} {}\n", "model", &config.model);
+        eprintln!("{}", style("[ASK]").blue().bold());
+        eprintln!("  {:16} {}", "provider", &config.provider);
+        eprintln!("  {:16} {}\n", "model", &config.model);
     }
 
     let provider = match create_provider_for_model(
@@ -140,7 +140,7 @@ pub async fn handle_ask_command(
                             // The final response carries the content; suppress streaming output.
                         } else {
                             if printed_reasoning && !reasoning_line_finished {
-                                println!();
+                                eprintln!();
                                 reasoning_line_finished = true;
                             }
                             print!("{}", delta);
@@ -153,12 +153,12 @@ pub async fn handle_ask_command(
                             streamed_reasoning.push_str(&delta);
                         } else {
                             if !printed_reasoning {
-                                print!("");
+                                eprint!("");
                                 printed_reasoning = true;
                                 reasoning_line_finished = false;
                             }
-                            print!("{}", delta);
-                            io::stdout().flush().ok();
+                            eprint!("{}", delta);
+                            io::stderr().flush().ok();
                         }
                     }
                     Ok(LLMStreamEvent::Completed { response }) => {
@@ -182,7 +182,7 @@ pub async fn handle_ask_command(
                 emit_json_response(config, final_response, reasoning)?;
             } else {
                 if printed_reasoning && !reasoning_line_finished {
-                    println!();
+                    eprintln!();
                 }
 
                 print_final_response(printed_any, Some(final_response));
