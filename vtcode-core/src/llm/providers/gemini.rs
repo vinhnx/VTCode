@@ -122,7 +122,7 @@ impl GeminiProvider {
 
         Self {
             api_key: Arc::from(api_key.as_str()),
-            http_client: HttpClientFactory::default_client(),
+            http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: Arc::from(
                 override_base_url(
                     urls::GEMINI_API_BASE,

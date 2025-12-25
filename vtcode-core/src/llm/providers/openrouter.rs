@@ -659,11 +659,12 @@ impl OpenRouterProvider {
             models::openrouter::DEFAULT_MODEL.to_string(),
             None,
             None,
+            TimeoutsConfig::default(),
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None)
+        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default())
     }
 
     pub fn from_config(
@@ -671,13 +672,19 @@ impl OpenRouterProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        _timeouts: Option<TimeoutsConfig>,
+        timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::openrouter::DEFAULT_MODEL);
 
-        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
+        Self::with_model_internal(
+            api_key_value,
+            model_value,
+            prompt_cache,
+            base_url,
+            timeouts.unwrap_or_default(),
+        )
     }
 
     fn with_model_internal(
@@ -685,7 +692,10 @@ impl OpenRouterProvider {
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
+        timeouts: TimeoutsConfig,
     ) -> Self {
+        use crate::llm::http_client::HttpClientFactory;
+        
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
             prompt_cache,
             |providers| &providers.openrouter,
@@ -694,7 +704,7 @@ impl OpenRouterProvider {
 
         Self {
             api_key,
-            http_client: HttpClient::new(),
+            http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: override_base_url(
                 urls::OPENROUTER_API_BASE,
                 base_url,
@@ -886,14 +896,9 @@ impl OpenRouterProvider {
             });
         }
 
-        let formatted_error = error_display::format_llm_error(
-            "OpenRouter",
-            &format!("HTTP {}: {}", status, error_text),
-        );
-        Err(LLMError::Provider {
-            message: formatted_error,
-            metadata: None,
-        })
+        // Use unified error parsing for consistent error categorization
+        use super::error_handling::parse_api_error;
+        Err(parse_api_error("OpenRouter", status, &error_text))
     }
 
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
