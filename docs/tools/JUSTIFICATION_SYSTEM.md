@@ -203,7 +203,7 @@ User requests: "Run the build and check for errors"
     Action: Execute build
       command: cargo build
 
-    Agent Reasoning:
+    Agent
       Need to verify code compiles before
       refactoring
 

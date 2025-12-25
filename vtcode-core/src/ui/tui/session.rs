@@ -1360,7 +1360,7 @@ mod tests {
             .collect();
         assert!(line_text.contains(&session.header_provider_short_value()));
         assert!(line_text.contains(&session.header_model_short_value()));
-        let reasoning_label = format!("Reasoning: {}", session.header_reasoning_short_value());
+        let reasoning_label = format!("{}", session.header_reasoning_short_value());
         assert!(line_text.contains(&reasoning_label));
         let mode_label = session.header_mode_short_label();
         assert!(line_text.contains(&mode_label));
