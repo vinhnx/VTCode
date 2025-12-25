@@ -715,6 +715,7 @@ pub async fn handle_run_doctor(ctx: SlashCommandContext<'_>) -> Result<SlashComm
         &provider_runtime,
         ctx.async_mcp_manager.map(|m| m.as_ref()),
         ctx.linked_directories,
+        Some(ctx.loaded_skills),
     )
     .await?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;

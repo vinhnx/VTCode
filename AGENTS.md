@@ -255,7 +255,7 @@ cargo run
 
 -   **Architecture**: See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 -   **Security**: See [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md)
--   **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md)
+-   **Contributing**: See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
 -   **Configuration**: See [docs/config/CONFIGURATION_PRECEDENCE.md](docs/config/CONFIGURATION_PRECEDENCE.md)
 -   **Provider Setup**: See [docs/PROVIDER_GUIDES.md](docs/PROVIDER_GUIDES.md)
 -   **Testing Guide**: See [docs/development/testing.md](docs/development/testing.md)
