@@ -81,6 +81,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Display token usage and remaining budget",
         },
         SlashCommandInfo {
+            name: "context",
+            description: "Display context usage breakdown with grouped skills, agents, and token counts",
+        },
+        SlashCommandInfo {
             name: "doctor",
             description: "Run installation and configuration diagnostics",
         },
@@ -221,7 +225,7 @@ mod tests {
     #[test]
     fn prefix_matches_are_sorted_alphabetically() {
         let names = names_for("c");
-        assert_eq!(names, vec!["clear", "command", "config", "cost"]);
+        assert_eq!(names, vec!["clear", "command", "config", "context", "cost"]);
     }
 
     #[test]

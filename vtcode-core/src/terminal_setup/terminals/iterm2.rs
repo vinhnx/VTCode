@@ -9,15 +9,15 @@ use crate::terminal_setup::detector::TerminalType;
 
 /// Generate iTerm2 setup instructions (manual configuration required)
 pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
-    let mut instructions = Vec::new();
-
-    instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
-    instructions.push("  iTerm2 Manual Configuration Instructions".to_string());
-    instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
-    instructions.push(String::new());
-    instructions.push("iTerm2 requires manual configuration via the GUI.".to_string());
-    instructions.push("Follow these steps to configure each feature:".to_string());
-    instructions.push(String::new());
+    let mut instructions = vec![
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string(),
+        "  iTerm2 Manual Configuration Instructions".to_string(),
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string(),
+        String::new(),
+        "iTerm2 requires manual configuration via the GUI.".to_string(),
+        "Follow these steps to configure each feature:".to_string(),
+        String::new(),
+    ];
 
     for (i, feature) in features.iter().enumerate() {
         match feature {

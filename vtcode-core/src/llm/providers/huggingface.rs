@@ -479,15 +479,13 @@ impl HuggingFaceProvider {
     /// Behavior 15: HF-specific error messages with documentation links
     fn format_error(&self, status: StatusCode, body: &str) -> LLMError {
         let message = if status == StatusCode::NOT_FOUND {
-            format!(
-                "Model not found on HuggingFace Inference Providers.\n\n\
+            "Model not found on HuggingFace Inference Providers.\n\n\
                 Ensure the model is:\n\
                 1. Correctly spelled (e.g., 'deepseek-ai/DeepSeek-R1')\n\
                 2. Available for text generation/chat completion\n\
                 3. Enabled for at least one inference provider\n\n\
                 Browse models: https://huggingface.co/models?pipeline_tag=text-generation&inference_provider=all\n\
-                Docs: https://huggingface.co/docs/inference-providers/tasks/chat-completion"
-            )
+                Docs: https://huggingface.co/docs/inference-providers/tasks/chat-completion".to_string()
         } else if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
             format!(
                 "Authentication failed ({}). \n\n\

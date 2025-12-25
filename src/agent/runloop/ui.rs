@@ -277,23 +277,13 @@ pub(crate) async fn build_inline_header_context(
 }
 
 pub(crate) fn render_session_banner(
-    renderer: &mut AnsiRenderer,
-    config: &CoreAgentConfig,
+    _renderer: &mut AnsiRenderer,
+    _config: &CoreAgentConfig,
     _session_bootstrap: &SessionBootstrap,
-    model_label: &str,
+    _model_label: &str,
     _reasoning_label: &str,
 ) -> Result<()> {
-    // Minimal preamble: show model and workspace in one compact line
-    let workspace_name = config
-        .workspace
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("workspace");
-    let model_short = model_label.split('/').next_back().unwrap_or(model_label);
-    renderer.line(
-        vtcode_core::utils::ansi::MessageStyle::Info,
-        &format!("→ {} @ {}", model_short, workspace_name),
-    )?;
+    // Preamble removed as requested. Diagnostics are still available in the status bar/header.
     Ok(())
 }
 

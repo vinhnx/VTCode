@@ -49,6 +49,7 @@ pub fn spawn_session(
 }
 
 /// Spawn session with optional custom prompts pre-loaded
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_session_with_prompts(
     theme: InlineTheme,
     placeholder: Option<String>,
@@ -77,7 +78,7 @@ pub fn spawn_session_with_prompts(
                 event_callback,
                 custom_prompts,
                 keyboard_flags: None, // Use default flags
-                active_pty_sessions: active_pty_sessions,
+                active_pty_sessions,
             },
         )
         .await

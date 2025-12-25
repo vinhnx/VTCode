@@ -8,15 +8,15 @@ use crate::terminal_setup::detector::TerminalType;
 
 /// Generate VS Code setup instructions
 pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
-    let mut instructions = Vec::new();
-
-    instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
-    instructions.push("  VS Code Terminal Manual Configuration".to_string());
-    instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
-    instructions.push(String::new());
-    instructions.push("VS Code requires adding keybindings to keybindings.json".to_string());
-    instructions.push("Follow these steps:".to_string());
-    instructions.push(String::new());
+    let mut instructions = vec![
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string(),
+        "  VS Code Terminal Manual Configuration".to_string(),
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string(),
+        String::new(),
+        "VS Code requires adding keybindings to keybindings.json".to_string(),
+        "Follow these steps:".to_string(),
+        String::new(),
+    ];
 
     for (i, feature) in features.iter().enumerate() {
         match feature {

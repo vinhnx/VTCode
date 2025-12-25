@@ -41,6 +41,7 @@ async fn test_visual_user_agent_exchange() {
         12,   // inline_rows
         true, // show_timeline_pane
         None,
+        None,
     );
 
     // Add content that would render visually
@@ -90,6 +91,7 @@ async fn test_visual_code_rendering() {
         15,   // inline_rows
         true, // show_timeline_pane
         None,
+        None,
     );
 
     if let Ok(sess) = session {
@@ -134,6 +136,7 @@ async fn test_visual_tool_output() {
         Default::default(),
         10,    // inline_rows
         false, // show_timeline_pane
+        None,
         None,
     );
 
@@ -195,6 +198,7 @@ async fn test_visual_error_handling() {
         Default::default(),
         12,   // inline_rows
         true, // show_timeline_pane
+        None,
         None,
     );
 
@@ -292,6 +296,7 @@ async fn test_visual_header_variations() {
             Default::default(),
             8,
             false,
+            None,
             None,
         );
 
