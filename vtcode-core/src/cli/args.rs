@@ -672,9 +672,9 @@ pub enum Commands {
     #[command(name = "tree-sitter")]
     TreeSitter,
 
-    /// **Generate or display man pages** for VTCode commands\n\n**Features:**\n• Generate Unix man pages for all commands\n• Display detailed command documentation\n• Save man pages to files\n• Comprehensive help for all VTCode features\n\n**Examples:**\n  vtcode man\n  vtcode man chat\n  vtcode man chat --output chat.1
+    /// **Generate or display man pages** for VT Code commands\n\n**Features:**\n• Generate Unix man pages for all commands\n• Display detailed command documentation\n• Save man pages to files\n• Comprehensive help for all VT Code features\n\n**Examples:**\n  vtcode man\n  vtcode man chat\n  vtcode man chat --output chat.1
     Man {
-        /// **Command name** to generate man page for (optional)\n\n**Available commands:**\n• chat, ask, analyze, performance, benchmark\n• create-project, init, man\n\n**If not specified, shows main VTCode man page**
+        /// **Command name** to generate man page for (optional)\n\n**Available commands:**\n• chat, ask, analyze, performance, benchmark\n• create-project, init, man\n\n**If not specified, shows main VT Code man page**
         command: Option<String>,
 
         /// **Output file path** to save man page\n\n**Format:** Standard Unix man page format (.1, .8, etc.)\n**Default:** Display to stdout

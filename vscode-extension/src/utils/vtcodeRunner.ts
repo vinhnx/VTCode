@@ -54,7 +54,7 @@ export function createSpawnOptions(
 ): SpawnOptionsWithoutStdio {
     const { env: overrideEnv, ...rest } = overrides;
     const baseEnv = { ...process.env } as NodeJS.ProcessEnv;
-    
+
     if (environmentProvider) {
         try {
             const overlay = environmentProvider();
@@ -87,13 +87,13 @@ export async function runVtcodeCommand(
 ): Promise<void> {
     if (vscode.env.uiKind === vscode.UIKind.Web) {
         throw new Error(
-            "VTCode commands that spawn the CLI are not available in the web extension host."
+            "VT Code commands that spawn the CLI are not available in the web extension host."
         );
     }
 
     if (!vscode.workspace.isTrusted) {
         throw new Error(
-            "Trust this workspace to run VTCode CLI commands from VS Code."
+            "Trust this workspace to run VT Code CLI commands from VS Code."
         );
     }
 
@@ -101,12 +101,13 @@ export async function runVtcodeCommand(
     const cwd = getWorkspaceRoot();
     if (!cwd) {
         throw new Error(
-            "Open a workspace folder before running VTCode commands."
+            "Open a workspace folder before running VT Code commands."
         );
     }
 
-    const output = options.output || vscode.window.createOutputChannel("VTCode");
-    
+    const output =
+        options.output || vscode.window.createOutputChannel("VTCode");
+
     if (options.cancellationToken?.isCancellationRequested) {
         throw new vscode.CancellationError();
     }
@@ -171,7 +172,7 @@ export async function runVtcodeCommand(
                 } else {
                     reject(
                         new Error(
-                            `VTCode exited with code ${code ?? "unknown"}`
+                            `VT Code exited with code ${code ?? "unknown"}`
                         )
                     );
                 }

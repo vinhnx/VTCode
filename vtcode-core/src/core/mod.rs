@@ -1,6 +1,6 @@
 //! # Core Agent Architecture
 //!
-//! This module contains the core components of the VTCode agent system,
+//! This module contains the core components of the VT Code agent system,
 //! implementing the main agent loop, context management, and supporting infrastructure.
 //!
 //! ## Architecture Overview

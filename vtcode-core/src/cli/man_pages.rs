@@ -1,4 +1,4 @@
-//! Man page generation for VTCode CLI using roff-rs
+//! Man page generation for VT Code CLI using roff-rs
 //!
 //! This module provides functionality to generate Unix man pages for VTCode
 //! commands and subcommands using the roff-rs library.
@@ -8,7 +8,7 @@ use roff::{Roff, bold, italic, roman};
 use std::path::Path;
 use tokio::fs;
 
-/// Man page generator for VTCode CLI
+/// Man page generator for VT Code CLI
 pub struct ManPageGenerator;
 
 impl ManPageGenerator {
@@ -18,7 +18,7 @@ impl ManPageGenerator {
         Utc::now().format("%Y-%m-%d").to_string()
     }
 
-    /// Generate man page for the main VTCode command
+    /// Generate man page for the main VT Code command
     pub fn generate_main_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
@@ -38,7 +38,7 @@ impl ManPageGenerator {
             ])
             .control("SH", ["DESCRIPTION"])
             .text([
-                roman("VTCode is an advanced coding agent with single-agent architecture and Decision Ledger that provides"),
+                roman("VT Code is an advanced coding agent with single-agent architecture and Decision Ledger that provides"),
                 roman(" intelligent code generation, analysis, and modification capabilities. It supports"),
                 roman(" multiple LLM providers including Gemini, OpenAI, Anthropic, DeepSeek, xAI, Z.AI,"),
                 roman(" Moonshot AI, OpenRouter, and Ollama, and includes tree-sitter powered code analysis for"),
@@ -208,7 +208,7 @@ impl ManPageGenerator {
             )])
             .control("TP", [])
             .text([roman(
-                "Timeout governance: tune [timeouts] in vtcode.toml to clamp tool duration. VTCode warns once execution passes the configured warning threshold so you can cancel runaway commands.",
+                "Timeout governance: tune [timeouts] in vtcode.toml to clamp tool duration. VT Code warns once execution passes the configured warning threshold so you can cancel runaway commands.",
             )])
             .control("SH", ["SEE ALSO"])
             .text([roman("Full documentation: https://github.com/vinhnx/vtcode")])
@@ -594,7 +594,7 @@ impl ManPageGenerator {
         let page = Roff::new()
             .control("TH", ["VTCODE-MAN", "1", &current_date, "VTCode", "User Commands"])
             .control("SH", ["NAME"])
-            .text([roman("vtcode-man - Generate or display man pages for VTCode commands")])
+            .text([roman("vtcode-man - Generate or display man pages for VT Code commands")])
             .control("SH", ["SYNOPSIS"])
             .text([
                 bold("vtcode"),
@@ -612,8 +612,8 @@ impl ManPageGenerator {
             ])
             .control("SH", ["DESCRIPTION"])
             .text([
-                roman("Generate or display Unix man pages for VTCode commands. Man pages provide"),
-                roman(" detailed documentation for all VTCode functionality including usage examples,"),
+                roman("Generate or display Unix man pages for VT Code commands. Man pages provide"),
+                roman(" detailed documentation for all VT Code functionality including usage examples,"),
                 roman(" option descriptions, and feature explanations."),
             ])
             .control("SH", ["OPTIONS"])
@@ -644,7 +644,7 @@ impl ManPageGenerator {
             .text([roman("• chat-verbose - Verbose interactive chat with transparency")])
             .text([roman("• man - Man page generation (this command)")])
             .control("SH", ["EXAMPLES"])
-            .text([roman("Display main VTCode man page:")])
+            .text([roman("Display main VT Code man page:")])
             .text([bold("  vtcode man")])
             .text([roman("Display chat command man page:")])
             .text([bold("  vtcode man chat")])

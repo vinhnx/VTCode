@@ -4,7 +4,7 @@
 /// Implements graceful degradation and helpful troubleshooting guidance.
 use std::fmt;
 
-/// Error type for VTCode extension operations
+/// Error type for VT Code extension operations
 #[derive(Debug, Clone)]
 pub struct ExtensionError {
     /// Error code for programmatic handling
@@ -19,12 +19,12 @@ pub struct ExtensionError {
     pub severity: ErrorSeverity,
 }
 
-/// Error codes for VTCode extension
+/// Error codes for VT Code extension
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorCode {
-    /// VTCode CLI not found in PATH
+    /// VT Code CLI not found in PATH
     CliNotFound,
-    /// VTCode CLI execution failed
+    /// VT Code CLI execution failed
     CliExecutionFailed,
     /// Configuration file not found or invalid
     ConfigError,
@@ -110,7 +110,7 @@ impl ExtensionError {
     pub fn cli_not_found() -> Self {
         let mut err = Self::new(
             ErrorCode::CliNotFound,
-            "VTCode CLI not found in PATH".to_string(),
+            "VT Code CLI not found in PATH".to_string(),
         );
         err.suggestions = vec![
             "Install VTCode: cargo install vtcode".to_string(),
@@ -125,10 +125,10 @@ impl ExtensionError {
     pub fn cli_execution_failed(reason: String) -> Self {
         let mut err = Self::new(
             ErrorCode::CliExecutionFailed,
-            format!("VTCode CLI execution failed: {}", reason),
+            format!("VT Code CLI execution failed: {}", reason),
         );
         err.suggestions = vec![
-            "Check VTCode installation: vtcode --version".to_string(),
+            "Check VT Code installation: vtcode --version".to_string(),
             "Verify configuration: vtcode config".to_string(),
             "Check logs: ~/.vtcode/logs/".to_string(),
         ];
@@ -318,9 +318,9 @@ impl RecoveryStrategy {
     /// Strategy for CLI not found
     pub fn cli_not_found_recovery() -> Self {
         Self::new(
-            "Install VTCode CLI".to_string(),
-            "The VTCode command-line interface is not installed".to_string(),
-            "VTCode CLI available in PATH".to_string(),
+            "Install VT Code CLI".to_string(),
+            "The VT Code command-line interface is not installed".to_string(),
+            "VT Code CLI available in PATH".to_string(),
         )
         .add_step("Install Rust: https://rustup.rs/".to_string())
         .add_step("Install VTCode: cargo install vtcode".to_string())
@@ -552,7 +552,7 @@ mod tests {
     fn test_extension_error_display() {
         let err = ExtensionError::cli_not_found();
         let display = format!("{}", err);
-        assert!(display.contains("VTCode CLI not found"));
+        assert!(display.contains("VT Code CLI not found"));
     }
 
     #[test]

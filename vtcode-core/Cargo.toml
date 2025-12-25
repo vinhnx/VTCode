@@ -3,7 +3,7 @@ name = "vtcode-core"
 version = "0.53.0"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
-description = "Core library for VTCode - a Rust-based terminal coding agent"
+description = "Core library for VT Code - a Rust-based terminal coding agent"
 license = "MIT"
 readme = "../README.md"
 homepage = "https://github.com/vinhnx/vtcode"
@@ -134,7 +134,10 @@ vtcode-indexer = { path = "../vtcode-indexer", version = "0.53.0" }
 # Token counting for attention budget management
 # Note: 'http' feature required for from_pretrained(), adds ~2MB to binary
 # Could be made optional if local tokenizer files are acceptable
-tokenizers = { version = "0.22", default-features = false, features = ["http", "fancy-regex"] }
+tokenizers = { version = "0.22", default-features = false, features = [
+    "http",
+    "fancy-regex",
+] }
 
 # Schema generation
 schemars = { workspace = true, optional = true }

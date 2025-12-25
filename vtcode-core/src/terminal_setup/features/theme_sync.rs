@@ -68,7 +68,7 @@ pub fn generate_config(terminal: TerminalType) -> Result<String> {
     let config = match terminal {
         TerminalType::Ghostty => {
             format!(
-                r#"# VTCode Dark Theme for Ghostty
+                r#"# VT Code Dark Theme for Ghostty
 background = {background}
 foreground = {foreground}
 cursor-color = {cursor}
@@ -117,7 +117,7 @@ palette = 15={bright_white}
 
         TerminalType::Kitty => {
             format!(
-                r#"# VTCode Dark Theme for Kitty
+                r#"# VT Code Dark Theme for Kitty
 background {background}
 foreground {foreground}
 cursor {cursor}
@@ -168,7 +168,7 @@ color15 {bright_white}
 
         TerminalType::Alacritty => {
             format!(
-                r#"# VTCode Dark Theme for Alacritty
+                r#"# VT Code Dark Theme for Alacritty
 [colors.primary]
 background = '{background}'
 foreground = '{foreground}'
@@ -224,7 +224,7 @@ white = '{bright_white}'
 
         TerminalType::Zed => {
             format!(
-                r#"// VTCode Dark Theme for Zed
+                r#"// VT Code Dark Theme for Zed
 {{
   "theme": {{
     "mode": "dark",
@@ -282,9 +282,9 @@ white = '{bright_white}'
 # 1. Open Warp Settings
 # 2. Go to Appearance → Themes
 # 3. Click "New Theme" or "Import Theme"
-# 4. Use the VTCode color values provided in the wizard
+# 4. Use the VT Code color values provided in the wizard
 
-# VTCode colors are displayed in the terminal setup output
+# VT Code colors are displayed in the terminal setup output
 # You can manually configure them in Warp's theme editor
 "#
         .to_string(),
@@ -294,7 +294,7 @@ white = '{bright_white}'
                 r#"{{
   "schemes": [
     {{
-      "name": "VTCode Dark",
+      "name": "VT Code Dark",
       "background": "{background}",
       "foreground": "{foreground}",
       "cursorColor": "{cursor}",
@@ -319,7 +319,7 @@ white = '{bright_white}'
   ],
   "profiles": {{
     "defaults": {{
-      "colorScheme": "VTCode Dark"
+      "colorScheme": "VT Code Dark"
     }}
   }}
 }}
@@ -349,7 +349,7 @@ white = '{bright_white}'
 
         TerminalType::Hyper => {
             format!(
-                r#"// VTCode Dark Theme for Hyper
+                r#"// VT Code Dark Theme for Hyper
 module.exports = {{
   config: {{
     backgroundColor: '{background}',
@@ -402,10 +402,10 @@ module.exports = {{
 
         TerminalType::Tabby => {
             format!(
-                r#"# VTCode Dark Theme for Tabby
+                r#"# VT Code Dark Theme for Tabby
 appearance:
   colorScheme:
-    name: "VTCode Dark"
+    name: "VT Code Dark"
     foreground: "{foreground}"
     background: "{background}"
     cursor: "{cursor}"
@@ -575,7 +575,7 @@ mod tests {
     fn test_generate_windows_terminal_config() {
         let config = generate_config(TerminalType::WindowsTerminal).unwrap();
         assert!(config.contains("schemes"));
-        assert!(config.contains("VTCode Dark"));
+        assert!(config.contains("VT Code Dark"));
     }
 
     #[test]

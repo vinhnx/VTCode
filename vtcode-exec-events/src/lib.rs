@@ -1,4 +1,4 @@
-//! Structured execution telemetry events shared across VTCode crates.
+//! Structured execution telemetry events shared across VT Code crates.
 //!
 //! This crate exposes the serialized schema for thread lifecycle updates,
 //! command execution results, and other timeline artifacts emitted by the

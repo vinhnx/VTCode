@@ -1,4 +1,4 @@
-# VTCode Agent Skills Documentation Index
+# VT Code Agent Skills Documentation Index
 
 Complete reference for all Agent Skills documentation, examples, and guides.
 
@@ -33,7 +33,7 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 **File:** `docs/AGENT_SKILLS_INTEGRATION.md`
 
 -   Complete integration guide
--   How to use skills with VTCode agent
+-   How to use skills with VT Code agent
 -   Agent integration points
 -   Code examples (Rust and Python)
 -   Workflow patterns
@@ -179,7 +179,7 @@ response = client.messages.create(
 )
 ```
 
-### Example: Use in VTCode Agent
+### Example: Use in VT Code Agent
 
 ```bash
 vtcode ask "Create Excel spreadsheet with Q4 financial data"
@@ -457,7 +457,7 @@ VTCode/
 -   [Agent Skills API Guide](https://platform.claude.com/docs/en/build-with-claude/skills-guide)
 -   [Skills Cookbook](https://github.com/anthropics/claude-cookbooks/tree/main/skills)
 
-### VTCode Implementation
+### VT Code Implementation
 
 -   `vtcode-core/src/skills/` - Core skills module
 -   `src/cli/skills.rs` - CLI command handlers
@@ -488,4 +488,4 @@ For help:
 ---
 
 **Last Updated:** December 13, 2024
-**VTCode Agent Skills Implementation**
+**VT Code Agent Skills Implementation**

@@ -1,10 +1,10 @@
-# VTCode MCP Implementation Simplification
+# VT Code MCP Implementation Simplification
 
 ## Current Status (November 2025)
 
 The asynchronous MCP server, circuit breaker layer, and related helper crates have been removed from VTCode. Field feedback showed the additional infrastructure increased startup time and memory pressure without materially improving reliability for the current set of providers. The core runtime now ships with a lean MCP client that focuses purely on outbound provider connections.
 
--   **No embedded MCP server** – VTCode no longer exposes its own MCP endpoints. Tooling that previously relied on the in-process server should interact with the standard tool registry instead.
+-   **No embedded MCP server** – VT Code no longer exposes its own MCP endpoints. Tooling that previously relied on the in-process server should interact with the standard tool registry instead.
 -   **Circuit breaker removed** – provider calls run directly after validation. Failures are surfaced immediately to the caller, which simplifies debugging and avoids unexpected retries.
 -   **Error handling simplified** – the custom `McpError` type and wrapper modules have been dropped; standard `anyhow::Error` context is used instead.
 -   **Configuration compatibility** – the existing `vtcode.toml` schema is still accepted. Server-specific settings are ignored and can be deleted from local configs when convenient.
@@ -15,7 +15,7 @@ The remainder of this document is preserved for historical context. Sections des
 
 ## Overview
 
-This document describes the improvements made to the VTCode MCP (Model Context Protocol) implementation. These enhancements focused on making the MCP system more robust, resilient, and easier to configure and debug.
+This document describes the improvements made to the VT Code MCP (Model Context Protocol) implementation. These enhancements focused on making the MCP system more robust, resilient, and easier to configure and debug.
 
 ## Key Improvements
 
@@ -134,7 +134,7 @@ if validated_config.is_valid() {
 
 ## Integration with Existing Code
 
-The improvements are designed to integrate seamlessly with the existing VTCode codebase:
+The improvements are designed to integrate seamlessly with the existing VT Code codebase:
 
 1. **Backward Compatibility** - Existing MCP client functionality is preserved
 2. **Gradual Rollout** - Enhancements can be enabled selectively
@@ -174,7 +174,7 @@ Planned future improvements include:
 1. **Advanced Rate Limiting** - More sophisticated rate limiting algorithms
 2. **OAuth Integration** - Support for OAuth-based authentication
 3. **Monitoring and Metrics** - Built-in monitoring for MCP operations
-4. **Extended Tool Catalog** - Richer set of VTCode tools exposed via MCP
+4. **Extended Tool Catalog** - Richer set of VT Code tools exposed via MCP
 5. **Multi-tenancy Support** - Isolation between different MCP clients
 
 ## Conclusion

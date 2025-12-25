@@ -4,7 +4,7 @@ This document describes VTCode's implementation of the XDG Base Directory Specif
 
 ## Overview
 
-VTCode now follows platform-specific conventions for storing configuration and data files:
+VT Code now follows platform-specific conventions for storing configuration and data files:
 
 -   **Linux**: `~/.config/vtcode/` and `~/.local/share/vtcode/`
 -   **macOS**: `~/Library/Application Support/com.vinhnx.vtcode/`

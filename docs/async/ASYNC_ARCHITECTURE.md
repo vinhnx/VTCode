@@ -1,66 +1,66 @@
-# VTCode Async Architecture Reference
+# VT Code Async Architecture Reference
 
 ## Overview
 
-VTCode uses a **fully async architecture** for all I/O operations, providing non-blocking execution and excellent responsiveness.
+VT Code uses a **fully async architecture** for all I/O operations, providing non-blocking execution and excellent responsiveness.
 
 ## Architecture Diagram
 
 ```
 
-                     User Interface (TUI)                     
-                    (Always Responsive)                       
+                     User Interface (TUI)
+                    (Always Responsive)
 
-                         
-                         
 
-                  Agent Turn Loop (Async)                     
-              - Tool call detection                           
-              - Timeout handling                              
-              - Cancellation support                          
 
-                         
-                         
 
-            execute_tool_with_timeout (Async)                 
-              - tokio::select! for cancellation               
-              - tokio::time::timeout for timeouts             
+                  Agent Turn Loop (Async)
+              - Tool call detection
+              - Timeout handling
+              - Cancellation support
 
-                         
-                         
 
-            ToolRegistry::execute_tool (Async)                
-              - Dispatches to appropriate tool                
 
-                         
-                         
 
-                   Tool Implementations                       
-                                                              
-                    
-    PTY Operations      File Operations                 
-                                                        
-    PtyManager          tokio::fs                       
-    ::run_command       ::read_to_string                
-                        ::write                         
-    Uses:               ::metadata                      
-    spawn_blocking      ::canonicalize                  
-                    
-                                                              
-                    
-    HTTP Requests       Search/Grep                     
-                                                        
-    reqwest             tokio::fs                       
-    (async)             (async)                         
-                    
+            execute_tool_with_timeout (Async)
+              - tokio::select! for cancellation
+              - tokio::time::timeout for timeouts
 
-                         
-                         
 
-                  Tokio Async Runtime                         
-              - Thread pool management                        
-              - Task scheduling                               
-              - Non-blocking I/O                              
+
+
+            ToolRegistry::execute_tool (Async)
+              - Dispatches to appropriate tool
+
+
+
+
+                   Tool Implementations
+
+
+    PTY Operations      File Operations
+
+    PtyManager          tokio::fs
+    ::run_command       ::read_to_string
+                        ::write
+    Uses:               ::metadata
+    spawn_blocking      ::canonicalize
+
+
+
+    HTTP Requests       Search/Grep
+
+    reqwest             tokio::fs
+    (async)             (async)
+
+
+
+
+
+                  Tokio Async Runtime
+              - Thread pool management
+              - Task scheduling
+              - Non-blocking I/O
 
 ```
 
@@ -88,6 +88,7 @@ impl PtyManager {
 ```
 
 **Key Features**:
+
 -   Non-blocking from async runtime perspective
 -   Proper timeout handling
 -   Process cancellation support
@@ -111,6 +112,7 @@ impl ToolRegistry {
 ```
 
 **Key Features**:
+
 -   Fully async execution
 -   Tool-specific implementations
 -   Error handling and recovery
@@ -129,11 +131,11 @@ pub async fn execute_tool_with_timeout(
 ) -> ToolExecutionStatus {
     tokio::select! {
         biased;
-        
+
         _ = ctrl_c_notify.notified() => {
             // Handle cancellation
         }
-        
+
         result = tokio::time::timeout(
             TOOL_TIMEOUT,
             registry.execute_tool(name, args)
@@ -145,6 +147,7 @@ pub async fn execute_tool_with_timeout(
 ```
 
 **Key Features**:
+
 -   Timeout support (5 minutes default)
 -   Cancellation via Ctrl+C
 -   Proper error handling
@@ -172,6 +175,7 @@ tokio::fs::create_dir_all(path).await?;
 ```
 
 **Files Using Async I/O**:
+
 -   `tree_sitter/refactoring.rs`
 -   `tree_sitter/analyzer.rs`
 -   `srgn.rs`
@@ -213,11 +217,11 @@ tokio::time::timeout(
 ```rust
 tokio::select! {
     biased;
-    
+
     _ = cancel_signal.notified() => {
         // Handle cancellation
     }
-    
+
     result = async_operation() => {
         // Handle result
     }
@@ -239,23 +243,25 @@ tokio::fs::write(path, data).await?;
 ## Performance Characteristics
 
 ### Blocking Operations
-- **Location**: Isolated to `spawn_blocking` thread pool
-- **Impact**: Zero impact on async runtime
-- **Scalability**: Thread pool auto-scales
+
+-   **Location**: Isolated to `spawn_blocking` thread pool
+-   **Impact**: Zero impact on async runtime
+-   **Scalability**: Thread pool auto-scales
 
 ### Async Operations
-- **Concurrency**: Multiple operations can run simultaneously
-- **Responsiveness**: UI never blocks
-- **Resource Usage**: Efficient, minimal overhead
+
+-   **Concurrency**: Multiple operations can run simultaneously
+-   **Responsiveness**: UI never blocks
+-   **Resource Usage**: Efficient, minimal overhead
 
 ### Benchmarks
 
-| Operation | Blocking Time | Async Overhead |
-|-----------|---------------|----------------|
-| File Read (1KB) | ~1ms | <0.1ms |
-| File Write (1KB) | ~2ms | <0.1ms |
-| PTY Command | Variable | <1ms |
-| HTTP Request | Variable | <0.5ms |
+| Operation        | Blocking Time | Async Overhead |
+| ---------------- | ------------- | -------------- |
+| File Read (1KB)  | ~1ms          | <0.1ms         |
+| File Write (1KB) | ~2ms          | <0.1ms         |
+| PTY Command      | Variable      | <1ms           |
+| HTTP Request     | Variable      | <0.5ms         |
 
 ## Error Handling
 
@@ -266,7 +272,7 @@ async fn operation() -> Result<T> {
     let data = tokio::fs::read_to_string(path)
         .await
         .context("Failed to read file")?;
-    
+
     // Process data
     Ok(result)
 }
@@ -296,56 +302,62 @@ tokio::select! {
 
 ## Best Practices
 
-### DO  
+### DO
 
 1. **Use `tokio::fs` for file operations**
-   ```rust
-   tokio::fs::read_to_string(path).await?
-   ```
+
+    ```rust
+    tokio::fs::read_to_string(path).await?
+    ```
 
 2. **Use `spawn_blocking` for CPU-intensive work**
-   ```rust
-   tokio::task::spawn_blocking(|| heavy_computation()).await?
-   ```
+
+    ```rust
+    tokio::task::spawn_blocking(|| heavy_computation()).await?
+    ```
 
 3. **Add timeouts to long operations**
-   ```rust
-   tokio::time::timeout(duration, operation()).await?
-   ```
+
+    ```rust
+    tokio::time::timeout(duration, operation()).await?
+    ```
 
 4. **Support cancellation**
-   ```rust
-   tokio::select! { ... }
-   ```
+    ```rust
+    tokio::select! { ... }
+    ```
 
-### DON'T  
+### DON'T
 
 1. **Don't use `std::fs` in async code**
-   ```rust
-   //   Bad
-   std::fs::read_to_string(path)?
-   
-   //   Good
-   tokio::fs::read_to_string(path).await?
-   ```
+
+    ```rust
+    //   Bad
+    std::fs::read_to_string(path)?
+
+    //   Good
+    tokio::fs::read_to_string(path).await?
+    ```
 
 2. **Don't block the async runtime**
-   ```rust
-   //   Bad
-   std::thread::sleep(duration);
-   
-   //   Good
-   tokio::time::sleep(duration).await;
-   ```
+
+    ```rust
+    //   Bad
+    std::thread::sleep(duration);
+
+    //   Good
+    tokio::time::sleep(duration).await;
+    ```
 
 3. **Don't forget to await**
-   ```rust
-   //   Bad
-   let future = async_operation();
-   
-   //   Good
-   let result = async_operation().await?;
-   ```
+
+    ```rust
+    //   Bad
+    let future = async_operation();
+
+    //   Good
+    let result = async_operation().await?;
+    ```
 
 ## Testing Async Code
 
@@ -399,27 +411,29 @@ async fn operation() -> Result<T> {
 ### Potential Improvements
 
 1. **Streaming Output** (Optional)
-   - Real-time output display
-   - Progress indicators
-   - Effort: 1-2 days
+
+    - Real-time output display
+    - Progress indicators
+    - Effort: 1-2 days
 
 2. **Parallel Execution** (Optional)
-   - Run independent tools concurrently
-   - Effort: 1 day
+
+    - Run independent tools concurrently
+    - Effort: 1 day
 
 3. **Native Async PTY** (Low Priority)
-   - Replace `spawn_blocking` with native async
-   - Only if performance issues arise
-   - Effort: 1-2 weeks
+    - Replace `spawn_blocking` with native async
+    - Only if performance issues arise
+    - Effort: 1-2 weeks
 
 ## References
 
-- [Tokio Documentation](https://tokio.rs/)
-- [Async Book](https://rust-lang.github.io/async-book/)
-- [VTCode Async Migration Docs](./ASYNC_MIGRATION_COMPLETE.md)
+-   [Tokio Documentation](https://tokio.rs/)
+-   [Async Book](https://rust-lang.github.io/async-book/)
+-   [VT Code Async Migration Docs](./ASYNC_MIGRATION_COMPLETE.md)
 
 ---
 
-**Last Updated**: December 2024  
-**Status**: Production Ready    
-**Coverage**: 100% Async I/O  
+**Last Updated**: December 2024
+**Status**: Production Ready
+**Coverage**: 100% Async I/O

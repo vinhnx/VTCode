@@ -1,10 +1,10 @@
-//! VTCode Command Implementations
+//! VT Code Command Implementations
 //!
-//! This module implements all VTCode commands that are exposed through
+//! This module implements all VT Code commands that are exposed through
 //! Zed's command palette. Uses CommandBuilder for cleaner construction.
 use crate::command_builder::CommandBuilder;
 
-/// Response from a VTCode command operation
+/// Response from a VT Code command operation
 #[derive(Debug, Clone)]
 pub struct CommandResponse {
     pub success: bool,
@@ -30,7 +30,7 @@ impl CommandResponse {
     }
 }
 
-/// Ask the VTCode agent an arbitrary question
+/// Ask the VT Code agent an arbitrary question
 pub fn ask_agent(query: &str) -> CommandResponse {
     match CommandBuilder::ask(query).execute() {
         Ok(result) => {
@@ -84,17 +84,17 @@ pub fn launch_chat() -> CommandResponse {
     }
 }
 
-/// Check VTCode CLI installation and status
+/// Check VT Code CLI installation and status
 pub fn check_status() -> CommandResponse {
     match CommandBuilder::version().execute() {
         Ok(result) => {
             if result.is_success() {
-                CommandResponse::ok(format!("VTCode CLI is available\n{}", result.stdout))
+                CommandResponse::ok(format!("VT Code CLI is available\n{}", result.stdout))
             } else {
-                CommandResponse::err("VTCode CLI check failed".to_string())
+                CommandResponse::err("VT Code CLI check failed".to_string())
             }
         }
-        Err(e) => CommandResponse::err(format!("VTCode CLI not found: {}", e)),
+        Err(e) => CommandResponse::err(format!("VT Code CLI not found: {}", e)),
     }
 }
 

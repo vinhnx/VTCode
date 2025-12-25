@@ -1,6 +1,6 @@
 //! Enhanced Skill Discovery and Loading
 //!
-//! Integrates traditional VTCode skills with CLI tool skills and progressive
+//! Integrates traditional VT Code skills with CLI tool skills and progressive
 //! context management for efficient memory usage and comprehensive skill discovery.
 
 use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig};
@@ -598,7 +598,7 @@ impl EnhancedSkillLoader {
 /// Enhanced skill discovery result
 #[derive(Debug, Clone)]
 pub struct EnhancedDiscoveryResult {
-    /// Traditional VTCode skills
+    /// Traditional VT Code skills
     pub traditional_skills: Vec<SkillContext>,
 
     /// CLI tool configurations
@@ -630,7 +630,7 @@ pub struct EnhancedDiscoveryStats {
 /// Enhanced skill types
 #[derive(Debug, Clone)]
 pub enum EnhancedSkill {
-    /// Traditional VTCode skill
+    /// Traditional VT Code skill
     Traditional(Skill),
 
     /// CLI tool skill

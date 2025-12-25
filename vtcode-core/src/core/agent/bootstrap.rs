@@ -2,7 +2,7 @@
 //!
 //! This module extracts the initialization logic from [`Agent`](super::core::Agent)
 //! so it can be reused by downstream consumers. The builder pattern makes it easy
-//! to override default components (for example when embedding VTCode in other
+//! to override default components (for example when embedding VT Code in other
 //! applications or exposing a reduced open-source surface area) without relying
 //! on the binary crate's internal setup.
 

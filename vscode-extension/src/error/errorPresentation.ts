@@ -24,28 +24,37 @@ export class ErrorPresentationHandler {
             return {
                 title: "Connection Failed",
                 message:
-                    "VTCode cannot connect to the backend service. The service may be starting up or encountered an issue.",
-                suggestion: "Try again in a few moments. If the problem persists, restart the extension.",
+                    "VT Code cannot connect to the backend service. The service may be starting up or encountered an issue.",
+                suggestion:
+                    "Try again in a few moments. If the problem persists, restart the extension.",
                 severity: "error",
             };
         }
 
-        if (errorMessage.includes("ETIMEDOUT") || errorMessage.includes("timeout")) {
+        if (
+            errorMessage.includes("ETIMEDOUT") ||
+            errorMessage.includes("timeout")
+        ) {
             return {
                 title: "Request Timeout",
                 message:
                     "The request took too long to complete. The network may be slow or the service is overloaded.",
-                suggestion: "Try again with a simpler query, or wait a moment before retrying.",
+                suggestion:
+                    "Try again with a simpler query, or wait a moment before retrying.",
                 severity: "warning",
             };
         }
 
-        if (errorMessage.includes("ENOTFOUND") || errorMessage.includes("DNS")) {
+        if (
+            errorMessage.includes("ENOTFOUND") ||
+            errorMessage.includes("DNS")
+        ) {
             return {
                 title: "Network Unreachable",
                 message:
-                    "VTCode cannot reach the backend service. Check your internet connection and firewall settings.",
-                suggestion: "Verify your network connection and check firewall rules.",
+                    "VT Code cannot reach the backend service. Check your internet connection and firewall settings.",
+                suggestion:
+                    "Verify your network connection and check firewall rules.",
                 severity: "error",
             };
         }
@@ -63,7 +72,10 @@ export class ErrorPresentationHandler {
         }
 
         // Rate limit errors
-        if (errorMessage.includes("rate limit") || errorMessage.includes("429")) {
+        if (
+            errorMessage.includes("rate limit") ||
+            errorMessage.includes("429")
+        ) {
             return {
                 title: "Rate Limited",
                 message:
@@ -82,7 +94,7 @@ export class ErrorPresentationHandler {
             return {
                 title: "Authentication Failed",
                 message:
-                    "VTCode cannot authenticate with the service. Your API key or credentials may be invalid or expired.",
+                    "VT Code cannot authenticate with the service. Your API key or credentials may be invalid or expired.",
                 suggestion:
                     "Check your configuration settings and ensure your API key is correct. See the documentation for setup instructions.",
                 severity: "error",
@@ -94,7 +106,7 @@ export class ErrorPresentationHandler {
             return {
                 title: "Tool Execution Failed",
                 message:
-                    "A tool that VTCode tried to use encountered an error. This might be a permission issue or an unexpected state.",
+                    "A tool that VT Code tried to use encountered an error. This might be a permission issue or an unexpected state.",
                 suggestion:
                     "Review the tool output above for details. You may need to adjust permissions or workspace state.",
                 severity: "error",
@@ -102,20 +114,29 @@ export class ErrorPresentationHandler {
         }
 
         // File not found errors
-        if (errorMessage.includes("ENOENT") || errorMessage.includes("not found")) {
+        if (
+            errorMessage.includes("ENOENT") ||
+            errorMessage.includes("not found")
+        ) {
             return {
                 title: "File Not Found",
-                message: "VTCode tried to access a file that doesn't exist or has been deleted.",
-                suggestion: "Check that the file still exists and the path is correct.",
+                message:
+                    "VT Code tried to access a file that doesn't exist or has been deleted.",
+                suggestion:
+                    "Check that the file still exists and the path is correct.",
                 severity: "warning",
             };
         }
 
         // Permission errors
-        if (errorMessage.includes("EACCES") || errorMessage.includes("permission denied")) {
+        if (
+            errorMessage.includes("EACCES") ||
+            errorMessage.includes("permission denied")
+        ) {
             return {
                 title: "Permission Denied",
-                message: "VTCode doesn't have permission to access this resource.",
+                message:
+                    "VT Code doesn't have permission to access this resource.",
                 suggestion:
                     "Check file permissions or workspace trust settings. You may need to grant additional permissions.",
                 severity: "error",
@@ -137,8 +158,11 @@ export class ErrorPresentationHandler {
         return {
             title: "Unexpected Error",
             message: errorMessage,
-            details: errorStack ? `Details: ${errorStack.split("\n")[1]?.trim()}` : undefined,
-            suggestion: "Check the output channel for more details. Please report this if it continues.",
+            details: errorStack
+                ? `Details: ${errorStack.split("\n")[1]?.trim()}`
+                : undefined,
+            suggestion:
+                "Check the output channel for more details. Please report this if it continues.",
             severity: "error",
         };
     }
@@ -187,19 +211,19 @@ export const ERROR_MESSAGES = {
     },
     BACKEND_UNAVAILABLE: {
         title: "Backend Service Unavailable",
-        message: "The VTCode backend service is not running.",
+        message: "The VT Code backend service is not running.",
         suggestion: "Start the backend service or check the documentation.",
         severity: "error" as const,
     },
     CONFIGURATION_INVALID: {
         title: "Invalid Configuration",
-        message: "Your VTCode configuration is invalid or incomplete.",
+        message: "Your VT Code configuration is invalid or incomplete.",
         suggestion: "Review your configuration file and fix any errors.",
         severity: "error" as const,
     },
     WORKSPACE_UNTRUSTED: {
         title: "Workspace Not Trusted",
-        message: "VTCode requires a trusted workspace to function safely.",
+        message: "VT Code requires a trusted workspace to function safely.",
         suggestion: "Trust this workspace in VS Code settings to use VTCode.",
         severity: "warning" as const,
     },

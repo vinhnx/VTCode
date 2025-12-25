@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Test script for VTCode project management
+# Test script for VT Code project management
 
-echo "Testing VTCode project management..."
+echo "Testing VT Code project management..."
 
 # Check if ~/.vtcode/projects directory exists
 if [ -d "$HOME/.vtcode/projects" ]; then

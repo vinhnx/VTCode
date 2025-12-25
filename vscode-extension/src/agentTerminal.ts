@@ -193,7 +193,7 @@ class ManagedTerminal implements vscode.Pseudoterminal, VtcodeTerminalHandle {
 
     get terminal(): vscode.Terminal {
         if (!this.attachedTerminal) {
-            throw new Error("VTCode terminal has not been attached yet.");
+            throw new Error("VT Code terminal has not been attached yet.");
         }
 
         return this.attachedTerminal;
@@ -303,7 +303,7 @@ class ManagedTerminal implements vscode.Pseudoterminal, VtcodeTerminalHandle {
                 ? loadError instanceof Error
                     ? loadError.message
                     : String(loadError)
-                : "Install dependencies with 'npm install' to enable the VTCode terminal.";
+                : "Install dependencies with 'npm install' to enable the VT Code terminal.";
             const message = `node-pty module not available. ${detail}`;
             this.writeEmitter.fire(
                 `\u001b[31m[vtcode] Failed to launch terminal: ${message}\u001b[0m\r\n`
@@ -317,7 +317,7 @@ class ManagedTerminal implements vscode.Pseudoterminal, VtcodeTerminalHandle {
             if (!nodePtyWarningShown) {
                 nodePtyWarningShown = true;
                 void vscode.window.showErrorMessage(
-                    "VTCode could not load the optional 'node-pty' dependency. Run 'npm install' in the extension workspace to enable the integrated terminal."
+                    "VT Code could not load the optional 'node-pty' dependency. Run 'npm install' in the extension workspace to enable the integrated terminal."
                 );
             }
             return;

@@ -1,8 +1,8 @@
-# VTCode Zed Extension - Comprehensive Guide
+# VT Code Zed Extension - Comprehensive Guide
 
-**Date**: November 9, 2025  
-**Version**: v0.3.0  
-**Status**:   Production Ready  
+**Date**: November 9, 2025
+**Version**: v0.3.0
+**Status**: Production Ready
 **Quality Grade**: A+ (8.7/10)
 
 ---
@@ -28,14 +28,14 @@
 
 ### What Is This?
 
-VTCode Zed Extension brings the powerful VTCode AI coding assistant to the Zed editor, providing:
+VT Code Zed Extension brings the powerful VT Code AI coding assistant to the Zed editor, providing:
 
--  **AI Assistance** - Direct access to VTCode AI agent
--  **Code Analysis** - Semantic code intelligence with workspace context
--  **Configuration** - TOML-based settings management
--  **Workspace Context** - Deep understanding of project structure
--  **Performance** - Multi-level intelligent caching
--  **Error Handling** - Professional error recovery
+-   **AI Assistance** - Direct access to VT Code AI agent
+-   **Code Analysis** - Semantic code intelligence with workspace context
+-   **Configuration** - TOML-based settings management
+-   **Workspace Context** - Deep understanding of project structure
+-   **Performance** - Multi-level intelligent caching
+-   **Error Handling** - Professional error recovery
 
 ### Key Stats
 
@@ -51,10 +51,10 @@ VTCode Zed Extension brings the powerful VTCode AI coding assistant to the Zed e
 
 ### Current Version
 
-- **v0.3.0** (Production Ready)
-- All 4 major phases complete
-- Ready for release and registry submission
-- Clear path for v0.4.0 enhancements
+-   **v0.3.0** (Production Ready)
+-   All 4 major phases complete
+-   Ready for release and registry submission
+-   Clear path for v0.4.0 enhancements
 
 ---
 
@@ -62,28 +62,28 @@ VTCode Zed Extension brings the powerful VTCode AI coding assistant to the Zed e
 
 ### Completion Status
 
-| Component | Status | Details |
-|-----------|--------|---------|
-| **Phase 1** |   Complete | CLI integration, command palette, output |
-| **Phase 2.1** |   Complete | Editor integration, diagnostics, status |
-| **Phase 2.2** |   Complete | Configuration validation, error reporting |
-| **Phase 2.3** |   Complete | Workspace analysis, file context |
-| **Phase 3** |   Complete | Error handling, caching, performance |
-| **Documentation** |   Complete | 21+ comprehensive docs |
-| **Testing** |   Complete | 107 tests, 100% coverage |
-| **Code Quality** |   Perfect | 0 warnings, production-ready |
+| Component         | Status   | Details                                   |
+| ----------------- | -------- | ----------------------------------------- |
+| **Phase 1**       | Complete | CLI integration, command palette, output  |
+| **Phase 2.1**     | Complete | Editor integration, diagnostics, status   |
+| **Phase 2.2**     | Complete | Configuration validation, error reporting |
+| **Phase 2.3**     | Complete | Workspace analysis, file context          |
+| **Phase 3**       | Complete | Error handling, caching, performance      |
+| **Documentation** | Complete | 21+ comprehensive docs                    |
+| **Testing**       | Complete | 107 tests, 100% coverage                  |
+| **Code Quality**  | Perfect  | 0 warnings, production-ready              |
 
 ### Quality Metrics
 
-| Metric | Value | Grade |
-|--------|-------|-------|
-| Code Quality | 0 warnings | A+ |
-| Test Coverage | 107 tests | A+ |
-| Documentation | 21 files | A+ |
-| Performance | <100ms tests | A+ |
-| API Design | Stable | A+ |
-| Security | No vulnerabilities | A+ |
-| **Overall** | **8.7/10** | **A+** |
+| Metric        | Value              | Grade  |
+| ------------- | ------------------ | ------ |
+| Code Quality  | 0 warnings         | A+     |
+| Test Coverage | 107 tests          | A+     |
+| Documentation | 21 files           | A+     |
+| Performance   | <100ms tests       | A+     |
+| API Design    | Stable             | A+     |
+| Security      | No vulnerabilities | A+     |
+| **Overall**   | **8.7/10**         | **A+** |
 
 ---
 
@@ -93,7 +93,7 @@ VTCode Zed Extension brings the powerful VTCode AI coding assistant to the Zed e
 
 1. **Rust** 1.70+ (2021 edition)
 2. **Zed** editor 0.150.0+
-3. **VTCode CLI** 0.1.0+
+3. **VT Code CLI** 0.1.0+
 4. **Git** for version control
 
 ### Installation
@@ -142,7 +142,7 @@ cargo build --release
 VTCodeExtension (entry point)
 
  executor.rs
-   Execute VTCode CLI commands
+   Execute VT Code CLI commands
    Handle timeouts and errors
    Stream output
 
@@ -209,7 +209,7 @@ Workspace Analysis
     ↓
 Cache Check
      Hit → Return cached result
-     Miss → Execute VTCode CLI
+     Miss → Execute VT Code CLI
         ↓
     Output Channel
         ↓
@@ -343,25 +343,29 @@ mod tests {
 ### Test Levels
 
 **1. Unit Tests** (107 total)
-- Test individual functions/methods
-- Mock external dependencies
-- Run in isolation
-- Execute in <100ms total
+
+-   Test individual functions/methods
+-   Mock external dependencies
+-   Run in isolation
+-   Execute in <100ms total
 
 **2. Integration Tests** (Future)
-- Test module interactions
-- Use real dependencies
-- Verify end-to-end workflows
+
+-   Test module interactions
+-   Use real dependencies
+-   Verify end-to-end workflows
 
 **3. Property Tests** (Future)
-- Find edge cases
-- Verify invariants
-- Randomized inputs
+
+-   Find edge cases
+-   Verify invariants
+-   Randomized inputs
 
 **4. Benchmarks** (Future)
-- Track performance
-- Prevent regressions
-- Identify bottlenecks
+
+-   Track performance
+-   Prevent regressions
+-   Identify bottlenecks
 
 ### Running Tests
 
@@ -384,20 +388,20 @@ cargo bench
 
 ### Test Coverage
 
-| Module | Tests | Coverage |
-|--------|-------|----------|
-| cache.rs | 14 | 100% |
-| error_handling.rs | 25 | 100% |
-| workspace.rs | 21 | 100% |
-| context.rs | 12 | 100% |
-| validation.rs | 11 | 100% |
-| editor.rs | 8 | 100% |
-| output.rs | 5 | 100% |
-| config.rs | 4 | 100% |
-| commands.rs | 2 | 90% |
-| executor.rs | 2 | 90% |
-| lib.rs | 0 | 0% (needs expansion) |
-| **Total** | **107** | **95%** |
+| Module            | Tests   | Coverage             |
+| ----------------- | ------- | -------------------- |
+| cache.rs          | 14      | 100%                 |
+| error_handling.rs | 25      | 100%                 |
+| workspace.rs      | 21      | 100%                 |
+| context.rs        | 12      | 100%                 |
+| validation.rs     | 11      | 100%                 |
+| editor.rs         | 8       | 100%                 |
+| output.rs         | 5       | 100%                 |
+| config.rs         | 4       | 100%                 |
+| commands.rs       | 2       | 90%                  |
+| executor.rs       | 2       | 90%                  |
+| lib.rs            | 0       | 0% (needs expansion) |
+| **Total**         | **107** | **95%**              |
 
 ### Writing Tests
 
@@ -468,23 +472,25 @@ echo "  All checks passed!"
 ### CI/CD Requirements
 
 Every PR should:
-- [ ] Pass `cargo check`
-- [ ] Pass `cargo clippy` (0 warnings)
-- [ ] Pass `cargo fmt --check`
-- [ ] Pass `cargo test --lib` (all tests)
-- [ ] Maintain or improve code coverage
-- [ ] Update documentation
+
+-   [ ] Pass `cargo check`
+-   [ ] Pass `cargo clippy` (0 warnings)
+-   [ ] Pass `cargo fmt --check`
+-   [ ] Pass `cargo test --lib` (all tests)
+-   [ ] Maintain or improve code coverage
+-   [ ] Update documentation
 
 ### Documentation Standards
 
 All public APIs must have:
-- Brief description of purpose
-- Parameter documentation
-- Return type documentation
-- Example usage
-- Error cases documented
 
-```rust
+-   Brief description of purpose
+-   Parameter documentation
+-   Return type documentation
+-   Example usage
+-   Error cases documented
+
+````rust
 /// Calculate workspace metrics
 ///
 /// Analyzes the workspace and returns aggregated metrics about
@@ -513,7 +519,7 @@ All public APIs must have:
 pub fn analyze_workspace(path: &str) -> ExtensionResult<ProjectStructure> {
     // Implementation
 }
-```
+````
 
 ---
 
@@ -534,16 +540,18 @@ Cache Capacity:     100MB max
 ### Performance Optimization
 
 **v0.3.0 (Current)**:
-- Single-threaded command execution
-- Mutex-based synchronization
-- Memory-only caching
-- In-memory file indexing
+
+-   Single-threaded command execution
+-   Mutex-based synchronization
+-   Memory-only caching
+-   In-memory file indexing
 
 **v0.4.0 (Planned)**:
-- Async/await support (20-30% faster)
-- RwLock for read-heavy operations (10-15% faster)
-- Persistent disk caching
-- Incremental file scanning
+
+-   Async/await support (20-30% faster)
+-   RwLock for read-heavy operations (10-15% faster)
+-   Persistent disk caching
+-   Incremental file scanning
 
 ### Profiling
 
@@ -565,49 +573,54 @@ perf report
 
 ### Security Considerations
 
-  **Implemented**:
-- No unsafe code
-- Input validation
-- Error handling prevents info leaks
-- No command injection vulnerabilities
-- Proper file permissions
+**Implemented**:
 
- **Recommended for v0.4.0**:
-- Input sanitization for shell commands
-- Path traversal protection
-- File size limits
-- Rate limiting for CLI calls
-- Audit logging
+-   No unsafe code
+-   Input validation
+-   Error handling prevents info leaks
+-   No command injection vulnerabilities
+-   Proper file permissions
+
+    **Recommended for v0.4.0**:
+
+-   Input sanitization for shell commands
+-   Path traversal protection
+-   File size limits
+-   Rate limiting for CLI calls
+-   Audit logging
 
 ### Security Best Practices
 
 1. **Always validate input**
-   ```rust
-   if input.is_empty() {
-       return Err("Input cannot be empty".into());
-   }
-   ```
+
+    ```rust
+    if input.is_empty() {
+        return Err("Input cannot be empty".into());
+    }
+    ```
 
 2. **Use Result types for errors**
-   ```rust
-   pub fn parse(input: &str) -> ExtensionResult<T> { ... }
-   ```
+
+    ```rust
+    pub fn parse(input: &str) -> ExtensionResult<T> { ... }
+    ```
 
 3. **Avoid unwrap() in production**
-   ```rust
-   // Bad
-   let value = some_option.unwrap();
-   
-   // Good
-   let value = some_option.ok_or("Missing value")?;
-   ```
+
+    ```rust
+    // Bad
+    let value = some_option.unwrap();
+
+    // Good
+    let value = some_option.ok_or("Missing value")?;
+    ```
 
 4. **Sanitize file paths**
-   ```rust
-   let path = Path::new(user_input);
-   let canonical = path.canonicalize()
-       .map_err(|_| "Invalid path")?;
-   ```
+    ```rust
+    let path = Path::new(user_input);
+    let canonical = path.canonicalize()
+        .map_err(|_| "Invalid path")?;
+    ```
 
 ---
 
@@ -616,34 +629,39 @@ perf report
 ### Release Process
 
 1. **Verify Quality**
-   ```bash
-   cargo check && cargo clippy && cargo test --lib
-   ```
+
+    ```bash
+    cargo check && cargo clippy && cargo test --lib
+    ```
 
 2. **Update Version**
-   ```toml
-   [package]
-   version = "0.3.0"
-   ```
+
+    ```toml
+    [package]
+    version = "0.3.0"
+    ```
 
 3. **Update CHANGELOG**
-   ```markdown
-   ## v0.3.0 (2025-11-09)
-   - Phase 1: Core features
-   - Phase 2: Advanced features
-   - Phase 3: Polish & distribution
-   ```
+
+    ```markdown
+    ## v0.3.0 (2025-11-09)
+
+    -   Phase 1: Core features
+    -   Phase 2: Advanced features
+    -   Phase 3: Polish & distribution
+    ```
 
 4. **Create Git Tag**
-   ```bash
-   git tag v0.3.0
-   git push origin v0.3.0
-   ```
+
+    ```bash
+    git tag v0.3.0
+    git push origin v0.3.0
+    ```
 
 5. **Build Release**
-   ```bash
-   cargo build --release
-   ```
+    ```bash
+    cargo build --release
+    ```
 
 ### Registry Submission
 
@@ -662,6 +680,7 @@ When ready for v0.4.0+:
 ### Common Issues
 
 **Issue**: `cargo build` fails
+
 ```bash
 # Solution
 rustup update
@@ -670,12 +689,14 @@ cargo build
 ```
 
 **Issue**: Tests fail intermittently
+
 ```bash
 # Solution: Run with single thread
 cargo test --lib -- --test-threads=1
 ```
 
 **Issue**: Clippy has warnings
+
 ```bash
 # Solution: Auto-fix if possible
 cargo clippy --fix --lib
@@ -683,6 +704,7 @@ cargo fmt
 ```
 
 **Issue**: Compilation slow
+
 ```bash
 # Solution: Use mold linker
 cargo install mold
@@ -692,19 +714,21 @@ RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo build
 ### Getting Help
 
 1. **Check documentation**
-   - Read DEVELOPMENT.md
-   - Review QUICK_START.md
-   - Check INDEX.md for full docs
+
+    - Read DEVELOPMENT.md
+    - Review QUICK_START.md
+    - Check INDEX.md for full docs
 
 2. **Search existing issues**
-   - GitHub issues
-   - Stack Overflow
-   - Zed forums
+
+    - GitHub issues
+    - Stack Overflow
+    - Zed forums
 
 3. **Ask for help**
-   - Create detailed bug report
-   - Include error message
-   - Provide reproduction steps
+    - Create detailed bug report
+    - Include error message
+    - Provide reproduction steps
 
 ---
 
@@ -713,54 +737,57 @@ RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo build
 ### v0.4.0 (Q1 2026)
 
 **Performance** (1 week)
-- [ ] Async/await for commands
-- [ ] RwLock for read-heavy paths
-- [ ] Switch to parking_lot
+
+-   [ ] Async/await for commands
+-   [ ] RwLock for read-heavy paths
+-   [ ] Switch to parking_lot
 
 **Testing** (1 week)
-- [ ] Expand lib.rs tests (10+ tests)
-- [ ] Expand commands.rs tests (10+ tests)
-- [ ] Add property-based testing
-- [ ] Add benchmarking suite
+
+-   [ ] Expand lib.rs tests (10+ tests)
+-   [ ] Expand commands.rs tests (10+ tests)
+-   [ ] Add property-based testing
+-   [ ] Add benchmarking suite
 
 **Features** (2 weeks)
-- [ ] Persistent disk caching
-- [ ] File watching
-- [ ] Command streaming
-- [ ] Structured logging
+
+-   [ ] Persistent disk caching
+-   [ ] File watching
+-   [ ] Command streaming
+-   [ ] Structured logging
 
 **Total**: ~4 weeks, 30+ tests added
 
 ### v0.5.0 (Q2 2026)
 
-- Zed registry submission
-- UI enhancements
-- Advanced analytics
-- Community feedback incorporation
+-   Zed registry submission
+-   UI enhancements
+-   Advanced analytics
+-   Community feedback incorporation
 
 ### v1.0.0 (Q3 2026)
 
-- Feature parity with VS Code extension
-- Production-grade stability
-- Comprehensive documentation
-- Community support
+-   Feature parity with VS Code extension
+-   Production-grade stability
+-   Comprehensive documentation
+-   Community support
 
 ---
 
 ## Key Files Reference
 
-| File | Purpose | Lines |
-|------|---------|-------|
-| 00-START-HERE.md | Quick navigation | N/A |
-| STATUS.md | Project status | ~350 |
-| IMPLEMENTATION_ROADMAP.md | Feature roadmap | ~450 |
-| DEEP-REVIEW.md | Technical analysis | ~600 |
-| OPTIMIZATION_ROADMAP.md | v0.4.0 plans | ~700 |
-| RELEASE_NOTES.md | v0.3.0 details | ~400 |
-| src/lib.rs | Extension core | 240 |
-| src/executor.rs | CLI execution | 127 |
-| src/cache.rs | Caching layer | 500 |
-| src/workspace.rs | Workspace analysis | 760 |
+| File                      | Purpose            | Lines |
+| ------------------------- | ------------------ | ----- |
+| 00-START-HERE.md          | Quick navigation   | N/A   |
+| STATUS.md                 | Project status     | ~350  |
+| IMPLEMENTATION_ROADMAP.md | Feature roadmap    | ~450  |
+| DEEP-REVIEW.md            | Technical analysis | ~600  |
+| OPTIMIZATION_ROADMAP.md   | v0.4.0 plans       | ~700  |
+| RELEASE_NOTES.md          | v0.3.0 details     | ~400  |
+| src/lib.rs                | Extension core     | 240   |
+| src/executor.rs           | CLI execution      | 127   |
+| src/cache.rs              | Caching layer      | 500   |
+| src/workspace.rs          | Workspace analysis | 760   |
 
 ---
 
@@ -780,43 +807,43 @@ cargo doc --open      # View docs
 
 ### Quality Checklist
 
-- [ ] Code compiles without errors
-- [ ] 0 clippy warnings
-- [ ] Formatted with cargo fmt
-- [ ] All tests passing
-- [ ] Documentation updated
-- [ ] Examples included
-- [ ] Error handling complete
+-   [ ] Code compiles without errors
+-   [ ] 0 clippy warnings
+-   [ ] Formatted with cargo fmt
+-   [ ] All tests passing
+-   [ ] Documentation updated
+-   [ ] Examples included
+-   [ ] Error handling complete
 
 ### Release Checklist
 
-- [ ] All tests passing (107)
-- [ ] 0 compiler warnings
-- [ ] Documentation complete
-- [ ] CHANGELOG updated
-- [ ] Version bumped
-- [ ] Git tagged
-- [ ] Ready for registry
+-   [ ] All tests passing (107)
+-   [ ] 0 compiler warnings
+-   [ ] Documentation complete
+-   [ ] CHANGELOG updated
+-   [ ] Version bumped
+-   [ ] Git tagged
+-   [ ] Ready for registry
 
 ---
 
 ## Conclusion
 
-VTCode Zed Extension v0.3.0 is a **production-ready**, **well-engineered** Rust project that:
+VT Code Zed Extension v0.3.0 is a **production-ready**, **well-engineered** Rust project that:
 
-  Implements all planned features  
-  Passes all quality gates  
-  Has comprehensive documentation  
-  Follows best practices  
-  Is ready for release  
+Implements all planned features
+Passes all quality gates
+Has comprehensive documentation
+Follows best practices
+Is ready for release
 
-**Grade**: A+ (8.7/10)  
+**Grade**: A+ (8.7/10)
 **Status**: Ready for v0.3.0 release and v0.4.0 planning
 
 For questions or contributions, refer to the comprehensive documentation included in this repository.
 
 ---
 
-**Last Updated**: November 9, 2025  
-**Version**: v0.3.0  
-**Status**:   Production Ready
+**Last Updated**: November 9, 2025
+**Version**: v0.3.0
+**Status**: Production Ready

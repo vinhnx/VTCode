@@ -15,7 +15,7 @@ pub fn generate_config(
     let mut config_lines = Vec::new();
 
     // Add header comment
-    config_lines.push("# VTCode Terminal Configuration for Ghostty".to_string());
+    config_lines.push("# VT Code Terminal Configuration for Ghostty".to_string());
     config_lines.push(String::new());
 
     // Generate feature-specific configurations

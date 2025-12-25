@@ -1,4 +1,4 @@
-/// VTCode Configuration Management
+/// VT Code Configuration Management
 ///
 /// Handles loading and parsing of vtcode.toml configuration files
 /// from the workspace root.
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-/// Root VTCode configuration structure
+/// Root VT Code configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]

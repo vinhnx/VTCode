@@ -20,7 +20,7 @@ impl<'a> AcpLaunchParams<'a> {
     }
 }
 
-/// Interface for components that expose VTCode over the Agent Client Protocol.
+/// Interface for components that expose VT Code over the Agent Client Protocol.
 #[async_trait(?Send)]
 pub trait AcpClientAdapter: Send + Sync {
     async fn serve(&self, params: AcpLaunchParams<'_>) -> Result<()>;

@@ -7,23 +7,24 @@ import { BaseCommand, type CommandContext } from "../types/command";
 export class TrustWorkspaceCommand extends BaseCommand {
     public readonly id = "vtcode.trustWorkspace";
     public readonly title = "Trust Workspace";
-    public readonly description = "Grant workspace trust to enable VTCode automation";
+    public readonly description =
+        "Grant workspace trust to enable VT Code automation";
     public readonly icon = "shield";
 
     async execute(context: CommandContext): Promise<void> {
         if (vscode.workspace.isTrusted) {
             void vscode.window.showInformationMessage(
-                "This workspace is already trusted for VTCode automation."
+                "This workspace is already trusted for VT Code automation."
             );
             return;
         }
 
         const trustedNow = await this.requestWorkspaceTrust(
-            "allow VTCode to process prompts with human oversight"
+            "allow VT Code to process prompts with human oversight"
         );
         if (trustedNow) {
             void vscode.window.showInformationMessage(
-                "Workspace trust granted. VTCode can now process prompts with human-in-the-loop safeguards."
+                "Workspace trust granted. VT Code can now process prompts with human-in-the-loop safeguards."
             );
             return;
         }
@@ -38,7 +39,7 @@ export class TrustWorkspaceCommand extends BaseCommand {
             );
             if (vscode.workspace.isTrusted) {
                 void vscode.window.showInformationMessage(
-                    "Workspace trust granted. VTCode can now process prompts with human-in-the-loop safeguards."
+                    "Workspace trust granted. VT Code can now process prompts with human-in-the-loop safeguards."
                 );
             }
         }
@@ -57,12 +58,12 @@ export class TrustWorkspaceCommand extends BaseCommand {
                 buttons?: ReadonlyArray<vscode.MessageItem>;
             }) => Thenable<boolean | undefined>;
         };
-        
+
         const requestFn = trustApi.requestWorkspaceTrust;
         if (typeof requestFn === "function") {
             try {
                 const granted = await requestFn({
-                    message: `VTCode requires a trusted workspace to ${action}.`,
+                    message: `VT Code requires a trusted workspace to ${action}.`,
                     modal: true,
                 });
                 return granted === true;

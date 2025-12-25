@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AskCommand } from "./askCommand";
-import { CommandContext } from "../types/command";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "vscode";
+import { CommandContext } from "../types/command";
+import { AskCommand } from "./askCommand";
 
 describe("AskCommand", () => {
     let command: AskCommand;
@@ -16,7 +16,7 @@ describe("AskCommand", () => {
 
     it("should have correct id, title, and icon", () => {
         expect(command.id).toBe("vtcode.ask");
-        expect(command.title).toBe("Ask VTCode Agent");
+        expect(command.title).toBe("Ask VT Code Agent");
         expect(command.icon).toBe("comment-discussion");
     });
 
@@ -27,7 +27,7 @@ describe("AskCommand", () => {
 
     it("should have description", () => {
         expect(command.description).toBeDefined();
-        expect(command.description).toContain("VTCode agent");
+        expect(command.description).toContain("VT Code agent");
     });
 
     it("should handle empty question gracefully", async () => {
@@ -68,7 +68,9 @@ describe("AskCommand", () => {
         await command.execute(context);
 
         expect(showInputBox).toHaveBeenCalled();
-        expect(showMessage).toHaveBeenCalledWith(expect.stringContaining("finished"));
+        expect(showMessage).toHaveBeenCalledWith(
+            expect.stringContaining("finished")
+        );
     });
 
     it("should prompt user with correct message", async () => {

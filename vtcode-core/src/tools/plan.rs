@@ -438,9 +438,11 @@ fn validate_plan_quality(update: &UpdatePlanArgs) -> Result<()> {
 
     // Check 2: Look for file path patterns in steps
     let has_file_paths = update.plan.iter().any(|step| {
-        step.step.contains('/') &&
-        (step.step.contains(".rs") || step.step.contains(".md") ||
-         step.step.contains(".toml") || step.step.contains(':'))
+        step.step.contains('/')
+            && (step.step.contains(".rs")
+                || step.step.contains(".md")
+                || step.step.contains(".toml")
+                || step.step.contains(':'))
     });
 
     if !has_file_paths {
@@ -448,7 +450,13 @@ fn validate_plan_quality(update: &UpdatePlanArgs) -> Result<()> {
     }
 
     // Check 3: Explanation should exist for final plan
-    if update.explanation.is_none() || update.explanation.as_ref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+    if update.explanation.is_none()
+        || update
+            .explanation
+            .as_ref()
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true)
+    {
         warnings.push("Plan missing context/explanation of what was explored");
     }
 

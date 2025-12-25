@@ -1,12 +1,13 @@
 # MCP Phase 1 Usage Guide
 
-**Phase:** 1 (Foundation complete)  
-**Updated:** 2025-11-20  
-**Audience:** VTCode developers integrating MCP
+**Phase:** 1 (Foundation complete)
+**Updated:** 2025-11-20
+**Audience:** VT Code developers integrating MCP
 
 ## Quick Start
 
 ### Import the MCP module
+
 ```rust
 use vtcode_core::mcp::{
     McpResult,
@@ -180,10 +181,10 @@ use vtcode_core::mcp::*;
 fn setup_provider(name: &str) -> McpResult<()> {
     let config = load_config()
         .context("Failed to load MCP configuration")?;
-    
+
     let transport = create_transport_from_config(&config.transport, &config.env)
         .context(format!("Failed to create transport for provider '{}'", name))?;
-    
+
     Ok(())
 }
 
@@ -201,11 +202,11 @@ fn call_tool(
 ) -> McpResult<serde_json::Value> {
     // Get tool schema from provider
     let schema = get_tool_schema(provider, tool)?;
-    
+
     // Validate input against schema
     validate_tool_input(schema.as_ref(), &input)
         .context(format!("Invalid input for tool '{}'", tool))?;
-    
+
     // Safe to invoke tool
     invoke_tool(provider, tool, input)
         .context(format!("Tool invocation failed: {}/{}", provider, tool))
@@ -230,22 +231,24 @@ fn try_get_tools(provider: &str) -> McpResult<Vec<Tool>> {
 
 ## What's NOT Supported in Phase 1
 
- Full JSON Schema validation (use Phase 2)
-- No support for: `minLength`, `maxLength`, `pattern`, `enum`, `oneOf`, `anyOf`, `allOf`
-- No nested schema validation beyond property types
-- No array item type validation
+Full JSON Schema validation (use Phase 2)
 
- HTTP transport
+-   No support for: `minLength`, `maxLength`, `pattern`, `enum`, `oneOf`, `anyOf`, `allOf`
+-   No nested schema validation beyond property types
+-   No array item type validation
 
- Complex error context (coming Phase 2)
+HTTP transport
 
- Tool schema caching (coming Phase 2)
+Complex error context (coming Phase 2)
+
+Tool schema caching (coming Phase 2)
 
 ---
 
 ## Phase 1 Limitations & Workarounds
 
 ### Limitation: Can't validate complex schemas
+
 ```rust
 // This schema validation will only check type, not constraints
 let schema = json!({
@@ -264,6 +267,7 @@ let schema = json!({
 ```
 
 **Workaround:** Add manual validation after schema check:
+
 ```rust
 validate_tool_input(Some(&schema), &input)?;
 
@@ -275,6 +279,7 @@ if let Some(name) = input.get("name").and_then(|v| v.as_str()) {
 ```
 
 ### Limitation: No HTTP transport
+
 ```rust
 // Fails in Phase 1
 let transport = create_transport_from_config(&http_config, &env)?;
@@ -325,6 +330,7 @@ mod tests {
 ## Debugging Tips
 
 ### Enable Detailed Error Context
+
 ```rust
 use anyhow::Result;
 use std::backtrace::Backtrace;
@@ -332,13 +338,14 @@ use std::backtrace::Backtrace;
 fn main() -> Result<()> {
     // Set backtrace to see call stack
     std::env::set_var("RUST_BACKTRACE", "1");
-    
+
     // Your MCP code here
     Ok(())
 }
 ```
 
 ### Log Error Chain
+
 ```rust
 use anyhow::Chain;
 
@@ -354,7 +361,6 @@ if let Err(e) = invoke_tool(...) {
 
 ## See Also
 
-- `docs/mcp/MCP_PHASE1_FINAL_REVIEW.md` - What was fixed
-- `docs/mcp/MCP_PHASE2_ROADMAP.md` - What's coming next
-- `vtcode-core/src/mcp/` - Source code and tests
-
+-   `docs/mcp/MCP_PHASE1_FINAL_REVIEW.md` - What was fixed
+-   `docs/mcp/MCP_PHASE2_ROADMAP.md` - What's coming next
+-   `vtcode-core/src/mcp/` - Source code and tests

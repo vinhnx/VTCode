@@ -729,7 +729,7 @@ pub(crate) fn render_mcp_login_guidance(
     )?;
     renderer.line(
         MessageStyle::Info,
-        "VTCode delegates OAuth to the CLI today.",
+        "VT Code delegates OAuth to the CLI today.",
     )?;
     renderer.line(
         MessageStyle::Info,

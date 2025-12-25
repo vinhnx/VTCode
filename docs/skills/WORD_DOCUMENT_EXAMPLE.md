@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
 ## Integration with VTCode
 
-Use Agent Skills in VTCode to generate documents programmatically:
+Use Agent Skills in VT Code to generate documents programmatically:
 
 ```bash
 vtcode /skills use doc-generator "Create a project proposal document"

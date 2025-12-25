@@ -292,7 +292,7 @@ impl VTCodeConfig {
     #[cfg(feature = "bootstrap")]
     /// Generate the default `vtcode.toml` template used by bootstrap helpers.
     fn default_vtcode_toml_template() -> String {
-        r#"# VTCode Configuration File (Example)
+        r#"# VT Code Configuration File (Example)
 # Getting-started reference; see docs/config/CONFIGURATION_PRECEDENCE.md for override order.
 # Copy this file to vtcode.toml and customize as needed.
 

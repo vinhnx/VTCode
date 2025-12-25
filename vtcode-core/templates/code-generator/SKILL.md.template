@@ -2,7 +2,7 @@
 name: {{generator_name}}
 description: Generate {{target_language}} code from templates using {{template_engine}}
 version: 1.0.0
-author: VTCode User
+author: VT Code User
 category: generator
 tags: code,generation,templates
 ---
@@ -72,4 +72,4 @@ The skill validates templates and provides clear error messages for:
 
 ---
 
-Generated from VTCode skill template v1.0.0
+Generated from VT Code skill template v1.0.0

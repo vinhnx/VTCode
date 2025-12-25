@@ -1,6 +1,6 @@
 //! # Tool System Architecture
 //!
-//! This module provides a modular, composable architecture for VTCode agent tools,
+//! This module provides a modular, composable architecture for VT Code agent tools,
 //! implementing a registry-based system for tool discovery, execution, and management.
 //!
 //! ## Architecture Overview

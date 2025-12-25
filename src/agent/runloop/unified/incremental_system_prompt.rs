@@ -149,7 +149,10 @@ impl IncrementalSystemPrompt {
             let _ = writeln!(prompt, "- full_auto: {}", context.full_auto);
 
             if context.full_auto {
-                let _ = writeln!(prompt, "\n# FULL-AUTO: Complete task autonomously until done or blocked.");
+                let _ = writeln!(
+                    prompt,
+                    "\n# FULL-AUTO: Complete task autonomously until done or blocked."
+                );
             }
 
             if let Some(plan) = &context.current_plan {

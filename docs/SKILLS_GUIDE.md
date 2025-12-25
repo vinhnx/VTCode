@@ -23,8 +23,8 @@ vtcode skills list
 
 Shows all discovered skills from multiple locations with precedence handling:
 
--   **VTCode User Skills** (`~/.vtcode/skills/`) - Highest precedence
--   **VTCode Project Skills** (`.vtcode/skills/`) - Project-specific skills
+-   **VT Code User Skills** (`~/.vtcode/skills/`) - Highest precedence
+-   **VT Code Project Skills** (`.vtcode/skills/`) - Project-specific skills
 -   **Pi User Skills** (`~/.pi/skills/`) - Pi framework user skills
 -   **Pi Project Skills** (`.pi/skills/`) - Pi framework project skills
 -   **Claude User Skills** (`~/.claude/skills/`) - Claude Code user skills
@@ -224,7 +224,7 @@ In future updates, you'll be able to use skills directly in chat mode:
 
 ## Try More Examples
 
-VTCode provides practical examples for using Anthropic's built-in Agent Skills (pptx, xlsx, docx, pdf). These examples demonstrate progressive disclosure and efficient file handling.
+VT Code provides practical examples for using Anthropic's built-in Agent Skills (pptx, xlsx, docx, pdf). These examples demonstrate progressive disclosure and efficient file handling.
 
 ### Create a Spreadsheet
 
@@ -439,7 +439,7 @@ if file_id:
 
 ---
 
-## New VTCode Skills Location System
+## New VT Code Skills Location System
 
 ### Multi-Location Support
 
@@ -447,8 +447,8 @@ VT Code now supports a comprehensive skills location system similar to pi-mono, 
 
 **Supported Locations:**
 
--   **VTCode User Skills**: `~/.vtcode/skills/` (highest precedence)
--   **VTCode Project Skills**: `.vtcode/skills/`
+-   **VT Code User Skills**: `~/.vtcode/skills/` (highest precedence)
+-   **VT Code Project Skills**: `.vtcode/skills/`
 -   **Pi User Skills**: `~/.pi/skills/`
 -   **Pi Project Skills**: `.pi/skills/`
 -   **Claude User Skills**: `~/.claude/skills/`
@@ -463,7 +463,7 @@ VT Code now supports a comprehensive skills location system similar to pi-mono, 
 
 **Name Separators**: Different separators for different frameworks:
 
--   VTCode locations: `/` (path separator)
+-   VT Code locations: `/` (path separator)
 -   Pi locations: `:` (colon separator)
 
 **Backward Compatibility**: All existing Claude Code skills continue to work in their original locations.
@@ -551,12 +551,12 @@ Common errors and solutions:
 
 ### Organization by Role
 
-**VTCode Global Skills** (`~/.vtcode/skills/`):
+**VT Code Global Skills** (`~/.vtcode/skills/`):
 
 -   Reusable across all projects (highest precedence)
 -   Examples: code-review, doc-generator, security-audit
 
-**VTCode Project Skills** (`.vtcode/skills/`):
+**VT Code Project Skills** (`.vtcode/skills/`):
 
 -   Specific to your project
 -   Examples: brand-guidelines, api-spec, deployment-playbook
@@ -579,8 +579,8 @@ Common errors and solutions:
 
 VT Code uses a precedence system to handle skill name collisions:
 
-1. **VTCode User Skills** (highest precedence)
-2. **VTCode Project Skills**
+1. **VT Code User Skills** (highest precedence)
+2. **VT Code Project Skills**
 3. **Pi User Skills**
 4. **Pi Project Skills**
 5. **Claude User Skills**
@@ -618,10 +618,10 @@ VT Code follows best practices from the [Agent Skills standard](http://agentskil
 Write descriptions that help your agent understand when and how to use the skill:
 
 ```yaml
-# Good 
+# Good
 description: Analyzes code
 
-# Better 
+# Better
 description: Performs comprehensive code reviews, checking for security vulnerabilities, performance bottlenecks, and code quality issues in Python and Go
 ```
 
@@ -754,7 +754,7 @@ When available, IDE extensions can:
 -   Execute skills on selected code
 -   Display skill results inline
 
-Check for Zed and VS Code extensions on the VTCode repository.
+Check for Zed and VS Code extensions on the VT Code repository.
 
 ---
 
@@ -763,7 +763,7 @@ Check for Zed and VS Code extensions on the VTCode repository.
 ### Skill Not Found
 
 ```bash
-# Verify skill exists in new VTCode locations
+# Verify skill exists in new VT Code locations
 ls ~/.vtcode/skills/
 ls .vtcode/skills/
 
@@ -811,7 +811,7 @@ vtcode skills info <name>  # Preview
 -   **Agent Skills Integration Guide**: http://agentskills.io/integrate-skills - How to add skills support to your agent
 -   **Anthropic Skills Spec**: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
 -   **Skills Cookbook**: https://github.com/anthropics/claude-cookbooks/tree/main/skills
--   **VTCode Skills Implementation**: `SKILLS_IMPLEMENTATION_SUMMARY.md`
+-   **VT Code Skills Implementation**: `SKILLS_IMPLEMENTATION_SUMMARY.md`
 -   **Integration Plan**: `SKILLS_INTEGRATION_PLAN.md`
 -   **Location System**: `vtcode-core/src/skills/locations.rs` - Implementation details
 -   **Precedence System**: Follows pi-mono pattern with VTCode-specific enhancements
@@ -826,13 +826,13 @@ vtcode skills info <name>  # Preview
 A: Yes! Pre-built skills (PDF, Excel, Word, PowerPoint) will be downloadable in future updates via `vtcode skills fetch anthropic-pdf`.
 
 **Q: Can skills call other tools?**
-A: Yes! When integrated with the agent harness, skills can call VTCode tools (file operations, shell commands, etc.).
+A: Yes! When integrated with the agent harness, skills can call VT Code tools (file operations, shell commands, etc.).
 
 **Q: How are skills different from prompts?**
 A: Skills are reusable, discoverable, versioned modules with explicit metadata. Prompts are conversation-level instructions.
 
 **Q: Can I share skills with teammates?**
-A: Yes! Keep skills in `.vtcode/skills/` (version control) or `~/.vtcode/skills/` (personal). The new VTCode location system provides better precedence and organization.
+A: Yes! Keep skills in `.vtcode/skills/` (version control) or `~/.vtcode/skills/` (personal). The new VT Code location system provides better precedence and organization.
 
 ---
 

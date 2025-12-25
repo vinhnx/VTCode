@@ -233,7 +233,7 @@ pub struct SimpleIndexer {
 }
 
 impl SimpleIndexer {
-    /// Create a new simple indexer with default VTCode paths.
+    /// Create a new simple indexer with default VT Code paths.
     pub fn new(workspace_root: PathBuf) -> Self {
         Self::with_components(
             SimpleIndexerConfig::new(workspace_root),

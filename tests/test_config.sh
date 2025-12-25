@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 
-# Test script for VTCode config loading from home directory
+# Test script for VT Code config loading from home directory
 
-echo "Testing VTCode configuration loading..."
+echo "Testing VT Code configuration loading..."
 
 # Check if ~/.vtcode directory exists
 if [ -d "$HOME/.vtcode" ]; then
     echo "✓ Found ~/.vtcode directory"
-    
+
     # Check if vtcode.toml exists in ~/.vtcode
     if [ -f "$HOME/.vtcode/vtcode.toml" ]; then
         echo "✓ Found ~/.vtcode/vtcode.toml"
-        
+
         # Check if the file has content
         if [ -s "$HOME/.vtcode/vtcode.toml" ]; then
             echo "✓ Configuration file has content"

@@ -5,11 +5,12 @@
 This document describes the implementation of a refined **Terminal UI event handler** pattern based on the [Ratatui recipe](https://ratatui.rs/recipes/apps/terminal-and-event-handler/) and adapted for VTCode's architecture.
 
 The new `tui::Tui` struct provides:
-- **Modular terminal management** with proper lifecycle (enter/exit raw mode, alternate screen)
-- **Async event-driven architecture** with configurable tick and frame rates
-- **Graceful shutdown** via cancellation tokens
-- **Extended event support** for keyboard, mouse, resize, focus, and paste events
-- **Drop-safe cleanup** to ensure terminal is restored even on panic
+
+-   **Modular terminal management** with proper lifecycle (enter/exit raw mode, alternate screen)
+-   **Async event-driven architecture** with configurable tick and frame rates
+-   **Graceful shutdown** via cancellation tokens
+-   **Extended event support** for keyboard, mouse, resize, focus, and paste events
+-   **Drop-safe cleanup** to ensure terminal is restored even on panic
 
 ## Key Components
 
@@ -55,11 +56,12 @@ pub struct Tui {
 ```
 
 **Key fields:**
-- `terminal`: Ratatui terminal for drawing UI
-- `task`: Background event handler tokio task
-- `cancellation_token`: Graceful shutdown signal
-- `event_rx/event_tx`: Async channel for events
-- Configuration: `frame_rate` (renders/sec), `tick_rate` (ticks/sec), `mouse`, `paste`
+
+-   `terminal`: Ratatui terminal for drawing UI
+-   `task`: Background event handler tokio task
+-   `cancellation_token`: Graceful shutdown signal
+-   `event_rx/event_tx`: Async channel for events
+-   Configuration: `frame_rate` (renders/sec), `tick_rate` (ticks/sec), `mouse`, `paste`
 
 ### 3. Builder Pattern
 
@@ -76,24 +78,27 @@ let mut tui = Tui::new()?
 ### 4. Terminal Lifecycle Methods
 
 #### `enter()`
-- Enables raw mode
-- Enters alternate screen
-- Shows/hides cursor as needed
-- Enables mouse capture (if configured)
-- Enables bracketed paste mode (if configured)
-- **Starts the event handler task**
+
+-   Enables raw mode
+-   Enters alternate screen
+-   Shows/hides cursor as needed
+-   Enables mouse capture (if configured)
+-   Enables bracketed paste mode (if configured)
+-   **Starts the event handler task**
 
 #### `exit()`
-- **Stops the event handler task** (gracefully with timeout)
-- Disables bracketed paste (if enabled)
-- Disables mouse capture (if enabled)
-- Leaves alternate screen
-- Disables raw mode
+
+-   **Stops the event handler task** (gracefully with timeout)
+-   Disables bracketed paste (if enabled)
+-   Disables mouse capture (if enabled)
+-   Leaves alternate screen
+-   Disables raw mode
 
 #### `start()` / `stop()` / `cancel()`
-- `start()`: Spawns the background event handler task
-- `stop()`: Stops with graceful timeout (aborts after 100ms if needed)
-- `cancel()`: Signals cancellation to the task
+
+-   `start()`: Spawns the background event handler task
+-   `stop()`: Stops with graceful timeout (aborts after 100ms if needed)
+-   `cancel()`: Signals cancellation to the task
 
 ### 5. Event Handler Task
 
@@ -103,17 +108,17 @@ The background event handler:
 tokio::select! {
     // Cancellation signal
     _ = cancellation_token.cancelled() => break,
-    
+
     // Crossterm events (via spawn_blocking)
     result = event_fut => {
         // Process keyboard, mouse, resize, focus, paste events
     }
-    
+
     // Tick event (at configured tick_rate)
     _ = tick_interval.tick() => {
         // Emit Tick event
     }
-    
+
     // Render event (at configured frame_rate)
     _ = render_interval.tick() => {
         // Emit Render event
@@ -122,10 +127,11 @@ tokio::select! {
 ```
 
 **Design notes:**
-- Uses `tokio::select!` for concurrent event handling
-- Crossterm event reading runs in `spawn_blocking` to avoid blocking the async runtime
-- Tick and render events are time-based, not IO-based
-- Events are sent over an unbounded MPSC channel
+
+-   Uses `tokio::select!` for concurrent event handling
+-   Crossterm event reading runs in `spawn_blocking` to avoid blocking the async runtime
+-   Tick and render events are time-based, not IO-based
+-   Events are sent over an unbounded MPSC channel
 
 ### 6. Deref & DerefMut Implementations
 
@@ -289,13 +295,14 @@ loop {
 
 ### Tick Rate vs Frame Rate
 
-- **Tick Rate** (default 4.0): Logical update events per second
-  - Use for game logic, state updates, animations
-  - Independent of rendering
-  
-- **Frame Rate** (default 60.0): Rendering events per second
-  - Use to throttle draw calls
-  - Useful to avoid excessive redraws on fast terminals
+-   **Tick Rate** (default 4.0): Logical update events per second
+
+    -   Use for game logic, state updates, animations
+    -   Independent of rendering
+
+-   **Frame Rate** (default 60.0): Rendering events per second
+    -   Use to throttle draw calls
+    -   Useful to avoid excessive redraws on fast terminals
 
 ### Example Configurations
 
@@ -313,8 +320,9 @@ Tui::new()?.tick_rate(4.0).frame_rate(60.0)
 ## Error Handling
 
 The event handler emits an `Event::Error` if:
-- Crossterm event reading fails
-- Event channel closes unexpectedly
+
+-   Crossterm event reading fails
+-   Event channel closes unexpectedly
 
 Applications should handle this gracefully:
 
@@ -367,21 +375,22 @@ cargo run --example tui_event_handler
 ```
 
 The example demonstrates:
-- Frame rate throttling (60fps)
-- Tick events (4Hz)
-- Keyboard input handling
-- Terminal resize handling
-- Graceful shutdown
+
+-   Frame rate throttling (60fps)
+-   Tick events (4Hz)
+-   Keyboard input handling
+-   Terminal resize handling
+-   Graceful shutdown
 
 ## Dependencies
 
-- `ratatui = "0.29"` - TUI rendering
-- `crossterm = "0.29"` - Terminal control
-- `tokio = "1.48"` - Async runtime
-- `tokio-util = "0.7"` - Cancellation tokens
-- `futures = "0.3"` - Async utilities
-- `signal-hook = "0.3"` - Signal handling (optional, Unix only)
-- `anyhow = "1.0"` - Error handling
+-   `ratatui = "0.29"` - TUI rendering
+-   `crossterm = "0.29"` - Terminal control
+-   `tokio = "1.48"` - Async runtime
+-   `tokio-util = "0.7"` - Cancellation tokens
+-   `futures = "0.3"` - Async utilities
+-   `signal-hook = "0.3"` - Signal handling (optional, Unix only)
+-   `anyhow = "1.0"` - Error handling
 
 ## Future Improvements
 
@@ -393,7 +402,7 @@ The example demonstrates:
 
 ## References
 
-- [Ratatui Recipe: Terminal & Event Handler](https://ratatui.rs/recipes/apps/terminal-and-event-handler/)
-- [Crossterm Docs](https://docs.rs/crossterm)
-- [Tokio Docs](https://docs.rs/tokio)
-- [VTCode Architecture](./ARCHITECTURE.md)
+-   [Ratatui Recipe: Terminal & Event Handler](https://ratatui.rs/recipes/apps/terminal-and-event-handler/)
+-   [Crossterm Docs](https://docs.rs/crossterm)
+-   [Tokio Docs](https://docs.rs/tokio)
+-   [VT Code Architecture](./ARCHITECTURE.md)

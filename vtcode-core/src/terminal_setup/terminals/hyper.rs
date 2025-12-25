@@ -14,7 +14,7 @@ pub fn generate_config(
     let mut config_sections = Vec::new();
 
     // Add header comment
-    config_sections.push("// VTCode Terminal Configuration for Hyper".to_string());
+    config_sections.push("// VT Code Terminal Configuration for Hyper".to_string());
     config_sections.push("// Add this to your ~/.hyper.js config file".to_string());
     config_sections.push(String::new());
 

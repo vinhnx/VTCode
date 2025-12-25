@@ -1,6 +1,6 @@
-# VTCode Extension Release Script
+# VT Code Extension Release Script
 
-Automated release script for the VTCode VSCode extension that handles version bumping, building, packaging, and publishing.
+Automated release script for the VT Code VSCode extension that handles version bumping, building, packaging, and publishing.
 
 ## Quick Start
 
@@ -17,7 +17,7 @@ Automated release script for the VTCode VSCode extension that handles version bu
 
 ## What It Does
 
-1.   Checks all required dependencies (node, npm, git, jq, vsce, ovsx)
+1.  Checks all required dependencies (node, npm, git, jq, vsce, ovsx)
 2.  Bumps version in package.json
 3.  Updates CHANGELOG.md with new version and date
 4.  Builds the extension (npm run bundle)
@@ -26,14 +26,14 @@ Automated release script for the VTCode VSCode extension that handles version bu
 7.  Creates git tag with format: `vscode-v{version}`
 8.  Pushes to GitHub (with confirmation)
 9.  Publishes to VSCode Marketplace (with confirmation)
-10.  Publishes to Open VSX Registry (with confirmation)
-11.  Cleans up old .vsix files
+10. Publishes to Open VSX Registry (with confirmation)
+11. Cleans up old .vsix files
 
 ## Tag Naming Convention
 
-The extension uses **`vscode-v{version}`** format to avoid conflicts with the main VTCode binary:
+The extension uses **`vscode-v{version}`** format to avoid conflicts with the main VT Code binary:
 
--   **Main VTCode CLI**: `v0.39.0`, `v0.39.1`, `v0.39.2`
+-   **Main VT Code CLI**: `v0.39.0`, `v0.39.1`, `v0.39.2`
 -   **VSCode Extension**: `vscode-v0.1.0`, `vscode-v0.1.1`, `vscode-v0.1.2`
 
 ## Prerequisites

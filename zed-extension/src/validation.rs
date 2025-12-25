@@ -1,6 +1,6 @@
 /// Configuration Validation
 ///
-/// Validates VTCode configuration with detailed error reporting.
+/// Validates VT Code configuration with detailed error reporting.
 use crate::config::{AiConfig, Config, SecurityConfig, WorkspaceConfig};
 
 /// Validation result with detailed errors

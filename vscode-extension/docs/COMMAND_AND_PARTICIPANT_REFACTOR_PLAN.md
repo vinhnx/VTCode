@@ -1,10 +1,10 @@
-# VTCode VSCode Extension - Command & Participant Refactor Plan
+# VT Code VSCode Extension - Command & Participant Refactor Plan
 
-This document proposes concrete, incremental refactors for the VTCode VSCode extension to:
+This document proposes concrete, incremental refactors for the VT Code VSCode extension to:
 
-- Modularize commands currently implemented inline in [`src/extension.ts`](src/extension.ts:154).
-- Introduce a participant-style context system aligned with the roadmap and existing `IdeContextFileBridge`.
-- Preserve behavior, command IDs, safety guarantees, and existing UX.
+-   Modularize commands currently implemented inline in [`src/extension.ts`](src/extension.ts:154).
+-   Introduce a participant-style context system aligned with the roadmap and existing `IdeContextFileBridge`.
+-   Preserve behavior, command IDs, safety guarantees, and existing UX.
 
 It is implementation-ready and maps directly onto the current codebase.
 
@@ -15,13 +15,13 @@ It is implementation-ready and maps directly onto the current codebase.
 1. Reduce `src/extension.ts` complexity by extracting self-contained modules.
 2. Centralize command wiring via a `CommandRegistry`.
 3. Introduce a `ParticipantRegistry` abstraction to manage context providers:
-   - Reuse existing IDE-context logic instead of rewriting.
-   - Prepare for future `@workspace`, `@code`, `@git`, `@terminal` participants.
+    - Reuse existing IDE-context logic instead of rewriting.
+    - Prepare for future `@workspace`, `@code`, `@git`, `@terminal` participants.
 4. Maintain:
-   - Workspace trust checks.
-   - CLI availability checks.
-   - Human-in-the-loop behavior.
-   - Existing command IDs & contributions.
+    - Workspace trust checks.
+    - CLI availability checks.
+    - Human-in-the-loop behavior.
+    - Existing command IDs & contributions.
 
 All changes are intentionally additive and compatible with the existing manifest.
 
@@ -44,7 +44,9 @@ export interface CommandServices {
     readonly backend: VtcodeBackend;
     readonly output: vscode.OutputChannel;
     readonly getConfigSummary: () => VtcodeConfigSummary | undefined;
-    readonly ensureWorkspaceTrustedForCommand: (action: string) => Promise<boolean>;
+    readonly ensureWorkspaceTrustedForCommand: (
+        action: string
+    ) => Promise<boolean>;
     readonly ensureCliAvailableForCommand: () => Promise<boolean>;
 }
 
@@ -56,8 +58,8 @@ export interface ICommand {
 
 Notes:
 
-- `CommandServices` is injected into each command to avoid re-reading globals.
-- `ICommand` stays minimal; per-command logic uses helpers via closure or constructor.
+-   `CommandServices` is injected into each command to avoid re-reading globals.
+-   `ICommand` stays minimal; per-command logic uses helpers via closure or constructor.
 
 ### 2.2 Registry: `src/commandRegistry.ts`
 
@@ -73,31 +75,35 @@ export class CommandRegistry {
 
     constructor(
         private readonly services: CommandServices,
-        private readonly register: typeof vscode.commands.registerCommand = vscode.commands.registerCommand,
+        private readonly register: typeof vscode.commands.registerCommand = vscode
+            .commands.registerCommand
     ) {}
 
     /**
-     * Register a VTCode command and track its disposable.
+     * Register a VT Code command and track its disposable.
      */
     registerCommand(command: ICommand): void {
         if (this.commands.has(command.id)) {
             throw new Error(`Command already registered: ${command.id}`);
         }
 
-        const disposable = this.register(command.id, async (...args: unknown[]) => {
-            try {
-                await command.execute(...args);
-            } catch (error) {
-                const message =
-                    error instanceof Error ? error.message : String(error);
-                this.services.output.appendLine(
-                    `[error] Command "${command.id}" failed: ${message}`,
-                );
-                void vscode.window.showErrorMessage(
-                    `VTCode: "${command.id}" failed: ${message}`,
-                );
+        const disposable = this.register(
+            command.id,
+            async (...args: unknown[]) => {
+                try {
+                    await command.execute(...args);
+                } catch (error) {
+                    const message =
+                        error instanceof Error ? error.message : String(error);
+                    this.services.output.appendLine(
+                        `[error] Command "${command.id}" failed: ${message}`
+                    );
+                    void vscode.window.showErrorMessage(
+                        `VTCode: "${command.id}" failed: ${message}`
+                    );
+                }
             }
-        });
+        );
 
         this.commands.set(command.id, disposable);
         this.services.context.subscriptions.push(disposable);
@@ -114,10 +120,10 @@ export class CommandRegistry {
 
 Behavior:
 
-- All commands share:
-  - Same output channel.
-  - Same error-handling pattern.
-  - Same trust/CLI helpers (injected via `CommandServices`).
+-   All commands share:
+    -   Same output channel.
+    -   Same error-handling pattern.
+    -   Same trust/CLI helpers (injected via `CommandServices`).
 
 ### 2.3 Example Commands
 
@@ -144,7 +150,7 @@ export class AskAgentCommand implements ICommand {
         }
 
         const question = await vscode.window.showInputBox({
-            prompt: "What would you like the VTCode agent to help with?",
+            prompt: "What would you like the VT Code agent to help with?",
             placeHolder: "Summarize src/main.rs",
             ignoreFocusOut: true,
         });
@@ -162,18 +168,18 @@ export class AskAgentCommand implements ICommand {
             // (imported from a shared helper rather than re-implemented here)
             await vscode.commands.executeCommand(
                 "vtcode.internal.runCliAsk",
-                promptWithContext,
+                promptWithContext
             );
 
             void vscode.window.showInformationMessage(
-                "VTCode finished processing your request. Check the VTCode output channel for details.",
+                "VT Code finished processing your request. Check the VT Code output channel for details."
             );
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error);
             output.appendLine(`[error] vtcode.askAgent failed: ${message}`);
             void vscode.window.showErrorMessage(
-                `Failed to ask VTCode: ${message}`,
+                `Failed to ask VTCode: ${message}`
             );
         }
     }
@@ -182,8 +188,8 @@ export class AskAgentCommand implements ICommand {
 
 Notes:
 
-- `vtcode.internal.runCliAsk` is a suggested internal helper command that wraps the existing `runVtcodeCommand(["ask", ...])` implementation from `extension.ts`, allowing reuse without code duplication.
-- Alternatively, expose a shared `runVtcodeAsk(prompt)` utility module.
+-   `vtcode.internal.runCliAsk` is a suggested internal helper command that wraps the existing `runVtcodeCommand(["ask", ...])` implementation from `extension.ts`, allowing reuse without code duplication.
+-   Alternatively, expose a shared `runVtcodeAsk(prompt)` utility module.
 
 #### 2.3.2 Ask Selection Command
 
@@ -203,7 +209,7 @@ export class AskSelectionCommand implements ICommand {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             void vscode.window.showWarningMessage(
-                "Open a text editor to ask VTCode about the current selection.",
+                "Open a text editor to ask VT Code about the current selection."
             );
             return;
         }
@@ -211,7 +217,7 @@ export class AskSelectionCommand implements ICommand {
         const selection = editor.selection;
         if (selection.isEmpty) {
             void vscode.window.showWarningMessage(
-                "Highlight text first, then run “Ask About Selection with VTCode.”",
+                "Highlight text first, then run “Ask About Selection with VTCode.”"
             );
             return;
         }
@@ -219,7 +225,7 @@ export class AskSelectionCommand implements ICommand {
         const selectedText = editor.document.getText(selection);
         if (!selectedText.trim()) {
             void vscode.window.showWarningMessage(
-                "The selected text is empty. Select code or text for VTCode to inspect.",
+                "The selected text is empty. Select code or text for VT Code to inspect."
             );
             return;
         }
@@ -230,7 +236,7 @@ export class AskSelectionCommand implements ICommand {
 
         const defaultQuestion = "Explain the highlighted selection.";
         const question = await vscode.window.showInputBox({
-            prompt: "How should VTCode help with the highlighted selection?",
+            prompt: "How should VT Code help with the highlighted selection?",
             value: defaultQuestion,
             valueSelection: [0, defaultQuestion.length],
             ignoreFocusOut: true,
@@ -242,9 +248,11 @@ export class AskSelectionCommand implements ICommand {
 
         const trimmedQuestion = question.trim() || defaultQuestion;
         const languageId = editor.document.languageId || "text";
-        const rangeLabel = `${selection.start.line + 1}-${selection.end.line + 1}`;
+        const rangeLabel = `${selection.start.line + 1}-${
+            selection.end.line + 1
+        }`;
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(
-            editor.document.uri,
+            editor.document.uri
         );
         const relativePath = workspaceFolder
             ? vscode.workspace.asRelativePath(editor.document.uri, false)
@@ -262,7 +270,7 @@ ${normalizedSelection}
 
         await vscode.commands.executeCommand(
             "vtcode.internal.runCliAsk",
-            prompt,
+            prompt
         );
     }
 }
@@ -272,30 +280,30 @@ ${normalizedSelection}
 
 Similarly extract:
 
-- `vtcode.openConfig` → `OpenConfigCommand`
-- `vtcode.openDocumentation` → `OpenDocsCommand`
-- `vtcode.launchAgentTerminal` → `LaunchAgentTerminalCommand`
-- `vtcode.runAnalyze` → `RunAnalyzeCommand`
-- Trust / HITL / MCP / tools policy commands.
+-   `vtcode.openConfig` → `OpenConfigCommand`
+-   `vtcode.openDocumentation` → `OpenDocsCommand`
+-   `vtcode.launchAgentTerminal` → `LaunchAgentTerminalCommand`
+-   `vtcode.runAnalyze` → `RunAnalyzeCommand`
+-   Trust / HITL / MCP / tools policy commands.
 
 Each:
 
-- Uses `CommandServices` for trust/CLI/summary.
-- For non-CLI commands (e.g. open docs), skip CLI checks but keep trust if needed.
+-   Uses `CommandServices` for trust/CLI/summary.
+-   For non-CLI commands (e.g. open docs), skip CLI checks but keep trust if needed.
 
 ### 2.4 Supporting Extraction: IDE Context Helpers
 
 Create `src/ideContext.ts` as a thin wrapper around existing helpers currently in [`src/extension.ts`](src/extension.ts:2712):
 
-- Export:
-  - `appendIdeContextToPrompt`
-  - `buildIdeContextBlock`
-  - Any pure helpers needed by commands or participants.
+-   Export:
+    -   `appendIdeContextToPrompt`
+    -   `buildIdeContextBlock`
+    -   Any pure helpers needed by commands or participants.
 
 This allows:
 
-- Commands and participants to call `appendIdeContextToPrompt(...)` without importing private internals from `extension.ts`.
-- Incremental migration without changing behavior.
+-   Commands and participants to call `appendIdeContextToPrompt(...)` without importing private internals from `extension.ts`.
+-   Incremental migration without changing behavior.
 
 ---
 
@@ -303,13 +311,13 @@ This allows:
 
 The current extension already:
 
-- Builds a VS Code Chat participant: `vtcode.agent` in `registerVtcodeAiIntegrations`.
-- Uses `appendIdeContextToPrompt` and `IdeContextFileBridge` to enrich prompts.
+-   Builds a VS Code Chat participant: `vtcode.agent` in `registerVtcodeAiIntegrations`.
+-   Uses `appendIdeContextToPrompt` and `IdeContextFileBridge` to enrich prompts.
 
 We formalize this into a small participant system that:
 
-- Stays internal (no breaking API).
-- Makes it easy to add more context sources later.
+-   Stays internal (no breaking API).
+-   Makes it easy to add more context sources later.
 
 ### 3.1 Types: `src/types/participant.ts`
 
@@ -353,7 +361,7 @@ export class ParticipantRegistry {
 
     async resolveMessage(
         message: string,
-        context: ParticipantContext,
+        context: ParticipantContext
     ): Promise<string> {
         let current = message;
         for (const participant of this.participants) {
@@ -376,11 +384,12 @@ export class ParticipantRegistry {
 Use existing behavior instead of inventing new features:
 
 1. `WorkspaceContextParticipant`
-   - Uses `appendIdeContextToPrompt` with `includeActiveEditor` / `includeVisibleEditors`.
-   - Essentially wraps current IDE context behavior into a participant.
+
+    - Uses `appendIdeContextToPrompt` with `includeActiveEditor` / `includeVisibleEditors`.
+    - Essentially wraps current IDE context behavior into a participant.
 
 2. Later (Phase 3+):
-   - `GitParticipant`, `TerminalParticipant`, etc. based on roadmap.
+    - `GitParticipant`, `TerminalParticipant`, etc. based on roadmap.
 
 Example:
 
@@ -398,7 +407,10 @@ export class WorkspaceContextParticipant implements ChatParticipant {
         return true;
     }
 
-    async resolve(message: string, context: ParticipantContext): Promise<string> {
+    async resolve(
+        message: string,
+        context: ParticipantContext
+    ): Promise<string> {
         return appendIdeContextToPrompt(message, {
             includeActiveEditor: true,
             chatRequest: context.chatRequest,
@@ -412,19 +424,19 @@ export class WorkspaceContextParticipant implements ChatParticipant {
 
 In `registerVtcodeAiIntegrations` (in [`src/extension.ts`](src/extension.ts:2545)):
 
-- Instantiate `ParticipantRegistry`.
-- Register `WorkspaceContextParticipant`.
-- When handling `vtcode.agent` chat:
+-   Instantiate `ParticipantRegistry`.
+-   Register `WorkspaceContextParticipant`.
+-   When handling `vtcode.agent` chat:
 
-  1. Start from `request.prompt`.
-  2. Build `ParticipantContext` with `request` and `token`.
-  3. Call `participantRegistry.resolveMessage(basePrompt, context)`.
-  4. Pass the resolved prompt to the existing `runVtcodeCommand(["ask", ...])`.
+    1. Start from `request.prompt`.
+    2. Build `ParticipantContext` with `request` and `token`.
+    3. Call `participantRegistry.resolveMessage(basePrompt, context)`.
+    4. Pass the resolved prompt to the existing `runVtcodeCommand(["ask", ...])`.
 
 This:
 
-- Keeps current behavior identical.
-- Makes it trivial to add more participants following the patterns in `VSCODE_EXTENSION_CODE_EXAMPLES.md`.
+-   Keeps current behavior identical.
+-   Makes it trivial to add more participants following the patterns in `VSCODE_EXTENSION_CODE_EXAMPLES.md`.
 
 ---
 
@@ -433,28 +445,28 @@ This:
 Implement incrementally without breaking users:
 
 1. Add:
-   - `src/types/command.ts`
-   - `src/commandRegistry.ts`
-   - `src/types/participant.ts`
-   - `src/participants/participantRegistry.ts`
-   - `src/participants/workspaceContextParticipant.ts`
-   - `src/ideContext.ts` (extracted helpers)
+    - `src/types/command.ts`
+    - `src/commandRegistry.ts`
+    - `src/types/participant.ts`
+    - `src/participants/participantRegistry.ts`
+    - `src/participants/workspaceContextParticipant.ts`
+    - `src/ideContext.ts` (extracted helpers)
 2. Wire `CommandRegistry` in `activate`:
-   - Construct `CommandServices` from existing globals/helpers.
-   - Register new command classes.
-   - Keep old inline registrations temporarily for parity testing.
+    - Construct `CommandServices` from existing globals/helpers.
+    - Register new command classes.
+    - Keep old inline registrations temporarily for parity testing.
 3. Once verified:
-   - Remove duplicate inline command implementations from `extension.ts`.
+    - Remove duplicate inline command implementations from `extension.ts`.
 4. Wire `ParticipantRegistry` into `registerVtcodeAiIntegrations`:
-   - Use registry to produce final prompts for `vtcode.agent`.
-   - Keep `appendIdeContextToPrompt` behavior identical.
+    - Use registry to produce final prompts for `vtcode.agent`.
+    - Keep `appendIdeContextToPrompt` behavior identical.
 5. Add targeted tests:
-   - Unit tests for:
-     - `CommandRegistry`
-     - `AskAgentCommand`, `AskSelectionCommand`
-     - `WorkspaceContextParticipant`
-   - Integration-style test for:
-     - `vtcode.agent` chat path with participant resolution.
+    - Unit tests for:
+        - `CommandRegistry`
+        - `AskAgentCommand`, `AskSelectionCommand`
+        - `WorkspaceContextParticipant`
+    - Integration-style test for:
+        - `vtcode.agent` chat path with participant resolution.
 
 ---
 
@@ -462,26 +474,26 @@ Implement incrementally without breaking users:
 
 Detailed UX and code are covered in:
 
-- `VSCODE_EXTENSION_CODE_EXAMPLES.md`
-- `VSCODE_EXTENSION_IMPROVEMENTS.md`
+-   `VSCODE_EXTENSION_CODE_EXAMPLES.md`
+-   `VSCODE_EXTENSION_IMPROVEMENTS.md`
 
 This refactor plan prepares for them by:
 
-- Centralizing commands (so tool-approval-triggering actions are easy to wrap).
-- Introducing participants (so context for approval can be richer).
-- Keeping `ChatViewProvider` as the single chat UI integration point.
+-   Centralizing commands (so tool-approval-triggering actions are easy to wrap).
+-   Introducing participants (so context for approval can be richer).
+-   Keeping `ChatViewProvider` as the single chat UI integration point.
 
 Recommended future hooks (not implemented yet):
 
-- `src/types/toolApproval.ts` + `src/tools/toolApprovalManager.ts`:
-  - Used by `ChatViewProvider` and `VtcodeBackend` to:
-    - Show approval modals in webview.
-    - Enforce HITL + policies from `vtcode.toml`.
-- `src/chat/conversationManager.ts`:
-  - Provide thread-level persistence.
-  - Integrated into:
-    - Webview (conversation list).
-    - VS Code Chat (optional mapping).
+-   `src/types/toolApproval.ts` + `src/tools/toolApprovalManager.ts`:
+    -   Used by `ChatViewProvider` and `VtcodeBackend` to:
+        -   Show approval modals in webview.
+        -   Enforce HITL + policies from `vtcode.toml`.
+-   `src/chat/conversationManager.ts`:
+    -   Provide thread-level persistence.
+    -   Integrated into:
+        -   Webview (conversation list).
+        -   VS Code Chat (optional mapping).
 
 These can be implemented after this refactor without further structural upheaval.
 
@@ -491,15 +503,15 @@ These can be implemented after this refactor without further structural upheaval
 
 This plan:
 
-- Aligns the current extension with the documented roadmap.
-- Provides concrete file-level changes:
-  - Command interfaces + registry.
-  - Participant interfaces + registry.
-  - IDE context helper extraction.
-- Keeps all existing behaviors and safeguards.
-- Sets a clean foundation for:
-  - Tool approval UI
-  - Conversation persistence
-  - Additional participants and UI polish.
+-   Aligns the current extension with the documented roadmap.
+-   Provides concrete file-level changes:
+    -   Command interfaces + registry.
+    -   Participant interfaces + registry.
+    -   IDE context helper extraction.
+-   Keeps all existing behaviors and safeguards.
+-   Sets a clean foundation for:
+    -   Tool approval UI
+    -   Conversation persistence
+    -   Additional participants and UI polish.
 
 Use this as the canonical reference when starting the Phase 2 refactor in this repository.

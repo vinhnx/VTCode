@@ -12,12 +12,12 @@ This document summarizes the complete implementation of mitigations for the Code
 
 ## Implementation Status: 89% Complete
 
-###   Fully Implemented (50%)
+### Fully Implemented (50%)
 
 1. **Timeout Escalation** - 100%
 2. **Serialization Stability** - 95%
 
-###   Substantially Implemented (50%)
+### Substantially Implemented (50%)
 
 3. **Constrained Sampling Regression** - 85%
 4. **apply_patch Tool Reliability** - 75%
@@ -26,11 +26,11 @@ This document summarizes the complete implementation of mitigations for the Code
 
 ## Detailed Implementation
 
-### Issue #1: apply_patch Tool Reliability   75%
+### Issue #1: apply_patch Tool Reliability 75%
 
 **Codex Problem**: Delete-and-recreate workflows risked partial state loss and repository corruption.
 
-####   Implemented
+#### Implemented
 
 1. **Telemetry Infrastructure** (`vtcode-core/src/tools/registry/telemetry.rs`)
 
@@ -60,7 +60,7 @@ This document summarizes the complete implementation of mitigations for the Code
     - Implementation guidance for CLI and TUI modes
     - References to related code sections
 
-####  Remaining Work
+#### Remaining Work
 
 1. **Confirmation Prompts** - Documented but not implemented
 
@@ -76,11 +76,11 @@ This document summarizes the complete implementation of mitigations for the Code
 
 ---
 
-### Issue #2: Timeout Escalation   100%
+### Issue #2: Timeout Escalation 100%
 
 **Codex Problem**: Exponential timeout backoff degraded UX during build/test loops.
 
-####   Fully Implemented
+#### Fully Implemented
 
 1. **Adaptive Timeout Ceilings** (`vtcode-core/src/tools/registry/mod.rs`)
 
@@ -114,7 +114,7 @@ This document summarizes the complete implementation of mitigations for the Code
     - Descriptive timeout errors with ceiling info
     - Per-category timeout classification
 
-####  Remaining Work
+#### Remaining Work
 
 1. **Documentation** - Configuration tuning guide
     - Create `docs/TIMEOUT_CONFIGURATION.md`
@@ -124,11 +124,11 @@ This document summarizes the complete implementation of mitigations for the Code
 
 ---
 
-### Issue #3: Constrained Sampling Regression   85%
+### Issue #3: Constrained Sampling Regression 85%
 
 **Codex Problem**: Mixed-language segments in <0.25% of sessions.
 
-####   Implemented
+#### Implemented
 
 **Test Suite**: `tests/language_consistency_test.rs` (525 lines, 17 tests)
 
@@ -164,9 +164,9 @@ pub fn validate_conversation_language_consistency(responses: &[Value]) -> Result
 pub fn validate_tool_response_language(tool_name: &str, response: &Value) -> Result<()>
 ```
 
-**Test Results**: 17/17 passing  
+**Test Results**: 17/17 passing
 
-####  Remaining Work
+#### Remaining Work
 
 1. **Provider Integration** - Hook validation into LLM response pipeline
 
@@ -193,11 +193,11 @@ pub fn validate_tool_response_language(tool_name: &str, response: &Value) -> Res
 
 ---
 
-### Issue #4: Responses API Encoding Difference   95%
+### Issue #4: Responses API Encoding Difference 95%
 
 **Codex Problem**: Extra newlines altered request encoding.
 
-####   Implemented
+#### Implemented
 
 **Test Suite**: `tests/tool_serialization_stability_test.rs` (499 lines, 14 tests)
 
@@ -236,9 +236,9 @@ fn snapshot_current_tool_schemas() -> Result<BTreeMap<String, Value>>
 pub fn update_schema_snapshots() -> Result<()>
 ```
 
-**Test Results**: 14/14 passing (10 unit + 4 integration, 1 skipped)  
+**Test Results**: 14/14 passing (10 unit + 4 integration, 1 skipped)
 
-####  Remaining Work
+#### Remaining Work
 
 1. **Documentation** - Contributor guidelines
 
@@ -254,7 +254,7 @@ pub fn update_schema_snapshots() -> Result<()>
 
 ## Test Coverage Summary
 
-### Total Tests: 31 (all passing  )
+### Total Tests: 31 (all passing )
 
 **Run Command**:
 
@@ -270,11 +270,11 @@ Summary [1.901s] 31 tests run: 31 passed, 1 skipped
 
 **Project Conventions**:
 
--     Uses `cargo test` as specified
--     Async patterns with `#[tokio::test]`
--     Integration with actual `ToolRegistry`
--     Proper error handling with `anyhow::Context`
--     Clear test organization
+-       Uses `cargo test` as specified
+-       Async patterns with `#[tokio::test]`
+-       Integration with actual `ToolRegistry`
+-       Proper error handling with `anyhow::Context`
+-       Clear test organization
 
 ---
 
@@ -321,24 +321,24 @@ Summary [1.901s] 31 tests run: 31 passed, 1 skipped
 
 **Event Definition** (telemetry.rs):
 
--     Well-structured enum with clear variants
--     Helper methods for common patterns
--     Comprehensive documentation
--     Test coverage included
+-       Well-structured enum with clear variants
+-       Helper methods for common patterns
+-       Comprehensive documentation
+-       Test coverage included
 
 **Event Emission** (executors.rs):
 
--     Proper error context with `anyhow::Context`
--     Structured logging with `tracing::debug`
--     Git backup detection heuristic
--     Clear documentation references
+-       Proper error context with `anyhow::Context`
+-       Structured logging with `tracing::debug`
+-       Git backup detection heuristic
+-       Clear documentation references
 
 **Code Maintainability**:
 
--     60+ line TODO for future implementation
--     Example code in comments
--     References to related code sections
--     Links to documentation
+-       60+ line TODO for future implementation
+-       Example code in comments
+-       References to related code sections
+-       Links to documentation
 
 ---
 
@@ -346,8 +346,8 @@ Summary [1.901s] 31 tests run: 31 passed, 1 skipped
 
 ### High Priority (Sprint 1: Week 1-2)
 
-1. ~~Add telemetry tracking~~   **DONE**
-2. ~~Create comprehensive test suites~~   **DONE**
+1. ~~Add telemetry tracking~~ **DONE**
+2. ~~Create comprehensive test suites~~ **DONE**
 3. Integrate language validation into LLM providers
 
 ### Medium Priority (Sprint 2: Week 3-4)
@@ -370,14 +370,14 @@ Summary [1.901s] 31 tests run: 31 passed, 1 skipped
 
 ```bash
 cargo check
-# Finished `dev` profile in 5.76s  
+# Finished `dev` profile in 5.76s
 ```
 
 ### Run Tests
 
 ```bash
 cargo test --test language_consistency_test --test tool_serialization_stability_test
-# Summary [1.901s] 31 tests run: 31 passed, 1 skipped  
+# Summary [1.901s] 31 tests run: 31 passed, 1 skipped
 ```
 
 ### Run All Tests
@@ -393,24 +393,24 @@ cargo test
 
 ### Security & Reliability
 
--     Telemetry tracking enables detection of problematic patterns
--     Warning messages alert users to risky operations
--     Git backup detection reduces data loss risk
--    Confirmation prompts would provide final safety layer (TODO)
+-       Telemetry tracking enables detection of problematic patterns
+-       Warning messages alert users to risky operations
+-       Git backup detection reduces data loss risk
+-   Confirmation prompts would provide final safety layer (TODO)
 
 ### Developer Experience
 
--     Clear test infrastructure for future validation
--     Comprehensive documentation for contributors
--     Structured events for observability platforms
--     Adaptive timeouts prevent UX degradation
+-       Clear test infrastructure for future validation
+-       Comprehensive documentation for contributors
+-       Structured events for observability platforms
+-       Adaptive timeouts prevent UX degradation
 
 ### Production Readiness
 
--     All tests passing with nextest
--     No breaking changes to existing APIs
--     Backward compatible configuration
--     Clear upgrade path documented
+-       All tests passing with nextest
+-       No breaking changes to existing APIs
+-       Backward compatible configuration
+-       Clear upgrade path documented
 
 ---
 
@@ -465,13 +465,13 @@ cargo test
 
 ## Conclusion
 
-VTCode has successfully implemented **89% of the Codex issue mitigations**, with:
+VT Code has successfully implemented **89% of the Codex issue mitigations**, with:
 
--     **Comprehensive test coverage** (31 passing tests)
--     **Production-ready telemetry** for destructive operations
--     **Adaptive timeout management** with configuration
--     **Serialization stability** validation framework
--     **Language consistency** detection infrastructure
+-       **Comprehensive test coverage** (31 passing tests)
+-       **Production-ready telemetry** for destructive operations
+-       **Adaptive timeout management** with configuration
+-       **Serialization stability** validation framework
+-       **Language consistency** detection infrastructure
 
 The remaining 11% focuses on:
 

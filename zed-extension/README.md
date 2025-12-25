@@ -4,26 +4,26 @@ This extension provides the VT Code AI coding assistant as an Agent Server in Ze
 
 ## Features
 
-- Full integration with Zed's Agent panel
-- Semantic code intelligence via Tree-sitter
-- Support for multiple LLM providers (OpenAI, Anthropic, Google Gemini, etc.)
-- Secure execution with workspace boundaries and tool policies
-- Real-time streaming responses and reasoning
+-   Full integration with Zed's Agent panel
+-   Semantic code intelligence via Tree-sitter
+-   Support for multiple LLM providers (OpenAI, Anthropic, Google Gemini, etc.)
+-   Secure execution with workspace boundaries and tool policies
+-   Real-time streaming responses and reasoning
 
 ## Configuration
 
 The extension automatically configures the necessary environment variables for ACP:
 
-- `VT_ACP_ENABLED=1` - Enables the Agent Client Protocol bridge
-- `VT_ACP_ZED_ENABLED=1` - Enables the Zed transport
+-   `VT_ACP_ENABLED=1` - Enables the Agent Client Protocol bridge
+-   `VT_ACP_ZED_ENABLED=1` - Enables the Zed transport
 
 ## Platform Support
 
 The extension supports the following platforms:
 
-- macOS (darwin-aarch64, darwin-x86_64)
-- Linux (linux-x86_64)
-- Windows (windows-x86_64)
+-   macOS (darwin-aarch64, darwin-x86_64)
+-   Linux (linux-x86_64)
+-   Windows (windows-x86_64)
 
 ## Building from Source
 
@@ -41,8 +41,8 @@ For local development and testing:
 
 1. Build VT Code: `cd /path/to/vtcode && cargo build --release`
 2. Create a test release archive:
-   - `mkdir temp_package && cp target/release/vtcode temp_package/`
-   - `cd temp_package && tar -czf vtcode-PLATFORM.tar.gz vtcode`
+    - `mkdir temp_package && cp target/release/vtcode temp_package/`
+    - `cd temp_package && tar -czf vtcode-PLATFORM.tar.gz vtcode`
 3. Calculate the SHA-256 checksum of your archive: `shasum -a 256 vtcode-PLATFORM.tar.gz`
 4. Update `extension.toml` archive URLs to point to your local test archive file (host via HTTP server or use GitHub release)
 5. Update SHA-256 hashes in `extension.toml` with actual values from your test file
@@ -54,7 +54,7 @@ For local development and testing:
 
 If you encounter "failed to install zed extensions" errors:
 
-1. **Check Release Availability**: The extension tries to download VTCode binaries from GitHub releases. Ensure that the version specified in `extension.toml` exists as a release on GitHub.
+1. **Check Release Availability**: The extension tries to download VT Code binaries from GitHub releases. Ensure that the version specified in `extension.toml` exists as a release on GitHub.
 
 2. **Verify Checksums**: If using custom binaries, make sure the SHA-256 checksums in `extension.toml` match your actual binary files.
 
@@ -62,11 +62,11 @@ If you encounter "failed to install zed extensions" errors:
 
 4. **Network Access**: Verify that Zed can access the URLs specified in the extension.toml file.
 
-5. **Build from Source**: If binaries aren't available, build VTCode from source using `cargo build --release` and create your own release archive.
+5. **Build from Source**: If binaries aren't available, build VT Code from source using `cargo build --release` and create your own release archive.
 
 **Important**: The default extension.toml references GitHub releases that may not exist for all versions. When in doubt, use the development installation method.
 
 ## Requirements
 
-- Zed v0.201 or later with Agent Client Protocol support
-- VT Code configuration with your AI provider settings
+-   Zed v0.201 or later with Agent Client Protocol support
+-   VT Code configuration with your AI provider settings

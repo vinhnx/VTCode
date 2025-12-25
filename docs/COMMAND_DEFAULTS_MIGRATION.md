@@ -2,38 +2,42 @@
 
 ## Overview
 
-VTCode now ships with comprehensive **safe-by-default** command allowlists. This document explains what changed and how to migrate your configuration.
+VT Code now ships with comprehensive **safe-by-default** command allowlists. This document explains what changed and how to migrate your configuration.
 
 ## What Changed
 
 ### Before
+
 Minimal default allow_list - only basic commands:
+
 ```toml
 [commands]
 allow_list = [
-  "ls", "pwd", "echo", "date", "whoami", 
+  "ls", "pwd", "echo", "date", "whoami",
   "git", "cargo", "python", "npm"
 ]
 ```
 
 ### After
+
 Comprehensive default allow_list - all safe development tools:
+
 ```toml
 [commands]
 allow_list = [
-  # 100+ safe commands including build tools, language runtimes, 
+  # 100+ safe commands including build tools, language runtimes,
   # file utilities, version control, compression, and system info
 ]
 ```
 
 ## Benefits
 
-  **Non-powered users don't need configuration** - Works out of the box  
-  **Agent access to full toolchain** - Can use `cargo test`, `npm run`, `pytest`, etc.  
-  **Better PATH resolution** - Extended PATH with `.cargo/bin`, `.local/bin`, etc.  
-  **Expanded glob patterns** - Patterns like `cargo *`, `npm run *` work  
-  **Comprehensive deny rules** - More dangerous commands are blocked  
-  **Backward compatible** - User configurations still override defaults  
+**Non-powered users don't need configuration** - Works out of the box
+**Agent access to full toolchain** - Can use `cargo test`, `npm run`, `pytest`, etc.
+**Better PATH resolution** - Extended PATH with `.cargo/bin`, `.local/bin`, etc.
+**Expanded glob patterns** - Patterns like `cargo *`, `npm run *` work
+**Comprehensive deny rules** - More dangerous commands are blocked
+**Backward compatible** - User configurations still override defaults
 
 ## Migration Steps
 
@@ -49,7 +53,7 @@ grep -A 30 "\[commands\]" vtcode.toml
 
 #### Option A: Use New Defaults (Recommended)
 
-Remove your `[commands]` section entirely and let VTCode use defaults:
+Remove your `[commands]` section entirely and let VT Code use defaults:
 
 ```toml
 # Remove these lines:
@@ -60,6 +64,7 @@ Remove your `[commands]` section entirely and let VTCode use defaults:
 ```
 
 This gets you:
+
 -   All 100+ safe commands enabled by default
 -   Full glob patterns for development workflows
 -   Automatic updates when new commands are added
@@ -77,7 +82,7 @@ allow_list = [
   "my-custom-tool",
 ]
 
-# Keep your custom denies  
+# Keep your custom denies
 deny_glob = [
   "rm *",     # Block all rm
   "docker run *",  # Custom: block containers
@@ -151,6 +156,7 @@ cat ~/.vtcode/audit/decisions.log
 ### Scenario 1: I have a minimal config
 
 **Current:**
+
 ```toml
 [commands]
 allow_list = ["ls", "git", "cargo"]
@@ -159,13 +165,14 @@ allow_list = ["ls", "git", "cargo"]
 **Migration:**
 Remove the entire `[commands]` section. You'll get 100+ safe commands automatically.
 
-**Result:**   Better - now `git stash`, `cargo test`, `npm install` all work
+**Result:** Better - now `git stash`, `cargo test`, `npm install` all work
 
 ---
 
 ### Scenario 2: I have project-specific rules
 
 **Current:**
+
 ```toml
 [commands]
 allow_list = ["ls", "git", "cargo", "make", "my-build-script"]
@@ -186,13 +193,14 @@ deny_glob = [
 ]
 ```
 
-**Result:**   Better - custom rules + all 100+ safe commands
+**Result:** Better - custom rules + all 100+ safe commands
 
 ---
 
 ### Scenario 3: I have very restrictive rules (high security)
 
 **Current:**
+
 ```toml
 [commands]
 allow_list = ["ls", "pwd", "git"]
@@ -213,13 +221,14 @@ deny_glob = ["*"]  # Still blocks everything by default
 allow_glob = []    # No patterns
 ```
 
-**Result:**   Same - your restrictions are preserved
+**Result:** Same - your restrictions are preserved
 
 ---
 
 ### Scenario 4: I have permissive rules (for trusted environments)
 
 **Current:**
+
 ```toml
 [commands]
 allow_glob = [
@@ -249,44 +258,49 @@ deny_glob = [
 ]
 ```
 
-**Result:**   Compatible - works as-is with new defaults
+**Result:** Compatible - works as-is with new defaults
 
 ## Before/After Examples
 
 ### Example 1: Python Development
 
 **Before (minimal config):**
+
 ```toml
 [commands]
 allow_list = ["ls", "pwd", "python", "pip"]
 ```
-- Only 4 commands work
-- No `pytest`, `black`, `flake8`, `mypy`
-- No version control
-- No file operations
+
+-   Only 4 commands work
+-   No `pytest`, `black`, `flake8`, `mypy`
+-   No version control
+-   No file operations
 
 **After (new defaults):**
+
 ```toml
 # No config needed - or minimal additions:
 [commands]
 allow_list = [
   # 100+ safe commands automatically
   "black",
-  "flake8", 
+  "flake8",
   "pytest",
   # ... plus all standard tools
 ]
 ```
-- Full Python toolchain works
-- Git, make, node.js all available
-- Can use `grep`, `find`, `tar`, etc.
-- Agent can run full workflows
+
+-   Full Python toolchain works
+-   Git, make, node.js all available
+-   Can use `grep`, `find`, `tar`, etc.
+-   Agent can run full workflows
 
 ---
 
 ### Example 2: Full-Stack Development
 
 **Before (custom):**
+
 ```toml
 [commands]
 allow_list = [
@@ -297,18 +311,20 @@ deny_glob = ["rm *", "sudo *"]
 ```
 
 **After (new defaults):**
+
 ```toml
 [commands]
 # Everything is enabled by default
 # Only customize if needed:
 deny_glob = [
   "rm *",           # Still blocked
-  "sudo *",         # Still blocked  
+  "sudo *",         # Still blocked
   "docker run *",   # Add custom restriction
 ]
 ```
 
 Result:
+
 -   Git workflows work fully (`git stash`, `git tag`, etc.)
 -   Cargo full toolchain (`cargo test`, `cargo doc`)
 -   Node.js packages (`yarn`, `pnpm`, `bun`)
@@ -366,6 +382,7 @@ cargo check
 **Cause:** PATH not extended properly
 
 **Fix:**
+
 ```toml
 [commands]
 extra_path_entries = [
@@ -382,6 +399,7 @@ extra_path_entries = [
 **Cause:** Deny rule takes precedence
 
 **Fix:**
+
 1. Check `deny_list` and `deny_glob` in `vtcode.toml`
 2. Remove if overly restrictive
 3. Add to `allow_list` if truly safe
@@ -393,6 +411,7 @@ extra_path_entries = [
 **Cause:** Tool not in extended PATH
 
 **Fix:**
+
 ```bash
 # Find where tool is installed
 which my-tool
@@ -406,7 +425,7 @@ extra_path_entries = [
 
 ## See Also
 
-- [COMMAND_SECURITY_MODEL.md](./COMMAND_SECURITY_MODEL.md) - Full command security details
-- [QUICK_COMMAND_REFERENCE.md](./QUICK_COMMAND_REFERENCE.md) - Quick reference for allowed/blocked commands
-- [vtcode.toml.example](../vtcode.toml.example) - Example configuration with all safe defaults
-- [AGENTS.md](../AGENTS.md) - Agent guidelines
+-   [COMMAND_SECURITY_MODEL.md](./COMMAND_SECURITY_MODEL.md) - Full command security details
+-   [QUICK_COMMAND_REFERENCE.md](./QUICK_COMMAND_REFERENCE.md) - Quick reference for allowed/blocked commands
+-   [vtcode.toml.example](../vtcode.toml.example) - Example configuration with all safe defaults
+-   [AGENTS.md](../AGENTS.md) - Agent guidelines

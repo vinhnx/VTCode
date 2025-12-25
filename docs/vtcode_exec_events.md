@@ -10,22 +10,22 @@ the rest of `vtcode-core`.
 Events are serialized with `serde` using an externally tagged `ThreadEvent` enum. Each
 variant captures a specific moment in the lifecycle of an execution thread:
 
-- **Thread lifecycle** – `thread.started`, `turn.started`, `turn.completed`, and
-  `turn.failed` events communicate coarse-grained scheduling milestones including token
-  accounting through the `Usage` struct.F:vtcode-exec-events/src/lib.rs†L12-L63
-- **Timeline items** – item events wrap a `ThreadItem` snapshot with stable identifiers so
-  consumers can correlate incremental updates (`item.started`, `item.updated`) with their
-  eventual completion (`item.completed`).F:vtcode-exec-events/src/lib.rs†L65-L120
-- **Command execution** – `CommandExecutionItem` reports the command string, aggregated
-  output, exit status, and a tri-state `CommandExecutionStatus` so dashboards can surface
-  long-running processes and failures.F:vtcode-exec-events/src/lib.rs†L122-L160
-- **File changes** – `FileChangeItem` enumerates per-file updates with a
-  `PatchApplyStatus` outcome to indicate whether patches landed cleanly.F:vtcode-exec-events/src/lib.rs†L162-L200
-- **Tooling and search** – `McpToolCallItem` and `WebSearchItem` track external tool
-  invocations and provider metadata, including optional arguments and raw result payloads
-  for audit trails.F:vtcode-exec-events/src/lib.rs†L202-L240
-- **Errors** – `ThreadErrorEvent` and `ErrorItem` record terminal failures alongside the
-  human-readable messages surfaced to operators.F:vtcode-exec-events/src/lib.rs†L41-L44F:vtcode-exec-events/src/lib.rs†L242-L248
+-   **Thread lifecycle** – `thread.started`, `turn.started`, `turn.completed`, and
+    `turn.failed` events communicate coarse-grained scheduling milestones including token
+    accounting through the `Usage` struct.F:vtcode-exec-events/src/lib.rs†L12-L63
+-   **Timeline items** – item events wrap a `ThreadItem` snapshot with stable identifiers so
+    consumers can correlate incremental updates (`item.started`, `item.updated`) with their
+    eventual completion (`item.completed`).F:vtcode-exec-events/src/lib.rs†L65-L120
+-   **Command execution** – `CommandExecutionItem` reports the command string, aggregated
+    output, exit status, and a tri-state `CommandExecutionStatus` so dashboards can surface
+    long-running processes and failures.F:vtcode-exec-events/src/lib.rs†L122-L160
+-   **File changes** – `FileChangeItem` enumerates per-file updates with a
+    `PatchApplyStatus` outcome to indicate whether patches landed cleanly.F:vtcode-exec-events/src/lib.rs†L162-L200
+-   **Tooling and search** – `McpToolCallItem` and `WebSearchItem` track external tool
+    invocations and provider metadata, including optional arguments and raw result payloads
+    for audit trails.F:vtcode-exec-events/src/lib.rs†L202-L240
+-   **Errors** – `ThreadErrorEvent` and `ErrorItem` record terminal failures alongside the
+    human-readable messages surfaced to operators.F:vtcode-exec-events/src/lib.rs†L41-L44F:vtcode-exec-events/src/lib.rs†L242-L248
 
 The schema favors additive evolution: new fields default via `Option` or `#[serde(default)]`
 so older consumers continue to deserialize previously known structures.
@@ -49,16 +49,16 @@ individual events.F:vtcode-exec-events/src/lib.rs†L8-L44F:vtcode-exec-events/s
 `vtcode-exec-events` ships with feature toggles so applications can pick the supporting
 infrastructure they need:
 
-- `serde-json` (default) – enables helper functions for serializing/deserializing events
-  to JSON strings or values while preserving the existing ergonomic API.F:vtcode-exec-events/src/lib.rs†L70-L92
-- `telemetry-log` – provides a ready-made `LogEmitter` that writes JSON payloads through
-  the `log` facade so adopters can reuse existing logging pipelines.F:vtcode-exec-events/src/lib.rs†L94-L133
-- `telemetry-tracing` – exposes a `TracingEmitter` that emits structured events tagged
-  with the schema version, integrating directly with the `tracing` ecosystem.F:vtcode-exec-events/src/lib.rs†L135-L187
-- `schema-export` – produces JSON Schema documents for both raw and versioned events so
-  downstream services can validate telemetry payloads offline.F:vtcode-exec-events/src/lib.rs†L189-L200
+-   `serde-json` (default) – enables helper functions for serializing/deserializing events
+    to JSON strings or values while preserving the existing ergonomic API.F:vtcode-exec-events/src/lib.rs†L70-L92
+-   `telemetry-log` – provides a ready-made `LogEmitter` that writes JSON payloads through
+    the `log` facade so adopters can reuse existing logging pipelines.F:vtcode-exec-events/src/lib.rs†L94-L133
+-   `telemetry-tracing` – exposes a `TracingEmitter` that emits structured events tagged
+    with the schema version, integrating directly with the `tracing` ecosystem.F:vtcode-exec-events/src/lib.rs†L135-L187
+-   `schema-export` – produces JSON Schema documents for both raw and versioned events so
+    downstream services can validate telemetry payloads offline.F:vtcode-exec-events/src/lib.rs†L189-L200
 
-## Integrating with VTCode runtimes
+## Integrating with VT Code runtimes
 
 `vtcode-core` re-exports the schema and emits events from the `ExecEventRecorder` inside the
 agent runner. You can attach an event sink by supplying a closure when constructing the

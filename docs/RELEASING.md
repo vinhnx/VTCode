@@ -1,19 +1,19 @@
-# VTCode Release Guide
+# VT Code Release Guide
 
-This document explains the release process for different components of the VTCode project.
+This document explains the release process for different components of the VT Code project.
 
 ## Components Overview
 
-The VTCode project has **two separate release processes** with independent versioning:
+The VT Code project has **two separate release processes** with independent versioning:
 
-1. **Main VTCode Binary** (Rust CLI) - Tags: `v0.39.x`
+1. **Main VT Code Binary** (Rust CLI) - Tags: `v0.39.x`
 2. **VSCode Extension** - Tags: `vscode-v0.1.x`
 
 ---
 
-## 1. Main VTCode Binary Release
+## 1. Main VT Code Binary Release
 
-The main VTCode Rust binary and related components.
+The main VT Code Rust binary and related components.
 
 ### Current Version
 
@@ -45,7 +45,7 @@ cargo read-manifest | jq -r .version
 
 ### Cross-compilation Configuration
 
-VTCode includes optimized cross-compilation configuration in `Cross.toml` for building binaries across multiple platforms. See [docs/cross-compilation.md](docs/cross-compilation.md) for details about the configuration.
+VT Code includes optimized cross-compilation configuration in `Cross.toml` for building binaries across multiple platforms. See [docs/cross-compilation.md](docs/cross-compilation.md) for details about the configuration.
 
 ### What It Does
 
@@ -208,7 +208,7 @@ git push origin :refs/tags/<tag-name>
 
 ## Distribution Channels
 
-### Main VTCode Binary
+### Main VT Code Binary
 
 -   **crates.io**: https://crates.io/crates/vtcode
 

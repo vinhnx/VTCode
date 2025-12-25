@@ -1,12 +1,12 @@
-# VTCode Zed Extension Development Guide
+# VT Code Zed Extension Development Guide
 
-This guide covers developing and testing the VTCode extension for Zed.
+This guide covers developing and testing the VT Code extension for Zed.
 
 ## Prerequisites
 
 -   **Rust**: Install via [rustup](https://www.rust-lang.org/tools/install)
 -   **Zed**: Latest version of the Zed editor
--   **VTCode CLI**: Install using `cargo install vtcode` or your package manager
+-   **VT Code CLI**: Install using `cargo install vtcode` or your package manager
 
 ## Building the Extension
 
@@ -53,7 +53,7 @@ Zed automatically handles the WASM compilation and linking when you install the 
 3. Test extension features:
     - Syntax highlighting for `vtcode.toml`
     - Configuration file validation
-    - VTCode commands in the command palette
+    - VT Code commands in the command palette
 
 ### Debugging
 
@@ -96,11 +96,11 @@ zed-extension/
 
 ## Extension Capabilities
 
-The VTCode extension provides:
+The VT Code extension provides:
 
 1. **Language Support**: Syntax highlighting and validation for `vtcode.toml`
 2. **Configuration**: Reading workspace `vtcode.toml` configuration
-3. **Integration**: Bridges Zed editor with VTCode CLI agent
+3. **Integration**: Bridges Zed editor with VT Code CLI agent
 
 ## Building and Publishing
 
@@ -175,5 +175,5 @@ Contributions are welcome! Please:
 ## Additional Resources
 
 -   [Zed Extension Developing Guide](https://zed.dev/docs/extensions/developing-extensions)
--   [VTCode Main Repository](https://github.com/vinhnx/vtcode)
+-   [VT Code Main Repository](https://github.com/vinhnx/vtcode)
 -   [Rust by Example](https://doc.rust-lang.org/rust-by-example/)

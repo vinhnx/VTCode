@@ -332,7 +332,7 @@ pub fn spool_large_output(
 
     // Write metadata header
     let metadata = format!(
-        "# VTCode Tool Output\n# Tool: {}\n# Timestamp: {}\n# Size: {} bytes\n---\n\n",
+        "# VT Code Tool Output\n# Tool: {}\n# Timestamp: {}\n# Size: {} bytes\n---\n\n",
         tool_name,
         chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"),
         content.len()

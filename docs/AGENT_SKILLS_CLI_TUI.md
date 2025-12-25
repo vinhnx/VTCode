@@ -11,9 +11,10 @@ vtcode chat
 ```
 
 You'll see the TUI chat interface with:
-- **Input area** (bottom) - Type messages and slash commands
-- **Transcript area** (top) - Shows conversation history
-- **Status bar** - Shows model, provider, token usage
+
+-   **Input area** (bottom) - Type messages and slash commands
+-   **Transcript area** (top) - Shows conversation history
+-   **Status bar** - Shows model, provider, token usage
 
 ### 2. Access Skills Commands
 
@@ -37,6 +38,7 @@ Autocomplete suggestions appear:
 ```
 
 **Output:**
+
 ```
 Available Skills:
   • spreadsheet-generator - Generate professional Excel spreadsheets with data, charts, and formatting
@@ -57,11 +59,12 @@ Use `/skills info <name>` for details
 ```
 
 **Output:**
+
 ```
 Skill: spreadsheet-generator
 Description: Generate professional Excel spreadsheets with data, charts, and formatting
 Version: 1.0.0
-Author: VTCode Team
+Author: VT Code Team
 
 --- Instructions ---
 When asked to generate a spreadsheet:
@@ -79,11 +82,13 @@ When asked to generate a spreadsheet:
 ```
 
 **Effect:**
-- Skill metadata added to system prompt (~100 tokens)
-- Agent now knows about this skill and when to use it
-- Full instructions loaded on-demand when needed
+
+-   Skill metadata added to system prompt (~100 tokens)
+-   Agent now knows about this skill and when to use it
+-   Full instructions loaded on-demand when needed
 
 **Output:**
+
 ```
  Loaded skill: spreadsheet-generator (v1.0.0)
   Description: Generate professional Excel spreadsheets...
@@ -99,9 +104,10 @@ Skill is ready to use. Ask the agent to use it in your next message.
 ```
 
 **Effect:**
-- Removes skill from current session
-- Frees up context tokens
-- Skill still available for other sessions
+
+-   Removes skill from current session
+-   Frees up context tokens
+-   Skill still available for other sessions
 
 ### Execute Skill with Input
 
@@ -110,9 +116,10 @@ Skill is ready to use. Ask the agent to use it in your next message.
 ```
 
 **Effect:**
-- Executes skill with specified input
-- Generates immediate output (file, document, analysis)
-- Results displayed in transcript
+
+-   Executes skill with specified input
+-   Generates immediate output (file, document, analysis)
+-   Results displayed in transcript
 
 ---
 
@@ -139,7 +146,7 @@ User: Create an Excel spreadsheet with Q4 2024 financial data including:
 Step 4: Agent creates spreadsheet
 Agent: I'll create the spreadsheet using the spreadsheet-generator skill...
        [Creates file]
-       
+
 Step 5: Download or use result
 Result: File reference shown, ready for download
 ```
@@ -198,32 +205,32 @@ Result: Specific refactoring suggestions provided
 
 ### Navigation
 
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` | Scroll transcript up/down |
-| `PgUp` / `PgDn` | Scroll transcript by page |
-| `Home` / `End` | Jump to top/bottom |
-| `Tab` | Autocomplete slash command |
-| `Ctrl+L` | Clear screen |
+| Key             | Action                     |
+| --------------- | -------------------------- |
+| `↑` / `↓`       | Scroll transcript up/down  |
+| `PgUp` / `PgDn` | Scroll transcript by page  |
+| `Home` / `End`  | Jump to top/bottom         |
+| `Tab`           | Autocomplete slash command |
+| `Ctrl+L`        | Clear screen               |
 
 ### Editing Input
 
-| Key | Action |
-|-----|--------|
+| Key      | Action                |
+| -------- | --------------------- |
 | `Ctrl+A` | Jump to start of line |
-| `Ctrl+E` | Jump to end of line |
-| `Ctrl+K` | Clear to end of line |
-| `Ctrl+U` | Clear entire line |
-| `Ctrl+W` | Delete previous word |
+| `Ctrl+E` | Jump to end of line   |
+| `Ctrl+K` | Clear to end of line  |
+| `Ctrl+U` | Clear entire line     |
+| `Ctrl+W` | Delete previous word  |
 
 ### Submission
 
-| Key | Action |
-|-----|--------|
-| `Enter` | Submit message |
+| Key           | Action                       |
+| ------------- | ---------------------------- |
+| `Enter`       | Submit message               |
 | `Shift+Enter` | New line in multi-line input |
-| `Ctrl+C` | Cancel/stop response |
-| `Ctrl+D` | Exit chat (when input empty) |
+| `Ctrl+C`      | Cancel/stop response         |
+| `Ctrl+D`      | Exit chat (when input empty) |
 
 ---
 
@@ -234,19 +241,22 @@ Result: Specific refactoring suggestions provided
 When you load a skill:
 
 **Immediately (100 tokens):**
-- Skill metadata (name, description)
-- Agent knows skill exists
-- No context cost for unused skills
+
+-   Skill metadata (name, description)
+-   Agent knows skill exists
+-   No context cost for unused skills
 
 **On-demand (<5K tokens):**
-- Full SKILL.md instructions
-- Workflows and guidelines
-- Loaded only when agent decides to use skill
+
+-   Full SKILL.md instructions
+-   Workflows and guidelines
+-   Loaded only when agent decides to use skill
 
 **Never:**
-- Skill resources (scripts, templates)
-- Only executed when needed
-- No context loading
+
+-   Skill resources (scripts, templates)
+-   Only executed when needed
+-   No context loading
 
 ### Using Multiple Skills
 
@@ -315,7 +325,7 @@ Command Sequence:
 Agent Response:
 Analyzing code against strict-architecture rules:
 - 500 lines per file maximum
-- 5 functions per file maximum  
+- 5 functions per file maximum
 - 4 arguments per function
 
 Findings:
@@ -344,12 +354,14 @@ Shows only document generation and workflow skills.
 ### 2. Skip Loading Details
 
 Instead of:
+
 ```
 /skills info spreadsheet-generator
 /skills load spreadsheet-generator
 ```
 
 You can directly:
+
 ```
 /skills use spreadsheet-generator "Create financial data"
 ```
@@ -399,7 +411,7 @@ Frees up tokens for longer conversations.
 User: Create a proposal document
 Agent: Creating proposal...
        [Generates document]
-       
+
 User: Ready! Your document is prepared for download.
 ```
 
@@ -438,12 +450,14 @@ Agent: Step 1: Creating data spreadsheet...
 ### Skill Not Found
 
 **Problem:**
+
 ```
 /skills info my-skill
 Error: Skill not found
 ```
 
 **Solution:**
+
 ```
 /skills list     # Check available skills
 vtcode skills config  # Check search paths
@@ -452,11 +466,13 @@ vtcode skills config  # Check search paths
 ### Slash Command Not Working
 
 **Problem:**
+
 ```
 /skills list doesn't work
 ```
 
 **Solution:**
+
 1. Type `/sk` and wait for autocomplete
 2. Ensure you're typing `/` (slash) not other characters
 3. Press `Tab` to autocomplete command
@@ -468,6 +484,7 @@ vtcode skills config  # Check search paths
 Agent says it will create a file but nothing appears
 
 **Solution:**
+
 1. Check agent output for errors
 2. Verify skill is properly loaded: `/skills list`
 3. Ensure code execution is enabled
@@ -478,19 +495,22 @@ Agent says it will create a file but nothing appears
 ## Keyboard Shortcuts Reference
 
 ### Navigation
-- `↑`/`↓` - Scroll transcript
-- `PgUp`/`PgDn` - Page scroll
-- `Tab` - Autocomplete
+
+-   `↑`/`↓` - Scroll transcript
+-   `PgUp`/`PgDn` - Page scroll
+-   `Tab` - Autocomplete
 
 ### Input Editing
-- `Ctrl+A` - Start of line
-- `Ctrl+E` - End of line
-- `Ctrl+W` - Delete word
+
+-   `Ctrl+A` - Start of line
+-   `Ctrl+E` - End of line
+-   `Ctrl+W` - Delete word
 
 ### Submission
-- `Enter` - Send message
-- `Shift+Enter` - New line
-- `Ctrl+C` - Cancel
+
+-   `Enter` - Send message
+-   `Shift+Enter` - New line
+-   `Ctrl+C` - Cancel
 
 ---
 
@@ -503,7 +523,7 @@ Agent says it will create a file but nothing appears
 
 User: I need 3 reports:
       1. Q4 2024 financial summary
-      2. Sales by region analysis  
+      2. Sales by region analysis
       3. Customer growth metrics
 
 Agent: Creating all three spreadsheets...
@@ -579,9 +599,9 @@ Agent: [creates with doc-generator]
 
 ### Documentation
 
-- Quick Reference: `docs/AGENT_SKILLS_QUICKREF.md`
-- Integration Guide: `docs/AGENT_SKILLS_INTEGRATION.md`
-- Complete Skills Guide: `docs/SKILLS_GUIDE.md`
+-   Quick Reference: `docs/AGENT_SKILLS_QUICKREF.md`
+-   Integration Guide: `docs/AGENT_SKILLS_INTEGRATION.md`
+-   Complete Skills Guide: `docs/SKILLS_GUIDE.md`
 
 ### Examples
 

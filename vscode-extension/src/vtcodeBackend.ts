@@ -12,7 +12,8 @@ function getPtyModule() {
             // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
             ptyModule = require("node-pty");
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+                error instanceof Error ? error.message : String(error);
             throw new Error(`Failed to load node-pty: ${message}`);
         }
     }
@@ -227,7 +228,7 @@ interface PtyCommandOptions {
 }
 
 /**
- * Backend wrapper for VTCode CLI streaming and tool execution.
+ * Backend wrapper for VT Code CLI streaming and tool execution.
  * Manages streaming responses, tool calls, and PTY sessions.
  */
 export class VtcodeBackend implements vscode.Disposable {
@@ -271,7 +272,7 @@ export class VtcodeBackend implements vscode.Disposable {
     }
 
     /**
-     * Stream a prompt to the VTCode CLI and parse the response chunks.
+     * Stream a prompt to the VT Code CLI and parse the response chunks.
      * Supports cancellation via abort controller.
      */
     async *streamPrompt(
@@ -350,7 +351,7 @@ export class VtcodeBackend implements vscode.Disposable {
             if (code !== 0 && !signal.aborted) {
                 const reason =
                     stderrChunks.join("").trim() ||
-                    `VTCode CLI exited with code ${code ?? "unknown"}`;
+                    `VT Code CLI exited with code ${code ?? "unknown"}`;
                 this.output.appendLine(`[vtcode] ${reason}`);
             }
         });
@@ -407,7 +408,7 @@ export class VtcodeBackend implements vscode.Disposable {
             if (exitCode !== null && exitCode !== 0) {
                 const raw =
                     stderrChunks.join("").trim() ||
-                    `VTCode CLI exited with code ${exitCode}`;
+                    `VT Code CLI exited with code ${exitCode}`;
                 const message = this.normalizeCliError(raw);
                 yield { kind: "error", message };
                 return;
@@ -473,7 +474,7 @@ export class VtcodeBackend implements vscode.Disposable {
             if (code !== 0 && !signal.aborted) {
                 const reason =
                     stderrChunks.join("").trim() ||
-                    `VTCode CLI exited with code ${code ?? "unknown"}`;
+                    `VT Code CLI exited with code ${code ?? "unknown"}`;
                 this.output.appendLine(`[vtcode] ${reason}`);
             }
         });
@@ -511,7 +512,7 @@ export class VtcodeBackend implements vscode.Disposable {
             if (exitCode !== null && exitCode !== 0) {
                 const raw =
                     stderrChunks.join("").trim() ||
-                    `VTCode CLI exited with code ${exitCode}`;
+                    `VT Code CLI exited with code ${exitCode}`;
                 const message = this.normalizeCliError(raw);
                 yield { kind: "error", message };
                 return;
@@ -540,7 +541,7 @@ export class VtcodeBackend implements vscode.Disposable {
             .replace(ANSI_OSC_PATTERN, "")
             .trim();
         if (!clean) {
-            return "VTCode CLI reported an unknown error.";
+            return "VT Code CLI reported an unknown error.";
         }
 
         const provider = this.configSummary?.agentProvider;
@@ -579,7 +580,7 @@ export class VtcodeBackend implements vscode.Disposable {
             const details =
                 error instanceof Error ? error.message : String(error);
             this.output.appendLine(
-                `[vtcode] Failed to resolve VTCode environment overlay: ${details}`
+                `[vtcode] Failed to resolve VT Code environment overlay: ${details}`
             );
         }
 
@@ -945,7 +946,7 @@ export class VtcodeBackend implements vscode.Disposable {
 
     /**
      * Send tool result back to CLI via stdin.
-     * 
+     *
      * NOTE: In the current exec mode architecture, the CLI runs autonomously
      * and does not read stdin for tool results. This method is kept as a
      * placeholder for potential future interactive modes where the CLI may
@@ -967,7 +968,9 @@ export class VtcodeBackend implements vscode.Disposable {
                 this.currentProcess.stdin.write(`${message}\n`);
             } catch (error) {
                 this.output.appendLine(
-                    `[vtcode] Failed to send tool result: ${error instanceof Error ? error.message : String(error)}`
+                    `[vtcode] Failed to send tool result: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`
                 );
             }
         }
@@ -975,7 +978,7 @@ export class VtcodeBackend implements vscode.Disposable {
 
     /**
      * Send tool error back to CLI via stdin.
-     * 
+     *
      * NOTE: In the current exec mode architecture, the CLI runs autonomously
      * and does not read stdin for tool errors. This method is kept as a
      * placeholder for potential future interactive modes where the CLI may
@@ -995,7 +998,9 @@ export class VtcodeBackend implements vscode.Disposable {
                 this.currentProcess.stdin.write(`${message}\n`);
             } catch (error) {
                 this.output.appendLine(
-                    `[vtcode] Failed to send tool error: ${error instanceof Error ? error.message : String(error)}`
+                    `[vtcode] Failed to send tool error: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`
                 );
             }
         }

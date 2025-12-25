@@ -1,9 +1,10 @@
-# VTCode Error Analytics & Monitoring Guide
+# VT Code Error Analytics & Monitoring Guide
 
 ## Overview
+
 This guide provides recommendations for tracking and analyzing error patterns across LLM providers in production.
 
-**Last Updated:** 2025-11-27T14:17:16+07:00  
+**Last Updated:** 2025-11-27T14:17:16+07:00
 **Status:** Production Monitoring Framework
 
 ---
@@ -11,6 +12,7 @@ This guide provides recommendations for tracking and analyzing error patterns ac
 ## Error Tracking Architecture
 
 ### Centralized Error Handling
+
 All provider errors flow through centralized handlers in `error_handling.rs`:
 
 ```rust
@@ -32,23 +34,26 @@ All provider errors flow through centralized handlers in `error_handling.rs`:
 ### Recommended Metrics
 
 #### 1. Error Rate by Provider
+
 ```rust
 // Track errors per provider
-counter!("llm.errors.total", 
+counter!("llm.errors.total",
     "provider" => provider_name,
     "error_type" => error_category
 );
 ```
 
 **Categories:**
-- `rate_limit` - 429 errors
-- `auth_error` - 401/403 errors
-- `network_error` - Connection failures
-- `parse_error` - JSON parsing failures
-- `server_error` - 500+ errors
-- `client_error` - 400-499 errors
+
+-   `rate_limit` - 429 errors
+-   `auth_error` - 401/403 errors
+-   `network_error` - Connection failures
+-   `parse_error` - JSON parsing failures
+-   `server_error` - 500+ errors
+-   `client_error` - 400-499 errors
 
 #### 2. Error Response Time
+
 ```rust
 // Track time to detect and handle errors
 histogram!("llm.error.handling_duration_ms",
@@ -58,6 +63,7 @@ histogram!("llm.error.handling_duration_ms",
 ```
 
 #### 3. Rate Limit Tracking
+
 ```rust
 // Specific rate limit monitoring
 counter!("llm.rate_limits.total",
@@ -71,6 +77,7 @@ gauge!("llm.rate_limits.current",
 ```
 
 #### 4. Error Recovery Success
+
 ```rust
 // Track retry success rates
 counter!("llm.errors.recovered",
@@ -101,7 +108,7 @@ pub fn handle_gemini_http_error(
     body: &str,
 ) -> anyhow::Error {
     let start = Instant::now();
-    
+
     // Categorize error
     let error_type = if is_rate_limit_error(status, body) {
         "rate_limit"
@@ -112,14 +119,14 @@ pub fn handle_gemini_http_error(
     } else {
         "unknown"
     };
-    
+
     // Record metrics
     counter!("llm.errors.total",
         "provider" => "gemini",
         "error_type" => error_type,
         "status_code" => status.as_u16()
     );
-    
+
     // Build error
     let error = if is_rate_limit_error(status, body) {
         counter!("llm.rate_limits.total", "provider" => "gemini");
@@ -127,14 +134,14 @@ pub fn handle_gemini_http_error(
     } else {
         // ... existing error handling
     };
-    
+
     // Record handling duration
     histogram!("llm.error.handling_duration_ms",
         start.elapsed().as_millis() as f64,
         "provider" => "gemini",
         "error_type" => error_type
     );
-    
+
     error
 }
 ```
@@ -142,26 +149,28 @@ pub fn handle_gemini_http_error(
 ### 2. Provider-Specific Dashboards
 
 #### Gemini Dashboard
+
 ```yaml
 metrics:
-  - name: "Gemini Error Rate"
-    query: "rate(llm_errors_total{provider='gemini'}[5m])"
-    
-  - name: "Gemini Rate Limits"
-    query: "sum(llm_rate_limits_total{provider='gemini'})"
-    
-  - name: "Gemini Error Distribution"
-    query: "sum by (error_type) (llm_errors_total{provider='gemini'})"
+    - name: "Gemini Error Rate"
+      query: "rate(llm_errors_total{provider='gemini'}[5m])"
+
+    - name: "Gemini Rate Limits"
+      query: "sum(llm_rate_limits_total{provider='gemini'})"
+
+    - name: "Gemini Error Distribution"
+      query: "sum by (error_type) (llm_errors_total{provider='gemini'})"
 ```
 
 #### Anthropic Dashboard
+
 ```yaml
 metrics:
-  - name: "Anthropic Error Rate"
-    query: "rate(llm_errors_total{provider='anthropic'}[5m])"
-    
-  - name: "Anthropic Auth Errors"
-    query: "sum(llm_errors_total{provider='anthropic',status_code='401'})"
+    - name: "Anthropic Error Rate"
+      query: "rate(llm_errors_total{provider='anthropic'}[5m])"
+
+    - name: "Anthropic Auth Errors"
+      query: "sum(llm_errors_total{provider='anthropic',status_code='401'})"
 ```
 
 ---
@@ -171,9 +180,10 @@ metrics:
 ### Common Error Patterns
 
 #### 1. Rate Limit Patterns
+
 ```sql
 -- Identify rate limit spikes
-SELECT 
+SELECT
     provider,
     DATE_TRUNC('hour', timestamp) as hour,
     COUNT(*) as rate_limit_count
@@ -185,14 +195,16 @@ LIMIT 20;
 ```
 
 **Action Items:**
-- Implement exponential backoff
-- Add request queuing
-- Consider provider rotation
+
+-   Implement exponential backoff
+-   Add request queuing
+-   Consider provider rotation
 
 #### 2. Authentication Failures
+
 ```sql
 -- Track auth error trends
-SELECT 
+SELECT
     provider,
     error_message,
     COUNT(*) as occurrences
@@ -203,14 +215,16 @@ ORDER BY occurrences DESC;
 ```
 
 **Action Items:**
-- Verify API key rotation
-- Check token expiration
-- Audit permission scopes
+
+-   Verify API key rotation
+-   Check token expiration
+-   Audit permission scopes
 
 #### 3. Network Errors
+
 ```sql
 -- Analyze network reliability
-SELECT 
+SELECT
     provider,
     error_type,
     AVG(retry_count) as avg_retries,
@@ -221,9 +235,10 @@ GROUP BY provider, error_type;
 ```
 
 **Action Items:**
-- Review timeout configurations
-- Check network infrastructure
-- Consider circuit breakers
+
+-   Review timeout configurations
+-   Check network infrastructure
+-   Consider circuit breakers
 
 ---
 
@@ -232,42 +247,45 @@ GROUP BY provider, error_type;
 ### Critical Alerts
 
 #### 1. High Error Rate
+
 ```yaml
 alert: HighLLMErrorRate
 expr: |
-  rate(llm_errors_total[5m]) > 0.1
+    rate(llm_errors_total[5m]) > 0.1
 for: 5m
 labels:
-  severity: critical
+    severity: critical
 annotations:
-  summary: "High error rate for {{ $labels.provider }}"
-  description: "Error rate is {{ $value }} errors/sec"
+    summary: "High error rate for {{ $labels.provider }}"
+    description: "Error rate is {{ $value }} errors/sec"
 ```
 
 #### 2. Rate Limit Threshold
+
 ```yaml
 alert: RateLimitExceeded
 expr: |
-  sum(llm_rate_limits_total) > 100
+    sum(llm_rate_limits_total) > 100
 for: 1m
 labels:
-  severity: warning
+    severity: warning
 annotations:
-  summary: "Rate limits exceeded for {{ $labels.provider }}"
-  description: "{{ $value }} rate limit errors in last minute"
+    summary: "Rate limits exceeded for {{ $labels.provider }}"
+    description: "{{ $value }} rate limit errors in last minute"
 ```
 
 #### 3. Provider Unavailability
+
 ```yaml
 alert: ProviderUnavailable
 expr: |
-  sum(llm_errors_total{error_type="server_error"}) > 10
+    sum(llm_errors_total{error_type="server_error"}) > 10
 for: 2m
 labels:
-  severity: critical
+    severity: critical
 annotations:
-  summary: "{{ $labels.provider }} may be unavailable"
-  description: "{{ $value }} server errors in 2 minutes"
+    summary: "{{ $labels.provider }} may be unavailable"
+    description: "{{ $value }} server errors in 2 minutes"
 ```
 
 ---
@@ -307,11 +325,13 @@ info!(
 ### Log Aggregation
 
 **Recommended Stack:**
-- **Collection:** Fluentd / Vector
-- **Storage:** Elasticsearch / Loki
-- **Visualization:** Kibana / Grafana
+
+-   **Collection:** Fluentd / Vector
+-   **Storage:** Elasticsearch / Loki
+-   **Visualization:** Kibana / Grafana
 
 **Query Examples:**
+
 ```
 # Find all rate limit errors in last hour
 provider:"gemini" AND error_type:"rate_limit" AND @timestamp:[now-1h TO now]
@@ -363,7 +383,7 @@ where
     F: FnMut() -> anyhow::Result<T>,
 {
     let mut attempt = 0;
-    
+
     loop {
         match operation() {
             Ok(result) => {
@@ -374,14 +394,14 @@ where
             }
             Err(e) if attempt < max_retries => {
                 let delay = Duration::from_millis(100 * 2_u64.pow(attempt));
-                
+
                 warn!(
                     attempt = attempt,
                     delay_ms = delay.as_millis(),
                     error = %e,
                     "Retrying after error"
                 );
-                
+
                 tokio::time::sleep(delay).await;
                 attempt += 1;
             }
@@ -412,7 +432,7 @@ impl CircuitBreaker {
         F: FnOnce() -> anyhow::Result<T>,
     {
         let state = self.state.lock().await;
-        
+
         match *state {
             CircuitState::Open => {
                 counter!("llm.circuit_breaker.rejected");
@@ -420,7 +440,7 @@ impl CircuitBreaker {
             }
             CircuitState::HalfOpen | CircuitState::Closed => {
                 drop(state);
-                
+
                 match operation() {
                     Ok(result) => {
                         self.on_success().await;
@@ -457,12 +477,12 @@ async fn call_with_fallback(
                 error = %e,
                 "Falling back to secondary provider"
             );
-            
+
             counter!("llm.fallback.triggered",
                 "primary" => primary.name(),
                 "fallback" => fallback.name()
             );
-            
+
             fallback.complete(request).await
         }
     }
@@ -477,35 +497,43 @@ async fn call_with_fallback(
 
 ```json
 {
-  "dashboard": {
-    "title": "LLM Provider Errors",
-    "panels": [
-      {
-        "title": "Error Rate by Provider",
-        "targets": [{
-          "expr": "sum(rate(llm_errors_total[5m])) by (provider)"
-        }]
-      },
-      {
-        "title": "Rate Limits",
-        "targets": [{
-          "expr": "sum(llm_rate_limits_total) by (provider)"
-        }]
-      },
-      {
-        "title": "Error Distribution",
-        "targets": [{
-          "expr": "sum(llm_errors_total) by (error_type)"
-        }]
-      },
-      {
-        "title": "Recovery Success Rate",
-        "targets": [{
-          "expr": "sum(rate(llm_errors_recovered[5m])) / sum(rate(llm_errors_total[5m]))"
-        }]
-      }
-    ]
-  }
+    "dashboard": {
+        "title": "LLM Provider Errors",
+        "panels": [
+            {
+                "title": "Error Rate by Provider",
+                "targets": [
+                    {
+                        "expr": "sum(rate(llm_errors_total[5m])) by (provider)"
+                    }
+                ]
+            },
+            {
+                "title": "Rate Limits",
+                "targets": [
+                    {
+                        "expr": "sum(llm_rate_limits_total) by (provider)"
+                    }
+                ]
+            },
+            {
+                "title": "Error Distribution",
+                "targets": [
+                    {
+                        "expr": "sum(llm_errors_total) by (error_type)"
+                    }
+                ]
+            },
+            {
+                "title": "Recovery Success Rate",
+                "targets": [
+                    {
+                        "expr": "sum(rate(llm_errors_recovered[5m])) / sum(rate(llm_errors_total[5m]))"
+                    }
+                ]
+            }
+        ]
+    }
 }
 ```
 
@@ -514,20 +542,23 @@ async fn call_with_fallback(
 ## Maintenance Checklist
 
 ### Daily
-- [ ] Review error rate trends
-- [ ] Check rate limit usage
-- [ ] Verify alert health
+
+-   [ ] Review error rate trends
+-   [ ] Check rate limit usage
+-   [ ] Verify alert health
 
 ### Weekly
-- [ ] Analyze error patterns
-- [ ] Review recovery strategies
-- [ ] Update alert thresholds
+
+-   [ ] Analyze error patterns
+-   [ ] Review recovery strategies
+-   [ ] Update alert thresholds
 
 ### Monthly
-- [ ] Generate error analytics report
-- [ ] Review provider reliability
-- [ ] Optimize retry strategies
-- [ ] Update documentation
+
+-   [ ] Generate error analytics report
+-   [ ] Review provider reliability
+-   [ ] Optimize retry strategies
+-   [ ] Update documentation
 
 ---
 
@@ -535,13 +566,14 @@ async fn call_with_fallback(
 
 Implementing comprehensive error analytics provides:
 
- **Proactive monitoring** - Catch issues before users  
- **Data-driven decisions** - Optimize based on real patterns  
- **Improved reliability** - Better error recovery  
- **Cost optimization** - Reduce unnecessary retries  
- **Better UX** - Faster error resolution  
+**Proactive monitoring** - Catch issues before users
+**Data-driven decisions** - Optimize based on real patterns
+**Improved reliability** - Better error recovery
+**Cost optimization** - Reduce unnecessary retries
+**Better UX** - Faster error resolution
 
 **Next Steps:**
+
 1. Implement metrics collection
 2. Set up dashboards
 3. Configure alerts
@@ -549,6 +581,6 @@ Implementing comprehensive error analytics provides:
 
 ---
 
-**Document Version:** 1.0.0  
-**Last Updated:** 2025-11-27T14:17:16+07:00  
-**Status:**  Ready for Implementation
+**Document Version:** 1.0.0
+**Last Updated:** 2025-11-27T14:17:16+07:00
+**Status:** Ready for Implementation

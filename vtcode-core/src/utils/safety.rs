@@ -1,4 +1,4 @@
-//! Safety checks for VTCode operations
+//! Safety checks for VT Code operations
 //!
 //! This module provides safety validations for potentially expensive
 //! or resource-intensive operations to ensure user control and efficiency.
@@ -8,7 +8,7 @@ use crate::ui::user_confirmation::{AgentMode, UserConfirmation};
 use crate::utils::colors::style;
 use anyhow::Result;
 
-/// Safety validation utilities for VTCode operations
+/// Safety validation utilities for VT Code operations
 pub struct SafetyValidator;
 
 impl SafetyValidator {

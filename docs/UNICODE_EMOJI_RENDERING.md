@@ -1,12 +1,13 @@
-# Unicode and Emoji Rendering in VTCode TUI
+# Unicode and Emoji Rendering in VT Code TUI
 
 ## Issue
 
-Unicode characters (especially emoji like  ) were appearing corrupted as "â" or other mojibake when displayed in git diff output or other TUI rendering.
+Unicode characters (especially emoji like ) were appearing corrupted as "â" or other mojibake when displayed in git diff output or other TUI rendering.
 
 ## Root Cause
 
 The corruption was caused by:
+
 1. **Git pager interference**: The `delta` pager (if configured as git's pager) outputs ANSI-coded text with UTF-8 characters, but when captured via `Command::output()`, the pager can introduce encoding issues
 2. **UTF-8 handling in ANSI parsing**: The `ansi-to-tui` crate's handling of multi-byte UTF-8 characters interspersed with ANSI escape sequences can sometimes cause character corruption
 
@@ -40,17 +41,19 @@ To avoid Unicode/emoji rendering issues in the TUI:
 
 ## Files Modified
 
-- `src/agent/runloop/git.rs` - Disabled pager for git diff commands
-- `vtcode-core/src/utils/ansi.rs` - Added clarifying comments about UTF-8 handling
+-   `src/agent/runloop/git.rs` - Disabled pager for git diff commands
+-   `vtcode-core/src/utils/ansi.rs` - Added clarifying comments about UTF-8 handling
 
 ## Terminal Requirements
 
 The terminal must be configured with a UTF-8 locale. On most modern systems, this is automatic:
-- macOS: Uses UTF-8 by default
-- Linux: Set `LANG=en_US.UTF-8` or equivalent
-- Windows (with WSL): Set WSL terminal to UTF-8
+
+-   macOS: Uses UTF-8 by default
+-   Linux: Set `LANG=en_US.UTF-8` or equivalent
+-   Windows (with WSL): Set WSL terminal to UTF-8
 
 You can verify your terminal's encoding with:
+
 ```bash
 locale
 echo "  UTF-8 works!"

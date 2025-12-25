@@ -62,7 +62,7 @@ fn generate_default_config() -> String {
     // Generate TOML content from the loaded/created config
     toml::to_string_pretty(&config).unwrap_or_else(|_| {
         // Fallback to hardcoded template if serialization fails
-        r#"# VTCode Configuration File
+        r#"# VT Code Configuration File
 # This file contains the configuration for VTCode
 
 [agent]

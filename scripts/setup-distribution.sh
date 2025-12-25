@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# VTCode Distribution Setup Script
+# VT Code Distribution Setup Script
 # This script helps set up and test the distribution configuration
 
 set -e
@@ -170,11 +170,11 @@ show_next_steps() {
 # Main function
 main() {
     echo "========================================"
-    echo "  VTCode Distribution Setup Script"
+    echo "  VT Code Distribution Setup Script"
     echo "========================================"
     echo
 
-    print_info "This script will help you set up VTCode distribution"
+    print_info "This script will help you set up VT Code distribution"
     echo
 
     setup_cargo

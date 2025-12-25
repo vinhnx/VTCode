@@ -2,7 +2,7 @@
 
 This guide explains how to adopt the `vtcode-tools` crate while keeping tool
 policy configuration in your own application's storage hierarchy. The default
-VTCode implementation persists policy state inside a `.vtcode` directory, but
+VT Code implementation persists policy state inside a `.vtcode` directory, but
 external consumers often prefer to colocate policy files with their existing
 configuration tree.
 
@@ -47,7 +47,7 @@ configuration file at the provided path.
 ## 4. Inject the manager into the registry
 
 `ToolRegistry` exposes dedicated constructors for supplying a pre-built policy
-manager so the default VTCode wiring never executes:
+manager so the default VT Code wiring never executes:
 
 ```rust
 use vtcode_tools::ToolRegistry;

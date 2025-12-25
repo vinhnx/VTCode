@@ -1,4 +1,4 @@
-name: Create Main VTCode Release
+name: Create Main VT Code Release
 
 on:
   workflow_dispatch:

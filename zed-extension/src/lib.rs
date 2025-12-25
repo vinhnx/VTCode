@@ -39,8 +39,8 @@ pub use workspace::{
     WorkspaceContext, WorkspaceFile,
 };
 
-/// VTCode extension for Zed editor
-/// Provides integration with the VTCode AI coding assistant
+/// VT Code extension for Zed editor
+/// Provides integration with the VT Code AI coding assistant
 pub struct VTCodeExtension {
     config: Option<Config>,
     vtcode_available: bool,
@@ -76,9 +76,9 @@ impl VTCodeExtension {
             self.config = Some(config);
         }
 
-        // Verify VTCode CLI is available
+        // Verify VT Code CLI is available
         if !self.vtcode_available {
-            return Err("VTCode CLI not found in PATH".to_string());
+            return Err("VT Code CLI not found in PATH".to_string());
         }
 
         Ok(())
@@ -89,7 +89,7 @@ impl VTCodeExtension {
         self.config.as_ref()
     }
 
-    /// Check if VTCode CLI is available
+    /// Check if VT Code CLI is available
     pub fn is_vtcode_available(&self) -> bool {
         self.vtcode_available
     }

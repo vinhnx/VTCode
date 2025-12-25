@@ -148,7 +148,7 @@ pub(crate) async fn initialize_session(
             None
         }
     } else {
-        debug!("No VTCode config provided");
+        debug!("No VT Code config provided");
         None
     };
 

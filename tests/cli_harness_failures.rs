@@ -41,7 +41,7 @@ fn config_override_failure_is_reported() {
         .current_dir(harness.workspace());
 
     cmd.assert().failure().stderr(
-        predicate::str::contains("failed to initialize VTCode startup context")
+        predicate::str::contains("failed to initialize VT Code startup context")
             .and(predicate::str::contains(missing_config.to_string_lossy())),
     );
 }

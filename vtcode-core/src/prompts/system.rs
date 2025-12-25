@@ -43,7 +43,7 @@ use tracing::warn;
 
 /// DEFAULT SYSTEM PROMPT (v4.4)
 /// Optimized for clarity and token efficiency
-const DEFAULT_SYSTEM_PROMPT: &str = r#"# VTCode Coding Assistant
+const DEFAULT_SYSTEM_PROMPT: &str = r#"# VT Code Coding Assistant
 
 Use tools immediately. Stop when done or blocked.
 
@@ -88,7 +88,7 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VTCode, an expert coding assistan
 
 /// LIGHTWEIGHT PROMPT (v4.2 - Resource-constrained / Simple operations)
 /// Minimal, essential guidance only
-const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VTCode - efficient coding agent.
+const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 
 - Act and verify. Direct tone.
 - Scoped: list_files, grep_file (≤5), read_file (max_tokens).
@@ -96,7 +96,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VTCode - efficient coding agent.
 
 /// SPECIALIZED PROMPT (v4.3 - Complex refactoring with streamlined guidance)
 /// For multi-file changes and sophisticated code analysis
-const DEFAULT_SPECIALIZED_PROMPT: &str = r#"# VTCode Specialized Agent
+const DEFAULT_SPECIALIZED_PROMPT: &str = r#"# VT Code Specialized Agent
 
 Complex refactoring and multi-file analysis. When stuck, try 2-3 alternatives before asking.
 

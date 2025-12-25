@@ -6,9 +6,9 @@ This document provides practical examples of using MiniMax-M2 with VTCode.
 
 1. Get your MiniMax API key from [MiniMax](https://www.minimax.chat/)
 2. Set it as your Anthropic API key:
-   ```bash
-   export ANTHROPIC_API_KEY=your_minimax_api_key_here
-   ```
+    ```bash
+    export ANTHROPIC_API_KEY=your_minimax_api_key_here
+    ```
 
 ## Example 1: Basic Configuration
 
@@ -162,39 +162,44 @@ allowed_tools = [
 1. **Temperature**: MiniMax requires temperature in (0.0, 1.0]. The default works well.
 2. **Context**: MiniMax-M2 has a 200K token context window, similar to Claude models.
 3. **Reasoning**: Enable higher reasoning effort for complex tasks.
-4. **Tool Calling**: Works seamlessly with all VTCode built-in tools.
+4. **Tool Calling**: Works seamlessly with all VT Code built-in tools.
 5. **Streaming**: Enabled by default for better UX.
 
 ## Troubleshooting
 
 ### Issue: "Invalid temperature"
+
 **Solution**: Ensure temperature is in range (0.0, 1.0]. Don't set it to 0.0 or above 1.0.
 
 ### Issue: "Model not found"
+
 **Solution**: Use exact model name: `MiniMax-M2` (case-sensitive)
 
 ### Issue: "Authentication failed"
+
 **Solution**: Verify your API key is set correctly:
+
 ```bash
 echo $ANTHROPIC_API_KEY
 ```
 
 ### Issue: "Image input not supported"
+
 **Solution**: MiniMax-M2 currently only supports text input, not images or documents.
 
 ## Performance Comparison
 
 Based on typical usage:
 
-| Task Type | MiniMax-M2 | Claude Sonnet 4.5 | Notes |
-|-----------|------------|-------------------|-------|
-| Code Generation | Fast | Fast | Similar performance |
-| Reasoning | Good | Excellent | Claude has edge on complex reasoning |
-| Tool Calling | Excellent | Excellent | Both work well |
-| Context Handling | 200K tokens | 200K tokens | Same capacity |
+| Task Type        | MiniMax-M2  | Claude Sonnet 4.5 | Notes                                |
+| ---------------- | ----------- | ----------------- | ------------------------------------ |
+| Code Generation  | Fast        | Fast              | Similar performance                  |
+| Reasoning        | Good        | Excellent         | Claude has edge on complex reasoning |
+| Tool Calling     | Excellent   | Excellent         | Both work well                       |
+| Context Handling | 200K tokens | 200K tokens       | Same capacity                        |
 
 ## Next Steps
 
-- Read the [MiniMax Integration Guide](../guides/minimax-integration.md)
-- Check the [Tool Calling Guide](../guides/tool-calling.md)
-- Explore [Configuration Options](../config/CONFIGURATION_PRECEDENCE.md)
+-   Read the [MiniMax Integration Guide](../guides/minimax-integration.md)
+-   Check the [Tool Calling Guide](../guides/tool-calling.md)
+-   Explore [Configuration Options](../config/CONFIGURATION_PRECEDENCE.md)

@@ -3,12 +3,12 @@ import { BaseCommand, type CommandContext } from "../types/command";
 import { runVtcodeCommand } from "../utils/vtcodeRunner";
 
 /**
- * Command to ask the VTCode agent a question
+ * Command to ask the VT Code agent a question
  */
 export class AskCommand extends BaseCommand {
     public readonly id = "vtcode.askAgent";
     public readonly title = "Ask Agent";
-    public readonly description = "Ask the VTCode agent a question";
+    public readonly description = "Ask the VT Code agent a question";
     public readonly icon = "comment-discussion";
 
     async execute(context: CommandContext): Promise<void> {
@@ -17,7 +17,7 @@ export class AskCommand extends BaseCommand {
         }
 
         const question = await vscode.window.showInputBox({
-            prompt: "What would you like the VTCode agent to help with?",
+            prompt: "What would you like the VT Code agent to help with?",
             placeHolder: "Summarize src/main.rs",
             ignoreFocusOut: true,
         });
@@ -29,13 +29,13 @@ export class AskCommand extends BaseCommand {
         try {
             // Note: IDE context integration would be added here
             const promptWithContext = question; // Simplified for now
-            
+
             await runVtcodeCommand(["ask", promptWithContext], {
                 title: "Asking VTCode…",
                 output: context.output,
             });
             void vscode.window.showInformationMessage(
-                "VTCode finished processing your request. Check the VTCode output channel for details."
+                "VT Code finished processing your request. Check the VT Code output channel for details."
             );
         } catch (error) {
             this.handleCommandError("ask", error);

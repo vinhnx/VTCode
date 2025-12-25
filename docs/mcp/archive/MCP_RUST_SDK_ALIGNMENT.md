@@ -1,26 +1,29 @@
-# VTCode MCP Implementation Alignment with Official Rust SDK
+# VT Code MCP Implementation Alignment with Official Rust SDK
 
 Review of vtcode MCP implementation against official `rmcp` (Rust SDK) best practices from:
-- https://github.com/modelcontextprotocol/rust-sdk (rmcp v0.9.0+)
-- https://modelcontextprotocol.io specification and llms.txt
+
+-   https://github.com/modelcontextprotocol/rust-sdk (rmcp v0.9.0+)
+-   https://modelcontextprotocol.io specification and llms.txt
 
 ## Executive Summary
 
 VTCode's MCP client implementation is well-structured and follows most MCP specification requirements. This document identifies alignment gaps and optimization opportunities to match official Rust SDK patterns.
 
 **Current Status:**
--  Core client implementation functional
--  Multiple transport support (stdio, HTTP)
--  Tool discovery with progressive disclosure
--  Configuration management via TOML
--  Minor alignment opportunities with RMCP patterns
--  Async lifecycle management could use RMCP patterns
+
+-   Core client implementation functional
+-   Multiple transport support (stdio, HTTP)
+-   Tool discovery with progressive disclosure
+-   Configuration management via TOML
+-   Minor alignment opportunities with RMCP patterns
+-   Async lifecycle management could use RMCP patterns
 
 ---
 
 ## 1. Architecture Alignment
 
-### VTCode Current Pattern
+### VT Code Current Pattern
+
 ```
 McpClient (high-level)
    McpProvider (per-provider wrapper)
@@ -29,6 +32,7 @@ McpClient (high-level)
 ```
 
 ### RMCP Official Pattern
+
 ```
 ServiceExt trait (protocol-agnostic)
    Transport (stdin/stdout, HTTP, WebSocket)
@@ -39,6 +43,7 @@ ServiceExt trait (protocol-agnostic)
 ### Recommendation: Adopt RMCP's ServiceExt Trait
 
 **Current code** (`vtcode-core/src/mcp/mod.rs`):
+
 ```rust
 pub struct McpClient {
     providers: HashMap<String, McpProvider>,
@@ -52,6 +57,7 @@ impl McpClient {
 ```
 
 **Better pattern** (aligned with RMCP):
+
 ```rust
 // Use ServiceExt for both client and server
 use rmcp::ServiceExt;
@@ -70,6 +76,7 @@ impl VTCodeMcpClient {
 ```
 
 **Action Items:**
+
 1. Review `rmcp` crate features: `["server"]` vs `["client"]`
 2. Consider using `ServiceExt` trait methods directly for initialization
 3. Simplify custom `initialize()` logic by delegating to RMCP
@@ -78,7 +85,8 @@ impl VTCodeMcpClient {
 
 ## 2. Transport Configuration
 
-### Current VTCode Transport
+### Current VT Code Transport
+
 **File:** `vtcode-config/src/mcp.rs`
 
 ```rust
@@ -104,16 +112,17 @@ HttpTransport::connect("http://...")
 
 ### Alignment Issues
 
-| Issue | Current | RMCP | Action |
-|-------|---------|------|--------|
-| **Process Spawning** | Manual `Command` construction | `TokioChildProcess` wrapper | Wrap Command in `TokioChildProcess` |
-| **Environment Variables** | Manual handling | Implicit in tokio | Review env var injection |
-| **Timeout Handling** | Custom timeout logic | RMCP handles via `ServiceExt` | Leverage RMCP timeout support |
-| **Error Handling** | Custom error types | RMCP uses `anyhow::Result` | Migrate to `anyhow` for consistency |
+| Issue                     | Current                       | RMCP                          | Action                              |
+| ------------------------- | ----------------------------- | ----------------------------- | ----------------------------------- |
+| **Process Spawning**      | Manual `Command` construction | `TokioChildProcess` wrapper   | Wrap Command in `TokioChildProcess` |
+| **Environment Variables** | Manual handling               | Implicit in tokio             | Review env var injection            |
+| **Timeout Handling**      | Custom timeout logic          | RMCP handles via `ServiceExt` | Leverage RMCP timeout support       |
+| **Error Handling**        | Custom error types            | RMCP uses `anyhow::Result`    | Migrate to `anyhow` for consistency |
 
 ### Recommendation: Use RMCP Transport Wrappers
 
 **Better code:**
+
 ```rust
 use rmcp::transport::{TokioChildProcess, ConfigureCommandExt};
 use tokio::process::Command;
@@ -138,7 +147,8 @@ async fn create_stdio_transport(config: &StdioConfig) -> Result<TokioChildProces
 
 ## 3. Schema & Tool Definition
 
-### Current VTCode Pattern
+### Current VT Code Pattern
+
 **File:** `vtcode-core/src/mcp/tool_discovery.rs`
 
 ```rust
@@ -161,22 +171,24 @@ pub struct ToolInput {
 
 ### Alignment Issues
 
-| Aspect | Current | RMCP | Gap |
-|--------|---------|------|-----|
-| **Schema Version** | Unspecified | JSON Schema 2020-12 | Need explicit version in validation |
-| **Schema Generation** | Manual JSON | `schemars` proc macro | Not using type-safe generation |
-| **Schema Validation** | Basic checks | Full JSON Schema validation | Missing advanced features |
-| **Tool Metadata** | Basic fields | Full `Tool` struct from spec | Missing optional fields |
+| Aspect                | Current      | RMCP                         | Gap                                 |
+| --------------------- | ------------ | ---------------------------- | ----------------------------------- |
+| **Schema Version**    | Unspecified  | JSON Schema 2020-12          | Need explicit version in validation |
+| **Schema Generation** | Manual JSON  | `schemars` proc macro        | Not using type-safe generation      |
+| **Schema Validation** | Basic checks | Full JSON Schema validation  | Missing advanced features           |
+| **Tool Metadata**     | Basic fields | Full `Tool` struct from spec | Missing optional fields             |
 
 ### Recommendation: Integrate schemars for Schema Generation
 
 **Add to Cargo.toml:**
+
 ```toml
 [dependencies]
 schemars = "0.8"
 ```
 
 **Better tool definition:**
+
 ```rust
 use schemars::{JsonSchema, json_schema};
 use serde::{Deserialize, Serialize};
@@ -200,7 +212,8 @@ impl McpTool {
 
 ## 4. Async Initialization Lifecycle
 
-### Current VTCode Pattern
+### Current VT Code Pattern
+
 **File:** `src/agent/runloop/unified/async_mcp_manager.rs`
 
 ```rust
@@ -233,13 +246,14 @@ match client.get_status() {
 
 ### Alignment Issues
 
-1. **Initialization Model**: VTCode uses manual state machine; RMCP uses trait-based lifecycle
-2. **Progress Reporting**: VTCode custom; RMCP delegates to handler
-3. **Error Recovery**: VTCode stores error state; RMCP propagates errors
+1. **Initialization Model**: VT Code uses manual state machine; RMCP uses trait-based lifecycle
+2. **Progress Reporting**: VT Code custom; RMCP delegates to handler
+3. **Error Recovery**: VT Code stores error state; RMCP propagates errors
 
 ### Recommendation: Simplify with RMCP Lifecycle
 
 **Better approach:**
+
 ```rust
 use rmcp::ServiceExt;
 
@@ -252,13 +266,13 @@ pub struct AsyncMcpManager {
 impl AsyncMcpManager {
     pub async fn start_initialization(mut self) -> Result<()> {
         let transport = self.create_transport().await?;
-        
+
         // Use RMCP's ServiceExt directly
         let client = transport.serve().await?;
         self.client = Some(client);
         Ok(())
     }
-    
+
     pub async fn get_status(&self) -> ConnectionStatus {
         self.client
             .as_ref()
@@ -272,7 +286,8 @@ impl AsyncMcpManager {
 
 ## 5. Tool Invocation & Execution
 
-### Current VTCode Pattern
+### Current VT Code Pattern
+
 **File:** `vtcode-core/src/tools/registry/mod.rs`
 
 ```rust
@@ -297,13 +312,14 @@ let result = client.call_tool(ToolCall {
 
 ### Alignment Issues
 
-1. **Request Format**: VTCode uses raw JSON; RMCP uses typed structs
+1. **Request Format**: VT Code uses raw JSON; RMCP uses typed structs
 2. **Error Handling**: Different error models
-3. **Streaming Support**: RMCP supports streaming; VTCode needs review
+3. **Streaming Support**: RMCP supports streaming; VT Code needs review
 
 ### Recommendation: Use RMCP's Call Types
 
 **Better code:**
+
 ```rust
 use rmcp::client::calls::ToolCall;
 
@@ -318,10 +334,10 @@ pub async fn execute_mcp_tool(
         name: tool_name.to_string(),
         arguments,
     };
-    
+
     // Use RMCP client's typed methods
     let result = client.call_tool(call).await?;
-    
+
     Ok(result)
 }
 ```
@@ -332,7 +348,8 @@ pub async fn execute_mcp_tool(
 
 ## 6. Error Handling & Result Types
 
-### Current VTCode Pattern
+### Current VT Code Pattern
+
 **File:** `vtcode-core/src/mcp/mod.rs`
 
 ```rust
@@ -357,13 +374,14 @@ pub async fn initialize() -> anyhow::Result<Client> {
 
 ### Alignment Issues
 
-1. **Error Types**: VTCode has custom enum; RMCP uses `anyhow`
-2. **Context**: VTCode loses context; RMCP preserves with `.context()`
+1. **Error Types**: VT Code has custom enum; RMCP uses `anyhow`
+2. **Context**: VT Code loses context; RMCP preserves with `.context()`
 3. **Consistency**: Mixing error models across codebase
 
 ### Recommendation: Unified anyhow Error Handling
 
 **Current:**
+
 ```rust
 match result {
     Err(McpError::ToolNotFound(name)) => { ... }
@@ -371,6 +389,7 @@ match result {
 ```
 
 **Better:**
+
 ```rust
 use anyhow::{anyhow, Context};
 
@@ -386,7 +405,8 @@ let tool = client.find_tool(name)
 
 ## 7. Tool Discovery Progressive Disclosure
 
-### Current VTCode Pattern 
+### Current VT Code Pattern
+
 **File:** `vtcode-core/src/mcp/tool_discovery.rs`
 
 ```rust
@@ -400,16 +420,19 @@ pub fn search_tools(detail_level: DetailLevel) -> Vec<ToolDescription> { ... }
 ```
 
 ### RMCP Alignment
+
 This is **well-designed** and matches RMCP principles of progressive context disclosure.
 
 ### Recommendation: Keep as-is
+
 No changes needed. This pattern is optimal for agent context management.
 
 ---
 
 ## 8. Configuration Management
 
-### Current VTCode Pattern 
+### Current VT Code Pattern
+
 **File:** `vtcode-config/src/mcp.rs`
 
 ```rust
@@ -421,11 +444,13 @@ pub struct McpClientConfig {
 ```
 
 ### RMCP Alignment
+
 RMCP doesn't dictate config format; stdio-based servers expect JSON on stdio.
 
 ### Recommendation: Add TOML Config Examples
 
 **Add to `vtcode.example.toml`:**
+
 ```toml
 [mcp]
 enabled = true
@@ -448,10 +473,12 @@ args = ["mcp-server-filesystem", "/Users/john/work"]
 
 ## 9. Provider Health & Connection Management
 
-### Current VTCode Gap 
+### Current VT Code Gap
+
 **Missing Feature**: Health checks for provider connections
 
 ### RMCP Pattern
+
 Supports `ping` requests to verify connection health
 
 ### Recommendation: Add Health Check Support
@@ -461,7 +488,7 @@ Supports `ping` requests to verify connection health
 ```rust
 pub async fn check_provider_health(client: &ManagedClient) -> Result<()> {
     use rmcp::client::calls::Ping;
-    
+
     client.send(Ping {}).await?;
     Ok(())
 }
@@ -483,21 +510,25 @@ pub async fn reconnect_if_unhealthy(
 
 ## 10. OAuth 2.1 Authorization Support
 
-### Current VTCode Gap 
+### Current VT Code Gap
+
 **Missing Feature**: OAuth 2.1 support for protected resources
 
 ### RMCP Pattern
+
 Official Rust SDK includes OAuth support: `docs/OAUTH_SUPPORT.md`
 
 ### Recommendation: Plan OAuth Integration
 
 **Steps:**
+
 1. Review `rmcp` OAuth patterns in official SDK
 2. Add `oauth2` crate to dependencies
 3. Implement `AuthorizationHandler` trait
 4. Add `auth` field to `McpProviderConfig`
 
 **Config example:**
+
 ```toml
 [[mcp.providers]]
 name = "secure-api"
@@ -515,15 +546,18 @@ scopes = ["read:data", "write:data"]
 
 ## 11. Streaming & Long-Running Operations
 
-### Current VTCode Gap 
+### Current VT Code Gap
+
 **Status**: May not fully support MCP streaming
 
 ### RMCP Pattern
+
 Protocol supports streaming responses via progress notifications
 
 ### Recommendation: Add Streaming Support
 
 **New capability:**
+
 ```rust
 pub async fn stream_mcp_tool(
     client: &ManagedClient,
@@ -536,20 +570,24 @@ pub async fn stream_mcp_tool(
 ```
 
 **Use cases:**
-- Long-running file operations
-- Paginated API results
-- Real-time data updates
+
+-   Long-running file operations
+-   Paginated API results
+-   Real-time data updates
 
 ---
 
 ## 12. Testing & Integration
 
-### Current VTCode Status 
+### Current VT Code Status
+
 **Files:**
-- `vtcode-core/tests/mcp_integration_test.rs`
-- `vtcode-core/tests/mcp_integration_e2e.rs`
+
+-   `vtcode-core/tests/mcp_integration_test.rs`
+-   `vtcode-core/tests/mcp_integration_e2e.rs`
 
 ### RMCP Pattern
+
 Official SDK includes examples in `examples/` directory
 
 ### Recommendation: Add Integration Tests
@@ -578,6 +616,7 @@ async fn test_concurrent_tool_invocations() {
 ## Implementation Priority
 
 ### Phase 1: High Priority (Immediate)
+
 1. **Use RMCP Transport wrappers** — Replaces custom transport logic
 2. **Add schemars integration** — Type-safe schema generation
 3. **Unified error handling** — Use `anyhow` consistently
@@ -587,6 +626,7 @@ async fn test_concurrent_tool_invocations() {
 **Impact:** Better alignment, reduced custom code
 
 ### Phase 2: Medium Priority (1-2 months)
+
 1. **Add health check support** — Robust connection management
 2. **Simplify async lifecycle** — Leverage RMCP ServiceExt
 3. **Improve streaming support** — For long-running operations
@@ -596,6 +636,7 @@ async fn test_concurrent_tool_invocations() {
 **Impact:** Better reliability, spec compliance
 
 ### Phase 3: Future (3+ months)
+
 1. **OAuth 2.1 support** — For protected resources
 2. **Advanced auth patterns** — mTLS, JWT, etc.
 3. **Custom transport backends** — WebSocket, gRPC
@@ -608,50 +649,54 @@ async fn test_concurrent_tool_invocations() {
 
 ## Checklist for Fine-Tuning
 
-- [ ] Review `rmcp` v0.9.0+ crate documentation
-- [ ] Update Cargo.toml with `rmcp = "0.9"` feature flags
-- [ ] Replace custom transport with `TokioChildProcess`
-- [ ] Add `schemars` for schema generation
-- [ ] Migrate to `anyhow::Result` throughout MCP module
-- [ ] Add health check service
-- [ ] Implement streaming support
-- [ ] Update integration tests
-- [ ] Document OAuth integration plan
-- [ ] Update AGENTS.md with MCP patterns
+-   [ ] Review `rmcp` v0.9.0+ crate documentation
+-   [ ] Update Cargo.toml with `rmcp = "0.9"` feature flags
+-   [ ] Replace custom transport with `TokioChildProcess`
+-   [ ] Add `schemars` for schema generation
+-   [ ] Migrate to `anyhow::Result` throughout MCP module
+-   [ ] Add health check service
+-   [ ] Implement streaming support
+-   [ ] Update integration tests
+-   [ ] Document OAuth integration plan
+-   [ ] Update AGENTS.md with MCP patterns
 
 ---
 
 ## References
 
-- **RMCP GitHub:** https://github.com/modelcontextprotocol/rust-sdk
-- **RMCP Crates.io:** https://crates.io/crates/rmcp (v0.9.0+)
-- **RMCP Examples:** https://github.com/modelcontextprotocol/rust-sdk/tree/main/examples
-- **MCP Specification:** https://spec.modelcontextprotocol.io/2025-06-18/
-- **MCP llms.txt:** https://modelcontextprotocol.io/llms.txt
-- **VTCode MCP Current:** `vtcode-core/src/mcp/mod.rs`
+-   **RMCP GitHub:** https://github.com/modelcontextprotocol/rust-sdk
+-   **RMCP Crates.io:** https://crates.io/crates/rmcp (v0.9.0+)
+-   **RMCP Examples:** https://github.com/modelcontextprotocol/rust-sdk/tree/main/examples
+-   **MCP Specification:** https://spec.modelcontextprotocol.io/2025-06-18/
+-   **MCP llms.txt:** https://modelcontextprotocol.io/llms.txt
+-   **VT Code MCP Current:** `vtcode-core/src/mcp/mod.rs`
 
 ---
 
 ## Next Steps
 
 1. **Create RMCP upgrade branch**
-   ```bash
-   git checkout -b feat/rmcp-alignment
-   ```
+
+    ```bash
+    git checkout -b feat/rmcp-alignment
+    ```
 
 2. **Start with Phase 1: Transport layer**
-   - Update `vtcode-core/src/mcp/transport.rs` to use RMCP wrappers
-   - Update `Cargo.toml` dependencies
+
+    - Update `vtcode-core/src/mcp/transport.rs` to use RMCP wrappers
+    - Update `Cargo.toml` dependencies
 
 3. **Test changes incrementally**
-   ```bash
-   cargo test --package vtcode-core --lib mcp::
-   ```
+
+    ```bash
+    cargo test --package vtcode-core --lib mcp::
+    ```
 
 4. **Update documentation**
-   - Update `docs/mcp/MCP_COMPLETE_IMPLEMENTATION_STATUS.md`
-   - Add RMCP patterns to `AGENTS.md`
+
+    - Update `docs/mcp/MCP_COMPLETE_IMPLEMENTATION_STATUS.md`
+    - Add RMCP patterns to `AGENTS.md`
 
 5. **Review with team**
-   - Share findings before major refactoring
-   - Get approval for breaking changes (if any)
+    - Share findings before major refactoring
+    - Get approval for breaking changes (if any)

@@ -1,5 +1,5 @@
 /**
- * Context7 MCP Integration for VTCode Chat Extension
+ * Context7 MCP Integration for VT Code Chat Extension
  *
  * Provides seamless integration with Context7 Model Context Protocol
  * for enhanced documentation retrieval, code understanding, and

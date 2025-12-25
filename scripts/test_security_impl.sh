@@ -1,10 +1,10 @@
 #!/bin/bash
-# VTCode Security Validation Test
+# VT Code Security Validation Test
 # Tests the security validation functions directly
 
 set -e
 
-echo "🛡️  VTCode Security Validation Test"
+echo "🛡️  VT Code Security Validation Test"
 echo "===================================="
 
 # Colors

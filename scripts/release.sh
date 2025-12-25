@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# VTCode Release Script powered by cargo-release
+# VT Code Release Script powered by cargo-release
 #
-# This script handles releases for the main VTCode Rust binary and related components.
+# This script handles releases for the main VT Code Rust binary and related components.
 # For VSCode extension releases, use: cd vscode-extension && ./release.sh
 #
 # Changelog Generation:
@@ -973,7 +973,7 @@ main() {
         fi
         sleep 2
     done
-    
+
     print_success "GitHub release v$released_version confirmed created"
 
     # Verify GitHub CLI authentication before starting uploads
@@ -983,25 +983,25 @@ main() {
         print_info "Install from: https://cli.github.com/"
         exit 1
     fi
-    
+
     local expected_account="vinhnx"
     if ! gh auth status >/dev/null 2>&1; then
         print_error "GitHub CLI is not authenticated. Please run: gh auth login"
         exit 1
     fi
-    
+
     if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
         print_error "Not logged in to GitHub account: $expected_account"
         print_info "Run: gh auth login --hostname github.com"
         exit 1
     fi
-    
+
     if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
         print_error "GitHub account '$expected_account' is not active"
         print_info "Run: gh auth switch --hostname github.com --user $expected_account"
         exit 1
     fi
-    
+
     print_success "GitHub CLI authenticated with correct account: $expected_account"
 
     # Perform post-release operations sequentially
@@ -1016,7 +1016,7 @@ main() {
         # Enable cross-compilation for multi-platform builds
         export VTCODE_DISABLE_CROSS=0
         print_info "Cross-compilation enabled for multi-platform builds"
-        
+
         if ! build_and_upload_binaries "$released_version"; then
             print_error "Binary build/upload failed"
             exit 1

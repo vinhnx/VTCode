@@ -1,7 +1,7 @@
-# VTCode Zed Extension - Optimization Roadmap
+# VT Code Zed Extension - Optimization Roadmap
 
-**Scope**: v0.4.0+ Enhancements  
-**Priority**: Medium (current v0.3.0 is production-ready)  
+**Scope**: v0.4.0+ Enhancements
+**Priority**: Medium (current v0.3.0 is production-ready)
 **Effort**: 2-3 weeks for full implementation
 
 ---
@@ -16,8 +16,8 @@ The extension is production-ready at v0.3.0. These optimizations will improve pe
 
 ### 1.1 Async/Await Implementation
 
-**Impact**: 20-30% faster command execution  
-**Effort**: High  
+**Impact**: 20-30% faster command execution
+**Effort**: High
 **Priority**: High
 
 ```rust
@@ -38,16 +38,19 @@ pub async fn execute_command(&self, args: &[&str]) -> ExtensionResult<String> {
 ```
 
 **Files to Update**:
-- `src/executor.rs` - Add async execution
-- `src/commands.rs` - Update to use async
-- `src/lib.rs` - Update main interfaces
+
+-   `src/executor.rs` - Add async execution
+-   `src/commands.rs` - Update to use async
+-   `src/lib.rs` - Update main interfaces
 
 **Testing**:
-- Add 5+ async/await tests
-- Verify concurrent command execution
-- Test timeout handling
+
+-   Add 5+ async/await tests
+-   Verify concurrent command execution
+-   Test timeout handling
 
 **Dependencies**:
+
 ```toml
 tokio = { version = "1.0", features = ["full"] }
 ```
@@ -56,8 +59,8 @@ tokio = { version = "1.0", features = ["full"] }
 
 ### 1.2 RwLock for Read-Heavy Operations
 
-**Impact**: 10-15% faster cache reads  
-**Effort**: Medium  
+**Impact**: 10-15% faster cache reads
+**Effort**: Medium
 **Priority**: Medium
 
 ```rust
@@ -77,7 +80,7 @@ impl<T: Clone> Cache<T> {
         let data = self.data.read().unwrap();
         data.get(key).cloned()
     }
-    
+
     pub fn insert(&self, key: String, value: T) {
         // Exclusive writer
         let mut data = self.data.write().unwrap();
@@ -87,16 +90,19 @@ impl<T: Clone> Cache<T> {
 ```
 
 **Files to Update**:
-- `src/cache.rs` - Change Mutex to RwLock
-- `src/output.rs` - Update OutputChannel
-- `src/editor.rs` - Update EditorState
+
+-   `src/cache.rs` - Change Mutex to RwLock
+-   `src/output.rs` - Update OutputChannel
+-   `src/editor.rs` - Update EditorState
 
 **Testing**:
-- Add concurrent read tests
-- Verify write exclusivity
-- Benchmark read performance
+
+-   Add concurrent read tests
+-   Verify write exclusivity
+-   Benchmark read performance
 
 **Dependencies**:
+
 ```toml
 # Already available in std
 ```
@@ -105,8 +111,8 @@ impl<T: Clone> Cache<T> {
 
 ### 1.3 Use parking_lot for Better Mutexes
 
-**Impact**: 5-10% faster mutex operations  
-**Effort**: Low  
+**Impact**: 5-10% faster mutex operations
+**Effort**: Low
 **Priority**: Low
 
 ```rust
@@ -120,16 +126,19 @@ let data = Arc::new(Mutex::new(value));
 ```
 
 **Files to Update**:
-- `src/cache.rs` - Change Mutex to parking_lot::Mutex
-- `src/editor.rs` - Change Mutex to parking_lot::Mutex
-- `src/output.rs` - Change Mutex to parking_lot::Mutex
+
+-   `src/cache.rs` - Change Mutex to parking_lot::Mutex
+-   `src/editor.rs` - Change Mutex to parking_lot::Mutex
+-   `src/output.rs` - Change Mutex to parking_lot::Mutex
 
 **Testing**:
-- Verify no behavioral changes
-- Benchmark mutex performance
-- Test under contention
+
+-   Verify no behavioral changes
+-   Benchmark mutex performance
+-   Test under contention
 
 **Dependencies**:
+
 ```toml
 parking_lot = "0.12"
 ```
@@ -138,8 +147,8 @@ parking_lot = "0.12"
 
 ### 1.4 Zero-Copy Patterns
 
-**Impact**: 5-10% memory savings  
-**Effort**: Medium  
+**Impact**: 5-10% memory savings
+**Effort**: Medium
 **Priority**: Medium
 
 ```rust
@@ -165,14 +174,16 @@ pub fn add_message(&self, text: Arc<str>) {
 ```
 
 **Files to Update**:
-- `src/output.rs` - Use Arc<str> for messages
-- `src/workspace.rs` - Use Arc<str> for file paths
-- `src/error_handling.rs` - Use Arc<str> for error messages
+
+-   `src/output.rs` - Use Arc<str> for messages
+-   `src/workspace.rs` - Use Arc<str> for file paths
+-   `src/error_handling.rs` - Use Arc<str> for error messages
 
 **Testing**:
-- Verify memory usage reduced
-- Ensure no performance regression
-- Check string sharing works
+
+-   Verify memory usage reduced
+-   Ensure no performance regression
+-   Check string sharing works
 
 ---
 
@@ -180,11 +191,11 @@ pub fn add_message(&self, text: Arc<str>) {
 
 ### 2.1 Increase lib.rs Test Coverage
 
-**Impact**: Better API validation  
-**Effort**: Low  
+**Impact**: Better API validation
+**Effort**: Low
 **Priority**: Medium
 
-**Current**: 0 tests  
+**Current**: 0 tests
 **Target**: 10-15 tests
 
 ```rust
@@ -211,7 +222,7 @@ mod tests {
         let response = ext.ask_agent_command("test");
         assert!(!response.success || !response.output.is_empty());
     }
-    
+
     // Add 7+ more tests
 }
 ```
@@ -220,11 +231,11 @@ mod tests {
 
 ### 2.2 Expand commands.rs Tests
 
-**Impact**: Better command validation  
-**Effort**: Low  
+**Impact**: Better command validation
+**Effort**: Low
 **Priority**: Medium
 
-**Current**: 2 tests  
+**Current**: 2 tests
 **Target**: 10-12 tests
 
 ```rust
@@ -259,11 +270,11 @@ fn test_command_output_formatting() { }
 
 ### 2.3 Expand executor.rs Tests
 
-**Impact**: Better CLI integration validation  
-**Effort**: Low  
+**Impact**: Better CLI integration validation
+**Effort**: Low
 **Priority**: Medium
 
-**Current**: 2 tests  
+**Current**: 2 tests
 **Target**: 10-12 tests
 
 ```rust
@@ -298,16 +309,18 @@ fn test_large_output_handling() { }
 
 ### 2.4 Property-Based Testing
 
-**Impact**: Find edge cases  
-**Effort**: Medium  
+**Impact**: Find edge cases
+**Effort**: Medium
 **Priority**: Low
 
 **New Dependency**:
+
 ```toml
 proptest = "1.0"
 ```
 
 **Example Tests**:
+
 ```rust
 #[cfg(test)]
 mod property_tests {
@@ -327,7 +340,7 @@ mod property_tests {
             let cache = Cache::new();
             cache.insert(key.clone(), value);
             cache.insert(key.clone(), value);
-            
+
             assert_eq!(cache.get(&key), Some(value));
         }
 
@@ -345,8 +358,8 @@ mod property_tests {
 
 ### 2.5 Benchmarking Suite
 
-**Impact**: Track performance over time  
-**Effort**: Medium  
+**Impact**: Track performance over time
+**Effort**: Medium
 **Priority**: Low
 
 **New File**: `benches/performance.rs`
@@ -389,8 +402,8 @@ fn bench_workspace_scan(b: &mut Bencher) {
 
 ### 3.1 Persistent Disk Caching
 
-**Impact**: Faster subsequent startups  
-**Effort**: High  
+**Impact**: Faster subsequent startups
+**Effort**: High
 **Priority**: High (for v0.4.0)
 
 ```rust
@@ -443,6 +456,7 @@ impl PersistentCache {
 **New File**: `src/persistent_cache.rs`
 
 **Dependencies**:
+
 ```toml
 serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3"  # For serialization
@@ -452,8 +466,8 @@ bincode = "1.3"  # For serialization
 
 ### 3.2 File Watching
 
-**Impact**: Real-time cache invalidation  
-**Effort**: High  
+**Impact**: Real-time cache invalidation
+**Effort**: High
 **Priority**: Medium
 
 ```rust
@@ -491,6 +505,7 @@ impl FileWatcher {
 ```
 
 **Dependencies**:
+
 ```toml
 notify = "5.0"
 notify-debounce-mini = "0.2"
@@ -500,8 +515,8 @@ notify-debounce-mini = "0.2"
 
 ### 3.3 Command Streaming
 
-**Impact**: Progressive output display  
-**Effort**: High  
+**Impact**: Progressive output display
+**Effort**: High
 **Priority**: Low
 
 ```rust
@@ -537,8 +552,8 @@ where
 
 ### 4.1 Structured Logging
 
-**Impact**: Better debugging  
-**Effort**: Medium  
+**Impact**: Better debugging
+**Effort**: Medium
 **Priority**: Medium
 
 ```rust
@@ -570,6 +585,7 @@ pub async fn execute_command(&self, args: &[&str]) -> ExtensionResult<String> {
 ```
 
 **Dependencies**:
+
 ```toml
 tracing = "0.1"
 tracing-subscriber = "0.3"
@@ -579,8 +595,8 @@ tracing-subscriber = "0.3"
 
 ### 4.2 Performance Metrics
 
-**Impact**: Track performance trends  
-**Effort**: Medium  
+**Impact**: Track performance trends
+**Effort**: Medium
 **Priority**: Low
 
 ```rust
@@ -613,8 +629,8 @@ impl Metrics {
 
 ### 5.1 Builder Patterns
 
-**Impact**: Better API ergonomics  
-**Effort**: Low  
+**Impact**: Better API ergonomics
+**Effort**: Low
 **Priority**: Low
 
 ```rust
@@ -664,8 +680,8 @@ let response = CommandResponseBuilder::new("ask")
 
 ### 5.2 NewType Patterns for Type Safety
 
-**Impact**: Fewer bugs, better documentation  
-**Effort**: Medium  
+**Impact**: Fewer bugs, better documentation
+**Effort**: Medium
 **Priority**: Low
 
 ```rust
@@ -693,72 +709,77 @@ let response = ext.ask_agent_command(&query)?;
 
 ## Implementation Priority Matrix
 
-| Item | Impact | Effort | Priority | v0.4.0 |
-|------|--------|--------|----------|--------|
-| Async/Await | High | High | High |   Yes |
-| RwLock | Medium | Medium | Medium |   Yes |
-| Expand Tests | Medium | Low | Medium |   Yes |
-| Persistent Cache | High | High | High |   Yes |
-| parking_lot | Low | Low | Low | Maybe |
-| File Watching | Medium | High | Medium | Maybe |
-| Property Testing | Medium | Medium | Low | No |
-| Benchmarking | Medium | Medium | Low | No |
-| Logging | Medium | Medium | Medium | Maybe |
-| Metrics | Medium | Medium | Low | Maybe |
+| Item             | Impact | Effort | Priority | v0.4.0 |
+| ---------------- | ------ | ------ | -------- | ------ |
+| Async/Await      | High   | High   | High     | Yes    |
+| RwLock           | Medium | Medium | Medium   | Yes    |
+| Expand Tests     | Medium | Low    | Medium   | Yes    |
+| Persistent Cache | High   | High   | High     | Yes    |
+| parking_lot      | Low    | Low    | Low      | Maybe  |
+| File Watching    | Medium | High   | Medium   | Maybe  |
+| Property Testing | Medium | Medium | Low      | No     |
+| Benchmarking     | Medium | Medium | Low      | No     |
+| Logging          | Medium | Medium | Medium   | Maybe  |
+| Metrics          | Medium | Medium | Low      | Maybe  |
 
 ---
 
 ## Estimated Timeline for v0.4.0
 
 ### Week 1: Performance
-- [ ] Implement async/await (2-3 days)
-- [ ] Add RwLock support (1 day)
-- [ ] Expand tests (1-2 days)
+
+-   [ ] Implement async/await (2-3 days)
+-   [ ] Add RwLock support (1 day)
+-   [ ] Expand tests (1-2 days)
 
 ### Week 2: Persistence & Streaming
-- [ ] Implement persistent cache (2-3 days)
-- [ ] Add file watching (2-3 days)
-- [ ] Expand tests (1 day)
+
+-   [ ] Implement persistent cache (2-3 days)
+-   [ ] Add file watching (2-3 days)
+-   [ ] Expand tests (1 day)
 
 ### Week 3: Polish
-- [ ] Add logging (1 day)
-- [ ] Add metrics (1 day)
-- [ ] Documentation updates (2 days)
+
+-   [ ] Add logging (1 day)
+-   [ ] Add metrics (1 day)
+-   [ ] Documentation updates (2 days)
 
 ### Week 4: QA & Release
-- [ ] Benchmarking (1 day)
-- [ ] Final testing (2 days)
-- [ ] Registry submission prep (1 day)
+
+-   [ ] Benchmarking (1 day)
+-   [ ] Final testing (2 days)
+-   [ ] Registry submission prep (1 day)
 
 ---
 
 ## Success Criteria for v0.4.0
 
-- [ ] Async operations working
-- [ ] 130+ unit tests (up from 107)
-- [ ] Persistent cache implemented
-- [ ] File watching working
-- [ ] Performance improved 15%+
-- [ ] 0 compiler warnings
-- [ ] 100% code coverage
-- [ ] Full documentation
-- [ ] Ready for registry
+-   [ ] Async operations working
+-   [ ] 130+ unit tests (up from 107)
+-   [ ] Persistent cache implemented
+-   [ ] File watching working
+-   [ ] Performance improved 15%+
+-   [ ] 0 compiler warnings
+-   [ ] 100% code coverage
+-   [ ] Full documentation
+-   [ ] Ready for registry
 
 ---
 
 ## Conclusion
 
 v0.3.0 is production-ready with an A+ grade. v0.4.0 optimizations will elevate it to A+++ with:
-- **20-30% faster** operations
-- **15%+ better** memory usage
-- **More comprehensive** testing
-- **Persistent** caching
-- **Real-time** file watching
-- **Production-grade** observability
+
+-   **20-30% faster** operations
+-   **15%+ better** memory usage
+-   **More comprehensive** testing
+-   **Persistent** caching
+-   **Real-time** file watching
+-   **Production-grade** observability
 
 All enhancements maintain backward compatibility while improving internal quality.
 
 ---
 
-**Created**: November 9, 2025  
+**Created**: November 9, 2025
 **Status**: Ready for v0.4.0 planning

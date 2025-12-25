@@ -1,10 +1,10 @@
 #!/bin/bash
-# Integration script for VTCode Chat Sidebar Extension
+# Integration script for VT Code Chat Sidebar Extension
 # Run this from the vscode-extension directory
 
 set -e
 
-echo "🚀 Integrating VTCode Chat Sidebar Extension..."
+echo "🚀 Integrating VT Code Chat Sidebar Extension..."
 
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then
@@ -48,7 +48,7 @@ cat << 'EOF'
           "id": "vtcodeChat",
           "name": "Chat",
           "icon": "$(comment-discussion)",
-          "contextualTitle": "VTCode Chat"
+          "contextualTitle": "VT Code Chat"
         },
         {
           "id": "vtcodeQuickActionsView",
@@ -87,7 +87,7 @@ cat << 'EOF'
       ]
     },
     "configuration": {
-      "title": "VTCode Chat",
+      "title": "VT Code Chat",
       "properties": {
         "vtcode.chat.autoApproveTools": {
           "type": "boolean",
@@ -165,7 +165,7 @@ if (terminalManager) {
             })
         );
 
-        outputChannel.appendLine("[info] VTCode chat features activated");
+        outputChannel.appendLine("[info] VT Code chat features activated");
     });
 }
 
@@ -179,7 +179,7 @@ echo "1. Review and merge package.json changes"
 echo "2. Add the code snippet to src/extension.ts"
 echo "3. Run: npm run compile"
 echo "4. Test: Press F5 to launch Extension Development Host"
-echo "5. Look for the VTCode icon in the activity bar"
+echo "5. Look for the VT Code icon in the activity bar"
 echo ""
 echo "📚 Documentation:"
 echo "- CHAT_EXTENSION.md - Architecture and features"

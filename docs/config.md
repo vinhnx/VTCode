@@ -1,8 +1,8 @@
-# VTCode Configuration
+# VT Code Configuration
 
-VTCode configuration gives you fine-grained control over the model, execution environment, and integrations available to the CLI. Use this guide alongside the workflows in the extension, the participant system, and the tool approval mechanisms available in the application.
+VT Code configuration gives you fine-grained control over the model, execution environment, and integrations available to the CLI. Use this guide alongside the workflows in the extension, the participant system, and the tool approval mechanisms available in the application.
 
-VTCode uses a configuration file named `vtcode.toml` that can be placed at the root of your project workspace to customize behavior. The extension watches for changes to this file and will automatically update settings when it's modified.
+VT Code uses a configuration file named `vtcode.toml` that can be placed at the root of your project workspace to customize behavior. The extension watches for changes to this file and will automatically update settings when it's modified.
 
 ## Quick navigation
 
@@ -15,7 +15,7 @@ VTCode uses a configuration file named `vtcode.toml` that can be placed at the r
 -   [Profiles and overrides](#profiles-and-overrides)
 -   [Reference table](#config-reference)
 
-VTCode supports several mechanisms for setting config values:
+VT Code supports several mechanisms for setting config values:
 
 -   The `$VTCODE_HOME/config.toml` configuration file where the `VTCODE_HOME` environment value defaults to `~/.vtcode`.
 -   The workspace-level `vtcode.toml` file that can be placed at the root of your project (similar to `AGENTS.md` in the OpenAI Codex).
@@ -25,7 +25,7 @@ Both the workspace `vtcode.toml` and the main `config.toml` file support the fol
 
 ## Feature flags
 
-Optional and experimental capabilities are toggled via the `[features]` table in `vtcode.toml`. These allow you to customize the behavior of various VTCode features.
+Optional and experimental capabilities are toggled via the `[features]` table in `vtcode.toml`. These allow you to customize the behavior of various VT Code features.
 
 ```toml
 [features]
@@ -49,7 +49,7 @@ Supported features:
 
 ### agent.provider
 
-The AI provider that VTCode should use.
+The AI provider that VT Code should use.
 
 ```toml
 [agent]
@@ -89,7 +89,7 @@ base_url = "http://localhost:11434/v1"
 # No API key required for local Ollama instance
 ```
 
-Note this makes it possible to use VTCode with non-default models, so long as they are properly configured with the correct API endpoints and authentication.
+Note this makes it possible to use VT Code with non-default models, so long as they are properly configured with the correct API endpoints and authentication.
 
 Or a third-party provider (using a distinct environment variable for the API key):
 
@@ -130,11 +130,11 @@ top_p = 0.9                # Top-P sampling parameter
 
 ### workspace.settings
 
-Controls various workspace-specific settings for VTCode execution:
+Controls various workspace-specific settings for VT Code execution:
 
 ```toml
 [workspace]
-# By default, VTCode will look for a vtcode.toml file in the root of your workspace
+# By default, VT Code will look for a vtcode.toml file in the root of your workspace
 # This determines the behavior when multiple workspaces exist
 use_root_config = true
 
@@ -165,7 +165,7 @@ participant_timeout = 30  # 30 seconds
 
 ### mcp
 
-You can configure VTCode to use [Model Context Protocol (MCP) servers](https://modelcontextprotocol.io/) to give VTCode access to external applications, resources, or services.
+You can configure VT Code to use [Model Context Protocol (MCP) servers](https://modelcontextprotocol.io/) to give VT Code access to external applications, resources, or services.
 
 #### Server configuration
 
@@ -211,7 +211,7 @@ Each MCP provider supports these options:
 
 ### security
 
-The security section defines how VTCode handles potentially dangerous operations:
+The security section defines how VT Code handles potentially dangerous operations:
 
 ```toml
 [security]
@@ -407,7 +407,7 @@ default_participants = ["@workspace", "@code", "@terminal", "@git"]
 
 ### telemetry
 
-VTCode can emit telemetry data about usage and performance:
+VT Code can emit telemetry data about usage and performance:
 
 ```toml
 [telemetry]
@@ -480,7 +480,7 @@ timeout = 30  # seconds
 
 ### VS Code Commands for Configuration
 
-VTCode VS Code extension provides several commands to help manage configuration:
+VT Code VS Code extension provides several commands to help manage configuration:
 
 -   `VTCode: Open Configuration` - Opens the workspace `vtcode.toml` file if it exists
 -   `VTCode: Toggle Human-in-the-Loop` - Quickly toggle the human_in_the_loop setting
@@ -489,7 +489,7 @@ VTCode VS Code extension provides several commands to help manage configuration:
 
 ### Command System Integration
 
-The VTCode extension uses a command system that can be configured through the settings:
+The VT Code extension uses a command system that can be configured through the settings:
 
 ```toml
 # Configure which commands are available
@@ -506,7 +506,7 @@ command_timeout = 300
 
 ### Workspace Trust
 
-VTCode follows VS Code's workspace trust model. Some features are only available in trusted workspaces:
+VT Code follows VS Code's workspace trust model. Some features are only available in trusted workspaces:
 
 ```toml
 # This setting is respected by VS Code when determining workspace trust
@@ -514,15 +514,15 @@ VTCode follows VS Code's workspace trust model. Some features are only available
 trusted_workspace_mode = true
 ```
 
-In untrusted workspaces, VTCode limits CLI automation capabilities to protect your system.
+In untrusted workspaces, VT Code limits CLI automation capabilities to protect your system.
 
 ## Configuration Validation and Troubleshooting
 
 ### Validation
 
-VTCode validates the configuration file on load. You can check for configuration errors by:
+VT Code validates the configuration file on load. You can check for configuration errors by:
 
-1. Looking at the VTCode output channel in VS Code
+1. Looking at the VT Code output channel in VS Code
 2. Using the `VTCode: Open Configuration` command which will highlight any parsing errors
 3. Running `vtcode check-config` from the command line if you have the CLI installed
 
@@ -534,7 +534,7 @@ Common configuration errors include:
 
 ### Troubleshooting
 
-If VTCode is not behaving as expected with your configuration:
+If VT Code is not behaving as expected with your configuration:
 
 1. First, verify the configuration file parses correctly:
 

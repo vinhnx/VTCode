@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# VTCode Distribution Test Script
+# VT Code Distribution Test Script
 # This script helps test the distribution setup before releasing
 
 set -e
@@ -168,7 +168,7 @@ validate_workflows() {
 
 # Main test function
 main() {
-    print_info "Starting VTCode distribution validation..."
+    print_info "Starting VT Code distribution validation..."
 
     local errors=0
 

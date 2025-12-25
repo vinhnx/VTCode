@@ -79,7 +79,7 @@ pub struct CliToolResult {
     pub execution_time_ms: u64,
 }
 
-/// Bridge between CLI tools and VTCode skills
+/// Bridge between CLI tools and VT Code skills
 #[derive(Debug, Clone)]
 pub struct CliToolBridge {
     pub config: CliToolConfig,
@@ -381,13 +381,13 @@ impl CliToolBridge {
         }
     }
 
-    /// Convert to VTCode Skill
+    /// Convert to VT Code Skill
     pub fn to_skill(&self) -> Result<Skill> {
         let manifest = SkillManifest {
             name: self.config.name.clone(),
             description: self.config.description.clone(),
             version: Some("1.0.0".to_string()),
-            author: Some("VTCode CLI Bridge".to_string()),
+            author: Some("VT Code CLI Bridge".to_string()),
             license: None,
             model: None,
             mode: None,

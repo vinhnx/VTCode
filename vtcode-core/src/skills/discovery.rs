@@ -1,7 +1,7 @@
 //! Dynamic Skill Discovery System
 //!
 //! Implements filesystem-based skill discovery with support for:
-//! - Traditional VTCode skills (SKILL.md files)
+//! - Traditional VT Code skills (SKILL.md files)
 //! - CLI tool skills (executable + README.md)
 //! - Auto-discovery of tools in standard locations
 //! - Progressive metadata loading
@@ -61,7 +61,7 @@ impl Default for DiscoveryConfig {
 /// Discovery result containing both traditional skills and CLI tools
 #[derive(Debug, Clone)]
 pub struct DiscoveryResult {
-    /// Traditional VTCode skills
+    /// Traditional VT Code skills
     pub skills: Vec<SkillContext>,
 
     /// CLI tool configurations
@@ -157,7 +157,7 @@ impl SkillDiscovery {
         }
     }
 
-    /// Discover traditional VTCode skills
+    /// Discover traditional VT Code skills
     async fn discover_traditional_skills(
         &mut self,
         workspace_root: &Path,
@@ -475,7 +475,7 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         name: config.name.clone(),
         description: config.description.clone(),
         version: Some("1.0.0".to_string()),
-        author: Some("VTCode CLI Discovery".to_string()),
+        author: Some("VT Code CLI Discovery".to_string()),
         license: None,
         model: None,
         mode: None,

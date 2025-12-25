@@ -101,7 +101,7 @@ fn actual_prompt_file_validation() {
             "System prompt should be substantial (>50 chars)"
         );
 
-        // Check for expected content patterns in the VTCode system prompt
+        // Check for expected content patterns in the VT Code system prompt
         let content_lower = content.to_lowercase();
 
         // Should mention being a coding assistant
@@ -189,9 +189,9 @@ fn integration_prompt_loading_workflow() {
     fs::create_dir_all(&prompts_dir).expect("Failed to create prompts directory");
 
     // Create a comprehensive system prompt
-    let system_prompt = r#"# VTCode System Prompt
+    let system_prompt = r#"# VT Code System Prompt
 
-You are a helpful coding assistant for the VTCode Rust project with access to file operations.
+You are a helpful coding assistant for the VT Code Rust project with access to file operations.
 
 ## Available Tools
 - list_files: List files and directories

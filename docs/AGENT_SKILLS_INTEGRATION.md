@@ -1,10 +1,10 @@
-# Using Agent Skills with VTCode Agent
+# Using Agent Skills with VT Code Agent
 
-Complete guide on integrating and using Anthropic Agent Skills with the VTCode agent harness.
+Complete guide on integrating and using Anthropic Agent Skills with the VT Code agent harness.
 
 ## Overview
 
-Agent Skills extend Claude's capabilities with specialized expertise for document generation, data analysis, and custom workflows. VTCode integrates Anthropic's Agent Skills through:
+Agent Skills extend Claude's capabilities with specialized expertise for document generation, data analysis, and custom workflows. VT Code integrates Anthropic's Agent Skills through:
 
 1. **CLI Commands** - Discover, load, and manage skills
 2. **Skill Container** - Progressive disclosure and execution
@@ -164,7 +164,7 @@ Every skill has a SKILL.md file:
 name: spreadsheet-generator
 description: Generate professional Excel spreadsheets with data, charts, and formatting
 version: 1.0.0
-author: VTCode Team
+author: VT Code Team
 license: MIT
 model: inherit
 mode: false
@@ -198,7 +198,7 @@ mode: false
 -   `allowed-tools` (optional): explicit allowlist for the skill (e.g., `Read`, `Write`, `Bash(python {baseDir}/scripts/*:*)`). Keep minimal; do not expose unused tools.
 -   `disable-model-invocation` (optional): gate direct model calls when the skill is active; prefer tools/scripts.
 -   `when-to-use` (optional, <=512 chars): guidance appended to description in some stacks; rely on a descriptive `description` first since this field is not guaranteed in upstream docs.
--   `requires-container` / `disallow-container` (optional, mutually exclusive): declare container requirements so VTCode can filter or prefer VTCode-native flows without string heuristics.
+-   `requires-container` / `disallow-container` (optional, mutually exclusive): declare container requirements so VT Code can filter or prefer VTCode-native flows without string heuristics.
 -   `license` (optional): short license string for the skill.
 -   `model` (optional): override model; default inherits session.
 -   `mode` (optional): mark skills that change operating mode (highlighted separately in some UIs).

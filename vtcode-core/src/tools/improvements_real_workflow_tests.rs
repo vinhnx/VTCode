@@ -1,7 +1,7 @@
 //! Real-world integration tests showing actual workflows
 //!
 //! These tests demonstrate how the improved system works together
-//! in practical scenarios matching real VTCode usage.
+//! in practical scenarios matching real VT Code usage.
 
 #![allow(deprecated)]
 #![allow(clippy::deprecated)]

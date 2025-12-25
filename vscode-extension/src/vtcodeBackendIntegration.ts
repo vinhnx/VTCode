@@ -1,7 +1,7 @@
 /**
- * VTCode Backend Integration Layer
+ * VT Code Backend Integration Layer
  *
- * Provides integration between the chat UI and VTCode CLI backend
+ * Provides integration between the chat UI and VT Code CLI backend
  * using a clean composition pattern.
  */
 
@@ -26,7 +26,7 @@ export interface AgentResponse {
 }
 
 /**
- * VTCode Backend Integration Service
+ * VT Code Backend Integration Service
  */
 export class VTCodeBackend {
     private config: VTCodeBackendConfig;
@@ -85,7 +85,7 @@ export class VTCodeBackend {
             // Step 2: Build conversation context
             const context = this.buildConversationContext(conversationHistory);
 
-            // Step 3: Call VTCode CLI
+            // Step 3: Call VT Code CLI
             const response = await this.callVTCodeCLI(enhancedQuery, context);
 
             return response;
@@ -109,7 +109,7 @@ export class VTCodeBackend {
     }
 
     /**
-     * Call VTCode CLI with full context integration
+     * Call VT Code CLI with full context integration
      */
     private async callVTCodeCLI(
         query: string,
@@ -193,7 +193,7 @@ export class VTCodeBackend {
             );
 
             throw new Error(
-                `VTCode CLI execution failed: ${
+                `VT Code CLI execution failed: ${
                     error instanceof Error ? error.message : String(error)
                 }`
             );
@@ -261,7 +261,7 @@ export class VTCodeBackend {
 }
 
 /**
- * Factory function to create VTCode backend
+ * Factory function to create VT Code backend
  */
 export async function createVTCodeBackend(
     outputChannel: vscode.OutputChannel,

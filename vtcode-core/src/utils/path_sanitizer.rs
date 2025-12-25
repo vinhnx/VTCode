@@ -1,6 +1,6 @@
 //! Utility for safely handling file system paths.
 //!
-//! The VTCode agent must never escape the workspace directory when performing
+//! The VT Code agent must never escape the workspace directory when performing
 //! file operations.  This module provides a single helper `secure_path` that
 //! canonicalises a user‑provided path and verifies that it is a descendant of
 //! the current working directory.  All callers should use this function before
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 /// returned.
 ///
 /// # Arguments
-/// * `workspace_root` – Absolute path to the VTCode workspace (usually the
+/// * `workspace_root` – Absolute path to the VT Code workspace (usually the
 ///   current working directory).
 /// * `user_path` – Path supplied by the user or a tool argument. May be
 ///   relative or absolute.

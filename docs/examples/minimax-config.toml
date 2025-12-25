@@ -1,4 +1,4 @@
-# Example VTCode Configuration for MiniMax-M2
+# Example VT Code Configuration for MiniMax-M2
 # Copy this to vtcode.toml and set your ANTHROPIC_API_KEY environment variable
 
 [agent]

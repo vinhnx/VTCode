@@ -405,7 +405,7 @@ pub fn update_schema_snapshots() -> Result<()> {
     Ok(())
 }
 
-// Integration tests with actual VTCode tool registry
+// Integration tests with actual VT Code tool registry
 #[cfg(test)]
 mod integration_tests {
     use super::*;

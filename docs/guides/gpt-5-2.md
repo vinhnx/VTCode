@@ -46,7 +46,7 @@ curl --request POST https://api.openai.com/v1/responses \
   --header "Content-type: application/json" \
   --data '{
     "model": "gpt-5.2",
-    "input": "Summarize the design constraints for the VTCode agent.",
+    "input": "Summarize the design constraints for the VT Code agent.",
     "reasoning": { "effort": "none" },
     "text": { "verbosity": "medium" }
   }'

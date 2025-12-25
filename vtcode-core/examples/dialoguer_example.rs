@@ -25,7 +25,7 @@ fn main() -> Result<()> {
     // Input prompt
     let name: String = Input::with_theme(&theme)
         .with_prompt("Your name")
-        .default("VTCode User".into())
+        .default("VT Code User".into())
         .interact_text()?;
 
     println!("Hello, {}!", name);

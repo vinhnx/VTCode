@@ -4,11 +4,11 @@
 
 ## Installation
 
-This skill is automatically discovered by VTCode when placed in the skills directory.
+This skill is automatically discovered by VT Code when placed in the skills directory.
 
 ## Usage
 
-Once installed, this skill can be invoked through the VTCode agent interface.
+Once installed, this skill can be invoked through the VT Code agent interface.
 
 ## Structure
 
@@ -48,4 +48,4 @@ When contributing to this skill:
 
 ## License
 
-This skill is part of the VTCode project.
+This skill is part of the VT Code project.

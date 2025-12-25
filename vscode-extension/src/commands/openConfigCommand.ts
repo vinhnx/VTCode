@@ -3,7 +3,7 @@ import { BaseCommand, type CommandContext } from "../types/command";
 import { pickVtcodeConfigUri } from "../vtcodeConfig";
 
 /**
- * Command to open the VTCode configuration file
+ * Command to open the VT Code configuration file
  */
 export class OpenConfigCommand extends BaseCommand {
     public readonly id = "vtcode.openConfig";
@@ -21,9 +21,7 @@ export class OpenConfigCommand extends BaseCommand {
                 return;
             }
 
-            const document = await vscode.workspace.openTextDocument(
-                configUri
-            );
+            const document = await vscode.workspace.openTextDocument(configUri);
             await vscode.window.showTextDocument(document, {
                 preview: false,
             });

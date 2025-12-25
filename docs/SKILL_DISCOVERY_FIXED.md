@@ -1,4 +1,4 @@
-#  FIXED: VTCode Agent Skill Discovery
+# FIXED: VT Code Agent Skill Discovery
 
 ## Issue Summary
 
@@ -6,7 +6,7 @@
 
 **Root Cause**: Wrong skill system used - `SkillManager` (looks for `skill.json`) instead of `SkillLoader` (reads `SKILL.md`).
 
-**Status**:  FIXED
+**Status**: FIXED
 
 ## What Was Changed
 
@@ -69,7 +69,7 @@ vtcode
 
 ## System Architecture
 
-VTCode now has TWO skill systems (both supported):
+VT Code now has TWO skill systems (both supported):
 
 ### 1. Claude Agent Skills (NEW - Fixed in this PR)
 
@@ -118,13 +118,13 @@ Expected output:
 
 ## Impact
 
- Agents can now discover and use Claude Agent Skills
- `search_tools` returns both MCP tools and skills
- No breaking changes to existing code
- Both skill systems continue to work independently
+Agents can now discover and use Claude Agent Skills
+`search_tools` returns both MCP tools and skills
+No breaking changes to existing code
+Both skill systems continue to work independently
 
 ---
 
 **Fixed by**: GitHub Copilot
 **Date**: December 13, 2025
-**Verified**:  Compilation, file checks, and skill discovery working
+**Verified**: Compilation, file checks, and skill discovery working

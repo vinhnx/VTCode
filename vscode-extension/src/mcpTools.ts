@@ -1,5 +1,5 @@
 /**
- * MCP Tool Integration for VTCode Chat Extension
+ * MCP Tool Integration for VT Code Chat Extension
  *
  * Provides Model Context Protocol (MCP) tool support for enhanced
  * chat capabilities including external tool invocations.

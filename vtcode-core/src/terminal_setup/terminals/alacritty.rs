@@ -14,7 +14,7 @@ pub fn generate_config(
     let mut config_sections = Vec::new();
 
     // Add header comment
-    config_sections.push("# VTCode Terminal Configuration for Alacritty".to_string());
+    config_sections.push("# VT Code Terminal Configuration for Alacritty".to_string());
     config_sections.push(String::new());
 
     // Generate feature-specific configurations

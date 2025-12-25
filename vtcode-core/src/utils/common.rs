@@ -1,7 +1,7 @@
-//! Utility functions for the VTCode agent
+//! Utility functions for the VT Code agent
 //!
 //! This module contains common utility functions that are used across different parts
-//! of the VTCode agent, helping to reduce code duplication and improve maintainability.
+//! of the VT Code agent, helping to reduce code duplication and improve maintainability.
 
 use crate::utils::colors::style;
 use anyhow::Result;

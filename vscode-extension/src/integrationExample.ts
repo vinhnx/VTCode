@@ -1,5 +1,5 @@
 /**
- * Quick Integration Example for VTCode Chat with MCP
+ * Quick Integration Example for VT Code Chat with MCP
  *
  * Copy this code to your extension.ts activate() function
  */
@@ -10,7 +10,7 @@ import { createMcpEnabledChat } from "./mcpChatAdapter";
 
 export async function activate(context: vscode.ExtensionContext) {
     // Create output channel for logging
-    const outputChannel = vscode.window.createOutputChannel("VTCode Chat");
+    const outputChannel = vscode.window.createOutputChannel("VT Code Chat");
     context.subscriptions.push(outputChannel);
 
     // Create terminal manager (assumes you already have this)
@@ -70,7 +70,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         outputChannel.appendLine(`[Chat] Activation failed: ${errorMsg}`);
         vscode.window.showErrorMessage(
-            `Failed to activate VTCode Chat: ${errorMsg}`
+            `Failed to activate VT Code Chat: ${errorMsg}`
         );
     }
 }
@@ -81,7 +81,7 @@ export async function activate(context: vscode.ExtensionContext) {
 export async function activateWithComposition(
     context: vscode.ExtensionContext
 ) {
-    const outputChannel = vscode.window.createOutputChannel("VTCode Chat");
+    const outputChannel = vscode.window.createOutputChannel("VT Code Chat");
     const terminalManager = new VtcodeTerminalManager(context);
 
     // Import factory functions
@@ -160,7 +160,7 @@ const packageJsonContributions = {
                     type: "webview",
                     id: "vtcodeChat",
                     name: "Chat",
-                    contextualTitle: "VTCode Chat",
+                    contextualTitle: "VT Code Chat",
                 },
             ],
         },
@@ -209,7 +209,7 @@ const packageJsonContributions = {
             ],
         },
         configuration: {
-            title: "VTCode Chat",
+            title: "VT Code Chat",
             properties: {
                 "vtcode.chat.autoApproveTools": {
                     type: "boolean",

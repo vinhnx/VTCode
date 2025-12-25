@@ -22,7 +22,7 @@ export class AnalyzeCommand extends BaseCommand {
                 output: context.output,
             });
             void vscode.window.showInformationMessage(
-                "VTCode finished analyzing the workspace. Review the VTCode output channel for results."
+                "VT Code finished analyzing the workspace. Review the VT Code output channel for results."
             );
         } catch (error) {
             this.handleCommandError("analyze the workspace", error);
