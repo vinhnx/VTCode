@@ -3,8 +3,6 @@ Add /settings as an alias for the /config command
 
 --
 
-
-
 Add LSP (Language Server Protocol) tool for code intelligence features like go-to-definition, find references, and hover documentation
 
 --

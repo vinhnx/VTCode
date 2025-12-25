@@ -209,7 +209,7 @@ pub async fn handle_slash_command(
                 prompt: prompt_text.to_string(),
             })
         }
-        "config" => Ok(SlashCommandOutcome::ShowConfig),
+        "config" | "settings" => Ok(SlashCommandOutcome::ShowConfig),
         "clear" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /clear")?;

@@ -2103,6 +2103,7 @@ mod tests {
             api_key_env: "TEST_API_KEY".to_string(),
             workspace: workspace.to_path_buf(),
             verbose: false,
+            quiet: false,
             theme: "test".to_string(),
             reasoning_effort: ReasoningEffortLevel::Low,
             ui_surface: UiSurfacePreference::default(),
