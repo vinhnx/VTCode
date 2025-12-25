@@ -669,23 +669,23 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::UPDATE_PLAN.to_string(),
-            description: "Track the plan file in planning mode. Write a concise TODO list with status (pending|in_progress|completed) and the current plan phase (understanding/design/review/final_plan). Use this for tasks that need 4+ steps and user-visible progress; keep tools read-only except for this plan update while drafting.".to_string(),
+            description: "Update the task plan with progress tracking and planning phases. For non-trivial tasks (4+ steps), use this to create precise plans with quality standards: (1) Understanding phase: explore 5-10 files, find similar patterns; (2) Design phase: break into 3-7 steps with specific file paths (e.g., src/tools/plan.rs:280); (3) Review phase: verify dependencies and ordering; (4) Final plan: ensure file paths, complexity estimates, and acceptance criteria are included. Good plans specify WHAT file WHERE at WHICH lines. Keep tools read-only during planning phases (understanding/design/review).".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "explanation": {"type": "string", "description": "Plan summary or current focus"},
+                    "explanation": {"type": "string", "description": "Plan summary or context from exploration phase - what files were read, what patterns were found"},
                     "phase": {
                         "type": "string",
-                        "description": "Current planning phase: understanding (gather context), design (propose approaches), review (validate with request), or final_plan (ready to execute)",
+                        "description": "Current planning phase: understanding (gather context, read 5-10 files), design (propose approaches with file paths), review (validate plan quality), or final_plan (ready to execute - requires file paths and proper breakdown)",
                         "enum": ["understanding", "design", "review", "final_plan"]
                     },
                     "plan": {
                         "type": "array",
-                        "description": "Plan steps with status. Recommended: 3-7 milestone items with one in_progress at a time.",
+                        "description": "Plan steps with status. Required: 3-7 steps for quality. Include specific file paths with line numbers (e.g., 'Update validate_plan in plan.rs:395-417'). Order by dependencies. One in_progress at a time.",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "step": {"type": "string", "description": "Step description"},
+                                "step": {"type": "string", "description": "Step description with file path and line numbers"},
                                 "status": {
                                     "type": "string",
                                     "enum": ["pending", "in_progress", "completed"],
