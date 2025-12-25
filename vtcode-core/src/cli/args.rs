@@ -342,6 +342,15 @@ pub struct Cli {
     #[arg(short = 'f', long, default_value_t = 60)]
     pub frame_rate: u64,
 
+    /// **Override the default agent model for this session**
+    ///
+    /// Use this to temporarily switch to a different model without modifying your config.
+    /// The agent name can be a model ID (e.g., gpt-5, claude-sonnet-4-5, gemini-3-pro).
+    ///
+    /// Example: vtcode --agent gpt-5 chat
+    #[arg(long, global = true, value_name = "AGENT")]
+    pub agent: Option<String>,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -956,6 +965,7 @@ impl Default for Cli {
             enable_skills: false, // Skills disabled by default
             tick_rate: 250,       // Default tick rate: 250ms
             frame_rate: 60,       // Default frame rate: 60 FPS
+            agent: None,          // No agent override by default
             command: Some(Commands::Chat),
         }
     }
