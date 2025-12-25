@@ -140,7 +140,7 @@ pub struct Session {
     transcript_cache: Option<TranscriptReflowCache>,
     /// Cache of visible lines by (scroll_offset, width) - shared via Arc for zero-copy reads
     /// Avoids expensive clone on cache hits
-    visible_lines_cache: Option<(usize, u16, Arc<Vec<Line<'static>>>)>,
+    pub(crate) visible_lines_cache: Option<(usize, u16, Arc<Vec<Line<'static>>>)>,
     pub(crate) queued_inputs: Vec<String>,
     queue_overlay_cache: Option<QueueOverlay>,
     queue_overlay_version: u64,

@@ -10,6 +10,7 @@ use ratatui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{Event, Level, Subscriber, field::Visit};
+use tracing::warn;
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
 use tui_syntax_highlight::{
@@ -53,8 +54,23 @@ impl LogForwarder {
 static LOG_FORWARDER: Lazy<Arc<LogForwarder>> = Lazy::new(|| Arc::new(LogForwarder::default()));
 
 const DEFAULT_THEME_NAME: &str = "base16-ocean.dark";
-static LOG_SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
-static LOG_THEME_SET: Lazy<ThemeSet> = Lazy::new(ThemeSet::load_defaults);
+static LOG_SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(|| {
+    // Attempt to load default syntaxes, but provide empty fallback if it fails
+    let syntax_set = SyntaxSet::load_defaults_newlines();
+    if syntax_set.syntaxes().is_empty() {
+        warn!("Failed to load syntax set for log highlighting; log syntax highlighting disabled");
+    }
+    syntax_set
+});
+static LOG_THEME_SET: Lazy<ThemeSet> = Lazy::new(|| {
+    match ThemeSet::load_defaults() {
+        theme_set if !theme_set.themes.is_empty() => theme_set,
+        _ => {
+            warn!("Failed to load theme set for log highlighting; using empty theme set");
+            ThemeSet::new()
+        }
+    }
+});
 static LOG_THEME_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
 static LOG_HIGHLIGHTER_CACHE: Lazy<RwLock<Option<(String, Highlighter)>>> =
     Lazy::new(|| RwLock::new(None));
@@ -186,6 +202,13 @@ pub fn set_log_theme_name(theme: Option<String>) {
 
 fn resolve_theme(theme_name: Option<String>) -> Theme {
     let name = theme_name.unwrap_or_else(|| DEFAULT_THEME_NAME.to_string());
+    
+    // If themes are empty, return default theme early
+    if LOG_THEME_SET.themes.is_empty() {
+        warn!("No log highlighting themes available");
+        return Theme::default();
+    }
+    
     if let Some(theme) = LOG_THEME_SET.themes.get(&name) {
         return theme.clone();
     }
@@ -197,7 +220,10 @@ fn resolve_theme(theme_name: Option<String>) -> Theme {
         .values()
         .next()
         .cloned()
-        .unwrap_or_default()
+        .unwrap_or_else(|| {
+            warn!("No themes available in LOG_THEME_SET despite non-empty check");
+            Theme::default()
+        })
 }
 
 fn highlighter_for_current_theme() -> Highlighter {
@@ -287,6 +313,13 @@ fn select_syntax(message: &str) -> &'static SyntaxReference {
 }
 
 pub fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
+    // If syntax set is empty, skip highlighting entirely
+    if LOG_SYNTAX_SET.syntaxes().is_empty() {
+        let mut text = Text::raw(entry.formatted.as_ref().to_string());
+        prepend_metadata(&mut text, entry);
+        return text;
+    }
+    
     let syntax = select_syntax(entry.message.as_ref());
     let mut highlighted = highlighter_for_current_theme()
         .highlight_lines(entry.message.lines(), syntax, &LOG_SYNTAX_SET)

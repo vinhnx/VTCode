@@ -820,6 +820,14 @@ pub mod ui {
     pub const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
     pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 
+    // TUI tick rate constants for smooth scrolling
+    /// Tick rate (Hz) when user is actively interacting with the TUI
+    pub const TUI_ACTIVE_TICK_RATE_HZ: f64 = 16.0;
+    /// Tick rate (Hz) when TUI is idle to save CPU
+    pub const TUI_IDLE_TICK_RATE_HZ: f64 = 4.0;
+    /// Duration (ms) to remain in active mode after last input
+    pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 500;
+
     // Theme and color constants
     pub const THEME_MIN_CONTRAST_RATIO: f64 = 4.5;
     pub const THEME_FOREGROUND_LIGHTEN_RATIO: f64 = 0.25;

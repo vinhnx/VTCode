@@ -1,20 +1,12 @@
 Add LSP (Language Server Protocol) tool for code intelligence features like go-to-definition, find references, and hover documentation
 
--
-
-fix skill allowed-tools not being applied to tools invoked by the skill
-
---
-
-fix a potential crash when syntax highlighting isn't initialized correctly
-
 --
 
 add support for custom session IDs when forking sessions with --session-id combined with --resume or --continue and --fork-session
 
 --
 
-implement input history cycling
+implement input history cycling with up/down arrow keys in the terminal input box
 
 --
 
@@ -23,10 +15,6 @@ fix slow input history cycling and race condition that could overwrite text afte
 --
 
 Reduced terminal flickering and scrolling performance issues for large and long transcripts. improve cpu and memory usage
-
----
-
-add loading indicator when resuming conversations for better feedback
 
 --
 
