@@ -13,14 +13,14 @@ categories = ["api-bindings", "network-programming", "text-editors"]
 keywords = ["vtcode", "acp", "agent", "client-connection", "vt"]
 
 [dependencies]
-agent-client-protocol = "0.7.0"
+agent-client-protocol = "0.9.2"
 anyhow = "1.0"
 tokio = { version = "1.48", features = ["full"] }
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { workspace = true }
 tracing = "0.1"
-uuid = { version = "1.8.0", features = ["v4"] }
+uuid = { version = "1.19.0", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 [package.metadata.docs.rs]

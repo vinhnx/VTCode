@@ -22,8 +22,8 @@ once_cell = "1.19"
 regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { workspace = true }
-toml = "0.9.8"
-toml_edit = "0.23.7"
+toml = "0.9.10"
+toml_edit = "0.24.0"
 tracing = "0.1"
 vtcode-commons = { path = "../vtcode-commons", version = "0.52.8" }
 dotenvy = "0.15"
@@ -35,7 +35,7 @@ bootstrap = []
 schema = ["dep:schemars"]
 
 [dev-dependencies]
-tempfile = "3.0"
+tempfile = "3.24"
 assert_fs = "1.1"
 serial_test = "3.1"
 
