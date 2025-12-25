@@ -351,11 +351,7 @@ pub struct Cli {
     ///   vtcode --continue --session-id suffix             (fork from latest)
     ///
     /// Validation: Alphanumeric characters, dash, and underscore only (max 64 chars).
-    #[arg(
-        long = "session-id",
-        global = true,
-        value_name = "CUSTOM_SUFFIX"
-    )]
+    #[arg(long = "session-id", global = true, value_name = "CUSTOM_SUFFIX")]
     pub session_id: Option<String>,
 
     /// **Enable skills system**

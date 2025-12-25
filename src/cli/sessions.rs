@@ -22,7 +22,9 @@ pub async fn handle_resume_session_command(
 ) -> Result<()> {
     let resume = match mode {
         SessionResumeMode::Latest => select_latest_session(false).await?,
-        SessionResumeMode::Specific(identifier) => Some(load_specific_session(&identifier, false).await?),
+        SessionResumeMode::Specific(identifier) => {
+            Some(load_specific_session(&identifier, false).await?)
+        }
         SessionResumeMode::Interactive => select_session_interactively(false).await?,
         SessionResumeMode::Fork(identifier) => {
             if identifier == "__latest__" {
@@ -103,16 +105,16 @@ async fn select_session_interactively(is_fork: bool) -> Result<Option<ResumeSess
 }
 
 fn convert_listing(listing: &SessionListing, is_fork: bool) -> ResumeSession {
-    let history = if let Some(progress) = &listing.snapshot.progress {
-        progress.recent_messages.iter().map(Message::from).collect()
+    // Prefer full archived messages; fall back to recent progress if the full log is absent.
+    let history_source = if !listing.snapshot.messages.is_empty() {
+        listing.snapshot.messages.iter()
+    } else if let Some(progress) = &listing.snapshot.progress {
+        progress.recent_messages.iter()
     } else {
-        listing
-            .snapshot
-            .messages
-            .iter()
-            .map(Message::from)
-            .collect()
+        [].iter()
     };
+
+    let history = history_source.map(Message::from).collect();
 
     ResumeSession {
         identifier: listing.identifier(),
@@ -190,10 +192,7 @@ fn print_fork_summary(resume: &ResumeSession) {
         "{}",
         style(format!("Original archive: {}", resume.path.display())).green()
     );
-    println!(
-        "{}",
-        style("Starting independent forked session").green()
-    );
+    println!("{}", style("Starting independent forked session").green());
 }
 
 async fn run_single_agent_loop(

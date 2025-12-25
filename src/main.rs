@@ -58,9 +58,10 @@ async fn run() -> Result<()> {
 
     // Load .env (non-fatal if missing)
     if let Err(err) = load_dotenv()
-        && !args.quiet {
-            eprintln!("vtcode: warning: failed to load .env: {err}");
-        }
+        && !args.quiet
+    {
+        eprintln!("vtcode: warning: failed to load .env: {err}");
+    }
 
     process_hardening::apply_process_hardening()
         .context("failed to apply process hardening safeguards")?;
