@@ -244,6 +244,7 @@ mod tests {
             checkpointing_storage_dir: None,
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            quiet: false,
         };
 
         let components = AgentComponentBuilder::new(&agent_config)
@@ -276,6 +277,7 @@ mod tests {
             checkpointing_storage_dir: None,
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            quiet: false,
         };
 
         let custom_session = SessionInfo {
@@ -350,6 +352,7 @@ mod tests {
             checkpointing_storage_dir: None,
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            quiet: false,
         }
     }
 }

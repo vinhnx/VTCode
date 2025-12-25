@@ -80,6 +80,8 @@ impl AnthropicProvider {
         base_url: Option<String>,
         anthropic_config: AnthropicConfig,
     ) -> Self {
+        use crate::llm::http_client::HttpClientFactory;
+        
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
             prompt_cache,
             |providers| &providers.anthropic,
@@ -98,7 +100,7 @@ impl AnthropicProvider {
 
         Self {
             api_key,
-            http_client: HttpClient::new(),
+            http_client: HttpClientFactory::default_client(),
             base_url: base_url_value,
             model,
             prompt_cache_enabled,

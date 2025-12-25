@@ -178,6 +178,7 @@ pub mod token_metrics;
 pub mod tool_bridge;
 pub mod types;
 pub mod utils; // Shared utilities for request/response processing
+pub mod http_client; // Centralized HTTP client factory
 
 #[cfg(test)]
 mod error_display_test;

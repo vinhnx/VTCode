@@ -45,14 +45,11 @@ impl ProviderConfig {
     /// Build HTTP client with provider-specific configuration
     #[allow(clippy::result_large_err)]
     pub fn build_http_client(&self) -> Result<HttpClient, LLMError> {
-        HttpClient::builder()
-            .timeout(self.timeout)
-            .connect_timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|e| LLMError::Network {
-                message: format!("Failed to build HTTP client: {}", e),
-                metadata: None,
-            })
+        use crate::llm::http_client::HttpClientFactory;
+        Ok(HttpClientFactory::with_timeouts(
+            self.timeout,
+            Duration::from_secs(30),
+        ))
     }
 }
 

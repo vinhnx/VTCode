@@ -259,6 +259,119 @@ pub fn format_http_error(provider: &str, status: reqwest::StatusCode, error_text
     error_display::format_llm_error(provider, &format!("HTTP {}: {}", status, error_text))
 }
 
+/// Parse standard API error response body into LLMError.
+///
+/// Handles multiple provider error formats:
+/// - OpenAI/DeepSeek/ZAI: `{"error": {"message": "..."}}`
+/// - Anthropic: `{"type": "error", "error": {"message": "..."}}`
+/// - Gemini: `{"error": {"message": "...", "status": "..."}}`
+/// - HuggingFace: `{"error": "..."}`
+///
+/// Falls back to raw body if JSON parsing fails.
+pub fn parse_api_error(
+    provider_name: &'static str,
+    status: reqwest::StatusCode,
+    body: &str,
+) -> LLMError {
+    // Try to extract a meaningful error message from JSON
+    let error_message = if let Ok(json) = serde_json::from_str::<Value>(body) {
+        // OpenAI/DeepSeek/ZAI/Anthropic format: {"error": {"message": "..."}}
+        if let Some(msg) = json
+            .get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(|m| m.as_str())
+        {
+            msg.to_string()
+        }
+        // HuggingFace simple format: {"error": "..."}
+        else if let Some(msg) = json.get("error").and_then(|e| e.as_str()) {
+            msg.to_string()
+        }
+        // Gemini alternate format: {"error": {"status": "...", "code": ...}}
+        else if let Some(status_msg) = json
+            .get("error")
+            .and_then(|e| e.get("status"))
+            .and_then(|s| s.as_str())
+        {
+            status_msg.to_string()
+        }
+        // Fallback to raw body
+        else {
+            body.to_string()
+        }
+    } else {
+        body.to_string()
+    };
+
+    // Categorize by status code
+    let status_code = status.as_u16();
+    
+    match status_code {
+        401 | 403 => LLMError::Authentication {
+            message: error_display::format_llm_error(
+                provider_name,
+                &format!("Authentication failed: {}", error_message),
+            ),
+            metadata: Some(LLMErrorMetadata::new(
+                provider_name,
+                Some(status_code),
+                Some("authentication_error".to_string()),
+                None,
+                None,
+                Some(body.to_string()),
+            )),
+        },
+        429 => LLMError::RateLimit {
+            metadata: Some(LLMErrorMetadata::new(
+                provider_name,
+                Some(status_code),
+                Some("rate_limit_error".to_string()),
+                None,
+                None,
+                Some(error_message),
+            )),
+        },
+        400 if is_rate_limit_error(status_code, body) => LLMError::RateLimit {
+            metadata: Some(LLMErrorMetadata::new(
+                provider_name,
+                Some(status_code),
+                Some("quota_exceeded".to_string()),
+                None,
+                None,
+                Some(error_message),
+            )),
+        },
+        400 => LLMError::InvalidRequest {
+            message: error_display::format_llm_error(
+                provider_name,
+                &format!("Invalid request: {}", error_message),
+            ),
+            metadata: Some(LLMErrorMetadata::new(
+                provider_name,
+                Some(status_code),
+                Some("invalid_request".to_string()),
+                None,
+                None,
+                Some(body.to_string()),
+            )),
+        },
+        _ => LLMError::Provider {
+            message: error_display::format_llm_error(
+                provider_name,
+                &format!("HTTP {}: {}", status, error_message),
+            ),
+            metadata: Some(LLMErrorMetadata::new(
+                provider_name,
+                Some(status_code),
+                None,
+                None,
+                None,
+                Some(body.to_string()),
+            )),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
