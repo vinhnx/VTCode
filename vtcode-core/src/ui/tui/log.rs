@@ -9,8 +9,8 @@ use ratatui::{
     text::{Line, Span, Text},
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{Event, Level, Subscriber, field::Visit};
 use tracing::warn;
+use tracing::{Event, Level, Subscriber, field::Visit};
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
 use tui_syntax_highlight::{
@@ -62,13 +62,11 @@ static LOG_SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(|| {
     }
     syntax_set
 });
-static LOG_THEME_SET: Lazy<ThemeSet> = Lazy::new(|| {
-    match ThemeSet::load_defaults() {
-        theme_set if !theme_set.themes.is_empty() => theme_set,
-        _ => {
-            warn!("Failed to load theme set for log highlighting; using empty theme set");
-            ThemeSet::new()
-        }
+static LOG_THEME_SET: Lazy<ThemeSet> = Lazy::new(|| match ThemeSet::load_defaults() {
+    theme_set if !theme_set.themes.is_empty() => theme_set,
+    _ => {
+        warn!("Failed to load theme set for log highlighting; using empty theme set");
+        ThemeSet::new()
     }
 });
 static LOG_THEME_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
@@ -202,13 +200,13 @@ pub fn set_log_theme_name(theme: Option<String>) {
 
 fn resolve_theme(theme_name: Option<String>) -> Theme {
     let name = theme_name.unwrap_or_else(|| DEFAULT_THEME_NAME.to_string());
-    
+
     // If themes are empty, return default theme early
     if LOG_THEME_SET.themes.is_empty() {
         warn!("No log highlighting themes available");
         return Theme::default();
     }
-    
+
     if let Some(theme) = LOG_THEME_SET.themes.get(&name) {
         return theme.clone();
     }
@@ -319,7 +317,7 @@ pub fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
         prepend_metadata(&mut text, entry);
         return text;
     }
-    
+
     let syntax = select_syntax(entry.message.as_ref());
     let mut highlighted = highlighter_for_current_theme()
         .highlight_lines(entry.message.lines(), syntax, &LOG_SYNTAX_SET)

@@ -165,7 +165,9 @@ static THEME_CACHE: Lazy<parking_lot::RwLock<HashMap<String, Theme>>> = Lazy::ne
         }
         _ => {
             // If theme loading fails, create empty cache and log warning
-            warn!("Failed to load default syntax highlighting themes; syntax highlighting will be disabled");
+            warn!(
+                "Failed to load default syntax highlighting themes; syntax highlighting will be disabled"
+            );
             parking_lot::RwLock::new(HashMap::new())
         }
     }

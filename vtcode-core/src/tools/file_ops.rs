@@ -1035,9 +1035,12 @@ impl FileOpsTool {
 
     /// Create a brand-new file, returning an error if the target already exists.
     pub async fn create_file(&self, args: Value) -> Result<Value> {
-        let input: CreateInput = serde_json::from_value(args).context(
-            "Error: Invalid 'create_file' arguments. Expected JSON object with: path (required, string), content (required, string). Example: {\"path\": \"src/lib.rs\", \"content\": \"fn main() {}\\n\"}",
-        )?;
+        let input: CreateInput = serde_json::from_value(args.clone()).map_err(|error| {
+            anyhow!(
+                "Error: Invalid 'create_file' arguments. Provide an object like {{\"path\": \"src/lib.rs\", \"content\": \"fn main() {{}}\\n\"}} with optional \"encoding\". Deserialization failed: {}",
+                error
+            )
+        })?;
 
         let CreateInput {
             path,
