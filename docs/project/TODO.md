@@ -6,18 +6,6 @@ add support for custom session IDs when forking sessions with --session-id combi
 
 --
 
-Reduced terminal flickering and scrolling performance issues for large and long transcripts. improve cpu and memory usage
-
---
-
-add loading indicator when using skills
-
---
-
-fix permission rules incorrectly rejecting valid bash commands containing shell glob patterns (e.g., ls _.txt, for f in _.png)
-
---
-
 improve ansi and background syntax highlighting for `diff` output. currently it lags
 
 --
@@ -34,23 +22,7 @@ fix IME (Input Method Editor) support for languages like Chinese, Japanese, and 
 
 ---
 
-Improve plan mode exit UX: show simplified yes/no dialog when exiting with empty or missing plan instead of throwing an error
-
----
-
-Add search functionality to /permissions command with / keyboard shortcut for filtering rules by tool name
-
----
-
 improve /doctor command output and format, also update new configuration options diagnosis <vtcode.toml> / conig
-
----
-
-add command "/mcp enable [server-name]" or "/mcp disable [server-name]" to quickly toggle all servers
-
---
-
-Update Fetch to skip summarization for pre-approved websites
 
 --
 
@@ -58,8 +30,8 @@ Add --agent CLI flag to override the agent setting for the current session
 
 --
 
-Plan Mode should builds more precise plans and executes more thoroughly
+REVIEW AND REFINE VTCODE AGENT SYSTEM PROMPT AND TOOL USAGE INSTRUCTIONS, REDUCE AMBIGUITY, AND TOKEN COUNT, AIM FOR CLARITY AND CONCISENESS, IMPROVE TOOL USAGE EXAMPLES, AND ENSURE CONSISTENCY ACROSS ALL AGENT PROMPTS.
 
 --
 
-Fix handling of thinking errors
+improve responsiveness when executing commands, tools, pty, and file operations. add a placeholder response while processing is ongoing.

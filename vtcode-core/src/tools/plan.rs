@@ -280,6 +280,7 @@ impl PlanManager {
 
     pub fn update_plan(&self, update: UpdatePlanArgs) -> Result<TaskPlan> {
         validate_plan(&update)?;
+        validate_plan_quality(&update)?;
 
         let sanitized_explanation = update
             .explanation
@@ -411,6 +412,50 @@ fn validate_plan(update: &UpdatePlanArgs) -> Result<()> {
             "Plan step {} cannot be empty",
             index + 1
         );
+    }
+
+    Ok(())
+}
+
+/// Validates plan quality when entering final_plan phase
+/// Provides suggestions for improving plan precision and thoroughness
+fn validate_plan_quality(update: &UpdatePlanArgs) -> Result<()> {
+    let Some(phase) = &update.phase else {
+        return Ok(()); // Only validate when explicitly setting phase
+    };
+
+    // Only enforce quality checks for final_plan phase
+    if !matches!(phase, PlanPhase::FinalPlan) {
+        return Ok(());
+    }
+
+    let mut warnings = Vec::new();
+
+    // Check 1: Minimum task breakdown
+    if update.plan.len() < 3 {
+        warnings.push("Plan should break down into at least 3 concrete steps for better clarity");
+    }
+
+    // Check 2: Look for file path patterns in steps
+    let has_file_paths = update.plan.iter().any(|step| {
+        step.step.contains('/') &&
+        (step.step.contains(".rs") || step.step.contains(".md") ||
+         step.step.contains(".toml") || step.step.contains(':'))
+    });
+
+    if !has_file_paths {
+        warnings.push("Plan should include specific file paths (e.g., path/to/file.rs:45)");
+    }
+
+    // Check 3: Explanation should exist for final plan
+    if update.explanation.is_none() || update.explanation.as_ref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+        warnings.push("Plan missing context/explanation of what was explored");
+    }
+
+    if !warnings.is_empty() {
+        // Return as warning, not error (for now - can be made strict via config)
+        tracing::warn!("Plan quality suggestions: {}", warnings.join("; "));
+        // TODO: Make this an error if config.agent.strict_plan_validation = true
     }
 
     Ok(())

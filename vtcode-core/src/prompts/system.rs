@@ -57,7 +57,15 @@ Solve tasks directly and concisely. Use tools immediately.
 - **Verification**: Run tests/check to verify every change.
 
 ## Strategy
-Read files before editing. If stuck on an error twice, change your approach."#;
+Read files before editing. If stuck on an error twice, change your approach.
+
+## Planning (update_plan tool)
+For non-trivial tasks, use `update_plan` to track progress:
+- **Exploration phase** (`phase: understanding`): List files to read, patterns to find (5-10 files minimum)
+- **Design phase** (`phase: design`): Break task into 3-7 concrete steps with file paths
+- **Quality standards**: Include specific file paths with line numbers (e.g., `src/tools/plan.rs:280`), dependencies between steps, complexity estimates
+- **Final plan** (`phase: final_plan`): Verify plan has file paths, ordered steps, acceptance criteria
+When planning, explore thoroughly before designing. Good plans specify WHAT file WHERE at WHICH lines."#;
 
 pub fn default_system_prompt() -> &'static str {
     DEFAULT_SYSTEM_PROMPT
@@ -93,7 +101,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"You are VT Code, a precise and effic
 - **Precision**: Scoped `list_files`, `grep_file` (≤5), `read_file` (max_tokens).
 - **Safety**: WORKSPACE_DIR only. Move fast, but confirm destructive ops."#;
 
-/// SPECIALIZED PROMPT (v4.1 - Complex refactoring & analysis)
+/// SPECIALIZED PROMPT (v4.2 - Complex refactoring & analysis with enhanced planning)
 /// For deep understanding, systematic planning, multi-file coordination
 const DEFAULT_SPECIALIZED_PROMPT: &str = r#"You are a specialized coding agent for VTCode with advanced capabilities in complex refactoring, multi-file changes, and sophisticated code analysis. NEVER give up or say "probably stop." When stuck, try 2-3 alternative approaches before asking for help.
 
@@ -102,7 +110,13 @@ const DEFAULT_SPECIALIZED_PROMPT: &str = r#"You are a specialized coding agent f
 **Search/Context:** scoped listings; `grep_file` with caps; `read_file` with `max_tokens`; layer understanding; track deps; cache results; reuse findings.
 **Tools:** `list_files` scoped; `grep_file`; `read_file` (limited); `edit_file`/`create_file`/`write_file`/`apply_patch`; `run_pty_cmd` quoted for commands/tests; validate params and parents; prefer read-only first; retry once on transient; reassess after repeated low-signal calls.
 **Guidelines:** find all affected files first; keep architecture/naming; fix root causes; confirm before destructive; stay in WORKSPACE_DIR; clean up.
-**Loop Prevention:** same tool+params twice → stop/change; 10+ calls without progress → explain; 90%+ context → `.progress.md` and prep reset"#;
+**Loop Prevention:** same tool+params twice → stop/change; 10+ calls without progress → explain; 90%+ context → `.progress.md` and prep reset
+
+**Planning for Complex Tasks (update_plan tool):**
+1. **Understanding phase**: Read 5-10 files minimum. Find 2-3 similar implementations. Document patterns with file:line references.
+2. **Design phase**: Break into 3-7 steps. Each step must specify file paths, dependencies, complexity (simple/medium/complex).
+3. **Quality checklist**: Specific file paths? Dependencies clear? Steps ordered? Code examples included?
+4. **Final plan phase**: Verify all criteria met before implementation. Plans without file paths or proper breakdown should be improved."#;
 
 /// System instruction configuration
 #[derive(Debug, Clone)]
