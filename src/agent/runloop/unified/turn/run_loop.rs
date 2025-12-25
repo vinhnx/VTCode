@@ -1026,7 +1026,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             config.reasoning_effort.as_str().to_string(),
         );
         let mut session_archive_error: Option<String> = None;
-        let mut session_archive = match SessionArchive::new(archive_metadata).await {
+        let mut session_archive = match SessionArchive::new(archive_metadata, None).await {
             Ok(archive) => Some(archive),
             Err(err) => {
                 session_archive_error = Some(err.to_string());

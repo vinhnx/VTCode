@@ -12,6 +12,7 @@ pub struct ResumeSession {
     pub snapshot: SessionSnapshot,
     pub history: Vec<ProviderMessage>,
     pub path: PathBuf,
+    pub is_fork: bool,
 }
 
 impl ResumeSession {

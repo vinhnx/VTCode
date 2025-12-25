@@ -574,7 +574,7 @@ pub(crate) async fn initialize_session_ui(
         config.reasoning_effort.as_str().to_string(),
     );
     let mut session_archive_error: Option<String> = None;
-    let session_archive = match SessionArchive::new(archive_metadata).await {
+    let session_archive = match SessionArchive::new(archive_metadata, None).await {
         Ok(archive) => Some(archive),
         Err(err) => {
             session_archive_error = Some(err.to_string());

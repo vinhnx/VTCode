@@ -153,8 +153,13 @@ async fn run() -> Result<()> {
     }
 
     if let Some(resume_mode) = &startup.session_resume {
-        cli::handle_resume_session_command(core_cfg, resume_mode.clone(), skip_confirmations)
-            .await?;
+        cli::handle_resume_session_command(
+            core_cfg,
+            resume_mode.clone(),
+            startup.custom_session_id.clone(),
+            skip_confirmations,
+        )
+        .await?;
         return Ok(());
     }
 

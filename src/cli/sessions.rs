@@ -17,44 +17,58 @@ const INTERACTIVE_SESSION_LIMIT: usize = 10;
 pub async fn handle_resume_session_command(
     config: &CoreAgentConfig,
     mode: SessionResumeMode,
+    custom_session_id: Option<String>,
     skip_confirmations: bool,
 ) -> Result<()> {
     let resume = match mode {
-        SessionResumeMode::Latest => select_latest_session().await?,
-        SessionResumeMode::Specific(identifier) => Some(load_specific_session(&identifier).await?),
-        SessionResumeMode::Interactive => select_session_interactively().await?,
+        SessionResumeMode::Latest => select_latest_session(false).await?,
+        SessionResumeMode::Specific(identifier) => Some(load_specific_session(&identifier, false).await?),
+        SessionResumeMode::Interactive => select_session_interactively(false).await?,
+        SessionResumeMode::Fork(identifier) => {
+            if identifier == "__latest__" {
+                select_latest_session(true).await?
+            } else {
+                Some(load_specific_session(&identifier, true).await?)
+            }
+        }
     };
 
-    let Some(resume) = resume else {
+    let Some(mut resume) = resume else {
         println!("{}", style("No session selected. Exiting.").yellow());
         return Ok(());
     };
 
-    print_resume_summary(&resume);
+    // If custom_session_id is provided, mark as fork
+    if let Some(suffix) = custom_session_id {
+        resume = fork_session(resume, suffix);
+        print_fork_summary(&resume);
+    } else {
+        print_resume_summary(&resume);
+    }
 
     run_single_agent_loop(config, skip_confirmations, resume).await
 }
 
-async fn select_latest_session() -> Result<Option<ResumeSession>> {
+async fn select_latest_session(is_fork: bool) -> Result<Option<ResumeSession>> {
     let mut listings = list_recent_sessions(1)
         .await
         .context("failed to load recent sessions")?;
     if let Some(listing) = listings.pop() {
-        Ok(Some(convert_listing(&listing)))
+        Ok(Some(convert_listing(&listing, is_fork)))
     } else {
         println!("{}", style("No archived sessions were found.").yellow());
         Ok(None)
     }
 }
 
-async fn load_specific_session(identifier: &str) -> Result<ResumeSession> {
+async fn load_specific_session(identifier: &str, is_fork: bool) -> Result<ResumeSession> {
     let listing = find_session_by_identifier(identifier)
         .await?
         .ok_or_else(|| anyhow!("No session with identifier '{}' was found.", identifier))?;
-    Ok(convert_listing(&listing))
+    Ok(convert_listing(&listing, is_fork))
 }
 
-async fn select_session_interactively() -> Result<Option<ResumeSession>> {
+async fn select_session_interactively(is_fork: bool) -> Result<Option<ResumeSession>> {
     let listings = list_recent_sessions(INTERACTIVE_SESSION_LIMIT)
         .await
         .context("failed to load recent sessions")?;
@@ -68,8 +82,14 @@ async fn select_session_interactively() -> Result<Option<ResumeSession>> {
         options.push(format_listing(listing));
     }
 
+    let prompt_text = if is_fork {
+        "Select a session to fork"
+    } else {
+        "Select a session to resume"
+    };
+
     let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select a session to resume")
+        .with_prompt(prompt_text)
         .items(&options)
         .default(0)
         .interact_opt()
@@ -79,10 +99,10 @@ async fn select_session_interactively() -> Result<Option<ResumeSession>> {
         return Ok(None);
     };
 
-    Ok(Some(convert_listing(&listings[index])))
+    Ok(Some(convert_listing(&listings[index], is_fork)))
 }
 
-fn convert_listing(listing: &SessionListing) -> ResumeSession {
+fn convert_listing(listing: &SessionListing, is_fork: bool) -> ResumeSession {
     let history = if let Some(progress) = &listing.snapshot.progress {
         progress.recent_messages.iter().map(Message::from).collect()
     } else {
@@ -99,6 +119,7 @@ fn convert_listing(listing: &SessionListing) -> ResumeSession {
         snapshot: listing.snapshot.clone(),
         history,
         path: listing.path.clone(),
+        is_fork,
     }
 }
 
@@ -140,6 +161,38 @@ fn print_resume_summary(resume: &ResumeSession) {
     println!(
         "{}",
         style(format!("Archive: {}", resume.path.display())).green()
+    );
+}
+
+fn fork_session(mut original: ResumeSession, custom_suffix: String) -> ResumeSession {
+    // Update identifier to reflect fork
+    original.identifier = format!("forked-{}", custom_suffix);
+    original.is_fork = true;
+    original
+}
+
+fn print_fork_summary(resume: &ResumeSession) {
+    let ended = resume
+        .snapshot
+        .ended_at
+        .with_timezone(&Local)
+        .format("%Y-%m-%d %H:%M");
+    println!(
+        "{}",
+        style(format!(
+            "Forking session with {} messages (original ended {})",
+            resume.message_count(),
+            ended
+        ))
+        .green()
+    );
+    println!(
+        "{}",
+        style(format!("Original archive: {}", resume.path.display())).green()
+    );
+    println!(
+        "{}",
+        style("Starting independent forked session").green()
     );
 }
 
@@ -250,8 +303,9 @@ mod tests {
             snapshot,
         };
 
-        let resume = convert_listing(&listing);
+        let resume = convert_listing(&listing, false);
         assert_eq!(resume.history.len(), 1);
         assert_eq!(resume.history[0].content.as_text(), "progress");
+        assert!(!resume.is_fork); // Verify is_fork is false for non-forked sessions
     }
 }
