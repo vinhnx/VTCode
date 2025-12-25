@@ -221,15 +221,70 @@ pub struct DiffRenderer {
     context_lines: usize,
     use_colors: bool,
     pub(crate) palette: GitDiffPalette,
+    // Pre-rendered ANSI codes for performance (cached)
+    cached_styles: CachedStyles,
+}
+
+/// Pre-rendered ANSI escape codes to avoid repeated calls to style.render()
+struct CachedStyles {
+    bullet: String,
+    label: String,
+    path: String,
+    stat_added: String,
+    stat_removed: String,
+    line_added: String,
+    line_removed: String,
+    line_context: String,
+    line_header: String,
+    line_number: String,
+    reset: String,
+}
+
+impl CachedStyles {
+    fn new(palette: &GitDiffPalette, use_colors: bool) -> Self {
+        if !use_colors {
+            return Self {
+                bullet: String::new(),
+                label: String::new(),
+                path: String::new(),
+                stat_added: String::new(),
+                stat_removed: String::new(),
+                line_added: String::new(),
+                line_removed: String::new(),
+                line_context: String::new(),
+                line_header: String::new(),
+                line_number: String::new(),
+                reset: String::new(),
+            };
+        }
+
+        let reset = format!("{}", Reset.render());
+        Self {
+            bullet: format!("{}", palette.bullet.render()),
+            label: format!("{}", palette.label.render()),
+            path: format!("{}", palette.path.render()),
+            stat_added: format!("{}", palette.stat_added.render()),
+            stat_removed: format!("{}", palette.stat_removed.render()),
+            line_added: format!("{}", palette.line_added.render()),
+            line_removed: format!("{}", palette.line_removed.render()),
+            line_context: format!("{}", palette.line_context.render()),
+            line_header: format!("{}", palette.line_header.render()),
+            line_number: format!("{}", palette.line_number.render()),
+            reset,
+        }
+    }
 }
 
 impl DiffRenderer {
     pub fn new(show_line_numbers: bool, context_lines: usize, use_colors: bool) -> Self {
+        let palette = GitDiffPalette::new(use_colors);
+        let cached_styles = CachedStyles::new(&palette, use_colors);
         Self {
             show_line_numbers,
             context_lines,
             use_colors,
-            palette: GitDiffPalette::new(use_colors),
+            palette,
+            cached_styles,
         }
     }
 
@@ -240,11 +295,14 @@ impl DiffRenderer {
         use_colors: bool,
         config: &GitColorConfig,
     ) -> Self {
+        let palette = GitDiffPalette::from_git_config(config, use_colors);
+        let cached_styles = CachedStyles::new(&palette, use_colors);
         Self {
             show_line_numbers,
             context_lines,
             use_colors,
-            palette: GitDiffPalette::from_git_config(config, use_colors),
+            palette,
+            cached_styles,
         }
     }
 
@@ -267,35 +325,79 @@ impl DiffRenderer {
     }
 
     fn render_summary(&self, diff: &FileDiff) -> String {
-        let bullet = self.paint(&self.palette.bullet, "▸");
-        let label = self.paint(&self.palette.label, "Edit");
-        let path = self.paint(&self.palette.path, &diff.file_path);
-        let additions = format!("+{}", diff.stats.additions);
-        let deletions = format!("-{}", diff.stats.deletions);
-        let added_span = self.paint(&self.palette.stat_added, &additions);
-        let removed_span = self.paint(&self.palette.stat_removed, &deletions);
-        format!(
-            "{} {} {} {} {}",
-            bullet, label, path, added_span, removed_span
-        )
+        if !self.use_colors {
+            return format!(
+                "▸ Edit {} +{} -{}",
+                diff.file_path, diff.stats.additions, diff.stats.deletions
+            );
+        }
+
+        // Pre-allocate: bullet(4) + label(4) + path + stats + resets + separators
+        let estimated_size = 50 + diff.file_path.len();
+        let mut output = String::with_capacity(estimated_size);
+
+        // Bullet: "▸" (3 bytes UTF-8)
+        output.push_str(&self.cached_styles.bullet);
+        output.push_str("▸");
+        output.push_str(&self.cached_styles.reset);
+        output.push(' ');
+
+        // Label: "Edit"
+        output.push_str(&self.cached_styles.label);
+        output.push_str("Edit");
+        output.push_str(&self.cached_styles.reset);
+        output.push(' ');
+
+        // Path
+        output.push_str(&self.cached_styles.path);
+        output.push_str(&diff.file_path);
+        output.push_str(&self.cached_styles.reset);
+        output.push(' ');
+
+        // Additions
+        output.push_str(&self.cached_styles.stat_added);
+        output.push('+');
+        use std::fmt::Write as FmtWrite;
+        let _ = write!(output, "{}", diff.stats.additions);
+        output.push_str(&self.cached_styles.reset);
+        output.push(' ');
+
+        // Deletions
+        output.push_str(&self.cached_styles.stat_removed);
+        output.push('-');
+        let _ = write!(output, "{}", diff.stats.deletions);
+        output.push_str(&self.cached_styles.reset);
+
+        output
     }
 
     /// Render line directly into buffer to avoid allocation
     fn render_line_into(&self, output: &mut String, line: &DiffLine) {
-        let (style, prefix, line_number) = match line.line_type {
-            DiffLineType::Added => (&self.palette.line_added, "+", line.line_number_new),
-            DiffLineType::Removed => (&self.palette.line_removed, "-", line.line_number_old),
+        let (style_code, prefix, line_number) = match line.line_type {
+            DiffLineType::Added => (&self.cached_styles.line_added, "+", line.line_number_new),
+            DiffLineType::Removed => (&self.cached_styles.line_removed, "-", line.line_number_old),
             DiffLineType::Context => (
-                &self.palette.line_context,
+                &self.cached_styles.line_context,
                 " ",
                 line.line_number_new.or(line.line_number_old),
             ),
-            DiffLineType::Header => (&self.palette.line_header, "", None),
+            DiffLineType::Header => (&self.cached_styles.line_header, "", None),
         };
 
         if self.show_line_numbers {
             if let Some(n) = line_number {
-                self.paint_into(output, &self.palette.line_number, &format!("{:>4}", n));
+                output.push_str(&self.cached_styles.line_number);
+                // Format line number right-aligned in 4 chars without heap allocation
+                if n < 10 {
+                    output.push_str("   ");
+                } else if n < 100 {
+                    output.push_str("  ");
+                } else if n < 1000 {
+                    output.push(' ');
+                }
+                use std::fmt::Write as FmtWrite;
+                let _ = write!(output, "{}", n);
+                output.push_str(&self.cached_styles.reset);
             } else {
                 output.push_str("    ");
             }
@@ -304,20 +406,18 @@ impl DiffRenderer {
 
         match line.line_type {
             DiffLineType::Header => {
-                self.paint_into(output, style, &line.content);
+                output.push_str(style_code);
+                output.push_str(&line.content);
+                output.push_str(&self.cached_styles.reset);
             }
             _ => {
-                if self.use_colors {
-                    let _ = write!(output, "{}", style.render());
-                }
+                output.push_str(style_code);
                 output.push_str(prefix);
                 if !line.content.is_empty() {
                     output.push(' ');
                     output.push_str(&line.content);
                 }
-                if self.use_colors {
-                    let _ = write!(output, "{}", Reset.render());
-                }
+                output.push_str(&self.cached_styles.reset);
             }
         }
     }
@@ -329,17 +429,6 @@ impl DiffRenderer {
             format!("{}{}{}", style.render(), text, Reset.render())
         } else {
             text.to_owned()
-        }
-    }
-
-    /// Paint directly into buffer to avoid allocation
-    fn paint_into(&self, output: &mut String, style: &Style, text: &str) {
-        if self.use_colors {
-            let _ = write!(output, "{}", style.render());
-            output.push_str(text);
-            let _ = write!(output, "{}", Reset.render());
-        } else {
-            output.push_str(text);
         }
     }
 
@@ -684,7 +773,9 @@ impl DiffChatRenderer {
 
     /// Render a summary when diffs are suppressed
     pub fn render_suppressed_summary(&self, check: &DiffSuppressionCheck) -> String {
-        let mut output = String::new();
+        // Pre-estimate size: header + summary + file list with colors
+        let estimated_size = 256 + (check.file_stats.len() * 100);
+        let mut output = String::with_capacity(estimated_size);
 
         // Header with warning indicator
         output.push_str("\n[WARN] ");
@@ -692,17 +783,34 @@ impl DiffChatRenderer {
         output.push_str("\n\n");
 
         // Overall summary with colored stats
-        let _ = write!(output, "Summary: {} file(s) changed", check.file_count);
-        if check.total_additions > 0 || check.total_deletions > 0 {
-            let additions = self.diff_renderer.paint(
-                &self.diff_renderer.palette.stat_added,
-                &format!("+{}", check.total_additions),
-            );
-            let deletions = self.diff_renderer.paint(
-                &self.diff_renderer.palette.stat_removed,
-                &format!("-{}", check.total_deletions),
-            );
-            let _ = write!(output, " ({} {})", additions, deletions);
+        output.push_str("Summary: ");
+        use std::fmt::Write as FmtWrite;
+        let _ = write!(output, "{} file(s) changed", check.file_count);
+
+        if check.total_additions > 0 || check.total_deletions > 0 && self.diff_renderer.use_colors {
+            output.push_str(" (");
+            
+            // Additions stat
+            if check.total_additions > 0 {
+                output.push_str(&self.diff_renderer.cached_styles.stat_added);
+                output.push('+');
+                let _ = write!(output, "{}", check.total_additions);
+                output.push_str(&self.diff_renderer.cached_styles.reset);
+            }
+            
+            if check.total_additions > 0 && check.total_deletions > 0 {
+                output.push(' ');
+            }
+            
+            // Deletions stat
+            if check.total_deletions > 0 {
+                output.push_str(&self.diff_renderer.cached_styles.stat_removed);
+                output.push('-');
+                let _ = write!(output, "{}", check.total_deletions);
+                output.push_str(&self.diff_renderer.cached_styles.reset);
+            }
+            
+            output.push(')');
         }
         output.push('\n');
 
@@ -716,15 +824,40 @@ impl DiffChatRenderer {
                     let _ = writeln!(output, "  ... and {} more file(s)", remaining);
                     break;
                 }
-                let additions = self.diff_renderer.paint(
-                    &self.diff_renderer.palette.stat_added,
-                    &format!("+{}", stat.additions),
-                );
-                let deletions = self.diff_renderer.paint(
-                    &self.diff_renderer.palette.stat_removed,
-                    &format!("-{}", stat.deletions),
-                );
-                let _ = writeln!(output, "  • {} ({} {})", stat.path, additions, deletions);
+
+                output.push_str("  • ");
+                output.push_str(&stat.path);
+                output.push_str(" (");
+
+                if self.diff_renderer.use_colors {
+                    // Additions
+                    if stat.additions > 0 {
+                        output.push_str(&self.diff_renderer.cached_styles.stat_added);
+                        output.push('+');
+                        let _ = write!(output, "{}", stat.additions);
+                        output.push_str(&self.diff_renderer.cached_styles.reset);
+                    }
+
+                    if stat.additions > 0 && stat.deletions > 0 {
+                        output.push(' ');
+                    }
+
+                    // Deletions
+                    if stat.deletions > 0 {
+                        output.push_str(&self.diff_renderer.cached_styles.stat_removed);
+                        output.push('-');
+                        let _ = write!(output, "{}", stat.deletions);
+                        output.push_str(&self.diff_renderer.cached_styles.reset);
+                    }
+                } else {
+                    output.push('+');
+                    let _ = write!(output, "{}", stat.additions);
+                    output.push(' ');
+                    output.push('-');
+                    let _ = write!(output, "{}", stat.deletions);
+                }
+
+                output.push_str(")\n");
             }
         }
 
