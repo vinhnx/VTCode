@@ -1,6 +1,7 @@
 {
   "version": 1,
   "available_tools": [
+    "agent_info",
     "analyze_agent",
     "apply_patch",
     "close_pty_session",
@@ -52,6 +53,7 @@
     "search_replace": "prompt",
     "skill": "prompt",
     "code_intelligence": "prompt",
+    "agent_info": "prompt",
     "mcp_get_current_time": "prompt",
     "mcp_time_get_current_time": "prompt",
     "mcp_convert_time": "prompt",
