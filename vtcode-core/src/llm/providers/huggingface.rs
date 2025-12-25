@@ -349,73 +349,122 @@ impl HuggingFaceProvider {
 
         // Convert messages
         for msg in &request.messages {
-            let role = match msg.role {
-                MessageRole::System => "system", // Revert to system for broader compatibility
-                MessageRole::User => "user",
-                MessageRole::Assistant => "assistant",
-                MessageRole::Tool => "tool",
+            // Helper to handle ContentPart conversion
+            let convert_parts = |parts: &[crate::llm::provider::ContentPart]| -> Value {
+                let parts_json: Vec<Value> = parts
+                    .iter()
+                    .map(|part| match part {
+                        crate::llm::provider::ContentPart::Text { text } => {
+                            json!({ "type": "input_text", "text": text })
+                        }
+                        crate::llm::provider::ContentPart::Image {
+                            data, mime_type, ..
+                        } => {
+                            json!({
+                                "type": "input_image",
+                                "image_url": format!("data:{};base64,{}", mime_type, data)
+                            })
+                        }
+                    })
+                    .collect();
+                json!(parts_json)
             };
 
-            // If we have instructions field separately, skip the first system message if it matches
-            if msg.role == MessageRole::System && request.system_prompt.is_some() {
-                continue;
-            }
-
-            let mut message_obj = json!({
-                "type": "message",
-                "role": role,
-            });
-
-            // Handle multimodal content
-            match &msg.content {
-                crate::llm::provider::MessageContent::Text(text) => {
-                    message_obj["content"] = json!(text);
-                }
-                crate::llm::provider::MessageContent::Parts(parts) => {
-                    let parts_json: Vec<Value> = parts
-                        .iter()
-                        .map(|part| match part {
-                            crate::llm::provider::ContentPart::Text { text } => {
-                                json!({ "type": "input_text", "text": text })
+            match msg.role {
+                MessageRole::System | MessageRole::User => {
+                    // Skip if first system message matches global instructions
+                    if msg.role == MessageRole::System && request.system_prompt.is_some() {
+                        // Check if we should skip this - we usually skip it if it's the first message
+                        // and matches request.system_prompt exactly.
+                        if let crate::llm::provider::MessageContent::Text(text) = &msg.content {
+                            if Some(text) == request.system_prompt.as_ref() {
+                                continue;
                             }
-                            crate::llm::provider::ContentPart::Image {
-                                data, mime_type, ..
-                            } => {
-                                json!({
-                                    "type": "input_image",
-                                    "image_url": format!("data:{};base64,{}", mime_type, data)
-                                })
-                            }
-                        })
-                        .collect();
-                    message_obj["content"] = json!(parts_json);
-                }
-            }
+                        }
+                    }
 
-            if msg.role == MessageRole::Assistant {
-                if let Some(tool_calls) = &msg.tool_calls {
-                    let tool_calls_json: Vec<Value> = tool_calls
-                        .iter()
-                        .filter_map(|tc| {
-                            tc.function.as_ref().map(|func| {
-                                json!({
-                                    "id": tc.id,
-                                    "type": "function",
+                    let role = if msg.role == MessageRole::System {
+                        "system"
+                    } else {
+                        "user"
+                    };
+
+                    let mut message_obj = json!({
+                        "type": "message",
+                        "role": role,
+                    });
+
+                    match &msg.content {
+                        crate::llm::provider::MessageContent::Text(text) => {
+                            message_obj["content"] = json!(text);
+                        }
+                        crate::llm::provider::MessageContent::Parts(parts) => {
+                            message_obj["content"] = convert_parts(parts);
+                        }
+                    }
+
+                    input.push(message_obj);
+                }
+                MessageRole::Assistant => {
+                    // 1. First, handle any text/multimodal content in a 'message' item
+                    let has_content = match &msg.content {
+                        crate::llm::provider::MessageContent::Text(text) => !text.is_empty(),
+                        crate::llm::provider::MessageContent::Parts(parts) => !parts.is_empty(),
+                    };
+
+                    if has_content {
+                        let mut message_obj = json!({
+                            "type": "message",
+                            "role": "assistant",
+                        });
+
+                        match &msg.content {
+                            crate::llm::provider::MessageContent::Text(text) => {
+                                message_obj["content"] = json!(text);
+                            }
+                            crate::llm::provider::MessageContent::Parts(parts) => {
+                                message_obj["content"] = convert_parts(parts);
+                            }
+                        }
+
+                        input.push(message_obj);
+                    }
+
+                    // 2. Then, handle each tool call as a separate 'function_call' item
+                    // This is required by the Responses API schema (verified via Zod errors)
+                    if let Some(tool_calls) = &msg.tool_calls {
+                        for tc in tool_calls {
+                            if let Some(func) = &tc.function {
+                                input.push(json!({
+                                    "type": "function_call",
+                                    "call_id": tc.id,
                                     "name": func.name,
                                     "arguments": func.arguments
-                                })
-                            })
-                        })
-                        .collect();
-                    message_obj["tool_calls"] = Value::Array(tool_calls_json);
+                                }));
+                            }
+                        }
+                    }
                 }
-            } else if msg.role == MessageRole::Tool {
-                if let Some(tool_call_id) = &msg.tool_call_id {
-                    message_obj["tool_call_id"] = json!(tool_call_id);
+                MessageRole::Tool => {
+                    // Tool results must use 'function_call_output' type
+                    // Field name is 'call_id' (not 'tool_call_id') and 'output'
+                    input.push(json!({
+                        "type": "function_call_output",
+                        "call_id": msg.tool_call_id.clone().unwrap_or_default(),
+                        "output": match &msg.content {
+                            crate::llm::provider::MessageContent::Text(text) => text.clone(),
+                            crate::llm::provider::MessageContent::Parts(parts) => {
+                                // For tool output, we usually expect a string (JSON result).
+                                // If it's multipart, we join text parts.
+                                parts.iter().filter_map(|p| match p {
+                                    crate::llm::provider::ContentPart::Text { text } => Some(text.as_str()),
+                                    _ => None
+                                }).collect::<Vec<_>>().join("")
+                            }
+                        }
+                    }));
                 }
             }
-
-            input.push(message_obj);
         }
 
         let mut payload = json!({
@@ -1253,5 +1302,71 @@ impl LLMClient for HuggingFaceProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::provider::{FunctionCall, Message, MessageContent, ToolCall};
+
+    #[test]
+    fn test_format_for_responses_api_tools() {
+        let provider = HuggingFaceProvider::new("test-key".to_string());
+        let mut request = LLMRequest::default();
+        request.model = "test-model".to_string();
+        request.messages = vec![
+            Message::user("What's the weather?".to_string()),
+            Message {
+                role: MessageRole::Assistant,
+                content: MessageContent::Text("Let me check.".to_string()),
+                tool_calls: Some(vec![ToolCall {
+                    id: "call_123".to_string(),
+                    call_type: "function".to_string(),
+                    function: Some(FunctionCall {
+                        name: "get_weather".to_string(),
+                        arguments: "{\"location\":\"London\"}".to_string(),
+                    }),
+                    text: None,
+                    thought_signature: None,
+                }]),
+                ..Default::default()
+            },
+            Message::tool_response("call_123".to_string(), "Sunny".to_string()),
+        ];
+
+        let result = provider
+            .format_for_responses_api(&request)
+            .expect("Failed to format for Responses API");
+        let input = result["input"]
+            .as_array()
+            .expect("Input should be an array");
+
+        assert_eq!(
+            input.len(),
+            4,
+            "Should have 4 items: user request, assistant text, assistant tool call, tool output"
+        );
+
+        // User message
+        assert_eq!(input[0]["type"], "message");
+        assert_eq!(input[0]["role"], "user");
+        assert_eq!(input[0]["content"], "What's the weather?");
+
+        // Assistant text part
+        assert_eq!(input[1]["type"], "message");
+        assert_eq!(input[1]["role"], "assistant");
+        assert_eq!(input[1]["content"], "Let me check.");
+
+        // Assistant tool call part
+        assert_eq!(input[2]["type"], "function_call");
+        assert_eq!(input[2]["call_id"], "call_123");
+        assert_eq!(input[2]["name"], "get_weather");
+        assert_eq!(input[2]["arguments"], "{\"location\":\"London\"}");
+
+        // Tool output part
+        assert_eq!(input[3]["type"], "function_call_output");
+        assert_eq!(input[3]["call_id"], "call_123");
+        assert_eq!(input[3]["output"], "Sunny");
     }
 }
