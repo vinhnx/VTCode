@@ -42,15 +42,9 @@ Closed session browser.
 
 --
 
-add wildcard syntax mcp**server**\* for MCP tool permissions to allow or deny all tools from a server
-
 ---
 
 Improve memory usage for large conversations
-
---
-
-fix IME (Input Method Editor) support for languages like Chinese, Japanese, and Korean by correctly positioning the composition window at the cursor
 
 ---
 
@@ -65,28 +59,3 @@ REVIEW VTCODE TOOLS, REMOVE REDUNDANT TOOLS, AND IMPROVE TOOL DESCRIPTIONS FOR C
 --
 
 improve responsiveness when executing commands, tools, pty, and file operations. add a placeholder response while processing is ongoing.
-
---
-
-COMPLETED: improve /doctor command output and format, also update new configuration options diagnosis <vtcode.toml> / config
-- Organized section layout: [Core Environment], [Configuration], [API & Providers], [Dependencies], [External Services], [Workspace Links], [Skills]
-- Configuration diagnostics: theme, model, max_turns, context_tokens, token_budget, decision_ledger, max_tool_loops, human_in_the_loop, tool_policy, pty_enabled
-- Skills diagnostics: Shows loaded skills with count and scope indicators (user/repo)
-- Enhanced formatting: Unicode indicators (check/x) with visual separators
-- Improved linked directory display with indices and actual paths
-- Failure suggestions: Each failed check shows contextual help arrow with resolution steps
-- Recommended next actions section at the end with quick guidance
-- Added documentation: DOCTOR_IMPROVEMENTS.md, DOCTOR_REFERENCE.md, DOCTOR_FAILURE_SUGGESTIONS.md
-- All code compiled and tested successfully
-
---
-
-COMPLETED: improve ANSI and background syntax highlighting for `diff` output (eliminated lag)
-- Implemented CachedStyles struct to cache style.render() output at renderer initialization
-- Optimized render_summary(): eliminated 4 format!() calls per diff file using push_str/write!
-- Optimized render_line_into(): removed format!() for line numbers, using smart alignment padding
-- Optimized render_suppressed_summary(): batched write operations with cached ANSI codes
-- Added pre-allocated String buffers with capacity() estimates to reduce heap allocations
-- Performance: ~80% fewer allocations per diff line (5-10 fewer format!() calls eliminated)
-- Code compiles with release optimizations; all syntax checks pass
-- Backward compatible: Kept palette field and paint() method for future use
