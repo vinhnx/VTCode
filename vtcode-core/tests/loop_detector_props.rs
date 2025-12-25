@@ -43,7 +43,3 @@ proptest! {
         prop_assert!(warning.is_some());
     }
 }
-
-
-
-

@@ -2126,7 +2126,7 @@ This skill generates files. After execution, file locations will be automaticall
         retry_count: u32,
     ) -> Result<(Option<i32>, PtyEphemeralCapture, VTCodePtySession)> {
         let mut lifecycle = PtySessionLifecycle::start(self)?;
-        
+
         // Increment active PTY sessions counter
         self.increment_active_pty_sessions();
 
@@ -2164,14 +2164,17 @@ This skill generates files. After execution, file locations will be automaticall
             let snapshot = self
                 .pty_manager()
                 .snapshot_session(&setup.session_id)
-                .with_context(|| format!("failed to snapshot PTY session '{}'", setup.session_id))?;
+                .with_context(|| {
+                    format!("failed to snapshot PTY session '{}'", setup.session_id)
+                })?;
 
             Ok((capture.exit_code, capture, snapshot))
-        }.await;
-        
+        }
+        .await;
+
         // Decrement active PTY sessions counter (always executed)
         self.decrement_active_pty_sessions();
-        
+
         result
     }
 

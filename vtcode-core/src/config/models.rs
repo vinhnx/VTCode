@@ -514,7 +514,7 @@ impl ModelId {
             ModelId::XaiGrok4Vision => models::xai::GROK_4_VISION,
             // Z.AI models
             ModelId::ZaiGlm47 => models::zai::GLM_4_7,
-             ModelId::ZaiGlm47DeepThinking => models::zai::GLM_4_7_DEEP_THINKING,
+            ModelId::ZaiGlm47DeepThinking => models::zai::GLM_4_7_DEEP_THINKING,
             ModelId::ZaiGlm46 => models::zai::GLM_4_6,
             ModelId::ZaiGlm46DeepThinking => models::zai::GLM_4_6_DEEP_THINKING,
             ModelId::ZaiGlm45 => models::zai::GLM_4_5,

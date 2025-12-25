@@ -119,6 +119,11 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "donate",
             description: "Support the project by buying the author a coffee",
         },
+        // Terminal setup
+        SlashCommandInfo {
+            name: "terminal-setup",
+            description: "Configure terminal for VT Code (multiline, copy/paste, shell, themes)",
+        },
     ]
 });
 

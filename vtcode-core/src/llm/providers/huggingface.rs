@@ -1,26 +1,29 @@
-#![allow(clippy::result_large_err, clippy::bind_instead_of_map, clippy::collapsible_if)]
+#![allow(
+    clippy::result_large_err,
+    clippy::bind_instead_of_map,
+    clippy::collapsible_if
+)]
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display::format_llm_error;
+use crate::llm::provider::ToolDefinition;
 use crate::llm::provider::{
-    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
-    LLMStreamEvent, MessageRole,
+    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+    MessageRole,
 };
-use crate::llm::types as llm_types;
 use crate::llm::providers::shared::{
-    NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls,
-    update_tool_calls,
+    NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls, update_tool_calls,
 };
 use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
+use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Value, json};
-use crate::llm::provider::ToolDefinition;
 
 use super::common::{
     map_finish_reason_common, override_base_url, parse_response_openai_format, resolve_model,
@@ -205,14 +208,10 @@ impl HuggingFaceProvider {
         Ok(model.to_string())
     }
 
-
     /// Behavior 1: Serialize tools with nested format (OpenAI-compatible)
     /// Documentation confirmed that the /v1/chat/completions endpoint
     /// expects the same nested structure as OpenAI.
-    fn serialize_tools_huggingface(
-        &self,
-        tools: &[ToolDefinition],
-    ) -> Option<Vec<Value>> {
+    fn serialize_tools_huggingface(&self, tools: &[ToolDefinition]) -> Option<Vec<Value>> {
         crate::llm::providers::common::serialize_tools_openai_format(tools)
     }
 
@@ -239,7 +238,7 @@ impl HuggingFaceProvider {
                 } else {
                     json!({ "type": "enabled" })
                 };
-                
+
                 // Behavior: Enable tool streaming for models that support it
                 if request.stream && request.tools.is_some() {
                     payload["tool_stream"] = json!(true);
@@ -353,7 +352,9 @@ impl HuggingFaceProvider {
                             crate::llm::provider::ContentPart::Text { text } => {
                                 json!({ "type": "input_text", "text": text })
                             }
-                            crate::llm::provider::ContentPart::Image { data, mime_type, .. } => {
+                            crate::llm::provider::ContentPart::Image {
+                                data, mime_type, ..
+                            } => {
                                 json!({
                                     "type": "input_image",
                                     "image_url": format!("data:{};base64,{}", mime_type, data)
@@ -437,7 +438,7 @@ impl HuggingFaceProvider {
                     }));
                 }
             }
-            
+
             if !flattened_tools.is_empty() {
                 payload["tools"] = json!(flattened_tools);
 
@@ -553,7 +554,7 @@ impl HuggingFaceProvider {
     fn parse_responses_api_format(json: &Value) -> Result<LLMResponse, LLMError> {
         // Check for convenience output_text helper first
         let convenience_text = json.get("output_text").and_then(|t| t.as_str());
-        
+
         // Extract the full response object if nested
         let json_obj = if json.get("response").is_some() {
             json.get("response").unwrap()
@@ -561,9 +562,7 @@ impl HuggingFaceProvider {
             json
         };
 
-        let output = json_obj
-            .get("output")
-            .and_then(|v| v.as_array());
+        let output = json_obj.get("output").and_then(|v| v.as_array());
 
         let output_arr = match output {
             Some(arr) => arr,
@@ -579,7 +578,7 @@ impl HuggingFaceProvider {
                         reasoning_details: None,
                     });
                 }
-                
+
                 // Not a Responses API format, fall back to Chat Completions
                 return Err(LLMError::Provider {
                     message: format_llm_error(PROVIDER_NAME, "Not a Responses API format"),
@@ -600,7 +599,8 @@ impl HuggingFaceProvider {
                     // Extract content from message.content array
                     if let Some(content_arr) = item.get("content").and_then(|c| c.as_array()) {
                         for entry in content_arr {
-                            let entry_type = entry.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                            let entry_type =
+                                entry.get("type").and_then(|t| t.as_str()).unwrap_or("");
                             match entry_type {
                                 "text" | "output_text" => {
                                     if let Some(text) = entry.get("text").and_then(|t| t.as_str()) {
@@ -671,31 +671,33 @@ impl HuggingFaceProvider {
 
         // Parse usage from response (checking both top level and response object)
         let usage_value = json.get("usage").or_else(|| json_obj.get("usage"));
-        let usage = usage_value.map(|usage_value| {
-            crate::llm::provider::Usage {
-                prompt_tokens: usage_value
-                    .get("input_tokens")
-                    .or_else(|| usage_value.get("prompt_tokens"))
-                    .and_then(|pt| pt.as_u64())
-                    .unwrap_or(0) as u32,
-                completion_tokens: usage_value
-                    .get("output_tokens")
-                    .or_else(|| usage_value.get("completion_tokens"))
-                    .and_then(|ct| ct.as_u64())
-                    .unwrap_or(0) as u32,
-                total_tokens: usage_value
-                    .get("total_tokens")
-                    .and_then(|tt| tt.as_u64())
-                    .unwrap_or(0) as u32,
-                cached_prompt_tokens: None,
-                cache_creation_tokens: None,
-                cache_read_tokens: None,
-            }
+        let usage = usage_value.map(|usage_value| crate::llm::provider::Usage {
+            prompt_tokens: usage_value
+                .get("input_tokens")
+                .or_else(|| usage_value.get("prompt_tokens"))
+                .and_then(|pt| pt.as_u64())
+                .unwrap_or(0) as u32,
+            completion_tokens: usage_value
+                .get("output_tokens")
+                .or_else(|| usage_value.get("completion_tokens"))
+                .and_then(|ct| ct.as_u64())
+                .unwrap_or(0) as u32,
+            total_tokens: usage_value
+                .get("total_tokens")
+                .and_then(|tt| tt.as_u64())
+                .unwrap_or(0) as u32,
+            cached_prompt_tokens: None,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
         });
 
         Ok(LLMResponse {
             content,
-            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+            tool_calls: if tool_calls.is_empty() {
+                None
+            } else {
+                Some(tool_calls)
+            },
             usage,
             finish_reason,
             reasoning,
@@ -725,7 +727,11 @@ impl HuggingFaceProvider {
         ))
     }
 
-    async fn parse_response(&self, response: Response, use_responses_api: bool) -> Result<LLMResponse, LLMError> {
+    async fn parse_response(
+        &self,
+        response: Response,
+        use_responses_api: bool,
+    ) -> Result<LLMResponse, LLMError> {
         let status = response.status();
 
         if !status.is_success() {
@@ -829,7 +835,6 @@ impl LLMProvider for HuggingFaceProvider {
         // Behavior 16: Prefer Responses API even with tools
         let use_responses_api = self.should_use_responses_api(&request);
 
-
         // Format request with HF-specific quirks
         let payload = if use_responses_api {
             self.format_for_responses_api(&request)?
@@ -870,7 +875,6 @@ impl LLMProvider for HuggingFaceProvider {
 
         // Behavior 16: Prefer Responses API even with tools
         let use_responses_api = self.should_use_responses_api(&request);
-
 
         // Format request with HF-specific quirks
         let payload = if use_responses_api {
@@ -929,7 +933,11 @@ impl LLMProvider for HuggingFaceProvider {
 
 // Streaming implementation
 impl HuggingFaceProvider {
-    async fn create_stream(&self, response: Response, use_responses_api: bool) -> Result<LLMStream, LLMError> {
+    async fn create_stream(
+        &self,
+        response: Response,
+        use_responses_api: bool,
+    ) -> Result<LLMStream, LLMError> {
         let mut bytes_stream = response.bytes_stream();
         let mut buffer = String::with_capacity(4096);
         let mut tool_calls: Vec<ToolCallBuilder> = Vec::new();
@@ -1180,7 +1188,7 @@ impl HuggingFaceProvider {
 impl LLMClient for HuggingFaceProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
         use super::common::convert_usage_to_llm_types;
-        
+
         let request = LLMRequest {
             messages: vec![crate::llm::provider::Message::user(prompt.to_string())],
             model: self.model.clone(),

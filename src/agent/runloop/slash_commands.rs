@@ -67,6 +67,7 @@ pub enum SlashCommandOutcome {
     SubmitPrompt {
         prompt: String,
     },
+    StartTerminalSetup,
 }
 
 #[derive(Clone, Debug)]
@@ -558,6 +559,16 @@ pub async fn handle_slash_command(
             };
             render_help(renderer, specific_cmd)?;
             Ok(SlashCommandOutcome::Handled)
+        }
+        "terminal-setup" => {
+            if !args.is_empty() {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Usage: /terminal-setup (no arguments supported yet)",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::StartTerminalSetup)
         }
         _ => {
             renderer.line(

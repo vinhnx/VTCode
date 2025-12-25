@@ -88,7 +88,9 @@ impl<'a> InlineEventContext<'a> {
                 self.input_processor().passive()
             }
             InlineEvent::Cancel => self.control_processor().cancel()?,
-            InlineEvent::ForceCancelPtySession => self.control_processor().force_cancel_pty_session()?,
+            InlineEvent::ForceCancelPtySession => {
+                self.control_processor().force_cancel_pty_session()?
+            }
             InlineEvent::Exit => self.control_processor().exit()?,
             InlineEvent::Interrupt => self.handle_interrupt(),
             InlineEvent::LaunchEditor => {

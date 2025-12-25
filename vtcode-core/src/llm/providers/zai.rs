@@ -226,14 +226,15 @@ impl ZAIProvider {
             {
                 payload["thinking"] = json!({ "type": "disabled" });
             } else {
-                // Enabled for reasoning models; GLM-4.6 and 4.5 determine automatically, 
+                // Enabled for reasoning models; GLM-4.6 and 4.5 determine automatically,
                 // while GLM-4.5V (and potentially others) force it.
                 payload["thinking"] = json!({ "type": "enabled" });
             }
-        }        if request.output_format.is_some() {
+        }
+        if request.output_format.is_some() {
             payload["response_format"] = json!({ "type": "json_object" });
         }
- 
+
         Ok(payload)
     }
 
@@ -440,7 +441,7 @@ impl LLMProvider for ZAIProvider {
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
         false
     }
- 
+
     fn supports_structured_output(&self, _model: &str) -> bool {
         true // Supported by all mainstream GLM-4.5/4.6/4.7 models
     }
@@ -966,18 +967,18 @@ mod tests {
     #[test]
     fn test_supports_reasoning() {
         let provider = ZAIProvider::new("key".to_string());
-        
+
         // Test base models
         assert!(provider.supports_reasoning("glm-4-plus"));
         assert!(provider.supports_reasoning("glm-4.7"));
         assert!(provider.supports_reasoning("glm-4.6"));
         assert!(provider.supports_reasoning("glm-4.5"));
         assert!(provider.supports_reasoning("glm-4.5-air"));
-        
+
         // Test thinking variants
         assert!(provider.supports_reasoning("glm-4.7:thinking"));
         assert!(provider.supports_reasoning("glm-4.6:thinking"));
-        
+
         // Test legacy/non-reasoning
         assert!(!provider.supports_reasoning("glm-4-32b-0414-128k"));
         assert!(!provider.supports_reasoning("glm-4.5v"));

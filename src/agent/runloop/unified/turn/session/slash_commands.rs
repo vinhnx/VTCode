@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tokio::sync::{Notify, RwLock};
 
 use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
@@ -674,6 +674,13 @@ pub async fn handle_outcome(
                 ctx.linked_directories,
             )
             .await?;
+            ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+            Ok(SlashCommandControl::Continue)
+        }
+        SlashCommandOutcome::StartTerminalSetup => {
+            let vt_cfg = ctx.vt_cfg.as_ref().context("VT Code configuration not available")?;
+            vtcode_core::terminal_setup::run_terminal_setup_wizard(ctx.renderer, vt_cfg)
+                .await?;
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
             Ok(SlashCommandControl::Continue)
         }

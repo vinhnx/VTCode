@@ -7,7 +7,7 @@ use vtcode_core::llm::providers::openai::OpenAIProvider;
 #[tokio::test]
 async fn mock_responses_api_receives_prompt_cache_retention() {
     // Start mock server
-    let expect_body = json!({ 
+    let expect_body = json!({
         "prompt_cache_retention": "24h",
         "output_types": ["message", "tool_call"]
     });
@@ -117,12 +117,12 @@ async fn mock_responses_api_top_level_tool_calls() {
     // Let's test top-level injection which we added support for.
 
     let mut server = Server::new_async().await;
-    
+
     // Simulate a response with top-level function_call
     let response_body = json!({
         "output": [
             {
-                "type": "message", 
+                "type": "message",
                 "content": [{"type": "output_text", "text": "I will call the tool."}]
             },
             {
@@ -165,7 +165,7 @@ async fn mock_responses_api_top_level_tool_calls() {
         .expect("provider should return");
 
     mock.assert_async().await;
-    
+
     // Check if tool call was parsed
     assert!(response.tool_calls.is_some());
     let calls = response.tool_calls.unwrap();
