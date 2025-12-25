@@ -624,6 +624,7 @@ fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Result
 
 fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     const TOOL_TAG: &str = "<tool_call>";
+    const TOOL_TAG_CLOSE: &str = "</tool_call>";
     const ARG_KEY_TAG: &str = "<arg_key>";
     const ARG_VALUE_TAG: &str = "<arg_value>";
     const ARG_KEY_CLOSE: &str = "</arg_key>";
@@ -640,7 +641,10 @@ fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     let mut indexed_values: BTreeMap<String, BTreeMap<usize, Value>> = BTreeMap::new();
     rest = after_name;
 
+    // First, try standard <arg_key>/<arg_value> parsing
+    let mut found_arg_tags = false;
     while let Some(key_index) = rest.find(ARG_KEY_TAG) {
+        found_arg_tags = true;
         rest = &rest[key_index + ARG_KEY_TAG.len()..];
         let (raw_key, mut after_key) = read_tag_text(rest);
         if raw_key.is_empty() {
@@ -671,6 +675,60 @@ fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
                 .insert(index, value);
         } else {
             object.insert(key.to_string(), value);
+        }
+    }
+
+    // If no arg tags found, try fallback parsing for malformed output
+    // e.g., <tool_call>list_files<tool_call>{"path": "/tmp"} or <tool_call>read_file path="/tmp"
+    if !found_arg_tags && object.is_empty() {
+        // Determine the content boundary (next <tool_call>, </tool_call>, or end)
+        let content_end = after_name
+            .find(TOOL_TAG)
+            .or_else(|| after_name.find(TOOL_TAG_CLOSE))
+            .unwrap_or(after_name.len());
+        let content = after_name[..content_end].trim();
+
+        if !content.is_empty() {
+            // Try parsing as JSON first
+            if let Some(json_start) = content.find('{') {
+                let json_content = &content[json_start..];
+                // Find matching closing brace
+                let mut depth = 0;
+                let mut json_end = None;
+                for (idx, ch) in json_content.char_indices() {
+                    match ch {
+                        '{' => depth += 1,
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                json_end = Some(idx + 1);
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if let Some(end) = json_end {
+                    if let Ok(parsed) = serde_json::from_str::<Value>(&json_content[..end]) {
+                        if let Some(obj) = parsed.as_object() {
+                            for (k, v) in obj {
+                                object.insert(k.clone(), v.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If JSON parsing didn't work, try key=value or key:value pairs
+            if object.is_empty() {
+                if let Some(parsed) = parse_key_value_arguments(content) {
+                    if let Some(obj) = parsed.as_object() {
+                        for (k, v) in obj {
+                            object.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1592,5 +1650,64 @@ mode: overwrite
             result.is_none(),
             "Should reject Harmony format with whitespace-only command"
         );
+    }
+
+    // ==================== Tests for malformed XML handling (GLM models) ====================
+
+    #[test]
+    fn test_parse_tagged_tool_call_handles_double_tag_malformed_xml() {
+        // GLM models sometimes output: <tool_call>list_files<tool_call>list
+        // Should extract tool name but with empty args
+        let message = "<tool_call>list_files<tool_call>list";
+        let result = parse_tagged_tool_call(message);
+        assert!(result.is_some(), "Should parse malformed double-tag XML");
+        let (name, args) = result.unwrap();
+        assert_eq!(name, "list_files");
+        // Args should be empty object since no valid args were found
+        assert!(args.as_object().map_or(true, |o| o.is_empty()));
+    }
+
+    #[test]
+    fn test_parse_tagged_tool_call_extracts_json_after_name() {
+        // When JSON appears after the tool name
+        let message = r#"<tool_call>read_file{"path": "/tmp/test.txt"}</tool_call>"#;
+        let result = parse_tagged_tool_call(message);
+        assert!(result.is_some(), "Should parse JSON after tool name");
+        let (name, args) = result.unwrap();
+        assert_eq!(name, "read_file");
+        assert_eq!(args.get("path").and_then(|v| v.as_str()), Some("/tmp/test.txt"));
+    }
+
+    #[test]
+    fn test_parse_tagged_tool_call_extracts_json_with_space() {
+        // When JSON appears after tool name with space
+        let message = r#"<tool_call>read_file {"path": "/tmp/test.txt"}</tool_call>"#;
+        let result = parse_tagged_tool_call(message);
+        assert!(result.is_some(), "Should parse JSON with space after tool name");
+        let (name, args) = result.unwrap();
+        assert_eq!(name, "read_file");
+        assert_eq!(args.get("path").and_then(|v| v.as_str()), Some("/tmp/test.txt"));
+    }
+
+    #[test]
+    fn test_parse_tagged_tool_call_handles_nested_json() {
+        // Nested JSON should be parsed correctly
+        let message = r#"<tool_call>run_pty_cmd{"command": "echo", "env": {"PATH": "/usr/bin"}}</tool_call>"#;
+        let result = parse_tagged_tool_call(message);
+        assert!(result.is_some(), "Should parse nested JSON");
+        let (name, args) = result.unwrap();
+        assert_eq!(name, "run_pty_cmd");
+        assert_eq!(args.get("command").and_then(|v| v.as_str()), Some("echo"));
+        assert!(args.get("env").and_then(|v| v.as_object()).is_some());
+    }
+
+    #[test]
+    fn test_parse_tagged_tool_call_stops_at_next_tool_call_tag() {
+        // Content boundary should be the next <tool_call> tag
+        let message = "<tool_call>list_files<tool_call>read_file";
+        let result = parse_tagged_tool_call(message);
+        assert!(result.is_some());
+        let (name, _) = result.unwrap();
+        assert_eq!(name, "list_files");
     }
 }
