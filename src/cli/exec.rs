@@ -26,7 +26,7 @@ pub struct ExecCommandOptions {
     pub last_message_file: Option<PathBuf>,
 }
 
-fn resolve_prompt(prompt_arg: Option<String>) -> Result<String> {
+fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
     match prompt_arg {
         Some(p) if p != "-" => Ok(p),
         maybe_dash => {
@@ -36,7 +36,7 @@ fn resolve_prompt(prompt_arg: Option<String>) -> Result<String> {
                     "No prompt provided. Pass a prompt argument, pipe input, or use '-' to read from stdin."
                 );
             }
-            if !force_stdin {
+            if !force_stdin && !quiet {
                 eprintln!("Reading prompt from stdin...");
             }
             // OPTIMIZATION: Pre-allocate buffer with reasonable capacity
@@ -70,7 +70,22 @@ pub async fn handle_exec_command(
     options: ExecCommandOptions,
     prompt_arg: Option<String>,
 ) -> Result<()> {
-    let prompt = resolve_prompt(prompt_arg)?;
+    tokio::select! {
+        res = handle_exec_command_impl(config, vt_cfg, options, prompt_arg) => res,
+        _ = tokio::signal::ctrl_c() => {
+            eprintln!("{}", style("\nCancelled by user.").yellow());
+            bail!("Operation cancelled");
+        }
+    }
+}
+
+async fn handle_exec_command_impl(
+    config: &CoreAgentConfig,
+    vt_cfg: &VTCodeConfig,
+    options: ExecCommandOptions,
+    prompt_arg: Option<String>,
+) -> Result<()> {
+    let prompt = resolve_prompt(prompt_arg, config.quiet)?;
 
     let trust_level = workspace_trust_level(&config.workspace)
         .await
@@ -157,7 +172,7 @@ pub async fn handle_exec_command(
         event_lines.push(line);
     }
 
-    if !options.json {
+    if !options.json && !config.quiet {
         eprintln!();
 
         if !result.summary.trim().is_empty() {

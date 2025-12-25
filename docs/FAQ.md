@@ -48,6 +48,17 @@ VT Code renders to `stderr` (via `CrosstermBackend::new(std::io::stderr())` in `
 
 No. VT Code uses a single `terminal.draw()` call per frame that renders all widgets together. See `vtcode-core/src/ui/tui/session.rs:render()` method, which orchestrates all UI components in one closure.
 
+### How do I pipe output to other tools?
+
+Because VT Code strictly separates data (`stdout`) from metadata/logging (`stderr`), you can pipe the output of commands like `ask` and `exec` directly.
+
+```bash
+# Code goes to file, logs stay on screen
+vtcode ask "code for a fibonacci function" > fib.py
+```
+
+Use `vtcode exec --json` to get a pipeable stream of structured events.
+
 ### How does VT Code handle terminal resizing?
 
 VT Code listens for `Event::Resize(x, y)` events and updates the layout automatically. The TUI widgets reflow based on the new terminal dimensions—no special handling needed.

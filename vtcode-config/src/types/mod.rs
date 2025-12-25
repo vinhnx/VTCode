@@ -405,6 +405,7 @@ pub struct AgentConfig {
     pub api_key_env: String,
     pub workspace: std::path::PathBuf,
     pub verbose: bool,
+    pub quiet: bool,
     pub theme: String,
     pub reasoning_effort: ReasoningEffortLevel,
     pub ui_surface: UiSurfacePreference,

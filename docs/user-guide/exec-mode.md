@@ -2,8 +2,7 @@
 
 VT Code's exec mode lets you run autonomous tasks from the shell without starting the interactive TUI. The workflow mirrors the
 `codex exec` guidance: commands run non-interactively, stream structured events, and can be resumed later. By default, `vtcode
-exec` prints progress to stderr while the final agent message is written to stdout, so you can safely pipe the result into other
-scripts without filtering intermediary logs.
+exec` prints progress, summaries, and outcomes to **stderr**. `stdout` remains silent unless you request structured output (via `--json`), allowing you to safely pipe the output to other tools without pollution.
 
 ## Launching exec mode
 

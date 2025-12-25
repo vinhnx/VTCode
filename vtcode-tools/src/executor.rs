@@ -91,7 +91,7 @@ impl CachedToolExecutor {
         args: Arc<Value>,
     ) -> anyhow::Result<Arc<Value>> {
         let start = std::time::Instant::now();
-        let cache_key = make_cache_key(tool_name, &*args);
+        let cache_key = make_cache_key(tool_name, &args);
 
         // Update stats (single write)
         {
@@ -138,7 +138,7 @@ impl CachedToolExecutor {
 
         // Execute tool (caller provides actual execution)
         // This is where your tool registry would call the actual tool
-        let result = self.execute_tool_internal(tool_name, &*owned_args).await?;
+        let result = self.execute_tool_internal(tool_name, &owned_args).await?;
 
         let duration_ms = start.elapsed().as_millis() as u64;
 

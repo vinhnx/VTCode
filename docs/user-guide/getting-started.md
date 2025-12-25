@@ -279,6 +279,16 @@ The agent will greet you and await your instructions. Try asking:
 -   "Refactor this function to be more readable"
 -   "Create a new API endpoint for user registration"
 
+### Command Line Queries
+
+For quick questions or piping to other tools, use the `ask` command:
+
+```bash
+vtcode ask "Write a Python function to calculate Fibonacci numbers" > fib.py
+```
+
+**Note**: `vtcode ask` sends the raw response code/text to **stdout**, while sending metadata (provider info, reasoning traces) to **stderr**. This makes it perfect for shell scripting and piping.
+
 ### Project Analysis
 
 ```bash

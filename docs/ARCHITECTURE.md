@@ -4,6 +4,15 @@
 
 VT Code follows a modular, trait-based architecture designed for maintainability, extensibility, and performance.
 
+### CLI Architecture
+
+The command-line interface is built on specific principles for robustness and interoperability:
+
+1.  **Strict Output Separation**: Data goes to `stdout`, diagnostics/logs go to `stderr`. This enables clean piping of machine-readable output.
+2.  **Standard Argument Parsing**: Uses `clap` for POSIX/GNU compliance, supporting standard flags and behavior.
+3.  **Command Isolation**: Each sub-command (`ask`, `exec`, `chat`) is handled by a dedicated module in `src/cli/`, sharing core logic via `vtcode-core`.
+4.  **Signal Handling**: Graceful handling of `SIGINT`/`SIGTERM` to ensure resource cleanup (e.g., restoring terminal state).
+
 ## Core Architecture
 
 ### Modular Tools System

@@ -223,6 +223,7 @@ impl AgentRunner {
             api_key_env: cfg.agent.api_key_env.clone(),
             workspace: self._workspace.clone(),
             verbose: false,
+            quiet: self.quiet,
             theme: cfg.agent.theme.clone(),
             reasoning_effort: self.reasoning_effort.unwrap_or(cfg.agent.reasoning_effort),
             ui_surface: cfg.agent.ui_surface,

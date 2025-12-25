@@ -201,6 +201,12 @@ pub struct Cli {
     ///   • Agent coordination details
     #[arg(long, global = true)]
     pub verbose: bool,
+    
+    /// **Suppress all non-essential output**
+    ///
+    /// Useful for: Scripting, pipelines, CI/CD
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
 
     /// **Configuration overrides or file path**
     ///
@@ -377,7 +383,9 @@ pub enum Commands {
     ///
     /// Example: vtcode ask "Explain Rust ownership"
     Ask {
-        prompt: String,
+        /// Prompt to ask. Use `-` to force reading from stdin.
+        #[arg(value_name = "PROMPT")]
+        prompt: Option<String>,
         /// Format the response using a structured representation.
         #[arg(long = "output-format", value_enum, value_name = "FORMAT")]
         output_format: Option<AskOutputFormat>,
@@ -934,6 +942,7 @@ impl Default for Cli {
             api_rate_limit: 30,
             max_tool_calls: 10,
             verbose: false,
+            quiet: false,
             config: Vec::new(),
             log_level: "info".to_owned(),
             no_color: false,
