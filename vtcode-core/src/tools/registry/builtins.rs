@@ -19,6 +19,9 @@ pub(super) fn register_builtin_tools(inventory: &mut ToolInventory, todo_plannin
 
 pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
     vec![
+        // ============================================================
+        // SEARCH & DISCOVERY (4 tools - all exposed)
+        // ============================================================
         ToolRegistration::new(
             tools::GREP_FILE,
             CapabilityLevel::CodeSearch,
@@ -32,59 +35,72 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::list_files_executor,
         ),
         ToolRegistration::new(
+            tools::SEARCH_TOOLS,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::search_tools_executor,
+        ),
+        ToolRegistration::new(
+            tools::CODE_INTELLIGENCE,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::code_intelligence_executor,
+        ),
+        // ============================================================
+        // SHELL EXECUTION (1 exposed + 6 hidden)
+        // ============================================================
+        ToolRegistration::new(
             tools::RUN_PTY_CMD,
             CapabilityLevel::Bash,
             true,
             ToolRegistry::run_pty_cmd_executor,
         ),
-        ToolRegistration::new(
-            tools::UPDATE_PLAN,
-            CapabilityLevel::Basic,
-            false,
-            ToolRegistry::update_plan_executor,
-        ),
+        // PTY session tools: hidden from LLM (internal use only)
         ToolRegistration::new(
             tools::CREATE_PTY_SESSION,
             CapabilityLevel::Bash,
             false,
             ToolRegistry::create_pty_session_executor,
-        ),
+        )
+        .with_llm_visibility(false),
         ToolRegistration::new(
             tools::LIST_PTY_SESSIONS,
             CapabilityLevel::Bash,
             false,
             ToolRegistry::list_pty_sessions_executor,
-        ),
+        )
+        .with_llm_visibility(false),
         ToolRegistration::new(
             tools::CLOSE_PTY_SESSION,
             CapabilityLevel::Bash,
             false,
             ToolRegistry::close_pty_session_executor,
-        ),
+        )
+        .with_llm_visibility(false),
         ToolRegistration::new(
             tools::SEND_PTY_INPUT,
             CapabilityLevel::Bash,
             false,
             ToolRegistry::send_pty_input_executor,
-        ),
+        )
+        .with_llm_visibility(false),
         ToolRegistration::new(
             tools::READ_PTY_SESSION,
             CapabilityLevel::Bash,
             false,
             ToolRegistry::read_pty_session_executor,
-        ),
+        )
+        .with_llm_visibility(false),
         ToolRegistration::new(
             tools::RESIZE_PTY_SESSION,
             CapabilityLevel::Bash,
             false,
             ToolRegistry::resize_pty_session_executor,
-        ),
-        ToolRegistration::new(
-            tools::WEB_FETCH,
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::web_fetch_executor,
-        ),
+        )
+        .with_llm_visibility(false),
+        // ============================================================
+        // FILE OPERATIONS (5 exposed + 2 deprecated)
+        // ============================================================
         ToolRegistration::new(
             tools::READ_FILE,
             CapabilityLevel::FileReading,
@@ -92,22 +108,16 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::read_file_executor,
         ),
         ToolRegistration::new(
-            tools::CREATE_FILE,
+            tools::WRITE_FILE,
             CapabilityLevel::Editing,
             false,
-            ToolRegistry::create_file_executor,
+            ToolRegistry::write_file_executor,
         ),
         ToolRegistration::new(
             tools::DELETE_FILE,
             CapabilityLevel::Editing,
             false,
             ToolRegistry::delete_file_executor,
-        ),
-        ToolRegistration::new(
-            tools::WRITE_FILE,
-            CapabilityLevel::Editing,
-            false,
-            ToolRegistry::write_file_executor,
         ),
         ToolRegistration::new(
             tools::EDIT_FILE,
@@ -121,18 +131,47 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             false,
             ToolRegistry::apply_patch_executor,
         ),
+        // Deprecated: use write_file with mode=fail_if_exists
+        ToolRegistration::new(
+            tools::CREATE_FILE,
+            CapabilityLevel::Editing,
+            false,
+            ToolRegistry::create_file_executor,
+        )
+        .with_llm_visibility(false)
+        .with_deprecated(true)
+        .with_deprecation_message("use write_file with mode=fail_if_exists"),
+        // Deprecated: use edit_file instead
         ToolRegistration::new(
             tools::SEARCH_REPLACE,
             CapabilityLevel::Editing,
             false,
             ToolRegistry::search_replace_executor,
-        ),
+        )
+        .with_llm_visibility(false)
+        .with_deprecated(true)
+        .with_deprecation_message("use edit_file instead"),
+        // ============================================================
+        // NETWORK & WEB (1 tool)
+        // ============================================================
         ToolRegistration::new(
-            tools::SEARCH_TOOLS,
+            tools::WEB_FETCH,
             CapabilityLevel::Bash,
             false,
-            ToolRegistry::search_tools_executor,
+            ToolRegistry::web_fetch_executor,
         ),
+        // ============================================================
+        // PLANNING (1 tool)
+        // ============================================================
+        ToolRegistration::new(
+            tools::UPDATE_PLAN,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::update_plan_executor,
+        ),
+        // ============================================================
+        // SPECIAL TOOLS (3 exposed + 2 deprecated)
+        // ============================================================
         ToolRegistration::new(
             tools::SKILL,
             CapabilityLevel::Basic,
@@ -145,23 +184,32 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             false,
             ToolRegistry::execute_code_executor,
         ),
+        // Merged agent diagnostics tool
+        ToolRegistration::new(
+            tools::AGENT_INFO,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::agent_info_executor,
+        ),
+        // Deprecated: use agent_info with mode=debug
         ToolRegistration::new(
             tools::DEBUG_AGENT,
             CapabilityLevel::Basic,
             false,
             ToolRegistry::debug_agent_executor,
-        ),
+        )
+        .with_llm_visibility(false)
+        .with_deprecated(true)
+        .with_deprecation_message("use agent_info with mode=debug"),
+        // Deprecated: use agent_info with mode=analyze
         ToolRegistration::new(
             tools::ANALYZE_AGENT,
             CapabilityLevel::Basic,
             false,
             ToolRegistry::analyze_agent_executor,
-        ),
-        ToolRegistration::new(
-            tools::CODE_INTELLIGENCE,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::code_intelligence_executor,
-        ),
+        )
+        .with_llm_visibility(false)
+        .with_deprecated(true)
+        .with_deprecation_message("use agent_info with mode=analyze"),
     ]
 }

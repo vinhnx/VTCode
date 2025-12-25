@@ -159,13 +159,6 @@ fn new_str_keys() -> &'static [&'static str] {
         .as_slice()
 }
 
-fn create_file_requirements() -> &'static [Value] {
-    static REQUIREMENTS: OnceLock<Vec<Value>> = OnceLock::new();
-    REQUIREMENTS
-        .get_or_init(|| required_pairs(path_keys(), content_keys()))
-        .as_slice()
-}
-
 fn delete_file_requirements() -> &'static [Value] {
     static REQUIREMENTS: OnceLock<Vec<Value>> = OnceLock::new();
     REQUIREMENTS
@@ -325,14 +318,19 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
         FunctionDeclaration {
-            name: tools::DEBUG_AGENT.to_string(),
-            description: "Agent diagnostics: configuration, available tools, workspace state, system info.".to_string(),
-            parameters: json!({"type": "object", "properties": {}}),
-        },
-        FunctionDeclaration {
-            name: tools::ANALYZE_AGENT.to_string(),
-            description: "Agent behavior analysis: tool usage, failure rates, context usage, performance metrics.".to_string(),
-            parameters: json!({"type": "object", "properties": {}}),
+            name: tools::AGENT_INFO.to_string(),
+            description: "Agent diagnostics: tools, workspace, usage stats. mode: debug|analyze|full.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": ["debug", "analyze", "full"],
+                        "description": "debug (config/state), analyze (metrics), full (both)",
+                        "default": "full"
+                    }
+                }
+            }),
         },
 
         // ============================================================
@@ -356,37 +354,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
 
-        FunctionDeclaration {
-            name: tools::CREATE_FILE.to_string(),
-            description: "Create a new file. Fails if file already exists to prevent accidental overwrites.".to_string(),
-            parameters: {
-                let mut properties = Map::new();
-
-                insert_string_with_aliases(
-                    &mut properties,
-                    "path",
-                    "Workspace-relative path to create",
-                    PATH_ALIAS_WITH_TARGET,
-                );
-                insert_string_with_aliases(
-                    &mut properties,
-                    "content",
-                    "Initial file contents",
-                    CONTENT_ALIASES,
-                );
-                insert_string_property(
-                    &mut properties,
-                    "encoding",
-                    "Text encoding (utf-8 default)",
-                );
-
-                json!({
-                    "type": "object",
-                    "properties": properties,
-                    "anyOf": create_file_requirements()
-                })
-            },
-        },
+        // NOTE: create_file removed - use write_file with mode=fail_if_exists
 
         FunctionDeclaration {
             name: tools::DELETE_FILE.to_string(),
@@ -523,128 +491,8 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
 
-        FunctionDeclaration {
-            name: tools::SEARCH_REPLACE.to_string(),
-            description: "Search and replace literal text in file. Optional backup and before/after context hints.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Path to file to edit"},
-                    "search": {"type": "string", "description": "Literal text to find"},
-                    "replace": {"type": "string", "description": "Replacement text"},
-                    "max_replacements": {"type": "integer", "description": "Optional cap on replacements"},
-                    "backup": {"type": "boolean", "description": "Create .bak backup before writing", "default": true},
-                    "before": {"type": "string", "description": "Optional required prefix immediately before the match"},
-                    "after": {"type": "string", "description": "Optional required suffix immediately after the match"}
-                },
-                "required": ["path", "search", "replace"]
-            }),
-        },
-
-
-        // ============================================================
-        // PTY SESSION MANAGEMENT
-        // ============================================================
-
-        FunctionDeclaration {
-            name: tools::CREATE_PTY_SESSION.to_string(),
-            description: "Create persistent PTY session for reuse across calls.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "session_id": {"type": "string", "description": "Unique session ID"},
-                    "command": {
-                        "description": "Command (string or array)",
-                        "oneOf": [
-                            {"type": "string"},
-                            {"type": "array", "items": {"type": "string"}}
-                        ]
-                    },
-                    "args": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Arguments when command is string"
-                    },
-                    "working_dir": {"type": "string", "description": "Working directory"},
-                    "rows": {"type": "integer", "description": "Terminal rows", "default": 24},
-                    "cols": {"type": "integer", "description": "Terminal columns", "default": 80}
-                },
-                "required": ["session_id", "command"]
-            }),
-        },
-
-        FunctionDeclaration {
-            name: tools::LIST_PTY_SESSIONS.to_string(),
-            description: "List active PTY sessions.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {},
-                "additionalProperties": false
-            }),
-        },
-
-        FunctionDeclaration {
-            name: tools::CLOSE_PTY_SESSION.to_string(),
-            description: "Terminate PTY session.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "session_id": {"type": "string", "description": "Session ID to close"}
-                },
-                "required": ["session_id"]
-            }),
-        },
-
-        FunctionDeclaration {
-            name: tools::SEND_PTY_INPUT.to_string(),
-            description: "Send input to PTY session.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "session_id": {"type": "string", "description": "Session ID"},
-                    "input": {"type": "string", "description": "UTF-8 text to send"},
-                    "input_base64": {"type": "string", "description": "Base64 encoded bytes"},
-                    "append_newline": {"type": "boolean", "description": "Append newline", "default": false},
-                    "wait_ms": {"type": "integer", "description": "Wait before capture (ms)", "default": 0},
-                    "drain": {"type": "boolean", "description": "Clear buffer after capture", "default": true},
-                    "max_tokens": {"type": "integer", "description": "Maximum tokens to include in output (per-call token budget). Prefer token-based limits for large outputs."}
-                },
-                "required": ["session_id"],
-                "additionalProperties": false
-            }),
-        },
-
-        FunctionDeclaration {
-            name: tools::READ_PTY_SESSION.to_string(),
-            description: "Read PTY session state (screen + scrollback).".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "session_id": {"type": "string", "description": "Session ID"},
-                    "drain": {"type": "boolean", "description": "Clear new output", "default": false},
-                    "include_screen": {"type": "boolean", "description": "Include screen buffer", "default": true},
-                    "include_scrollback": {"type": "boolean", "description": "Include scrollback", "default": true},
-                    "max_tokens": {"type": "integer", "description": "Maximum tokens to include in output (per-call token budget). Prefer token-based limits for large outputs."}
-                },
-                "required": ["session_id"],
-                "additionalProperties": false
-            }),
-        },
-
-        FunctionDeclaration {
-            name: tools::RESIZE_PTY_SESSION.to_string(),
-            description: "Resize PTY session terminal dimensions.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "session_id": {"type": "string", "description": "Session ID"},
-                    "rows": {"type": "integer", "description": "Terminal rows", "minimum": 1},
-                    "cols": {"type": "integer", "description": "Terminal columns", "minimum": 1}
-                },
-                "required": ["session_id"],
-                "additionalProperties": false
-            }),
-        },
+        // NOTE: search_replace removed - use edit_file instead
+        // NOTE: PTY session tools (create/list/close/send/read/resize) hidden from LLM - use run_pty_cmd
 
         // ============================================================
         // NETWORK OPERATIONS
