@@ -40,11 +40,12 @@ impl DeepSeekProvider {
             models::deepseek::DEFAULT_MODEL.to_string(),
             None,
             None,
+            TimeoutsConfig::default(),
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None)
+        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default())
     }
 
     pub fn from_config(
@@ -52,13 +53,19 @@ impl DeepSeekProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        _timeouts: Option<TimeoutsConfig>,
+        timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::deepseek::DEFAULT_MODEL);
 
-        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
+        Self::with_model_internal(
+            api_key_value,
+            model_value,
+            prompt_cache,
+            base_url,
+            timeouts.unwrap_or_default(),
+        )
     }
 
     fn with_model_internal(
@@ -66,6 +73,7 @@ impl DeepSeekProvider {
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
+        timeouts: TimeoutsConfig,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
         
@@ -77,7 +85,7 @@ impl DeepSeekProvider {
 
         Self {
             api_key,
-            http_client: HttpClientFactory::default_client(),
+            http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: override_base_url(
                 urls::DEEPSEEK_API_BASE,
                 base_url,

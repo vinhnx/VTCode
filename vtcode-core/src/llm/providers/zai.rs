@@ -49,12 +49,13 @@ impl ZAIProvider {
         model: String,
         base_url: Option<String>,
         _prompt_cache: Option<PromptCachingConfig>,
+        timeouts: TimeoutsConfig,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
         
         Self {
             api_key,
-            http_client: HttpClientFactory::default_client(),
+            http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: override_base_url(
                 urls::Z_AI_API_BASE,
                 base_url,
@@ -66,11 +67,17 @@ impl ZAIProvider {
     }
 
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, models::zai::DEFAULT_MODEL.to_string(), None, None)
+        Self::with_model_internal(
+            api_key,
+            models::zai::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+            TimeoutsConfig::default(),
+        )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None)
+        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default())
     }
 
     pub fn from_config(
@@ -78,12 +85,18 @@ impl ZAIProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        _timeouts: Option<TimeoutsConfig>,
+        timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::zai::DEFAULT_MODEL);
-        Self::with_model_internal(api_key_value, model_value, base_url, prompt_cache)
+        Self::with_model_internal(
+            api_key_value,
+            model_value,
+            base_url,
+            prompt_cache,
+            timeouts.unwrap_or_default(),
+        )
     }
 
     fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {

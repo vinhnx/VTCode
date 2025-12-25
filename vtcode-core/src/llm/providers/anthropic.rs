@@ -45,11 +45,19 @@ impl AnthropicProvider {
             None,
             None,
             AnthropicConfig::default(),
+            TimeoutsConfig::default(),
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, AnthropicConfig::default())
+        Self::with_model_internal(
+            api_key,
+            model,
+            None,
+            None,
+            AnthropicConfig::default(),
+            TimeoutsConfig::default(),
+        )
     }
 
     pub fn from_config(
@@ -57,7 +65,7 @@ impl AnthropicProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        _timeouts: Option<TimeoutsConfig>,
+        timeouts: Option<TimeoutsConfig>,
         anthropic_config: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
@@ -70,6 +78,7 @@ impl AnthropicProvider {
             prompt_cache,
             base_url,
             anthropic_cfg,
+            timeouts.unwrap_or_default(),
         )
     }
 
@@ -79,6 +88,7 @@ impl AnthropicProvider {
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
         anthropic_config: AnthropicConfig,
+        timeouts: TimeoutsConfig,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
         
@@ -100,7 +110,7 @@ impl AnthropicProvider {
 
         Self {
             api_key,
-            http_client: HttpClientFactory::default_client(),
+            http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: base_url_value,
             model,
             prompt_cache_enabled,
