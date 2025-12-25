@@ -784,7 +784,7 @@ TODO2.md
 .cursorignore
 .vtcode/index/
 .vtcode/checkpoints/
-.vtcode/
+.vtcode/skills/
 .claude/
 .agent/
 .pi/

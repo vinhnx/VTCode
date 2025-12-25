@@ -116,6 +116,7 @@ pub struct HuggingFaceProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    _timeouts: TimeoutsConfig,
 }
 
 impl HuggingFaceProvider {
@@ -132,21 +133,37 @@ impl HuggingFaceProvider {
         Self::with_model_internal(api_key, model, None, None)
     }
 
+    pub fn with_timeouts(api_key: String, timeouts: TimeoutsConfig) -> Self {
+        Self::with_model_internal(
+            api_key,
+            models::huggingface::DEFAULT_MODEL.to_string(),
+            None,
+            Some(timeouts),
+        )
+    }
+
     fn with_model_internal(
         api_key: String,
         model: String,
         base_url: Option<String>,
-        _prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
     ) -> Self {
+        let timeouts = timeouts.unwrap_or_default();
+        let timeout = std::time::Duration::from_secs(timeouts.default_ceiling_seconds);
+        
         Self {
             api_key,
-            http_client: HttpClient::new(),
+            http_client: HttpClient::builder()
+                .timeout(timeout)
+                .build()
+                .unwrap_or_else(|_| HttpClient::new()),
             base_url: override_base_url(
                 urls::HUGGINGFACE_API_BASE,
                 base_url,
                 Some(env_vars::HUGGINGFACE_BASE_URL),
             ),
             model,
+            _timeouts: timeouts,
         }
     }
 
@@ -154,13 +171,13 @@ impl HuggingFaceProvider {
         api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
-        prompt_cache: Option<PromptCachingConfig>,
-        _timeouts: Option<TimeoutsConfig>,
+        _prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::huggingface::DEFAULT_MODEL);
-        Self::with_model_internal(api_key_value, model_value, base_url, prompt_cache)
+        Self::with_model_internal(api_key_value, model_value, base_url, timeouts)
     }
 
     /// Behavior 10: Normalize and validate HuggingFace model IDs
@@ -797,6 +814,15 @@ impl HuggingFaceProvider {
             .map(|s| s.to_string())
             .collect()
     }
+    /// Behavior 14: Resolve API endpoint based on selected mode
+    fn get_endpoint(&self, use_responses_api: bool) -> String {
+        let base = self.base_url.trim_end_matches('/');
+        if use_responses_api {
+            format!("{}/responses", base)
+        } else {
+            format!("{}/chat/completions", base)
+        }
+    }
 }
 
 #[async_trait]
@@ -838,6 +864,8 @@ impl LLMProvider for HuggingFaceProvider {
         128_000 // Default context window
     }
 
+
+
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
@@ -860,11 +888,7 @@ impl LLMProvider for HuggingFaceProvider {
         };
 
         // Make HTTP request
-        let endpoint = if use_responses_api {
-            format!("{}/responses", self.base_url.trim_end_matches('/'))
-        } else {
-            format!("{}/chat/completions", self.base_url.trim_end_matches('/'))
-        };
+        let endpoint = self.get_endpoint(use_responses_api);
 
         let response = self
             .http_client
@@ -901,11 +925,7 @@ impl LLMProvider for HuggingFaceProvider {
         };
 
         // Make HTTP request
-        let endpoint = if use_responses_api {
-            format!("{}/responses", self.base_url.trim_end_matches('/'))
-        } else {
-            format!("{}/chat/completions", self.base_url.trim_end_matches('/'))
-        };
+        let endpoint = self.get_endpoint(use_responses_api);
 
         let response = self
             .http_client
@@ -969,6 +989,15 @@ impl HuggingFaceProvider {
                 let chunk = chunk_result.map_err(|err| format_network_error(PROVIDER_NAME, &err))?;
                 let text = String::from_utf8_lossy(&chunk);
                 buffer.push_str(&text);
+
+                // Behavior 15: Enforce maximum buffer size to prevent memory exhaustion
+                // from malformed streams without newlines.
+                if buffer.len() > 128_000 {
+                    Err(LLMError::Provider {
+                        message: format_llm_error(PROVIDER_NAME, "Stream buffer exceeded maximum size (128KB)"),
+                        metadata: None,
+                    })?;
+                }
 
                 // Process complete SSE events
                 while let Some(newline_pos) = buffer.find('\n') {
