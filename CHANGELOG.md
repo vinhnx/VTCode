@@ -3,6 +3,36 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.52.10] - 2025-12-25
+
+
+### Features
+    - feat: Refactor and expand slash command handling with new diagnostics, skills, tools, workspace, and context commands.
+    - feat: Implement terminal setup wizard with support for multiple terminals and features, and update LLM provider models.
+    - feat: add code intelligence tool with LSP-like navigation features
+
+
+### Bug Fixes
+    - fix: Disable JSON object output and Responses API for GLM models and refine streaming completion event content handling.
+    - fix: disable npm publishing in release.sh
+    - fix: remove npm installation due to GitHub Actions costs
+    - fix: rename npm package from vtcode-bin to vtcode
+
+
+### Documentation
+    - docs: update changelog for v0.52.9 [skip ci]
+    - docs: update installation instructions and scripts for npm package
+
+
+### Chores
+    - chore: release v0.52.9
+    - chore(deps): bump the all-rust-deps group with 21 updates
+    - chore: release v0.52.8
+    - chore: update npm version to 0.52.8
+    - chore: release v0.52.7
+    - chore(deps): bump DavidAnson/markdownlint-cli2-action from 21 to 22
+    - chore(deps): bump actions/cache from 4 to 5
+    - chore(deps): bump actions/upload-artifact from 5 to 6
 # [Version 0.52.9] - 2025-12-25
 
 
