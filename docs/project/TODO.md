@@ -6,18 +6,6 @@ add support for custom session IDs when forking sessions with --session-id combi
 
 --
 
-tools execution performance is too slow when using tools with filesystem (create/edit files), improve performance when executing tools
-
---
-
-implement input history cycling with up/down arrow keys in the terminal input box
-
---
-
-fix slow input history cycling and race condition that could overwrite text after message submission
-
---
-
 Reduced terminal flickering and scrolling performance issues for large and long transcripts. improve cpu and memory usage
 
 --

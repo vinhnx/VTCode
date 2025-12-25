@@ -339,6 +339,11 @@ impl Session {
         self.mark_dirty();
     }
 
+    /// Check if input is currently enabled
+    pub(crate) fn is_input_enabled(&self) -> bool {
+        self.input_enabled
+    }
+
     pub fn set_log_receiver(&mut self, receiver: UnboundedReceiver<LogEntry>) {
         self.log_receiver = Some(receiver);
     }
