@@ -3,10 +3,11 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+
 # [Version 0.53.0] - 2025-12-25
 
-
 ### Features
+
     - feat: add agent option to CLI for temporary model override
     - feat: enhance planning tool with quality validation and detailed descriptions for task phases
     - feat: enhance input history navigation and improve session input handling
@@ -25,23 +26,23 @@ All notable changes to vtcode will be documented in this file.
     - feat: Implement terminal setup wizard with support for multiple terminals and features, and update LLM provider models.
     - feat: add code intelligence tool with LSP-like navigation features
 
-
 ### Bug Fixes
+
     - fix: Disable JSON object output and Responses API for GLM models and refine streaming completion event content handling.
     - fix: disable npm publishing in release.sh
     - fix: remove npm installation due to GitHub Actions costs
     - fix: rename npm package from vtcode-bin to vtcode
 
-
 ### Documentation
+
     - docs: Update README with new sections for Keyboard Shortcuts and macOS Alt Shortcut Troubleshooting; refine TODO list entries for clarity and consistency.
     - docs: Add a comprehensive list of new features, bug fixes, and performance improvements to the project TODO list.
     - docs: update changelog for v0.52.10 [skip ci]
     - docs: update changelog for v0.52.9 [skip ci]
     - docs: update installation instructions and scripts for npm package
 
-
 ### Chores
+
     - chore: release v0.52.10
     - chore: release v0.52.9
     - chore(deps): bump the all-rust-deps group with 21 updates
@@ -51,28 +52,29 @@ All notable changes to vtcode will be documented in this file.
     - chore(deps): bump DavidAnson/markdownlint-cli2-action from 21 to 22
     - chore(deps): bump actions/cache from 4 to 5
     - chore(deps): bump actions/upload-artifact from 5 to 6
+
 # [Version 0.52.10] - 2025-12-25
 
-
 ### Features
+
     - feat: Refactor and expand slash command handling with new diagnostics, skills, tools, workspace, and context commands.
     - feat: Implement terminal setup wizard with support for multiple terminals and features, and update LLM provider models.
     - feat: add code intelligence tool with LSP-like navigation features
 
-
 ### Bug Fixes
+
     - fix: Disable JSON object output and Responses API for GLM models and refine streaming completion event content handling.
     - fix: disable npm publishing in release.sh
     - fix: remove npm installation due to GitHub Actions costs
     - fix: rename npm package from vtcode-bin to vtcode
 
-
 ### Documentation
+
     - docs: update changelog for v0.52.9 [skip ci]
     - docs: update installation instructions and scripts for npm package
 
-
 ### Chores
+
     - chore: release v0.52.9
     - chore(deps): bump the all-rust-deps group with 21 updates
     - chore: release v0.52.8
@@ -81,26 +83,27 @@ All notable changes to vtcode will be documented in this file.
     - chore(deps): bump DavidAnson/markdownlint-cli2-action from 21 to 22
     - chore(deps): bump actions/cache from 4 to 5
     - chore(deps): bump actions/upload-artifact from 5 to 6
+
 # [Version 0.52.9] - 2025-12-25
 
-
 ### Features
+
     - feat: Refactor and expand slash command handling with new diagnostics, skills, tools, workspace, and context commands.
     - feat: Implement terminal setup wizard with support for multiple terminals and features, and update LLM provider models.
     - feat: add code intelligence tool with LSP-like navigation features
 
-
 ### Bug Fixes
+
     - fix: disable npm publishing in release.sh
     - fix: remove npm installation due to GitHub Actions costs
     - fix: rename npm package from vtcode-bin to vtcode
 
-
 ### Documentation
+
     - docs: update installation instructions and scripts for npm package
 
-
 ### Chores
+
     - chore(deps): bump the all-rust-deps group with 21 updates
     - chore: release v0.52.8
     - chore: update npm version to 0.52.8
@@ -108,47 +111,50 @@ All notable changes to vtcode will be documented in this file.
     - chore(deps): bump DavidAnson/markdownlint-cli2-action from 21 to 22
     - chore(deps): bump actions/cache from 4 to 5
     - chore(deps): bump actions/upload-artifact from 5 to 6
+
 # [Version 0.52.5] - 2025-12-24
 
-
 ### Bug Fixes
+
     - fix: update release workflow to handle npm publishing correctly
     - fix: unignore .github directory to enable GitHub Actions CI/CD workflows
 
-
 ### Documentation
+
     - docs: update changelog for v0.52.4 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.52.4 [skip ci]
     - chore: release v0.52.4
     - chore: update npm package.json to v0.52.3 [skip ci]
+
 # [Version 0.52.4] - 2025-12-24
 
-
 ### Features
+
     - feat: Add new Z.AI GLM models, refine reasoning support, and update Hugging Face model naming conventions.
     - feat: reimplement HuggingFace LLM provider with dedicated logic to handle its unique API behaviors and compatibility.
     - feat: Add Hugging Face integration documentation and update tool policies to include git and cargo commands while removing some mcp time-related tools.
 
-
 ### Bug Fixes
+
     - fix: unignore .github directory to enable GitHub Actions CI/CD workflows
 
-
 ### Documentation
+
     - docs: update changelog for v0.52.3 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.52.3 [skip ci]
     - chore: release v0.52.3
     - chore: update npm package.json to v0.52.2 [skip ci]
+
 # [Version 0.52.3] - 2025-12-24
 
-
 ### Features
+
     - feat: Add new Z.AI GLM models, refine reasoning support, and update Hugging Face model naming conventions.
     - feat: reimplement HuggingFace LLM provider with dedicated logic to handle its unique API behaviors and compatibility.
     - feat: Add Hugging Face integration documentation and update tool policies to include git and cargo commands while removing some mcp time-related tools.
@@ -165,24 +171,25 @@ All notable changes to vtcode will be documented in this file.
     - feat: Include Claude agent configurations and GitHub workflows in version control, and update existing agent definitions, skills, commands, hooks, and CI/CD configurations.
     - feat: Introduce agent giving-up reasoning detection and constructive responses, and set `execute_code` tool policy to prompt.
 
-
 ### Bug Fixes
+
     - fix: add missing package-lock.json      r npm CI workflow
 
-
 ### Documentation
+
     - docs: update changelog for v0.52.2 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.52.2 [skip ci]
     - chore: release v0.52.2
     - chore: remove temporary file `temp_check.rs`
     - chore: update npm package.json to v0.52.1 [skip ci]
+
 # [Version 0.52.2] - 2025-12-24
 
-
 ### Features
+
     - feat: Add MiniMax model support to the Anthropic provider and adjust its API base URL.
     - feat: Reorganize Hugging Face model identifiers and enhance Anthropic model validation
     - feat: Add Hugging Face provider support and update configuration
@@ -197,104 +204,108 @@ All notable changes to vtcode will be documented in this file.
     - feat: Introduce agent giving-up reasoning detection and constructive responses, and set `execute_code` tool policy to prompt.
     - feat: add keyboard protocol configuration and documentation for enhanced keyboard event handling
 
-
 ### Bug Fixes
+
     - fix: add missing package-lock.json      r npm CI workflow
 
-
 ### Refactors
+
     - refactor: simplify configuration handling and update tool permissions in multiple files
     - refactor: apply clippy fixes for code quality improvements
     - refactor: clean up whitespace and formatting across multiple files for improved readability
 
-
 ### Documentation
+
     - docs: update changelog for v0.52.1 [skip ci]
 
-
 ### Tests
+
     - test: add missing fields to LLMRequest initializers
 
-
 ### Chores
+
     - chore: remove temporary file `temp_check.rs`
     - chore: update npm package.json to v0.52.1 [skip ci]
     - chore: release v0.52.1
     - chore: update npm package.json to v0.52.0 [skip ci]
+
 # [Version 0.52.1] - 2025-12-23
 
-
 ### Features
+
     - feat: add keyboard protocol configuration and documentation for enhanced keyboard event handling
     - feat: Introduce advanced LLM parameters, add default implementations for LLMRequest, Message, and ToolChoice, and remove nextest.toml.
 
-
 ### Refactors
+
     - refactor: simplify configuration handling and update tool permissions in multiple files
     - refactor: apply clippy fixes for code quality improvements
     - refactor: clean up whitespace and formatting across multiple files for improved readability
     - refactor: Migrate testing from `cargo nextest` to `cargo test` and enhance Anthropic LLM configuration with new parameters.
 
-
 ### Documentation
+
     - docs: update changelog for v0.52.0 [skip ci]
     - docs: Add guidelines for git operations in AGENTS.md and update LLM provider configuration in vtcode.toml
     - docs: Replace all cargo nextest references with cargo test across documentation and agent rules
 
-
 ### Tests
+
     - test: add missing fields to LLMRequest initializers
 
-
 ### Chores
+
     - chore: update npm package.json to v0.52.0 [skip ci]
     - chore: release v0.52.0
     - chore: update npm package.json to v0.51.2 [skip ci]
+
 # [Version 0.52.0] - 2025-12-23
 
-
 ### Features
+
     - feat: Introduce advanced LLM parameters, add default implementations for LLMRequest, Message, and ToolChoice, and remove nextest.toml.
     - feat: Add new model constants for grok-4-1-fast and grok-code-fast-1
 
-
 ### Refactors
+
     - refactor: Migrate testing from `cargo nextest` to `cargo test` and enhance Anthropic LLM configuration with new parameters.
 
-
 ### Documentation
+
     - docs: Add guidelines for git operations in AGENTS.md and update LLM provider configuration in vtcode.toml
     - docs: Replace all cargo nextest references with cargo test across documentation and agent rules
     - docs: update changelog for v0.51.2 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.51.2 [skip ci]
     - chore: release v0.51.2
     - chore: update npm package.json to v0.51.1 [skip ci]
+
 # [Version 0.51.2] - 2025-12-22
 
-
 ### Features
+
     - feat: Add new model constants for grok-4-1-fast and grok-code-fast-1
     - feat: Implement search and filter functionality for the TUI configuration palette.
     - feat: Introduce a TUI config palette, refactor rendering logic, and enable dynamic theme application.
 
-
 ### Documentation
+
     - docs: update changelog for v0.51.1 [skip ci]
     - docs: update changelog for v0.51.0 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.51.1 [skip ci]
     - chore: release v0.51.1
     - chore: release v0.51.0
     - chore: update npm package.json to v0.50.13 [skip ci]
+
 # [Version 0.51.1] - 2025-12-22
 
-
 ### Features
+
     - feat: Implement search and filter functionality for the TUI configuration palette.
     - feat: Introduce a TUI config palette, refactor rendering logic, and enable dynamic theme application.
     - feat: enhance session logging functionality and update default model
@@ -306,32 +317,33 @@ All notable changes to vtcode will be documented in this file.
     - feat: enhance list rendering with highlight symbol and repeat option
     - feat: implement XDG Base Directory Specification for configuration and data storage
 
-
 ### Bug Fixes
+
     - fix: redirect terminal commands from stdout to stderr for TUI functionality
     - fix: change terminal output from stderr to stdout for ModernTui
     - fix: reorder MCP time policies and update tool policy documentation
     - fix: align OpenAI Responses API implementation with official spec
 
-
 ### Refactors
+
     - refactor: streamline widget block creation and layout definitions in TUI components
 
-
 ### Documentation
+
     - docs: update changelog for v0.51.0 [skip ci]
     - docs: update changelog for v0.50.13 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.51.0
     - chore: update npm package.json to v0.50.13 [skip ci]
     - chore: release v0.50.13
     - chore: update npm package.json to v0.50.12 [skip ci]
+
 # [Version 0.51.0] - 2025-12-22
 
-
 ### Features
+
     - feat: Introduce a TUI config palette, refactor rendering logic, and enable dynamic theme application.
     - feat: enhance session logging functionality and update default model
     - feat: integrate SessionWidget into main render function
@@ -342,30 +354,31 @@ All notable changes to vtcode will be documented in this file.
     - feat: enhance list rendering with highlight symbol and repeat option
     - feat: implement XDG Base Directory Specification for configuration and data storage
 
-
 ### Bug Fixes
+
     - fix: redirect terminal commands from stdout to stderr for TUI functionality
     - fix: change terminal output from stderr to stdout for ModernTui
     - fix: reorder MCP time policies and update tool policy documentation
     - fix: align OpenAI Responses API implementation with official spec
 
-
 ### Refactors
+
     - refactor: streamline widget block creation and layout definitions in TUI components
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.13 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.50.13 [skip ci]
     - chore: release v0.50.13
     - chore: update npm package.json to v0.50.12 [skip ci]
+
 # [Version 0.50.13] - 2025-12-21
 
-
 ### Features
+
     - feat: enhance session logging functionality and update default model
     - feat: integrate SessionWidget into main render function
     - feat: add buffer-based widgets for input, modal, and slash
@@ -381,34 +394,35 @@ All notable changes to vtcode will be documented in this file.
     - feat: Implement pre-flight LLM request and tool definition validation, and ensure `mark_tool_loop_limit_hit` is idempotent.
     - feat: improve release process by adding Linux build automation and related documentation.
 
-
 ### Bug Fixes
+
     - fix: redirect terminal commands from stdout to stderr for TUI functionality
     - fix: change terminal output from stderr to stdout for ModernTui
     - fix: reorder MCP time policies and update tool policy documentation
     - fix: align OpenAI Responses API implementation with official spec
 
-
 ### Performance Improvements
+
     - perf: optimize rate limiting with a read-lock fast path and refactor tool execution retry delays using constant values.
 
-
 ### Refactors
+
     - refactor: streamline widget block creation and layout definitions in TUI components
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.12 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.50.12 [skip ci]
     - chore: release v0.50.12
     - chore: update npm package.json to v0.50.11 [skip ci]
+
 # [Version 0.50.12] - 2025-12-20
 
-
 ### Features
+
     - feat: Enhance tool execution error handling and implement planning mode warnings
     - feat: Implement TUI-aware tool approval prompts and human-in-the-loop notification bell.
     - feat: add plan phase management and update tool registry for planning mode
@@ -417,47 +431,49 @@ All notable changes to vtcode will be documented in this file.
     - feat: improve release process by adding Linux build automation and related documentation.
     - feat: Add Linux build and release support, fix npm publish, and improve release asset uploads and install script error handling.
 
-
 ### Performance Improvements
+
     - perf: optimize rate limiting with a read-lock fast path and refactor tool execution retry delays using constant values.
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.11 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.50.11 [skip ci]
     - chore: release v0.50.11
     - chore: update VSCode extension package.json to v0.50.10 [skip ci]
     - chore: update npm package.json to v0.50.10 [skip ci]
+
 # [Version 0.50.11] - 2025-12-20
 
-
 ### Features
+
     - feat: Add Linux build and release support, fix npm publish, and improve release asset uploads and install script error handling.
     - feat: Add npm publishing troubleshooting guide and authentication setup script, and automate binary stub creation in the release process.
     - feat: Enable manual versioned builds in the release workflow and significantly enhance the install script with improved dependency/platform detection, asset verification, and a cargo fallback.
 
-
 ### Bug Fixes
+
     - fix: resolve GitHub release binary upload failures and enhance release script verification with new documentation.
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.10 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.50.10 [skip ci]
     - chore: update npm package.json to v0.50.10 [skip ci]
     - chore: release v0.50.10
     - chore: update VSCode extension package.json to v0.50.9 [skip ci]
     - chore: update npm package.json to v0.50.9 [skip ci]
+
 # [Version 0.50.10] - 2025-12-20
 
-
 ### Features
+
     - feat: Add npm publishing troubleshooting guide and authentication setup script, and automate binary stub creation in the release process.
     - feat: Enable manual versioned builds in the release workflow and significantly enhance the install script with improved dependency/platform detection, asset verification, and a cargo fallback.
     - feat: Implement agent task retry with exponential backoff and render tool follow-up prompts.
@@ -472,24 +488,24 @@ All notable changes to vtcode will be documented in this file.
     - feat: implement circuit breaker pattern for MCP client failures and optimize tool inventory management
     - feat: add code reviewer and commit message generator skills
 
-
 ### Bug Fixes
+
     - fix: resolve GitHub release binary upload failures and enhance release script verification with new documentation.
     - fix: update tool policies and configuration settings for improved performance
     - fix: remove external editor keybinding (Control+E)
     - fix: prevent arrow keys from triggering external editor launch
 
-
 ### Refactors
+
     - refactor: remove router configuration and related core logic
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.9 [skip ci]
     - docs: update changelog for v0.50.8 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.50.9 [skip ci]
     - chore: update npm package.json to v0.50.9 [skip ci]
     - chore: release v0.50.9
@@ -497,10 +513,11 @@ All notable changes to vtcode will be documented in this file.
     - chore: remove AI model routing configuration from TOML files
     - chore: update VSCode extension package.json to v0.50.7 [skip ci]
     - chore: update npm package.json to v0.50.7 [skip ci]
+
 # [Version 0.50.9] - 2025-12-20
 
-
 ### Features
+
     - feat: Implement agent task retry with exponential backoff and render tool follow-up prompts.
     - feat: Enhance skill validation and file reference checks for Agent Skills compliance
     - feat: Implement Agent Skills specification by adding `compatibility` and `metadata` fields to skill manifests, updating `allowed-tools` to a space-delimited string, and clarifying skill loading behavior.
@@ -513,24 +530,24 @@ All notable changes to vtcode will be documented in this file.
     - feat: implement circuit breaker pattern for MCP client failures and optimize tool inventory management
     - feat: add code reviewer and commit message generator skills
 
-
 ### Bug Fixes
+
     - fix: update tool policies and configuration settings for improved performance
     - fix: remove external editor keybinding (Control+E)
     - fix: prevent arrow keys from triggering external editor launch
 
-
 ### Refactors
+
     - refactor: remove router configuration and related core logic
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.8 [skip ci]
     - docs: update changelog for v0.50.7 [skip ci]
     - docs: update changelog for v0.50.6 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.50.8
     - chore: remove AI model routing configuration from TOML files
     - chore: update VSCode extension package.json to v0.50.7 [skip ci]
@@ -539,10 +556,11 @@ All notable changes to vtcode will be documented in this file.
     - chore: release v0.50.6
     - chore: update VSCode extension package.json to v0.50.5 [skip ci]
     - chore: update npm package.json to v0.50.5 [skip ci]
+
 # [Version 0.50.8] - 2025-12-20
 
-
 ### Features
+
     - feat: Implement Agent Skills specification by adding `compatibility` and `metadata` fields to skill manifests, updating `allowed-tools` to a space-delimited string, and clarifying skill loading behavior.
     - feat: Enhance tool execution policy with granular user confirmation, auto-acceptance, and feedback capabilities.
     - feat: extract anthropic config, reduce configuration complexity, document experimental features
@@ -553,23 +571,23 @@ All notable changes to vtcode will be documented in this file.
     - feat: implement circuit breaker pattern for MCP client failures and optimize tool inventory management
     - feat: add code reviewer and commit message generator skills
 
-
 ### Bug Fixes
+
     - fix: update tool policies and configuration settings for improved performance
     - fix: remove external editor keybinding (Control+E)
     - fix: prevent arrow keys from triggering external editor launch
 
-
 ### Refactors
+
     - refactor: remove router configuration and related core logic
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.7 [skip ci]
     - docs: update changelog for v0.50.6 [skip ci]
 
-
 ### Chores
+
     - chore: remove AI model routing configuration from TOML files
     - chore: update VSCode extension package.json to v0.50.7 [skip ci]
     - chore: update npm package.json to v0.50.7 [skip ci]
@@ -577,72 +595,75 @@ All notable changes to vtcode will be documented in this file.
     - chore: release v0.50.6
     - chore: update VSCode extension package.json to v0.50.5 [skip ci]
     - chore: update npm package.json to v0.50.5 [skip ci]
+
 # [Version 0.50.7] - 2025-12-19
 
-
 ### Features
+
     - feat: Add success indicators to renderer on exit commands and session end
     - feat: Update tool policy to prompt for file creation and execution, enhance session state management, and adjust LLM provider settings in configuration.
     - feat: Enhance skill definitions with new metadata fields, improve LLM provider support, and refine TUI components.
     - feat: Implement shell command policy checking with regex and glob patterns and add new metadata fields to skill definitions.
     - feat: enhance line ending handling in patch operations and tests
 
-
 ### Bug Fixes
+
     - fix: Correct test expectations for token threshold boundaries
     - fix: handle errors in AtomicWriter creation and improve diff operations tests
 
-
 ### Refactors
+
     - refactor: remove unnecessary whitespace in diff and test files
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.6 [skip ci]
     - docs: update changelog for v0.50.5 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.50.6
     - chore: update VSCode extension package.json to v0.50.5 [skip ci]
     - chore: update npm package.json to v0.50.5 [skip ci]
     - chore: release v0.50.5
     - chore: update VSCode extension package.json to v0.50.4 [skip ci]
     - chore: update npm package.json to v0.50.4 [skip ci]
+
 # [Version 0.50.6] - 2025-12-19
 
-
 ### Features
+
     - feat: Add success indicators to renderer on exit commands and session end
     - feat: Update tool policy to prompt for file creation and execution, enhance session state management, and adjust LLM provider settings in configuration.
     - feat: Enhance skill definitions with new metadata fields, improve LLM provider support, and refine TUI components.
     - feat: Implement shell command policy checking with regex and glob patterns and add new metadata fields to skill definitions.
     - feat: enhance line ending handling in patch operations and tests
 
-
 ### Bug Fixes
+
     - fix: Correct test expectations for token threshold boundaries
     - fix: handle errors in AtomicWriter creation and improve diff operations tests
 
-
 ### Refactors
+
     - refactor: remove unnecessary whitespace in diff and test files
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.5 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.50.5 [skip ci]
     - chore: update npm package.json to v0.50.5 [skip ci]
     - chore: release v0.50.5
     - chore: update VSCode extension package.json to v0.50.4 [skip ci]
     - chore: update npm package.json to v0.50.4 [skip ci]
+
 # [Version 0.50.5] - 2025-12-19
 
-
 ### Features
+
     - feat: Add success indicators to renderer on exit commands and session end
     - feat: Update tool policy to prompt for file creation and execution, enhance session state management, and adjust LLM provider settings in configuration.
     - feat: Enhance skill definitions with new metadata fields, improve LLM provider support, and refine TUI components.
@@ -650,150 +671,157 @@ All notable changes to vtcode will be documented in this file.
     - feat: enhance line ending handling in patch operations and tests
     - feat: add Gemini 3 Flash Preview model and update configurations
 
-
 ### Bug Fixes
+
     - fix: Correct test expectations for token threshold boundaries
     - fix: handle errors in AtomicWriter creation and improve diff operations tests
 
-
 ### Refactors
+
     - refactor: remove unnecessary whitespace in diff and test files
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.4 [skip ci]
     - docs: update changelog for v0.50.3 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.50.4 [skip ci]
     - chore: update npm package.json to v0.50.4 [skip ci]
     - chore: release v0.50.4
     - chore: release v0.50.3
     - chore: update VSCode extension package.json to v0.50.2 [skip ci]
     - chore: update npm package.json to v0.50.2 [skip ci]
+
 # [Version 0.50.4] - 2025-12-18
 
-
 ### Features
+
     - feat: add Gemini 3 Flash Preview model and update configurations
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.3 [skip ci]
     - docs: update changelog for v0.50.2 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.50.3
     - chore: update VSCode extension package.json to v0.50.2 [skip ci]
     - chore: update npm package.json to v0.50.2 [skip ci]
     - chore: release v0.50.2
     - chore: update VSCode extension package.json to v0.50.1 [skip ci]
     - chore: update npm package.json to v0.50.1 [skip ci]
+
 # [Version 0.50.3] - 2025-12-18
 
-
 ### Features
+
     - feat: add Gemini 3 Flash Preview model and update configurations
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.2 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.50.2 [skip ci]
     - chore: update npm package.json to v0.50.2 [skip ci]
     - chore: release v0.50.2
     - chore: update VSCode extension package.json to v0.50.1 [skip ci]
     - chore: update npm package.json to v0.50.1 [skip ci]
+
 # [Version 0.50.2] - 2025-12-16
 
-
 ### Bug Fixes
+
     - fix: correct logical operator for XAI provider model check
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.1 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.50.1 [skip ci]
     - chore: update npm package.json to v0.50.1 [skip ci]
     - chore: release v0.50.1
     - chore: update VSCode extension package.json to v0.50.0 [skip ci]
     - chore: update npm package.json to v0.50.0 [skip ci]
+
 # [Version 0.50.1] - 2025-12-16
 
-
 ### Features
+
     - feat: implement rate limiting for tool calls and add Nemotron-3-Nano model support
 
-
 ### Bug Fixes
+
     - fix: correct logical operator for XAI provider model check
 
-
 ### Documentation
+
     - docs: update changelog for v0.50.0 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.50.0 [skip ci]
     - chore: update npm package.json to v0.50.0 [skip ci]
     - chore: release v0.50.0
     - chore: update VSCode extension package.json to v0.49.8 [skip ci]
     - chore: update npm package.json to v0.49.8 [skip ci]
+
 # [Version 0.50.0] - 2025-12-16
 
-
 ### Features
+
     - feat: implement rate limiting for tool calls and add Nemotron-3-Nano model support
 
-
 ### Documentation
+
     - docs: update changelog for v0.49.8 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.49.8 [skip ci]
     - chore: update npm package.json to v0.49.8 [skip ci]
     - chore: release v0.49.8
     - chore: update VSCode extension package.json to v0.49.7 [skip ci]
     - chore: update npm package.json to v0.49.7 [skip ci]
+
 # [Version 0.49.8] - 2025-12-16
 
-
 ### Documentation
+
     - docs: update changelog for v0.49.7 [skip ci]
     - docs: update changelog for v0.49.6 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.49.7 [skip ci]
     - chore: update npm package.json to v0.49.7 [skip ci]
     - chore: release v0.49.7
     - chore: release v0.49.6
     - chore: update VSCode extension package.json to v0.49.5 [skip ci]
     - chore: update npm package.json to v0.49.5 [skip ci]
+
 # [Version 0.49.7] - 2025-12-15
 
-
 ### Bug Fixes
+
     - fix: include templates directory in package for crates.io publishing
 
-
 ### Documentation
+
     - docs: update changelog for v0.49.6 [skip ci]
     - docs: update changelog for v0.49.5 [skip ci]
     - docs: update changelog for v0.49.4 [skip ci]
     - docs: update changelog for v0.49.3 [skip ci]
     - docs: update changelog for v0.49.2 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.49.6
     - chore: update VSCode extension package.json to v0.49.5 [skip ci]
     - chore: update npm package.json to v0.49.5 [skip ci]
@@ -803,21 +831,22 @@ All notable changes to vtcode will be documented in this file.
     - chore: release v0.49.2
     - chore: update VSCode extension package.json to v0.49.1 [skip ci]
     - chore: update npm package.json to v0.49.1 [skip ci]
+
 # [Version 0.49.6] - 2025-12-15
 
-
 ### Bug Fixes
+
     - fix: include templates directory in package for crates.io publishing
 
-
 ### Documentation
+
     - docs: update changelog for v0.49.5 [skip ci]
     - docs: update changelog for v0.49.4 [skip ci]
     - docs: update changelog for v0.49.3 [skip ci]
     - docs: update changelog for v0.49.2 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.49.5 [skip ci]
     - chore: update npm package.json to v0.49.5 [skip ci]
     - chore: release v0.49.5
@@ -826,21 +855,22 @@ All notable changes to vtcode will be documented in this file.
     - chore: release v0.49.2
     - chore: update VSCode extension package.json to v0.49.1 [skip ci]
     - chore: update npm package.json to v0.49.1 [skip ci]
+
 # [Version 0.49.5] - 2025-12-14
 
-
 ### Bug Fixes
+
     - fix: include templates directory in package for crates.io publishing
 
-
 ### Documentation
+
     - docs: update changelog for v0.49.4 [skip ci]
     - docs: update changelog for v0.49.3 [skip ci]
     - docs: update changelog for v0.49.2 [skip ci]
     - docs: update changelog for v0.49.1 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.49.4
     - chore: release v0.49.3
     - chore: release v0.49.2
@@ -848,69 +878,75 @@ All notable changes to vtcode will be documented in this file.
     - chore: update npm package.json to v0.49.1 [skip ci]
     - chore: release v0.49.1
     - chore: update npm package.json to v0.49.0 [skip ci]
+
 # [Version 0.49.4] - 2025-12-14
 
-
 ### Documentation
+
     - docs: update changelog for v0.49.3 [skip ci]
     - docs: update changelog for v0.49.2 [skip ci]
     - docs: update changelog for v0.49.1 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.49.3
     - chore: release v0.49.2
     - chore: update VSCode extension package.json to v0.49.1 [skip ci]
     - chore: update npm package.json to v0.49.1 [skip ci]
     - chore: release v0.49.1
     - chore: update npm package.json to v0.49.0 [skip ci]
+
 # [Version 0.49.3] - 2025-12-14
 
-
 ### Documentation
+
     - docs: update changelog for v0.49.2 [skip ci]
     - docs: update changelog for v0.49.1 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.49.2
     - chore: update VSCode extension package.json to v0.49.1 [skip ci]
     - chore: update npm package.json to v0.49.1 [skip ci]
     - chore: release v0.49.1
     - chore: update npm package.json to v0.49.0 [skip ci]
+
 # [Version 0.49.2] - 2025-12-14
 
-
 ### Documentation
+
     - docs: update changelog for v0.49.1 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.49.1 [skip ci]
     - chore: update npm package.json to v0.49.1 [skip ci]
     - chore: release v0.49.1
     - chore: update npm package.json to v0.49.0 [skip ci]
 
 ### Added
-- **Comprehensive Skills Location System**: Implemented multi-location skill discovery with precedence handling
-  - VTCode User Skills (`~/.vtcode/skills/`) - Highest precedence
-  - VTCode Project Skills (`.vtcode/skills/`) - Project-specific skills  
-  - Pi Framework Skills (`~/.pi/skills/`, `.pi/skills/`)
-  - Claude Code Skills (`~/.claude/skills/`, `.claude/skills/`)
-  - Codex CLI Skills (`~/.codex/skills/`)
-- **Precedence System**: Skills from higher precedence locations override lower precedence skills with the same name
-- **Migration Support**: All existing skills migrated from `.claude/skills` to `.vtcode/skills` with backward compatibility
-- **Enhanced Skill Loader**: Updated loader to integrate with new location system while maintaining backward compatibility
+
+-   **Comprehensive Skills Location System**: Implemented multi-location skill discovery with precedence handling
+    -   VT Code User Skills (`~/.vtcode/skills/`) - Highest precedence
+    -   VT Code Project Skills (`.vtcode/skills/`) - Project-specific skills
+    -   Pi Framework Skills (`~/.pi/skills/`, `.pi/skills/`)
+    -   Claude Code Skills (`~/.claude/skills/`, `.claude/skills/`)
+    -   Codex CLI Skills (`~/.codex/skills/`)
+-   **Precedence System**: Skills from higher precedence locations override lower precedence skills with the same name
+-   **Migration Support**: All existing skills migrated from `.claude/skills` to `.vtcode/skills` with backward compatibility
+-   **Enhanced Skill Loader**: Updated loader to integrate with new location system while maintaining backward compatibility
 
 ### Changed
-- Updated skills documentation to reflect new location system and precedence handling
-- Enhanced skill discovery to support recursive scanning and proper name collision resolution
+
+-   Updated skills documentation to reflect new location system and precedence handling
+-   Enhanced skill discovery to support recursive scanning and proper name collision resolution
 
 ## [Version 0.43.0] - 2025-11-09
+
 # [Version 0.49.1] - 2025-12-13
 
-
 ### Bug Fixes
+
     - fix: update execute_code and skill policies to allow execution
     - fix: remove outdated skill discovery documentation and integrate new skill loading functionality
     - fix: enhance skill discovery and loading functionality for vtcode agent
@@ -918,21 +954,22 @@ All notable changes to vtcode will be documented in this file.
     - fix: add missing skill tool function declaration
     - fix: vtcode agent skill discovery using SkillLoader instead of SkillManager
 
-
 ### Documentation
+
     - docs: update changelog for v0.49.0 [skip ci]
     - docs: add complete skill tool fix summary
 
-
 ### Chores
+
     - chore: update npm package.json to v0.49.0 [skip ci]
     - chore: release v0.49.0
     - chore: update VSCode extension package.json to v0.48.3 [skip ci]
     - chore: update npm package.json to v0.48.3 [skip ci]
+
 # [Version 0.49.0] - 2025-12-13
 
-
 ### Bug Fixes
+
     - fix: update execute_code and skill policies to allow execution
     - fix: remove outdated skill discovery documentation and integrate new skill loading functionality
     - fix: enhance skill discovery and loading functionality for vtcode agent
@@ -940,56 +977,58 @@ All notable changes to vtcode will be documented in this file.
     - fix: add missing skill tool function declaration
     - fix: vtcode agent skill discovery using SkillLoader instead of SkillManager
 
-
 ### Documentation
+
     - docs: add complete skill tool fix summary
     - docs: update changelog for v0.48.3 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.48.3 [skip ci]
     - chore: update npm package.json to v0.48.3 [skip ci]
     - chore: release v0.48.3
     - chore: update VSCode extension package.json to v0.48.2 [skip ci]
     - chore: update npm package.json to v0.48.2 [skip ci]
+
 # [Version 0.48.3] - 2025-12-13
 
-
 ### Refactors
+
     - refactor: update LLMError handling in turn_processing
     - refactor: standardize LLMError structure across providers
     - refactor: enhance Z.AI provider error handling and API key validation
     - refactor: enhance context trimming and session management features
     - refactor: update configuration and documentation for improved clarity and performance
 
-
 ### Documentation
+
     - docs: update changelog for v0.48.2 [skip ci]
     - docs: update changelog for v0.48.1 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.48.2 [skip ci]
     - chore: update npm package.json to v0.48.2 [skip ci]
     - chore: release v0.48.2
     - chore: release v0.48.1
     - chore: update VSCode extension package.json to v0.48.0 [skip ci]
     - chore: update npm package.json to v0.48.0 [skip ci]
+
 # [Version 0.48.2] - 2025-12-13
 
-
 ### Features
+
     - feat: update OpenAI provider to support GPT-5.2 and enhance reasoning options
     - feat: enhance response output with reasoning traces
     - feat: implement timeout warning management for tool execution
     - feat: enhance tool execution with rate limiting and workspace management
 
-
 ### Bug Fixes
+
     - fix: improve error handling in LLM client creation and tool execution
 
-
 ### Refactors
+
     - refactor: update LLMError handling in turn_processing
     - refactor: standardize LLMError structure across providers
     - refactor: enhance Z.AI provider error handling and API key validation
@@ -1000,34 +1039,35 @@ All notable changes to vtcode will be documented in this file.
     - refactor: remove logging statements from UI interaction and session handling
     - refactor: remove outdated vibe_tooling_mapping documentation
 
-
 ### Documentation
+
     - docs: update changelog for v0.48.1 [skip ci]
     - docs: update changelog for v0.48.0 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.48.1
     - chore: update VSCode extension package.json to v0.48.0 [skip ci]
     - chore: update npm package.json to v0.48.0 [skip ci]
     - chore: release v0.48.0
     - chore: update VSCode extension package.json to v0.47.16 [skip ci]
     - chore: update npm package.json to v0.47.16 [skip ci]
+
 # [Version 0.48.1] - 2025-12-13
 
-
 ### Features
+
     - feat: update OpenAI provider to support GPT-5.2 and enhance reasoning options
     - feat: enhance response output with reasoning traces
     - feat: implement timeout warning management for tool execution
     - feat: enhance tool execution with rate limiting and workspace management
 
-
 ### Bug Fixes
+
     - fix: improve error handling in LLM client creation and tool execution
 
-
 ### Refactors
+
     - refactor: standardize LLMError structure across providers
     - refactor: enhance Z.AI provider error handling and API key validation
     - refactor: enhance context trimming and session management features
@@ -1037,21 +1077,22 @@ All notable changes to vtcode will be documented in this file.
     - refactor: remove logging statements from UI interaction and session handling
     - refactor: remove outdated vibe_tooling_mapping documentation
 
-
 ### Documentation
+
     - docs: update changelog for v0.48.0 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.48.0 [skip ci]
     - chore: update npm package.json to v0.48.0 [skip ci]
     - chore: release v0.48.0
     - chore: update VSCode extension package.json to v0.47.16 [skip ci]
     - chore: update npm package.json to v0.47.16 [skip ci]
+
 # [Version 0.48.0] - 2025-12-12
 
-
 ### Features
+
     - feat: update OpenAI provider to support GPT-5.2 and enhance reasoning options
     - feat: enhance response output with reasoning traces
     - feat: implement timeout warning management for tool execution
@@ -1070,33 +1111,34 @@ All notable changes to vtcode will be documented in this file.
     - feat: enhance timeout configuration and adaptive timeout handling
     - feat: add search_replace tool and enhance file operations
 
-
 ### Bug Fixes
+
     - fix: improve error handling in LLM client creation and tool execution
 
-
 ### Refactors
+
     - refactor: update GPT-5.2 model identifiers and documentation
     - refactor: streamline error handling and conditional checks in various modules
     - refactor: remove logging statements from UI interaction and session handling
     - refactor: remove outdated vibe_tooling_mapping documentation
     - refactor: enhance loop detection logic and add tests
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.16 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.16 [skip ci]
     - chore: update npm package.json to v0.47.16 [skip ci]
     - chore: release v0.47.16
     - chore: update VSCode extension package.json to v0.47.15 [skip ci]
     - chore: update npm package.json to v0.47.15 [skip ci]
+
 # [Version 0.47.16] - 2025-12-11
 
-
 ### Features
+
     - feat: enhance logging and error handling in orchestrator and agent components
     - feat: improve tracing initialization and error handling in main
     - feat: implement idle turn detection and management in task execution
@@ -1111,31 +1153,32 @@ All notable changes to vtcode will be documented in this file.
     - feat: enhance timeout configuration and adaptive timeout handling
     - feat: add search_replace tool and enhance file operations
 
-
 ### Refactors
+
     - refactor: enhance loop detection logic and add tests
     - refactor: simplify line style selection logic in tool output
     - refactor: streamline initialization and error handling in various modules
     - refactor: simplify ToolCallUpdateFields initialization
     - refactor: update tool policy and improve middleware handling
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.15 [skip ci]
     - docs: update changelog for v0.47.14 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.15 [skip ci]
     - chore: update npm package.json to v0.47.15 [skip ci]
     - chore: release v0.47.15
     - chore: release v0.47.14
     - chore: update VSCode extension package.json to v0.47.13 [skip ci]
     - chore: update npm package.json to v0.47.13 [skip ci]
+
 # [Version 0.47.15] - 2025-12-11
 
-
 ### Refactors
+
     - refactor: simplify line style selection logic in tool output
     - refactor: streamline initialization and error handling in various modules
     - refactor: simplify ToolCallUpdateFields initialization
@@ -1153,23 +1196,24 @@ All notable changes to vtcode will be documented in this file.
     - refactor: streamline conditional checks and improve code readability
     - refactor: unify token budget constants and improve context management
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.14 [skip ci]
     - docs: update changelog for v0.47.13 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.47.14
     - chore: update VSCode extension package.json to v0.47.13 [skip ci]
     - chore: update npm package.json to v0.47.13 [skip ci]
     - chore: release v0.47.13
     - chore: update VSCode extension package.json to v0.47.12 [skip ci]
     - chore: update npm package.json to v0.47.12 [skip ci]
+
 # [Version 0.47.14] - 2025-12-11
 
-
 ### Refactors
+
     - refactor: simplify line style selection logic in tool output
     - refactor: streamline initialization and error handling in various modules
     - refactor: simplify ToolCallUpdateFields initialization
@@ -1187,26 +1231,27 @@ All notable changes to vtcode will be documented in this file.
     - refactor: streamline conditional checks and improve code readability
     - refactor: unify token budget constants and improve context management
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.13 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.13 [skip ci]
     - chore: update npm package.json to v0.47.13 [skip ci]
     - chore: release v0.47.13
     - chore: update VSCode extension package.json to v0.47.12 [skip ci]
     - chore: update npm package.json to v0.47.12 [skip ci]
+
 # [Version 0.47.13] - 2025-12-10
 
-
 ### Features
+
     - feat: update tool policy and enhance loop detection functionality
     - feat: implement tool call safety validation and execution tracking
 
-
 ### Refactors
+
     - refactor: remove deprecated tools and update tool policies
     - refactor: update tool policy and streamline follow-up handling
     - refactor: enhance PTY command output summarization and follow-up handling
@@ -1227,14 +1272,14 @@ All notable changes to vtcode will be documented in this file.
     - refactor: update model configurations to use OpenRouter for Moonshot models; remove deprecated entries and enhance model support
     - refactor: enhance reasoning model support and update tool policies; remove deprecated Moonshot models
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.12 [skip ci]
     - docs: update changelog for v0.47.11 [skip ci]
     - docs: update changelog for v0.47.10 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.12 [skip ci]
     - chore: update npm package.json to v0.47.12 [skip ci]
     - chore: release v0.47.12
@@ -1243,16 +1288,17 @@ All notable changes to vtcode will be documented in this file.
     - chore: release v0.47.10
     - chore: update VSCode extension package.json to v0.47.9 [skip ci]
     - chore: update npm package.json to v0.47.9 [skip ci]
+
 # [Version 0.47.12] - 2025-12-08
 
-
 ### Features
+
     - feat: update tool policy and enhance loop detection functionality
     - feat: implement tool call safety validation and execution tracking
     - feat(build): add multi-stage Dockerfile for building and running vtcode
 
-
 ### Refactors
+
     - refactor: update tool policy and enhance tool validation
     - refactor: improve code formatting and structure across multiple files
     - refactor: implement API failure tracking with exponential backoff; optimize tool caching and navigation
@@ -1262,15 +1308,15 @@ All notable changes to vtcode will be documented in this file.
     - refactor: enhance reasoning model support and update tool policies; remove deprecated Moonshot models
     - refactor: improve code readability by simplifying conditional statements and updating deprecated usages across multiple modules
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.11 [skip ci]
     - docs: update changelog for v0.47.10 [skip ci]
     - docs: update changelog for v0.47.9 [skip ci]
     - docs: update changelog for v0.47.8 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.47.11
     - chore: update dependencies and improve code formatting
     - chore: release v0.47.10
@@ -1281,16 +1327,17 @@ All notable changes to vtcode will be documented in this file.
     - chore: update tool policies and optimize configuration loading
     - chore: update VSCode extension package.json to v0.47.7 [skip ci]
     - chore: update npm package.json to v0.47.7 [skip ci]
+
 # [Version 0.47.11] - 2025-12-08
 
-
 ### Features
+
     - feat: update tool policy and enhance loop detection functionality
     - feat: implement tool call safety validation and execution tracking
     - feat(build): add multi-stage Dockerfile for building and running vtcode
 
-
 ### Refactors
+
     - refactor: update tool policy and enhance tool validation
     - refactor: improve code formatting and structure across multiple files
     - refactor: implement API failure tracking with exponential backoff; optimize tool caching and navigation
@@ -1300,14 +1347,14 @@ All notable changes to vtcode will be documented in this file.
     - refactor: enhance reasoning model support and update tool policies; remove deprecated Moonshot models
     - refactor: improve code readability by simplifying conditional statements and updating deprecated usages across multiple modules
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.10 [skip ci]
     - docs: update changelog for v0.47.9 [skip ci]
     - docs: update changelog for v0.47.8 [skip ci]
 
-
 ### Chores
+
     - chore: update dependencies and improve code formatting
     - chore: release v0.47.10
     - chore: update VSCode extension package.json to v0.47.9 [skip ci]
@@ -1317,27 +1364,28 @@ All notable changes to vtcode will be documented in this file.
     - chore: update tool policies and optimize configuration loading
     - chore: update VSCode extension package.json to v0.47.7 [skip ci]
     - chore: update npm package.json to v0.47.7 [skip ci]
+
 # [Version 0.47.10] - 2025-12-07
 
-
 ### Features
+
     - feat(build): add multi-stage Dockerfile for building and running vtcode
 
-
 ### Refactors
+
     - refactor: optimize core agent execution and consolidate utility modules
     - refactor: introduce warning and error handling methods in AgentRunner; streamline tool failure logging and path normalization utilities
     - refactor: update model configurations to use OpenRouter for Moonshot models; remove deprecated entries and enhance model support
     - refactor: enhance reasoning model support and update tool policies; remove deprecated Moonshot models
     - refactor: improve code readability by simplifying conditional statements and updating deprecated usages across multiple modules
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.9 [skip ci]
     - docs: update changelog for v0.47.8 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.9 [skip ci]
     - chore: update npm package.json to v0.47.9 [skip ci]
     - chore: release v0.47.9
@@ -1345,25 +1393,26 @@ All notable changes to vtcode will be documented in this file.
     - chore: update tool policies and optimize configuration loading
     - chore: update VSCode extension package.json to v0.47.7 [skip ci]
     - chore: update npm package.json to v0.47.7 [skip ci]
+
 # [Version 0.47.9] - 2025-12-05
 
-
 ### Features
+
     - feat: update tool policies and improve code structure with dead code allowances
     - feat(build): add multi-stage Dockerfile for building and running vtcode
 
-
 ### Refactors
+
     - refactor: improve code readability by simplifying conditional statements and updating deprecated usages across multiple modules
     - refactor: remove unused tools from tool policies
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.8 [skip ci]
     - docs: update changelog for v0.47.7 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.47.8
     - chore: update tool policies and optimize configuration loading
     - chore: update VSCode extension package.json to v0.47.7 [skip ci]
@@ -1374,23 +1423,24 @@ All notable changes to vtcode will be documented in this file.
     - chore(deps): bump actions/checkout from 5 to 6
     - chore(deps): bump the all-rust-deps group with 15 updates
     - chore: update npm package.json to v0.47.6 [skip ci]
+
 # [Version 0.47.8] - 2025-12-05
 
-
 ### Features
+
     - feat: update tool policies and improve code structure with dead code allowances
     - feat(build): add multi-stage Dockerfile for building and running vtcode
 
-
 ### Refactors
+
     - refactor: remove unused tools from tool policies
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.7 [skip ci]
 
-
 ### Chores
+
     - chore: update tool policies and optimize configuration loading
     - chore: update VSCode extension package.json to v0.47.7 [skip ci]
     - chore: update npm package.json to v0.47.7 [skip ci]
@@ -1400,15 +1450,16 @@ All notable changes to vtcode will be documented in this file.
     - chore(deps): bump actions/checkout from 5 to 6
     - chore(deps): bump the all-rust-deps group with 15 updates
     - chore: update npm package.json to v0.47.6 [skip ci]
+
 # [Version 0.47.7] - 2025-12-03
 
-
 ### Features
+
     - feat: update tool policies and improve code structure with dead code allowances
     - feat: add diff suppression logic and constants for large changes
 
-
 ### Performance Improvements
+
     - perf: optimize memory allocations and pre-allocate buffers in various modules
     - perf: use write! macro in metrics module
     - perf: use write! macro in llm/token_metrics
@@ -1425,8 +1476,8 @@ All notable changes to vtcode will be documented in this file.
     - perf(core): use write! macro instead of format! with push_str
     - perf(core): remove redundant clones and allocations
 
-
 ### Refactors
+
     - refactor: remove unused tools from tool policies
     - refactor: optimize completion learning modules with .into() patterns
     - refactor: optimize linting and code completion modules
@@ -1438,18 +1489,18 @@ All notable changes to vtcode will be documented in this file.
     - refactor(llm): extract common provider helpers to reduce duplication
     - refactor: optimize diff rendering and suppression logic
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.6 [skip ci]
     - docs: add comprehensive optimization report
 
-
 ### Style Changes
+
     - style: fix clippy warnings (assign_op, unnecessary_cast, collapsible_if, const thread_local)
     - style: remove redundant closures
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.6 [skip ci]
     - chore(deps): bump DavidAnson/markdownlint-cli2-action from 20 to 21
     - chore(deps): bump actions/checkout from 5 to 6
@@ -1458,20 +1509,21 @@ All notable changes to vtcode will be documented in this file.
     - chore: release v0.47.6
     - chore: update VSCode extension package.json to v0.47.5 [skip ci]
     - chore: update npm package.json to v0.47.5 [skip ci]
+
 # [Version 0.47.6] - 2025-11-30
 
-
 ### Features
+
     - feat: add diff suppression logic and constants for large changes
     - feat: parse and display friendly error messages from Anthropic API responses
 
-
 ### Bug Fixes
+
     - fix: clear spinner before displaying error message
     - fix: gracefully handle provider API errors without panicking
 
-
 ### Performance Improvements
+
     - perf: optimize memory allocations and pre-allocate buffers in various modules
     - perf: use write! macro in metrics module
     - perf: use write! macro in llm/token_metrics
@@ -1488,8 +1540,8 @@ All notable changes to vtcode will be documented in this file.
     - perf(core): use write! macro instead of format! with push_str
     - perf(core): remove redundant clones and allocations
 
-
 ### Refactors
+
     - refactor: optimize completion learning modules with .into() patterns
     - refactor: optimize linting and code completion modules
     - refactor: optimize core modules for code quality and allocations
@@ -1501,102 +1553,105 @@ All notable changes to vtcode will be documented in this file.
     - refactor: optimize diff rendering and suppression logic
     - refactor: streamline code formatting and improve readability across multiple files
 
-
 ### Documentation
+
     - docs: add comprehensive optimization report
     - docs: clarify spinner cleanup implementation details
     - docs: update changelog for v0.47.5 [skip ci]
     - docs: update changes summary with comprehensive error handling improvements
 
-
 ### Style Changes
+
     - style: fix clippy warnings (assign_op, unnecessary_cast, collapsible_if, const thread_local)
     - style: remove redundant closures
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.5 [skip ci]
     - chore: update npm package.json to v0.47.5 [skip ci]
     - chore: release v0.47.5
     - chore: update VSCode extension package.json to v0.47.4 [skip ci]
     - chore: update npm package.json to v0.47.4 [skip ci]
+
 # [Version 0.47.5] - 2025-11-25
 
-
 ### Features
+
     - feat: parse and display friendly error messages from Anthropic API responses
 
-
 ### Bug Fixes
+
     - fix: clear spinner before displaying error message
     - fix: gracefully handle provider API errors without panicking
     - fix: remove unused spawn_session import
 
-
 ### Refactors
+
     - refactor: streamline code formatting and improve readability across multiple files
 
-
 ### Documentation
+
     - docs: update changes summary with comprehensive error handling improvements
     - docs: update changelog for v0.47.4 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.4 [skip ci]
     - chore: update npm package.json to v0.47.4 [skip ci]
     - chore: release v0.47.4
     - chore: update VSCode extension package.json to v0.47.3 [skip ci]
     - chore: update npm package.json to v0.47.3 [skip ci]
+
 # [Version 0.47.4] - 2025-11-25
 
-
 ### Bug Fixes
+
     - fix: remove unused spawn_session import
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.3 [skip ci]
     - docs: update changelog for v0.47.2 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.3 [skip ci]
     - chore: update npm package.json to v0.47.3 [skip ci]
     - chore: release v0.47.3
     - chore: release v0.47.2
     - chore: update VSCode extension package.json to v0.47.1 [skip ci]
     - chore: update npm package.json to v0.47.1 [skip ci]
+
 # [Version 0.47.3] - 2025-11-25
 
-
 ### Features
+
     - feat: Enhance tool policy with pre-approval allowlist, improve file operation error messages, and refine tool declarations.
     - feat: Integrate production-grade tool improvements system
     - feat: Implement animated thinking spinner for user input submission
     - feat: Add comprehensive ANSI escape sequence documentation and a new core utility module for ANSI codes.
 
-
 ### Bug Fixes
+
     - fix: correct RUSTFLAGS invalid option and align system prompt with actual tool definitions
     - fix: resolve all cargo clippy warnings and update rust toolchain to stable
     - fix: Revise thinking spinner message to use first-person agent voice
     - fix: Move thinking spinner display to after user message in transcript
     - fix: Clear thinking spinner message on all agent response command types
 
-
 ### Refactors
+
     - refactor: Update ThinkingSpinner struct visibility for better encapsulation
     - refactor: remove redundant reasoning handling, clarify intent
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.2 [skip ci]
     - docs: update changelog for v0.47.1 [skip ci]
     - docs: update changelog for v0.47.0 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.47.2
     - chore: update VSCode extension package.json to v0.47.1 [skip ci]
     - chore: update npm package.json to v0.47.1 [skip ci]
@@ -1604,53 +1659,55 @@ All notable changes to vtcode will be documented in this file.
     - chore: release v0.47.0
     - chore: update VSCode extension package.json to v0.46.0 [skip ci]
     - chore: update npm package.json to v0.46.0 [skip ci]
+
 # [Version 0.47.2] - 2025-11-25
 
-
 ### Features
+
     - feat: Enhance tool policy with pre-approval allowlist, improve file operation error messages, and refine tool declarations.
     - feat: Integrate production-grade tool improvements system
     - feat: Implement animated thinking spinner for user input submission
     - feat: Add comprehensive ANSI escape sequence documentation and a new core utility module for ANSI codes.
 
-
 ### Bug Fixes
+
     - fix: correct RUSTFLAGS invalid option and align system prompt with actual tool definitions
     - fix: resolve all cargo clippy warnings and update rust toolchain to stable
     - fix: Revise thinking spinner message to use first-person agent voice
     - fix: Move thinking spinner display to after user message in transcript
     - fix: Clear thinking spinner message on all agent response command types
 
-
 ### Refactors
+
     - refactor: Update ThinkingSpinner struct visibility for better encapsulation
     - refactor: remove redundant reasoning handling, clarify intent
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.1 [skip ci]
     - docs: update changelog for v0.47.0 [skip ci]
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.47.1 [skip ci]
     - chore: update npm package.json to v0.47.1 [skip ci]
     - chore: release v0.47.1
     - chore: release v0.47.0
     - chore: update VSCode extension package.json to v0.46.0 [skip ci]
     - chore: update npm package.json to v0.46.0 [skip ci]
+
 # [Version 0.47.1] - 2025-11-23
 
-
 ### Features
+
     - feat: Enhance tool policy with pre-approval allowlist, improve file operation error messages, and refine tool declarations.
     - feat: Integrate production-grade tool improvements system
     - feat: Implement animated thinking spinner for user input submission
     - feat: Add comprehensive ANSI escape sequence documentation and a new core utility module for ANSI codes.
     - feat: Refactor install script, rename `run_pty_cmd` to `run_terminal_cmd`, and update installation instructions for Homebrew and NPM.
 
-
 ### Bug Fixes
+
     - fix: correct RUSTFLAGS invalid option and align system prompt with actual tool definitions
     - fix: resolve all cargo clippy warnings and update rust toolchain to stable
     - fix: Revise thinking spinner message to use first-person agent voice
@@ -1659,16 +1716,16 @@ All notable changes to vtcode will be documented in this file.
     - fix: Update public re-export and documentation to reference file_helpers instead of legacy
     - fix: Improve `edit_file` tool's robustness
 
-
 ### Refactors
+
     - refactor: Update ThinkingSpinner struct visibility for better encapsulation
     - refactor: remove redundant reasoning handling, clarify intent
     - refactor: Rename `legacy` module to `file_helpers` and fix critical `edit_file` bugs related to newline handling, matching, and trailing newlines.
     - refactor(mcp): Clean up unused imports
     - refactor: Rename `run_terminal_cmd` to `run_pty_cmd` across documentation, examples, and tests.
 
-
 ### Documentation
+
     - docs: update changelog for v0.47.0 [skip ci]
     - docs: update changelog for v0.46.0 [skip ci]
     - docs/mcp: integrate DEPLOYMENT_GUIDE and update INDEX navigation
@@ -1683,26 +1740,27 @@ All notable changes to vtcode will be documented in this file.
     - docs/mcp: Complete documentation migration - consolidate and organize
     - docs: Update and expand documentation across various topics, add a new MCP diagnostic guide, and adjust project configurations and dependencies.
 
-
 ### Chores
+
     - chore: release v0.47.0
     - chore: update VSCode extension package.json to v0.46.0 [skip ci]
     - chore: update npm package.json to v0.46.0 [skip ci]
     - chore: release v0.46.0
     - chore: update VSCode extension package.json to v0.45.6 [skip ci]
     - chore: update npm package.json to v0.45.6 [skip ci]
+
 # [Version 0.47.0] - 2025-11-23
 
-
 ### Features
+
     - feat: Enhance tool policy with pre-approval allowlist, improve file operation error messages, and refine tool declarations.
     - feat: Integrate production-grade tool improvements system
     - feat: Implement animated thinking spinner for user input submission
     - feat: Add comprehensive ANSI escape sequence documentation and a new core utility module for ANSI codes.
     - feat: Refactor install script, rename `run_pty_cmd` to `run_terminal_cmd`, and update installation instructions for Homebrew and NPM.
 
-
 ### Bug Fixes
+
     - fix: correct RUSTFLAGS invalid option and align system prompt with actual tool definitions
     - fix: resolve all cargo clippy warnings and update rust toolchain to stable
     - fix: Revise thinking spinner message to use first-person agent voice
@@ -1711,16 +1769,16 @@ All notable changes to vtcode will be documented in this file.
     - fix: Update public re-export and documentation to reference file_helpers instead of legacy
     - fix: Improve `edit_file` tool's robustness
 
-
 ### Refactors
+
     - refactor: Update ThinkingSpinner struct visibility for better encapsulation
     - refactor: remove redundant reasoning handling, clarify intent
     - refactor: Rename `legacy` module to `file_helpers` and fix critical `edit_file` bugs related to newline handling, matching, and trailing newlines.
     - refactor(mcp): Clean up unused imports
     - refactor: Rename `run_terminal_cmd` to `run_pty_cmd` across documentation, examples, and tests.
 
-
 ### Documentation
+
     - docs: update changelog for v0.46.0 [skip ci]
     - docs/mcp: integrate DEPLOYMENT_GUIDE and update INDEX navigation
     - docs/mcp: Add lessons learned - project retrospective
@@ -1734,25 +1792,26 @@ All notable changes to vtcode will be documented in this file.
     - docs/mcp: Complete documentation migration - consolidate and organize
     - docs: Update and expand documentation across various topics, add a new MCP diagnostic guide, and adjust project configurations and dependencies.
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.46.0 [skip ci]
     - chore: update npm package.json to v0.46.0 [skip ci]
     - chore: release v0.46.0
     - chore: update VSCode extension package.json to v0.45.6 [skip ci]
     - chore: update npm package.json to v0.45.6 [skip ci]
+
 # [Version 0.46.0] - 2025-11-21
 
-
 ### Features
+
     - feat: Refactor install script, rename `run_pty_cmd` to `run_terminal_cmd`, and update installation instructions for Homebrew and NPM.
     - feat: Add new tools to tool-policy and update permissions for fetch and time providers
     - feat: Add default editor fallback (vi on Unix, notepad on Windows) when EDITOR/VISUAL not set
     - feat: Add external editor integration with TUI suspension, alternate screen handling, and stability improvements.
     - feat: update tool policies, add setup script, and enhance README with configuration details
 
-
 ### Bug Fixes
+
     - fix: Update public re-export and documentation to reference file_helpers instead of legacy
     - fix: Improve `edit_file` tool's robustness
     - fix: Track fire-and-forget tokio::spawn tasks with JoinHandles
@@ -1760,15 +1819,15 @@ All notable changes to vtcode will be documented in this file.
     - fix: Add environment() and path() to EditorBuilder to properly detect and launch editor
     - fix: Remove duplicate test block with non-existent method in zed.rs
 
-
 ### Refactors
+
     - refactor: Rename `legacy` module to `file_helpers` and fix critical `edit_file` bugs related to newline handling, matching, and trailing newlines.
     - refactor(mcp): Clean up unused imports
     - refactor: Rename `run_terminal_cmd` to `run_pty_cmd` across documentation, examples, and tests.
     - refactor: Remove static default editor, rely on try_common_editors for fallback
 
-
 ### Documentation
+
     - docs/mcp: integrate DEPLOYMENT_GUIDE and update INDEX navigation
     - docs/mcp: Add lessons learned - project retrospective
     - docs/mcp: Add team communication kit - ready-to-use materials
@@ -1787,17 +1846,18 @@ All notable changes to vtcode will be documented in this file.
     - docs: add Ratatui FAQ-based TUI best practices guides
     - docs: Add External Editor Configuration to docs index
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.45.6 [skip ci]
     - chore: update npm package.json to v0.45.6 [skip ci]
     - chore: release v0.45.6
     - chore: update VSCode extension package.json to v0.45.5 [skip ci]
     - chore: update npm package.json to v0.45.5 [skip ci]
+
 # [Version 0.45.6] - 2025-11-20
 
-
 ### Features
+
     - feat: Add new tools to tool-policy and update permissions for fetch and time providers
     - feat: Add default editor fallback (vi on Unix, notepad on Windows) when EDITOR/VISUAL not set
     - feat: Add external editor integration with TUI suspension, alternate screen handling, and stability improvements.
@@ -1807,8 +1867,8 @@ All notable changes to vtcode will be documented in this file.
     - feat: implement interactive tree UI for file structure visualization
     - feat: enhance diff display with full-width backgrounds and improve terminal command visibility
 
-
 ### Bug Fixes
+
     - fix: Track fire-and-forget tokio::spawn tasks with JoinHandles
     - fix: Apply Ratatui FAQ best practices - fix async/tokio issues
     - fix: Add environment() and path() to EditorBuilder to properly detect and launch editor
@@ -1821,8 +1881,8 @@ All notable changes to vtcode will be documented in this file.
     - fix: remove duplicate user message from conversation history
     - fix: remove duplicate user message in turn loop
 
-
 ### Refactors
+
     - refactor: Remove static default editor, rely on try_common_editors for fallback
     - refactor: Remove sandbox functionality and streamline shell command
     - refactor: eliminate wrapper layer in execute_shell_command
@@ -1834,8 +1894,8 @@ All notable changes to vtcode will be documented in this file.
     - refactor: streamline command execution error suggestions and implement unified run command executor
     - refactor: streamline loop detection logic and improve non-interactive handling
 
-
 ### Documentation
+
     - docs: add comprehensive Ratatui improvements summary
     - docs: Add async improvements documentation
     - docs: add Ratatui FAQ integration summary document
@@ -1851,25 +1911,26 @@ All notable changes to vtcode will be documented in this file.
     - docs: update PTY command execution improvements documentation
     - docs: add embedded assets management guide and pre-commit hook
 
-
 ### Chores
+
     - chore: update VSCode extension package.json to v0.45.5 [skip ci]
     - chore: update npm package.json to v0.45.5 [skip ci]
     - chore: release v0.45.5
     - chore: standardize default shell in workflow files and set job timeouts
     - chore: update VSCode extension package.json to v0.45.4 and commit changes [skip ci]
     - chore: update npm package.json to v0.45.4 [skip ci]
+
 # [Version 0.45.5] - 2025-11-19
 
-
 ### Features
+
     - feat: VT Code System Prompt v3 - Context Optimized Implementation
     - feat: add Bash tool and remove non-existent run_pty_cmd references
     - feat: implement interactive tree UI for file structure visualization
     - feat: enhance diff display with full-width backgrounds and improve terminal command visibility
 
-
 ### Bug Fixes
+
     - fix: expose shell tool to LLM by setting expose_in_llm to true
     - fix: ensure development tools are always in PATH with fallback paths
     - fix: remove overly complex sandbox cache clearing on PTY retry
@@ -1879,8 +1940,8 @@ All notable changes to vtcode will be documented in this file.
     - fix: remove duplicate user message in turn loop
     - fix: suppress dead_code warnings for intentionally disabled features
 
-
 ### Refactors
+
     - refactor: Remove sandbox functionality and streamline shell command
     - refactor: eliminate wrapper layer in execute_shell_command
     - refactor: use pattern matching in execute_shell_command for clarity
@@ -1892,8 +1953,8 @@ All notable changes to vtcode will be documented in this file.
     - refactor: streamline loop detection logic and improve non-interactive handling
     - refactor: replace dissimilar with optimized Myers diff algorithm
 
-
 ### Documentation
+
     - docs: Add implementation completion summary for System Prompt v3
     - docs: fix misleading comment for RUN_PTY_CMD constant
     - docs: add comprehensive PTY fix outcome report with complete analysis
@@ -1905,17 +1966,18 @@ All notable changes to vtcode will be documented in this file.
     - docs: update changelog for v0.45.4 [skip ci]
     - docs: update AGENTS.md with comprehensive agent guide and tool usage guidelines
 
-
 ### Chores
+
     - chore: standardize default shell in workflow files and set job timeouts
     - chore: update VSCode extension package.json to v0.45.4 and commit changes [skip ci]
     - chore: update npm package.json to v0.45.4 [skip ci]
     - chore: release v0.45.4
     - chore: update npm package.json to v0.45.3 [skip ci]
+
 # [Version 0.45.4] - 2025-11-17
 
-
 ### Bug Fixes
+
     - fix: suppress dead_code warnings for intentionally disabled features
     - fix: prevent infinite tool loops by using >= instead of >
     - fix: resolve clippy warnings (range_contains, doc comments, identical blocks)
@@ -1923,79 +1985,81 @@ All notable changes to vtcode will be documented in this file.
     - fix: truncate verbose reasoning output to reduce noise during tool execution
     - fix(llm): update lmstudio provider: remove stale 'For now' comment and simplify validation; update related utility and policy files
 
-
 ### Refactors
+
     - refactor: replace dissimilar with optimized Myers diff algorithm
     - refactor: organize documentation into docs/phases and docs/scroll subdirectories; consolidate PHASE5 and SCROLL artifacts for better maintainability
 
-
 ### Documentation
+
     - docs: update AGENTS.md with comprehensive agent guide and tool usage guidelines
     - docs: update changelog for v0.45.3 [skip ci]
     - docs: reorganize root-level docs into docs/ subdirectories per AGENTS.md
     - docs: clarify run_pty_cmd usage for git, cargo, and one-off shell commands
 
-
 ### Style Changes
+
     - style: apply cargo fmt
 
-
 ### Chores
+
     - chore: update npm package.json to v0.45.3 [skip ci]
     - chore: release v0.45.3
     - chore: update npm package.json to v0.45.2 [skip ci]
+
 # [Version 0.45.3] - 2025-11-17
 
-
 ### Features
+
     - feat: implement token-based truncation for tool outputs and update configuration
 
-
 ### Bug Fixes
+
     - fix: prevent infinite tool loops by using >= instead of >
     - fix: resolve clippy warnings (range_contains, doc comments, identical blocks)
     - fix: improve tool failure handling by tracking failed attempts
     - fix: truncate verbose reasoning output to reduce noise during tool execution
     - fix(llm): update lmstudio provider: remove stale 'For now' comment and simplify validation; update related utility and policy files
 
-
 ### Refactors
+
     - refactor: organize documentation into docs/phases and docs/scroll subdirectories; consolidate PHASE5 and SCROLL artifacts for better maintainability
 
-
 ### Documentation
+
     - docs: reorganize root-level docs into docs/ subdirectories per AGENTS.md
     - docs: clarify run_pty_cmd usage for git, cargo, and one-off shell commands
     - docs: update changelog for v0.45.2 [skip ci]
     - docs: update changelog for v0.45.1 [skip ci]
 
-
 ### Style Changes
+
     - style: apply cargo fmt
 
-
 ### Chores
+
     - chore: update npm package.json to v0.45.2 [skip ci]
     - chore: release v0.45.2
     - chore: release v0.45.1
     - chore: update npm package.json to v0.45.0 [skip ci]
+
 # [Version 0.45.2] - 2025-11-17
 
-
 ### Features
+
     - feat: implement token-based truncation for tool outputs and update configuration
 
-
 ### Refactors
+
     - refactor(runloop): extract tool pipeline into  and add  — reduce run loop complexity
 
-
 ### Documentation
+
     - docs: update changelog for v0.45.1 [skip ci]
     - docs: update changelog for v0.45.0 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.45.1
     - chore: update npm package.json to v0.45.0 [skip ci]
     - chore: release v0.45.0
@@ -2004,22 +2068,23 @@ All notable changes to vtcode will be documented in this file.
     - chore(runloop): remove session.rs contents to extract run loop
     - chore(runloop): Extract run_single_agent_loop_unified to run_loop.rs
     - chore: update npm package.json to v0.44.1 [skip ci]
+
 # [Version 0.45.1] - 2025-11-17
 
-
 ### Features
+
     - feat: implement token-based truncation for tool outputs and update configuration
 
-
 ### Refactors
+
     - refactor(runloop): extract tool pipeline into  and add  — reduce run loop complexity
 
-
 ### Documentation
+
     - docs: update changelog for v0.45.0 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.45.0 [skip ci]
     - chore: release v0.45.0
     - chore: update GitHub Actions workflows for improved performance and consistency; adjust dependency management and environment variables
@@ -2027,23 +2092,24 @@ All notable changes to vtcode will be documented in this file.
     - chore(runloop): remove session.rs contents to extract run loop
     - chore(runloop): Extract run_single_agent_loop_unified to run_loop.rs
     - chore: update npm package.json to v0.44.1 [skip ci]
+
 # [Version 0.45.0] - 2025-11-16
 
-
 ### Bug Fixes
+
     - fix: update Claude model identifiers and descriptions for accuracy
 
-
 ### Refactors
+
     - refactor(runloop): extract tool pipeline into  and add  — reduce run loop complexity
 
-
 ### Documentation
+
     - docs: update changelog for v0.44.1 [skip ci]
     - docs: update changelog for v0.44.0 [skip ci]
 
-
 ### Chores
+
     - chore: update GitHub Actions workflows for improved performance and consistency; adjust dependency management and environment variables
     - chore(runloop): make session.rs minimal exposing slash_commands
     - chore(runloop): remove session.rs contents to extract run loop
@@ -2051,38 +2117,40 @@ All notable changes to vtcode will be documented in this file.
     - chore: update npm package.json to v0.44.1 [skip ci]
     - chore: release v0.44.1
     - chore: release v0.44.0
-    - chore: update configuration files for VTCode support
+    - chore: update configuration files for VT Code support
     - chore: update npm package.json to v0.43.17 [skip ci]
+
 # [Version 0.44.1] - 2025-11-15
 
-
 ### Bug Fixes
+
     - fix: update Claude model identifiers and descriptions for accuracy
 
-
 ### Documentation
+
     - docs: update changelog for v0.44.0 [skip ci]
     - docs: update changelog for v0.43.17 [skip ci]
     - docs: update changelog for v0.43.16 [skip ci]
 
-
 ### Chores
+
     - chore: release v0.44.0
-    - chore: update configuration files for VTCode support
+    - chore: update configuration files for VT Code support
     - chore: update npm package.json to v0.43.17 [skip ci]
     - chore: release v0.43.17
     - chore: release v0.43.16
     - chore: update npm package.json to v0.43.15 [skip ci]
+
 # [Version 0.44.0] - 2025-11-15
 
-
 ### Documentation
+
     - docs: update changelog for v0.43.17 [skip ci]
     - docs: update changelog for v0.43.16 [skip ci]
 
-
 ### Chores
-    - chore: update configuration files for VTCode support
+
+    - chore: update configuration files for VT Code support
     - chore: update npm package.json to v0.43.17 [skip ci]
     - chore: release v0.43.17
     - chore: release v0.43.16
@@ -3515,7 +3583,7 @@ All notable changes to vtcode will be documented in this file.
 
     - feat: Enhance workspace trust and automation features
     - feat: add workspace trust request functionality
-    - feat: Add VTCode Chat extension with MCP integration
+    - feat: Add VT Code Chat extension with MCP integration
     - feat: add experimental smart summarization feature for conversation compression
     - feat: replace tempfile with assert_fs for improved temporary directory handling
 
@@ -3549,7 +3617,7 @@ All notable changes to vtcode will be documented in this file.
 
     - feat: Enhance workspace trust and automation features
     - feat: add workspace trust request functionality
-    - feat: Add VTCode Chat extension with MCP integration
+    - feat: Add VT Code Chat extension with MCP integration
     - feat: add experimental smart summarization feature for conversation compression
     - feat: replace tempfile with assert_fs for improved temporary directory handling
 
@@ -3699,13 +3767,13 @@ All notable changes to vtcode will be documented in this file.
 ### Features
 
     - feat: add cross-compilation configuration and documentation
-    - feat: Enhance development and release process for VTCode extension
+    - feat: Enhance development and release process for VT Code extension
 
 ### Bug Fixes
 
     - fix: update changelog generation to handle date formatting correctly
-    - fix: rename VTCode Update Plan tool for consistency
-    - fix: update language model tool properties for VTCode Update Plan
+    - fix: rename VT Code Update Plan tool for consistency
+    - fix: update language model tool properties for VT Code Update Plan
 
 ### Refactors
 
@@ -3733,13 +3801,13 @@ All notable changes to vtcode will be documented in this file.
 ### Features
 
     - feat: add cross-compilation configuration and documentation|
-    - feat: Enhance development and release process for VTCode extension|
+    - feat: Enhance development and release process for VT Code extension|
 
 ### Bug Fixes
 
     - fix: update changelog generation to handle date formatting correctly|
-    - fix: rename VTCode Update Plan tool for consistency|
-    - fix: update language model tool properties for VTCode Update Plan|
+    - fix: rename VT Code Update Plan tool for consistency|
+    - fix: update language model tool properties for VT Code Update Plan|
 
 ### Refactors
 
@@ -3767,11 +3835,11 @@ All notable changes to vtcode will be documented in this file.
 # [Version 0.39.4] - 2025-11-03$'
 
 '### Features$'
-'    - feat: Enhance development and release process for VTCode extension$'
+'    - feat: Enhance development and release process for VT Code extension$'
 
 '### Bug Fixes$'
-'    - fix: rename VTCode Update Plan tool for consistency
-    - fix: update language model tool properties for VTCode Update Plan$'
+'    - fix: rename VT Code Update Plan tool for consistency
+    - fix: update language model tool properties for VT Code Update Plan$'
 
 '### Refactors$'
 '    - refactor: remove unused IdeContextBridge and clean up session initialization$'
@@ -3795,11 +3863,11 @@ All notable changes to vtcode will be documented in this file.
 # [Version 0.39.3] - 2025-11-03$'
 
 '### Features$'
-'    - feat: Enhance development and release process for VTCode extension$'
+'    - feat: Enhance development and release process for VT Code extension$'
 
 '### Bug Fixes$'
-'    - fix: rename VTCode Update Plan tool for consistency
-    - fix: update language model tool properties for VTCode Update Plan$'
+'    - fix: rename VT Code Update Plan tool for consistency
+    - fix: update language model tool properties for VT Code Update Plan$'
 
 '### Documentation$'
 '    - docs: update changelog for v0.39.2 [skip ci]$'
@@ -4933,8 +5001,8 @@ All notable changes to vtcode will be documented in this file.
     - feat: add synchronous fetching of LMStudio models and improve model selection
     - feat: Add IDE integration and troubleshooting guides to documentation
     - feat: Add VSCode extension publishing support to release script
-    - feat: Add initial files for VTCode Companion extension including README, LICENSE, CHANGELOG, and esbuild configuration
-    - feat: Add initial package.json for VTCode Companion extension
+    - feat: Add initial files for VT Code Companion extension including README, LICENSE, CHANGELOG, and esbuild configuration
+    - feat: Add initial package.json for VT Code Companion extension
     - feat(security): Implement comprehensive security documentation and fixes
     - feat: add comprehensive security audit and model documentation
 
@@ -4944,7 +5012,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Refactors
 
-    - refactor: Rename extension from "VTCode Companion" to "VTCode" and update CHANGELOG
+    - refactor: Rename extension from "VT Code Companion" to "VTCode" and update CHANGELOG
     - refactor: use unsafe blocks for environment variable manipulation in tests
     - refactor: remove unused tools and simplify tool policies
 
@@ -4981,15 +5049,15 @@ All notable changes to vtcode will be documented in this file.
 
     - feat: Add IDE integration and troubleshooting guides to documentation
     - feat: Add VSCode extension publishing support to release script
-    - feat: Add initial files for VTCode Companion extension including README, LICENSE, CHANGELOG, and esbuild configuration
-    - feat: Add initial package.json for VTCode Companion extension
+    - feat: Add initial files for VT Code Companion extension including README, LICENSE, CHANGELOG, and esbuild configuration
+    - feat: Add initial package.json for VT Code Companion extension
     - feat(security): Implement comprehensive security documentation and fixes
     - feat: add comprehensive security audit and model documentation
     - feat: add changelog generation from commits in release script
 
 ### Refactors
 
-    - refactor: Rename extension from "VTCode Companion" to "VTCode" and update CHANGELOG
+    - refactor: Rename extension from "VT Code Companion" to "VTCode" and update CHANGELOG
     - refactor: use unsafe blocks for environment variable manipulation in tests
     - refactor: remove unused tools and simplify tool policies
 
@@ -5011,7 +5079,7 @@ All notable changes to vtcode will be documented in this file.
 
 -   feat: add changelog generation from commits in release script
 -   feat: run doctests separately in publish_extracted_crates.sh
--   feat: add comprehensive plan for open sourcing VTCode core components
+-   feat: add comprehensive plan for open sourcing VT Code core components
 -   feat: add demo section with updated demo GIF in README
 -   feat: add VT Code VHS showcase and demo files
 

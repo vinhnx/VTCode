@@ -82,7 +82,7 @@ impl UserConfirmation {
     pub fn select_agent_mode() -> Result<AgentMode> {
         println!("{}", style("Agent Mode Selection").cyan().bold());
         println!(
-            "VTCode now uses single-agent mode with Decision Ledger for reliable task execution."
+            "VT Code now uses single-agent mode with Decision Ledger for reliable task execution."
         );
 
         Ok(AgentMode::SingleCoder)

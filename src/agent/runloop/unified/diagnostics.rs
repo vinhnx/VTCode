@@ -1,8 +1,8 @@
 use anyhow::Result;
 
+use vtcode_core::config::ToolPolicy;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
-use vtcode_core::config::ToolPolicy;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
@@ -16,7 +16,13 @@ pub(crate) async fn run_doctor_diagnostics(
     provider_name: &str,
     async_mcp_manager: Option<&AsyncMcpManager>,
     linked_directories: &[LinkedDirectory],
-    loaded_skills: Option<&std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, vtcode_core::skills::types::Skill>>>>,
+    loaded_skills: Option<
+        &std::sync::Arc<
+            tokio::sync::RwLock<
+                std::collections::HashMap<String, vtcode_core::skills::types::Skill>,
+            >,
+        >,
+    >,
 ) -> Result<()> {
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(
@@ -25,7 +31,7 @@ pub(crate) async fn run_doctor_diagnostics(
     )?;
     renderer.line(
         MessageStyle::Status,
-        &format!("VTCode Doctor v{}", env!("CARGO_PKG_VERSION")),
+        &format!("VT Code Doctor v{}", env!("CARGO_PKG_VERSION")),
     )?;
     renderer.line(
         MessageStyle::Status,
@@ -43,7 +49,7 @@ pub(crate) async fn run_doctor_diagnostics(
     };
     render_doctor_check(renderer, "  Workspace", workspace_result)?;
 
-    let cli_version = format!("VTCode {}", env!("CARGO_PKG_VERSION"));
+    let cli_version = format!("VT Code {}", env!("CARGO_PKG_VERSION"));
     render_doctor_check(renderer, "  CLI Version", Ok(cli_version))?;
 
     renderer.line(MessageStyle::Info, "")?;
@@ -63,11 +69,7 @@ pub(crate) async fn run_doctor_diagnostics(
 
     // Config-specific diagnostics
     if let Some(cfg) = vt_cfg {
-        render_doctor_check(
-            renderer,
-            "  Theme",
-            Ok(cfg.agent.theme.clone()),
-        )?;
+        render_doctor_check(renderer, "  Theme", Ok(cfg.agent.theme.clone()))?;
 
         let model_info = if cfg.agent.small_model.enabled {
             let small_model = if cfg.agent.small_model.model.is_empty() {
@@ -77,8 +79,7 @@ pub(crate) async fn run_doctor_diagnostics(
             };
             format!(
                 "{} (+ small model: {})",
-                cfg.agent.default_model,
-                small_model
+                cfg.agent.default_model, small_model
             )
         } else {
             cfg.agent.default_model.clone()
@@ -99,10 +100,7 @@ pub(crate) async fn run_doctor_diagnostics(
 
         // Token budget status
         let token_budget_status = if cfg.context.token_budget.enabled {
-            format!(
-                "Enabled (model: {})",
-                cfg.context.token_budget.model
-            )
+            format!("Enabled (model: {})", cfg.context.token_budget.model)
         } else {
             "Disabled".to_string()
         };
@@ -129,7 +127,11 @@ pub(crate) async fn run_doctor_diagnostics(
             "  HITL Enabled",
             Ok(format!(
                 "{}",
-                if cfg.security.human_in_the_loop { "Yes" } else { "No" }
+                if cfg.security.human_in_the_loop {
+                    "Yes"
+                } else {
+                    "No"
+                }
             )),
         )?;
 
@@ -139,20 +141,13 @@ pub(crate) async fn run_doctor_diagnostics(
             ToolPolicy::Deny => "Deny all (security)",
             ToolPolicy::Prompt => "Prompt on tool use",
         };
-        render_doctor_check(
-            renderer,
-            "  Tool Policy",
-            Ok(policy.to_string()),
-        )?;
+        render_doctor_check(renderer, "  Tool Policy", Ok(policy.to_string()))?;
 
         // PTY configuration
         render_doctor_check(
             renderer,
             "  PTY Enabled",
-            Ok(format!(
-                "{}",
-                if cfg.pty.enabled { "Yes" } else { "No" }
-            )),
+            Ok(format!("{}", if cfg.pty.enabled { "Yes" } else { "No" })),
         )?;
     }
 
@@ -165,14 +160,8 @@ pub(crate) async fn run_doctor_diagnostics(
         provider_name
     };
     let api_key_result = match get_api_key(provider_label, &ApiKeySources::default()) {
-        Ok(_) => Ok(format!(
-            "API key configured for '{}'",
-            provider_label
-        )),
-        Err(err) => Err(format!(
-            "Missing API key for '{}': {}",
-            provider_label, err
-        )),
+        Ok(_) => Ok(format!("API key configured for '{}'", provider_label)),
+        Err(err) => Err(format!("Missing API key for '{}': {}", provider_label, err)),
     };
     render_doctor_check(renderer, "  API Key", api_key_result)?;
 
@@ -183,12 +172,15 @@ pub(crate) async fn run_doctor_diagnostics(
         .map(|version| format!("Node.js {}", version));
     render_doctor_check(renderer, "  Node.js", node_result)?;
 
-    let npm_result = detect_command_version("npm", &["--version"])
-        .map(|version| format!("npm {}", version));
+    let npm_result =
+        detect_command_version("npm", &["--version"]).map(|version| format!("npm {}", version));
     render_doctor_check(renderer, "  npm", npm_result)?;
 
     let ripgrep_result = match detect_command_version("rg", &["--version"]) {
-        Ok(version) => Ok(format!("Ripgrep {}", version.lines().next().unwrap_or(&version))),
+        Ok(version) => Ok(format!(
+            "Ripgrep {}",
+            version.lines().next().unwrap_or(&version)
+        )),
         Err(e) => {
             if e.contains("not found") {
                 Err("Not installed (searches will fall back to built-in grep)".to_string())
@@ -218,9 +210,7 @@ pub(crate) async fn run_doctor_diagnostics(
                     McpInitStatus::Initializing { progress } => {
                         Ok(format!("Initializing: {}", progress))
                     }
-                    McpInitStatus::Error { message } => {
-                        Err(format!("Init error: {}", message))
-                    }
+                    McpInitStatus::Error { message } => Err(format!("Init error: {}", message)),
                     McpInitStatus::Disabled => Ok("Disabled in config".to_string()),
                 }
             } else {
@@ -243,7 +233,12 @@ pub(crate) async fn run_doctor_diagnostics(
         for (idx, entry) in linked_directories.iter().enumerate() {
             renderer.line(
                 MessageStyle::Output,
-                &format!("  [{}] {} → {}", idx + 1, entry.display_path, entry.original.display()),
+                &format!(
+                    "  [{}] {} → {}",
+                    idx + 1,
+                    entry.display_path,
+                    entry.original.display()
+                ),
             )?;
         }
     }
@@ -277,7 +272,7 @@ pub(crate) async fn run_doctor_diagnostics(
         MessageStyle::Status,
         "═══════════════════════════════════════════════════════════════",
     )?;
-    
+
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Status, "[Recommended Next Actions]")?;
     renderer.line(
@@ -296,7 +291,7 @@ pub(crate) async fn run_doctor_diagnostics(
         MessageStyle::Info,
         "[DOCS] See docs/development/DOCTOR_REFERENCE.md for comprehensive troubleshooting.",
     )?;
-    
+
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(
         MessageStyle::Status,
@@ -312,14 +307,9 @@ fn render_doctor_check(
     outcome: std::result::Result<String, String>,
 ) -> Result<()> {
     match outcome {
-        Ok(detail) => {
-            renderer.line(MessageStyle::Status, &format!("✓ {}: {}", label, detail))?
-        }
+        Ok(detail) => renderer.line(MessageStyle::Status, &format!("✓ {}: {}", label, detail))?,
         Err(detail) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("✗ {}: {}", label, detail),
-            )?;
+            renderer.line(MessageStyle::Error, &format!("✗ {}: {}", label, detail))?;
             // Show suggestion for specific failures
             if let Some(suggestion) = get_suggestion_for_failure(label, &detail) {
                 renderer.line(MessageStyle::Info, &format!("  → {}", suggestion))?;
@@ -331,7 +321,7 @@ fn render_doctor_check(
 
 fn get_suggestion_for_failure(label: &str, error: &str) -> Option<String> {
     let label_lower = label.to_lowercase();
-    
+
     if label_lower.contains("workspace") {
         Some("Ensure workspace directory is accessible and not deleted.".to_string())
     } else if label_lower.contains("api key") {

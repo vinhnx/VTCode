@@ -15,41 +15,47 @@ When an MCP tool fails, agents should:
 ## MCP Fundamentals for Agents
 
 ### What is MCP?
-- **Not a shell command** (can't call `mcp::time::get_current_time`)
-- **Requires a running server process** (via `uvx` or installed Python package)
-- **Configured in `.mcp.json` and `vtcode.toml`**
-- **Invoked through the tool interface** (not bash)
+
+-   **Not a shell command** (can't call `mcp::time::get_current_time`)
+-   **Requires a running server process** (via `uvx` or installed Python package)
+-   **Configured in `.mcp.json` and `vtcode.toml`**
+-   **Invoked through the tool interface** (not bash)
 
 ### Common User Mistake
+
 Users often try shell invocation:
+
 ```bash
 $ mcp::time::get_current_time Asia/Tokyo
 # Result: command not found (exit 127)
 ```
 
 **Agent must explain:** MCP tools aren't shell commands. They require:
-- MCP server to be running
-- Tool interface invocation
-- Proper configuration
+
+-   MCP server to be running
+-   Tool interface invocation
+-   Proper configuration
 
 ## Failure Type → Agent Response Map
 
 ### Type 1: Command Not Found (Exit 127)
 
 **What the error looks like:**
+
 ```
 $ mcp::time::get_current_time Asia/Tokyo
 zsh: command not found: mcp::time::get_current_time
 ```
 
 **Agent response:**
+
 ```
 MCP tools aren't shell commands. They're accessed via the tool interface, not through the shell.
 
-The syntax 'mcp::time::get_current_time' doesn't work in bash/zsh. 
+The syntax 'mcp::time::get_current_time' doesn't work in bash/zsh.
 
 Instead, MCP tools:
-- Are invoked through the VTCode tool system
+- Are invoked through the VT Code tool system
 - Require the MCP server process to be running
 - Need proper configuration in .mcp.json
 
@@ -65,6 +71,7 @@ If needed, install: pip install mcp-server-time
 ### Type 2: Broken Pipe (EPIPE)
 
 **What the error looks like:**
+
 ```
 Tool execution failed
 Error: BrokenPipe
@@ -72,6 +79,7 @@ Message: "connection lost to MCP server"
 ```
 
 **Agent response:**
+
 ```
 The MCP server for 'time' crashed or lost connection.
 
@@ -106,6 +114,7 @@ Fix:
 ### Type 3: Timeout
 
 **What the error looks like:**
+
 ```
 Tool execution timeout
 Error: Timeout
@@ -113,6 +122,7 @@ Message: "MCP server did not respond within 15 seconds"
 ```
 
 **Agent response:**
+
 ```
 The MCP server took too long to start or respond.
 
@@ -140,7 +150,7 @@ Solutions:
 4. Enable debug logging:
    [mcp]
    log_level = "debug"
-   
+
    Then check logs for details.
 
 5. Check if uvx is available:
@@ -151,6 +161,7 @@ Solutions:
 ### Type 4: Provider Not Found / Config Error
 
 **What the error looks like:**
+
 ```
 Tool execution failed
 Error: InitializationError
@@ -158,6 +169,7 @@ Message: "No such process" or "Failed to start MCP server"
 ```
 
 **Agent response:**
+
 ```
 The MCP server failed to start because it's not properly installed or configured.
 
@@ -165,7 +177,7 @@ Check your setup:
 
 1. Verify .mcp.json exists and is valid JSON:
    cat .mcp.json
-   
+
    Should look like:
    {
      "mcpServers": {
@@ -201,6 +213,7 @@ If still failing, manually verify:
 ### Type 5: Tool Invocation Failed (Runtime Error)
 
 **What the error looks like:**
+
 ```
 Tool execution FAILURE
 Status: FAILURE
@@ -208,6 +221,7 @@ Error: "Invalid parameter: timezone"
 ```
 
 **Agent response:**
+
 ```
 The MCP server is running, but the tool invocation failed.
 
@@ -222,7 +236,7 @@ Debug steps:
 
 2. Check MCP server version:
    pip show mcp-server-time
-   
+
    If outdated, upgrade:
    pip install --upgrade mcp-server-time
 
@@ -242,14 +256,14 @@ Debug steps:
 
 When receiving an MCP tool failure, agents should:
 
-- [ ] Parse the error message for exit code or error type
-- [ ] Classify error (Command not found / EPIPE / Timeout / Config / Runtime)
-- [ ] Explain in plain language what went wrong
-- [ ] Show at least one diagnostic command
-- [ ] Provide specific fix steps with examples
-- [ ] Suggest verification ("Run `vtcode doctor` to verify")
-- [ ] Reference `docs/mcp/MCP_DIAGNOSTIC_GUIDE.md` for complex issues
-- [ ] **Never** suggest shell invocation of MCP tools
+-   [ ] Parse the error message for exit code or error type
+-   [ ] Classify error (Command not found / EPIPE / Timeout / Config / Runtime)
+-   [ ] Explain in plain language what went wrong
+-   [ ] Show at least one diagnostic command
+-   [ ] Provide specific fix steps with examples
+-   [ ] Suggest verification ("Run `vtcode doctor` to verify")
+-   [ ] Reference `docs/mcp/MCP_DIAGNOSTIC_GUIDE.md` for complex issues
+-   [ ] **Never** suggest shell invocation of MCP tools
 
 ## Template for Agents
 
@@ -287,16 +301,18 @@ When receiving an MCP tool failure, agents should:
 ## Key Messaging
 
 ### DON'T say:
-- "MCP error occurred"
-- "Try restarting" (without explanation)
-- "Check logs" (without guidance)
-- "Run this command" (without context)
+
+-   "MCP error occurred"
+-   "Try restarting" (without explanation)
+-   "Check logs" (without guidance)
+-   "Run this command" (without context)
 
 ### DO say:
-- "MCP server crashed because [specific reason]"
-- "To fix, [specific steps with commands]"
-- "Verify with: [command that proves it's fixed]"
-- "This happens because [mechanism explanation]"
+
+-   "MCP server crashed because [specific reason]"
+-   "To fix, [specific steps with commands]"
+-   "Verify with: [command that proves it's fixed]"
+-   "This happens because [mechanism explanation]"
 
 ## For Extension Developers
 
@@ -309,20 +325,21 @@ If implementing error handling for MCP tools:
 5. Reference MCP_DIAGNOSTIC_GUIDE.md
 
 Example (TypeScript):
+
 ```typescript
 try {
-  await invokeMcpTool(toolName, params);
+    await invokeMcpTool(toolName, params);
 } catch (error) {
-  const errorType = classifyMcpError(error);
-  const guidance = getMcpDiagnosticGuidance(errorType);
-  renderer.displayError(error.message);
-  renderer.displayInfo(guidance);
+    const errorType = classifyMcpError(error);
+    const guidance = getMcpDiagnosticGuidance(errorType);
+    renderer.displayError(error.message);
+    renderer.displayInfo(guidance);
 }
 ```
 
 ## References
 
-- **Quick Reference:** `docs/mcp/MCP_AGENT_QUICK_REFERENCE.md`
-- **Full Guide:** `docs/mcp/MCP_DIAGNOSTIC_GUIDE.md`
-- **Implementation:** `src/agent/runloop/unified/mcp_support.rs`
-- **Error Handling:** `src/agent/runloop/unified/async_mcp_manager.rs`
+-   **Quick Reference:** `docs/mcp/MCP_AGENT_QUICK_REFERENCE.md`
+-   **Full Guide:** `docs/mcp/MCP_DIAGNOSTIC_GUIDE.md`
+-   **Implementation:** `src/agent/runloop/unified/mcp_support.rs`
+-   **Error Handling:** `src/agent/runloop/unified/async_mcp_manager.rs`

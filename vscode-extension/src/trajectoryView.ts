@@ -59,7 +59,7 @@ class TrajectoryTreeDataProvider
                 return [
                     new PlaceholderTreeItem(
                         this.placeholderMessage ??
-                            "Run the VTCode agent to capture trajectory logs."
+                            "Run the VT Code agent to capture trajectory logs."
                     ),
                 ];
             }
@@ -104,10 +104,7 @@ class PlaceholderTreeItem extends TrajectoryTreeItem {
 
 class TurnTreeItem extends TrajectoryTreeItem {
     constructor(public readonly turn: TrajectoryTurn) {
-        super(
-            `Turn ${turn.turn}`,
-            vscode.TreeItemCollapsibleState.Collapsed
-        );
+        super(`Turn ${turn.turn}`, vscode.TreeItemCollapsibleState.Collapsed);
 
         const descriptionParts: string[] = [];
         if (turn.route) {
@@ -154,11 +151,12 @@ class ToolTreeItem extends TrajectoryTreeItem {
     constructor(tool: ToolRecord) {
         super(`Tool: ${tool.name}`, vscode.TreeItemCollapsibleState.None);
 
-        const statusLabel = tool.ok === false
-            ? "Failed"
-            : tool.ok === true
-            ? "Completed"
-            : "Unknown";
+        const statusLabel =
+            tool.ok === false
+                ? "Failed"
+                : tool.ok === true
+                ? "Completed"
+                : "Unknown";
         const argsPreview = formatArgsPreview(tool.args);
         const descriptionParts = [statusLabel];
         if (argsPreview) {
@@ -202,9 +200,8 @@ export class TrajectoryViewController implements vscode.Disposable {
             )
         );
         context.subscriptions.push(
-            vscode.commands.registerCommand(
-                "vtcode.refreshAgentTimeline",
-                () => this.refreshNow()
+            vscode.commands.registerCommand("vtcode.refreshAgentTimeline", () =>
+                this.refreshNow()
             )
         );
         context.subscriptions.push(
@@ -217,7 +214,11 @@ export class TrajectoryViewController implements vscode.Disposable {
 
         context.subscriptions.push(
             vscode.workspace.onDidChangeConfiguration((event) => {
-                if (event.affectsConfiguration("vtcode.agentTimeline.refreshDebounceMs")) {
+                if (
+                    event.affectsConfiguration(
+                        "vtcode.agentTimeline.refreshDebounceMs"
+                    )
+                ) {
                     this.refreshDelayMs = this.resolveRefreshDelay();
                 }
             })
@@ -261,7 +262,7 @@ export class TrajectoryViewController implements vscode.Disposable {
         if (!folder) {
             this.provider.update(
                 [],
-                "Open a workspace folder to inspect VTCode agent telemetry."
+                "Open a workspace folder to inspect VT Code agent telemetry."
             );
             return;
         }
@@ -304,7 +305,7 @@ export class TrajectoryViewController implements vscode.Disposable {
         if (!logUri) {
             this.provider.update(
                 [],
-                "Open a workspace folder to inspect VTCode agent telemetry."
+                "Open a workspace folder to inspect VT Code agent telemetry."
             );
             return;
         }
@@ -312,15 +313,19 @@ export class TrajectoryViewController implements vscode.Disposable {
         try {
             await vscode.workspace.fs.stat(logUri);
         } catch (error) {
-            if (error instanceof vscode.FileSystemError && error.code === "FileNotFound") {
+            if (
+                error instanceof vscode.FileSystemError &&
+                error.code === "FileNotFound"
+            ) {
                 this.provider.update(
                     [],
-                    "No trajectory logs detected. Run a VTCode chat session to populate this view."
+                    "No trajectory logs detected. Run a VT Code chat session to populate this view."
                 );
                 return;
             }
 
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+                error instanceof Error ? error.message : String(error);
             this.provider.update(
                 [],
                 `Failed to read trajectory logs: ${message}`
@@ -334,11 +339,12 @@ export class TrajectoryViewController implements vscode.Disposable {
             const turns = parseTrajectoryLog(text);
             const placeholder =
                 turns.length === 0
-                    ? "Trajectory log is empty. Run the VTCode agent to capture activity."
+                    ? "Trajectory log is empty. Run the VT Code agent to capture activity."
                     : undefined;
             this.provider.update(turns, placeholder);
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+                error instanceof Error ? error.message : String(error);
             this.provider.update(
                 [],
                 `Failed to parse trajectory logs: ${message}`
@@ -358,14 +364,18 @@ export class TrajectoryViewController implements vscode.Disposable {
         try {
             await vscode.workspace.fs.stat(logUri);
         } catch (error) {
-            if (error instanceof vscode.FileSystemError && error.code === "FileNotFound") {
+            if (
+                error instanceof vscode.FileSystemError &&
+                error.code === "FileNotFound"
+            ) {
                 void vscode.window.showInformationMessage(
-                    "VTCode has not written a trajectory log yet. Run a chat session to generate telemetry."
+                    "VT Code has not written a trajectory log yet. Run a chat session to generate telemetry."
                 );
                 return;
             }
 
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+                error instanceof Error ? error.message : String(error);
             void vscode.window.showErrorMessage(
                 `Failed to open trajectory log: ${message}`
             );
@@ -466,9 +476,7 @@ function parseTrajectoryLog(text: string): TrajectoryTurn[] {
         turn.tools.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
     }
 
-    return turnOrder
-        .sort((a, b) => b.turn - a.turn)
-        .slice(0, MAX_TURNS);
+    return turnOrder.sort((a, b) => b.turn - a.turn).slice(0, MAX_TURNS);
 }
 
 function parseTrajectoryLine(line: string): TrajectoryRecord | undefined {
@@ -532,8 +540,7 @@ function parseTrajectoryLine(line: string): TrajectoryRecord | undefined {
             return undefined;
         }
 
-        const ok =
-            typeof record.ok === "boolean" ? record.ok : undefined;
+        const ok = typeof record.ok === "boolean" ? record.ok : undefined;
         const args = Object.prototype.hasOwnProperty.call(record, "args")
             ? (record as { args?: unknown }).args
             : undefined;
@@ -607,9 +614,7 @@ function buildTurnTooltip(turn: TrajectoryTurn): vscode.MarkdownString {
     const tooltip = new vscode.MarkdownString(undefined, true);
     tooltip.appendMarkdown(`**Turn:** ${turn.turn}`);
     if (turn.route) {
-        tooltip.appendMarkdown(
-            `\n\n**Model:** ${turn.route.selected_model}`
-        );
+        tooltip.appendMarkdown(`\n\n**Model:** ${turn.route.selected_model}`);
         tooltip.appendMarkdown(
             `\n\n**Class:** ${formatClassLabel(turn.route.class)}`
         );
@@ -626,9 +631,7 @@ function buildTurnTooltip(turn: TrajectoryTurn): vscode.MarkdownString {
 function buildRouteTooltip(route: RouteRecord): vscode.MarkdownString {
     const tooltip = new vscode.MarkdownString(undefined, true);
     tooltip.appendMarkdown(`**Model:** ${route.selected_model}`);
-    tooltip.appendMarkdown(
-        `\n\n**Class:** ${formatClassLabel(route.class)}`
-    );
+    tooltip.appendMarkdown(`\n\n**Class:** ${formatClassLabel(route.class)}`);
 
     const timestamp = formatTimestamp(route.ts);
     if (timestamp) {
@@ -647,11 +650,12 @@ function buildToolTooltip(tool: ToolRecord): vscode.MarkdownString {
     const tooltip = new vscode.MarkdownString(undefined, true);
     tooltip.appendMarkdown(`**Tool:** ${tool.name}`);
 
-    const statusLabel = tool.ok === false
-        ? "Failed"
-        : tool.ok === true
-        ? "Completed"
-        : "Unknown";
+    const statusLabel =
+        tool.ok === false
+            ? "Failed"
+            : tool.ok === true
+            ? "Completed"
+            : "Unknown";
     tooltip.appendMarkdown(`\n\n**Status:** ${statusLabel}`);
 
     const timestamp = formatTimestamp(tool.ts);

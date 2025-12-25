@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { ChatParticipant, ParticipantContext } from "./types/participant";
 
 /**
- * Registry for managing VTCode chat participants
+ * Registry for managing VT Code chat participants
  */
 export class ParticipantRegistry {
     private participants = new Map<string, ChatParticipant>();
@@ -50,15 +50,19 @@ export class ParticipantRegistry {
      */
     public clear(): void {
         this.participants.clear();
-        this.disposables.forEach(d => d.dispose());
+        this.disposables.forEach((d) => d.dispose());
         this.disposables = [];
     }
 
     /**
      * Find participants that can handle the given context
      */
-    public findEligibleParticipants(context: ParticipantContext): ChatParticipant[] {
-        return this.getAll().filter(participant => participant.canHandle(context));
+    public findEligibleParticipants(
+        context: ParticipantContext
+    ): ChatParticipant[] {
+        return this.getAll().filter((participant) =>
+            participant.canHandle(context)
+        );
     }
 
     /**
@@ -78,7 +82,8 @@ export class ParticipantRegistry {
                     context
                 );
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
+                const errorMessage =
+                    error instanceof Error ? error.message : String(error);
                 void vscode.window.showWarningMessage(
                     `Participant "${participant.displayName}" failed to resolve context: ${errorMessage}`
                 );
@@ -97,7 +102,7 @@ export class ParticipantRegistry {
         description: string;
         insertText: string;
     }> {
-        return this.getAll().map(participant => ({
+        return this.getAll().map((participant) => ({
             label: participant.id,
             description: participant.description || "",
             insertText: `${participant.id} `,

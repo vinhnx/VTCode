@@ -5,7 +5,7 @@ pub(crate) async fn read_system_prompt(workspace: &Path, session_addendum: Optio
     let mut prompt = if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
         text.to_string()
     } else {
-        r#"# VTCode - Rust Coding Assistant
+        r#"# VT Code - Rust Coding Assistant
 
 Use tools immediately. Stop when done or blocked.
 

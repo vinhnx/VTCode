@@ -64,7 +64,7 @@ guide self-diagnostic and self-fix logic.
     `apply_patch` only when you have reviewed the diff locally or staged a
     backup—failed patches can leave partially rewritten files.
 -   Tune the `[timeouts]` table in `vtcode.toml` when integrating long-running
-    tooling. VTCode raises an inline warning once execution crosses the
+    tooling. VT Code raises an inline warning once execution crosses the
     `warning_threshold_percent` so you can cancel runaway commands before they
     hit the ceiling.
 

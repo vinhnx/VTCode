@@ -1,4 +1,4 @@
-//! Panic hook implementation for VTCode TUI applications
+//! Panic hook implementation for VT Code TUI applications
 //! This module provides a panic hook that restores terminal state when a panic occurs,
 //! preventing terminal corruption, and provides better panic formatting for different build types.
 
@@ -63,12 +63,12 @@ pub fn init_panic_hook() {
             if !is_tui {
                 // On program CLI show on debug log
                 // We use tracing if available, but also print a simple message
-                tracing::debug!(panic = %panic_info, "VTCode encountered a critical error");
+                tracing::debug!(panic = %panic_info, "VT Code encountered a critical error");
             }
 
             eprintln!("\nVTCode encountered a critical error and needs to shut down.");
             eprintln!("Error details: {}", panic_info);
-            eprintln!("If you encounter this issue, please report it to the VTCode team.");
+            eprintln!("If you encounter this issue, please report it to the VT Code team.");
             eprintln!("Run with --debug for more information.\n");
 
             // Call the original hook to ensure standard panic reporting (like backtraces)

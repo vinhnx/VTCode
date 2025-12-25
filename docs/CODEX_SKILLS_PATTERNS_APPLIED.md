@@ -563,7 +563,7 @@ When you run this skill, VT Code will use the detected Python environment automa
 
 ```
 
-**Package Manager Preferences**: VTCode agents automatically prefer modern tools:
+**Package Manager Preferences**: VT Code agents automatically prefer modern tools:
 - Python: `uv pip install` (faster) > `pip install` (fallback)
 - JavaScript: `bun install` / `bun add` (faster) > `npm install` (fallback)
 

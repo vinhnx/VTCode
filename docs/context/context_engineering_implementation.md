@@ -165,14 +165,13 @@ detailed_tracking = false
 
 ## Existing Features Already Aligned
 
-VTCode already had several features aligned with Anthropic's principles:
+VT Code already had several features aligned with Anthropic's principles:
 
 ### Decision Ledger
 
 -   `vtcode-core/src/core/decision_tracker.rs`
 -   Tracks decisions with reasoning and outcomes
 -   Generates compact summaries (`render_ledger_brief`)
-
 
 ### Auto-Chunking
 
@@ -192,7 +191,7 @@ VTCode already had several features aligned with Anthropic's principles:
 
 1. **Just-in-Time Context Loading** - Implement lazy file loading patterns
 
-3. **Tool Result Clearing** - Auto-clear old tool outputs
+2. **Tool Result Clearing** - Auto-clear old tool outputs
 
 ### Medium Priority
 

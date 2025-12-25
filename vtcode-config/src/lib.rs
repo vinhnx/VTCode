@@ -1,4 +1,4 @@
-//! Shared configuration loader utilities for VTCode and downstream integrations.
+//! Shared configuration loader utilities for VT Code and downstream integrations.
 //!
 //! This crate exposes [`VTCodeConfig`] and [`ConfigManager`] for reading and
 //! validating `vtcode.toml` files while allowing applications to customize the

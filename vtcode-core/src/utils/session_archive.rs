@@ -456,11 +456,11 @@ async fn resolve_sessions_dir() -> Result<PathBuf> {
         return Ok(path);
     }
 
-    let manager = DotManager::new().context("failed to load VTCode dot manager")?;
+    let manager = DotManager::new().context("failed to load VT Code dot manager")?;
     manager
         .initialize()
         .await
-        .context("failed to initialize VTCode dot directory structure")?;
+        .context("failed to initialize VT Code dot directory structure")?;
     let dir = manager.sessions_dir();
     tokio::fs::create_dir_all(&dir)
         .await

@@ -1,4 +1,4 @@
-# Cross configuration for VTCode project
+# Cross configuration for VT Code project
 # Optimized for cross-compilation of the multi-platform Rust-based terminal coding agent
 
 [build]
@@ -11,12 +11,12 @@ default-target = "x86_64-unknown-linux-gnu"
 passthrough = [
     "PKG_CONFIG_ALLOW_CROSS",
     "OPENSSL_DIR",
-    "OPENSSL_LIB_DIR", 
+    "OPENSSL_LIB_DIR",
     "OPENSSL_INCLUDE_DIR",
     "SDKROOT",
     "VTCODE_SKIP_AUTO_CROSS",
     "VCPKG_ROOT",
-    "VCPKG_ROOT_STATUS", 
+    "VCPKG_ROOT_STATUS",
     "OPENSSL_STATIC",
     "CROSS_CONTAINER_ENGINE",
 ]
@@ -34,14 +34,14 @@ target = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
 image = "ghcr.io/cross-rs/x86_64-apple-darwin:latest"
 pre-build = [
     "export SDKROOT=$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || echo '')",
-    "export PKG_CONFIG_ALLOW_CROSS=1"
+    "export PKG_CONFIG_ALLOW_CROSS=1",
 ]
 
-[target.aarch64-apple-darwin] 
+[target.aarch64-apple-darwin]
 image = "ghcr.io/cross-rs/aarch64-apple-darwin:latest"
 pre-build = [
     "export SDKROOT=$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || echo '')",
-    "export PKG_CONFIG_ALLOW_CROSS=1"
+    "export PKG_CONFIG_ALLOW_CROSS=1",
 ]
 
 [target.x86_64-unknown-linux-gnu]
@@ -49,7 +49,7 @@ image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:latest"
 dockerfile = "./Dockerfile.x86_64-unknown-linux-gnu"
 pre-build = [
     "apt-get update && apt-get install -y pkg-config libssl-dev",
-    "export PKG_CONFIG_ALLOW_CROSS=1"
+    "export PKG_CONFIG_ALLOW_CROSS=1",
 ]
 
 [target.aarch64-unknown-linux-gnu]
@@ -57,19 +57,19 @@ image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest"
 dockerfile = "./Dockerfile.aarch64-unknown-linux-gnu"
 pre-build = [
     "apt-get update && apt-get install -y pkg-config libssl-dev",
-    "export PKG_CONFIG_ALLOW_CROSS=1"
+    "export PKG_CONFIG_ALLOW_CROSS=1",
 ]
 
 [target.x86_64-pc-windows-msvc]
 image = "ghcr.io/cross-rs/x86_64-pc-windows-msvc:latest"
 pre-build = [
     "vcpkg install openssl:x64-windows",
-    "export PKG_CONFIG_ALLOW_CROSS=1"
+    "export PKG_CONFIG_ALLOW_CROSS=1",
 ]
 
 [target.aarch64-pc-windows-msvc]
 image = "ghcr.io/cross-rs/aarch64-pc-windows-msvc:latest"
 pre-build = [
     "vcpkg install openssl:x64-windows",
-    "export PKG_CONFIG_ALLOW_CROSS=1"
+    "export PKG_CONFIG_ALLOW_CROSS=1",
 ]

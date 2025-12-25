@@ -1,4 +1,4 @@
-//! VTCode - Research-preview Rust coding agent
+//! VT Code - Research-preview Rust coding agent
 //!
 //! Thin binary entry point that delegates to modular CLI handlers.
 
@@ -101,19 +101,19 @@ async fn run() -> Result<()> {
                 Some(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
             let startup = StartupContext::from_cli_args(&modified_args)
                 .await
-                .context("failed to initialize VTCode startup context")?;
+                .context("failed to initialize VT Code startup context")?;
             (startup, Some(prompt_text))
         } else {
             // Valid workspace directory, proceed normally
             let startup = StartupContext::from_cli_args(&args)
                 .await
-                .context("failed to initialize VTCode startup context")?;
+                .context("failed to initialize VT Code startup context")?;
             (startup, None)
         }
     } else {
         let startup = StartupContext::from_cli_args(&args)
             .await
-            .context("failed to initialize VTCode startup context")?;
+            .context("failed to initialize VT Code startup context")?;
         (startup, None)
     };
 

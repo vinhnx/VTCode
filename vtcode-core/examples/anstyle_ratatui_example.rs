@@ -66,7 +66,7 @@ fn main() -> io::Result<()> {
     println!("\n=== CLI Output Example ===\n");
     println!(
         "{}",
-        theme.render_cli("Welcome to VTCode Styling!", &theme.title)
+        theme.render_cli("Welcome to VT Code Styling!", &theme.title)
     );
     println!(
         "{}",
@@ -101,7 +101,7 @@ fn main() -> io::Result<()> {
         let title_block = Block::bordered().style(anstyle_to_ratatui(theme.title));
 
         let title_text = Line::from(vec![
-            theme.render_tui_span("VTCode ", &theme.title),
+            theme.render_tui_span("VT Code ", &theme.title),
             theme.render_tui_span("Styling Example", &theme.highlight),
         ]);
 

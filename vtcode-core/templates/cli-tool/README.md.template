@@ -4,12 +4,12 @@
 
 ## Overview
 
-This is a CLI tool integration for VTCode that wraps the `{{tool_command}}` command.
+This is a CLI tool integration for VT Code that wraps the `{{tool_command}}` command.
 
 ## Installation
 
 1. Ensure `{{tool_command}}` is installed on your system
-2. Place this skill directory in your VTCode skills directory
+2. Place this skill directory in your VT Code skills directory
 3. Make sure `tool.sh` is executable: `chmod +x tool.sh`
 
 ## Configuration
@@ -30,7 +30,7 @@ If `schema.json` is present, it will be used to validate input arguments.
 
 ## Examples
 
-See the instructions in the VTCode interface for usage examples.
+See the instructions in the VT Code interface for usage examples.
 
 ## Troubleshooting
 

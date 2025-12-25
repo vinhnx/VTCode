@@ -5,7 +5,7 @@
 //!
 //! ## Current Implementation Note
 //!
-//! As of v0.50.7, VTCode implements skills as **callable tools** (via Tool trait),
+//! As of v0.50.7, VT Code implements skills as **callable tools** (via Tool trait),
 //! not as prompt text in the system prompt. Skills are loaded on-demand via
 //! `/skills load <name>` commands and registered in the tool registry.
 //!

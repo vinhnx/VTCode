@@ -1,22 +1,25 @@
-# VTCode Command Security - Quick Reference
+# VT Code Command Security - Quick Reference
 
 ## What Works Out of the Box
 
 All these commands are **enabled by default** for non-powered users:
 
 ### File & Text Operations
+
 ```
 ls, pwd, cat, head, tail, grep, find, wc, sort, uniq, cut, awk, sed
 echo, printf, date, which, file, stat, tree, diff, patch
 ```
 
 ### Version Control
+
 ```
 git (all subcommands)
 hg, svn, git-lfs
 ```
 
 ### Build & Compilation
+
 ```
 cargo, cargo build, cargo test, cargo run, cargo clippy, cargo check, cargo fmt
 rustc, rustfmt, rustup
@@ -24,6 +27,7 @@ make, cmake, ninja, meson, bazel
 ```
 
 ### Languages & Runtimes
+
 ```
 python, python3, pip, pip3, virtualenv, pytest, black, flake8, mypy, ruff
 node, npm, yarn, pnpm, bun, npx
@@ -33,16 +37,19 @@ gcc, g++, clang, clang++
 ```
 
 ### Compression
+
 ```
 tar, zip, unzip, gzip, gunzip, bzip2, bunzip2, xz, unxz
 ```
 
 ### System Information
+
 ```
 ps, top, htop, df, du, whoami, hostname, uname
 ```
 
 ### Containers
+
 ```
 docker, docker-compose (with restrictions on docker run)
 ```
@@ -52,17 +59,18 @@ docker, docker-compose (with restrictions on docker run)
 These commands **cannot be run** regardless of configuration:
 
 ### Dangerous Patterns
-- `rm -rf /`, `rm -rf ~`, `rm -rf /*` - Filesystem destruction
-- `shutdown`, `reboot`, `halt`, `poweroff` - System shutdown
-- `sudo *` - Privilege escalation
-- `chmod *`, `chown *` - Permission/ownership changes
-- `kill *`, `pkill *` - Process termination
-- `systemctl *` - Service management
-- `mount *`, `umount *` - Filesystem mounting
-- `mkfs *`, `fdisk *`, `dd *` - Disk operations
-- `eval` - Code evaluation
-- `:(){ :|:& };:` - Fork bomb
-- `kubectl *` - Kubernetes operations
+
+-   `rm -rf /`, `rm -rf ~`, `rm -rf /*` - Filesystem destruction
+-   `shutdown`, `reboot`, `halt`, `poweroff` - System shutdown
+-   `sudo *` - Privilege escalation
+-   `chmod *`, `chown *` - Permission/ownership changes
+-   `kill *`, `pkill *` - Process termination
+-   `systemctl *` - Service management
+-   `mount *`, `umount *` - Filesystem mounting
+-   `mkfs *`, `fdisk *`, `dd *` - Disk operations
+-   `eval` - Code evaluation
+-   `:(){ :|:& };:` - Fork bomb
+-   `kubectl *` - Kubernetes operations
 
 ## Wildcard Patterns (Enabled by Default)
 
@@ -89,6 +97,7 @@ docker *           → docker ps, docker logs, docker build, etc. (except docker
 Edit `vtcode.toml` in your project:
 
 ### Allow a new command
+
 ```toml
 [commands]
 allow_list = [
@@ -98,6 +107,7 @@ allow_list = [
 ```
 
 ### Allow a command pattern
+
 ```toml
 allow_glob = [
   "my-tool *",  # Enables: my-tool build, my-tool test, etc.
@@ -105,6 +115,7 @@ allow_glob = [
 ```
 
 ### Block something
+
 ```toml
 deny_glob = [
   "docker run *",  # Blocks: docker run anything
@@ -114,28 +125,36 @@ deny_glob = [
 ## Common Scenarios
 
 ### I need to run `docker build`
-  Works - It's in `docker *` pattern
+
+Works - It's in `docker *` pattern
 
 ### I need to run `docker run`
-  Blocked - Requires explicit review (container creation is restricted)
+
+Blocked - Requires explicit review (container creation is restricted)
 
 ### I need to run `git reset --hard`
-  Works - It's in `git *` pattern (but agent may ask for confirmation on destructive ops)
+
+Works - It's in `git *` pattern (but agent may ask for confirmation on destructive ops)
 
 ### I need to run `npm install`
-  Works - It's in `npm *` pattern
+
+Works - It's in `npm *` pattern
 
 ### I need to run `rm`
-  Blocked - Deletion is always denied to prevent accidents
+
+Blocked - Deletion is always denied to prevent accidents
 
 ### I need to run `cargo test`
-  Works - It's in `cargo *` pattern
+
+Works - It's in `cargo *` pattern
 
 ### I need to run `python script.py`
-  Works - It's in `python *` pattern
+
+Works - It's in `python *` pattern
 
 ### I need to run `sudo something`
-  Blocked - Privilege escalation is always denied
+
+Blocked - Privilege escalation is always denied
 
 ## Troubleshooting
 
@@ -152,12 +171,14 @@ deny_glob = [
 ```
 
 If you need it, either:
+
 1. Remove it from `deny_glob`
 2. Add explicit allow to `allow_list`
 
 ### I added a command but it's still blocked
 
 Commands are checked in this order:
+
 1. deny_list (exact match) - Blocks if found
 2. deny_glob (pattern) - Blocks if found
 3. deny_regex (regex) - Blocks if found
@@ -185,6 +206,6 @@ cat ~/.vtcode/audit/decisions.log
 
 ## See Also
 
-- **[COMMAND_SECURITY_MODEL.md](./COMMAND_SECURITY_MODEL.md)** - Full documentation
-- **[vtcode.toml.example](../vtcode.toml.example)** - Complete config examples
-- **[EXECUTION_POLICY.md](./EXECUTION_POLICY.md)** - Overall security policy
+-   **[COMMAND_SECURITY_MODEL.md](./COMMAND_SECURITY_MODEL.md)** - Full documentation
+-   **[vtcode.toml.example](../vtcode.toml.example)** - Complete config examples
+-   **[EXECUTION_POLICY.md](./EXECUTION_POLICY.md)** - Overall security policy

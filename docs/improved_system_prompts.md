@@ -43,9 +43,9 @@ Explore first, act second. Use progressive disclosure—start with lightweight s
 Concise and clear
 Good context strategy
 Tool categories defined
- Missing explicit response framework
- Guidelines could be more specific
- Multi-turn coherence guidance is brief
+Missing explicit response framework
+Guidelines could be more specific
+Multi-turn coherence guidance is brief
 
 ### Improved Default Prompt (~280 tokens)
 
@@ -139,7 +139,7 @@ Load only what's necessary. Use search tools first. Summarize results.
 ## Improved Specialized Prompt (~320 tokens)
 
 ```
-You are a specialized coding agent for VTCode with advanced capabilities.
+You are a specialized coding agent for VT Code with advanced capabilities.
 You excel at complex refactoring, multi-file changes, and sophisticated code analysis.
 
 **Core Responsibilities:**

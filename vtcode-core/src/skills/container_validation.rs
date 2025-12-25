@@ -41,7 +41,7 @@ pub struct ContainerSkillsValidator {
     container_patterns: Vec<String>,
     /// Patterns that indicate fallback alternatives
     fallback_patterns: Vec<String>,
-    /// Patterns that indicate VTCode incompatibility
+    /// Patterns that indicate VT Code incompatibility
     incompatibility_patterns: Vec<String>,
 }
 
@@ -84,7 +84,7 @@ impl ContainerSkillsValidator {
                 analysis: "Manifest sets requires-container=true".to_string(),
                 patterns_found: vec!["requires-container".to_string()],
                 recommendations: vec![
-                    "This skill declares Anthropic container skills are required; VTCode cannot execute them directly.".to_string(),
+                    "This skill declares Anthropic container skills are required; VT Code cannot execute them directly.".to_string(),
                     "Use a VTCode-native alternative or provide a fallback implementation.".to_string(),
                 ],
                 should_filter: true,
@@ -150,7 +150,7 @@ impl ContainerSkillsValidator {
             (
                 ContainerSkillsRequirement::RequiredWithFallback,
                 format!(
-                    "Skill '{}' explicitly states it requires Anthropic container skills which VTCode does not support. However, it provides fallback alternatives.",
+                    "Skill '{}' explicitly states it requires Anthropic container skills which VT Code does not support. However, it provides fallback alternatives.",
                     skill.name()
                 ),
                 false, // Don't filter - provide fallback guidance
@@ -240,7 +240,7 @@ impl ContainerSkillsValidator {
             recommendations
                 .push("Use the fallback instructions in the skill documentation.".to_string());
             recommendations
-                .push("Look for sections marked 'Option 2' or 'VTCode Alternative'.".to_string());
+                .push("Look for sections marked 'Option 2' or 'VT Code Alternative'.".to_string());
             recommendations.push(
                 "The skill instructions contain working examples using `execute_code`.".to_string(),
             );

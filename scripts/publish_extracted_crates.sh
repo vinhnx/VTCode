@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # publish_extracted_crates.sh orchestrates the sequential publishes for the
-# extracted VTCode crates. It mirrors the workflow defined in
+# extracted VT Code crates. It mirrors the workflow defined in
 # docs/component_release_plan.md and provides optional dry-run coverage so the
 # same script can be used for validation ahead of the real release window.
 
@@ -175,7 +175,7 @@ for crate in "${CRATES[@]}"; do
     echo
 done
 
-echo "Release sequence complete." 
+echo "Release sequence complete."
 if [[ $DRY_RUN -eq 1 ]]; then
     echo "All commands were executed in dry-run mode."
 else

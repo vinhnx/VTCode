@@ -1,10 +1,10 @@
 #!/bin/bash
-# VTCode Security Test
+# VT Code Security Test
 # Tests that dangerous commands are properly blocked
 
 set -e
 
-echo "🛡️  VTCode Security Test Suite"
+echo "🛡️  VT Code Security Test Suite"
 echo "================================"
 
 # Colors

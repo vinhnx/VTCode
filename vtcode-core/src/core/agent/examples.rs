@@ -8,9 +8,9 @@ impl AgentExamples {
     /// Create a simple agent example
     pub fn basic_example() -> &'static str {
         r#"
-# Basic VTCode Usage Example
+# Basic VT Code Usage Example
 
-This example shows how to use VTCode for code analysis and tool execution.
+This example shows how to use VT Code for code analysis and tool execution.
 
 ## Available Tools:
 - grep_file: Ripgrep-backed code search
@@ -27,7 +27,7 @@ This example shows how to use VTCode for code analysis and tool execution.
     /// Advanced agent usage example
     pub fn advanced_example() -> &'static str {
         r#"
-# Advanced VTCode Usage
+# Advanced VT Code Usage
 
 ## Tool Integration:
 - All tools now support PTY for terminal emulation

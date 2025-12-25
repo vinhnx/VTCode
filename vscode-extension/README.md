@@ -10,7 +10,7 @@ For installation instructions and download links for other IDEs, visit our [IDE 
 
 ## Features
 
--   **AI Coding Assistant**: Access the VTCode agent directly from VS Code
+-   **AI Coding Assistant**: Access the VT Code agent directly from VS Code
 -   **Quick Actions**: Easily send questions and get responses without leaving your editor
 -   **Code Analysis**: Analyze your workspace with semantic code intelligence
 -   **Configuration Management**: Edit your `vtcode.toml` configuration files with syntax highlighting
@@ -20,7 +20,7 @@ For installation instructions and download links for other IDEs, visit our [IDE 
 
 ## Prerequisites
 
-Before using this extension, you need to have the VTCode CLI installed:
+Before using this extension, you need to have the VT Code CLI installed:
 
 ```bash
 # Install with Cargo (recommended)
@@ -35,12 +35,12 @@ npm install -g vtcode-ai
 
 ## Quick Start
 
-1. Install the VTCode CLI using one of the methods above
+1. Install the VT Code CLI using one of the methods above
 2. Install this extension from the VS Code Marketplace
 3. Open a workspace containing a `vtcode.toml` file
-4. Access VTCode features through:
+4. Access VT Code features through:
     - The Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`)
-    - The VTCode Quick Actions view in the Explorer
+    - The VT Code Quick Actions view in the Explorer
     - Right-click context menu on selected code
     - Status bar icon
 
@@ -49,12 +49,12 @@ npm install -g vtcode-ai
 The extension contributes the following commands:
 
 -   `VTCode: Open Quick Actions` - Access the quick actions panel
--   `VTCode: Ask the Agent` - Send a question to the VTCode agent
+-   `VTCode: Ask the Agent` - Send a question to the VT Code agent
 -   `VTCode: Ask About Selection` - Ask about highlighted code
 -   `VTCode: Launch Agent Terminal` - Open an integrated terminal session running `vtcode chat`
 -   `VTCode: Analyze Workspace` - Run `vtcode analyze` on your workspace
 -   `VTCode: Open Configuration` - Edit your `vtcode.toml` configuration file
--   `VTCode: Open Documentation` - Access VTCode documentation
+-   `VTCode: Open Documentation` - Access VT Code documentation
 -   `VTCode: Toggle Human-in-the-Loop` - Control human approval for sensitive operations
 -   And more...
 
@@ -62,9 +62,9 @@ The extension contributes the following commands:
 
 The extension contributes the following settings:
 
--   `vtcode.commandPath`: Path to the VTCode executable (default: `vtcode`)
+-   `vtcode.commandPath`: Path to the VT Code executable (default: `vtcode`)
 
-For comprehensive VTCode configuration options, see the [configuration documentation](./docs/config.md). You can also use the example configuration files provided:
+For comprehensive VT Code configuration options, see the [configuration documentation](./docs/config.md). You can also use the example configuration files provided:
 
 -   [vtcode.toml](./vtcode.toml) - Basic configuration example
 -   [vtcode.toml.example](./vtcode.toml.example) - Comprehensive configuration with all options
@@ -72,12 +72,12 @@ For comprehensive VTCode configuration options, see the [configuration documenta
 ## Requirements
 
 -   VS Code version 1.87.0 or higher
--   VTCode now supports placing the VTCode view container in VS Code's Secondary Side Bar (VS Code 1.106+). You can move the VTCode container from the activity bar to the secondary side bar via drag-and-drop or through the context menus in the UI.
--   VTCode CLI installed and accessible in your PATH
+-   VT Code now supports placing the VT Code view container in VS Code's Secondary Side Bar (VS Code 1.106+). You can move the VT Code container from the activity bar to the secondary side bar via drag-and-drop or through the context menus in the UI.
+-   VT Code CLI installed and accessible in your PATH
 
 ## Contributing
 
-Contributions are welcome! Please see the [main VTCode repository](https://github.com/vinhnx/vtcode) for contribution guidelines.
+Contributions are welcome! Please see the [main VT Code repository](https://github.com/vinhnx/vtcode) for contribution guidelines.
 
 ### Development
 
@@ -102,7 +102,7 @@ The release script automates version bumping, building, packaging, and publishin
 
 ## Support
 
-If you find VTCode useful, please consider supporting the project by visiting [BuyMeACoffee](https://www.buymeacoffee.com/vinhnx).
+If you find VT Code useful, please consider supporting the project by visiting [BuyMeACoffee](https://www.buymeacoffee.com/vinhnx).
 
 ## License
 

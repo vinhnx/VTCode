@@ -1,16 +1,16 @@
-#  COMPLETE FIX: VTCode Agent Skill Discovery & Loading
+# COMPLETE FIX: VT Code Agent Skill Discovery & Loading
 
 ## Problem Summary
 
 When trying to use Claude Agent Skills (like `spreadsheet-generator`), the vtcode agent encountered **two issues**:
 
-### Issue 1: `search_tools` returned empty results  FIXED
+### Issue 1: `search_tools` returned empty results FIXED
 
 -   **Error**: `{"matched":0,"results":[]}`
 -   **Cause**: Used wrong loader (SkillManager looking for `skill.json` instead of SkillLoader reading `SKILL.md`)
 -   **Fix**: Changed `search_tools_executor` to use `SkillLoader` (commit f5f413c5)
 
-### Issue 2: `skill` tool not recognized  FIXED
+### Issue 2: `skill` tool not recognized FIXED
 
 -   **Error**: `Tool 'skill' execution failed: Unknown tool: skill`
 -   **Cause**: Function declaration missing from `declarations.rs`
@@ -153,19 +153,19 @@ Agent:
 
 ## Key Insights
 
-1. **Two Skill Systems**: VTCode supports both Claude Agent Skills (SKILL.md) and executable code skills (skill.json). The fix ensures the correct loader is used for each.
+1. **Two Skill Systems**: VT Code supports both Claude Agent Skills (SKILL.md) and executable code skills (skill.json). The fix ensures the correct loader is used for each.
 
 2. **Three Required Pieces**:
 
-    -  Executor implementation (`skill_executor` - existed)
-    -  Tool registration (`builtins.rs` - existed)
-    -  Function declaration (`declarations.rs` - **was missing**)
+    - Executor implementation (`skill_executor` - existed)
+    - Tool registration (`builtins.rs` - existed)
+    - Function declaration (`declarations.rs` - **was missing**)
 
 3. **Discovery vs Loading**: `search_tools` finds skills, `skill` loads them. Both now work correctly.
 
 ---
 
-**Status**:  COMPLETE
+**Status**: COMPLETE
 **Commits**: f5f413c5, 390245e1
 **Date**: December 13, 2025
 **Verified**: Build successful, ready for testing

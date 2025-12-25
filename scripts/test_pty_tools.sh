@@ -1,10 +1,10 @@
 #!/bin/bash
-# VTCode Tools Focused Test
+# VT Code Tools Focused Test
 # Tests availability and basic functionality of external tools
 
 set -e
 
-echo "VTCode Tools Test"
+echo "VT Code Tools Test"
 echo "================="
 
 # Colors

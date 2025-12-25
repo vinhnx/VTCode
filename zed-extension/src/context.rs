@@ -1,10 +1,10 @@
 /// Editor Context Management
 ///
-/// Provides rich context from the Zed editor for VTCode commands.
+/// Provides rich context from the Zed editor for VT Code commands.
 /// Captures selection, file info, workspace structure, and environment.
 use std::path::PathBuf;
 
-/// Rich context from the editor for a VTCode command
+/// Rich context from the editor for a VT Code command
 #[derive(Debug, Clone)]
 pub struct EditorContext {
     /// Currently active file path
@@ -86,7 +86,7 @@ impl Default for EditorContext {
     }
 }
 
-/// Diagnostic result from VTCode analysis
+/// Diagnostic result from VT Code analysis
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
     /// Severity: error, warning, info

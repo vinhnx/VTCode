@@ -1,8 +1,8 @@
-# VTCode Agent Skills - Master Guide
+# VT Code Agent Skills - Master Guide
 
-Complete reference for using Anthropic Agent Skills with VTCode in CLI and TUI.
+Complete reference for using Anthropic Agent Skills with VT Code in CLI and TUI.
 
-##  Quick Start (2 minutes)
+## Quick Start (2 minutes)
 
 ```bash
 # 1. Start interactive chat
@@ -22,42 +22,47 @@ vtcode chat
 
 ---
 
-##  Documentation Map
+## Documentation Map
 
 ### For TUI Users (I'm using `vtcode chat`)
 
 **Start here:**
-- [`AGENT_SKILLS_QUICKREF.md`](AGENT_SKILLS_QUICKREF.md) - One-page quick reference (5 min)
-- [`AGENT_SKILLS_CLI_TUI.md`](AGENT_SKILLS_CLI_TUI.md) - Complete TUI guide (15 min)
-- [`AGENT_SKILLS_TUI_VISUAL.md`](AGENT_SKILLS_TUI_VISUAL.md) - Visual step-by-step guide
+
+-   [`AGENT_SKILLS_QUICKREF.md`](AGENT_SKILLS_QUICKREF.md) - One-page quick reference (5 min)
+-   [`AGENT_SKILLS_CLI_TUI.md`](AGENT_SKILLS_CLI_TUI.md) - Complete TUI guide (15 min)
+-   [`AGENT_SKILLS_TUI_VISUAL.md`](AGENT_SKILLS_TUI_VISUAL.md) - Visual step-by-step guide
 
 ### For Integration (I'm building with skills)
 
 **Start here:**
-- [`AGENT_SKILLS_INTEGRATION.md`](AGENT_SKILLS_INTEGRATION.md) - Integration patterns (20 min)
-- [`AGENT_SKILLS_SUMMARY.md`](AGENT_SKILLS_SUMMARY.md) - Implementation overview
+
+-   [`AGENT_SKILLS_INTEGRATION.md`](AGENT_SKILLS_INTEGRATION.md) - Integration patterns (20 min)
+-   [`AGENT_SKILLS_SUMMARY.md`](AGENT_SKILLS_SUMMARY.md) - Implementation overview
 
 ### For Skill Creation (I want to build custom skills)
 
 **Start here:**
-- [`SKILLS_GUIDE.md`](SKILLS_GUIDE.md) - Complete skills guide (30 min)
-- [`.claude/skills/README.md`](../.claude/skills/README.md) - Skills directory guide
+
+-   [`SKILLS_GUIDE.md`](SKILLS_GUIDE.md) - Complete skills guide (30 min)
+-   [`.claude/skills/README.md`](../.claude/skills/README.md) - Skills directory guide
 
 ### For Examples (Show me code!)
 
 **Start here:**
-- [`examples/skills_spreadsheet.py`](../examples/skills_spreadsheet.py) - Excel examples
-- [`examples/skills_word_document.py`](../examples/skills_word_document.py) - Word examples
-- [`examples/skills_pdf_generation.py`](../examples/skills_pdf_generation.py) - PDF examples
+
+-   [`examples/skills_spreadsheet.py`](../examples/skills_spreadsheet.py) - Excel examples
+-   [`examples/skills_word_document.py`](../examples/skills_word_document.py) - Word examples
+-   [`examples/skills_pdf_generation.py`](../examples/skills_pdf_generation.py) - PDF examples
 
 ### For Navigation (Find specific info)
 
 **Go here:**
-- [`INDEX_AGENT_SKILLS.md`](INDEX_AGENT_SKILLS.md) - Complete navigation index
+
+-   [`INDEX_AGENT_SKILLS.md`](INDEX_AGENT_SKILLS.md) - Complete navigation index
 
 ---
 
-##  Choose Your Path
+## Choose Your Path
 
 ### "I want to use skills in the TUI now"
 
@@ -109,7 +114,7 @@ vtcode chat
 
 ---
 
-##  Slash Commands Cheat Sheet
+## Slash Commands Cheat Sheet
 
 ```bash
 /skills list              # List all available skills
@@ -121,7 +126,7 @@ vtcode chat
 
 ---
 
-##  Common Workflows
+## Common Workflows
 
 ### Workflow 1: Create Financial Spreadsheet
 
@@ -129,10 +134,10 @@ vtcode chat
 $ vtcode chat
 /skills load spreadsheet-generator
 # Type: Create Excel with Q4 revenue, expenses, profit margins
-# Agent creates file 
+# Agent creates file
 ```
 
-**Time:** 2-3 minutes  
+**Time:** 2-3 minutes
 **Reference:** AGENT_SKILLS_CLI_TUI.md → Example 1
 
 ### Workflow 2: Generate Project Document
@@ -141,10 +146,10 @@ $ vtcode chat
 $ vtcode chat
 /skills load doc-generator
 # Type: Create proposal with scope, timeline, budget
-# Agent creates file 
+# Agent creates file
 ```
 
-**Time:** 3-4 minutes  
+**Time:** 3-4 minutes
 **Reference:** AGENT_SKILLS_CLI_TUI.md → Example 2
 
 ### Workflow 3: Code Architecture Review
@@ -153,10 +158,10 @@ $ vtcode chat
 $ vtcode chat
 /skills load strict-architecture
 # Type: Review code for 500-line, 5-func, 4-arg rules
-# Agent analyzes and provides recommendations 
+# Agent analyzes and provides recommendations
 ```
 
-**Time:** 2-3 minutes  
+**Time:** 2-3 minutes
 **Reference:** AGENT_SKILLS_CLI_TUI.md → Example 3
 
 ### Workflow 4: Create Comprehensive Report
@@ -167,32 +172,32 @@ $ vtcode chat
 /skills load doc-generator
 /skills load pdf-report-generator
 # Type: Create quarterly report with all three files
-# Agent creates all three 
+# Agent creates all three
 ```
 
-**Time:** 5-10 minutes  
+**Time:** 5-10 minutes
 **Reference:** AGENT_SKILLS_TUI_VISUAL.md → Multi-Skill Workflow
 
 ---
 
-##  Available Skills
+## Available Skills
 
 ### Document Generation (Anthropic Agent Skills)
 
-| Skill | Type | Use For | Command |
-|-------|------|---------|---------|
+| Skill                   | Type       | Use For                                      | Command                              |
+| ----------------------- | ---------- | -------------------------------------------- | ------------------------------------ |
 | `spreadsheet-generator` | Excel/xlsx | Dashboards, data analysis, financial reports | `/skills load spreadsheet-generator` |
-| `doc-generator` | Word/docx | Proposals, reports, technical docs | `/skills load doc-generator` |
-| `pdf-report-generator` | PDF | Invoices, certificates, reports | `/skills load pdf-report-generator` |
+| `doc-generator`         | Word/docx  | Proposals, reports, technical docs           | `/skills load doc-generator`         |
+| `pdf-report-generator`  | PDF        | Invoices, certificates, reports              | `/skills load pdf-report-generator`  |
 
 ### Development Skills
 
-| Skill | Type | Use For | Command |
-|-------|------|---------|---------|
+| Skill                 | Type        | Use For                                              | Command                            |
+| --------------------- | ----------- | ---------------------------------------------------- | ---------------------------------- |
 | `strict-architecture` | Code Review | Architecture validation (500 lines, 5 funcs, 4 args) | `/skills load strict-architecture` |
-| `bdd-workflow` | Process | TDD/BDD feature development | `/skills load bdd-workflow` |
-| `code-orchestration` | Process | Orchestrated development | `/skills load code-orchestration` |
-| `forensic-debugging` | Process | CRASH-RCA bug investigation | `/skills load forensic-debugging` |
+| `bdd-workflow`        | Process     | TDD/BDD feature development                          | `/skills load bdd-workflow`        |
+| `code-orchestration`  | Process     | Orchestrated development                             | `/skills load code-orchestration`  |
+| `forensic-debugging`  | Process     | CRASH-RCA bug investigation                          | `/skills load forensic-debugging`  |
 
 ---
 
@@ -200,20 +205,20 @@ $ vtcode chat
 
 ### Quick Access in TUI
 
-| Key | Action |
-|-----|--------|
+| Key           | Action                         |
+| ------------- | ------------------------------ |
 | `/sk` + `Tab` | Autocomplete `/skills` command |
-| `↑` / `↓` | Scroll transcript |
-| `Enter` | Send message |
-| `Shift+Enter` | New line |
-| `Ctrl+C` | Cancel response |
-| `Ctrl+L` | Clear screen |
+| `↑` / `↓`     | Scroll transcript              |
+| `Enter`       | Send message                   |
+| `Shift+Enter` | New line                       |
+| `Ctrl+C`      | Cancel response                |
+| `Ctrl+L`      | Clear screen                   |
 
 **Full reference:** AGENT_SKILLS_CLI_TUI.md → Keyboard Shortcuts
 
 ---
 
-##  Progressive Disclosure
+## Progressive Disclosure
 
 How skills efficiently use context:
 
@@ -241,26 +246,27 @@ RESOURCES (on-demand)
 
 ---
 
-##  Documentation Files
+## Documentation Files
 
 All documentation files located in `docs/`:
 
-| File | Size | Purpose | Audience |
-|------|------|---------|----------|
-| `AGENT_SKILLS_QUICKREF.md` | 6.2K | One-page quick reference | Everyone |
-| `AGENT_SKILLS_CLI_TUI.md` | 12K | Complete TUI guide | TUI users |
-| `AGENT_SKILLS_TUI_VISUAL.md` | 24K | Visual step-by-step guide | Visual learners |
-| `AGENT_SKILLS_INTEGRATION.md` | 12K | Integration patterns | Developers |
-| `AGENT_SKILLS_SUMMARY.md` | 10K | Implementation overview | Architects |
-| `SKILLS_GUIDE.md` | 16K | Complete skills guide | Skill creators |
-| `INDEX_AGENT_SKILLS.md` | 11K | Navigation index | Researchers |
-| `README_AGENT_SKILLS.md` | This file | Master guide | Everyone |
+| File                          | Size      | Purpose                   | Audience        |
+| ----------------------------- | --------- | ------------------------- | --------------- |
+| `AGENT_SKILLS_QUICKREF.md`    | 6.2K      | One-page quick reference  | Everyone        |
+| `AGENT_SKILLS_CLI_TUI.md`     | 12K       | Complete TUI guide        | TUI users       |
+| `AGENT_SKILLS_TUI_VISUAL.md`  | 24K       | Visual step-by-step guide | Visual learners |
+| `AGENT_SKILLS_INTEGRATION.md` | 12K       | Integration patterns      | Developers      |
+| `AGENT_SKILLS_SUMMARY.md`     | 10K       | Implementation overview   | Architects      |
+| `SKILLS_GUIDE.md`             | 16K       | Complete skills guide     | Skill creators  |
+| `INDEX_AGENT_SKILLS.md`       | 11K       | Navigation index          | Researchers     |
+| `README_AGENT_SKILLS.md`      | This file | Master guide              | Everyone        |
 
 ---
 
-##  Getting Started Paths
+## Getting Started Paths
 
 ### Path 1: I Just Want to Use Skills (5 minutes)
+
 ```
 1. Read: AGENT_SKILLS_QUICKREF.md
 2. Run: vtcode chat
@@ -270,6 +276,7 @@ All documentation files located in `docs/`:
 ```
 
 ### Path 2: I Want to Learn Properly (30 minutes)
+
 ```
 1. Read: AGENT_SKILLS_QUICKREF.md
 2. Read: AGENT_SKILLS_CLI_TUI.md
@@ -279,6 +286,7 @@ All documentation files located in `docs/`:
 ```
 
 ### Path 3: I Want to Integrate Skills (1 hour)
+
 ```
 1. Understand: AGENT_SKILLS_SUMMARY.md
 2. Learn: AGENT_SKILLS_INTEGRATION.md
@@ -288,6 +296,7 @@ All documentation files located in `docs/`:
 ```
 
 ### Path 4: I Want to Create Custom Skills (2 hours)
+
 ```
 1. Overview: SKILLS_GUIDE.md
 2. Structure: SKILLS_GUIDE.md → Skill Structure
@@ -299,21 +308,23 @@ All documentation files located in `docs/`:
 
 ---
 
-##  Learning Resources
+## Learning Resources
 
 ### Official Resources
-- [Anthropic Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
-- [Agent Skills Quickstart](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/quickstart)
-- [Skills Cookbook](https://github.com/anthropics/claude-cookbooks/tree/main/skills)
 
-### VTCode Resources
-- `.claude/skills/README.md` - Skills directory overview
-- `examples/` - Working Python examples
-- `docs/skills/` - Specific skill documentation
+-   [Anthropic Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
+-   [Agent Skills Quickstart](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/quickstart)
+-   [Skills Cookbook](https://github.com/anthropics/claude-cookbooks/tree/main/skills)
+
+### VT Code Resources
+
+-   `.claude/skills/README.md` - Skills directory overview
+-   `examples/` - Working Python examples
+-   `docs/skills/` - Specific skill documentation
 
 ---
 
-##  Verification
+## Verification
 
 ### Verify Skills Are Available
 
@@ -340,9 +351,10 @@ python examples/skills_spreadsheet.py
 
 ---
 
-##  Troubleshooting
+## Troubleshooting
 
 ### Skill Not Found
+
 ```bash
 /skills list              # Check available
 /skills config            # Check search paths
@@ -350,6 +362,7 @@ vtcode skills validate <path>  # Validate SKILL.md
 ```
 
 ### Slash Command Not Working
+
 ```bash
 /help                     # See all commands
 /skills                   # See skill commands
@@ -357,6 +370,7 @@ Tab key                   # Trigger autocomplete
 ```
 
 ### File Not Generated
+
 ```
 1. Check: Agent output for errors
 2. Verify: /skills list shows skill loaded
@@ -368,34 +382,38 @@ Tab key                   # Trigger autocomplete
 
 ---
 
-##  Feature Summary
+## Feature Summary
 
- **Anthropic Agent Skills Integration**
-- Excel (xlsx) generation
-- Word (docx) generation
-- PDF generation
-- PowerPoint (pptx) generation
+**Anthropic Agent Skills Integration**
 
- **Custom Skills Support**
-- Create custom skills with SKILL.md
-- Skill discovery and loading
-- Progressive disclosure (efficient context)
+-   Excel (xlsx) generation
+-   Word (docx) generation
+-   PDF generation
+-   PowerPoint (pptx) generation
 
- **CLI & TUI Integration**
-- `/skills` slash commands
-- Interactive skill loading
-- Multi-skill workflows
-- Keyboard shortcuts
+    **Custom Skills Support**
 
- **Development Skills**
-- Code architecture review (strict-architecture)
-- BDD/TDD workflows
-- Code orchestration
-- Forensic debugging
+-   Create custom skills with SKILL.md
+-   Skill discovery and loading
+-   Progressive disclosure (efficient context)
+
+    **CLI & TUI Integration**
+
+-   `/skills` slash commands
+-   Interactive skill loading
+-   Multi-skill workflows
+-   Keyboard shortcuts
+
+    **Development Skills**
+
+-   Code architecture review (strict-architecture)
+-   BDD/TDD workflows
+-   Code orchestration
+-   Forensic debugging
 
 ---
 
-##  Next Steps
+## Next Steps
 
 **Choose one:**
 
@@ -421,30 +439,30 @@ Tab key                   # Trigger autocomplete
 
 ---
 
-##  Support
+## Support
 
-- **Quick Questions?** → `AGENT_SKILLS_QUICKREF.md`
-- **How do I use in TUI?** → `AGENT_SKILLS_CLI_TUI.md`
-- **How do I integrate?** → `AGENT_SKILLS_INTEGRATION.md`
-- **How do I create skills?** → `SKILLS_GUIDE.md`
-- **Need navigation?** → `INDEX_AGENT_SKILLS.md`
-
----
-
-##  What's Included
-
- 3 new Agent Skills in `.claude/skills/`
- 7 documentation files (89KB total)
- 3 working Python examples
- 3 example documentation files
- Complete CLI/TUI integration
- Progressive disclosure optimization
- Keyboard shortcuts and workflows
- Troubleshooting guides
+-   **Quick Questions?** → `AGENT_SKILLS_QUICKREF.md`
+-   **How do I use in TUI?** → `AGENT_SKILLS_CLI_TUI.md`
+-   **How do I integrate?** → `AGENT_SKILLS_INTEGRATION.md`
+-   **How do I create skills?** → `SKILLS_GUIDE.md`
+-   **Need navigation?** → `INDEX_AGENT_SKILLS.md`
 
 ---
 
-##  You're Ready!
+## What's Included
+
+3 new Agent Skills in `.claude/skills/`
+7 documentation files (89KB total)
+3 working Python examples
+3 example documentation files
+Complete CLI/TUI integration
+Progressive disclosure optimization
+Keyboard shortcuts and workflows
+Troubleshooting guides
+
+---
+
+## You're Ready!
 
 Everything is set up. Start with:
 
@@ -459,5 +477,5 @@ vtcode chat
 
 ---
 
-**Last Updated:** December 13, 2024  
-**VTCode Agent Skills - Complete Implementation**
+**Last Updated:** December 13, 2024
+**VT Code Agent Skills - Complete Implementation**

@@ -16,9 +16,10 @@ When a check fails, a helpful suggestion appears immediately below:
 ```
 
 The suggestion (→) provides:
-- What went wrong
-- How to fix it
-- Relevant commands or documentation
+
+-   What went wrong
+-   How to fix it
+-   Relevant commands or documentation
 
 ### 2. Recommended Next Actions Section
 
@@ -33,32 +34,37 @@ A new `[Recommended Next Actions]` section appears at the end:
 ```
 
 This provides:
-- Quick status: All pass or some failures?
-- Action items based on results
-- Cross-references to related commands
-- Links to comprehensive docs
+
+-   Quick status: All pass or some failures?
+-   Action items based on results
+-   Cross-references to related commands
+-   Links to comprehensive docs
 
 ## Supported Suggestions
 
 ### Workspace
+
 ```
 ✗ Workspace: Workspace directory is missing or inaccessible
   → Ensure workspace directory is accessible and not deleted.
 ```
 
 ### API Key
+
 ```
 ✗ API Key: Missing API key for 'openai': OPENAI_API_KEY not found
   → Set API key: export OPENAI_API_KEY=sk-... or similar for your provider.
 ```
 
 ### Configuration
+
 ```
 ✗ Config File: Failed to load configuration from vtcode.toml
   → Copy vtcode.toml.example to vtcode.toml to customize settings.
 ```
 
 ### Dependencies
+
 ```
 ✗ Node.js: Node.js not found in PATH
   → Install Node.js: brew install node (macOS) or see nodejs.org
@@ -71,6 +77,7 @@ This provides:
 ```
 
 ### External Services (MCP)
+
 ```
 ✗ MCP: Init error: Failed to start MCP server 'time'
   → Check MCP configuration in vtcode.toml: ensure servers are running and timeouts are reasonable.
@@ -85,12 +92,12 @@ This provides:
 
 ```
 ═══════════════════════════════════════════════════════════════
-VTCode Doctor v0.52.10
+VT Code Doctor v0.52.10
 ═══════════════════════════════════════════════════════════════
 
 [Core Environment]
   ✓ Workspace: /path/to/workspace
-  ✓ CLI Version: VTCode 0.52.10
+  ✓ CLI Version: VT Code 0.52.10
 
 [Configuration]
   ✓ Config File: Loaded from /path/to/vtcode.toml
@@ -136,10 +143,11 @@ VTCode Doctor v0.52.10
 ## Implementation Details
 
 ### Code Location
-- File: `src/agent/runloop/unified/diagnostics.rs`
-- Functions:
-  - `render_doctor_check()` - Shows check status and triggers suggestion
-  - `get_suggestion_for_failure()` - Generates context-aware suggestions
+
+-   File: `src/agent/runloop/unified/diagnostics.rs`
+-   Functions:
+    -   `render_doctor_check()` - Shows check status and triggers suggestion
+    -   `get_suggestion_for_failure()` - Generates context-aware suggestions
 
 ### How It Works
 
@@ -153,11 +161,13 @@ VTCode Doctor v0.52.10
 ### Smart Suggestion Matching
 
 Suggestions are matched using:
-- Case-insensitive label matching
-- Error message content checking
-- Context-aware recommendations
+
+-   Case-insensitive label matching
+-   Error message content checking
+-   Context-aware recommendations
 
 Example:
+
 ```rust
 if label_lower.contains("api key") {
     Some("Set API key: export OPENAI_API_KEY=sk-... or similar for your provider.".to_string())
@@ -169,9 +179,9 @@ if label_lower.contains("api key") {
 ## User Workflow
 
 1. **Run Diagnosis**: `/doctor`
-2. **Review Results**: 
-   - Green checks (✓) = OK
-   - Red failures (✗) = Need attention
+2. **Review Results**:
+    - Green checks (✓) = OK
+    - Red failures (✗) = Need attention
 3. **Follow Suggestions**: Read the arrow (→) text below each failure
 4. **Fix Issues**: Execute suggested commands
 5. **Verify**: Re-run `/doctor` to confirm fixes
@@ -180,27 +190,30 @@ if label_lower.contains("api key") {
 ## Benefits
 
 ### For Users
-- **Faster Resolution**: Suggestions appear immediately without searching docs
-- **Clarity**: Clear explanation of what's wrong and how to fix it
-- **Guidance**: Next actions section guides them on what to do after diagnosis
-- **Learning**: Helps users understand system requirements
+
+-   **Faster Resolution**: Suggestions appear immediately without searching docs
+-   **Clarity**: Clear explanation of what's wrong and how to fix it
+-   **Guidance**: Next actions section guides them on what to do after diagnosis
+-   **Learning**: Helps users understand system requirements
 
 ### For Developers
-- **Self-Healing**: Users can often resolve issues on their own
-- **Support Load**: Reduces support requests for common issues
-- **Discovery**: Helps users find related commands and features
+
+-   **Self-Healing**: Users can often resolve issues on their own
+-   **Support Load**: Reduces support requests for common issues
+-   **Discovery**: Helps users find related commands and features
 
 ## Future Enhancements
 
 Possible improvements:
-- Interactive fix suggestions (execute directly)
-- Severity levels for failures (warning vs critical)
-- Custom suggestion providers via plugins
-- Suggestion feedback (thumbs up/down)
-- Analytics on most common failures
+
+-   Interactive fix suggestions (execute directly)
+-   Severity levels for failures (warning vs critical)
+-   Custom suggestion providers via plugins
+-   Suggestion feedback (thumbs up/down)
+-   Analytics on most common failures
 
 ## Related Documentation
 
-- `DOCTOR_IMPROVEMENTS.md` - Overview of all doctor enhancements
-- `DOCTOR_REFERENCE.md` - Quick reference guide
-- `DOCTOR_COMPLETE_CHANGELOG.md` - Technical implementation details
+-   `DOCTOR_IMPROVEMENTS.md` - Overview of all doctor enhancements
+-   `DOCTOR_REFERENCE.md` - Quick reference guide
+-   `DOCTOR_COMPLETE_CHANGELOG.md` - Technical implementation details

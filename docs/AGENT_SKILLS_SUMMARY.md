@@ -38,7 +38,7 @@ Complete Anthropic Agent Skills integration for VTCode, following the Claude API
 
 2. **docs/AGENT_SKILLS_INTEGRATION.md** (new)
 
-    - How to use skills with VTCode agent
+    - How to use skills with VT Code agent
     - Quick start guide
     - Available built-in skills
     - Code examples (Rust and Python)
@@ -218,7 +218,7 @@ container={
 
 ### Agent Integration
 
-VTCode agent harness integrates skills through:
+VT Code agent harness integrates skills through:
 
 1. **CLI Module** (`src/cli/skills.rs`)
 

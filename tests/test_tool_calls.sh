@@ -1,10 +1,10 @@
 #!/bin/bash
-# VTCode End-to-End Tool Call Testing Script
+# VT Code End-to-End Tool Call Testing Script
 # Tests various tool calls to ensure they work correctly
 
 set -e
 
-echo "🧪 VTCode End-to-End Tool Call Testing"
+echo "🧪 VT Code End-to-End Tool Call Testing"
 echo "======================================="
 
 # Colors for output
@@ -74,7 +74,7 @@ echo "Tests Passed: $TESTS_PASSED"
 echo "Success Rate: $((TESTS_PASSED * 100 / TESTS_RUN))%"
 
 if [ $TESTS_PASSED -eq $TESTS_RUN ]; then
-    echo -e "\n${GREEN}🎉 All tests passed! VTCode tools are working correctly.${NC}"
+    echo -e "\n${GREEN}🎉 All tests passed! VT Code tools are working correctly.${NC}"
     exit 0
 else
     echo -e "\n${RED}・  Some tests failed. Please check the output above.${NC}"

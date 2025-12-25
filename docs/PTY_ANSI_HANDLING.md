@@ -2,7 +2,7 @@
 
 ## Overview
 
-VTCode implements comprehensive ANSI code stripping for PTY command output to ensure clean, machine-readable output for agent processing.
+VT Code implements comprehensive ANSI code stripping for PTY command output to ensure clean, machine-readable output for agent processing.
 
 ## Architecture
 
@@ -43,14 +43,15 @@ fn push_text(&mut self, text: &str) {
 
 Multiple locations in `vtcode-core/src/tools/registry/executors.rs`:
 
-| Function | Lines | Output Field |
-|----------|-------|--------------|
-| `execute_run_pty_command()` | 3371 | `output` |
-| `execute_read_pty_session()` | 2120 | `output` |
-| `execute_send_pty_input()` | 2022 | `output` |
-| `snapshot_to_map()` | 2911, 2920 | `screen_contents`, `scrollback` |
+| Function                     | Lines      | Output Field                    |
+| ---------------------------- | ---------- | ------------------------------- |
+| `execute_run_pty_command()`  | 3371       | `output`                        |
+| `execute_read_pty_session()` | 2120       | `output`                        |
+| `execute_send_pty_input()`   | 2022       | `output`                        |
+| `snapshot_to_map()`          | 2911, 2920 | `screen_contents`, `scrollback` |
 
 Example:
+
 ```rust
 response.insert("output".to_string(), Value::String(strip_ansi(&output)));
 ```
@@ -72,25 +73,28 @@ Two complementary parsers handle edge cases:
 ### `crate::utils::ansi_parser::strip_ansi()` (Primary)
 
 Handles:
-- **CSI sequences**: `ESC[...letter` (colors, styles, cursor movement)
-- **OSC sequences**: `ESC]...BEL` or `ESC]...ST` (hyperlinks, titles)
-- **DCS/PM/APC**: `ESC P/^/_...ST` (device control strings)
-- **2-char escapes**: `ESC[`, `ESC]`, etc.
-- **Incomplete sequences**: Gracefully handles partial ANSI at EOF
+
+-   **CSI sequences**: `ESC[...letter` (colors, styles, cursor movement)
+-   **OSC sequences**: `ESC]...BEL` or `ESC]...ST` (hyperlinks, titles)
+-   **DCS/PM/APC**: `ESC P/^/_...ST` (device control strings)
+-   **2-char escapes**: `ESC[`, `ESC]`, etc.
+-   **Incomplete sequences**: Gracefully handles partial ANSI at EOF
 
 Tests in `vtcode-core/src/utils/ansi_parser.rs` verify:
-- Basic colors: `\x1b[31mRed\x1b[0m` → `Red`
-- Bold: `\x1b[1;32mbold\x1b[0m` → `bold`
-- Cargo output with warnings/errors
-- OSC with ST terminator: `\x1b]8;;file://\x1b\\` (hyperlinks)
+
+-   Basic colors: `\x1b[31mRed\x1b[0m` → `Red`
+-   Bold: `\x1b[1;32mbold\x1b[0m` → `bold`
+-   Cargo output with warnings/errors
+-   OSC with ST terminator: `\x1b]8;;file://\x1b\\` (hyperlinks)
 
 ### `streams.rs::strip_ansi_codes()` (Secondary)
 
 Character-by-character parsing with:
-- Peekable iterator for lookahead
-- Proper ST (`ESC\` / `\u{0007}`) termination
-- Character set selection (`ESC(0`, `ESC)B`)
-- Single-char sequences (cursor save, reset, etc.)
+
+-   Peekable iterator for lookahead
+-   Proper ST (`ESC\` / `\u{0007}`) termination
+-   Character set selection (`ESC(0`, `ESC)B`)
+-   Single-char sequences (cursor save, reset, etc.)
 
 ## Data Flow
 
@@ -116,9 +120,9 @@ Clean, machine-readable output to agent
 
 ### Existing Tests
 
-- `vtcode-core/src/utils/ansi_parser.rs`: 10+ tests covering CSI, OSC, edge cases
-- `vtcode-core/src/tools/pty.rs`: Scrollback size, overflow, metrics tests
-- Implicit: Every `strip_ansi()` call prevents malformed output
+-   `vtcode-core/src/utils/ansi_parser.rs`: 10+ tests covering CSI, OSC, edge cases
+-   `vtcode-core/src/tools/pty.rs`: Scrollback size, overflow, metrics tests
+-   Implicit: Every `strip_ansi()` call prevents malformed output
 
 ### Manual Verification
 
@@ -131,33 +135,34 @@ Both commands should produce **zero matches** after these changes.
 
 ## Performance Impact
 
-- **Minimal**: Single-pass linear scan over output text
-- **Token-aware truncation** already processes all output for token counting
-- **Environment variables**: No runtime cost (set once at spawn)
+-   **Minimal**: Single-pass linear scan over output text
+-   **Token-aware truncation** already processes all output for token counting
+-   **Environment variables**: No runtime cost (set once at spawn)
 
 ## Edge Cases Handled
 
-| Case | Handling |
-|------|----------|
-| Incomplete UTF-8 at output boundary | Replacement char `U+FFFD` + continue |
-| ANSI at token boundary | Strip before truncation, then truncate |
-| Multiple nested styles | All sequences stripped (not rendered anyway) |
-| Hyperlinks (`ESC]8` OSC) | Stripped (just text remains) |
-| 256-color codes (`ESC[38;5;123m`) | Stripped (part of CSI sequence) |
-| True color (`ESC[38;2;R;G;Bm`) | Stripped (part of CSI sequence) |
-| Mixed line endings | Preserved as-is (`\r\n`, `\n`, `\r`) |
+| Case                                | Handling                                     |
+| ----------------------------------- | -------------------------------------------- |
+| Incomplete UTF-8 at output boundary | Replacement char `U+FFFD` + continue         |
+| ANSI at token boundary              | Strip before truncation, then truncate       |
+| Multiple nested styles              | All sequences stripped (not rendered anyway) |
+| Hyperlinks (`ESC]8` OSC)            | Stripped (just text remains)                 |
+| 256-color codes (`ESC[38;5;123m`)   | Stripped (part of CSI sequence)              |
+| True color (`ESC[38;2;R;G;Bm`)      | Stripped (part of CSI sequence)              |
+| Mixed line endings                  | Preserved as-is (`\r\n`, `\n`, `\r`)         |
 
 ## Related Files
 
-- `vtcode-core/src/tools/pty.rs` - PTY management and ANSI prevention
-- `vtcode-core/src/utils/ansi_parser.rs` - Core stripping logic
-- `vtcode-core/src/tools/registry/executors.rs` - Return-path stripping
-- `src/agent/runloop/tool_output/streams.rs` - Render-time stripping
-- `src/acp/zed.rs` - ACP integration with stripping
+-   `vtcode-core/src/tools/pty.rs` - PTY management and ANSI prevention
+-   `vtcode-core/src/utils/ansi_parser.rs` - Core stripping logic
+-   `vtcode-core/src/tools/registry/executors.rs` - Return-path stripping
+-   `src/agent/runloop/tool_output/streams.rs` - Render-time stripping
+-   `src/acp/zed.rs` - ACP integration with stripping
 
 ## Configuration
 
 PTY output ANSI handling is **automatic and not user-configurable**. The system always:
+
 1.  Prevents ANSI generation at command spawn
 2.  Strips any escaped sequences at capture
 3.  Strips again at output return

@@ -340,7 +340,8 @@ impl GrepSearchManager {
         use std::process::Command;
 
         let mut cmd = Command::new("rg");
-        cmd.arg("-j").arg(optimal_search_threads().get().to_string());
+        cmd.arg("-j")
+            .arg(optimal_search_threads().get().to_string());
 
         // Add support for respecting ignore files (default is to respect them)
         if !input.respect_ignore_files.unwrap_or(true) {

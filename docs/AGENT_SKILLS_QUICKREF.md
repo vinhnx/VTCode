@@ -135,7 +135,7 @@ vtcode ask "Review this code using strict-architecture rules"
 
 ## Skill Search Paths
 
-VTCode searches for skills in order:
+VT Code searches for skills in order:
 
 1. `.claude/skills/` (project-local)
 2. `./skills/` (workspace)
@@ -245,7 +245,7 @@ python examples/skills_spreadsheet.py
 
 ## Anthropic Agent Skills
 
-VTCode integrates Anthropic's pre-built skills:
+VT Code integrates Anthropic's pre-built skills:
 
 -   **xlsx** - Excel spreadsheet generation
 -   **docx** - Word document generation

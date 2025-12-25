@@ -262,7 +262,7 @@ fn display_welcome(renderer: &mut AnsiRenderer) -> Result<()> {
         MessageStyle::Info,
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     )?;
-    renderer.line(MessageStyle::Info, "  VTCode Terminal Setup Wizard")?;
+    renderer.line(MessageStyle::Info, "  VT Code Terminal Setup Wizard")?;
     renderer.line(
         MessageStyle::Info,
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",

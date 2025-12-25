@@ -5,13 +5,14 @@
 
 ## Overview
 
-This document summarizes all changes made during the comprehensive dependency optimization effort for the VTCode Rust workspace.
+This document summarizes all changes made during the comprehensive dependency optimization effort for the VT Code Rust workspace.
 
 ## Files Modified
 
 ### 1. Root Cargo.toml (`/Cargo.toml`)
 
 #### Workspace Dependencies Added
+
 ```toml
 [workspace.dependencies]
 base64 = "0.22.1"
@@ -28,17 +29,20 @@ regex = "1.12"            # ← Added
 ```
 
 #### Dependencies Removed
+
 ```diff
 - signal-hook = "0.3"     # Unused dependency
 - which = "8.0.0"         # Unused dependency
 ```
 
 #### Dependencies Added
+
 ```diff
 + dirs = "6.0"            # Required by src/agent/runloop/ui.rs
 ```
 
 #### Dependencies Updated to Use Workspace
+
 ```diff
 - anyhow = "1.0"
 + anyhow = { workspace = true }
@@ -62,11 +66,13 @@ regex = "1.12"            # ← Added
 ### 2. vtcode-core/Cargo.toml
 
 #### Dependencies Removed
+
 ```diff
 - indicatif = { version = "0.18", default-features = false }  # Unused
 ```
 
 #### Dependencies Updated to Use Workspace
+
 ```diff
 - anyhow = "1.0"
 + anyhow = { workspace = true }
@@ -85,6 +91,7 @@ regex = "1.12"            # ← Added
 ```
 
 #### Dependencies Optimized
+
 ```diff
 - tokenizers = { version = "0.22", features = ["http"] }
 + # Token counting for attention budget management
@@ -96,6 +103,7 @@ regex = "1.12"            # ← Added
 ### 3. vtcode-tools/Cargo.toml
 
 #### Dependencies Updated to Use Workspace
+
 ```diff
 [dependencies]
 - anyhow = "1.0"
@@ -124,6 +132,7 @@ regex = "1.12"            # ← Added
 ### 4. vtcode-llm/src/config.rs
 
 #### Bug Fix - Missing Field
+
 ```diff
 pub fn as_factory_config(source: &dyn ProviderConfig) -> vtcode_core::llm::factory::ProviderConfig {
     vtcode_core::llm::factory::ProviderConfig {
@@ -140,22 +149,26 @@ pub fn as_factory_config(source: &dyn ProviderConfig) -> vtcode_core::llm::facto
 ## Impact Summary
 
 ### Dependency Count Changes
-- **Removed:** 3 unused dependencies (signal-hook, which, indicatif)
-- **Added:** 1 required dependency (dirs)
-- **Consolidated:** 5+ dependencies to workspace level
-- **Net Change:** -2 direct dependencies, improved version consistency
+
+-   **Removed:** 3 unused dependencies (signal-hook, which, indicatif)
+-   **Added:** 1 required dependency (dirs)
+-   **Consolidated:** 5+ dependencies to workspace level
+-   **Net Change:** -2 direct dependencies, improved version consistency
 
 ### Build Improvements
+
 1. **Faster incremental builds** - Workspace dependencies improve caching
 2. **Smaller binary size** - Removed unused dependencies and optimized features
 3. **Reduced duplicate versions** - Workspace consolidation prevents version drift
 
 ### Code Quality
+
 1. **Fixed compilation error** - Added missing `anthropic` field in vtcode-llm
 2. **Added missing dependency** - Added `dirs` to main binary
 3. **Improved documentation** - Added comments explaining tokenizers features
 
 ### Future Optimization Opportunities
+
 1. **Tree-sitter language features** - Make individual parsers optional (~5-10MB reduction)
 2. **Tokenizer local-only mode** - Remove http feature when acceptable (~2MB reduction)
 3. **Syntax highlighting optimization** - Review syntect feature requirements (~1-2MB reduction)

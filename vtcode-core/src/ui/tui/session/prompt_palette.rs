@@ -496,7 +496,7 @@ mod tests {
         palette.all_prompts = vec![
             PromptEntry {
                 name: "vtcode".to_owned(),
-                description: "VTCode helper".to_owned(),
+                description: "VT Code helper".to_owned(),
             },
             PromptEntry {
                 name: "rust".to_owned(),

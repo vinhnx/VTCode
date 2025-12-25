@@ -462,7 +462,7 @@ pub fn validate_tool_response_language(tool_name: &str, response: &Value) -> Res
     Ok(())
 }
 
-// Integration tests with actual VTCode tool registry
+// Integration tests with actual VT Code tool registry
 #[cfg(test)]
 mod integration_tests {
     use super::*;

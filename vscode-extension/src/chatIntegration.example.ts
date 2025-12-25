@@ -44,7 +44,7 @@ export function activateChatFeature(
             })
         );
 
-        outputChannel.appendLine("[info] VTCode chat features activated");
+        outputChannel.appendLine("[info] VT Code chat features activated");
     });
 }
 
@@ -77,7 +77,7 @@ const packageJsonUpdates = {
                     id: "vtcodeChat",
                     name: "Chat",
                     icon: "media/chat-icon.svg",
-                    contextualTitle: "VTCode Chat",
+                    contextualTitle: "VT Code Chat",
                 },
                 {
                     id: "vtcodeQuickActionsView",
@@ -116,7 +116,7 @@ const packageJsonUpdates = {
             ],
         },
         configuration: {
-            title: "VTCode Chat",
+            title: "VT Code Chat",
             properties: {
                 "vtcode.chat.autoApproveTools": {
                     type: "boolean",

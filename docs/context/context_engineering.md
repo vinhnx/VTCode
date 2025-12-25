@@ -2,7 +2,7 @@
 
 ## Overview
 
-VTCode implements context engineering principles based on [Anthropic's research](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) to manage the "attention budget" of large language models effectively. This document explains the strategies and features we use to prevent context rot and maintain agent coherence across long-horizon tasks.
+VT Code implements context engineering principles based on [Anthropic's research](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) to manage the "attention budget" of large language models effectively. This document explains the strategies and features we use to prevent context rot and maintain agent coherence across long-horizon tasks.
 
 ## Context Engineering vs Prompt Engineering
 
@@ -139,8 +139,6 @@ To prevent context pollution from verbose tool outputs:
 
 -   **Auto-Truncation**: Command outputs >10k lines show first 5k + last 5k
 -   **Concise Formats**: Tools default to `response_format="concise"`
-
-
 
 ### 7. **Tool Design for Efficiency**
 

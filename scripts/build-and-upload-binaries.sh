@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# VTCode Binary Build and Upload Script
+# VT Code Binary Build and Upload Script
 # This script builds binaries for macOS and uploads them to GitHub Releases
 
 set -e
@@ -60,20 +60,20 @@ check_dependencies() {
         print_error "GitHub CLI is not authenticated. Please run: gh auth login"
         exit 1
     fi
-    
+
     # Check if we're logged in to the expected account and it's active
     if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
         print_error "Not logged in to GitHub account: $expected_account"
         print_info "Run: gh auth login --hostname github.com"
         exit 1
     fi
-    
+
     if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
         print_error "GitHub account '$expected_account' is not active"
         print_info "Run: gh auth switch --hostname github.com --user $expected_account"
         exit 1
     fi
-    
+
     print_success "GitHub CLI authenticated with correct account: $expected_account"
 
     # Check if cross is available and should be used
@@ -304,7 +304,7 @@ calculate_checksums() {
     # macOS checksums (always built)
     local x86_64_macos_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
     local aarch64_macos_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
-    
+
     # Write macOS checksum files
     echo "$x86_64_macos_sha256" > "$dist_dir/vtcode-v$version-x86_64-apple-darwin.sha256"
     echo "$aarch64_macos_sha256" > "$dist_dir/vtcode-v$version-aarch64-apple-darwin.sha256"
@@ -313,10 +313,10 @@ calculate_checksums() {
     if [[ "$OSTYPE" != "darwin"* ]] && [[ -f "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" ]]; then
         local x86_64_linux_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
         local aarch64_linux_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
-        
+
         echo "$x86_64_linux_sha256" > "$dist_dir/vtcode-v$version-x86_64-unknown-linux-gnu.sha256"
         echo "$aarch64_linux_sha256" > "$dist_dir/vtcode-v$version-aarch64-unknown-linux-gnu.sha256"
-        
+
         print_info "x86_64 Linux SHA256: $x86_64_linux_sha256"
         print_info "aarch64 Linux SHA256: $aarch64_linux_sha256"
     fi
@@ -348,14 +348,14 @@ upload_binaries() {
 
     # Upload all files in batch for better performance
     print_info "Uploading assets to GitHub release..."
-    
+
     local files_to_upload=()
     # macOS files (always built)
     files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.tar.gz")
     files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.sha256")
     files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.tar.gz")
     files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.sha256")
-    
+
     # Linux files (only if on Linux)
     if [[ "$OSTYPE" != "darwin"* ]]; then
         files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz")
@@ -363,7 +363,7 @@ upload_binaries() {
         files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz")
         files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.sha256")
     fi
-    
+
     # Verify all files exist before uploading (filter out missing files)
     local files_to_upload_filtered=()
     for file in "${files_to_upload[@]}"; do
@@ -373,13 +373,13 @@ upload_binaries() {
             print_warning "File not found, skipping: $file"
         fi
     done
-    
+
     if [[ ${#files_to_upload_filtered[@]} -eq 0 ]]; then
         print_error "No files to upload"
         cd ..
         return 1
     fi
-    
+
     # Upload files
     print_info "Uploading ${#files_to_upload_filtered[@]} files to release $tag..."
     if ! gh release upload "$tag" "${files_to_upload_filtered[@]}" --clobber; then
@@ -387,7 +387,7 @@ upload_binaries() {
         cd ..
         return 1
     fi
-    
+
     # Verify upload was successful
     print_info "Verifying uploaded assets..."
     sleep 2  # Give GitHub a moment to process the upload
@@ -398,7 +398,7 @@ upload_binaries() {
     else
         print_success "All $asset_count assets uploaded successfully"
     fi
-    
+
     cd ..
 
     print_success "Binary upload process completed"

@@ -1,37 +1,37 @@
 # Styling Integration: anstyle-crossterm
 
-This document describes how VTCode integrates `anstyle-crossterm` for unified styling across CLI and TUI components.
+This document describes how VT Code integrates `anstyle-crossterm` for unified styling across CLI and TUI components.
 
 ## Overview
 
-VTCode uses `anstyle` as the core styling library for ANSI terminal output, providing a generic, crate-agnostic way to define colors and text effects. The `anstyle-crossterm` adapter bridge integrates this with `crossterm` (used by our TUI), and our custom `ratatui_styles` module further bridges to `ratatui` components.
+VT Code uses `anstyle` as the core styling library for ANSI terminal output, providing a generic, crate-agnostic way to define colors and text effects. The `anstyle-crossterm` adapter bridge integrates this with `crossterm` (used by our TUI), and our custom `ratatui_styles` module further bridges to `ratatui` components.
 
 ## Architecture
 
 ```
 
-                    Application Code                      
-           (CLI output, TUI widgets, etc.)                
+                    Application Code
+           (CLI output, TUI widgets, etc.)
 
-                       
-        
-                                     
-               
-      anstyle                 ratatui_styles 
-     (Generic)                (TUI Bridge)   
-               
-                                     
-        
-                       
-            
-             anstyle-crossterm   
-              (to_crossterm)     
-            
-                       
-            
-              crossterm/ratatui  
-              (Terminal Output)   
-            
+
+
+
+
+      anstyle                 ratatui_styles
+     (Generic)                (TUI Bridge)
+
+
+
+
+
+             anstyle-crossterm
+              (to_crossterm)
+
+
+
+              crossterm/ratatui
+              (Terminal Output)
+
 ```
 
 ## Components
@@ -50,10 +50,11 @@ let style = Style::new()
 ```
 
 **Advantages:**
-- Crate-agnostic (can be used with any terminal library)
-- Low-level ANSI styling with RGB and 256-color support
-- Zero dependencies
-- Perfect for library APIs
+
+-   Crate-agnostic (can be used with any terminal library)
+-   Low-level ANSI styling with RGB and 256-color support
+-   Zero dependencies
+-   Perfect for library APIs
 
 ### 2. anstyle-crossterm (Adapter)
 
@@ -70,7 +71,8 @@ let crossterm_style = to_crossterm(anstyle);
 ```
 
 **Key Function:**
-- `to_crossterm(astyle: anstyle::Style) -> crossterm::style::ContentStyle`
+
+-   `to_crossterm(astyle: anstyle::Style) -> crossterm::style::ContentStyle`
 
 ### 3. ratatui_styles (TUI Bridge)
 
@@ -89,9 +91,10 @@ let ratatui_style = anstyle_to_ratatui(anstyle);
 ```
 
 **Conversions Supported:**
-- **Colors:** All standard colors (Red, Green, Blue, etc.), dark variants, RGB, indexed/ANSI values
-- **Effects:** Bold, Italic, Underlined, Dimmed, Reversed, Blink, Crossed-out
-- **Default mapping:** Dark variants map intelligently to standard colors when not available in ratatui
+
+-   **Colors:** All standard colors (Red, Green, Blue, etc.), dark variants, RGB, indexed/ANSI values
+-   **Effects:** Bold, Italic, Underlined, Dimmed, Reversed, Blink, Crossed-out
+-   **Default mapping:** Dark variants map intelligently to standard colors when not available in ratatui
 
 ## Usage Examples
 
@@ -174,19 +177,22 @@ impl AppTheme {
 ## Benefits
 
 ### For CLI Code
-- **Simple API**: `style("text").green().bold()`
-- **No TUI dependencies**: Works in any CLI context
-- **Chainable**: Fluent interface for composing styles
+
+-   **Simple API**: `style("text").green().bold()`
+-   **No TUI dependencies**: Works in any CLI context
+-   **Chainable**: Fluent interface for composing styles
 
 ### For TUI Code
-- **Unified styling**: Same style definitions everywhere
-- **Reusable**: Define once, use in CLI and TUI
-- **Type-safe**: Full Rust type checking
+
+-   **Unified styling**: Same style definitions everywhere
+-   **Reusable**: Define once, use in CLI and TUI
+-   **Type-safe**: Full Rust type checking
 
 ### For Library Authors
-- **Crate-agnostic**: Expose `anstyle::Style` in your API
-- **No hard dependencies**: Consumers choose their terminal library
-- **Composable**: Users can combine multiple libraries seamlessly
+
+-   **Crate-agnostic**: Expose `anstyle::Style` in your API
+-   **No hard dependencies**: Consumers choose their terminal library
+-   **Composable**: Users can combine multiple libraries seamlessly
 
 ## Dependencies
 
@@ -206,13 +212,15 @@ ratatui = { version = "0.29", features = ["crossterm"] }
 ## Performance Considerations
 
 All conversions are zero-cost:
-- No allocations (except for String rendering in CLI)
-- No runtime lookups (pure matching/conversion)
-- Inline-friendly (small functions)
+
+-   No allocations (except for String rendering in CLI)
+-   No runtime lookups (pure matching/conversion)
+-   Inline-friendly (small functions)
 
 Measurement on typical use:
-- `anstyle_to_ratatui()`: ~10-50 nanoseconds
-- Full widget render with 100 styled spans: <1ms
+
+-   `anstyle_to_ratatui()`: ~10-50 nanoseconds
+-   Full widget render with 100 styled spans: <1ms
 
 ## Testing
 
@@ -223,10 +231,11 @@ cargo test --lib ratatui_styles
 ```
 
 Tests cover:
-- ANSI color conversion
-- Effects/attributes conversion
-- Combined style conversion
-- Edge cases
+
+-   ANSI color conversion
+-   Effects/attributes conversion
+-   Combined style conversion
+-   Edge cases
 
 ## Future Improvements
 
@@ -237,7 +246,7 @@ Tests cover:
 
 ## References
 
-- [anstyle GitHub](https://github.com/rust-cli/anstyle)
-- [anstyle-crossterm docs](https://docs.rs/anstyle-crossterm/)
-- [crossterm docs](https://docs.rs/crossterm/)
-- [ratatui docs](https://docs.rs/ratatui/)
+-   [anstyle GitHub](https://github.com/rust-cli/anstyle)
+-   [anstyle-crossterm docs](https://docs.rs/anstyle-crossterm/)
+-   [crossterm docs](https://docs.rs/crossterm/)
+-   [ratatui docs](https://docs.rs/ratatui/)

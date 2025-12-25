@@ -1,14 +1,14 @@
 import * as vscode from "vscode";
 import { BaseCommand, type CommandContext } from "../types/command";
-import { runVtcodeCommand, type VtcodeTaskDefinition } from "../utils/vtcodeRunner";
+import { type VtcodeTaskDefinition } from "../utils/vtcodeRunner";
 
 /**
- * Command to update the VTCode task plan
+ * Command to update the VT Code task plan
  */
 export class UpdatePlanCommand extends BaseCommand {
     public readonly id = "vtcode.runUpdatePlanTask";
     public readonly title = "Update Plan";
-    public readonly description = "Update the VTCode task plan";
+    public readonly description = "Update the VT Code task plan";
     public readonly icon = "checklist";
 
     async execute(context: CommandContext): Promise<void> {
@@ -25,7 +25,7 @@ export class UpdatePlanCommand extends BaseCommand {
 
         if (updatePlanTasks.length === 0) {
             void vscode.window.showWarningMessage(
-                "No VTCode update plan tasks are available. Define a VTCode task in tasks.json to customize the workflow."
+                "No VT Code update plan tasks are available. Define a VT Code task in tasks.json to customize the workflow."
             );
             return;
         }
@@ -39,7 +39,7 @@ export class UpdatePlanCommand extends BaseCommand {
                 task,
             }));
             const selection = await vscode.window.showQuickPick(pickItems, {
-                placeHolder: "Select the VTCode plan task to run",
+                placeHolder: "Select the VT Code plan task to run",
             });
             taskToRun = selection?.task;
         }

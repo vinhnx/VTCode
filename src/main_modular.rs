@@ -1,6 +1,6 @@
-//! VTCode - Research-preview Rust coding agent
+//! VT Code - Research-preview Rust coding agent
 //!
-//! This is the main binary entry point for VTCode with modular CLI architecture.
+//! This is the main binary entry point for VT Code with modular CLI architecture.
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -64,7 +64,7 @@ pub enum Commands {
     Analyze,
     /// Create a new project
     CreateProject { name: String, features: Vec<String> },
-    /// Initialize VTCode configuration
+    /// Initialize VT Code configuration
     Init {
         #[arg(long)]
         force: bool,

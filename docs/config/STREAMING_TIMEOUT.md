@@ -2,7 +2,7 @@
 
 ## Overview
 
-VTCode uses configurable timeouts to prevent long-running LLM streaming requests from consuming resources indefinitely. The `streaming_ceiling_seconds` configuration controls the maximum time the system will wait for an LLM provider to stream a response.
+VT Code uses configurable timeouts to prevent long-running LLM streaming requests from consuming resources indefinitely. The `streaming_ceiling_seconds` configuration controls the maximum time the system will wait for an LLM provider to stream a response.
 
 ## Default Configuration
 
@@ -39,24 +39,24 @@ Edit `vtcode.toml` and increase the `streaming_ceiling_seconds` value:
 streaming_ceiling_seconds = 900  # 15 minutes
 ```
 
-Then restart VTCode for the changes to take effect.
+Then restart VT Code for the changes to take effect.
 
 #### 2. Reduce Input Length
 
-- Break large codebase analyses into smaller chunks
-- Summarize large files before asking questions about them
-- Use more specific search queries to reduce context
+-   Break large codebase analyses into smaller chunks
+-   Summarize large files before asking questions about them
+-   Use more specific search queries to reduce context
 
 #### 3. Check Network Connectivity
 
-- Verify your internet connection is stable
-- Check if your network has latency issues
-- Try running in a different network environment
-- Look for firewall or proxy issues that might slow streaming
+-   Verify your internet connection is stable
+-   Check if your network has latency issues
+-   Try running in a different network environment
+-   Look for firewall or proxy issues that might slow streaming
 
 #### 4. Monitor Streaming Progress
 
-VTCode will warn you when streaming operations approach the timeout limit (at 80% by default). If you see warnings frequently, consider increasing the timeout.
+VT Code will warn you when streaming operations approach the timeout limit (at 80% by default). If you see warnings frequently, consider increasing the timeout.
 
 ## Configuration Options
 
@@ -64,14 +64,14 @@ VTCode will warn you when streaming operations approach the timeout limit (at 80
 
 Maximum time in seconds to wait for an LLM streaming response.
 
-- **0**: Disables the timeout entirely (not recommended)
-- **300-600**: Good for typical use cases and standard network conditions
-- **900-1800**: Recommended for large codebases, complex analyses, or slow networks
-- **>1800**: Use only if you consistently hit timeouts and have a reliable connection
+-   **0**: Disables the timeout entirely (not recommended)
+-   **300-600**: Good for typical use cases and standard network conditions
+-   **900-1800**: Recommended for large codebases, complex analyses, or slow networks
+-   **>1800**: Use only if you consistently hit timeouts and have a reliable connection
 
 ### Warning Threshold
 
-When combined with the global `warning_threshold_percent` setting, VTCode will emit a warning once streaming exceeds 80% of the timeout:
+When combined with the global `warning_threshold_percent` setting, VT Code will emit a warning once streaming exceeds 80% of the timeout:
 
 ```toml
 [timeouts]
@@ -102,6 +102,7 @@ streaming_ceiling_seconds = 1500  # 25 minutes
 **Symptom**: The same query works occasionally but times out other times
 
 **Solution**: This typically indicates network instability. Try:
+
 1. Increase timeout slightly: `streaming_ceiling_seconds = 800`
 2. Retry during periods of stable network
 3. Check for background network activity consuming bandwidth
@@ -118,13 +119,14 @@ warning_threshold_percent = 85  # Warn at 85% instead of 80%
 
 ## Performance Impact
 
-- **Higher timeouts**: No performance impact during normal operation, only affects how long errors take to report
-- **Disabled timeout (0)**: Requests could potentially hang indefinitely without feedback
-- **Very low timeouts (<300s)**: May cause false timeouts on slower networks
+-   **Higher timeouts**: No performance impact during normal operation, only affects how long errors take to report
+-   **Disabled timeout (0)**: Requests could potentially hang indefinitely without feedback
+-   **Very low timeouts (<300s)**: May cause false timeouts on slower networks
 
 ## Related Configuration
 
 See also:
-- `[timeouts] default_ceiling_seconds` - For standard (non-streaming) tool timeouts
-- `[timeouts] pty_ceiling_seconds` - For terminal command timeouts
-- `[timeouts] warning_threshold_percent` - For timeout warning threshold
+
+-   `[timeouts] default_ceiling_seconds` - For standard (non-streaming) tool timeouts
+-   `[timeouts] pty_ceiling_seconds` - For terminal command timeouts
+-   `[timeouts] warning_threshold_percent` - For timeout warning threshold

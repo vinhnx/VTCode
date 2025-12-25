@@ -5,7 +5,7 @@ use tokio::task;
 use toml::Value as TomlValue;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 
-pub(crate) const CONFIG_MODAL_TITLE: &str = "VTCode Configuration";
+pub(crate) const CONFIG_MODAL_TITLE: &str = "VT Code Configuration";
 #[allow(dead_code)]
 pub(crate) const MODAL_CLOSE_HINT: &str = "Press Esc to close the configuration modal.";
 const SENSITIVE_KEYWORDS: [&str; 5] = ["key", "token", "secret", "password", "credential"];

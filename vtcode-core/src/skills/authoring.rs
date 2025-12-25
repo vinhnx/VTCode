@@ -19,7 +19,7 @@ name: {skill_name}
 description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
 # Optional fields following Agent Skills spec:
 # allowed-tools: "Read Write Bash"  # Space-delimited list
-# compatibility: "Designed for VTCode (or similar CLI agents)"
+# compatibility: "Designed for VT Code (or similar CLI agents)"
 # license: MIT
 # metadata:
 #   author: Your Name

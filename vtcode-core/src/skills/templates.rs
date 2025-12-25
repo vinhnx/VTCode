@@ -1,7 +1,7 @@
 //! Skill Template System
 //!
 //! Provides templates for common skill patterns, enabling rapid skill development
-//! and standardization across the VTCode ecosystem.
+//! and standardization across the VT Code ecosystem.
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ use tracing::{debug, info};
 /// Skill template types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TemplateType {
-    /// Traditional VTCode skill with SKILL.md
+    /// Traditional VT Code skill with SKILL.md
     Traditional,
     /// CLI tool integration skill
     CliTool,
@@ -157,7 +157,7 @@ impl TemplateEngine {
         SkillTemplate {
             name: "Traditional Skill".to_string(),
             template_type: TemplateType::Traditional,
-            description: "Standard VTCode skill with SKILL.md format".to_string(),
+            description: "Standard VT Code skill with SKILL.md format".to_string(),
             version: "1.0.0".to_string(),
             variables: vec![
                 TemplateVariable {
@@ -179,7 +179,7 @@ impl TemplateEngine {
                 TemplateVariable {
                     name: "author".to_string(),
                     description: "Skill author".to_string(),
-                    default_value: Some("VTCode User".to_string()),
+                    default_value: Some("VT Code User".to_string()),
                     required: false,
                     validation_pattern: None,
                     examples: vec![],
@@ -229,7 +229,7 @@ impl TemplateEngine {
         SkillTemplate {
             name: "CLI Tool Integration".to_string(),
             template_type: TemplateType::CliTool,
-            description: "Integrate external CLI tools as VTCode skills".to_string(),
+            description: "Integrate external CLI tools as VT Code skills".to_string(),
             version: "1.0.0".to_string(),
             variables: vec![
                 TemplateVariable {
@@ -656,7 +656,7 @@ impl TemplateEngine {
             .or_else(|| variables.get("tester_name"))
             .ok_or_else(|| anyhow!("No skill name found"))?;
 
-        let default_desc = "A VTCode skill".to_string();
+        let default_desc = "A VT Code skill".to_string();
         let description = variables
             .get("description")
             .or_else(|| variables.get("tool_description"))

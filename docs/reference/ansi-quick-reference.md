@@ -1,8 +1,9 @@
-# ANSI Quick Reference for VTCode Development
+# ANSI Quick Reference for VT Code Development
 
 ## Most Common Sequences
 
 ### Colors (Foreground)
+
 ```
 \x1b[30m  Black
 \x1b[31m  Red       ← Errors
@@ -16,6 +17,7 @@
 ```
 
 ### Bright Colors (90-97)
+
 ```
 \x1b[91m  Bright Red
 \x1b[92m  Bright Green
@@ -27,6 +29,7 @@
 ```
 
 ### Text Styles
+
 ```
 \x1b[0m   Reset all
 \x1b[1m   Bold
@@ -41,6 +44,7 @@
 ```
 
 ### Cursor Control
+
 ```
 \x1b[H      Home (0,0)
 \x1b[{n}A   Up n lines
@@ -53,6 +57,7 @@
 ```
 
 ### Erase Functions
+
 ```
 \x1b[2J   Clear entire screen
 \x1b[K    Clear from cursor to end of line
@@ -62,6 +67,7 @@
 ```
 
 ### Screen Modes
+
 ```
 \x1b[?1049h  Enable alternative buffer
 \x1b[?1049l  Disable alternative buffer
@@ -69,9 +75,10 @@
 \x1b[?47l    Restore screen
 ```
 
-## VTCode Usage Examples
+## VT Code Usage Examples
 
 ### Stripping ANSI
+
 ```rust
 use vtcode_core::utils::ansi_parser::strip_ansi;
 
@@ -81,6 +88,7 @@ let clean = strip_ansi("\x1b[31mError\x1b[0m");
 ```
 
 ### Detecting ANSI Sequences
+
 ```rust
 // Check if string contains ANSI codes
 fn has_ansi(text: &str) -> bool {
@@ -91,6 +99,7 @@ fn has_ansi(text: &str) -> bool {
 ### Common Patterns in PTY Output
 
 #### Cargo Output
+
 ```
 \x1b[0m\x1b[1m\x1b[32m   Compiling\x1b[0m vtcode v0.45.6
      ^^^^^^^^^^^^^^ Bold Green "Compiling"
@@ -103,6 +112,7 @@ fn has_ansi(text: &str) -> bool {
 ```
 
 #### Git Output
+
 ```
 \x1b[32m+\x1b[0m Added line
      ^^^^ Green "+"
@@ -117,6 +127,7 @@ fn has_ansi(text: &str) -> bool {
 ## Regex Patterns
 
 ### Match Any ANSI Sequence
+
 ```rust
 // Simple pattern (most common)
 r"\x1b\[[0-9;]*[a-zA-Z]"
@@ -129,6 +140,7 @@ r"\x1b(\[[0-9;?]*[a-zA-Z]|\][^\x07]*\x07|[=>])"
 ```
 
 ### Extract Color Codes
+
 ```rust
 // Match foreground color: ESC[3Xm or ESC[9Xm
 r"\x1b\[(3[0-7]|9[0-7])m"
@@ -143,6 +155,7 @@ r"\x1b\[38;2;(\d+);(\d+);(\d+)m"
 ## Testing Helpers
 
 ### Generate Test Strings
+
 ```rust
 // Red text
 format!("\x1b[31m{}\x1b[0m", "Error")
@@ -155,6 +168,7 @@ format!("\x1b[1m\x1b[4m\x1b[33m{}\x1b[0m", "Warning")
 ```
 
 ### Verify Stripping
+
 ```rust
 #[test]
 fn test_strip_preserves_text() {
@@ -165,25 +179,29 @@ fn test_strip_preserves_text() {
 
 ## Common Mistakes
 
-###  Don't embed ANSI in Ratatui
+### Don't embed ANSI in Ratatui
+
 ```rust
 // BAD - Ratatui will render escape codes literally
 Span::raw("\x1b[31mError\x1b[0m")
 ```
 
-###  Use Ratatui styles instead
+### Use Ratatui styles instead
+
 ```rust
 // GOOD
 Span::styled("Error", Style::default().fg(Color::Red))
 ```
 
-###  Don't count tokens with ANSI
+### Don't count tokens with ANSI
+
 ```rust
 // BAD - ANSI codes inflate count
 let tokens = count_tokens(&pty_output);
 ```
 
-###  Strip first
+### Strip first
+
 ```rust
 // GOOD
 let clean = strip_ansi(&pty_output);
@@ -193,6 +211,7 @@ let tokens = count_tokens(&clean);
 ## Debugging ANSI Issues
 
 ### View Raw Bytes
+
 ```rust
 // Print hex representation
 for byte in text.bytes() {
@@ -205,6 +224,7 @@ println!();
 ```
 
 ### Visualize ANSI Codes
+
 ```rust
 // Replace ESC with visible marker
 let visible = text.replace("\x1b", "␛");
@@ -213,10 +233,11 @@ println!("{}", visible);
 ```
 
 ### Check for Incomplete Sequences
+
 ```rust
 // Detect truncated ANSI codes
 fn has_incomplete_ansi(text: &str) -> bool {
-    text.ends_with("\x1b") || 
+    text.ends_with("\x1b") ||
     text.ends_with("\x1b[") ||
     (text.contains("\x1b[") && !text.contains("m"))
 }
@@ -225,6 +246,7 @@ fn has_incomplete_ansi(text: &str) -> bool {
 ## Performance Tips
 
 ### Pre-compile Regex
+
 ```rust
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -238,6 +260,7 @@ let clean = ANSI_REGEX.replace_all(text, "");
 ```
 
 ### Avoid Repeated Stripping
+
 ```rust
 //  BAD - strips multiple times
 for line in output.lines() {
@@ -256,24 +279,24 @@ for line in clean_output.lines() {
 
 ```
 
- ANSI Quick Reference                                    
+ ANSI Quick Reference
 
- Reset:        \x1b[0m                                   
- Bold:         \x1b[1m                                   
- Dim:          \x1b[2m                                   
- Red:          \x1b[31m                                  
- Green:        \x1b[32m                                  
- Yellow:       \x1b[33m                                  
- Blue:         \x1b[34m                                  
- Clear line:   \x1b[2K                                   
- Hide cursor:  \x1b[?25l                                 
- Show cursor:  \x1b[?25h                                 
+ Reset:        \x1b[0m
+ Bold:         \x1b[1m
+ Dim:          \x1b[2m
+ Red:          \x1b[31m
+ Green:        \x1b[32m
+ Yellow:       \x1b[33m
+ Blue:         \x1b[34m
+ Clear line:   \x1b[2K
+ Hide cursor:  \x1b[?25l
+ Show cursor:  \x1b[?25h
  Alt buffer:   \x1b[?1049h (enable) \x1b[?1049l (disable)
 
 ```
 
 ## See Also
 
-- `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
-- `docs/reference/ansi-in-vtcode.md` - VTCode-specific usage
-- `vtcode-core/src/utils/ansi_parser.rs` - Implementation
+-   `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
+-   `docs/reference/ansi-in-vtcode.md` - VTCode-specific usage
+-   `vtcode-core/src/utils/ansi_parser.rs` - Implementation

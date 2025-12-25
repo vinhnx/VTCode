@@ -1,6 +1,6 @@
 //! # Agent Skills Integration
 //!
-//! Enhanced skills system for VTCode with multi-level loading, CLI tool integration,
+//! Enhanced skills system for VT Code with multi-level loading, CLI tool integration,
 //! and progressive context management inspired by pi-mono's minimalist approach.
 //!
 //! ## Features

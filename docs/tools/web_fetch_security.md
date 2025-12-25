@@ -1,6 +1,6 @@
 # Web Fetch Tool Security Configuration
 
-The `web_fetch` tool provides flexible security modes for controlling which URLs can be accessed by VTCode agents.
+The `web_fetch` tool provides flexible security modes for controlling which URLs can be accessed by VT Code agents.
 
 ## Security Modes
 

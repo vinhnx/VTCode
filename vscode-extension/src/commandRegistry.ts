@@ -1,16 +1,16 @@
 import * as vscode from "vscode";
-import { ICommand, CommandContext } from "./types/command";
+import { CommandContext, ICommand } from "./types/command";
 
 /**
- * VTCode Command Registry
- * 
- * This registry manages all VTCode commands available in the extension.
+ * VT Code Command Registry
+ *
+ * This registry manages all VT Code commands available in the extension.
  * For configuration options and examples, see the documentation:
  * - docs/config.md - Complete configuration reference
  * - vtcode.toml - Basic example configuration
  * - vtcode.toml.example - Comprehensive example with all options
- * 
- * Registry for managing VTCode commands
+ *
+ * Registry for managing VT Code commands
  */
 export class CommandRegistry {
     private commands = new Map<string, ICommand>();
@@ -21,7 +21,7 @@ export class CommandRegistry {
      */
     public register(command: ICommand): void {
         this.commands.set(command.id, command);
-        
+
         // Register with VS Code command system
         const disposable = vscode.commands.registerCommand(
             command.id,
@@ -31,7 +31,10 @@ export class CommandRegistry {
                     try {
                         await command.execute(context);
                     } catch (error) {
-                        const message = error instanceof Error ? error.message : String(error);
+                        const message =
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
                         void vscode.window.showErrorMessage(
                             `Command "${command.title}" failed: ${message}`
                         );
@@ -39,7 +42,7 @@ export class CommandRegistry {
                 }
             }
         );
-        
+
         this.disposables.push(disposable);
     }
 
@@ -78,7 +81,7 @@ export class CommandRegistry {
      */
     public clear(): void {
         this.commands.clear();
-        this.disposables.forEach(d => d.dispose());
+        this.disposables.forEach((d) => d.dispose());
         this.disposables = [];
     }
 

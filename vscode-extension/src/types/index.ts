@@ -1,6 +1,6 @@
 /**
- * Core type definitions for VTCode extension
+ * Core type definitions for VT Code extension
  */
 
-export type { ICommand, CommandContext } from "./command";
+export type { CommandContext, ICommand } from "./command";
 export type { ChatParticipant, ParticipantContext } from "./participant";

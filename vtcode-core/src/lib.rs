@@ -116,9 +116,9 @@
 //!   completions without losing plan consistency.
 
 //!
-//! VTCode Core Library
+//! VT Code Core Library
 //!
-//! This crate provides the core functionality for the VTCode agent,
+//! This crate provides the core functionality for the VT Code agent,
 //! including tool implementations, LLM integration, and utility functions.
 
 // Public modules

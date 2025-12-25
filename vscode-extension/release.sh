@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# VTCode VSCode Extension Release Script
+# VT Code VSCode Extension Release Script
 # This script automates the release process for the VSCode extension
 # Usage: ./release.sh [patch|minor|major]
 
@@ -267,7 +267,7 @@ cleanup_old_vsix() {
 # Main release flow
 main() {
 	echo -e "${BLUE}╔════════════════════════════════════════════════════════╗${NC}"
-	echo -e "${BLUE}║${NC}  ${GREEN}VTCode VSCode Extension Release Script${NC}          ${BLUE}║${NC}"
+	echo -e "${BLUE}║${NC}  ${GREEN}VT Code VSCode Extension Release Script${NC}          ${BLUE}║${NC}"
 	echo -e "${BLUE}╚════════════════════════════════════════════════════════╝${NC}"
 	echo
 

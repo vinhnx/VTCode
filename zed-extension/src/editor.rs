@@ -8,11 +8,11 @@ use std::sync::{Arc, Mutex};
 /// Status indicator for the status bar
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusIndicator {
-    /// VTCode CLI is ready
+    /// VT Code CLI is ready
     Ready,
-    /// VTCode CLI is executing a command
+    /// VT Code CLI is executing a command
     Executing,
-    /// VTCode CLI is unavailable
+    /// VT Code CLI is unavailable
     Unavailable,
     /// An error occurred
     Error,
@@ -30,10 +30,10 @@ impl StatusIndicator {
 
     pub fn label(&self) -> &'static str {
         match self {
-            StatusIndicator::Ready => "VTCode Ready",
-            StatusIndicator::Executing => "VTCode Running...",
-            StatusIndicator::Unavailable => "VTCode Unavailable",
-            StatusIndicator::Error => "VTCode Error",
+            StatusIndicator::Ready => "VT Code Ready",
+            StatusIndicator::Executing => "VT Code Running...",
+            StatusIndicator::Unavailable => "VT Code Unavailable",
+            StatusIndicator::Error => "VT Code Error",
         }
     }
 }
@@ -205,10 +205,10 @@ mod tests {
 
     #[test]
     fn test_status_indicator_labels() {
-        assert_eq!(StatusIndicator::Ready.label(), "VTCode Ready");
-        assert_eq!(StatusIndicator::Executing.label(), "VTCode Running...");
-        assert_eq!(StatusIndicator::Unavailable.label(), "VTCode Unavailable");
-        assert_eq!(StatusIndicator::Error.label(), "VTCode Error");
+        assert_eq!(StatusIndicator::Ready.label(), "VT Code Ready");
+        assert_eq!(StatusIndicator::Executing.label(), "VT Code Running...");
+        assert_eq!(StatusIndicator::Unavailable.label(), "VT Code Unavailable");
+        assert_eq!(StatusIndicator::Error.label(), "VT Code Error");
     }
 
     #[test]

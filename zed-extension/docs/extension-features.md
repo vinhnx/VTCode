@@ -1,20 +1,20 @@
-# VTCode Zed Extension Features
+# VT Code Zed Extension Features
 
-This document outlines the features provided by the VTCode extension for Zed.
+This document outlines the features provided by the VT Code extension for Zed.
 
 ## Current Features
 
 ### 1. Language Support for vtcode.toml
 
--   **Syntax Highlighting**: TOML syntax highlighting specific to VTCode configuration files
+-   **Syntax Highlighting**: TOML syntax highlighting specific to VT Code configuration files
 -   **File Association**: Automatically detects and highlights `vtcode.toml` files
 -   **Configuration Validation**: Basic TOML validation through Zed's language support
 
-### 2. Integration with VTCode CLI
+### 2. Integration with VT Code CLI
 
-The extension provides seamless integration with the VTCode command-line agent:
+The extension provides seamless integration with the VT Code command-line agent:
 
--   Launches VTCode CLI commands from within Zed
+-   Launches VT Code CLI commands from within Zed
 -   Passes workspace context to the agent
 -   Streams responses directly in the editor
 
@@ -32,11 +32,11 @@ The following features are planned for future releases:
 
 ### Commands in Command Palette
 
--   **Ask the Agent**: Send arbitrary questions to VTCode agent
+-   **Ask the Agent**: Send arbitrary questions to VT Code agent
 -   **Analyze Workspace**: Run VTCode's workspace analysis
 -   **Launch Chat**: Open an interactive chat session
 -   **Edit Configuration**: Quick access to vtcode.toml
--   **View Status**: Show VTCode CLI installation status
+-   **View Status**: Show VT Code CLI installation status
 
 ### Integration Features
 
@@ -47,36 +47,36 @@ The following features are planned for future releases:
 
 ### Editor Features
 
--   **Completions**: Code completions from VTCode agent
+-   **Completions**: Code completions from VT Code agent
 -   **Diagnostics**: Integration with VTCode's diagnostic tools
 -   **Code Lens**: Display actionable information inline
--   **Quick Fixes**: VTCode agent-powered code fixes
+-   **Quick Fixes**: VT Code agent-powered code fixes
 
 ### Settings and Configuration
 
--   **Custom VTCode Path**: Override default vtcode command path
+-   **Custom VT Code Path**: Override default vtcode command path
 -   **API Key Management**: Secure handling of AI provider API keys
--   **Output Channel**: Dedicated output channel for VTCode responses
+-   **Output Channel**: Dedicated output channel for VT Code responses
 -   **Logging Options**: Control verbosity of logging
 
 ## Architecture
 
 ```
 
-       Zed Editor                        
-   
-   VTCode Extension (WASM Binary)     
-       
-    • Language Support              
-    • Configuration Management      
-    • CLI Integration               
-       
-   
+       Zed Editor
 
-               
+   VT Code Extension (WASM Binary)
+
+    • Language Support
+    • Configuration Management
+    • CLI Integration
+
+
+
+
                 vtcode.toml (Configuration)
-               
-                VTCode CLI Binary
+
+                VT Code CLI Binary
                    (Handles AI Logic)
 ```
 
@@ -108,7 +108,7 @@ allowed_tools = ["read_file", "edit_file", "analyze_code"]
 
 1. Open a file in your workspace
 2. Run "VTCode: Ask About Selection" (right-click on code)
-3. Extension passes the selected code to VTCode agent
+3. Extension passes the selected code to VT Code agent
 4. Response appears in output channel
 
 ### Example 2: Configure Workspace
@@ -127,7 +127,7 @@ allowed_tools = ["read_file", "edit_file", "analyze_code"]
 
 ## Dependencies
 
--   **VTCode CLI**: Must be installed and in PATH
+-   **VT Code CLI**: Must be installed and in PATH
 -   **Zed**: Version 0.150.0 or higher recommended
 -   **Rust**: For building from source (development only)
 
@@ -135,12 +135,12 @@ allowed_tools = ["read_file", "edit_file", "analyze_code"]
 
 -   **Platforms**: macOS, Linux, Windows
 -   **Zed Versions**: Latest stable release
--   **VTCode Versions**: 0.1.0 and later
+-   **VT Code Versions**: 0.1.0 and later
 
 ## Performance Considerations
 
 -   Extension runs in WebAssembly sandbox
--   All heavy computation delegated to VTCode CLI
+-   All heavy computation delegated to VT Code CLI
 -   Minimal memory footprint in editor process
 -   Asynchronous command execution prevents UI blocking
 
@@ -153,9 +153,9 @@ allowed_tools = ["read_file", "edit_file", "analyze_code"]
 
 ## Troubleshooting
 
-### VTCode CLI Not Found
+### VT Code CLI Not Found
 
--   Ensure VTCode is installed: `cargo install vtcode`
+-   Ensure VT Code is installed: `cargo install vtcode`
 -   Check PATH: `which vtcode`
 -   Configure custom path in Zed settings
 
@@ -174,10 +174,10 @@ allowed_tools = ["read_file", "edit_file", "analyze_code"]
 ## Feedback and Support
 
 Report issues or request features at:
-[VTCode GitHub Issues](https://github.com/vinhnx/vtcode/issues)
+[VT Code GitHub Issues](https://github.com/vinhnx/vtcode/issues)
 
 ## Related Documentation
 
--   [VTCode Main Documentation](https://github.com/vinhnx/vtcode)
+-   [VT Code Main Documentation](https://github.com/vinhnx/vtcode)
 -   [Zed Editor Documentation](https://zed.dev/docs)
 -   [TOML Specification](https://toml.io/)

@@ -1,8 +1,8 @@
-# VTCode Command Security Model
+# VT Code Command Security Model
 
 ## Overview
 
-VTCode implements a comprehensive, defense-in-depth command security system that enables non-powered users to run safe commands by default while protecting against dangerous operations. This system helps the agent use system and build tools properly via environment PATH configuration.
+VT Code implements a comprehensive, defense-in-depth command security system that enables non-powered users to run safe commands by default while protecting against dangerous operations. This system helps the agent use system and build tools properly via environment PATH configuration.
 
 ## Design Philosophy
 
@@ -37,46 +37,60 @@ Input: command → Check deny_list → Check deny_glob → Check deny_regex
 ### Categories
 
 #### 1. File System Utilities (Read-Only)
+
 Safely query and display file information without modification:
-- **Basic**: `ls`, `pwd`, `cat`, `head`, `tail`, `echo`, `printf`
-- **Search**: `grep`, `find`, `locate`
-- **Analysis**: `wc`, `sort`, `uniq`, `cut`, `awk`, `sed`
-- **Inspection**: `file`, `stat`, `diff`, `tree`, `du`, `df`
+
+-   **Basic**: `ls`, `pwd`, `cat`, `head`, `tail`, `echo`, `printf`
+-   **Search**: `grep`, `find`, `locate`
+-   **Analysis**: `wc`, `sort`, `uniq`, `cut`, `awk`, `sed`
+-   **Inspection**: `file`, `stat`, `diff`, `tree`, `du`, `df`
 
 #### 2. Version Control (Git/Hg/SVN)
+
 Inspect repository state and manage commits safely:
-- **Inspection**: `git status`, `git log`, `git show`, `git diff`, `git branch`
-- **Safe workflows**: `git fetch`, `git pull`, `git add`, `git commit`, `git stash`, `git tag`
-- **Other VCS**: `hg`, `svn`, `git-lfs`
+
+-   **Inspection**: `git status`, `git log`, `git show`, `git diff`, `git branch`
+-   **Safe workflows**: `git fetch`, `git pull`, `git add`, `git commit`, `git stash`, `git tag`
+-   **Other VCS**: `hg`, `svn`, `git-lfs`
 
 #### 3. Build Systems
+
 Core compilation and build tool execution:
-- **Make-based**: `make`, `cmake`, `ninja`, `meson`, `bazel`
-- **Rust ecosystem**: `cargo`, `rustc`, `rustfmt`, `rustup`, `cargo test`
-- **All major subcommands**: `cargo build`, `cargo test`, `cargo check`, `cargo run`, etc.
+
+-   **Make-based**: `make`, `cmake`, `ninja`, `meson`, `bazel`
+-   **Rust ecosystem**: `cargo`, `rustc`, `rustfmt`, `rustup`, `cargo test`
+-   **All major subcommands**: `cargo build`, `cargo test`, `cargo check`, `cargo run`, etc.
 
 #### 4. Language Runtimes & Package Managers
+
 Execution and dependency management for all major languages:
-- **Python**: `python`, `python3`, `pip`, `pip3`, `virtualenv`, `pytest`, `black`, `flake8`, `mypy`, `ruff`
-- **Node.js**: `npm`, `node`, `yarn`, `pnpm`, `bun`, `npx`
-- **Go**: `go`, `gofmt`, `golint`
-- **Java**: `java`, `javac`, `mvn`, `gradle`
-- **C/C++**: `gcc`, `g++`, `clang`, `clang++`
+
+-   **Python**: `python`, `python3`, `pip`, `pip3`, `virtualenv`, `pytest`, `black`, `flake8`, `mypy`, `ruff`
+-   **Node.js**: `npm`, `node`, `yarn`, `pnpm`, `bun`, `npx`
+-   **Go**: `go`, `gofmt`, `golint`
+-   **Java**: `java`, `javac`, `mvn`, `gradle`
+-   **C/C++**: `gcc`, `g++`, `clang`, `clang++`
 
 #### 5. Compression & Archiving
+
 Safe data compression without system-level access:
-- `tar`, `zip`, `unzip`, `gzip`, `gunzip`, `bzip2`, `bunzip2`, `xz`, `unxz`
+
+-   `tar`, `zip`, `unzip`, `gzip`, `gunzip`, `bzip2`, `bunzip2`, `xz`, `unxz`
 
 #### 6. Container Tools
+
 Docker and container platforms:
-- `docker`, `docker-compose` (with restrictions on `docker run`)
-- **Note**: `docker run *` is denied; containers require careful review
+
+-   `docker`, `docker-compose` (with restrictions on `docker run`)
+-   **Note**: `docker run *` is denied; containers require careful review
 
 #### 7. System Information
+
 Safe read-only system monitoring:
-- `ps`, `top`, `htop` - Process listing and monitoring
-- `df`, `du` - Disk usage
-- `whoami`, `hostname`, `uname` - System identity
+
+-   `ps`, `top`, `htop` - Process listing and monitoring
+-   `df`, `du` - Disk usage
+-   `whoami`, `hostname`, `uname` - System identity
 
 ### Glob Patterns for Workflows
 
@@ -98,57 +112,69 @@ allow_glob = [
 ### Categories
 
 #### 1. Destructive Filesystem Operations
-- **Root deletion**: `rm -rf /`, `rm -rf /*`, `rm -rf /home`, `rm -rf /usr`, `rm -rf /etc`
-- **Home deletion**: `rm -rf ~`
-- **Filesystem tools**: `mkfs`, `mkfs.ext4`, `fdisk`, `dd if=/dev/*`
+
+-   **Root deletion**: `rm -rf /`, `rm -rf /*`, `rm -rf /home`, `rm -rf /usr`, `rm -rf /etc`
+-   **Home deletion**: `rm -rf ~`
+-   **Filesystem tools**: `mkfs`, `mkfs.ext4`, `fdisk`, `dd if=/dev/*`
 
 #### 2. System Shutdown/Reboot
-- `shutdown`, `reboot`, `halt`, `poweroff`
-- `systemctl poweroff`, `systemctl reboot`, `systemctl halt`
-- `init 0`, `init 6`
+
+-   `shutdown`, `reboot`, `halt`, `poweroff`
+-   `systemctl poweroff`, `systemctl reboot`, `systemctl halt`
+-   `init 0`, `init 6`
 
 #### 3. Privilege Escalation
-- Any `sudo` command: `sudo rm`, `sudo chmod`, `sudo bash`, etc.
-- Root switching: `su root`, `su -`
-- Admin shells: `sudo -i`, `nohup bash -i`, `exec bash -i`
+
+-   Any `sudo` command: `sudo rm`, `sudo chmod`, `sudo bash`, etc.
+-   Root switching: `su root`, `su -`
+-   Admin shells: `sudo -i`, `nohup bash -i`, `exec bash -i`
 
 #### 4. Filesystem Mounting/Unmounting
-- `mount`, `umount` - Prevent unauthorized filesystem manipulation
+
+-   `mount`, `umount` - Prevent unauthorized filesystem manipulation
 
 #### 5. Disk/Data Destruction
-- `format`, `fdisk`, `mkfs`, `shred`, `wipe`
-- `dd if=/dev/zero`, `dd if=/dev/random`, `dd if=/dev/urandom`
+
+-   `format`, `fdisk`, `mkfs`, `shred`, `wipe`
+-   `dd if=/dev/zero`, `dd if=/dev/random`, `dd if=/dev/urandom`
 
 #### 6. Permission/Ownership Changes
-- `chmod 777`, `chmod -R 777` - Make files world-writable (dangerous)
-- `chown -R`, `chgrp -R` - Recursive ownership changes
+
+-   `chmod 777`, `chmod -R 777` - Make files world-writable (dangerous)
+-   `chown -R`, `chgrp -R` - Recursive ownership changes
 
 #### 7. Shell Exploits
-- **Fork bomb**: `:(){ :|:& };:`
-- **Code evaluation**: `eval` - Prevents arbitrary code injection
-- **Config sourcing**: `source /etc/bashrc`, `source ~/.bashrc`
+
+-   **Fork bomb**: `:(){ :|:& };:`
+-   **Code evaluation**: `eval` - Prevents arbitrary code injection
+-   **Config sourcing**: `source /etc/bashrc`, `source ~/.bashrc`
 
 #### 8. Sensitive Data Access
-- **User databases**: `cat /etc/passwd`, `cat /etc/shadow`
-- **SSH keys**: `cat ~/.ssh/id_*`, `rm ~/.ssh/*`, `rm -r ~/.ssh`
-- **System logs**: `tail -f /var/log`, direct log access
+
+-   **User databases**: `cat /etc/passwd`, `cat /etc/shadow`
+-   **SSH keys**: `cat ~/.ssh/id_*`, `rm ~/.ssh/*`, `rm -r ~/.ssh`
+-   **System logs**: `tail -f /var/log`, direct log access
 
 #### 9. Process Control
-- `kill`, `pkill` - Process termination
-- **Note**: Allows monitoring (`ps`, `top`, `htop`) but not process killing
+
+-   `kill`, `pkill` - Process termination
+-   **Note**: Allows monitoring (`ps`, `top`, `htop`) but not process killing
 
 #### 10. Service Management
-- `systemctl *` - System service manipulation (denied at glob level)
-- `service *` - Legacy service management
-- `crontab`, `at` - Task scheduling (dangerous for automation)
+
+-   `systemctl *` - System service manipulation (denied at glob level)
+-   `service *` - Legacy service management
+-   `crontab`, `at` - Task scheduling (dangerous for automation)
 
 #### 11. Container/Orchestration
-- `kubectl *` - Kubernetes operations (admin access)
-- `docker run *` - Container creation (requires careful review)
+
+-   `kubectl *` - Kubernetes operations (admin access)
+-   `docker run *` - Container creation (requires careful review)
 
 ## Validation Rules (Configuration Reference)
 
 ### `allow_list` - Explicit Commands
+
 Exact command matches allowed without confirmation.
 
 ```toml
@@ -162,6 +188,7 @@ allow_list = [
 ```
 
 ### `deny_list` - Explicit Blocks
+
 Exact command patterns that are always blocked.
 
 ```toml
@@ -174,6 +201,7 @@ deny_list = [
 ```
 
 ### `allow_glob` - Glob Patterns
+
 Wildcard patterns for command families.
 
 ```toml
@@ -185,6 +213,7 @@ allow_glob = [
 ```
 
 ### `deny_glob` - Denied Patterns
+
 Blocks entire command families.
 
 ```toml
@@ -196,6 +225,7 @@ deny_glob = [
 ```
 
 ### `allow_regex` - Regex Patterns
+
 Regular expressions for complex allow rules.
 
 ```toml
@@ -206,6 +236,7 @@ allow_regex = [
 ```
 
 ### `deny_regex` - Regex Blocks
+
 Regular expressions to block patterns.
 
 ```toml
@@ -231,11 +262,12 @@ extra_path_entries = [
 ```
 
 This allows the agent to access:
-- Rust tools: `cargo`, `rustc`, `rustfmt`, `rustup`
-- Python tools: `pytest`, `black`, `flake8`, `mypy`
-- Node tools: `npm`, `yarn`, `node`
-- Go tools: `go`, `gofmt`
-- And all other build/development tools installed via package managers
+
+-   Rust tools: `cargo`, `rustc`, `rustfmt`, `rustup`
+-   Python tools: `pytest`, `black`, `flake8`, `mypy`
+-   Node tools: `npm`, `yarn`, `node`
+-   Go tools: `go`, `gofmt`
+-   And all other build/development tools installed via package managers
 
 ## Environment Variables
 
@@ -263,16 +295,18 @@ cache_ttl_seconds = 300
 ```
 
 **Audit logs track:**
-- Allowed commands executed
-- Blocked/denied commands attempted
-- Permission decision cache hits
-- Command resolution paths
 
-## Usage with the VTCode Agent
+-   Allowed commands executed
+-   Blocked/denied commands attempted
+-   Permission decision cache hits
+-   Command resolution paths
+
+## Usage with the VT Code Agent
 
 ### Default Behavior (Non-Powered Users)
 
 Out of the box:
+
 1. Agent can execute all safe commands from `allow_list`
 2. Agent can use pattern-based commands like `git *`, `cargo *`
 3. Dangerous commands are automatically blocked with no prompt
@@ -379,19 +413,19 @@ deny_glob = [
 
 ### What This Protects Against
 
-  Accidental destructive commands  
-  Privilege escalation attempts  
-  Malicious shell exploits (forkbombs, eval injection)  
-  Sensitive data exposure (SSH keys, password files)  
-  System shutdown/corruption  
-  Filesystem manipulation  
+Accidental destructive commands
+Privilege escalation attempts
+Malicious shell exploits (forkbombs, eval injection)
+Sensitive data exposure (SSH keys, password files)
+System shutdown/corruption
+Filesystem manipulation
 
 ### What This Does NOT Protect Against
 
- Compromised agent LLM (if it's compromised, it can craft allowed commands to cause harm)  
- Commands that are allowed but have dangerous flags (e.g., `cargo build --offline` with missing dependencies)  
- Zip bombs or other valid-but-malicious allowed file operations  
- Side effects of running safe commands in a bad state  
+Compromised agent LLM (if it's compromised, it can craft allowed commands to cause harm)
+Commands that are allowed but have dangerous flags (e.g., `cargo build --offline` with missing dependencies)
+Zip bombs or other valid-but-malicious allowed file operations
+Side effects of running safe commands in a bad state
 
 ### Best Practices
 
@@ -491,8 +525,8 @@ RUST_LOG=debug cargo run
 
 ## See Also
 
-- [docs/EXECUTION_POLICY.md](./EXECUTION_POLICY.md) - Overall execution policy
-- [docs/PERMISSION_SYSTEM_INTEGRATION.md](./PERMISSION_SYSTEM_INTEGRATION.md) - Permission system details
-- [docs/environment/ALLOWED_COMMANDS_REFERENCE.md](./environment/ALLOWED_COMMANDS_REFERENCE.md) - Complete command reference
-- [vtcode-config/src/core/commands.rs](../vtcode-config/src/core/commands.rs) - Implementation
-- [vtcode.toml.example](../vtcode.toml.example) - Configuration examples
+-   [docs/EXECUTION_POLICY.md](./EXECUTION_POLICY.md) - Overall execution policy
+-   [docs/PERMISSION_SYSTEM_INTEGRATION.md](./PERMISSION_SYSTEM_INTEGRATION.md) - Permission system details
+-   [docs/environment/ALLOWED_COMMANDS_REFERENCE.md](./environment/ALLOWED_COMMANDS_REFERENCE.md) - Complete command reference
+-   [vtcode-config/src/core/commands.rs](../vtcode-config/src/core/commands.rs) - Implementation
+-   [vtcode.toml.example](../vtcode.toml.example) - Configuration examples

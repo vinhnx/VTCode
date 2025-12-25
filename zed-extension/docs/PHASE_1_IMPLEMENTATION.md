@@ -1,16 +1,16 @@
-# Phase 1 Implementation - VTCode Zed Extension (v0.2.0)
+# Phase 1 Implementation - VT Code Zed Extension (v0.2.0)
 
-This document details the Phase 1 implementation of core features for the VTCode Zed extension.
+This document details the Phase 1 implementation of core features for the VT Code Zed extension.
 
 ## What's New in v0.2.0
 
-###  Completed Features
+### Completed Features
 
-#### 1. Process Execution Integration 
+#### 1. Process Execution Integration
 
 -   **Module**: `src/executor.rs`
 -   **Capabilities**:
-    -   Execute VTCode CLI commands from Rust
+    -   Execute VT Code CLI commands from Rust
     -   Capture stdout and stderr
     -   Return structured results with status codes
     -   Error handling for missing CLI
@@ -33,7 +33,7 @@ if result.is_success() {
 }
 ```
 
-#### 2. Configuration Management 
+#### 2. Configuration Management
 
 -   **Module**: `src/config.rs`
 -   **Capabilities**:
@@ -59,13 +59,13 @@ pub struct Config {
 }
 ```
 
-#### 3. Extension Core Initialization 
+#### 3. Extension Core Initialization
 
 -   **Module**: `src/lib.rs`
 -   **Capabilities**:
     -   Initialize extension with workspace detection
     -   Load configuration from workspace
-    -   Verify VTCode CLI availability
+    -   Verify VT Code CLI availability
     -   Provide access to configuration and status
 
 **Key Methods**:
@@ -76,7 +76,7 @@ pub fn config(&self) -> Option<&Config>
 pub fn is_vtcode_available(&self) -> bool
 ```
 
-###  Code Statistics
+### Code Statistics
 
 ```
 Module Statistics:
@@ -91,7 +91,7 @@ Test Coverage:
  Tests for all major functions
 ```
 
-###  Build Statistics
+### Build Statistics
 
 ```
 Binary Size: 500KB (release build)
@@ -109,32 +109,32 @@ Compile Status: No warnings, no errors
 ## Architecture Overview
 
 ```
-VTCode Zed Extension (v0.2.0)
+VT Code Zed Extension (v0.2.0)
 
-          Main Extension (lib.rs)             
-     
-    VTCodeExtension struct                 
-    - config: Option<Config>               
-    - vtcode_available: bool               
-                                           
-    Methods:                               
-    - initialize()                         
-    - config()                             
-    - is_vtcode_available()                
-     
+          Main Extension (lib.rs)
 
-             
-    
-                    
-                    
-  
-Config    Executor       Extension  
-Module    Module         Core       
-                                    
-- Load   - Execute      - Init      
-- Parse  - Check CLI    - Status    
-- Find   - Version                  
-  
+    VTCodeExtension struct
+    - config: Option<Config>
+    - vtcode_available: bool
+
+    Methods:
+    - initialize()
+    - config()
+    - is_vtcode_available()
+
+
+
+
+
+
+
+Config    Executor       Extension
+Module    Module         Core
+
+- Load   - Execute      - Init
+- Parse  - Check CLI    - Status
+- Find   - Version
+
 ```
 
 ## API Reference
@@ -147,7 +147,7 @@ Module    Module         Core
 impl Extension for VTCodeExtension {
     fn new() -> Self {
         // Create new extension instance
-        // Checks VTCode CLI availability
+        // Checks VT Code CLI availability
     }
 }
 ```
@@ -157,13 +157,13 @@ impl Extension for VTCodeExtension {
 ```rust
 pub fn initialize(&mut self, workspace_root: &str) -> Result<(), String>
 // Initialize with workspace configuration
-// Returns error if VTCode CLI not available
+// Returns error if VT Code CLI not available
 
 pub fn config(&self) -> Option<&Config>
 // Get current configuration (if loaded)
 
 pub fn is_vtcode_available(&self) -> bool
-// Check if VTCode CLI is in PATH
+// Check if VT Code CLI is in PATH
 ```
 
 ### Config Module
@@ -257,7 +257,7 @@ fn main() {
 }
 ```
 
-### Example 2: Execute VTCode Command
+### Example 2: Execute VT Code Command
 
 ```rust
 use vtcode::execute_command;
@@ -434,7 +434,7 @@ cargo build --release
 cargo test -- --nocapture --test-threads=1
 ```
 
-### VTCode CLI Not Found
+### VT Code CLI Not Found
 
 ```bash
 # Verify installation
@@ -449,7 +449,7 @@ cargo install vtcode
 
 -   **Startup Time**: <100ms (CLI check)
 -   **Config Load**: <10ms (TOML parsing)
--   **Command Execution**: Depends on VTCode CLI performance
+-   **Command Execution**: Depends on VT Code CLI performance
 -   **Memory**: <5MB (extension overhead)
 
 ## Compatibility
@@ -458,17 +458,17 @@ cargo install vtcode
 -   **Minimum Rust**: 1.70.0
 -   **Target**: WebAssembly (wasm32-unknown-unknown)
 -   **Zed Version**: 0.150.0+
--   **VTCode CLI**: 0.1.0+
+-   **VT Code CLI**: 0.1.0+
 
 ## Changelog
 
 ### v0.2.0 (Phase 1) - 2024-11-09
 
--    Process execution integration
--    Configuration management system
--    Extension initialization
--    Unit tests (9 tests, 100% pass)
--    Complete documentation
+-   Process execution integration
+-   Configuration management system
+-   Extension initialization
+-   Unit tests (9 tests, 100% pass)
+-   Complete documentation
 
 ### v0.1.0 (Initial) - 2024-11-09
 
@@ -488,14 +488,14 @@ To contribute to Phase 1 or work on Phase 2:
 
 ## References
 
--   [VTCode Main Repository](https://github.com/vinhnx/vtcode)
+-   [VT Code Main Repository](https://github.com/vinhnx/vtcode)
 -   [Zed Extension API](https://zed.dev/docs/extensions)
 -   [Rust std::process](https://doc.rust-lang.org/std/process/)
 -   [TOML Format](https://toml.io/)
 
 ---
 
-**Status**: Phase 1 Complete 
+**Status**: Phase 1 Complete
 **Target Release**: v0.2.0
 **Next Phase**: v0.3.0 (Command Palette & Output Channel)
 **Estimated Timeline**: 2-3 weeks

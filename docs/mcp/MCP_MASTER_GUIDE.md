@@ -1,7 +1,7 @@
 # MCP Module Master Guide
 
-**Status:** Phase 1  | Phase 2  (40% complete) | Phase 3  Planned  
-**Last Updated:** 2025-11-20  
+**Status:** Phase 1 | Phase 2 (40% complete) | Phase 3 Planned
+**Last Updated:** 2025-11-20
 **Production Ready:** Yes (Phase 1 & 2)
 
 ---
@@ -9,30 +9,33 @@
 ## Quick Start (Choose Your Path)
 
 ### ‍ I want to USE the MCP module
+
 → Jump to [API Reference](#api-reference) below
 
-###  I want to UNDERSTAND what happened
+### I want to UNDERSTAND what happened
+
 → Read [Session Overview](#session-overview)
 
-###  I want to IMPLEMENT Phase 3
+### I want to IMPLEMENT Phase 3
+
 → See [Phase 3 Roadmap](#phase-3-roadmap)
 
 ---
 
 ## Session Overview
 
-**What:** VTCode's MCP module review and improvements (Nov 20, 2025)  
-**Issues Found:** 3 (all fixed)  
-**Phase 2 Progress:** 2/5 objectives completed (40%)  
-**Documentation:** 5 comprehensive guides created  
+**What:** VTCode's MCP module review and improvements (Nov 20, 2025)
+**Issues Found:** 3 (all fixed)
+**Phase 2 Progress:** 2/5 objectives completed (40%)
+**Documentation:** 5 comprehensive guides created
 
 ### Issues Fixed in Phase 1
 
-| Issue | Problem | Status |
-|-------|---------|--------|
-| Schema Validation | Tests expected type checking, code didn't provide it |  Fixed |
-| Module Exports | Transport helpers not exported |  Fixed |
-| Error Helpers | 5 of 7 error helpers missing from exports |  Fixed |
+| Issue             | Problem                                              | Status |
+| ----------------- | ---------------------------------------------------- | ------ |
+| Schema Validation | Tests expected type checking, code didn't provide it | Fixed  |
+| Module Exports    | Transport helpers not exported                       | Fixed  |
+| Error Helpers     | 5 of 7 error helpers missing from exports            | Fixed  |
 
 ### Phase 2 Completed (2/5)
 
@@ -75,6 +78,7 @@ configuration_error("reason")
 ```
 
 **Pattern:**
+
 ```rust
 match some_operation() {
     Ok(result) => Ok(result),
@@ -104,17 +108,19 @@ validate_tool_input(Some(&schema), &input)?;  //  Pass
 ```
 
 **Supported Features:**
-- Required properties
-- Type checking (string, integer, boolean, array, object, null)
-- Min/max length and value constraints
-- Enum value validation
-- Array item validation
-- Nested object validation
-- Pattern matching (regex)
-- Complex schemas (oneOf, anyOf, allOf)
+
+-   Required properties
+-   Type checking (string, integer, boolean, array, object, null)
+-   Min/max length and value constraints
+-   Enum value validation
+-   Array item validation
+-   Nested object validation
+-   Pattern matching (regex)
+-   Complex schemas (oneOf, anyOf, allOf)
 
 **Error Messages:**
 Schema validation errors include context:
+
 ```
 Schema validation failed: Missing required property: "name"
 Schema validation failed: String value does not match pattern '^[A-Z]'
@@ -143,6 +149,7 @@ let (transport, stderr_reader) = create_stdio_transport_with_stderr(
 ## File Organization
 
 ### Core Documentation
+
 ```
 docs/mcp/
  MCP_MASTER_GUIDE.md               START HERE
@@ -152,6 +159,7 @@ docs/mcp/
 ```
 
 ### Phase Completions
+
 ```
  phase1/
     FINAL_REVIEW.md              Issue-by-issue breakdown
@@ -162,6 +170,7 @@ docs/mcp/
 ```
 
 ### Legacy/Reference (Archive)
+
 ```
  archive/
     MCP_COMPLETE_IMPLEMENTATION_STATUS.md
@@ -181,32 +190,38 @@ docs/mcp/
 ## Phase 3 Roadmap
 
 ### Objective 1: HTTP Transport Support (3-4 hours)
-**Priority:** HIGH - Enables cloud MCP providers  
-**Dependencies:** rmcp HTTP wrapper review  
+
+**Priority:** HIGH - Enables cloud MCP providers
+**Dependencies:** rmcp HTTP wrapper review
 **Acceptance Criteria:**
-- [ ] HTTP transport creation function
-- [ ] Certificate handling (HTTPS)
-- [ ] Authentication strategy design
-- [ ] Full test coverage
-- [ ] Backward compatibility with stdio
+
+-   [ ] HTTP transport creation function
+-   [ ] Certificate handling (HTTPS)
+-   [ ] Authentication strategy design
+-   [ ] Full test coverage
+-   [ ] Backward compatibility with stdio
 
 ### Objective 2: Enhanced Error Context (2-3 hours)
-**Priority:** MEDIUM - Improves debugging  
-**Work:** Design system-wide error code pattern (MCP_E001 style)  
+
+**Priority:** MEDIUM - Improves debugging
+**Work:** Design system-wide error code pattern (MCP_E001 style)
 **Acceptance Criteria:**
-- [ ] Error code design document
-- [ ] Error code enumeration
-- [ ] Updated error helpers with codes
-- [ ] Documentation for developers
+
+-   [ ] Error code design document
+-   [ ] Error code enumeration
+-   [ ] Updated error helpers with codes
+-   [ ] Documentation for developers
 
 ### Objective 3: Tool Schema Registry (2 hours, optional)
-**Priority:** LOW - Performance optimization  
-**Work:** Cache frequently-used schemas  
+
+**Priority:** LOW - Performance optimization
+**Work:** Cache frequently-used schemas
 **Acceptance Criteria:**
-- [ ] Registry trait definition
-- [ ] LRU cache implementation
-- [ ] Benchmark showing improvement
-- [ ] Thread-safe access
+
+-   [ ] Registry trait definition
+-   [ ] LRU cache implementation
+-   [ ] Benchmark showing improvement
+-   [ ] Thread-safe access
 
 ---
 
@@ -269,6 +284,7 @@ let (transport, _stderr) = create_stdio_transport_with_stderr(
 ## Testing Patterns
 
 ### Error Testing
+
 ```rust
 #[test]
 fn test_missing_tool_error() {
@@ -278,19 +294,21 @@ fn test_missing_tool_error() {
 ```
 
 ### Schema Validation Testing
+
 ```rust
 #[test]
 fn test_schema_validation() {
     let schema = json!({"type": "object", "required": ["name"]});
     let valid = json!({"name": "test"});
     let invalid = json!({});
-    
+
     assert!(validate_tool_input(Some(&schema), &valid).is_ok());
     assert!(validate_tool_input(Some(&schema), &invalid).is_err());
 }
 ```
 
 ### Transport Testing
+
 ```rust
 #[test]
 fn test_transport_creation() {
@@ -305,15 +323,15 @@ fn test_transport_creation() {
 
 ## Quality Metrics
 
-| Metric | Value | Status |
-|--------|-------|--------|
-| Breaking Changes | 0 |  |
-| Test Coverage | 10+ assertions |  |
-| Compilation | Clean |  |
-| Backward Compatibility | 100% |  |
-| Error Helper Exports | 7/7 |  |
-| Module Exports | Complete |  |
-| Schema Validation | Full JSON Schema 2020-12 |  |
+| Metric                 | Value                    | Status |
+| ---------------------- | ------------------------ | ------ |
+| Breaking Changes       | 0                        |        |
+| Test Coverage          | 10+ assertions           |        |
+| Compilation            | Clean                    |        |
+| Backward Compatibility | 100%                     |        |
+| Error Helper Exports   | 7/7                      |        |
+| Module Exports         | Complete                 |        |
+| Schema Validation      | Full JSON Schema 2020-12 |        |
 
 ---
 
@@ -336,12 +354,14 @@ fn test_transport_creation() {
 ## Recommendations
 
 ### For Developers (Now)
+
 1.  Share MCP_PHASE1_USAGE_GUIDE.md with your team
 2.  Start using `validate_tool_input()` for all schema validation
 3.  Review error handling patterns in this guide
 4.  Check your code uses correct error helpers
 
 ### For Planners (Next Phase)
+
 1. Schedule Phase 3 planning session
 2. Confirm HTTP transport is highest priority
 3. Plan 1-week sprint for implementation
@@ -351,31 +371,31 @@ fn test_transport_creation() {
 
 ## Related Files
 
-- **Implementation:** `vtcode-core/src/mcp/`
-- **Tests:** `vtcode-core/src/mcp/*test*`
-- **Config:** `vtcode.toml` (MCP configuration)
-- **Examples:** `examples/mcp_*.rs`
+-   **Implementation:** `vtcode-core/src/mcp/`
+-   **Tests:** `vtcode-core/src/mcp/*test*`
+-   **Config:** `vtcode.toml` (MCP configuration)
+-   **Examples:** `examples/mcp_*.rs`
 
 ---
 
 ## FAQ
 
-**Q: Is the MCP module production-ready?**  
+**Q: Is the MCP module production-ready?**
 A: Yes, Phase 1 is complete and tested. Phase 2 adds JSON Schema validation and is also production-ready.
 
-**Q: Can I use this with existing VTCode code?**  
+**Q: Can I use this with existing VT Code code?**
 A: Yes, 100% backward compatible. No breaking changes between phases.
 
-**Q: What should I use for error handling?**  
+**Q: What should I use for error handling?**
 A: Use the exported error helpers (tool_not_found, schema_invalid, etc.) with anyhow::Context.
 
-**Q: How do I validate user input?**  
+**Q: How do I validate user input?**
 A: Use `validate_tool_input(Some(&schema), &input)?;` with your JSON Schema.
 
-**Q: When will HTTP transport be available?**  
+**Q: When will HTTP transport be available?**
 A: Phase 3, estimated 3-4 hours of implementation work. See Phase 3 Roadmap above.
 
 ---
 
-**Last Updated:** 2025-11-20  
+**Last Updated:** 2025-11-20
 **Phase Status:** Phase 1 & 2 Complete, Phase 3 Ready to Start

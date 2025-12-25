@@ -70,33 +70,33 @@ impl ConfigWriter {
         Ok(())
     }
 
-    /// Merge new VTCode configuration section with existing config
+    /// Merge new VT Code configuration section with existing config
     ///
-    /// Removes old VTCode sections and adds the new section, preserving user customizations
+    /// Removes old VT Code sections and adds the new section, preserving user customizations
     pub fn merge_with_markers(
         existing: &str,
         new_section: &str,
         format: ConfigFormat,
     ) -> Result<String> {
-        // Remove any existing VTCode section
+        // Remove any existing VT Code section
         let cleaned = Self::remove_vtcode_section(existing);
 
-        // Add new VTCode section with markers
+        // Add new VT Code section with markers
         let vtcode_section = Self::wrap_with_markers(new_section, format);
 
         // Determine where to insert the new section
         let merged = if cleaned.trim().is_empty() {
-            // File is empty, just use the VTCode section
+            // File is empty, just use the VT Code section
             vtcode_section
         } else {
-            // Append VTCode section at the end
+            // Append VT Code section at the end
             format!("{}\n\n{}", cleaned.trim_end(), vtcode_section)
         };
 
         Ok(merged)
     }
 
-    /// Remove existing VTCode configuration section from content
+    /// Remove existing VT Code configuration section from content
     fn remove_vtcode_section(content: &str) -> String {
         let lines: Vec<&str> = content.lines().collect();
         let mut result = Vec::new();
@@ -121,7 +121,7 @@ impl ConfigWriter {
         result.join("\n")
     }
 
-    /// Wrap configuration content with VTCode markers
+    /// Wrap configuration content with VT Code markers
     fn wrap_with_markers(content: &str, format: ConfigFormat) -> String {
         let comment_prefix = match format {
             ConfigFormat::PlainText | ConfigFormat::Toml | ConfigFormat::Yaml => "#",

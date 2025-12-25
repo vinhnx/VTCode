@@ -5,7 +5,7 @@
 //! with VTCode's multi-provider configuration model. The original
 //! implementation inside this project had grown organically and mixed a
 //! large amount of bookkeeping logic with the lower level rmcp client
-//! transport. The rewritten version keeps the VTCode specific surface
+//! transport. The rewritten version keeps the VT Code specific surface
 //! (allow lists, tool indexing, status reporting) but delegates the
 //! actual protocol interaction to a lightweight `RmcpClient` adapter
 //! that mirrors Codex' `mcp-client` crate. This dramatically reduces
@@ -172,7 +172,7 @@ pub trait McpToolExecutor: Send + Sync {
 }
 
 /// High level MCP client responsible for managing multiple providers and
-/// enforcing VTCode specific policies like tool allow lists.
+/// enforcing VT Code specific policies like tool allow lists.
 pub struct McpClient {
     config: McpClientConfig,
     providers: RwLock<HashMap<String, Arc<McpProvider>>>,

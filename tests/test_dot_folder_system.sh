@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Comprehensive test script for VTCode dot-folder project management
+# Comprehensive test script for VT Code dot-folder project management
 
-echo "=== VTCode Dot-Folder Project Management Test ==="
+echo "=== VT Code Dot-Folder Project Management Test ==="
 
 # Test 1: Check if ~/.vtcode/projects directory exists
 echo "Test 1: Checking ~/.vtcode/projects directory..."
@@ -27,7 +27,7 @@ cargo run --quiet --manifest-path /workspace/vtcode/Cargo.toml -- init-project -
 cat > "$HOME/.vtcode/projects/test-vtcode-project/.project" << EOF
 {
   "name": "test-vtcode-project",
-  "description": "Test project for VTCode dot-folder system",
+  "description": "Test project for VT Code dot-folder system",
   "created_at": $(date +%s),
   "updated_at": $(date +%s),
   "root_path": "/tmp/test-vtcode-project",
@@ -101,7 +101,7 @@ rm -rf "$HOME/.vtcode/projects/test-vtcode-project"
 rm -rf /tmp/test-vtcode-project
 
 echo -e "\n=== All tests completed successfully! ==="
-echo "The VTCode dot-folder project management system is working correctly."
+echo "The VT Code dot-folder project management system is working correctly."
 echo "Features verified:"
 echo "  • Project directory structure creation"
 echo "  • Subdirectory organization (config, cache, embeddings, retrieval)"

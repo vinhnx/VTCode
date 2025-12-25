@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { AskCommand } from "../askCommand";
 import * as vtcodeRunner from "../../utils/vtcodeRunner";
+import { AskCommand } from "../askCommand";
 
 // Mock the vtcodeRunner module
 jest.mock("../../utils/vtcodeRunner");
@@ -9,8 +9,12 @@ describe("AskCommand", () => {
     let command: AskCommand;
     let mockContext: any;
     let mockShowInputBox: jest.SpiedFunction<typeof vscode.window.showInputBox>;
-    let mockShowInformationMessage: jest.SpiedFunction<typeof vscode.window.showInformationMessage>;
-    let mockShowErrorMessage: jest.SpiedFunction<typeof vscode.window.showErrorMessage>;
+    let mockShowInformationMessage: jest.SpiedFunction<
+        typeof vscode.window.showInformationMessage
+    >;
+    let mockShowErrorMessage: jest.SpiedFunction<
+        typeof vscode.window.showErrorMessage
+    >;
 
     beforeEach(() => {
         command = new AskCommand();
@@ -26,7 +30,10 @@ describe("AskCommand", () => {
 
         // Mock VS Code API
         mockShowInputBox = jest.spyOn(vscode.window, "showInputBox");
-        mockShowInformationMessage = jest.spyOn(vscode.window, "showInformationMessage");
+        mockShowInformationMessage = jest.spyOn(
+            vscode.window,
+            "showInformationMessage"
+        );
         mockShowErrorMessage = jest.spyOn(vscode.window, "showErrorMessage");
 
         // Reset mocks
@@ -42,7 +49,9 @@ describe("AskCommand", () => {
             // Arrange
             const mockQuestion = "What is the meaning of life?";
             mockShowInputBox.mockResolvedValue(mockQuestion);
-            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(undefined);
+            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(
+                undefined
+            );
             mockShowInformationMessage.mockResolvedValue(undefined as any);
 
             // Act
@@ -50,7 +59,7 @@ describe("AskCommand", () => {
 
             // Assert
             expect(mockShowInputBox).toHaveBeenCalledWith({
-                prompt: "What would you like the VTCode agent to help with?",
+                prompt: "What would you like the VT Code agent to help with?",
                 placeHolder: "Summarize src/main.rs",
                 ignoreFocusOut: true,
             });
@@ -62,14 +71,16 @@ describe("AskCommand", () => {
                 }
             );
             expect(mockShowInformationMessage).toHaveBeenCalledWith(
-                "VTCode finished processing your request. Check the VTCode output channel for details."
+                "VT Code finished processing your request. Check the VT Code output channel for details."
             );
         });
 
         it("should handle empty question gracefully", async () => {
             // Arrange
             mockShowInputBox.mockResolvedValue("");
-            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(undefined);
+            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(
+                undefined
+            );
 
             // Act
             await command.execute(mockContext);
@@ -82,7 +93,9 @@ describe("AskCommand", () => {
         it("should handle cancelled input", async () => {
             // Arrange
             mockShowInputBox.mockResolvedValue(undefined);
-            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(undefined);
+            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(
+                undefined
+            );
 
             // Act
             await command.execute(mockContext);
@@ -97,7 +110,9 @@ describe("AskCommand", () => {
             const mockQuestion = "Test question";
             const mockError = new Error("Command failed");
             mockShowInputBox.mockResolvedValue(mockQuestion);
-            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockRejectedValue(mockError);
+            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockRejectedValue(
+                mockError
+            );
             mockShowErrorMessage.mockResolvedValue(undefined as any);
 
             // Act
@@ -115,7 +130,9 @@ describe("AskCommand", () => {
             // Arrange
             const mockQuestion = "  Test question  ";
             mockShowInputBox.mockResolvedValue(mockQuestion);
-            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(undefined);
+            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(
+                undefined
+            );
             mockShowInformationMessage.mockResolvedValue(undefined as any);
 
             // Act
@@ -133,7 +150,9 @@ describe("AskCommand", () => {
         it("should have correct command metadata", () => {
             expect(command.id).toBe("vtcode.askAgent");
             expect(command.title).toBe("Ask Agent");
-            expect(command.description).toBe("Ask the VTCode agent a question");
+            expect(command.description).toBe(
+                "Ask the VT Code agent a question"
+            );
             expect(command.icon).toBe("comment-discussion");
         });
     });

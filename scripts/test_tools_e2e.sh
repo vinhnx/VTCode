@@ -1,10 +1,10 @@
 #!/bin/bash
-# VTCode Tools End-to-End Test Script
+# VT Code Tools End-to-End Test Script
 # Tests the grep_file and bash tools
 
 set -e  # Exit on any error
 
-echo "🧪 VTCode Tools End-to-End Test Suite"
+echo "🧪 VT Code Tools End-to-End Test Suite"
 echo "===================================="
 
 # Colors for output
@@ -63,7 +63,7 @@ echo -e "\nTesting Tool Compilation"
 echo "============================"
 
 # Test 1: Check if tools compile
-run_test "VTCode Core Compilation" "cargo check --package vtcode-core --quiet && echo 'success'" "success"
+run_test "VT Code Core Compilation" "cargo check --package vtcode-core --quiet && echo 'success'" "success"
 
 echo -e "\nTesting External Dependencies"
 echo "=============================="

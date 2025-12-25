@@ -789,7 +789,7 @@ impl DiffChatRenderer {
 
         if check.total_additions > 0 || check.total_deletions > 0 && self.diff_renderer.use_colors {
             output.push_str(" (");
-            
+
             // Additions stat
             if check.total_additions > 0 {
                 output.push_str(&self.diff_renderer.cached_styles.stat_added);
@@ -797,11 +797,11 @@ impl DiffChatRenderer {
                 let _ = write!(output, "{}", check.total_additions);
                 output.push_str(&self.diff_renderer.cached_styles.reset);
             }
-            
+
             if check.total_additions > 0 && check.total_deletions > 0 {
                 output.push(' ');
             }
-            
+
             // Deletions stat
             if check.total_deletions > 0 {
                 output.push_str(&self.diff_renderer.cached_styles.stat_removed);
@@ -809,7 +809,7 @@ impl DiffChatRenderer {
                 let _ = write!(output, "{}", check.total_deletions);
                 output.push_str(&self.diff_renderer.cached_styles.reset);
             }
-            
+
             output.push(')');
         }
         output.push('\n');

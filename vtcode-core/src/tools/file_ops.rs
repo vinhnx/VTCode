@@ -5,7 +5,7 @@ use super::types::*;
 use crate::config::constants::diff;
 use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
 use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler};
-use crate::utils::diff::{compute_diff, DiffOptions};
+use crate::utils::diff::{DiffOptions, compute_diff};
 use crate::utils::image_processing::read_image_file;
 use crate::utils::path::canonicalize_workspace;
 use crate::utils::vtcodegitignore::should_exclude_file;
@@ -1642,14 +1642,17 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
     }
 
     let line_count = diff_bundle.formatted.lines().count();
-    let (additions, deletions) = diff_bundle
-        .formatted
-        .lines()
-        .fold((0usize, 0usize), |(add, del), line| match line.chars().next() {
-            Some('+') => (add + 1, del),
-            Some('-') => (add, del + 1),
-            _ => (add, del),
-        });
+    let (additions, deletions) =
+        diff_bundle
+            .formatted
+            .lines()
+            .fold((0usize, 0usize), |(add, del), line| {
+                match line.chars().next() {
+                    Some('+') => (add + 1, del),
+                    Some('-') => (add, del + 1),
+                    _ => (add, del),
+                }
+            });
     let total_changes = additions + deletions;
 
     if total_changes > diff::MAX_SINGLE_FILE_CHANGES {

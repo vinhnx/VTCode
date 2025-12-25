@@ -199,7 +199,7 @@ Keyboard shortcuts:
 pub fn generate_shell_rc_snippet(shell: &str) -> Result<String> {
     let snippet = match shell {
         "bash" => {
-            r#"# VTCode Shell Integration for Bash
+            r#"# VT Code Shell Integration for Bash
 if [ -n "$VTCODE_SESSION" ]; then
     # Working directory tracking via OSC 7
     __vtcode_osc7() {
@@ -224,7 +224,7 @@ fi
         }
 
         "zsh" => {
-            r#"# VTCode Shell Integration for Zsh
+            r#"# VT Code Shell Integration for Zsh
 if [ -n "$VTCODE_SESSION" ]; then
     # Working directory tracking via OSC 7
     __vtcode_osc7() {
@@ -249,7 +249,7 @@ fi
         }
 
         "fish" => {
-            r#"# VTCode Shell Integration for Fish
+            r#"# VT Code Shell Integration for Fish
 if set -q VTCODE_SESSION
     # Working directory tracking via OSC 7
     function __vtcode_osc7_helper --on-variable PWD

@@ -13,9 +13,9 @@ use tracing::{debug, info, warn};
 /// Skill location types with precedence ordering
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SkillLocationType {
-    /// VTCode user skills (highest precedence)
+    /// VT Code user skills (highest precedence)
     VtcodeUser = 6,
-    /// VTCode project skills
+    /// VT Code project skills
     VtcodeProject = 5,
     /// Pi user skills
     PiUser = 4,
@@ -168,7 +168,7 @@ impl SkillLocations {
     /// Get default skill locations following pi-mono pattern
     pub fn default_locations() -> Vec<SkillLocation> {
         vec![
-            // VTCode locations (highest precedence)
+            // VT Code locations (highest precedence)
             SkillLocation::new(
                 SkillLocationType::VtcodeUser,
                 PathBuf::from("~/.vtcode/skills"),
@@ -468,8 +468,8 @@ impl Default for SkillLocations {
 impl std::fmt::Display for SkillLocationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SkillLocationType::VtcodeUser => write!(f, "VTCode User"),
-            SkillLocationType::VtcodeProject => write!(f, "VTCode Project"),
+            SkillLocationType::VtcodeUser => write!(f, "VT Code User"),
+            SkillLocationType::VtcodeProject => write!(f, "VT Code Project"),
             SkillLocationType::PiUser => write!(f, "Pi User"),
             SkillLocationType::PiProject => write!(f, "Pi Project"),
             SkillLocationType::ClaudeUser => write!(f, "Claude User"),
@@ -511,7 +511,7 @@ mod tests {
         );
 
         let skill_name = location.get_skill_name(&skill_path);
-        // VTCode uses '/' as separator for recursive locations
+        // VT Code uses '/' as separator for recursive locations
         assert_eq!(skill_name, Some("web/tools/search-engine".to_string()));
     }
 
@@ -551,9 +551,9 @@ mod tests {
         let claude_skills = workspace_root.join(".claude/skills");
 
         println!("Testing with workspace root: {}", workspace_root.display());
-        println!("VTCode skills path: {}", vtcode_skills.display());
+        println!("VT Code skills path: {}", vtcode_skills.display());
         println!("Claude skills path: {}", claude_skills.display());
-        println!("VTCode path exists: {}", vtcode_skills.exists());
+        println!("VT Code path exists: {}", vtcode_skills.exists());
         println!("Claude path exists: {}", claude_skills.exists());
 
         let locations = SkillLocations::with_locations(vec![
@@ -578,13 +578,13 @@ mod tests {
             skill_names.contains(&"spreadsheet-generator".to_string())
                 || skill_names.contains(&"doc-generator".to_string())
                 || skill_names.contains(&"pdf-report-generator".to_string()),
-            "Should have found at least one of the VTCode skills"
+            "Should have found at least one of the VT Code skills"
         );
     }
 
     #[test]
     fn test_full_integration() {
-        println!("Testing full VTCode skills location system integration...");
+        println!("Testing full VT Code skills location system integration...");
 
         // Test with the actual workspace
         let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -598,7 +598,7 @@ mod tests {
 
         println!("Default locations discovered {} skills", discovered.len());
 
-        // Test specific VTCode location
+        // Test specific VT Code location
         let vtcode_skills = workspace_root.join(".vtcode/skills");
         let vtcode_locations = SkillLocations::with_locations(vec![SkillLocation::new(
             SkillLocationType::VtcodeProject,
@@ -608,7 +608,7 @@ mod tests {
 
         let vtcode_discovered = vtcode_locations.discover_skills().unwrap();
         println!(
-            "VTCode location discovered {} skills",
+            "VT Code location discovered {} skills",
             vtcode_discovered.len()
         );
 

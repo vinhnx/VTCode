@@ -3,6 +3,7 @@
 ## Status Indicator
 
 ### Quick Start
+
 ```typescript
 import { StatusIndicator } from "./ui/statusIndicator";
 
@@ -16,6 +17,7 @@ indicator.setModel("gpt-4");
 ```
 
 ### Status Values
+
 ```
 "idle"      →  Ready
 "thinking"  →  Thinking...
@@ -25,6 +27,7 @@ indicator.setModel("gpt-4");
 ```
 
 ### Methods
+
 ```typescript
 setStatus(status: ChatStatus): void
 setModel(modelName: string): void
@@ -35,6 +38,7 @@ reset(): void
 ```
 
 ### Output Examples
+
 ```
  Ready
  Thinking...
@@ -48,6 +52,7 @@ reset(): void
 ## Error Presentation Handler
 
 ### Quick Start
+
 ```typescript
 import { ErrorPresentationHandler } from "./error/errorPresentation";
 
@@ -56,7 +61,7 @@ try {
 } catch (error) {
     const presentation = ErrorPresentationHandler.format(error);
     console.log(`${presentation.title}: ${presentation.message}`);
-    
+
     // For chat display:
     const chatMessage = ErrorPresentationHandler.formatForChat(error);
     addMessage({ role: "error", content: chatMessage });
@@ -64,19 +69,21 @@ try {
 ```
 
 ### Detected Error Types
-| Pattern | Title | Severity |
-|---------|-------|----------|
-| ECONNREFUSED | Connection Failed | error |
-| timeout | Request Timeout | warning |
-| ENOTFOUND | Network Unreachable | error |
-| token limit | Token Limit Exceeded | warning |
-| 429 / rate limit | Rate Limited | warning |
-| 401 / unauthorized | Authentication Failed | error |
-| ENOENT | File Not Found | warning |
-| EACCES | Permission Denied | error |
-| JSON / parse | Invalid Response Format | warning |
+
+| Pattern            | Title                   | Severity |
+| ------------------ | ----------------------- | -------- |
+| ECONNREFUSED       | Connection Failed       | error    |
+| timeout            | Request Timeout         | warning  |
+| ENOTFOUND          | Network Unreachable     | error    |
+| token limit        | Token Limit Exceeded    | warning  |
+| 429 / rate limit   | Rate Limited            | warning  |
+| 401 / unauthorized | Authentication Failed   | error    |
+| ENOENT             | File Not Found          | warning  |
+| EACCES             | Permission Denied       | error    |
+| JSON / parse       | Invalid Response Format | warning  |
 
 ### Methods
+
 ```typescript
 format(error: Error | string): ErrorPresentation
 formatForChat(error: Error | string): string
@@ -84,13 +91,14 @@ getContext(error: Error | string): Record<string, unknown>
 ```
 
 ### Output Example
+
 ```
 **Connection Failed**
 
-VTCode cannot connect to the backend service. The service may be starting 
+VT Code cannot connect to the backend service. The service may be starting
 up or encountered an issue.
 
- **Suggestion:** Try again in a few moments. If the problem persists, 
+ **Suggestion:** Try again in a few moments. If the problem persists,
 restart the extension.
 ```
 
@@ -99,6 +107,7 @@ restart the extension.
 ## CSS Classes
 
 ### Markdown Elements
+
 ```html
 <strong>Bold text</strong>
 <em>Italic text</em>
@@ -109,24 +118,29 @@ const x = 1;
 </code></pre>
 
 <table>
-  <th>Header</th>
-  <td>Cell</td>
+    <th>Header</th>
+    <td>Cell</td>
 </table>
 
-<ul><li>Item</li></ul>
-<ol><li>Item</li></ol>
+<ul>
+    <li>Item</li>
+</ul>
+<ol>
+    <li>Item</li>
+</ol>
 
 <blockquote>Quote</blockquote>
 <a href="#">Link</a>
 ```
 
 ### Code Block Actions
+
 ```html
 <div class="code-block-wrapper">
-  <div class="code-block-actions">
-    <button class="code-copy-button">Copy</button>
-  </div>
-  <pre><code>...</code></pre>
+    <div class="code-block-actions">
+        <button class="code-copy-button">Copy</button>
+    </div>
+    <pre><code>...</code></pre>
 </div>
 ```
 
@@ -135,30 +149,34 @@ const x = 1;
 ## Integration Checklist
 
 ### Minimal Integration (1 hour)
-- [ ] Import StatusIndicator in chatView.ts
-- [ ] Initialize in resolveWebviewView
-- [ ] Update status in handleUserMessage
-- [ ] Test basic functionality
+
+-   [ ] Import StatusIndicator in chatView.ts
+-   [ ] Initialize in resolveWebviewView
+-   [ ] Update status in handleUserMessage
+-   [ ] Test basic functionality
 
 ### Full Integration (3 hours)
-- [ ] All of above plus:
-- [ ] Import ErrorPresentationHandler
-- [ ] Format error messages
-- [ ] Add token tracking
-- [ ] Update webview message handler
-- [ ] Test error scenarios
+
+-   [ ] All of above plus:
+-   [ ] Import ErrorPresentationHandler
+-   [ ] Format error messages
+-   [ ] Add token tracking
+-   [ ] Update webview message handler
+-   [ ] Test error scenarios
 
 ### Advanced Integration (Optional)
-- [ ] Progress indicators for tools
-- [ ] Participant context display
-- [ ] Advanced metrics
-- [ ] Performance monitoring
+
+-   [ ] Progress indicators for tools
+-   [ ] Participant context display
+-   [ ] Advanced metrics
+-   [ ] Performance monitoring
 
 ---
 
 ## Common Code Snippets
 
 ### Initialize Status Indicator
+
 ```typescript
 private statusIndicator: StatusIndicator | undefined;
 
@@ -172,6 +190,7 @@ this.statusIndicator = new StatusIndicator((text) => {
 ```
 
 ### Handle Streaming with Status
+
 ```typescript
 this.statusIndicator?.setStatus("streaming");
 
@@ -185,10 +204,11 @@ this.statusIndicator?.setStatus("idle");
 ```
 
 ### Format Error in Chat
+
 ```typescript
 catch (error) {
     this.statusIndicator?.setStatus("error");
-    
+
     const formatted = ErrorPresentationHandler.formatForChat(error);
     this.addMessage({
         role: "error",
@@ -199,6 +219,7 @@ catch (error) {
 ```
 
 ### Update Status in Webview
+
 ```typescript
 window.addEventListener("message", (event) => {
     const message = event.data;
@@ -217,6 +238,7 @@ window.addEventListener("message", (event) => {
 ## Testing
 
 ### Run Tests
+
 ```bash
 # StatusIndicator tests
 npm test -- --grep "StatusIndicator"
@@ -232,6 +254,7 @@ npm test -- --coverage
 ```
 
 ### Expected Results
+
 ```
  StatusIndicator (10 tests)
  ErrorPresentationHandler (12 tests)
@@ -244,6 +267,7 @@ npm test -- --coverage
 ## Troubleshooting
 
 ### Status Not Showing
+
 ```typescript
 // Verify element exists
 const el = document.getElementById("status");
@@ -254,6 +278,7 @@ console.assert(el, "Status element not found");
 ```
 
 ### Errors Not Formatted
+
 ```typescript
 // Verify handler imported
 import { ErrorPresentationHandler } from "./error/errorPresentation";
@@ -263,6 +288,7 @@ const text = ErrorPresentationHandler.formatForChat(error);
 ```
 
 ### CSS Not Applied
+
 ```bash
 # Reload extension
 cmd+shift+P > Developer: Reload Window
@@ -272,41 +298,47 @@ rm -rf out/ && npm run compile
 ```
 
 ### TypeScript Errors
+
 ```typescript
 // Verify imports
 import { StatusIndicator, type ChatStatus } from "./ui/statusIndicator";
-import { ErrorPresentationHandler, type ErrorPresentation } from "./error/errorPresentation";
+import {
+    ErrorPresentationHandler,
+    type ErrorPresentation,
+} from "./error/errorPresentation";
 ```
 
 ---
 
 ## Performance Tips
 
-###   Do
-- Update status every 100-500ms
-- Batch updates when possible
-- Use debouncing for frequent updates
-- Sample metrics instead of every event
+### Do
 
-###   Avoid
-- Status updates > 10 per second
-- Large error messages in logs
-- Unbounded message history
-- Synchronous file I/O in callbacks
+-   Update status every 100-500ms
+-   Batch updates when possible
+-   Use debouncing for frequent updates
+-   Sample metrics instead of every event
+
+### Avoid
+
+-   Status updates > 10 per second
+-   Large error messages in logs
+-   Unbounded message history
+-   Synchronous file I/O in callbacks
 
 ---
 
 ## Files Reference
 
-| File | Purpose | Location |
-|------|---------|----------|
-| statusIndicator.ts | Status indicator component | src/ui/ |
-| statusIndicator.test.ts | Status indicator tests | src/ui/ |
-| errorPresentation.ts | Error formatting | src/error/ |
-| errorPresentation.test.ts | Error handler tests | src/error/ |
-| chat-view.css | Enhanced styles | media/ |
-| PHASE_1_IMPROVEMENTS.md | Component docs | docs/ |
-| PHASE_1_INTEGRATION.md | Integration guide | docs/ |
+| File                      | Purpose                    | Location   |
+| ------------------------- | -------------------------- | ---------- |
+| statusIndicator.ts        | Status indicator component | src/ui/    |
+| statusIndicator.test.ts   | Status indicator tests     | src/ui/    |
+| errorPresentation.ts      | Error formatting           | src/error/ |
+| errorPresentation.test.ts | Error handler tests        | src/error/ |
+| chat-view.css             | Enhanced styles            | media/     |
+| PHASE_1_IMPROVEMENTS.md   | Component docs             | docs/      |
+| PHASE_1_INTEGRATION.md    | Integration guide          | docs/      |
 
 ---
 
@@ -330,10 +362,10 @@ export const ERROR_MESSAGES
 
 ## Links & Resources
 
-- **Component Docs**: `docs/PHASE_1_IMPROVEMENTS.md`
-- **Integration Guide**: `docs/PHASE_1_INTEGRATION.md`
-- **Phase Status**: `PHASE_1_STATUS.md`
-- **Full Roadmap**: `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md`
+-   **Component Docs**: `docs/PHASE_1_IMPROVEMENTS.md`
+-   **Integration Guide**: `docs/PHASE_1_INTEGRATION.md`
+-   **Phase Status**: `PHASE_1_STATUS.md`
+-   **Full Roadmap**: `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md`
 
 ---
 

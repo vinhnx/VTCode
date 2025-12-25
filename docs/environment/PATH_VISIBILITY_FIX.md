@@ -1,20 +1,21 @@
-# PATH Visibility Fix for VTCode Agent
+# PATH Visibility Fix for VT Code Agent
 
 ## Problem
 
-The VTCode agent was unable to execute commands that were in the system PATH, such as `cargo`, even though they were installed and accessible from the shell. This occurred because the environment variable initialization was not inheriting the parent process's environment variables, particularly `PATH`.
+The VT Code agent was unable to execute commands that were in the system PATH, such as `cargo`, even though they were installed and accessible from the shell. This occurred because the environment variable initialization was not inheriting the parent process's environment variables, particularly `PATH`.
 
 ## Root Cause
 
 Two functions responsible for environment setup were creating fresh environments without preserving the parent process's environment:
 
 1. **`vtcode-core/src/tools/command.rs`** - `execute_terminal_command()`:
-   - Created an empty `HashMap` and only set `PAGER`, `GIT_PAGER`, and `LESS`
-   - Did not inherit `PATH` or other system environment variables
+
+    - Created an empty `HashMap` and only set `PAGER`, `GIT_PAGER`, and `LESS`
+    - Did not inherit `PATH` or other system environment variables
 
 2. **`vtcode-core/src/tools/pty.rs`** - `set_command_environment()`:
-   - Set TTY-specific variables but did not inherit parent environment
-   - This prevented commands from finding executables in user paths (e.g., `~/.cargo/bin`, `/opt/homebrew/bin`)
+    - Set TTY-specific variables but did not inherit parent environment
+    - This prevented commands from finding executables in user paths (e.g., `~/.cargo/bin`, `/opt/homebrew/bin`)
 
 ## Solution
 
@@ -32,6 +33,7 @@ let mut env: HashMap<OsString, OsString> = std::env::vars_os()
 ```
 
 Then override specific variables as needed:
+
 ```rust
 env.insert(OsString::from("PAGER"), OsString::from("cat"));
 env.insert(OsString::from("GIT_PAGER"), OsString::from("cat"));
@@ -59,22 +61,26 @@ builder.env("PAGER", "cat");
 This fix enables the agent to access all commands listed in `ALLOWED_COMMANDS` in `vtcode-config/src/constants.rs`, including:
 
 ### Development Tools
-- **Rust**: `cargo`, `rustc`, `rustfmt`, `rustup`, `clippy`
-- **Node.js**: `npm`, `yarn`, `pnpm`, `bun`, `node`, `npx`
-- **Python**: `python`, `python3`, `pip`, `pip3`, `conda`, `pytest`
-- **Build Systems**: `make`, `cmake`, `ninja`, `meson`, `bazel`
+
+-   **Rust**: `cargo`, `rustc`, `rustfmt`, `rustup`, `clippy`
+-   **Node.js**: `npm`, `yarn`, `pnpm`, `bun`, `node`, `npx`
+-   **Python**: `python`, `python3`, `pip`, `pip3`, `conda`, `pytest`
+-   **Build Systems**: `make`, `cmake`, `ninja`, `meson`, `bazel`
 
 ### Version Control
-- `git`, `hg`, `svn`
+
+-   `git`, `hg`, `svn`
 
 ### Container & Cloud
-- `docker`, `docker-compose`, `podman`
-- `aws`, `gcloud`, `az`, `kubectl`, `helm`
+
+-   `docker`, `docker-compose`, `podman`
+-   `aws`, `gcloud`, `az`, `kubectl`, `helm`
 
 ### System Utilities
-- `ls`, `cat`, `grep`, `find`, `which`, `type`, `file`, `stat`
-- Text processing: `awk`, `sed`, `grep`, `cut`, `sort`, `uniq`
-- Archives: `tar`, `zip`, `gzip`, `bzip2`
+
+-   `ls`, `cat`, `grep`, `find`, `which`, `type`, `file`, `stat`
+-   Text processing: `awk`, `sed`, `grep`, `cut`, `sort`, `uniq`
+-   Archives: `tar`, `zip`, `gzip`, `bzip2`
 
 ## Testing
 
@@ -92,16 +98,17 @@ The fix has been verified to work with common commands:
 
 ## Files Modified
 
-- `vtcode-core/src/tools/command.rs` - Line 44-56
-- `vtcode-core/src/tools/pty.rs` - Line 921-934
+-   `vtcode-core/src/tools/command.rs` - Line 44-56
+-   `vtcode-core/src/tools/pty.rs` - Line 921-934
 
 ## Security Considerations
 
 The fix preserves the existing security model:
-- Command validation via `validate_command()` still enforces allow/deny lists
-- Sandbox profiles still apply restrictions if configured
-- The agent only inherits the environment of the parent shell, which is expected behavior
-- Color output remains disabled for consistency in PTY mode
+
+-   Command validation via `validate_command()` still enforces allow/deny lists
+-   Sandbox profiles still apply restrictions if configured
+-   The agent only inherits the environment of the parent shell, which is expected behavior
+-   Color output remains disabled for consistency in PTY mode
 
 ## Related Configuration
 

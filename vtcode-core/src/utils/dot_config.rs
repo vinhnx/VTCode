@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-/// VTCode configuration stored in ~/.vtcode/
+/// VT Code configuration stored in ~/.vtcode/
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DotConfig {
     pub version: String,
@@ -139,7 +139,7 @@ impl Default for UiConfig {
     }
 }
 
-/// Dot folder manager for VTCode configuration and cache
+/// Dot folder manager for VT Code configuration and cache
 #[derive(Clone)]
 pub struct DotManager {
     config_dir: PathBuf,

@@ -1,6 +1,6 @@
-# VTCode Companion Extension Development Guide
+# VT Code Companion Extension Development Guide
 
-This guide provides instructions for setting up, developing, and running the VTCode Companion VSCode extension.
+This guide provides instructions for setting up, developing, and running the VT Code Companion VSCode extension.
 
 ## Prerequisites
 
@@ -128,17 +128,17 @@ When using the "Run Extension" launch configuration:
 The extension contributes the following commands:
 
 -   `vtcode.openQuickActions` - Open the quick actions panel
--   `vtcode.askAgent` - Send a question to the VTCode agent
+-   `vtcode.askAgent` - Send a question to the VT Code agent
 -   `vtcode.askSelection` - Ask about the selected text
 -   `vtcode.openConfig` - Open the vtcode.toml configuration file
--   `vtcode.launchAgentTerminal` - Launch an integrated VTCode terminal
+-   `vtcode.launchAgentTerminal` - Launch an integrated VT Code terminal
 -   And more...
 
 Access these commands via the Command Palette (Ctrl+Shift+P or Cmd+Shift+P).
 
 ## Troubleshooting Terminal Activation
 
-If you're seeing activation commands like `source /path/to/venv/bin/activate` when launching the VTCode agent terminal, this might be due to VSCode's terminal profile settings automatically activating Python environments. The extension simply sends the `vtcode chat` command to the terminal; if you're seeing environment activation, it's likely due to your VSCode configuration.
+If you're seeing activation commands like `source /path/to/venv/bin/activate` when launching the VT Code agent terminal, this might be due to VSCode's terminal profile settings automatically activating Python environments. The extension simply sends the `vtcode chat` command to the terminal; if you're seeing environment activation, it's likely due to your VSCode configuration.
 
 To resolve this:
 
@@ -151,7 +151,7 @@ To resolve this:
 
 ## CLI Installation Requirements
 
-The VTCode extension requires the VTCode CLI to be installed separately on your system. The extension cannot install the CLI automatically for security and policy reasons.
+The VT Code extension requires the VT Code CLI to be installed separately on your system. The extension cannot install the CLI automatically for security and policy reasons.
 
 The CLI can be installed via:
 
@@ -164,7 +164,7 @@ The extension checks for the CLI availability when activated and will show appro
 
 ## Adding a Status Bar Icon
 
-The extension already includes functionality to add a status bar icon that indicates VTCode status. In the `extension.ts` file, you'll find:
+The extension already includes functionality to add a status bar icon that indicates VT Code status. In the `extension.ts` file, you'll find:
 
 1. A status bar item is created in the `activate` function
 2. The status bar item has a tooltip and command associated with it
@@ -192,7 +192,7 @@ By default, the status bar item opens the quick actions when clicked if the CLI 
 
 ### Customizing Status Bar Icon
 
-To show a dedicated VTCode icon in the status bar (similar to other extensions in VSCode):
+To show a dedicated VT Code icon in the status bar (similar to other extensions in VSCode):
 
 1. The status bar item is created in the `activate` function in `extension.ts`:
 
@@ -212,7 +212,7 @@ To show a dedicated VTCode icon in the status bar (similar to other extensions i
     The `$(hubot)` part is a VSCode codicon that displays a robot icon, appropriate for an AI agent extension. You can use other VSCode codicons like:
 
     - `$(comment-discussion)` for a discussion/chat icon
-    - `$(terminal)` for a terminal icon (appropriate for VTCode chat)
+    - `$(terminal)` for a terminal icon (appropriate for VT Code chat)
     - `$(rocket)` for a rocket icon
     - `$(zap)` for a lightning bolt icon
     - `$(tools)` for a tools icon
@@ -224,7 +224,7 @@ To show a dedicated VTCode icon in the status bar (similar to other extensions i
     statusBarItem.text = `$(hubot) VTCode`; // Using a robot icon
     ```
 
-4. For the VTCode chat functionality specifically, you might consider using the `$(terminal)` icon since it launches a terminal with the VTCode chat interface.
+4. For the VT Code chat functionality specifically, you might consider using the `$(terminal)` icon since it launches a terminal with the VT Code chat interface.
 
 5. VSCode status bar items do not directly support custom SVG/PNG images. They use built-in codicons. However, the extension icon (shown in the Extensions view and marketplace) can be a custom SVG image stored in the media folder.
 
@@ -258,7 +258,7 @@ To show a dedicated VTCode icon in the status bar (similar to other extensions i
     statusBarItem.text = "$(hubot)"; // Just the icon
     ```
 
-This will make the status bar icon launch the VTCode agent terminal when clicked instead of opening the quick actions panel.
+This will make the status bar icon launch the VT Code agent terminal when clicked instead of opening the quick actions panel.
 
 You can also customize the appearance of the status bar, including text and tooltip, in the same `updateStatusBarItem` function.
 
@@ -266,11 +266,11 @@ The existing status bar item already has a command to open the agent terminal, a
 
 ## Common Issues
 
-### Missing VTCode CLI
+### Missing VT Code CLI
 
-If you see messages about the VTCode CLI being missing:
+If you see messages about the VT Code CLI being missing:
 
-1. Install the VTCode CLI according to the [official installation guide](https://github.com/vinhnx/vtcode#installation)
+1. Install the VT Code CLI according to the [official installation guide](https://github.com/vinhnx/vtcode#installation)
 2. Or update the `vtcode.commandPath` setting in VSCode preferences
 
 ### Extension Not Loading
@@ -358,12 +358,12 @@ The automated release script performs the following steps:
 
 ### Tag Naming Convention
 
-The extension uses a **different naming convention** from the main VTCode binary to avoid version conflicts:
+The extension uses a **different naming convention** from the main VT Code binary to avoid version conflicts:
 
--   **Main VTCode binary tags**: `v0.39.0`, `v0.39.1`, etc.
+-   **Main VT Code binary tags**: `v0.39.0`, `v0.39.1`, etc.
 -   **VSCode extension tags**: `vscode-v0.1.0`, `vscode-v0.1.1`, etc.
 
-This ensures that extension releases don't conflict with the core VTCode CLI releases in the same repository.
+This ensures that extension releases don't conflict with the core VT Code CLI releases in the same repository.
 
 ### Manual Release Steps
 
@@ -455,6 +455,6 @@ code --install-extension vtcode-companion-0.1.2.vsix
 
 -   [VSCode Extension API Documentation](https://code.visualstudio.com/api)
 -   [Extension Development Tutorial](https://code.visualstudio.com/api/get-started/your-first-extension)
--   [VTCode Companion GitHub Repository](https://github.com/vinhnx/vtcode)
+-   [VT Code Companion GitHub Repository](https://github.com/vinhnx/vtcode)
 -   [Publishing Extensions](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
 -   [Open VSX Registry](https://open-vsx.org/)

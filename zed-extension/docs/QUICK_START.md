@@ -1,10 +1,10 @@
-# VTCode Zed Extension - Quick Start
+# VT Code Zed Extension - Quick Start
 
-Get up and running with the VTCode extension for Zed in 5 minutes.
+Get up and running with the VT Code extension for Zed in 5 minutes.
 
 ## 1. Install Prerequisites
 
-### VTCode CLI
+### VT Code CLI
 
 Choose your preferred installation method:
 
@@ -170,7 +170,7 @@ log_level = "debug"
 
 ### Commands Don't Appear
 
--   **Issue**: VTCode commands missing from command palette
+-   **Issue**: VT Code commands missing from command palette
 -   **Solution**: Reload Zed (Cmd/Ctrl + R) or close and reopen
 
 ### API Key Errors
@@ -192,21 +192,21 @@ log_level = "debug"
 ## Next Steps
 
 1. **Read Configuration Guide**: [Full configuration options](extension-features.md)
-2. **Check VTCode Documentation**: [Main VTCode repo](https://github.com/vinhnx/vtcode)
+2. **Check VT Code Documentation**: [Main VT Code repo](https://github.com/vinhnx/vtcode)
 3. **Join Community**: Star the repo and share feedback
 4. **Contribute**: [Development guide](DEVELOPMENT.md)
 
 ## Support
 
--   **GitHub Issues**: [VTCode Issues](https://github.com/vinhnx/vtcode/issues)
--   **Documentation**: [VTCode Docs](https://github.com/vinhnx/vtcode#documentation)
+-   **GitHub Issues**: [VT Code Issues](https://github.com/vinhnx/vtcode/issues)
+-   **Documentation**: [VT Code Docs](https://github.com/vinhnx/vtcode#documentation)
 -   **Discord**: [Join our community](https://discord.com/invite/...)
 
 ## Tips & Tricks
 
 ### Pro Tips
 
-1. **Keyboard Shortcuts**: Bind VTCode commands to keybindings in Zed
+1. **Keyboard Shortcuts**: Bind VT Code commands to keybindings in Zed
 2. **Context**: The more context you provide, the better responses
 3. **Iterations**: Use "Ask the Agent" for follow-up questions in a conversation
 4. **Analysis**: Use "Analyze Workspace" for large refactoring tasks

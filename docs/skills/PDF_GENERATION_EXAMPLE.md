@@ -132,7 +132,7 @@ message = """Create a technical data sheet PDF with:
 -   **Sections**: Create multi-section documents
 -   **Watermarks**: Add background text or images
 
-## Integration with VTCode Skills
+## Integration with VT Code Skills
 
 Create a custom skill for PDF generation:
 

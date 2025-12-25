@@ -47,8 +47,8 @@
 
 ## Documents
 
-+ Ask Google Gemini CodeWiki <a href="https://codewiki.google/github.com/vinhnx/vtcode"><img src="https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white" alt="Ask CodeWiki"></a>
-+ Ask Devin DeepWiki <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+-   Ask Google Gemini CodeWiki <a href="https://codewiki.google/github.com/vinhnx/vtcode"><img src="https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white" alt="Ask CodeWiki"></a>
+-   Ask Devin DeepWiki <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 
 ---
 
@@ -204,7 +204,7 @@ VT Code is available as an VS Code extension.
     <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
   </a>
 
-The original VTCode extension for Visual Studio Code with full semantic code understanding and AI assistance.
+The original VT Code extension for Visual Studio Code with full semantic code understanding and AI assistance.
 
 VT Code is also compatible with other VS Code-compatible editors:
 

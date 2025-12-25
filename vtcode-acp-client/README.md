@@ -1,16 +1,16 @@
-# VTCode ACP Client
+# VT Code ACP Client
 
 HTTP-based Agent Communication Protocol (ACP) client library for inter-agent communication in distributed agent systems.
 
 ## Features
 
-  **REST-based Communication** - Standard HTTP protocol, no special SDKs required
-  **Agent Discovery** - Find agents by capability or ID
-  **Sync & Async** - Both synchronous and asynchronous request handling
-  **Health Monitoring** - Ping agents to check status
-  **Message Serialization** - Type-safe ACP message handling
-  **Registry Management** - In-memory agent registry with lifecycle management
-  **Error Handling** - Comprehensive error types for debugging
+**REST-based Communication** - Standard HTTP protocol, no special SDKs required
+**Agent Discovery** - Find agents by capability or ID
+**Sync & Async** - Both synchronous and asynchronous request handling
+**Health Monitoring** - Ping agents to check status
+**Message Serialization** - Type-safe ACP message handling
+**Registry Management** - In-memory agent registry with lifecycle management
+**Error Handling** - Comprehensive error types for debugging
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ use serde_json::json;
 async fn main() -> anyhow::Result<()> {
     // Create client
     let client = AcpClient::new("my-agent".to_string())?;
-    
+
     // Register a remote agent
     let agent = AgentInfo {
         id: "remote-agent".to_string(),
@@ -43,16 +43,16 @@ async fn main() -> anyhow::Result<()> {
         online: true,
         last_seen: None,
     };
-    
+
     client.registry().register(agent).await?;
-    
+
     // Call the remote agent
     let result = client.call_sync(
         "remote-agent",
         "execute".to_string(),
         json!({"cmd": "echo hello"}),
     ).await?;
-    
+
     println!("Result: {}", result);
     Ok(())
 }
@@ -63,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
 ### Core Components
 
 #### `AcpClient`
+
 Main client for agent communication.
 
 ```rust
@@ -83,6 +84,7 @@ let agent_info = client.discover_agent("http://remote:8080").await?;
 ```
 
 #### `AgentRegistry`
+
 In-memory registry of available agents.
 
 ```rust
@@ -106,6 +108,7 @@ registry.update_status("agent-id", false).await?;
 ```
 
 #### `AcpMessage`
+
 Type-safe message handling.
 
 ```rust
@@ -145,7 +148,7 @@ match client.call_sync("agent", "action".to_string(), args).await {
 
 ```
 User Code
-   
+
     AcpClient
          HTTP Communication (reqwest)
          Message Serialization (serde_json)
@@ -156,37 +159,39 @@ User Code
 ## Message Protocol
 
 ### Request
+
 ```json
 {
-  "id": "uuid",
-  "type": "request",
-  "sender": "local-agent",
-  "recipient": "remote-agent",
-  "content": {
-    "action": "execute_tool",
-    "args": { "param": "value" },
-    "sync": true,
-    "timeout_secs": 30
-  },
-  "timestamp": "2024-01-01T12:00:00Z",
-  "correlation_id": null
+    "id": "uuid",
+    "type": "request",
+    "sender": "local-agent",
+    "recipient": "remote-agent",
+    "content": {
+        "action": "execute_tool",
+        "args": { "param": "value" },
+        "sync": true,
+        "timeout_secs": 30
+    },
+    "timestamp": "2024-01-01T12:00:00Z",
+    "correlation_id": null
 }
 ```
 
 ### Response
+
 ```json
 {
-  "id": "uuid",
-  "type": "response",
-  "sender": "remote-agent",
-  "recipient": "local-agent",
-  "content": {
-    "status": "success",
-    "result": { "output": "data" },
-    "execution_time_ms": 245
-  },
-  "timestamp": "2024-01-01T12:00:00Z",
-  "correlation_id": "request-id"
+    "id": "uuid",
+    "type": "response",
+    "sender": "remote-agent",
+    "recipient": "local-agent",
+    "content": {
+        "status": "success",
+        "result": { "output": "data" },
+        "execution_time_ms": 245
+    },
+    "timestamp": "2024-01-01T12:00:00Z",
+    "correlation_id": "request-id"
 }
 ```
 
@@ -195,6 +200,7 @@ User Code
 For an agent to be callable, it must implement:
 
 ### 1. POST `/messages`
+
 Handle ACP requests and return responses.
 
 ```rust
@@ -205,6 +211,7 @@ app.post("/messages", |msg: AcpMessage| async {
 ```
 
 ### 2. GET `/metadata`
+
 Return agent discovery information.
 
 ```rust
@@ -219,6 +226,7 @@ app.get("/metadata", || async {
 ```
 
 ### 3. GET `/health`
+
 Simple health check endpoint.
 
 ```rust
@@ -254,37 +262,39 @@ cargo run --example acp_distributed_workflow
 
 ## Performance
 
-- **Message serialization:** <1ms
-- **Local registry lookup:** O(1)
-- **HTTP timeout:** Configurable (default 30s)
-- **Async overhead:** Minimal (uses tokio)
+-   **Message serialization:** <1ms
+-   **Local registry lookup:** O(1)
+-   **HTTP timeout:** Configurable (default 30s)
+-   **Async overhead:** Minimal (uses tokio)
 
 ## Security Considerations
 
- **Current Implementation:**
-- HTTP (not HTTPS) by default
-- No authentication/authorization
-- No message encryption
-- Messages logged with tracing
+**Current Implementation:**
 
- **Recommended for Production:**
-- Use HTTPS with certificate pinning
-- Implement JWT or mTLS authentication
-- Add message signing and encryption
-- Implement rate limiting
-- Add audit logging
-- Use VPN/private networks
+-   HTTP (not HTTPS) by default
+-   No authentication/authorization
+-   No message encryption
+-   Messages logged with tracing
+
+    **Recommended for Production:**
+
+-   Use HTTPS with certificate pinning
+-   Implement JWT or mTLS authentication
+-   Add message signing and encryption
+-   Implement rate limiting
+-   Add audit logging
+-   Use VPN/private networks
 
 ## Roadmap
 
-- [ ] HTTPS/TLS support
-- [ ] Authentication plugins (JWT, mTLS)
-- [ ] Message encryption
-- [ ] Automatic retries with exponential backoff
-- [ ] Circuit breaker pattern
-- [ ] Message queuing
-- [ ] OpenTelemetry integration
-- [ ] Metrics collection
+-   [ ] HTTPS/TLS support
+-   [ ] Authentication plugins (JWT, mTLS)
+-   [ ] Message encryption
+-   [ ] Automatic retries with exponential backoff
+-   [ ] Circuit breaker pattern
+-   [ ] Message queuing
+-   [ ] OpenTelemetry integration
+-   [ ] Metrics collection
 
 ## Integration with VTCode
 
@@ -298,9 +308,9 @@ See [ACP_INTEGRATION.md](../docs/ACP_INTEGRATION.md) for integration details.
 
 ## References
 
-- [ACP Official Specification](https://agentcommunicationprotocol.dev/)
-- [VTCode Documentation](../docs/)
-- [Examples](../examples/)
+-   [ACP Official Specification](https://agentcommunicationprotocol.dev/)
+-   [VT Code Documentation](../docs/)
+-   [Examples](../examples/)
 
 ## License
 

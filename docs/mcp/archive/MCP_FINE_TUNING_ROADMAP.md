@@ -1,4 +1,4 @@
-# VTCode MCP Fine-Tuning Implementation Roadmap
+# VT Code MCP Fine-Tuning Implementation Roadmap
 
 Detailed implementation roadmap to align vtcode MCP client with official `rmcp` (Rust SDK) best practices.
 
@@ -15,6 +15,7 @@ This document provides concrete implementation steps for the 12 alignment gaps i
 **File:** `Cargo.toml` (root)
 
 **Current:**
+
 ```toml
 [workspace]
 members = [
@@ -25,6 +26,7 @@ members = [
 ```
 
 **Add rmcp dependency to vtcode-core:**
+
 ```toml
 [package]
 name = "vtcode-core"
@@ -40,6 +42,7 @@ serde_json = "1.0"
 ```
 
 **Verification:**
+
 ```bash
 cargo check -p vtcode-core
 ```
@@ -62,22 +65,22 @@ pub async fn create_transport(config: &McpTransport) -> Result<TransportType> {
         McpTransport::Stdio(stdio_config) => {
             let mut cmd = Command::new(&stdio_config.command);
             cmd.args(&stdio_config.args);
-            
+
             // Configure environment variables
             for (key, value) in &stdio_config.env {
                 cmd.env(key, value);
             }
-            
+
             let transport = TokioChildProcess::new(cmd)
                 .context("Failed to create child process")?;
-            
+
             Ok(TransportType::Stdio(transport))
         }
         McpTransport::Http(http_config) => {
             let transport = HttpTransport::connect(&http_config.url)
                 .await
                 .context("Failed to connect to HTTP server")?;
-            
+
             Ok(TransportType::Http(transport))
         }
     }
@@ -119,6 +122,7 @@ pub fn schema_invalid(reason: &str) -> anyhow::Error {
 ```
 
 **Update all files using `McpError`:**
+
 ```bash
 # Find all McpError references
 grep -r "McpError" vtcode-core/src/mcp/
@@ -127,6 +131,7 @@ grep -r "McpError" vtcode-core/src/mcp/
 ```
 
 **Before:**
+
 ```rust
 pub fn list_tools(&self) -> Result<Vec<Tool>, McpError> {
     self.client.as_ref()
@@ -137,11 +142,12 @@ pub fn list_tools(&self) -> Result<Vec<Tool>, McpError> {
 ```
 
 **After:**
+
 ```rust
 pub fn list_tools(&self) -> anyhow::Result<Vec<Tool>> {
     let client = self.client.as_ref()
         .context("MCP client not initialized")?;
-    
+
     client.list_tools()
         .context("Failed to list tools")
 }
@@ -163,7 +169,7 @@ use serde_json::{json, Value};
 pub struct ManagedTool {
     pub name: String,
     pub description: String,
-    
+
     #[serde(skip)]
     pub input_schema: Value,
 }
@@ -173,18 +179,18 @@ impl ManagedTool {
     pub fn schema_json(&self) -> &Value {
         &self.input_schema
     }
-    
+
     /// Validate input against schema
     pub fn validate_input(&self, input: &Value) -> anyhow::Result<()> {
         // Use jsonschema crate for validation
         use jsonschema::validator::Draft202012;
-        
+
         let schema = Draft202012::compile(&self.input_schema)
             .context("Failed to compile JSON schema")?;
-        
+
         schema.validate(input)
             .context("Input does not match schema")?;
-        
+
         Ok(())
     }
 }
@@ -197,6 +203,7 @@ pub fn generate_schema<T: JsonSchema>() -> Value {
 ```
 
 **Add to Cargo.toml:**
+
 ```toml
 [dependencies]
 jsonschema = "0.18"  # For schema validation
@@ -211,6 +218,7 @@ jsonschema = "0.18"  # For schema validation
 **File:** `src/agent/runloop/unified/async_mcp_manager.rs`
 
 **Current state tracking:**
+
 ```rust
 pub enum McpInitStatus {
     Disabled,
@@ -221,16 +229,17 @@ pub enum McpInitStatus {
 ```
 
 **Simplified version:**
+
 ```rust
 use rmcp::ServiceExt;
 
 pub enum McpInitStatus {
     Disabled,
     Initializing,
-    Ready { 
+    Ready {
         client: Box<dyn ManagedMcpClient>,  // Trait object
     },
-    Error { 
+    Error {
         message: String,
         retry_count: u32,
     },
@@ -247,51 +256,51 @@ impl AsyncMcpManager {
         if matches!(self.status, McpInitStatus::Initializing) {
             return Ok(()); // Already initializing
         }
-        
+
         self.status = McpInitStatus::Initializing;
-        
+
         let config = self.config.clone();
         let task = tokio::spawn(async move {
             Self::initialize_providers(&config).await
         });
-        
+
         self.init_task = Some(task);
         Ok(())
     }
-    
+
     private async fn initialize_providers(
         config: &McpClientConfig,
     ) -> anyhow::Result<Box<dyn ManagedMcpClient>> {
         // Initialize all providers in parallel
         let mut handles = vec![];
-        
+
         for (name, provider_config) in &config.providers {
             let name = name.clone();
             let config = provider_config.clone();
-            
+
             let handle = tokio::spawn(async move {
                 Self::initialize_provider(&name, &config).await
             });
-            
+
             handles.push(handle);
         }
-        
+
         // Wait for all with timeout
         let timeout = Duration::from_secs(config.startup_timeout_seconds);
         let results = tokio::time::timeout(timeout, futures::future::join_all(handles))
             .await
             .context("MCP initialization timeout")?;
-        
+
         // Collect results
         let mut clients = HashMap::new();
         for result in results {
             let (name, client) = result??;
             clients.insert(name, client);
         }
-        
+
         Ok(Box::new(MultiProviderClient { clients }))
     }
-    
+
     pub async fn get_status(&self) -> McpInitStatus {
         // Check if task completed
         if let Some(task) = &self.init_task {
@@ -299,13 +308,14 @@ impl AsyncMcpManager {
                 // Handle completion
             }
         }
-        
+
         self.status.clone()
     }
 }
 ```
 
 **Key improvements:**
+
 1. Cleaner state machine
 2. Parallel provider initialization
 3. Proper timeout handling
@@ -343,7 +353,7 @@ impl ManagedMcpClient for MultiProviderClient {
             .list_tools()
             .await
     }
-    
+
     async fn execute_tool(
         &self,
         provider: &str,
@@ -353,7 +363,7 @@ impl ManagedMcpClient for MultiProviderClient {
         let client = self.get_client(provider)?;
         client.execute_tool(tool, args).await
     }
-    
+
     async fn health_check(&self) -> anyhow::Result<()> {
         // Check all providers
         for (name, client) in &self.clients {
@@ -396,19 +406,19 @@ pub async fn execute_mcp_tool(
     let tool = tools.iter()
         .find(|t| t.name == tool_name)
         .ok_or_else(|| anyhow!("Tool not found: {}", tool_name))?;
-    
+
     // Validate input
     if let Some(schema) = &tool.schema {
         schema.validate(&arguments)
             .context("Tool arguments do not match schema")?;
     }
-    
+
     // Execute with RMCP pattern
     let call = ToolCall {
         name: tool_name.to_string(),
         arguments,
     };
-    
+
     client.execute_tool(provider, tool_name, call.arguments)
         .await
         .context("Tool execution failed")
@@ -447,7 +457,7 @@ impl HealthChecker {
             timeout: Duration::from_secs(5),
         }
     }
-    
+
     pub async fn check(
         &self,
         client: &dyn ManagedMcpClient,
@@ -456,7 +466,7 @@ impl HealthChecker {
             self.timeout,
             client.health_check(),
         ).await;
-        
+
         match result {
             Ok(Ok(())) => Ok(HealthStatus::Healthy),
             Ok(Err(e)) => Ok(HealthStatus::Unhealthy(e.to_string())),
@@ -512,6 +522,7 @@ async fn test_schema_validation() {
 ### 4.2 Update Documentation
 
 **Update files:**
+
 1. `docs/mcp/MCP_COMPLETE_IMPLEMENTATION_STATUS.md` — Add Phase 1 completion
 2. `AGENTS.md` — Add RMCP integration patterns
 3. `docs/mcp/README.md` — Create overview
@@ -520,17 +531,17 @@ async fn test_schema_validation() {
 
 ## Validation Checklist
 
-- [ ] All dependencies updated
-- [ ] `cargo check` passes
-- [ ] `cargo clippy` passes
-- [ ] Transport layer refactored
-- [ ] Error handling unified to `anyhow`
-- [ ] schemars integrated for schemas
-- [ ] AsyncMcpManager refactored
-- [ ] Health checks implemented
-- [ ] Tool invocation updated
-- [ ] All integration tests pass
-- [ ] Documentation updated
+-   [ ] All dependencies updated
+-   [ ] `cargo check` passes
+-   [ ] `cargo clippy` passes
+-   [ ] Transport layer refactored
+-   [ ] Error handling unified to `anyhow`
+-   [ ] schemars integrated for schemas
+-   [ ] AsyncMcpManager refactored
+-   [ ] Health checks implemented
+-   [ ] Tool invocation updated
+-   [ ] All integration tests pass
+-   [ ] Documentation updated
 
 ---
 
@@ -554,10 +565,11 @@ git reset --hard phase-1-checkpoint
 ## Performance Impact
 
 **Expected improvements:**
-- Reduced code complexity: 30-40% fewer custom implementations
-- Better error context: Easier debugging with `anyhow`
-- Type-safe schemas: Compile-time schema validation
-- Parallel initialization: Faster MCP startup
+
+-   Reduced code complexity: 30-40% fewer custom implementations
+-   Better error context: Easier debugging with `anyhow`
+-   Type-safe schemas: Compile-time schema validation
+-   Parallel initialization: Faster MCP startup
 
 **No performance degradation expected** — RMCP patterns are production-tested.
 
@@ -565,13 +577,13 @@ git reset --hard phase-1-checkpoint
 
 ## Timeline Summary
 
-| Phase | Duration | Key Deliverables |
-|-------|----------|------------------|
-| Phase 1 | 2 weeks | Dependencies, transport, error handling |
-| Phase 2 | 1 week | Async lifecycle, multi-provider client |
-| Phase 3 | 1 week | Tool execution, health checks, streaming |
-| Phase 4 | 1 week | Tests, documentation, validation |
-| **Total** | **5 weeks** | **Full RMCP alignment** |
+| Phase     | Duration    | Key Deliverables                         |
+| --------- | ----------- | ---------------------------------------- |
+| Phase 1   | 2 weeks     | Dependencies, transport, error handling  |
+| Phase 2   | 1 week      | Async lifecycle, multi-provider client   |
+| Phase 3   | 1 week      | Tool execution, health checks, streaming |
+| Phase 4   | 1 week      | Tests, documentation, validation         |
+| **Total** | **5 weeks** | **Full RMCP alignment**                  |
 
 ---
 
@@ -587,7 +599,7 @@ git reset --hard phase-1-checkpoint
 
 ## References
 
-- RMCP GitHub: https://github.com/modelcontextprotocol/rust-sdk
-- RMCP Examples: https://github.com/modelcontextprotocol/rust-sdk/tree/main/examples
-- Alignment Doc: `docs/mcp/MCP_RUST_SDK_ALIGNMENT.md`
-- Current Status: `docs/mcp/MCP_COMPLETE_IMPLEMENTATION_STATUS.md`
+-   RMCP GitHub: https://github.com/modelcontextprotocol/rust-sdk
+-   RMCP Examples: https://github.com/modelcontextprotocol/rust-sdk/tree/main/examples
+-   Alignment Doc: `docs/mcp/MCP_RUST_SDK_ALIGNMENT.md`
+-   Current Status: `docs/mcp/MCP_COMPLETE_IMPLEMENTATION_STATUS.md`

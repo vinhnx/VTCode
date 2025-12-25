@@ -1,13 +1,13 @@
-# VTCode Zed Extension - Setup & Installation Guide
+# VT Code Zed Extension - Setup & Installation Guide
 
-Complete guide for setting up the VTCode Zed extension in your environment.
+Complete guide for setting up the VT Code Zed extension in your environment.
 
 ## What's Included
 
- **Complete Zed Extension** for VTCode AI coding assistant
+**Complete Zed Extension** for VT Code AI coding assistant
 
 -   Language support for `vtcode.toml` configuration files
--   Integration with VTCode CLI
+-   Integration with VT Code CLI
 -   WebAssembly binary (compiled and ready)
 -   Full documentation and roadmap
 
@@ -36,7 +36,7 @@ zed-extension/
 
 -   **Zed Editor**: Latest stable version
 -   **Rust**: Installed via [rustup](https://www.rust-lang.org/tools/install)
--   **VTCode CLI**: Install with `cargo install vtcode`
+-   **VT Code CLI**: Install with `cargo install vtcode`
 
 ### Optional
 
@@ -54,7 +54,7 @@ rustup --version
 # Check Zed installation
 zed --version
 
-# Check VTCode CLI
+# Check VT Code CLI
 vtcode --version
 ```
 
@@ -65,7 +65,7 @@ All three should output version information.
 **Option A: Development Installation** (recommended for testing)
 
 ```bash
-# Clone VTCode repository
+# Clone VT Code repository
 git clone https://github.com/vinhnx/vtcode.git
 cd vtcode/zed-extension
 
@@ -179,7 +179,7 @@ rustc --version
 # Should be 1.70.0 or newer
 ```
 
-### VTCode CLI Not Found
+### VT Code CLI Not Found
 
 **Problem**: Extension can't find vtcode command
 
@@ -225,7 +225,7 @@ source ~/.zshrc  # or ~/.bashrc
 
 -   [ ] Rust installed via rustup: `rustup --version`
 -   [ ] Zed installed: `zed --version`
--   [ ] VTCode CLI installed: `vtcode --version`
+-   [ ] VT Code CLI installed: `vtcode --version`
 -   [ ] Extension installed in Zed Extensions
 -   [ ] `vtcode.toml` exists in workspace root
 -   [ ] API key set in environment: `echo $ANTHROPIC_API_KEY`
@@ -302,7 +302,7 @@ RUST_BACKTRACE=1  # For debugging build issues
 
 ### Documentation
 
--   [VTCode Main Repo](https://github.com/vinhnx/vtcode)
+-   [VT Code Main Repo](https://github.com/vinhnx/vtcode)
 -   [Zed Editor Docs](https://zed.dev/docs)
 -   [Extension Source](./src/lib.rs)
 
@@ -310,7 +310,7 @@ RUST_BACKTRACE=1  # For debugging build issues
 
 -   **Issues**: [GitHub Issues](https://github.com/vinhnx/vtcode/issues)
 -   **Discussions**: [GitHub Discussions](https://github.com/vinhnx/vtcode/discussions)
--   **Feedback**: Star  the repo if you find it useful
+-   **Feedback**: Star the repo if you find it useful
 
 ## Uninstallation
 
@@ -333,7 +333,7 @@ rm -rf ~/.cache/zed/extensions/installed/vtcode
 
 -   **Extension Version**: 0.1.0
 -   **Zed Compatibility**: 0.150.0+
--   **VTCode CLI**: 0.1.0+
+-   **VT Code CLI**: 0.1.0+
 -   **Rust Edition**: 2021
 -   **Last Updated**: November 2024
 

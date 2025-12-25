@@ -1,4 +1,4 @@
-# Example: Using doc-generator in VTCode TUI
+# Example: Using doc-generator in VT Code TUI
 
 Complete step-by-step example of creating a Word document using the `doc-generator` skill in VTCode's interactive chat.
 
@@ -18,6 +18,7 @@ $ vtcode chat
 ```
 
 Then type:
+
 ```
 Create a professional project proposal document for a mobile app development project:
 
@@ -82,7 +83,7 @@ $ vtcode chat
 /skills load doc-generator
 ```
 
-**Result:**  Skill loaded
+**Result:** Skill loaded
 
 ### Step 3: Create Document
 
@@ -131,7 +132,7 @@ Project Scope (Page 2):
 
 Timeline (Page 3):
 - Month 1-2: Design & Architecture
-- Month 2-3: Core Development  
+- Month 2-3: Core Development
 - Month 4: Testing & QA
 - Month 5: Deployment & Integration
 - Month 6: Training & Documentation
@@ -180,21 +181,22 @@ Ready to download and send to client!
 
 A professional Word document with:
 
- **Title Page** - Project name, client, date  
- **Executive Summary** - Overview and key benefits  
- **Project Scope** - Detailed requirements (4 areas)  
- **Timeline** - 6-month development schedule  
- **Budget** - Breakdown by category (table format)  
- **Success Metrics** - Clear goals and KPIs  
- **Risk Assessment** - Risk identification and mitigation  
- **Next Steps** - Action items with timelines  
+**Title Page** - Project name, client, date
+**Executive Summary** - Overview and key benefits
+**Project Scope** - Detailed requirements (4 areas)
+**Timeline** - 6-month development schedule
+**Budget** - Breakdown by category (table format)
+**Success Metrics** - Clear goals and KPIs
+**Risk Assessment** - Risk identification and mitigation
+**Next Steps** - Action items with timelines
 
 All formatted professionally with:
-- Proper heading styles
-- Bold and italic emphasis
-- Tables with clear formatting
-- Appropriate spacing
-- Professional fonts
+
+-   Proper heading styles
+-   Bold and italic emphasis
+-   Tables with clear formatting
+-   Appropriate spacing
+-   Professional fonts
 
 ---
 
@@ -333,34 +335,39 @@ Agent: [Creates employee handbook]
 ## Real-World Use Cases
 
 ### Use Case 1: Client Proposal
-- Professional presentation to potential client
-- Details project scope and timeline
-- Shows budget and deliverables
-- Includes success metrics
+
+-   Professional presentation to potential client
+-   Details project scope and timeline
+-   Shows budget and deliverables
+-   Includes success metrics
 
 ### Use Case 2: Internal Report
-- Executive summary for leadership
-- Key findings and recommendations
-- Data-driven analysis
-- Action items
+
+-   Executive summary for leadership
+-   Key findings and recommendations
+-   Data-driven analysis
+-   Action items
 
 ### Use Case 3: Training Material
-- Step-by-step guides
-- Procedures and best practices
-- Troubleshooting guides
-- FAQs
+
+-   Step-by-step guides
+-   Procedures and best practices
+-   Troubleshooting guides
+-   FAQs
 
 ### Use Case 4: Documentation
-- API specifications
-- System architecture
-- User guides
-- Technical specifications
+
+-   API specifications
+-   System architecture
+-   User guides
+-   Technical specifications
 
 ### Use Case 5: Meeting Minutes
-- Discussion notes
-- Action items with owners
-- Decisions made
-- Next steps
+
+-   Discussion notes
+-   Action items with owners
+-   Decisions made
+-   Next steps
 
 ---
 
@@ -428,14 +435,16 @@ Agent: [Creates with all formatting]
 ## Common Requests
 
 ### Request 1: Add Table of Contents
+
 ```
-User: Add an automated table of contents 
+User: Add an automated table of contents
       at the beginning of the document
 
 Agent: [Adds TOC with page numbers]
 ```
 
 ### Request 2: Add Appendix
+
 ```
 User: Add appendix sections for:
       1. Detailed specifications
@@ -446,6 +455,7 @@ Agent: [Adds appendix with all sections]
 ```
 
 ### Request 3: Add Visual Elements
+
 ```
 User: Add visual elements:
       - Organization chart
@@ -456,6 +466,7 @@ Agent: [Creates ASCII art or reference placeholders]
 ```
 
 ### Request 4: Professional Branding
+
 ```
 User: Brand the document with:
       - Company logo (provide image)
@@ -470,12 +481,12 @@ Agent: [Applies branding throughout]
 
 ## Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
+| Key           | Action           |
+| ------------- | ---------------- |
 | `Shift+Enter` | Multi-line input |
-| `Ctrl+A` | Start of line |
-| `Ctrl+E` | End of line |
-| `Tab` | Autocomplete |
+| `Ctrl+A`      | Start of line    |
+| `Ctrl+E`      | End of line      |
+| `Tab`         | Autocomplete     |
 
 ---
 
@@ -496,6 +507,7 @@ After the document is created:
 ### Issue: "Document structure not quite right"
 
 **Solution:**
+
 ```
 User: Reorganize the document:
       - Move sections in this order
@@ -508,6 +520,7 @@ Agent: [Recreates with new structure]
 ### Issue: "Too long/too short"
 
 **Solution:**
+
 ```
 User: Make it more concise (remove details)
       OR
@@ -519,6 +532,7 @@ Agent: [Adjusts length]
 ### Issue: "Need different sections"
 
 **Solution:**
+
 ```
 User: Replace the Budget section with:
       [New section details]
@@ -531,6 +545,7 @@ Agent: [Updates document]
 ## Summary
 
 ### Quick Process
+
 1. Start chat: `vtcode chat`
 2. Load skill: `/skills load doc-generator`
 3. Type requirements
@@ -538,25 +553,27 @@ Agent: [Updates document]
 5. Download and use
 
 ### Time Estimate
-- Simple document: 30-60 seconds
-- Complex document: 1-2 minutes
-- With modifications: 2-3 minutes
+
+-   Simple document: 30-60 seconds
+-   Complex document: 1-2 minutes
+-   With modifications: 2-3 minutes
 
 ### Best For
-- Professional proposals
-- Reports and documentation
-- Training materials
-- Meeting minutes
-- Project documentation
-- Employee handbooks
+
+-   Professional proposals
+-   Reports and documentation
+-   Training materials
+-   Meeting minutes
+-   Project documentation
+-   Employee handbooks
 
 ---
 
 ## Related Examples
 
-- `EXAMPLE_SPREADSHEET_GENERATOR.md` - Excel creation
-- `EXAMPLE_PDF_GENERATOR.md` - PDF reports
-- `AGENT_SKILLS_CLI_TUI.md` - Complete TUI guide
+-   `EXAMPLE_SPREADSHEET_GENERATOR.md` - Excel creation
+-   `EXAMPLE_PDF_GENERATOR.md` - PDF reports
+-   `AGENT_SKILLS_CLI_TUI.md` - Complete TUI guide
 
 ---
 

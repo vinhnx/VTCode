@@ -1,12 +1,12 @@
-/// VTCode CLI Command Executor
+/// VT Code CLI Command Executor
 ///
-/// Handles execution of VTCode CLI commands and output capture.
-/// This module provides the interface for running VTCode commands
+/// Handles execution of VT Code CLI commands and output capture.
+/// This module provides the interface for running VT Code commands
 /// and retrieving their results with timeout support.
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-/// Result of a VTCode command execution
+/// Result of a VT Code command execution
 #[derive(Debug, Clone)]
 pub struct CommandResult {
     /// Exit status (0 = success)
@@ -33,7 +33,7 @@ impl CommandResult {
     }
 }
 
-/// Execute a VTCode command
+/// Execute a VT Code command
 ///
 /// # Arguments
 /// * `command` - The vtcode subcommand (e.g., "ask", "analyze")
@@ -51,7 +51,7 @@ pub fn execute_command(command: &str, args: &[&str]) -> Result<CommandResult, St
     execute_command_with_timeout(command, args, timeout)
 }
 
-/// Execute a VTCode command with custom timeout
+/// Execute a VT Code command with custom timeout
 ///
 /// # Arguments
 /// * `command` - The vtcode subcommand
@@ -91,7 +91,7 @@ pub fn execute_command_with_timeout(
     })
 }
 
-/// Check if VTCode CLI is available
+/// Check if VT Code CLI is available
 pub fn check_vtcode_available() -> bool {
     Command::new("vtcode")
         .arg("--version")
@@ -100,7 +100,7 @@ pub fn check_vtcode_available() -> bool {
         .unwrap_or(false)
 }
 
-/// Get VTCode CLI version
+/// Get VT Code CLI version
 pub fn get_vtcode_version() -> Result<String, String> {
     let result = execute_command("--version", &[])?;
     if result.is_success() {

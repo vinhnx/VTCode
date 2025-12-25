@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 /// Workspace Context Management
 ///
-/// Provides rich workspace structure and file context for VTCode commands.
+/// Provides rich workspace structure and file context for VT Code commands.
 /// Handles workspace analysis, file discovery, and content context passing.
 use std::path::PathBuf;
 

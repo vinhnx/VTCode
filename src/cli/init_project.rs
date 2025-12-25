@@ -52,7 +52,7 @@ pub async fn handle_init_project_command(
     }
 
     // Create project structure
-    project_manager.create_project(&project_name, Some("VTCode project"))?;
+    project_manager.create_project(&project_name, Some("VT Code project"))?;
     println!(
         "{} Created project structure in: {}",
         style("Success").green(),
@@ -62,7 +62,7 @@ pub async fn handle_init_project_command(
     // Create or update project metadata
     let current_dir = std::env::current_dir()?;
     let mut metadata = ProjectData::new(&project_name);
-    metadata.description = Some("VTCode project".to_string());
+    metadata.description = Some("VT Code project".to_string());
     project_manager.update_project(&metadata)?;
     println!("{} Created project metadata", style("Success").green());
 

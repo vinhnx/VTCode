@@ -1,6 +1,6 @@
 /// Unified error handling for MCP operations
 ///
-/// VTCode uses `anyhow::Result<T>` for all MCP errors to maintain consistency
+/// VT Code uses `anyhow::Result<T>` for all MCP errors to maintain consistency
 /// with the Rust SDK patterns and provide rich error context.
 ///
 /// Phase 3: Error codes follow the pattern MCP_E{code}

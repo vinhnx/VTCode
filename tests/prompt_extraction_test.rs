@@ -20,7 +20,7 @@ fn test_codex_alignment_analysis_exists() {
     // Verify analysis sections
     assert!(analysis.contains("## Alignment Assessment"));
     assert!(analysis.contains("### Strong Alignments"));
-    assert!(analysis.contains("### VTCode Innovations Beyond Codex"));
+    assert!(analysis.contains("### VT Code Innovations Beyond Codex"));
     assert!(analysis.contains("## Recommended Enhancements"));
 }
 
@@ -29,7 +29,7 @@ fn test_codex_alignment_analysis_exists() {
 fn test_system_prompt_content_accuracy() {
     let system_md = fs::read_to_string("prompts/system.md").expect("system.md should exist");
 
-    // Verify extracted prompt contains key VTCode features
+    // Verify extracted prompt contains key VT Code features
     assert!(system_md.contains("batch_file_operations"));
     assert!(system_md.contains("run_pty_cmd"));
     assert!(system_md.contains("vtcode.toml"));

@@ -1,4 +1,8 @@
 import * as vscode from "vscode";
+import { ConversationManager } from "./conversation/conversationManager";
+import { ParticipantRegistry } from "./participantRegistry";
+import { ParticipantContext } from "./types/participant";
+import { getUniqueMentionTypes, parseMentions } from "./utils/mentionParser";
 import {
     VtcodeBackend,
     type VtcodeStreamChunk,
@@ -6,10 +10,6 @@ import {
     type VtcodeToolExecutionResult,
 } from "./vtcodeBackend";
 import { VtcodeConfigSummary } from "./vtcodeConfig";
-import { ParticipantRegistry } from "./participantRegistry";
-import { ParticipantContext } from "./types/participant";
-import { ConversationManager } from "./conversation/conversationManager";
-import { parseMentions, getUniqueMentionTypes } from "./utils/mentionParser";
 
 interface ChatMessage {
     readonly role: "user" | "assistant" | "system" | "tool" | "error";
@@ -41,10 +41,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     ) {
         // Initialize participant registry
         this.participantRegistry = new ParticipantRegistry();
-        
+
         // Initialize conversation manager
-        this.conversationManager = new ConversationManager(context, this.output);
-        
+        this.conversationManager = new ConversationManager(
+            context,
+            this.output
+        );
+
         // Create initial conversation
         this.conversationManager.createConversation();
     }
@@ -70,7 +73,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         if (summary?.humanInTheLoop === false && previous !== false) {
             this.output.appendLine(
-                "[chatView] Configuration disabled human_in_the_loop; VTCode prompts will proceed without extra VS Code confirmations."
+                "[chatView] Configuration disabled human_in_the_loop; VT Code prompts will proceed without extra VS Code confirmations."
             );
         }
     }
@@ -153,20 +156,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // Parse @mentions from the message
         const parsedMessage = parseMentions(text);
         const mentionTypes = getUniqueMentionTypes(parsedMessage);
-        
+
         if (mentionTypes.length > 0) {
-            this.output.appendLine(`[chatView] Detected mentions: ${mentionTypes.join(', ')}`);
+            this.output.appendLine(
+                `[chatView] Detected mentions: ${mentionTypes.join(", ")}`
+            );
         }
 
         // Build participant context
         const participantContext = await this.buildParticipantContext();
-        
+
         // Resolve context for mentioned participants only
-        const enhancedText = await this.participantRegistry.resolveContextForMentions(
-            parsedMessage.cleanText,
-            participantContext,
-            mentionTypes
-        );
+        const enhancedText =
+            await this.participantRegistry.resolveContextForMentions(
+                parsedMessage.cleanText,
+                participantContext,
+                mentionTypes
+            );
 
         const userMessage: ChatMessage = {
             role: "user",
@@ -277,7 +283,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
 
         const selection = await vscode.window.showWarningMessage(
-            "VTCode requires a trusted workspace before processing prompts.",
+            "VT Code requires a trusted workspace before processing prompts.",
             { modal: true },
             "Trust Workspace",
             "Cancel"
@@ -354,7 +360,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private async requestToolApproval(call: VtcodeToolCall): Promise<boolean> {
         const detail = JSON.stringify(call.args, null, 2);
         const selection = await vscode.window.showInformationMessage(
-            `VTCode requested tool "${call.name}".`,
+            `VT Code requested tool "${call.name}".`,
             {
                 modal: true,
                 detail:
@@ -476,8 +482,10 @@ ${output}`
         const activeEditor = vscode.window.activeTextEditor;
         if (activeEditor) {
             const document = activeEditor.document;
-            const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-            
+            const workspaceFolder = vscode.workspace.getWorkspaceFolder(
+                document.uri
+            );
+
             context.activeFile = {
                 path: document.fileName,
                 language: document.languageId,
@@ -526,9 +534,9 @@ ${output}`
             this.lastHumanInLoopSetting === false
                 ? "Tools may execute without a manual approval prompt; describe safety checks before running destructive commands."
                 : "Tools require human approval before execution; propose shell commands and edits explicitly.";
-        const preamble = `system: You are the VTCode workspace agent running inside VS Code. Workspace trust is ${
+        const preamble = `system: You are the VT Code workspace agent running inside VS Code. Workspace trust is ${
             this.workspaceTrusted ? "granted" : "restricted"
-        }. Human-in-the-loop is ${hitlState}. ${toolGuidance} Prefer using VTCode tools or PTY sessions for filesystem or shell access, and reference the IDE context snapshot when available.`;
+        }. Human-in-the-loop is ${hitlState}. ${toolGuidance} Prefer using VT Code tools or PTY sessions for filesystem or shell access, and reference the IDE context snapshot when available.`;
 
         const relevantMessages = this.messages
             .filter(
@@ -597,7 +605,7 @@ ${output}`
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="stylesheet" href="${styleUri}" />
-<title>VTCode Chat</title>
+<title>VT Code Chat</title>
 </head>
 <body>
     <div id="chat-root" class="chat-root">
@@ -611,7 +619,7 @@ ${output}`
             </header>
             <div id="transcript" class="chat-transcript" role="log" aria-live="polite"></div>
             <form id="composer" class="chat-composer" aria-label="Send a message">
-                <textarea id="message" class="chat-input" rows="3" placeholder="Ask VTCode a question"></textarea>
+                <textarea id="message" class="chat-input" rows="3" placeholder="Ask VT Code a question"></textarea>
                 <div class="chat-actions">
                     <button id="send" type="submit" class="chat-button">Send</button>
                     <button id="cancel" type="button" class="chat-button chat-button--secondary" style="display: none;">Cancel</button>

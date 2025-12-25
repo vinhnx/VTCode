@@ -64,7 +64,7 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
         println!("\nCreate a traditional skill:");
         println!("  vtcode skills create ./my-skill");
         println!("\nOr install skills in standard locations:");
-        println!("  ~/.vtcode/skills/     (VTCode user skills)");
+        println!("  ~/.vtcode/skills/     (VT Code user skills)");
         println!("  .vtcode/skills/       (Project skills)");
         println!("  ~/.claude/skills/     (Claude Code compatibility)");
         println!("  ~/.codex/skills/      (OpenAI Codex CLI compatibility)");
@@ -384,8 +384,8 @@ pub async fn handle_skills_config(options: &SkillsCommandOptions) -> Result<()> 
     println!("Skill Configuration\n");
     println!("Workspace: {}", options.workspace.display());
     println!("\nSkill Search Paths (by precedence):");
-    println!("  • ~/.vtcode/skills/     (VTCode user skills - highest precedence)");
-    println!("  • .vtcode/skills/       (VTCode project skills)");
+    println!("  • ~/.vtcode/skills/     (VT Code user skills - highest precedence)");
+    println!("  • .vtcode/skills/       (VT Code project skills)");
     println!("  • ~/.pi/skills/         (Pi framework user skills)");
     println!("  • .pi/skills/           (Pi framework project skills)");
     println!("  • ~/.claude/skills/     (Claude Code user skills)");

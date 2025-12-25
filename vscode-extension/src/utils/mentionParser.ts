@@ -1,5 +1,5 @@
 /**
- * @mention parser for VTCode extension
+ * @mention parser for VT Code extension
  * Extracts participant mentions from chat messages and provides context resolution
  */
 
@@ -54,15 +54,18 @@ export function parseMentions(text: string): ParsedMessage {
     // Remove mentions from text to create clean version
     // Process in reverse order to maintain indices
     cleanText = text;
-    const sortedMentions = [...mentions].sort((a, b) => b.startIndex - a.startIndex);
-    
+    const sortedMentions = [...mentions].sort(
+        (a, b) => b.startIndex - a.startIndex
+    );
+
     for (const mention of sortedMentions) {
-        cleanText = cleanText.substring(0, mention.startIndex) + 
-                   cleanText.substring(mention.endIndex);
+        cleanText =
+            cleanText.substring(0, mention.startIndex) +
+            cleanText.substring(mention.endIndex);
     }
 
     // Clean up extra whitespace
-    cleanText = cleanText.replace(/\s+/g, ' ').trim();
+    cleanText = cleanText.replace(/\s+/g, " ").trim();
 
     return {
         originalText: text,
@@ -78,7 +81,7 @@ export function parseMentions(text: string): ParsedMessage {
  * @returns Array of unique mention types
  */
 export function getUniqueMentionTypes(parsedMessage: ParsedMessage): string[] {
-    return [...new Set(parsedMessage.mentions.map(m => m.type))];
+    return [...new Set(parsedMessage.mentions.map((m) => m.type))];
 }
 
 /**
@@ -87,8 +90,11 @@ export function getUniqueMentionTypes(parsedMessage: ParsedMessage): string[] {
  * @param type The mention type to check for
  * @returns True if the message contains the mention type
  */
-export function hasMentionType(parsedMessage: ParsedMessage, type: string): boolean {
-    return parsedMessage.mentions.some(m => m.type === type.toLowerCase());
+export function hasMentionType(
+    parsedMessage: ParsedMessage,
+    type: string
+): boolean {
+    return parsedMessage.mentions.some((m) => m.type === type.toLowerCase());
 }
 
 /**
@@ -98,21 +104,25 @@ export function hasMentionType(parsedMessage: ParsedMessage, type: string): bool
  * @returns Text with mentions replaced by descriptions
  */
 export function replaceMentionsWithDescriptions(
-    parsedMessage: ParsedMessage, 
+    parsedMessage: ParsedMessage,
     descriptions: Map<string, string>
 ): string {
     let result = parsedMessage.originalText;
-    
+
     // Process mentions in reverse order to maintain indices
-    const sortedMentions = [...parsedMessage.mentions].sort((a, b) => b.startIndex - a.startIndex);
-    
+    const sortedMentions = [...parsedMessage.mentions].sort(
+        (a, b) => b.startIndex - a.startIndex
+    );
+
     for (const mention of sortedMentions) {
-        const description = descriptions.get(mention.type) || `[${mention.type} context]`;
-        result = result.substring(0, mention.startIndex) + 
-                description + 
-                result.substring(mention.endIndex);
+        const description =
+            descriptions.get(mention.type) || `[${mention.type} context]`;
+        result =
+            result.substring(0, mention.startIndex) +
+            description +
+            result.substring(mention.endIndex);
     }
-    
+
     return result;
 }
 
@@ -123,7 +133,7 @@ export function replaceMentionsWithDescriptions(
  * @returns Object with valid and invalid mentions
  */
 export function validateMentions(
-    parsedMessage: ParsedMessage, 
+    parsedMessage: ParsedMessage,
     availableTypes: string[]
 ): {
     valid: Mention[];
@@ -131,7 +141,7 @@ export function validateMentions(
 } {
     const valid: Mention[] = [];
     const invalid: Mention[] = [];
-    
+
     for (const mention of parsedMessage.mentions) {
         if (availableTypes.includes(mention.type)) {
             valid.push(mention);
@@ -139,6 +149,6 @@ export function validateMentions(
             invalid.push(mention);
         }
     }
-    
+
     return { valid, invalid };
 }

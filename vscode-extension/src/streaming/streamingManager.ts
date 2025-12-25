@@ -1,5 +1,5 @@
-import * as vscode from 'vscode';
-import { VtcodeStreamChunk } from '../vtcodeBackend';
+import * as vscode from "vscode";
+import { VtcodeStreamChunk } from "../vtcodeBackend";
 
 export interface StreamingOptions {
     readonly bufferSize: number;
@@ -18,7 +18,7 @@ export interface StreamMetrics {
 }
 
 /**
- * Enhanced streaming manager for VTCode responses
+ * Enhanced streaming manager for VT Code responses
  * Provides buffering, smoothing, progress tracking, and metrics
  */
 export class StreamingManager implements vscode.Disposable {
@@ -33,8 +33,11 @@ export class StreamingManager implements vscode.Disposable {
     private metrics: StreamMetrics | null = null;
     private updateTimer: NodeJS.Timeout | null = null;
     private progressDisposable: vscode.Disposable | null = null;
-    private readonly onUpdateEmitter = new vscode.EventEmitter<VtcodeStreamChunk[]>();
-    private readonly onCompleteEmitter = new vscode.EventEmitter<StreamMetrics>();
+    private readonly onUpdateEmitter = new vscode.EventEmitter<
+        VtcodeStreamChunk[]
+    >();
+    private readonly onCompleteEmitter =
+        new vscode.EventEmitter<StreamMetrics>();
     private readonly onErrorEmitter = new vscode.EventEmitter<Error>();
 
     public readonly onUpdate = this.onUpdateEmitter.event;
@@ -49,7 +52,7 @@ export class StreamingManager implements vscode.Disposable {
         options?: Partial<StreamingOptions>
     ): Promise<StreamMetrics> {
         const opts = { ...this.defaultOptions, ...options };
-        
+
         // Initialize metrics
         this.metrics = {
             totalChunks: 0,
@@ -75,7 +78,6 @@ export class StreamingManager implements vscode.Disposable {
 
             // Complete streaming
             return this.completeStreaming();
-
         } catch (error) {
             this.handleError(error as Error);
             throw error;
@@ -87,15 +89,22 @@ export class StreamingManager implements vscode.Disposable {
     /**
      * Process individual chunk with buffering
      */
-    private async processChunk(chunk: VtcodeStreamChunk, options: StreamingOptions): Promise<void> {
+    private async processChunk(
+        chunk: VtcodeStreamChunk,
+        options: StreamingOptions
+    ): Promise<void> {
         // Add to buffer
         this.buffer.push(chunk);
-        
+
         // Update metrics
         this.updateMetrics(chunk);
 
         // Emit update if buffer is full or it's a terminal chunk
-        if (this.buffer.length >= options.bufferSize || chunk.kind === 'done' || chunk.kind === 'error') {
+        if (
+            this.buffer.length >= options.bufferSize ||
+            chunk.kind === "done" ||
+            chunk.kind === "error"
+        ) {
             await this.flushBuffer(options);
         }
     }
@@ -107,7 +116,7 @@ export class StreamingManager implements vscode.Disposable {
         if (this.buffer.length === 0) return;
 
         // Apply smoothing if enabled
-        const chunksToEmit = options.enableSmoothing 
+        const chunksToEmit = options.enableSmoothing
             ? this.applySmoothing(this.buffer)
             : [...this.buffer];
 
@@ -124,16 +133,16 @@ export class StreamingManager implements vscode.Disposable {
     private applySmoothing(chunks: VtcodeStreamChunk[]): VtcodeStreamChunk[] {
         // Group text chunks by type to reduce rapid updates
         const smoothed: VtcodeStreamChunk[] = [];
-        let currentText = '';
+        let currentText = "";
 
         for (const chunk of chunks) {
-            if (chunk.kind === 'text') {
+            if (chunk.kind === "text") {
                 currentText += chunk.text;
             } else {
                 // Flush accumulated text before non-text chunk
                 if (currentText) {
-                    smoothed.push({ kind: 'text', text: currentText });
-                    currentText = '';
+                    smoothed.push({ kind: "text", text: currentText });
+                    currentText = "";
                 }
                 smoothed.push(chunk);
             }
@@ -141,7 +150,7 @@ export class StreamingManager implements vscode.Disposable {
 
         // Flush any remaining text
         if (currentText) {
-            smoothed.push({ kind: 'text', text: currentText });
+            smoothed.push({ kind: "text", text: currentText });
         }
 
         return smoothed;
@@ -154,17 +163,19 @@ export class StreamingManager implements vscode.Disposable {
         if (!this.metrics) return;
 
         this.metrics.totalChunks++;
-        
+
         // Estimate bytes (rough approximation)
         const chunkSize = JSON.stringify(chunk).length;
         this.metrics.totalBytes += chunkSize;
 
         // Calculate averages
-        this.metrics.averageChunkSize = this.metrics.totalBytes / this.metrics.totalChunks;
-        
+        this.metrics.averageChunkSize =
+            this.metrics.totalBytes / this.metrics.totalChunks;
+
         const elapsedSeconds = (Date.now() - this.metrics.startTime) / 1000;
         if (elapsedSeconds > 0) {
-            this.metrics.chunksPerSecond = this.metrics.totalChunks / elapsedSeconds;
+            this.metrics.chunksPerSecond =
+                this.metrics.totalChunks / elapsedSeconds;
         }
     }
 
@@ -172,49 +183,55 @@ export class StreamingManager implements vscode.Disposable {
      * Show progress indicator
      */
     private showProgressIndicator(): void {
-        this.progressDisposable = vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'VTCode is thinking...',
-            cancellable: true,
-        }, async (progress, token) => {
-            return new Promise<void>((resolve) => {
-                let lastUpdate = Date.now();
-                
-                const updateProgress = () => {
-                    if (!this.metrics) return;
+        this.progressDisposable = vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: "VT Code is thinking...",
+                cancellable: true,
+            },
+            async (progress, token) => {
+                return new Promise<void>((resolve) => {
+                    let lastUpdate = Date.now();
 
-                    const elapsed = Date.now() - this.metrics.startTime;
-                    const estimatedTotalTime = this.estimateTotalTime();
-                    
-                    if (estimatedTotalTime > 0) {
-                        const progressPercent = Math.min((elapsed / estimatedTotalTime) * 100, 90);
-                        progress.report({ 
-                            increment: progressPercent,
-                            message: this.getProgressMessage() 
-                        });
-                    }
+                    const updateProgress = () => {
+                        if (!this.metrics) return;
 
-                    // Check for cancellation
-                    if (token.isCancellationRequested) {
-                        this.handleCancellation();
-                    }
+                        const elapsed = Date.now() - this.metrics.startTime;
+                        const estimatedTotalTime = this.estimateTotalTime();
 
-                    // Continue updating
-                    if (this.updateTimer) {
-                        this.updateTimer = setTimeout(updateProgress, 100);
-                    }
-                };
+                        if (estimatedTotalTime > 0) {
+                            const progressPercent = Math.min(
+                                (elapsed / estimatedTotalTime) * 100,
+                                90
+                            );
+                            progress.report({
+                                increment: progressPercent,
+                                message: this.getProgressMessage(),
+                            });
+                        }
 
-                this.updateTimer = setTimeout(updateProgress, 100);
-                
-                // Resolve when streaming completes
-                this.onComplete(() => {
-                    clearTimeout(this.updateTimer!);
-                    this.updateTimer = null;
-                    resolve();
+                        // Check for cancellation
+                        if (token.isCancellationRequested) {
+                            this.handleCancellation();
+                        }
+
+                        // Continue updating
+                        if (this.updateTimer) {
+                            this.updateTimer = setTimeout(updateProgress, 100);
+                        }
+                    };
+
+                    this.updateTimer = setTimeout(updateProgress, 100);
+
+                    // Resolve when streaming completes
+                    this.onComplete(() => {
+                        clearTimeout(this.updateTimer!);
+                        this.updateTimer = null;
+                        resolve();
+                    });
                 });
-            });
-        });
+            }
+        );
     }
 
     /**
@@ -226,7 +243,8 @@ export class StreamingManager implements vscode.Disposable {
         }
 
         // Estimate based on average chunk processing time
-        const avgTimePerChunk = (Date.now() - this.metrics.startTime) / this.metrics.totalChunks;
+        const avgTimePerChunk =
+            (Date.now() - this.metrics.startTime) / this.metrics.totalChunks;
         const estimatedChunks = this.metrics.totalChunks * 2; // Assume we're halfway
         return avgTimePerChunk * estimatedChunks;
     }
@@ -235,15 +253,17 @@ export class StreamingManager implements vscode.Disposable {
      * Get progress message based on current state
      */
     private getProgressMessage(): string {
-        if (!this.metrics) return 'Processing...';
+        if (!this.metrics) return "Processing...";
 
         const { totalChunks, chunksPerSecond, totalBytes } = this.metrics;
         const mb = (totalBytes / 1024 / 1024).toFixed(2);
 
         if (chunksPerSecond > 10) {
-            return `Processing ${totalChunks} chunks (${mb} MB) at ${chunksPerSecond.toFixed(1)} chunks/sec`;
+            return `Processing ${totalChunks} chunks (${mb} MB) at ${chunksPerSecond.toFixed(
+                1
+            )} chunks/sec`;
         } else if (totalChunks < 10) {
-            return 'Initializing...';
+            return "Initializing...";
         } else {
             return `Processing... ${totalChunks} chunks received`;
         }
@@ -254,7 +274,7 @@ export class StreamingManager implements vscode.Disposable {
      */
     private completeStreaming(): StreamMetrics {
         if (!this.metrics) {
-            throw new Error('Streaming not started');
+            throw new Error("Streaming not started");
         }
 
         // Mark end time
@@ -280,7 +300,7 @@ export class StreamingManager implements vscode.Disposable {
      * Handle cancellation
      */
     private handleCancellation(): void {
-        const error = new Error('Streaming cancelled by user');
+        const error = new Error("Streaming cancelled by user");
         this.handleError(error);
     }
 
@@ -351,9 +371,9 @@ export function createThrottledGenerator<T>(
         for await (const item of generator) {
             const now = Date.now();
             const timeSinceLastEmit = now - lastEmitTime;
-            
+
             if (timeSinceLastEmit < minIntervalMs) {
-                await new Promise(resolve => 
+                await new Promise((resolve) =>
                     setTimeout(resolve, minIntervalMs - timeSinceLastEmit)
                 );
             }

@@ -1,8 +1,8 @@
-# VTCode MCP Client Overview
+# VT Code MCP Client Overview
 
 ## Current Positioning
 
-VTCode ships a lean Model Context Protocol (MCP) client that focuses on outbound
+VT Code ships a lean Model Context Protocol (MCP) client that focuses on outbound
 connections to third-party MCP providers. The implementation is built on top of
 the [`rmcp` crate](https://docs.rs/rmcp/latest/rmcp/) and follows the
 [official protocol guidance](https://modelcontextprotocol.io/docs/getting-started/intro).
@@ -15,7 +15,7 @@ Key capabilities that remain available:
 -   Connect to multiple providers (stdio or experimental HTTP) using rmcp client
     transports.
 -   Index exposed tools, resources, and prompts with allow-list enforcement.
--   Execute tools via the `McpToolExecutor` trait used by the VTCode tool registry.
+-   Execute tools via the `McpToolExecutor` trait used by the VT Code tool registry.
 -   Surface provider status, metadata, and resource contents to the TUI.
 
 ## Configuration Summary
@@ -115,7 +115,7 @@ to surface the failure.
 
 -   Enable tracing (`RUST_LOG=vtcode_core::mcp_client=debug`) to follow the rmcp
     handshake and tool-fetch lifecycle.
--   Ensure provider binaries are on the PATH inherited by the VTCode process; the
+-   Ensure provider binaries are on the PATH inherited by the VT Code process; the
     client intentionally starts transports with a minimal environment.
 -   When HTTP transports are required, set
     `experimental_use_rmcp_client = true` and confirm TLS or bearer token settings

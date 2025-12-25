@@ -2,7 +2,7 @@
  * Enhanced Chat View Client-Side Script
  *
  * Handles UI interactions, real-time updates, markdown rendering,
- * and message management for the VTCode chat interface.
+ * and message management for the VT Code chat interface.
  */
 
 (function () {

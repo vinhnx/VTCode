@@ -3,19 +3,20 @@ import { BaseCommand, type CommandContext } from "../types/command";
 import { runVtcodeCommand } from "../utils/vtcodeRunner";
 
 /**
- * Command to ask VTCode about the currently selected code
+ * Command to ask VT Code about the currently selected code
  */
 export class AskSelectionCommand extends BaseCommand {
     public readonly id = "vtcode.askSelection";
     public readonly title = "Ask About Selection";
-    public readonly description = "Ask VTCode to explain or analyze the selected code";
+    public readonly description =
+        "Ask VT Code to explain or analyze the selected code";
     public readonly icon = "comment";
 
     async execute(context: CommandContext): Promise<void> {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             void vscode.window.showWarningMessage(
-                "Open a text editor to ask VTCode about the current selection."
+                "Open a text editor to ask VT Code about the current selection."
             );
             return;
         }
@@ -31,7 +32,7 @@ export class AskSelectionCommand extends BaseCommand {
         const selectedText = editor.document.getText(selection);
         if (!selectedText.trim()) {
             void vscode.window.showWarningMessage(
-                "The selected text is empty. Select code or text for VTCode to inspect."
+                "The selected text is empty. Select code or text for VT Code to inspect."
             );
             return;
         }
@@ -42,7 +43,7 @@ export class AskSelectionCommand extends BaseCommand {
 
         const defaultQuestion = "Explain the highlighted selection.";
         const question = await vscode.window.showInputBox({
-            prompt: "How should VTCode help with the highlighted selection?",
+            prompt: "How should VT Code help with the highlighted selection?",
             value: defaultQuestion,
             valueSelection: [0, defaultQuestion.length],
             ignoreFocusOut: true,
@@ -54,7 +55,9 @@ export class AskSelectionCommand extends BaseCommand {
 
         const trimmedQuestion = question.trim() || defaultQuestion;
         const languageId = editor.document.languageId || "text";
-        const rangeLabel = `${selection.start.line + 1}-${selection.end.line + 1}`;
+        const rangeLabel = `${selection.start.line + 1}-${
+            selection.end.line + 1
+        }`;
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(
             editor.document.uri
         );
@@ -66,11 +69,11 @@ export class AskSelectionCommand extends BaseCommand {
 
         try {
             await runVtcodeCommand(["ask", prompt], {
-                title: "Asking VTCode about the selection…",
+                title: "Asking VT Code about the selection…",
                 output: context.output,
             });
             void vscode.window.showInformationMessage(
-                "VTCode processed the highlighted selection. Review the output channel for the response."
+                "VT Code processed the highlighted selection. Review the output channel for the response."
             );
         } catch (error) {
             this.handleCommandError("ask about the selection", error);

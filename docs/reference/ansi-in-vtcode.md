@@ -2,7 +2,7 @@
 
 ## Overview
 
-VTCode extensively uses ANSI escape sequences for terminal control, PTY output processing, and TUI rendering. This document maps the ANSI reference to VTCode's implementation.
+VT Code extensively uses ANSI escape sequences for terminal control, PTY output processing, and TUI rendering. This document maps the ANSI reference to VTCode's implementation.
 
 ## Key Modules
 
@@ -15,21 +15,24 @@ pub fn strip_ansi(text: &str) -> String
 ```
 
 **Used in**:
-- PTY output cleaning (`vtcode-core/src/tools/pty.rs:208`)
-- Tool output formatting (`vtcode-core/src/tools/registry/executors.rs`)
-- TUI session rendering (`vtcode-core/src/ui/tui/session.rs`)
+
+-   PTY output cleaning (`vtcode-core/src/tools/pty.rs:208`)
+-   Tool output formatting (`vtcode-core/src/tools/registry/executors.rs`)
+-   TUI session rendering (`vtcode-core/src/ui/tui/session.rs`)
 
 **Patterns Handled**:
-- CSI sequences: `ESC[...m` (colors, styles)
-- Cursor control: `ESC[H`, `ESC[A/B/C/D`
-- Erase functions: `ESC[J`, `ESC[K`
-- OSC sequences: `ESC]...BEL`
+
+-   CSI sequences: `ESC[...m` (colors, styles)
+-   Cursor control: `ESC[H`, `ESC[A/B/C/D`
+-   Erase functions: `ESC[J`, `ESC[K`
+-   OSC sequences: `ESC]...BEL`
 
 ### 2. ANSI Style Utilities (`vtcode-core/src/utils/anstyle_utils.rs`)
 
 **Purpose**: Convert ANSI styles to Ratatui styles for TUI rendering
 
 **Key Functions**:
+
 ```rust
 pub fn ansi_color_to_ratatui_color(color: &AnsiColorType) -> Color
 pub fn ansi_effects_to_ratatui_modifiers(effects: Effects) -> Modifier
@@ -37,9 +40,10 @@ pub fn ansi_style_to_ratatui_style(style: AnsiStyle) -> Style
 ```
 
 **Color Support**:
--  8/16 colors (ANSI standard)
--  256 colors (8-bit)
--  RGB/Truecolor (24-bit)
+
+-   8/16 colors (ANSI standard)
+-   256 colors (8-bit)
+-   RGB/Truecolor (24-bit)
 
 ### 3. ANSI Renderer (`vtcode-core/src/utils/ansi.rs`)
 
@@ -56,33 +60,33 @@ pub enum MessageStyle
 
 ### Colors (Most Common)
 
-| Usage | ANSI Sequence | VTCode Context |
-|-------|---------------|----------------|
-| Error messages | `ESC[31m` (Red) | Tool execution errors |
-| Success messages | `ESC[32m` (Green) | Successful operations |
-| Warnings | `ESC[33m` (Yellow) | Policy warnings |
-| Info | `ESC[34m` (Blue) | General information |
-| Dim text | `ESC[2m` | Secondary information |
-| Bold text | `ESC[1m` | Emphasis |
-| Reset | `ESC[0m` | Clear all styles |
+| Usage            | ANSI Sequence      | VT Code Context       |
+| ---------------- | ------------------ | --------------------- |
+| Error messages   | `ESC[31m` (Red)    | Tool execution errors |
+| Success messages | `ESC[32m` (Green)  | Successful operations |
+| Warnings         | `ESC[33m` (Yellow) | Policy warnings       |
+| Info             | `ESC[34m` (Blue)   | General information   |
+| Dim text         | `ESC[2m`           | Secondary information |
+| Bold text        | `ESC[1m`           | Emphasis              |
+| Reset            | `ESC[0m`           | Clear all styles      |
 
 ### Cursor Control
 
-| Usage | ANSI Sequence | VTCode Context |
-|-------|---------------|----------------|
-| Hide cursor | `ESC[?25l` | During TUI operations |
-| Show cursor | `ESC[?25h` | After TUI exit |
-| Clear line | `ESC[2K` | Progress updates |
-| Move cursor | `ESC[{n}A/B/C/D` | TUI navigation |
+| Usage       | ANSI Sequence    | VT Code Context       |
+| ----------- | ---------------- | --------------------- |
+| Hide cursor | `ESC[?25l`       | During TUI operations |
+| Show cursor | `ESC[?25h`       | After TUI exit        |
+| Clear line  | `ESC[2K`         | Progress updates      |
+| Move cursor | `ESC[{n}A/B/C/D` | TUI navigation        |
 
 ### Screen Modes
 
-| Usage | ANSI Sequence | VTCode Context |
-|-------|---------------|----------------|
-| Alt buffer enable | `ESC[?1049h` | External editor launch |
-| Alt buffer disable | `ESC[?1049l` | Return from editor |
-| Save screen | `ESC[?47h` | Before external app |
-| Restore screen | `ESC[?47l` | After external app |
+| Usage              | ANSI Sequence | VT Code Context        |
+| ------------------ | ------------- | ---------------------- |
+| Alt buffer enable  | `ESC[?1049h`  | External editor launch |
+| Alt buffer disable | `ESC[?1049l`  | Return from editor     |
+| Save screen        | `ESC[?47h`    | Before external app    |
+| Restore screen     | `ESC[?47l`    | After external app     |
 
 ## PTY Output Processing
 
@@ -133,6 +137,7 @@ if let Ok(s) = std::str::from_utf8(chunk) {
 ### Color Mapping
 
 **8/16 Colors** (from reference):
+
 ```
 Black=30/40   → Ratatui::Black
 Red=31/41     → Ratatui::Red
@@ -145,6 +150,7 @@ White=37/47   → Ratatui::White
 ```
 
 **Bright Colors** (90-97):
+
 ```
 BrightRed=91     → Ratatui::LightRed
 BrightGreen=92   → Ratatui::LightGreen
@@ -153,28 +159,30 @@ BrightBlue=94    → Ratatui::LightBlue
 ```
 
 **256 Colors** (`ESC[38;5;{ID}m`):
+
 ```rust
 // Converted via ansi_color_to_ratatui_color()
 // Supports full 256-color palette
 ```
 
 **RGB Colors** (`ESC[38;2;{r};{g};{b}m`):
+
 ```rust
-AnsiColorType::Rgb(rgb_color) => 
+AnsiColorType::Rgb(rgb_color) =>
     Color::Rgb(rgb_color.r(), rgb_color.g(), rgb_color.b())
 ```
 
 ### Effects Mapping
 
-| ANSI Effect | Code | Ratatui Modifier |
-|-------------|------|------------------|
-| Bold | `ESC[1m` | `Modifier::BOLD` |
-| Dim | `ESC[2m` | `Modifier::DIM` |
-| Italic | `ESC[3m` | `Modifier::ITALIC` |
-| Underline | `ESC[4m` | `Modifier::UNDERLINED` |
-| Blink | `ESC[5m` | `Modifier::SLOW_BLINK` |
-| Reverse | `ESC[7m` | `Modifier::REVERSED` |
-| Hidden | `ESC[8m` | `Modifier::HIDDEN` |
+| ANSI Effect   | Code     | Ratatui Modifier        |
+| ------------- | -------- | ----------------------- |
+| Bold          | `ESC[1m` | `Modifier::BOLD`        |
+| Dim           | `ESC[2m` | `Modifier::DIM`         |
+| Italic        | `ESC[3m` | `Modifier::ITALIC`      |
+| Underline     | `ESC[4m` | `Modifier::UNDERLINED`  |
+| Blink         | `ESC[5m` | `Modifier::SLOW_BLINK`  |
+| Reverse       | `ESC[7m` | `Modifier::REVERSED`    |
+| Hidden        | `ESC[8m` | `Modifier::HIDDEN`      |
 | Strikethrough | `ESC[9m` | `Modifier::CROSSED_OUT` |
 
 ## Common Patterns
@@ -307,38 +315,43 @@ let s = String::from_utf8(chunk).unwrap(); // May panic
 ## Reference Implementation
 
 For complete ANSI sequence reference, see:
-- `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
-- `vtcode-core/src/utils/ansi_parser.rs` - Stripping implementation
-- `vtcode-core/src/utils/anstyle_utils.rs` - Style conversion
-- `vtcode-core/src/utils/ansi.rs` - Rendering utilities
+
+-   `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
+-   `vtcode-core/src/utils/ansi_parser.rs` - Stripping implementation
+-   `vtcode-core/src/utils/anstyle_utils.rs` - Style conversion
+-   `vtcode-core/src/utils/ansi.rs` - Rendering utilities
 
 ## Future Enhancements
 
 1. **Parse ANSI for Structured Output**
-   - Extract color information for semantic analysis
-   - Detect error patterns by color (red = error)
+
+    - Extract color information for semantic analysis
+    - Detect error patterns by color (red = error)
 
 2. **Preserve Formatting in Logs**
-   - Option to keep ANSI in log files
-   - HTML export with color preservation
+
+    - Option to keep ANSI in log files
+    - HTML export with color preservation
 
 3. **Custom Color Schemes**
-   - User-configurable color mappings
-   - Theme support for TUI
+
+    - User-configurable color mappings
+    - Theme support for TUI
 
 4. **Advanced Cursor Control**
-   - Implement cursor position tracking
-   - Support for complex TUI layouts
+    - Implement cursor position tracking
+    - Support for complex TUI layouts
 
 ## Summary
 
-VTCode has comprehensive ANSI support:
--  Stripping for clean text processing
--  Parsing for style extraction
--  Conversion to Ratatui styles
--  Rendering for terminal output
--  Full color support (8/16/256/RGB)
--  All standard text effects
--  Cursor and screen control
+VT Code has comprehensive ANSI support:
+
+-   Stripping for clean text processing
+-   Parsing for style extraction
+-   Conversion to Ratatui styles
+-   Rendering for terminal output
+-   Full color support (8/16/256/RGB)
+-   All standard text effects
+-   Cursor and screen control
 
 The implementation follows best practices and is well-tested.

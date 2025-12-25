@@ -33,7 +33,7 @@ pub const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 
 /// Enum of tools available via the Agent Client Protocol (ACP) integration with Zed
 ///
-/// Only a subset of VTCode tools are exposed via ACP for security and integration reasons:
+/// Only a subset of VT Code tools are exposed via ACP for security and integration reasons:
 /// - **ReadFile**: Safe, non-invasive file reading within workspace bounds
 /// - **ListFiles**: Safe file discovery and pattern matching within workspace
 ///
