@@ -232,18 +232,10 @@ impl HuggingFaceProvider {
             let api_model = request.model.to_lowercase();
 
             if is_glm {
-                // GLM-4.7 on Z.AI backend uses 'thinking' object
-                payload["thinking"] = if api_model.contains("glm-4.7") {
-                    json!({ "type": "enabled", "clear_thinking": false })
-                } else {
-                    json!({ "type": "enabled" })
-                };
-
-                // Behavior: Enable tool streaming for models that support it
-                if request.stream && request.tools.is_some() {
-                    payload["tool_stream"] = json!(true);
-                }
-            } else if is_glm || api_model.contains("deepseek-r1") || api_model.contains("v3.2") {
+                // GLM-4.7 on Z.AI backend uses 'thinking' object.
+                // We use specific simple configuration to pass HF strict validation.
+                payload["thinking"] = json!({ "type": "enabled" });
+            } else if api_model.contains("deepseek-r1") || api_model.contains("v3.2") {
                 // Generic 'thinking' trigger for other reasoning models
                 payload["thinking"] = json!({ "type": "enabled" });
             }

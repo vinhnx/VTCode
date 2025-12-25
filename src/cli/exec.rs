@@ -158,10 +158,10 @@ pub async fn handle_exec_command(
     }
 
     if !options.json {
-        println!();
+        eprintln!();
 
         if !result.summary.trim().is_empty() {
-            println!(
+            eprintln!(
                 "{} {}\n",
                 style("[SUMMARY]").green().bold(),
                 result.summary.trim()
@@ -178,37 +178,37 @@ pub async fn handle_exec_command(
             .map(|value| value.to_string())
             .unwrap_or_else(|| "-".into());
 
-        println!("{}", style("[OUTCOME]").magenta().bold());
-        println!("  {:16} {}", "outcome", result.outcome);
-        println!("  {:16} {}", "turns", result.turns_executed);
-        println!("  {:16} {}", "duration_ms", result.total_duration_ms);
-        println!("  {:16} {}", "avg_turn_ms", avg_display);
-        println!("  {:16} {}", "max_turn_ms", max_display);
-        println!("  {:16} {}\n", "warnings", result.warnings.len());
+        eprintln!("{}", style("[OUTCOME]").magenta().bold());
+        eprintln!("  {:16} {}", "outcome", result.outcome);
+        eprintln!("  {:16} {}", "turns", result.turns_executed);
+        eprintln!("  {:16} {}", "duration_ms", result.total_duration_ms);
+        eprintln!("  {:16} {}", "avg_turn_ms", avg_display);
+        eprintln!("  {:16} {}", "max_turn_ms", max_display);
+        eprintln!("  {:16} {}\n", "warnings", result.warnings.len());
 
         // OPTIMIZATION: Extract common pattern to reduce code duplication
         if !result.modified_files.is_empty() {
-            println!("{}", style("[FILES]").cyan().bold());
+            eprintln!("{}", style("[FILES]").cyan().bold());
             for (idx, file) in result.modified_files.iter().enumerate() {
-                println!("  {:>2}. {}", idx + 1, file);
+                eprintln!("  {:>2}. {}", idx + 1, file);
             }
-            println!();
+            eprintln!();
         }
 
         if !result.executed_commands.is_empty() {
-            println!("{}", style("[COMMANDS]").cyan().bold());
+            eprintln!("{}", style("[COMMANDS]").cyan().bold());
             for (idx, cmd) in result.executed_commands.iter().enumerate() {
-                println!("  {:>2}. {}", idx + 1, cmd);
+                eprintln!("  {:>2}. {}", idx + 1, cmd);
             }
-            println!();
+            eprintln!();
         }
 
         if !result.warnings.is_empty() {
-            println!("{}", style("[WARNINGS]").yellow().bold());
+            eprintln!("{}", style("[WARNINGS]").yellow().bold());
             for (idx, warning) in result.warnings.iter().enumerate() {
-                println!("  {:>2}. {}", idx + 1, warning);
+                eprintln!("  {:>2}. {}", idx + 1, warning);
             }
-            println!();
+            eprintln!();
         }
     }
 
