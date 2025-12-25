@@ -83,13 +83,12 @@ impl ScrollAccumulator {
     }
 }
 
-/// Check if session has any modal, palette, or input active that uses arrow key navigation
+/// Check if session has any modal or palette active that uses arrow key navigation
 fn has_active_navigation_ui(session: &Session) -> bool {
     session.modal.is_some()
         || session.file_palette_active
         || session.prompt_palette_active
         || session.config_palette_active
-        || session.is_input_enabled()
 }
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;

@@ -47,14 +47,6 @@ impl InputManager {
         self.reset_history_navigation();
     }
 
-    /// Sets the input content without resetting history navigation
-    ///
-    /// Used during history navigation to preserve the history index
-    pub fn set_content_preserve_history(&mut self, content: String) {
-        self.content = content.clone();
-        self.cursor = content.len();
-    }
-
     /// Returns the current cursor position
     pub fn cursor(&self) -> usize {
         self.cursor
