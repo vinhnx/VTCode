@@ -1423,6 +1423,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                         session_end_reason = reason;
                         break;
                     }
+                    InlineLoopAction::ResumeSession(_session_id) => {
+                        // Session resumption is handled in the outer loop (session_loop.rs)
+                        // This code path (run_loop.rs) is not designed for mid-session resumption
+                        // Log and continue
+                        renderer.line(
+                            MessageStyle::Info,
+                            "Session resumption requested but not available in this context.",
+                        )?;
+                        continue;
+                    }
                 };
 
             if input_owned.is_empty() {

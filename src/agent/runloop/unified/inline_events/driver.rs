@@ -157,6 +157,7 @@ impl<'a> InlineEventLoop<'a> {
             InlineLoopAction::Exit(reason) => Some(InlineLoopAction::Exit(reason)),
             InlineLoopAction::Continue => None,
             InlineLoopAction::Submit(_) => None,
+            InlineLoopAction::ResumeSession(_) => None,
         }
     }
 }

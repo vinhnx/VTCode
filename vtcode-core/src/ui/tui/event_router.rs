@@ -6,6 +6,7 @@
 use super::modern_tui::Event;
 use super::session::Session;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use crate::ui::tui::session::slash;
 
 /// Determines which component should handle an event
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,8 +123,7 @@ impl Session {
     }
 
     pub(crate) fn is_slash_palette_active(&self) -> bool {
-        // Check if slash palette has suggestions
-        false // Placeholder - implement based on SlashPalette API
+        slash::slash_navigation_available(self)
     }
 }
 

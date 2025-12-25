@@ -19,7 +19,7 @@ const THEME_ACTIVE_BADGE: &str = "Active";
 const THEME_SELECT_HINT: &str = "Use ↑/↓ to choose a theme, Enter to apply, Esc to cancel.";
 const SESSIONS_PALETTE_TITLE: &str = "Archived sessions";
 const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
-const SESSIONS_HINT_SECONDARY: &str = "Enter to print details • Esc to close.";
+const SESSIONS_HINT_SECONDARY: &str = "Enter to resume session • Esc to close.";
 const SESSIONS_LATEST_BADGE: &str = "Latest";
 
 #[derive(Clone)]
@@ -137,56 +137,6 @@ pub(crate) fn show_sessions_palette(
     Ok(true)
 }
 
-pub(crate) fn render_session_details(
-    renderer: &mut AnsiRenderer,
-    listing: &SessionListing,
-) -> Result<()> {
-    let ended_local = listing
-        .snapshot
-        .ended_at
-        .with_timezone(&Local)
-        .format("%Y-%m-%d %H:%M");
-    let duration = listing
-        .snapshot
-        .ended_at
-        .signed_duration_since(listing.snapshot.started_at);
-    let duration_std = duration.to_std().unwrap_or_else(|_| Duration::from_secs(0));
-    let duration_label = format_duration_label(duration_std);
-    let tool_count = listing.snapshot.distinct_tools.len();
-
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "- (ID: {}) {} · Model: {} · Workspace: {}",
-            listing.identifier(),
-            ended_local,
-            listing.snapshot.metadata.model,
-            listing.snapshot.metadata.workspace_label,
-        ),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "    Duration: {} · {} msgs · {} tools",
-            duration_label, listing.snapshot.total_messages, tool_count,
-        ),
-    )?;
-
-    if let Some(prompt) = listing.first_prompt_preview() {
-        renderer.line(MessageStyle::Info, &format!("    Prompt: {prompt}"))?;
-    }
-
-    if let Some(reply) = listing.first_reply_preview() {
-        renderer.line(MessageStyle::Info, &format!("    Reply: {reply}"))?;
-    }
-
-    renderer.line(
-        MessageStyle::Info,
-        &format!("    File: {}", listing.path.display()),
-    )?;
-    Ok(())
-}
-
 pub(crate) async fn handle_palette_selection(
     palette: ActivePalette,
     selection: InlineListSelection,
@@ -222,14 +172,8 @@ pub(crate) async fn handle_palette_selection(
             _ => Ok(Some(ActivePalette::Theme { mode })),
         },
         ActivePalette::Sessions { listings, limit } => {
-            if let InlineListSelection::Session(selected_id) = &selection
-                && let Some(listing) = listings
-                    .iter()
-                    .find(|entry| entry.identifier() == *selected_id)
-                    .cloned()
-            {
-                render_session_details(renderer, &listing)?;
-            }
+            // Session selection is handled earlier in the modal handler
+            // This path is for refreshing the palette display
             if show_sessions_palette(renderer, &listings, limit)? {
                 Ok(Some(ActivePalette::Sessions { listings, limit }))
             } else {

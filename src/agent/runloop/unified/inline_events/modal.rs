@@ -62,8 +62,7 @@ impl<'a> InlineModalProcessor<'a> {
         match self.model_picker.handle_submit(renderer, selection).await? {
             ModelPickerOutcome::SkipPalette => Ok(InlineLoopAction::Continue),
             ModelPickerOutcome::ForwardToPalette(selection) => {
-                self.palette.handle_submit(renderer, selection).await?;
-                Ok(InlineLoopAction::Continue)
+                self.palette.handle_submit(renderer, selection).await
             }
             ModelPickerOutcome::Continue => Ok(InlineLoopAction::Continue),
         }
@@ -92,14 +91,23 @@ impl<'a> PaletteCoordinator<'a> {
         &mut self,
         renderer: &mut AnsiRenderer,
         selection: InlineListSelection,
-    ) -> Result<()> {
+    ) -> Result<InlineLoopAction> {
         if let Some(active) = self.state.take() {
+            // Check if this is a session selection - if so, return the ResumeSession action
+            if let InlineListSelection::Session(session_id) = &selection {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Resuming session: {}", session_id),
+                )?;
+                return Ok(InlineLoopAction::ResumeSession(session_id.clone()));
+            }
+
             let restore =
                 handle_palette_selection(active, selection, renderer, self.handle).await?;
             if let Some(state) = restore {
                 *self.state = Some(state);
             }
-            return Ok(());
+            return Ok(InlineLoopAction::Continue);
         }
 
         // Safety net: If palette state is missing, log and inform the user
@@ -112,7 +120,7 @@ impl<'a> PaletteCoordinator<'a> {
             "Selection dismissed because the palette is no longer active. Please try again.",
         )?;
 
-        Ok(())
+        Ok(InlineLoopAction::Continue)
     }
 
     fn handle_cancel(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
