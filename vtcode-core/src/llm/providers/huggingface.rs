@@ -217,8 +217,26 @@ impl HuggingFaceProvider {
 
     /// Behavior 2,4,6,7: Format Chat Completions API request with HF-specific quirks
     fn format_for_chat_completions(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let messages = serialize_messages_openai_format(request, PROVIDER_KEY)?;
+        let mut messages = serialize_messages_openai_format(request, PROVIDER_KEY)?;
         let is_glm = self.is_glm_model(&request.model);
+
+        // Prepend system prompt if it exists and isn't already there
+        if let Some(system) = &request.system_prompt {
+            let has_system = messages
+                .first()
+                .and_then(|m| m.get("role"))
+                .and_then(|r| r.as_str())
+                == Some("system");
+            if !has_system {
+                messages.insert(
+                    0,
+                    json!({
+                        "role": "system",
+                        "content": system
+                    }),
+                );
+            }
+        }
 
         let mut payload = json!({
             "model": request.model,
@@ -231,10 +249,11 @@ impl HuggingFaceProvider {
         if self.supports_reasoning_effort(&request.model) {
             let api_model = request.model.to_lowercase();
 
+            // Behavior 18: Skip 'thinking' parameter for GLM models in Chat API on HF router
+            // to avoid 400 "Invalid API parameter" errors. Reasoning is often automatic
+            // for GLM-4.7 or handled via the Responses API.
             if is_glm {
-                // GLM-4.7 on Z.AI backend uses 'thinking' object.
-                // We use specific simple configuration to pass HF strict validation.
-                payload["thinking"] = json!({ "type": "enabled" });
+                // Skip adding thinking parameter for GLM in Chat API
             } else if api_model.contains("deepseek-r1") || api_model.contains("v3.2") {
                 // Generic 'thinking' trigger for other reasoning models
                 payload["thinking"] = json!({ "type": "enabled" });

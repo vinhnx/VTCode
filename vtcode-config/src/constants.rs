@@ -190,6 +190,7 @@ pub mod models {
             OPENAI_GPT_OSS_20B,
             ZAI_GLM_46,
             ZAI_GLM_47,
+            ZAI_GLM_47_NOVITA,
             MOONSHOT_KIMI_K2_THINKING,
             // Recommended VLM
             ZAI_GLM_45V,
@@ -214,6 +215,7 @@ pub mod models {
         pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b";
         pub const ZAI_GLM_46: &str = "zai-org/GLM-4.6:zai-org";
         pub const ZAI_GLM_47: &str = "zai-org/GLM-4.7:zai-org";
+        pub const ZAI_GLM_47_NOVITA: &str = "zai-org/GLM-4.7:novita";
         pub const MOONSHOT_KIMI_K2_THINKING: &str = "moonshotai/Kimi-K2-Thinking";
 
         // Recommended VLM
@@ -235,6 +237,7 @@ pub mod models {
             OPENAI_GPT_OSS_20B,
             ZAI_GLM_46,
             ZAI_GLM_47,
+            ZAI_GLM_47_NOVITA,
             MOONSHOT_KIMI_K2_THINKING,
             ZAI_GLM_45V,
             DEEPSEEK_V32_NOVITA,

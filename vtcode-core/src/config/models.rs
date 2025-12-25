@@ -248,6 +248,8 @@ pub enum ModelId {
     HuggingFaceOpenAIGptOss120b,
     /// Z.AI GLM-4.7 via Hugging Face router
     HuggingFaceGlm47,
+    /// Z.AI GLM-4.7 via Novita on Hugging Face router
+    HuggingFaceGlm47Novita,
     /// MoonshotAI Kimi K2 Thinking via Hugging Face router
     HuggingFaceKimiK2Thinking,
     /// MiniMax M2 via Novita on Hugging Face router
@@ -500,6 +502,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
             ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
+            ModelId::HuggingFaceGlm47Novita => models::huggingface::ZAI_GLM_47_NOVITA,
             ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
             ModelId::HuggingFaceMinimaxM2Novita => models::huggingface::MINIMAX_M2_NOVITA,
             ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
@@ -635,6 +638,7 @@ impl ModelId {
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
             | ModelId::HuggingFaceGlm47
+            | ModelId::HuggingFaceGlm47Novita
             | ModelId::HuggingFaceKimiK2Thinking
             | ModelId::HuggingFaceMinimaxM2Novita
             | ModelId::HuggingFaceDeepseekV32Novita
@@ -839,6 +843,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
             ModelId::HuggingFaceGlm47 => "GLM-4.7 (HF)",
+            ModelId::HuggingFaceGlm47Novita => "GLM-4.7 (Novita)",
             ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
             ModelId::HuggingFaceMinimaxM2Novita => "MiniMax-M2 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
@@ -974,6 +979,9 @@ impl ModelId {
             }
             ModelId::HuggingFaceGlm47 => {
                 "Z.AI GLM-4.7 long-context reasoning model served via Hugging Face router"
+            }
+            ModelId::HuggingFaceGlm47Novita => {
+                "Z.AI GLM-4.7 via Novita inference provider on HuggingFace router."
             }
             ModelId::HuggingFaceKimiK2Thinking => {
                 "MoonshotAI Kimi K2 Thinking routed through Hugging Face"
@@ -1181,6 +1189,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
             ModelId::HuggingFaceGlm47,
+            ModelId::HuggingFaceGlm47Novita,
             ModelId::HuggingFaceKimiK2Thinking,
             ModelId::HuggingFaceMinimaxM2Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
@@ -1465,7 +1474,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => "V3.2-Exp",
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
-            ModelId::HuggingFaceGlm47 => "4.7",
+            ModelId::HuggingFaceGlm47 | ModelId::HuggingFaceGlm47Novita => "4.7",
             ModelId::HuggingFaceKimiK2Thinking => "k2",
             ModelId::HuggingFaceMinimaxM2Novita => "m2",
             ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
@@ -1633,6 +1642,7 @@ impl FromStr for ModelId {
                 Ok(ModelId::HuggingFaceOpenAIGptOss120b)
             }
             s if s == models::huggingface::ZAI_GLM_47 => Ok(ModelId::HuggingFaceGlm47),
+            s if s == models::huggingface::ZAI_GLM_47_NOVITA => Ok(ModelId::HuggingFaceGlm47Novita),
             s if s == models::huggingface::MOONSHOT_KIMI_K2_THINKING => {
                 Ok(ModelId::HuggingFaceKimiK2Thinking)
             }
