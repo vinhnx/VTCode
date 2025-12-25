@@ -21,12 +21,12 @@ use crate::agent::runloop::context::ContextTrimConfig;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::ModelPickerState;
 // use crate::agent::runloop::slash_commands::McpCommandAction;
-use crate::agent::runloop::unified::palettes::ActivePalette;
-use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 pub use crate::agent::runloop::slash_commands::SlashCommandOutcome;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::context_manager::ContextManager;
+use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
+use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason};
 
@@ -109,27 +109,19 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ExecuteTool { name, args } => {
             handlers::handle_execute_tool(ctx, name, args).await
         }
-        SlashCommandOutcome::ClearConversation => {
-            handlers::handle_clear_conversation(ctx).await
-        }
+        SlashCommandOutcome::ClearConversation => handlers::handle_clear_conversation(ctx).await,
         SlashCommandOutcome::ShowStatus => handlers::handle_show_status(ctx).await,
         SlashCommandOutcome::ShowCost => handlers::handle_show_cost(ctx).await,
         SlashCommandOutcome::ShowContext => handlers::handle_show_context(ctx).await,
-        SlashCommandOutcome::ManageMcp { action } => {
-            handlers::handle_manage_mcp(ctx, action).await
-        }
+        SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
         SlashCommandOutcome::RunDoctor => handlers::handle_run_doctor(ctx).await,
-        SlashCommandOutcome::StartTerminalSetup => {
-            handlers::handle_start_terminal_setup(ctx).await
-        }
+        SlashCommandOutcome::StartTerminalSetup => handlers::handle_start_terminal_setup(ctx).await,
         SlashCommandOutcome::ManageWorkspaceDirectories { command } => {
             handlers::handle_manage_workspace_directories(ctx, command).await
         }
         SlashCommandOutcome::NewSession => handlers::handle_new_session(ctx).await,
         SlashCommandOutcome::OpenDocs => handlers::handle_open_docs(ctx).await,
-        SlashCommandOutcome::ShowPruningReport => {
-            handlers::handle_show_pruning_report(ctx).await
-        }
+        SlashCommandOutcome::ShowPruningReport => handlers::handle_show_pruning_report(ctx).await,
         SlashCommandOutcome::LaunchEditor { file } => {
             handlers::handle_launch_editor(ctx, file).await
         }

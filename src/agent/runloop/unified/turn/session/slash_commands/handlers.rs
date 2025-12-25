@@ -3,16 +3,15 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 
 use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
+use vtcode_core::config::constants::tools as tools_consts;
 use vtcode_core::core::decision_tracker::DecisionTracker;
+use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::theme_from_styles;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive;
 use vtcode_core::utils::transcript;
-use vtcode_core::llm::provider as uni;
-use vtcode_core::config::constants::tools as tools_consts;
 
-use crate::agent::runloop::unified::turn::workspace::{bootstrap_config_files, build_workspace_index};
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::slash_commands::McpCommandAction;
 use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
@@ -28,13 +27,16 @@ use crate::agent::runloop::unified::palettes::{
 };
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
+use crate::agent::runloop::unified::turn::workspace::{
+    bootstrap_config_files, build_workspace_index,
+};
 use crate::agent::runloop::unified::ui_interaction::{display_session_status, display_token_cost};
 use crate::agent::runloop::unified::workspace_links::handle_workspace_directory_command;
 use crate::hooks::lifecycle::SessionEndReason;
 use webbrowser;
 
-use crate::agent::runloop::unified::turn::config_modal::load_config_modal_content;
 use super::{SlashCommandContext, SlashCommandControl};
+use crate::agent::runloop::unified::turn::config_modal::load_config_modal_content;
 
 pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     // Prefer tool-driven diagnostics when available
@@ -195,7 +197,10 @@ pub async fn handle_analyze_agent(ctx: SlashCommandContext<'_>) -> Result<SlashC
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_theme_changed(ctx: SlashCommandContext<'_>, theme_id: String) -> Result<SlashCommandControl> {
+pub async fn handle_theme_changed(
+    ctx: SlashCommandContext<'_>,
+    theme_id: String,
+) -> Result<SlashCommandControl> {
     persist_theme_preference(ctx.renderer, &theme_id).await?;
     let styles = theme::active_styles();
     ctx.handle.set_theme(theme_from_styles(&styles));
@@ -203,7 +208,10 @@ pub async fn handle_theme_changed(ctx: SlashCommandContext<'_>, theme_id: String
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_theme_palette(ctx: SlashCommandContext<'_>, mode: crate::agent::runloop::slash_commands::ThemePaletteMode) -> Result<SlashCommandControl> {
+pub async fn handle_start_theme_palette(
+    ctx: SlashCommandContext<'_>,
+    mode: crate::agent::runloop::slash_commands::ThemePaletteMode,
+) -> Result<SlashCommandControl> {
     if ctx.model_picker_state.is_some() {
         ctx.renderer.line(
             MessageStyle::Error,
@@ -224,7 +232,10 @@ pub async fn handle_start_theme_palette(ctx: SlashCommandContext<'_>, mode: crat
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_sessions_palette(ctx: SlashCommandContext<'_>, limit: usize) -> Result<SlashCommandControl> {
+pub async fn handle_start_sessions_palette(
+    ctx: SlashCommandContext<'_>,
+    limit: usize,
+) -> Result<SlashCommandControl> {
     if ctx.model_picker_state.is_some() {
         ctx.renderer.line(
             MessageStyle::Error,
@@ -255,9 +266,12 @@ pub async fn handle_start_sessions_palette(ctx: SlashCommandContext<'_>, limit: 
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_file_browser(ctx: SlashCommandContext<'_>, initial_filter: Option<String>) -> Result<SlashCommandControl> {
+pub async fn handle_start_file_browser(
+    ctx: SlashCommandContext<'_>,
+    initial_filter: Option<String>,
+) -> Result<SlashCommandControl> {
     if ctx.model_picker_state.is_some() {
-         ctx.renderer.line(
+        ctx.renderer.line(
             MessageStyle::Error,
             "Close the active model picker before opening file browser.",
         )?;
@@ -283,7 +297,9 @@ pub async fn handle_start_file_browser(ctx: SlashCommandContext<'_>, initial_fil
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_model_selection(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub async fn handle_start_model_selection(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
     if ctx.model_picker_state.is_some() {
         ctx.renderer.line(
             MessageStyle::Error,
@@ -331,7 +347,10 @@ pub async fn handle_start_model_selection(ctx: SlashCommandContext<'_>) -> Resul
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_initialize_workspace(ctx: SlashCommandContext<'_>, force: bool) -> Result<SlashCommandControl> {
+pub async fn handle_initialize_workspace(
+    ctx: SlashCommandContext<'_>,
+    force: bool,
+) -> Result<SlashCommandControl> {
     let workspace_path = ctx.config.workspace.clone();
     let workspace_label = workspace_path.display().to_string();
     ctx.renderer.line(
@@ -391,14 +410,16 @@ pub async fn handle_initialize_workspace(ctx: SlashCommandContext<'_>, force: bo
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_generate_agent_file(ctx: SlashCommandContext<'_>, overwrite: bool) -> Result<SlashCommandControl> {
+pub async fn handle_generate_agent_file(
+    ctx: SlashCommandContext<'_>,
+    overwrite: bool,
+) -> Result<SlashCommandControl> {
     let workspace_path = ctx.config.workspace.clone();
     ctx.renderer.line(
         MessageStyle::Info,
         "Generating AGENTS.md guidance. This may take a moment...",
     )?;
-    match generate_agents_file(ctx.tool_registry, workspace_path.as_path(), overwrite).await
-    {
+    match generate_agents_file(ctx.tool_registry, workspace_path.as_path(), overwrite).await {
         Ok(report) => match report.status {
             GenerateAgentsFileStatus::Created => {
                 ctx.renderer.line(
@@ -457,7 +478,11 @@ pub async fn handle_show_config(ctx: SlashCommandContext<'_>) -> Result<SlashCom
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_execute_tool(ctx: SlashCommandContext<'_>, name: String, args: serde_json::Value) -> Result<SlashCommandControl> {
+pub async fn handle_execute_tool(
+    ctx: SlashCommandContext<'_>,
+    name: String,
+    args: serde_json::Value,
+) -> Result<SlashCommandControl> {
     match ensure_tool_permission(
         ctx.tool_registry,
         &name,
@@ -496,7 +521,9 @@ pub async fn handle_execute_tool(ctx: SlashCommandContext<'_>, name: String, arg
     }
 }
 
-pub async fn handle_clear_conversation(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub async fn handle_clear_conversation(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
     ctx.conversation_history.clear();
     *ctx.session_stats = SessionStats::default();
     {
@@ -552,10 +579,7 @@ pub async fn handle_show_context(ctx: SlashCommandContext<'_>) -> Result<SlashCo
     use crate::agent::runloop::context_usage::{ContextUsageInfo, render_context_usage};
 
     // Build context usage info from current session state
-    let mut info = ContextUsageInfo::new(
-        &ctx.config.model,
-        ctx.trim_config.max_tokens,
-    );
+    let mut info = ContextUsageInfo::new(&ctx.config.model, ctx.trim_config.max_tokens);
 
     // Get token budget stats
     let token_budget = ctx.context_manager.token_budget();
@@ -570,7 +594,9 @@ pub async fn handle_show_context(ctx: SlashCommandContext<'_>) -> Result<SlashCo
     info.system_tools_tokens = tool_count * 50; // ~50 tokens per tool definition
 
     // Count messages tokens from conversation history
-    info.messages_tokens = ctx.conversation_history.iter()
+    info.messages_tokens = ctx
+        .conversation_history
+        .iter()
         .map(|msg| msg.content.as_text().len() / 4)
         .sum();
 
@@ -581,9 +607,15 @@ pub async fn handle_show_context(ctx: SlashCommandContext<'_>) -> Result<SlashCo
         // Determine scope based on path
         let path_str = skill.path.to_string_lossy();
         if path_str.contains("/.vtcode/skills") || path_str.contains("/.claude/skills") {
-            info.user_skills.push(crate::agent::runloop::context_usage::ContextItem::new(name, tokens));
+            info.user_skills
+                .push(crate::agent::runloop::context_usage::ContextItem::new(
+                    name, tokens,
+                ));
         } else {
-            info.project_skills.push(crate::agent::runloop::context_usage::ContextItem::new(name, tokens));
+            info.project_skills
+                .push(crate::agent::runloop::context_usage::ContextItem::new(
+                    name, tokens,
+                ));
         }
     }
 
@@ -606,7 +638,10 @@ pub async fn handle_show_context(ctx: SlashCommandContext<'_>) -> Result<SlashCo
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_manage_mcp(ctx: SlashCommandContext<'_>, action: McpCommandAction) -> Result<SlashCommandControl> {
+pub async fn handle_manage_mcp(
+    ctx: SlashCommandContext<'_>,
+    action: McpCommandAction,
+) -> Result<SlashCommandControl> {
     let manager = ctx.async_mcp_manager.map(|m| m.as_ref());
     match action {
         McpCommandAction::Overview => {
@@ -638,8 +673,7 @@ pub async fn handle_manage_mcp(ctx: SlashCommandContext<'_>, action: McpCommandA
             .await?;
         }
         McpCommandAction::EditConfig => {
-            render_mcp_config_edit_guidance(ctx.renderer, ctx.config.workspace.as_path())
-                .await?;
+            render_mcp_config_edit_guidance(ctx.renderer, ctx.config.workspace.as_path()).await?;
         }
         McpCommandAction::Repair => {
             repair_mcp_runtime(
@@ -687,15 +721,22 @@ pub async fn handle_run_doctor(ctx: SlashCommandContext<'_>) -> Result<SlashComm
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_terminal_setup(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    let vt_cfg = ctx.vt_cfg.as_ref().context("VT Code configuration not available")?;
-    vtcode_core::terminal_setup::run_terminal_setup_wizard(ctx.renderer, vt_cfg)
-        .await?;
+pub async fn handle_start_terminal_setup(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    let vt_cfg = ctx
+        .vt_cfg
+        .as_ref()
+        .context("VT Code configuration not available")?;
+    vtcode_core::terminal_setup::run_terminal_setup_wizard(ctx.renderer, vt_cfg).await?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_manage_workspace_directories(ctx: SlashCommandContext<'_>, command: crate::agent::runloop::slash_commands::WorkspaceDirectoryCommand) -> Result<SlashCommandControl> {
+pub async fn handle_manage_workspace_directories(
+    ctx: SlashCommandContext<'_>,
+    command: crate::agent::runloop::slash_commands::WorkspaceDirectoryCommand,
+) -> Result<SlashCommandControl> {
     handle_workspace_directory_command(
         ctx.renderer,
         &ctx.config.workspace,
@@ -737,7 +778,9 @@ pub async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<SlashComma
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_show_pruning_report(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub async fn handle_show_pruning_report(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "Pruning Report:")?;
     let ledger = ctx.pruning_ledger.read().await;
     let report = ledger.generate_report();
@@ -786,7 +829,10 @@ pub async fn handle_show_pruning_report(ctx: SlashCommandContext<'_>) -> Result<
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_launch_editor(ctx: SlashCommandContext<'_>, file: Option<String>) -> Result<SlashCommandControl> {
+pub async fn handle_launch_editor(
+    ctx: SlashCommandContext<'_>,
+    file: Option<String>,
+) -> Result<SlashCommandControl> {
     use std::path::PathBuf;
     use vtcode_core::tools::terminal_app::TerminalAppLauncher;
 
@@ -882,7 +928,10 @@ pub async fn handle_launch_git(ctx: SlashCommandContext<'_>) -> Result<SlashComm
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_manage_skills(ctx: SlashCommandContext<'_>, action: crate::agent::runloop::SkillCommandAction) -> Result<SlashCommandControl> {
+pub async fn handle_manage_skills(
+    ctx: SlashCommandContext<'_>,
+    action: crate::agent::runloop::SkillCommandAction,
+) -> Result<SlashCommandControl> {
     use crate::agent::runloop::handle_skill_command;
     use vtcode_core::config::types::CapabilityLevel;
     use vtcode_core::skills::executor::SkillToolAdapter;
@@ -905,11 +954,8 @@ pub async fn handle_manage_skills(ctx: SlashCommandContext<'_>, action: crate::a
 
             let name_static: &'static str = Box::leak(Box::new(skill_name.clone()));
 
-            let registration = ToolRegistration::from_tool(
-                name_static,
-                CapabilityLevel::Bash,
-                adapter_arc,
-            );
+            let registration =
+                ToolRegistration::from_tool(name_static, CapabilityLevel::Bash, adapter_arc);
 
             if let Err(e) = ctx.tool_registry.register_tool(registration) {
                 ctx.renderer.line(

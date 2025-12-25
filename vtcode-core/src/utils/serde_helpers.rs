@@ -40,9 +40,7 @@ where
 
     match MaybeQuoted::<T>::deserialize(deserializer)? {
         MaybeQuoted::Native(val) => Ok(Some(val)),
-        MaybeQuoted::Quoted(s) => T::from_str(&s)
-            .map(Some)
-            .map_err(serde::de::Error::custom),
+        MaybeQuoted::Quoted(s) => T::from_str(&s).map(Some).map_err(serde::de::Error::custom),
         MaybeQuoted::Null => Ok(None),
     }
 }

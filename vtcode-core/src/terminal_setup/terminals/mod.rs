@@ -2,16 +2,16 @@
 //!
 //! Each terminal has its own module with configuration generation logic.
 
-pub mod ghostty;
-pub mod kitty;
 pub mod alacritty;
-pub mod zed;
-pub mod warp;
-pub mod iterm2;
-pub mod vscode;
-pub mod windows_terminal;
+pub mod ghostty;
 pub mod hyper;
+pub mod iterm2;
+pub mod kitty;
 pub mod tabby;
+pub mod vscode;
+pub mod warp;
+pub mod windows_terminal;
+pub mod zed;
 
 #[cfg(test)]
 mod tests {

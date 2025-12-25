@@ -303,7 +303,7 @@ fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
     match prompt_arg {
         Some(p) if p != "-" => Ok(p),
         maybe_dash => {
-            use std::io::{IsTerminal, Read, self};
+            use std::io::{self, IsTerminal, Read};
             let force_stdin = matches!(maybe_dash.as_deref(), Some("-"));
             if io::stdin().is_terminal() && !force_stdin {
                 anyhow::bail!(

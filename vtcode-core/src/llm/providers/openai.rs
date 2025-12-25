@@ -879,10 +879,8 @@ impl OpenAIProvider {
 
         // Use centralized HTTP client factory for consistent timeout handling
         use crate::llm::http_client::HttpClientFactory;
-        let http_client = HttpClientFactory::with_timeouts(
-            Duration::from_secs(120),
-            Duration::from_secs(30),
-        );
+        let http_client =
+            HttpClientFactory::with_timeouts(Duration::from_secs(120), Duration::from_secs(30));
 
         Self {
             api_key: Arc::from(api_key.as_str()),

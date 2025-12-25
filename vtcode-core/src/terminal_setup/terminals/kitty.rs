@@ -2,13 +2,15 @@
 //!
 //! Generates configuration for Kitty terminal emulator.
 
-use anyhow::Result;
 use crate::terminal_setup::config_writer::{ConfigFormat, ConfigWriter};
-use crate::terminal_setup::features::multiline;
 use crate::terminal_setup::detector::TerminalType;
+use crate::terminal_setup::features::multiline;
+use anyhow::Result;
 
 /// Generate complete Kitty configuration with all features
-pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
+pub fn generate_config(
+    features: &[crate::terminal_setup::detector::TerminalFeature],
+) -> Result<String> {
     let mut config_lines = Vec::new();
 
     // Add header comment
@@ -27,7 +29,10 @@ pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeat
                 config_lines.push("# Enhanced copy/paste".to_string());
                 config_lines.push("enable_bracketed_paste yes".to_string());
                 config_lines.push("copy_on_select clipboard".to_string());
-                config_lines.push("mouse_map shift+left click grabbed,ungrabbed mouse_selection normal".to_string());
+                config_lines.push(
+                    "mouse_map shift+left click grabbed,ungrabbed mouse_selection normal"
+                        .to_string(),
+                );
                 config_lines.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ShellIntegration => {

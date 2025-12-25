@@ -31,7 +31,7 @@
     "analyze_agent": "allow",
     "apply_patch": "prompt",
     "close_pty_session": "allow",
-    "create_file": "prompt",
+    "create_file": "allow",
     "create_pty_session": "allow",
     "debug_agent": "allow",
     "delete_file": "prompt",
@@ -52,12 +52,13 @@
     "search_replace": "prompt",
     "skill": "allow",
     "code_intelligence": "prompt",
+    "mcp_get_current_time": "prompt",
+    "mcp_time_get_current_time": "prompt",
     "mcp_convert_time": "prompt",
     "mcp_time_convert_time": "prompt",
     "mcp_fetch": "prompt",
     "mcp_fetch_fetch": "prompt",
-    "mcp_get_current_time": "prompt",
-    "mcp_time_get_current_time": "prompt"
+    "run_pty": "allow"
   },
   "constraints": {},
   "mcp": {

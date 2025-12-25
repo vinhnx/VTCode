@@ -8,8 +8,8 @@ use serde_json::{Value, json};
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
 use crate::tools::traits::Tool;
+use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
 
 pub struct ReadFileHandler;
 
@@ -23,10 +23,16 @@ pub struct ReadFileArgs {
     /// Absolute path to the file that will be read.
     pub file_path: String,
     /// 1-indexed line number to start reading from; defaults to 1.
-    #[serde(default = "defaults::offset", deserialize_with = "deserialize_maybe_quoted")]
+    #[serde(
+        default = "defaults::offset",
+        deserialize_with = "deserialize_maybe_quoted"
+    )]
     pub offset: usize,
     /// Maximum number of lines to return; defaults to 2000.
-    #[serde(default = "defaults::limit", deserialize_with = "deserialize_maybe_quoted")]
+    #[serde(
+        default = "defaults::limit",
+        deserialize_with = "deserialize_maybe_quoted"
+    )]
     pub limit: usize,
     /// Determines whether the handler reads a simple slice or indentation-aware block.
     #[serde(default)]
@@ -54,7 +60,10 @@ pub struct IndentationArgs {
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub anchor_line: Option<usize>,
     /// Maximum indentation depth to collect; `0` means unlimited.
-    #[serde(default = "defaults::max_levels", deserialize_with = "deserialize_maybe_quoted")]
+    #[serde(
+        default = "defaults::max_levels",
+        deserialize_with = "deserialize_maybe_quoted"
+    )]
     pub max_levels: usize,
     /// Whether to include sibling blocks at the same indentation level.
     #[serde(default = "defaults::include_siblings")]

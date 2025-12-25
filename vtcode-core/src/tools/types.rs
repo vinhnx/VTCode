@@ -1,8 +1,8 @@
 //! Common types used across the tool system
 
+use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
-use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
 
 /// Enhanced cache entry with performance tracking
 #[derive(Debug, Clone)]
@@ -72,13 +72,31 @@ pub struct Input {
     pub max_lines: Option<usize>,
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_tokens: Option<usize>,
-    #[serde(default, alias = "offset", alias = "byte_offset", deserialize_with = "deserialize_opt_maybe_quoted")]
+    #[serde(
+        default,
+        alias = "offset",
+        alias = "byte_offset",
+        deserialize_with = "deserialize_opt_maybe_quoted"
+    )]
     pub offset_bytes: Option<u64>,
-    #[serde(default, alias = "line_offset", deserialize_with = "deserialize_opt_maybe_quoted")]
+    #[serde(
+        default,
+        alias = "line_offset",
+        deserialize_with = "deserialize_opt_maybe_quoted"
+    )]
     pub offset_lines: Option<usize>,
-    #[serde(default, alias = "page_size", alias = "byte_page_size", deserialize_with = "deserialize_opt_maybe_quoted")]
+    #[serde(
+        default,
+        alias = "page_size",
+        alias = "byte_page_size",
+        deserialize_with = "deserialize_opt_maybe_quoted"
+    )]
     pub page_size_bytes: Option<usize>,
-    #[serde(default, alias = "line_page_size", deserialize_with = "deserialize_opt_maybe_quoted")]
+    #[serde(
+        default,
+        alias = "line_page_size",
+        deserialize_with = "deserialize_opt_maybe_quoted"
+    )]
     pub page_size_lines: Option<usize>,
 }
 
@@ -137,7 +155,10 @@ pub struct EditInput {
 pub struct ListInput {
     #[serde(default = "default_list_path")]
     pub path: String,
-    #[serde(default = "default_max_items", deserialize_with = "deserialize_maybe_quoted")]
+    #[serde(
+        default = "default_max_items",
+        deserialize_with = "deserialize_maybe_quoted"
+    )]
     pub max_items: usize,
     /// Optional page number for pagination (1-based)
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]

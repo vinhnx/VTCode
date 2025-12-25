@@ -115,11 +115,11 @@ pub mod migration;
 pub mod path;
 pub mod ratatui_styles;
 pub mod safety;
+pub mod serde_helpers;
 pub mod session_archive;
 pub mod style_helpers;
 pub mod transcript;
 pub mod unicode_monitor;
-pub mod serde_helpers;
 pub mod vtcodegitignore;
 
 pub use anstyle_utils::*;

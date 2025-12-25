@@ -131,14 +131,13 @@ impl TerminalType {
 
     /// Get the configuration file path for this terminal
     pub fn config_path(&self) -> Result<PathBuf> {
-        let home_dir = dirs::home_dir()
-            .context("Failed to determine home directory")?;
+        let home_dir = dirs::home_dir().context("Failed to determine home directory")?;
 
         let path = match self {
             TerminalType::Ghostty => {
                 if cfg!(target_os = "windows") {
-                    let appdata = env::var("APPDATA")
-                        .context("APPDATA environment variable not set")?;
+                    let appdata =
+                        env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("ghostty").join("config")
                 } else {
                     home_dir.join(".config").join("ghostty").join("config")
@@ -147,8 +146,8 @@ impl TerminalType {
 
             TerminalType::Kitty => {
                 if cfg!(target_os = "windows") {
-                    let appdata = env::var("APPDATA")
-                        .context("APPDATA environment variable not set")?;
+                    let appdata =
+                        env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("kitty").join("kitty.conf")
                 } else {
                     home_dir.join(".config").join("kitty").join("kitty.conf")
@@ -157,22 +156,31 @@ impl TerminalType {
 
             TerminalType::Alacritty => {
                 if cfg!(target_os = "windows") {
-                    let appdata = env::var("APPDATA")
-                        .context("APPDATA environment variable not set")?;
-                    PathBuf::from(appdata).join("alacritty").join("alacritty.toml")
+                    let appdata =
+                        env::var("APPDATA").context("APPDATA environment variable not set")?;
+                    PathBuf::from(appdata)
+                        .join("alacritty")
+                        .join("alacritty.toml")
                 } else {
-                    home_dir.join(".config").join("alacritty").join("alacritty.toml")
+                    home_dir
+                        .join(".config")
+                        .join("alacritty")
+                        .join("alacritty.toml")
                 }
             }
 
             TerminalType::Zed => {
                 // Zed uses settings.json in its config directory
                 if cfg!(target_os = "windows") {
-                    let appdata = env::var("APPDATA")
-                        .context("APPDATA environment variable not set")?;
+                    let appdata =
+                        env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("Zed").join("settings.json")
                 } else if cfg!(target_os = "macos") {
-                    home_dir.join("Library").join("Application Support").join("Zed").join("settings.json")
+                    home_dir
+                        .join("Library")
+                        .join("Application Support")
+                        .join("Zed")
+                        .join("settings.json")
                 } else {
                     home_dir.join(".config").join("zed").join("settings.json")
                 }
@@ -190,7 +198,10 @@ impl TerminalType {
             TerminalType::ITerm2 => {
                 // iTerm2 uses plist file on macOS only
                 if cfg!(target_os = "macos") {
-                    home_dir.join("Library").join("Preferences").join("com.googlecode.iterm2.plist")
+                    home_dir
+                        .join("Library")
+                        .join("Preferences")
+                        .join("com.googlecode.iterm2.plist")
                 } else {
                     anyhow::bail!("iTerm2 is only available on macOS")
                 }
@@ -198,13 +209,25 @@ impl TerminalType {
 
             TerminalType::VSCode => {
                 if cfg!(target_os = "windows") {
-                    let appdata = env::var("APPDATA")
-                        .context("APPDATA environment variable not set")?;
-                    PathBuf::from(appdata).join("Code").join("User").join("settings.json")
+                    let appdata =
+                        env::var("APPDATA").context("APPDATA environment variable not set")?;
+                    PathBuf::from(appdata)
+                        .join("Code")
+                        .join("User")
+                        .join("settings.json")
                 } else if cfg!(target_os = "macos") {
-                    home_dir.join("Library").join("Application Support").join("Code").join("User").join("settings.json")
+                    home_dir
+                        .join("Library")
+                        .join("Application Support")
+                        .join("Code")
+                        .join("User")
+                        .join("settings.json")
                 } else {
-                    home_dir.join(".config").join("Code").join("User").join("settings.json")
+                    home_dir
+                        .join(".config")
+                        .join("Code")
+                        .join("User")
+                        .join("settings.json")
                 }
             }
 
@@ -224,17 +247,19 @@ impl TerminalType {
                 }
             }
 
-            TerminalType::Hyper => {
-                home_dir.join(".hyper.js")
-            }
+            TerminalType::Hyper => home_dir.join(".hyper.js"),
 
             TerminalType::Tabby => {
                 if cfg!(target_os = "windows") {
-                    let appdata = env::var("APPDATA")
-                        .context("APPDATA environment variable not set")?;
+                    let appdata =
+                        env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("tabby").join("config.yaml")
                 } else if cfg!(target_os = "macos") {
-                    home_dir.join("Library").join("Application Support").join("tabby").join("config.yaml")
+                    home_dir
+                        .join("Library")
+                        .join("Application Support")
+                        .join("tabby")
+                        .join("config.yaml")
                 } else {
                     home_dir.join(".config").join("tabby").join("config.yaml")
                 }

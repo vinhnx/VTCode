@@ -201,7 +201,7 @@ pub struct Cli {
     ///   • Agent coordination details
     #[arg(long, global = true)]
     pub verbose: bool,
-    
+
     /// **Suppress all non-essential output**
     ///
     /// Useful for: Scripting, pipelines, CI/CD

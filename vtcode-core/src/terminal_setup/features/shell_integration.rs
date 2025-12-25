@@ -6,24 +6,22 @@
 //! - Prompt integration
 //! - Command duration tracking
 
-use anyhow::Result;
 use crate::terminal_setup::detector::TerminalType;
+use anyhow::Result;
 
 /// Generate shell integration configuration for the specified terminal
 pub fn generate_config(terminal: TerminalType) -> Result<String> {
     let config = match terminal {
-        TerminalType::Ghostty => {
-            r#"# Shell integration
+        TerminalType::Ghostty => r#"# Shell integration
 shell-integration = detect
 shell-integration-features = cursor,sudo,title
 
 # Working directory tracking
 working-directory = inherit
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Kitty => {
-            r#"# Shell integration
+        TerminalType::Kitty => r#"# Shell integration
 shell_integration enabled
 
 # Features
@@ -31,11 +29,10 @@ shell_integration_features title cwd
 
 # Automatically inject shell integration
 shell_integration_startup_mode enabled
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Alacritty => {
-            r#"# Shell integration via OSC sequences
+        TerminalType::Alacritty => r#"# Shell integration via OSC sequences
 # Add this to your shell RC file (~/.bashrc, ~/.zshrc, etc.):
 #
 # For Bash:
@@ -57,11 +54,10 @@ shell_integration_startup_mode enabled
 
 # Note: Alacritty doesn't have built-in shell integration
 # The configuration above enables working directory tracking
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Zed => {
-            r#"// Zed terminal has built-in shell integration
+        TerminalType::Zed => r#"// Zed terminal has built-in shell integration
 // Working directory and command tracking enabled by default
 {
   "terminal": {
@@ -74,11 +70,10 @@ shell_integration_startup_mode enabled
     "working_directory": "current_project_directory"
   }
 }
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Warp => {
-            r#"# Warp has advanced built-in shell integration
+        TerminalType::Warp => r#"# Warp has advanced built-in shell integration
 # Features automatically enabled:
 # - Working directory tracking
 # - Command history
@@ -88,11 +83,10 @@ shell_integration_startup_mode enabled
 
 # No additional configuration needed
 # Shell integration is automatic
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::WindowsTerminal => {
-            r#"{
+        TerminalType::WindowsTerminal => r#"{
   "profiles": {
     "defaults": {
       "startingDirectory": "%USERPROFILE%"
@@ -105,11 +99,10 @@ shell_integration_startup_mode enabled
 // 1. PowerShell: Built-in PSReadLine module
 // 2. WSL: Add OSC sequences to .bashrc/.zshrc
 // 3. Git Bash: Configure prompt in .bash_profile
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Hyper => {
-            r#"// Shell integration for Hyper
+        TerminalType::Hyper => r#"// Shell integration for Hyper
 // Install hyper-statusline plugin for enhanced integration
 
 config: {
@@ -123,11 +116,10 @@ config: {
 // Install recommended plugins:
 // hyper install hyper-statusline
 // hyper install hyper-search
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::Tabby => {
-            r#"terminal:
+        TerminalType::Tabby => r#"terminal:
   shellIntegration: true
   workingDirectory: auto
 
@@ -139,11 +131,10 @@ config: {
   # Command tracking
   trackCommands: true
   showCommandStatus: true
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::ITerm2 => {
-            r#"Manual iTerm2 Shell Integration Setup:
+        TerminalType::ITerm2 => r#"Manual iTerm2 Shell Integration Setup:
 
 METHOD 1: Automatic Installation (Recommended)
 1. Open iTerm2
@@ -167,11 +158,10 @@ Configuration in Preferences:
 1. Profiles → General → Working Directory
 2. Set to "Reuse previous session's directory"
 3. Profiles → Terminal → Enable "Shell Integration"
-"#.to_string()
-        }
+"#
+        .to_string(),
 
-        TerminalType::VSCode => {
-            r#"VS Code Shell Integration Configuration:
+        TerminalType::VSCode => r#"VS Code Shell Integration Configuration:
 
 Shell integration is built-in and enabled by default.
 
@@ -194,8 +184,8 @@ Features:
 Keyboard shortcuts:
 - Ctrl+Up/Down: Navigate between commands
 - Ctrl+Shift+G: Go to recent directory
-"#.to_string()
-        }
+"#
+        .to_string(),
 
         TerminalType::Unknown => {
             anyhow::bail!("Cannot generate shell integration config for unknown terminal type");

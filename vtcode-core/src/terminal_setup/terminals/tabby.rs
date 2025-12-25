@@ -2,13 +2,15 @@
 //!
 //! Generates YAML configuration for Tabby terminal.
 
-use anyhow::Result;
 use crate::terminal_setup::config_writer::{ConfigFormat, ConfigWriter};
-use crate::terminal_setup::features::multiline;
 use crate::terminal_setup::detector::TerminalType;
+use crate::terminal_setup::features::multiline;
+use anyhow::Result;
 
 /// Generate complete Tabby configuration with all features
-pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
+pub fn generate_config(
+    features: &[crate::terminal_setup::detector::TerminalFeature],
+) -> Result<String> {
     let mut config_sections = Vec::new();
 
     // Add header comment
@@ -25,17 +27,23 @@ pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeat
             }
             crate::terminal_setup::detector::TerminalFeature::CopyPaste => {
                 config_sections.push("# Enhanced copy/paste".to_string());
-                config_sections.push(r#"terminal:
+                config_sections.push(
+                    r#"terminal:
   copyOnSelect: true
   pasteOnMiddleClick: true
-"#.to_string());
+"#
+                    .to_string(),
+                );
             }
             crate::terminal_setup::detector::TerminalFeature::ShellIntegration => {
                 config_sections.push("# Shell integration".to_string());
-                config_sections.push(r#"terminal:
+                config_sections.push(
+                    r#"terminal:
   shellIntegration: true
   workingDirectory: auto
-"#.to_string());
+"#
+                    .to_string(),
+                );
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
                 config_sections.push("# Theme colors will be configured separately".to_string());

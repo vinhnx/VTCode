@@ -2,13 +2,15 @@
 //!
 //! Generates TOML configuration for Alacritty terminal emulator.
 
-use anyhow::Result;
 use crate::terminal_setup::config_writer::{ConfigFormat, ConfigWriter};
-use crate::terminal_setup::features::multiline;
 use crate::terminal_setup::detector::TerminalType;
+use crate::terminal_setup::features::multiline;
+use anyhow::Result;
 
 /// Generate complete Alacritty configuration with all features
-pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
+pub fn generate_config(
+    features: &[crate::terminal_setup::detector::TerminalFeature],
+) -> Result<String> {
     let mut config_sections = Vec::new();
 
     // Add header comment
@@ -93,7 +95,8 @@ mod tests {
     #[test]
     fn test_merge_with_existing() {
         let existing = "# User config\n[font]\nsize = 12\n";
-        let new_config = "[[keyboard.bindings]]\nkey = \"Return\"\nmods = \"Shift\"\nchars = \"\\n\"";
+        let new_config =
+            "[[keyboard.bindings]]\nkey = \"Return\"\nmods = \"Shift\"\nchars = \"\\n\"";
 
         let merged = merge_with_existing(existing, new_config).unwrap();
 

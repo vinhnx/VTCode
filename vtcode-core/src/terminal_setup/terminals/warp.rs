@@ -5,7 +5,9 @@
 use anyhow::Result;
 
 /// Generate Warp configuration (mostly informational since Warp has built-in features)
-pub fn generate_config(_features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
+pub fn generate_config(
+    _features: &[crate::terminal_setup::detector::TerminalFeature],
+) -> Result<String> {
     let info = r#"# Warp Terminal Configuration
 
 Warp has built-in support for most features:

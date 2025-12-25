@@ -15,8 +15,8 @@ use vtcode_core::models::ModelId;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi_parser::strip_ansi;
 
-use vtcode_core::terminal_setup::detector::TerminalType;
 use crate::agent::runloop::git::{GitStatusSummary, git_status_summary};
+use vtcode_core::terminal_setup::detector::TerminalType;
 
 #[derive(Default, Clone)]
 pub(crate) struct InputStatusState {

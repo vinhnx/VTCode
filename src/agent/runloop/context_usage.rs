@@ -86,16 +86,13 @@ impl ContextUsageInfo {
         (self.current_tokens as f64 / self.max_tokens as f64) * 100.0
     }
 
-
     /// Add MCP tool
     pub fn add_mcp_tool(&mut self, name: impl Into<String>, tokens: usize) {
         self.mcp_tools.push(ContextItem::new(name, tokens));
         self.mcp_tools.sort_by(|a, b| b.tokens.cmp(&a.tokens));
         self.mcp_tools_tokens = self.mcp_tools.iter().map(|t| t.tokens).sum();
     }
-
 }
-
 
 /// Format token count for display (e.g., "3.2k" or "150")
 fn format_tokens(tokens: usize) -> String {
@@ -107,10 +104,7 @@ fn format_tokens(tokens: usize) -> String {
 }
 
 /// Render the context usage visualization
-pub fn render_context_usage(
-    renderer: &mut AnsiRenderer,
-    info: &ContextUsageInfo,
-) -> Result<()> {
+pub fn render_context_usage(renderer: &mut AnsiRenderer, info: &ContextUsageInfo) -> Result<()> {
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Info, "Context Usage")?;
 
@@ -205,7 +199,9 @@ fn render_token_bar(renderer: &mut AnsiRenderer, info: &ContextUsageInfo) -> Res
     // Calculate cells for each type
     let used_cells = ((usage_percent / 100.0) * total_cells as f64).round() as usize;
     let buffer_cells = ((buffer_percent / 100.0) * total_cells as f64).round() as usize;
-    let free_cells = total_cells.saturating_sub(used_cells).saturating_sub(buffer_cells);
+    let free_cells = total_cells
+        .saturating_sub(used_cells)
+        .saturating_sub(buffer_cells);
 
     // Build the bar symbols
     let mut symbols: Vec<char> = Vec::with_capacity(total_cells);
@@ -267,7 +263,8 @@ fn render_token_bar(renderer: &mut AnsiRenderer, info: &ContextUsageInfo) -> Res
 
     // Render free space and buffer info
     let free_tokens = info.free_tokens();
-    let buffer_tokens = ((info.autocompact_buffer_percent / 100.0) * info.max_tokens as f64) as usize;
+    let buffer_tokens =
+        ((info.autocompact_buffer_percent / 100.0) * info.max_tokens as f64) as usize;
 
     let row8: String = symbols[80..90].iter().collect();
     renderer.line(

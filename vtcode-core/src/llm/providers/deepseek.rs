@@ -76,7 +76,7 @@ impl DeepSeekProvider {
         timeouts: TimeoutsConfig,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
-        
+
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
             prompt_cache,
             |providers| &providers.deepseek,

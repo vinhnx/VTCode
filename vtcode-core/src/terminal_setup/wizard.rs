@@ -2,9 +2,9 @@
 //!
 //! Guides users through configuring their terminal emulator for VT Code.
 
-use anyhow::{Context, Result};
-use crate::utils::ansi::{AnsiRenderer, MessageStyle};
 use crate::VTCodeConfig;
+use crate::utils::ansi::{AnsiRenderer, MessageStyle};
+use anyhow::{Context, Result};
 
 use super::backup::ConfigBackupManager;
 use super::detector::{TerminalFeature, TerminalType};
@@ -20,7 +20,10 @@ pub async fn run_terminal_setup_wizard(
     let terminal_type = TerminalType::detect()?;
 
     if terminal_type == TerminalType::Unknown {
-        renderer.line(MessageStyle::Error, "Could not detect your terminal emulator.")?;
+        renderer.line(
+            MessageStyle::Error,
+            "Could not detect your terminal emulator.",
+        )?;
         renderer.line(MessageStyle::Info, "Supported terminals: Ghostty, Kitty, Alacritty, Zed, Warp, iTerm2, VS Code, Windows Terminal, Hyper, Tabby")?;
         return Ok(());
     }
@@ -61,7 +64,11 @@ pub async fn run_terminal_setup_wizard(
 
     for feature in &features {
         let supported = terminal_type.supports_feature(*feature);
-        let status = if supported { "✓" } else { "✗ (not supported)" };
+        let status = if supported {
+            "✓"
+        } else {
+            "✗ (not supported)"
+        };
         renderer.line(
             if supported {
                 MessageStyle::Status
@@ -121,10 +128,7 @@ pub async fn run_terminal_setup_wizard(
     } else {
         renderer.line(
             MessageStyle::Info,
-            &format!(
-                "Config file does not exist yet: {}",
-                config_path.display()
-            ),
+            &format!("Config file does not exist yet: {}", config_path.display()),
         )?;
         renderer.line(MessageStyle::Info, "A new config file will be created.")?;
     }
@@ -168,7 +172,8 @@ pub async fn run_terminal_setup_wizard(
         }
         TerminalType::ITerm2 => {
             // iTerm2 requires manual setup - display instructions
-            let instructions = crate::terminal_setup::terminals::iterm2::generate_config(&enabled_features)?;
+            let instructions =
+                crate::terminal_setup::terminals::iterm2::generate_config(&enabled_features)?;
             renderer.line_if_not_empty(MessageStyle::Info)?;
             for line in instructions.lines() {
                 renderer.line(MessageStyle::Info, line)?;
@@ -177,7 +182,8 @@ pub async fn run_terminal_setup_wizard(
         }
         TerminalType::VSCode => {
             // VS Code requires manual setup - display instructions
-            let instructions = crate::terminal_setup::terminals::vscode::generate_config(&enabled_features)?;
+            let instructions =
+                crate::terminal_setup::terminals::vscode::generate_config(&enabled_features)?;
             renderer.line_if_not_empty(MessageStyle::Info)?;
             for line in instructions.lines() {
                 renderer.line(MessageStyle::Info, line)?;
@@ -216,9 +222,15 @@ pub async fn run_terminal_setup_wizard(
 
     // Step 5: Show completion message
     renderer.line_if_not_empty(MessageStyle::Info)?;
-    renderer.line(MessageStyle::Status, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
+    renderer.line(
+        MessageStyle::Status,
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    )?;
     renderer.line(MessageStyle::Status, "  Setup Complete!")?;
-    renderer.line(MessageStyle::Status, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
+    renderer.line(
+        MessageStyle::Status,
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    )?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
     renderer.line(
         MessageStyle::Info,
@@ -246,9 +258,15 @@ pub async fn run_terminal_setup_wizard(
 
 /// Display welcome message
 fn display_welcome(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
+    renderer.line(
+        MessageStyle::Info,
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    )?;
     renderer.line(MessageStyle::Info, "  VTCode Terminal Setup Wizard")?;
-    renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
+    renderer.line(
+        MessageStyle::Info,
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    )?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
     renderer.line(
         MessageStyle::Info,
@@ -258,7 +276,10 @@ fn display_welcome(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(MessageStyle::Info, "Features:")?;
     renderer.line(MessageStyle::Info, "  • Shift+Enter for multiline input")?;
     renderer.line(MessageStyle::Info, "  • Enhanced copy/paste integration")?;
-    renderer.line(MessageStyle::Info, "  • Shell integration (working directory, command status)")?;
+    renderer.line(
+        MessageStyle::Info,
+        "  • Shell integration (working directory, command status)",
+    )?;
     renderer.line(MessageStyle::Info, "  • Theme synchronization")?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
 

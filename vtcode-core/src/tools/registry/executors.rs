@@ -8,10 +8,10 @@ use crate::tools::types::VTCodePtySession;
 use crate::tools::{PlanUpdateResult, UpdatePlanArgs};
 
 use crate::utils::diff::{DiffOptions, compute_diff};
+use crate::utils::serde_helpers::deserialize_opt_maybe_quoted;
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use crate::utils::serde_helpers::deserialize_opt_maybe_quoted;
 use chrono::prelude::Utc;
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
@@ -666,7 +666,11 @@ impl ToolRegistry {
             }
 
             // Update search_path to be used in GrepSearchInput
-            let search_path = if search_path.is_empty() { ".".to_string() } else { search_path };
+            let search_path = if search_path.is_empty() {
+                ".".to_string()
+            } else {
+                search_path
+            };
 
             // Validate and enforce hard limits
             if let Some(max_results) = payload.max_results {

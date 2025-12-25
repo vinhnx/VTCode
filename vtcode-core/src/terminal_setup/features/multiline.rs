@@ -3,8 +3,8 @@
 //! Generates terminal-specific configuration for binding Shift+Enter to insert a newline
 //! character, enabling multiline input in VT Code.
 
-use anyhow::Result;
 use crate::terminal_setup::detector::TerminalType;
+use anyhow::Result;
 
 /// Generate Shift+Enter multiline configuration for a terminal
 pub fn generate_config(terminal_type: TerminalType) -> Result<String> {
