@@ -127,6 +127,7 @@ async fn test_tui_session_creation() {
         10,                 // inline_rows
         true,               // show_timeline_pane
         None,               // event_callback
+        None,               // active_pty_sessions
     );
 
     // Verify that the session was created successfully

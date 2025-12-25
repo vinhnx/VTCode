@@ -15,10 +15,12 @@ use vtcode_core::models::ModelId;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi_parser::strip_ansi;
 
+use vtcode_core::terminal_setup::detector::TerminalType;
 use crate::agent::runloop::git::{GitStatusSummary, git_status_summary};
 
 #[derive(Default, Clone)]
 pub(crate) struct InputStatusState {
+    pub(crate) terminal_name: Option<String>,
     pub(crate) left: Option<String>,
     pub(crate) right: Option<String>,
     pub(crate) git_left: Option<String>,
@@ -62,7 +64,16 @@ pub(crate) async fn update_input_status_if_changed(
         state.last_git_refresh = None;
         state.git_left = None;
         state.git_summary = None;
+        state.terminal_name = None;
     } else {
+        // Detect terminal name if not already cached
+        if state.terminal_name.is_none() {
+            state.terminal_name = TerminalType::detect()
+                .ok()
+                .filter(|t| *t != TerminalType::Unknown)
+                .map(|t| t.name().to_string());
+        }
+
         let should_refresh_git = match state.last_git_refresh {
             Some(last_refresh) => last_refresh.elapsed() >= GIT_STATUS_REFRESH_INTERVAL,
             None => true,
@@ -76,16 +87,23 @@ pub(crate) async fn update_input_status_if_changed(
                     } else {
                         ui::HEADER_GIT_CLEAN_SUFFIX
                     };
-                    let display = if summary.branch.is_empty() {
+                    let git_display = if summary.branch.is_empty() {
                         indicator.to_string()
                     } else {
                         format!("{}{}", summary.branch, indicator)
                     };
+
+                    let display = if let Some(term) = &state.terminal_name {
+                        format!("{} | {}", term, git_display)
+                    } else {
+                        git_display
+                    };
+
                     state.git_left = Some(display);
                     state.git_summary = Some(summary);
                 }
                 Ok(None) => {
-                    state.git_left = None;
+                    state.git_left = state.terminal_name.clone();
                     state.git_summary = None;
                 }
                 Err(error) => {
@@ -95,6 +113,7 @@ pub(crate) async fn update_input_status_if_changed(
                         "Failed to resolve git status"
                     );
                     state.git_summary = None;
+                    state.git_left = state.terminal_name.clone();
                 }
             }
 

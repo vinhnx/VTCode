@@ -44,6 +44,7 @@ async fn test_real_ui_scenario_with_commands() {
         12,   // inline_rows
         true, // show_timeline_pane
         None,
+        None,
     );
 
     // Verify session was created

@@ -5,6 +5,7 @@
 use anyhow::Result;
 use crate::terminal_setup::config_writer::{ConfigFormat, ConfigWriter};
 use crate::terminal_setup::features::multiline;
+use crate::terminal_setup::features::shell_integration;
 use crate::terminal_setup::detector::TerminalType;
 
 /// Generate complete Ghostty configuration with all features
@@ -29,9 +30,8 @@ pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeat
                 config_lines.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ShellIntegration => {
-                config_lines.push("# Shell integration".to_string());
-                config_lines.push("shell-integration = true".to_string());
-                config_lines.push(String::new());
+                let shell_config = shell_integration::generate_config(TerminalType::Ghostty)?;
+                config_lines.push(shell_config);
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
                 config_lines.push("# Theme will be configured separately".to_string());

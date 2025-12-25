@@ -11,6 +11,7 @@ use vtcode_core::project_doc::{self, ProjectDocOptions};
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::tui::InlineHeaderHighlight;
 use vtcode_core::utils::common::summarize_workspace_languages;
+use vtcode_core::terminal_setup::detector::{TerminalFeature, TerminalType};
 
 #[derive(Default, Clone)]
 pub(crate) struct SessionBootstrap {
@@ -116,7 +117,55 @@ fn build_header_highlights(onboarding_cfg: &AgentOnboardingConfig) -> Vec<Inline
         highlights.push(actions);
     }
 
+    highlights.push(terminal_info_highlight());
+
     highlights
+}
+
+fn terminal_info_highlight() -> InlineHeaderHighlight {
+    let (title, lines) = match TerminalType::detect() {
+        Ok(term) if term != TerminalType::Unknown => {
+            let mut lines = Vec::new();
+            lines.push(format!("Terminal: {}", term.name()));
+
+            let features = [
+                TerminalFeature::Multiline,
+                TerminalFeature::CopyPaste,
+                TerminalFeature::ShellIntegration,
+                TerminalFeature::ThemeSync,
+            ];
+
+            let supported: Vec<&str> = features
+                .iter()
+                .filter(|f| term.supports_feature(**f))
+                .map(|f| match f {
+                    TerminalFeature::Multiline => "Multiline",
+                    TerminalFeature::CopyPaste => "Copy/Paste",
+                    TerminalFeature::ShellIntegration => "Shell Integration",
+                    TerminalFeature::ThemeSync => "Theme Sync",
+                })
+                .collect();
+
+            if !supported.is_empty() {
+                lines.push(format!("Capabilities: {}", supported.join(", ")));
+            }
+
+            if term.requires_manual_setup() {
+                lines.push("Status: Setup Required (Run /terminal-setup)".to_string());
+            } else if term == TerminalType::Ghostty || term == TerminalType::Kitty {
+                // For fully supported terminals, show they are ready
+                lines.push("Status: Optimized for VT Code".to_string());
+            }
+
+            ("Terminal Environment".to_string(), lines)
+        }
+        _ => (
+            "Terminal Environment".to_string(),
+            vec!["Detected: Generic / Unknown".to_string()],
+        ),
+    };
+
+    InlineHeaderHighlight { title, lines }
 }
 
 fn usage_tips_highlight(tips: &[String]) -> Option<InlineHeaderHighlight> {

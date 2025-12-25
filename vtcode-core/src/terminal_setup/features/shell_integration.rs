@@ -14,7 +14,7 @@ pub fn generate_config(terminal: TerminalType) -> Result<String> {
     let config = match terminal {
         TerminalType::Ghostty => {
             r#"# Shell integration
-shell-integration = true
+shell-integration = detect
 shell-integration-features = cursor,sudo,title
 
 # Working directory tracking

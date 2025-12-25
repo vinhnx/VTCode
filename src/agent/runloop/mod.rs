@@ -1,4 +1,5 @@
 mod context;
+mod context_usage;
 mod git;
 mod mcp_elicitation;
 mod mcp_events;
