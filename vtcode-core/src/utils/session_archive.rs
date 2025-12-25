@@ -221,34 +221,50 @@ fn generate_unique_archive_path(
     sessions_dir: &Path,
     metadata: &SessionArchiveMetadata,
     started_at: DateTime<Utc>,
+    custom_suffix: Option<&str>,
 ) -> PathBuf {
     let sanitized_label = sanitize_component(&metadata.workspace_label);
     let timestamp = started_at.format("%Y%m%dT%H%M%SZ").to_string();
-    let micros = started_at.timestamp_subsec_micros();
-    let pid = process::id();
-    let mut attempt = 0u32;
 
-    loop {
-        let suffix = if attempt == 0 {
-            String::new()
-        } else {
-            format!("-{:02}", attempt)
-        };
+    if let Some(suffix) = custom_suffix {
+        // Custom suffix format: session-{label}-{timestamp}-{suffix}.json
         let file_name = format!(
-            "{}-{}-{}_{:06}-{:05}{}.{}",
+            "{}-{}-{}-{}.{}",
             SESSION_FILE_PREFIX,
             sanitized_label,
             timestamp,
-            micros,
-            pid,
-            suffix,
+            sanitize_component(suffix),
             SESSION_FILE_EXTENSION
         );
-        let candidate = sessions_dir.join(file_name);
-        if !candidate.exists() {
-            return candidate;
+        sessions_dir.join(file_name)
+    } else {
+        // Original format with collision detection: session-{label}-{timestamp}_{micros}-{pid}{-NN}.json
+        let micros = started_at.timestamp_subsec_micros();
+        let pid = process::id();
+        let mut attempt = 0u32;
+
+        loop {
+            let suffix = if attempt == 0 {
+                String::new()
+            } else {
+                format!("-{:02}", attempt)
+            };
+            let file_name = format!(
+                "{}-{}-{}_{:06}-{:05}{}.{}",
+                SESSION_FILE_PREFIX,
+                sanitized_label,
+                timestamp,
+                micros,
+                pid,
+                suffix,
+                SESSION_FILE_EXTENSION
+            );
+            let candidate = sessions_dir.join(file_name);
+            if !candidate.exists() {
+                return candidate;
+            }
+            attempt = attempt.wrapping_add(1);
         }
-        attempt = attempt.wrapping_add(1);
     }
 }
 
@@ -260,10 +276,15 @@ pub struct SessionArchive {
 }
 
 impl SessionArchive {
-    pub async fn new(metadata: SessionArchiveMetadata) -> Result<Self> {
+    pub async fn new(metadata: SessionArchiveMetadata, custom_suffix: Option<String>) -> Result<Self> {
         let sessions_dir = resolve_sessions_dir().await?;
         let started_at = Utc::now();
-        let path = generate_unique_archive_path(&sessions_dir, &metadata, started_at);
+        let path = generate_unique_archive_path(
+            &sessions_dir,
+            &metadata,
+            started_at,
+            custom_suffix.as_deref(),
+        );
 
         Ok(Self {
             path,
@@ -334,6 +355,50 @@ impl SessionArchive {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Create a forked session from an existing session snapshot
+    ///
+    /// This creates a new session archive that inherits metadata from the source
+    /// session but operates independently. The forked session will have a new
+    /// archive file with a custom suffix if provided.
+    ///
+    /// # Arguments
+    /// * `source_snapshot` - The snapshot of the session to fork from
+    /// * `custom_suffix` - Optional custom suffix for the new session ID
+    ///
+    /// # Returns
+    /// A new SessionArchive instance for the forked session
+    pub async fn fork(
+        source_snapshot: &SessionSnapshot,
+        custom_suffix: Option<String>,
+    ) -> Result<Self> {
+        let sessions_dir = resolve_sessions_dir().await?;
+        let started_at = Utc::now();
+
+        // Preserve workspace metadata from source
+        let forked_metadata = SessionArchiveMetadata {
+            workspace_label: source_snapshot.metadata.workspace_label.clone(),
+            workspace_path: source_snapshot.metadata.workspace_path.clone(),
+            model: source_snapshot.metadata.model.clone(),
+            provider: source_snapshot.metadata.provider.clone(),
+            theme: source_snapshot.metadata.theme.clone(),
+            reasoning_effort: source_snapshot.metadata.reasoning_effort.clone(),
+            loaded_skills: source_snapshot.metadata.loaded_skills.clone(),
+        };
+
+        let path = generate_unique_archive_path(
+            &sessions_dir,
+            &forked_metadata,
+            started_at,
+            custom_suffix.as_deref(),
+        );
+
+        Ok(Self {
+            path,
+            metadata: forked_metadata,
+            started_at,
+        })
     }
 }
 

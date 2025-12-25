@@ -318,6 +318,46 @@ pub struct Cli {
     )]
     pub continue_latest: bool,
 
+    /// **Fork an existing session and continue with a new session ID**
+    ///
+    /// Creates a copy of an existing session's conversation history and starts
+    /// a new independent session. The forked session inherits all messages from
+    /// the original but operates independently (new messages don't affect the original).
+    ///
+    /// Can be combined with `--session-id` for custom naming.
+    ///
+    /// Examples:
+    ///   vtcode --fork-session session-vtcode-20250101T120000Z_123456-12345
+    ///   vtcode --fork-session old-session --session-id my-feature
+    #[arg(
+        long = "fork-session",
+        global = true,
+        value_name = "SESSION_ID",
+        conflicts_with_all = ["resume_session", "continue_latest", "full_auto"]
+    )]
+    pub fork_session: Option<String>,
+
+    /// **Provide a custom suffix for the session identifier**
+    ///
+    /// Customizes the session file name with a user-provided suffix.
+    /// Format: `session-{workspace}-{timestamp}-{custom-suffix}.json`
+    ///
+    /// Works standalone for new sessions or combined with session operations:
+    ///
+    /// Examples:
+    ///   vtcode --session-id my-feature                    (new session)
+    ///   vtcode --fork-session old-id --session-id new-id  (fork with custom name)
+    ///   vtcode --resume old-id --session-id continued     (resume as fork)
+    ///   vtcode --continue --session-id suffix             (fork from latest)
+    ///
+    /// Validation: Alphanumeric characters, dash, and underscore only (max 64 chars).
+    #[arg(
+        long = "session-id",
+        global = true,
+        value_name = "CUSTOM_SUFFIX"
+    )]
+    pub session_id: Option<String>,
+
     /// **Enable skills system**
     ///
     /// Enables the skills subsystem for loading and executing agent skills.
@@ -961,6 +1001,8 @@ impl Default for Cli {
             full_auto: None,
             resume_session: None,
             continue_latest: false,
+            fork_session: None,
+            session_id: None,
             debug: false,
             enable_skills: false, // Skills disabled by default
             tick_rate: 250,       // Default tick rate: 250ms

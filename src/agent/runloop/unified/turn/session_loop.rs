@@ -234,10 +234,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                 .ended_at
                 .with_timezone(&Local)
                 .format("%Y-%m-%d %H:%M");
+
+            let action = if session.is_fork { "Forking" } else { "Resuming" };
+
             renderer.line(
                 MessageStyle::Info,
                 &format!(
-                    "Resuming session {} · ended {} · {} messages",
+                    "{} session {} · ended {} · {} messages",
+                    action,
                     session.identifier,
                     ended_local,
                     session.message_count()
@@ -247,6 +251,46 @@ pub(crate) async fn run_single_agent_loop_unified(
                 MessageStyle::Info,
                 &format!("Previous archive: {}", session.path.display()),
             )?;
+
+            if session.is_fork {
+                renderer.line(
+                    MessageStyle::Info,
+                    "Starting independent forked session",
+                )?;
+            }
+
+            // Display full conversation history
+            if !session.history.is_empty() {
+                renderer.line_if_not_empty(MessageStyle::Output)?;
+                renderer.line(MessageStyle::Info, "Conversation history:")?;
+
+                for (idx, msg) in session.history.iter().enumerate() {
+                    let role_label = match msg.role {
+                        uni::MessageRole::User => "You",
+                        uni::MessageRole::Assistant => "Assistant",
+                        _ => "System",
+                    };
+
+                    let content_preview = match &msg.content {
+                        uni::MessageContent::Text(text) => {
+                            if text.len() > 200 {
+                                format!("{}...", &text[..200])
+                            } else {
+                                text.clone()
+                            }
+                        }
+                        uni::MessageContent::Parts(parts) => {
+                            format!("[{} content parts]", parts.len())
+                        }
+                    };
+
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("  [{}] {}: {}", idx + 1, role_label, content_preview),
+                    )?;
+                }
+            }
+
             renderer.line_if_not_empty(MessageStyle::Output)?;
         }
 
@@ -263,20 +307,52 @@ pub(crate) async fn run_single_agent_loop_unified(
             config.provider.clone()
         };
         let header_provider_label = provider_label.clone();
-        let archive_metadata = SessionArchiveMetadata::new(
-            workspace_label,
-            workspace_path,
-            config.model.clone(),
-            provider_label,
-            config.theme.clone(),
-            config.reasoning_effort.as_str().to_string(),
-        );
         let mut session_archive_error: Option<String> = None;
-        let mut session_archive = match SessionArchive::new(archive_metadata).await {
-            Ok(archive) => Some(archive),
-            Err(err) => {
-                session_archive_error = Some(err.to_string());
-                None
+        let mut session_archive = if let Some(resume) = resume_state.as_ref() {
+            if resume.is_fork {
+                // Fork: create new archive from source snapshot with custom ID
+                let custom_id = resume.identifier.strip_prefix("forked-").map(|s| s.to_string());
+                match SessionArchive::fork(&resume.snapshot, custom_id).await {
+                    Ok(archive) => Some(archive),
+                    Err(err) => {
+                        session_archive_error = Some(err.to_string());
+                        None
+                    }
+                }
+            } else {
+                // Resume: create normal archive (resume doesn't modify original)
+                let archive_metadata = SessionArchiveMetadata::new(
+                    workspace_label,
+                    workspace_path,
+                    config.model.clone(),
+                    provider_label,
+                    config.theme.clone(),
+                    config.reasoning_effort.as_str().to_string(),
+                );
+                match SessionArchive::new(archive_metadata, None).await {
+                    Ok(archive) => Some(archive),
+                    Err(err) => {
+                        session_archive_error = Some(err.to_string());
+                        None
+                    }
+                }
+            }
+        } else {
+            // New session: create normal archive
+            let archive_metadata = SessionArchiveMetadata::new(
+                workspace_label,
+                workspace_path,
+                config.model.clone(),
+                provider_label,
+                config.theme.clone(),
+                config.reasoning_effort.as_str().to_string(),
+            );
+            match SessionArchive::new(archive_metadata, None).await {
+                Ok(archive) => Some(archive),
+                Err(err) => {
+                    session_archive_error = Some(err.to_string());
+                    None
+                }
             }
         };
 

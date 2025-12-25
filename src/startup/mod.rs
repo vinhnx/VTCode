@@ -16,6 +16,21 @@ fn truncate_error(msg: &str, max_len: usize) -> String {
         msg.to_owned()
     }
 }
+
+/// Validate custom session ID suffix
+fn validate_session_id_suffix(suffix: &str) -> Result<()> {
+    if suffix.is_empty() {
+        bail!("Custom session ID suffix cannot be empty");
+    }
+    if suffix.len() > 64 {
+        bail!("Custom session ID suffix too long (maximum 64 characters)");
+    }
+    if !suffix.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        bail!("Custom session ID suffix must contain only alphanumeric characters, dashes, or underscores");
+    }
+    Ok(())
+}
+
 use first_run::maybe_run_first_run_setup;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
@@ -38,6 +53,7 @@ pub struct StartupContext {
     pub full_auto_requested: bool,
     pub automation_prompt: Option<String>,
     pub session_resume: Option<SessionResumeMode>,
+    pub custom_session_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +61,7 @@ pub enum SessionResumeMode {
     Interactive,
     Latest,
     Specific(String),
+    Fork(String),  // Fork from specific session ID
 }
 
 impl StartupContext {
@@ -123,21 +140,48 @@ impl StartupContext {
         // Validate configuration against models database
         validate_startup_configuration(&config, &workspace, args.quiet)?;
 
-        let session_resume = if let Some(value) = args.resume_session.as_ref() {
+        // Validate custom session ID if provided
+        let custom_session_id = args.session_id.clone();
+        if let Some(ref suffix) = custom_session_id {
+            validate_session_id_suffix(suffix)?;
+        }
+
+        // Parse session resume mode and handle fork logic
+        let session_resume = if let Some(fork_id) = args.fork_session.as_ref() {
+            // --fork-session takes precedence
+            Some(SessionResumeMode::Fork(fork_id.clone()))
+        } else if let Some(value) = args.resume_session.as_ref() {
             if value == "__interactive__" {
-                Some(SessionResumeMode::Interactive)
+                // --resume with interactive mode
+                if custom_session_id.is_some() {
+                    Some(SessionResumeMode::Interactive)  // Will fork after selection
+                } else {
+                    Some(SessionResumeMode::Interactive)
+                }
             } else {
-                Some(SessionResumeMode::Specific(value.clone()))
+                // --resume with specific ID
+                if custom_session_id.is_some() {
+                    // --resume + --session-id becomes fork
+                    Some(SessionResumeMode::Fork(value.clone()))
+                } else {
+                    Some(SessionResumeMode::Specific(value.clone()))
+                }
             }
         } else if args.continue_latest {
-            Some(SessionResumeMode::Latest)
+            // --continue (resume latest)
+            if custom_session_id.is_some() {
+                // --continue + --session-id becomes fork from latest
+                Some(SessionResumeMode::Fork("__latest__".to_string()))
+            } else {
+                Some(SessionResumeMode::Latest)
+            }
         } else {
             None
         };
 
         if session_resume.is_some() && args.command.is_some() {
             bail!(
-                "--resume/--continue cannot be combined with other commands. Run the resume operation without a subcommand."
+                "--resume/--continue/--fork-session cannot be combined with other commands. Run the operation without a subcommand."
             );
         }
 
@@ -250,6 +294,7 @@ impl StartupContext {
             full_auto_requested,
             automation_prompt,
             session_resume,
+            custom_session_id,
         })
     }
 }
