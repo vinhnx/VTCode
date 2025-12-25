@@ -50,9 +50,11 @@ impl ZAIProvider {
         base_url: Option<String>,
         _prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
+        use crate::llm::http_client::HttpClientFactory;
+        
         Self {
             api_key,
-            http_client: HttpClient::new(),
+            http_client: HttpClientFactory::default_client(),
             base_url: override_base_url(
                 urls::Z_AI_API_BASE,
                 base_url,

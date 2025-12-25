@@ -108,6 +108,8 @@ impl GeminiProvider {
         base_url: Option<String>,
         timeouts: TimeoutsConfig,
     ) -> Self {
+        use crate::llm::http_client::HttpClientFactory;
+        
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
             prompt_cache,
             |providers| &providers.gemini,
@@ -120,7 +122,7 @@ impl GeminiProvider {
 
         Self {
             api_key: Arc::from(api_key.as_str()),
-            http_client: HttpClient::new(),
+            http_client: HttpClientFactory::default_client(),
             base_url: Arc::from(
                 override_base_url(
                     urls::GEMINI_API_BASE,

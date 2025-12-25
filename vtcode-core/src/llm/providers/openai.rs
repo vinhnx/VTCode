@@ -877,12 +877,16 @@ impl OpenAIProvider {
         };
         responses_api_modes.insert(model.clone(), initial_state);
 
+        // Use centralized HTTP client factory for consistent timeout handling
+        use crate::llm::http_client::HttpClientFactory;
+        let http_client = HttpClientFactory::with_timeouts(
+            Duration::from_secs(120),
+            Duration::from_secs(30),
+        );
+
         Self {
             api_key: Arc::from(api_key.as_str()),
-            http_client: HttpClient::builder()
-                .timeout(Duration::from_secs(120))
-                .build()
-                .unwrap_or_else(|_| HttpClient::new()),
+            http_client,
             base_url: Arc::from(resolved_base_url.as_str()),
             model: Arc::from(model.as_str()),
             responses_api_modes: Mutex::new(responses_api_modes),

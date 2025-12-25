@@ -148,15 +148,13 @@ impl HuggingFaceProvider {
         base_url: Option<String>,
         timeouts: Option<TimeoutsConfig>,
     ) -> Self {
+        use crate::llm::http_client::HttpClientFactory;
+        
         let timeouts = timeouts.unwrap_or_default();
-        let timeout = std::time::Duration::from_secs(timeouts.default_ceiling_seconds);
         
         Self {
             api_key,
-            http_client: HttpClient::builder()
-                .timeout(timeout)
-                .build()
-                .unwrap_or_else(|_| HttpClient::new()),
+            http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: override_base_url(
                 urls::HUGGINGFACE_API_BASE,
                 base_url,
