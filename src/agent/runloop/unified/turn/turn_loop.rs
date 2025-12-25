@@ -289,7 +289,7 @@ pub async fn run_turn_loop(
                     {
                         ctx.renderer.line(
                             MessageStyle::Info,
-                            &format!("Reasoning: {}", reasoning_text),
+                            &format!(" {}", reasoning_text),
                         )?;
                     }
                 }
@@ -441,7 +441,7 @@ pub async fn run_turn_loop(
                     {
                         ctx.renderer.line(
                             MessageStyle::Info,
-                            &format!("Reasoning: {}", reasoning_text),
+                            &format!(" {}", reasoning_text),
                         )?;
                     }
                 }

@@ -51,7 +51,7 @@ impl ToolJustification {
         let mut lines = vec![];
 
         lines.push(String::new());
-        lines.push("Agent Reasoning:".to_owned());
+        lines.push("Agent ".to_owned());
 
         // Wrap reason text if needed - iterate directly without collecting
         for line in self.reason.lines() {
