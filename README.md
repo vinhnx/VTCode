@@ -107,27 +107,6 @@ VT Code supports a rich set of configuration options, with preferences stored in
 -   **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
 -   **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
 
-### RL Optimization Loop
-
--   Adaptive action selection via bandit (default) or actor-critic strategies
--   Reward shaping from latency/success signals; opt-in under `[optimization]`
--   Hot-swappable to favor low-latency targets (cloud/edge/on-prem executors)
-
-```toml
-[optimization]
-enabled = true
-strategy = "bandit" # or "actor_critic"
-
-[optimization.bandit]
-exploration_epsilon = 0.1
-latency_weight = 0.35
-
-[optimization.reward_shaping]
-success_reward = 1.0
-timeout_penalty = -0.8
-latency_penalty_weight = 0.25
-```
-
 For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
 
 ---
