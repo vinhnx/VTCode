@@ -1,19 +1,8 @@
-
-Add /settings as an alias for the /config command
-
---
-
 Add LSP (Language Server Protocol) tool for code intelligence features like go-to-definition, find references, and hover documentation
-
---
-
-add guidance for macOS users when Alt shortcuts fail due to terminal configuration
 
 -
 
-
 fix skill allowed-tools not being applied to tools invoked by the skill
-
 
 --
 
@@ -45,7 +34,7 @@ add loading indicator when using skills
 
 --
 
-fix permission rules incorrectly rejecting valid bash commands containing shell glob patterns (e.g., ls *.txt, for f in *.png)
+fix permission rules incorrectly rejecting valid bash commands containing shell glob patterns (e.g., ls _.txt, for f in _.png)
 
 --
 
@@ -53,7 +42,7 @@ improve ansi and background syntax highlighting for `diff` output. currently it 
 
 --
 
-add wildcard syntax mcp__server__* for MCP tool permissions to allow or deny all tools from a server
+add wildcard syntax mcp**server**\* for MCP tool permissions to allow or deny all tools from a server
 
 ---
 
