@@ -165,7 +165,7 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
     }
 }
 
-pub(super) fn slash_navigation_available(session: &Session) -> bool {
+pub(crate) fn slash_navigation_available(session: &Session) -> bool {
     session.input_enabled
         && !session.slash_palette.is_empty()
         && session.modal.is_none()
@@ -439,12 +439,25 @@ pub(super) fn try_handle_slash_navigation(
     has_alt: bool,
     has_command: bool,
 ) -> bool {
-    if !slash_navigation_available(session) || has_control || has_alt {
+    if !slash_navigation_available(session) {
+        return false;
+    }
+
+    // Block Control modifier
+    if has_control {
+        return false;
+    }
+
+    // Block Alt unless combined with Command for Up/Down navigation
+    if has_alt && !matches!(key.code, KeyCode::Up | KeyCode::Down) {
         return false;
     }
 
     let handled = match key.code {
         KeyCode::Up => {
+            if has_alt && !has_command {
+                return false;
+            }
             if has_command {
                 select_first_slash_suggestion(session)
             } else {
@@ -452,6 +465,9 @@ pub(super) fn try_handle_slash_navigation(
             }
         }
         KeyCode::Down => {
+            if has_alt && !has_command {
+                return false;
+            }
             if has_command {
                 select_last_slash_suggestion(session)
             } else {

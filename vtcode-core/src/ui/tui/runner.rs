@@ -89,6 +89,7 @@ fn has_active_navigation_ui(session: &Session) -> bool {
         || session.file_palette_active
         || session.prompt_palette_active
         || session.config_palette_active
+        || crate::ui::tui::session::slash::slash_navigation_available(session)
 }
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;

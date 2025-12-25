@@ -741,6 +741,58 @@ pub(crate) async fn run_single_agent_loop_unified(
                         session_end_reason = reason;
                         break;
                     }
+                    InlineLoopAction::ResumeSession(session_id) => {
+                        // Load and resume the selected session
+                        use vtcode_core::utils::session_archive::find_session_by_identifier;
+                        use vtcode_core::llm::provider::Message;
+
+                        renderer.line(
+                            MessageStyle::Info,
+                            &format!("Loading session: {}", session_id),
+                        )?;
+
+                        match find_session_by_identifier(&session_id).await {
+                            Ok(Some(listing)) => {
+                                let history = if let Some(progress) = &listing.snapshot.progress {
+                                    progress.recent_messages.iter().map(Message::from).collect()
+                                } else {
+                                    listing.snapshot.messages.iter().map(Message::from).collect()
+                                };
+
+                                #[allow(unused_assignments)]
+                                {
+                                    resume_state = Some(ResumeSession {
+                                        identifier: listing.identifier(),
+                                        snapshot: listing.snapshot.clone(),
+                                        history,
+                                        path: listing.path.clone(),
+                                        is_fork: false,
+                                    });
+                                }
+
+                                renderer.line(
+                                    MessageStyle::Info,
+                                    &format!("Restarting with session: {}", session_id),
+                                )?;
+                                session_end_reason = SessionEndReason::Completed;
+                                break; // Exit current loop to restart with resumed session
+                            }
+                            Ok(None) => {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Session not found: {}", session_id),
+                                )?;
+                                continue;
+                            }
+                            Err(err) => {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Failed to load session: {}", err),
+                                )?;
+                                continue;
+                            }
+                        }
+                    }
                 };
 
             if input_owned.is_empty() {
