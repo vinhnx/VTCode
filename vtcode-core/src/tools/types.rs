@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
+use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
 
 /// Enhanced cache entry with performance tracking
 #[derive(Debug, Clone)]
@@ -61,23 +62,23 @@ pub struct OperationStats {
 #[derive(Debug, Deserialize)]
 pub struct Input {
     pub path: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_bytes: Option<usize>,
     #[serde(default)]
     pub encoding: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub chunk_lines: Option<usize>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_lines: Option<usize>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_tokens: Option<usize>,
-    #[serde(default, alias = "offset", alias = "byte_offset")]
+    #[serde(default, alias = "offset", alias = "byte_offset", deserialize_with = "deserialize_opt_maybe_quoted")]
     pub offset_bytes: Option<u64>,
-    #[serde(default, alias = "line_offset")]
+    #[serde(default, alias = "line_offset", deserialize_with = "deserialize_opt_maybe_quoted")]
     pub offset_lines: Option<usize>,
-    #[serde(default, alias = "page_size", alias = "byte_page_size")]
+    #[serde(default, alias = "page_size", alias = "byte_page_size", deserialize_with = "deserialize_opt_maybe_quoted")]
     pub page_size_bytes: Option<usize>,
-    #[serde(default, alias = "line_page_size")]
+    #[serde(default, alias = "line_page_size", deserialize_with = "deserialize_opt_maybe_quoted")]
     pub page_size_lines: Option<usize>,
 }
 
@@ -136,13 +137,13 @@ pub struct EditInput {
 pub struct ListInput {
     #[serde(default = "default_list_path")]
     pub path: String,
-    #[serde(default = "default_max_items")]
+    #[serde(default = "default_max_items", deserialize_with = "deserialize_maybe_quoted")]
     pub max_items: usize,
     /// Optional page number for pagination (1-based)
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub page: Option<usize>,
     /// Optional page size for pagination
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub per_page: Option<usize>,
     /// Controls verbosity of tool output: "concise" (default) or "detailed"
     #[serde(default)]
@@ -167,7 +168,7 @@ pub struct EnhancedTerminalInput {
     pub command: Vec<String>,
     #[serde(default)]
     pub working_dir: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub timeout_secs: Option<u64>,
     #[serde(default)]
     pub mode: Option<String>, // "terminal", "pty"
@@ -184,7 +185,7 @@ pub struct EnhancedTerminalInput {
     #[serde(default)]
     pub confirm: Option<bool>,
     /// Maximum number of tokens to return in the output
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_tokens: Option<usize>,
 }
 

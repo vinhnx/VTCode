@@ -11,6 +11,7 @@ use crate::utils::diff::{DiffOptions, compute_diff};
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use crate::utils::serde_helpers::deserialize_opt_maybe_quoted;
 use chrono::prelude::Utc;
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
@@ -568,7 +569,7 @@ impl ToolRegistry {
                 pattern: String,
                 #[serde(default = "default_grep_path", alias = "root", alias = "search_path")]
                 path: String,
-                #[serde(default)]
+                #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
                 max_results: Option<usize>,
                 #[serde(default)]
                 case_sensitive: Option<bool>,
@@ -576,13 +577,13 @@ impl ToolRegistry {
                 literal: Option<bool>,
                 #[serde(default)]
                 glob_pattern: Option<String>,
-                #[serde(default)]
+                #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
                 context_lines: Option<usize>,
                 #[serde(default)]
                 include_hidden: Option<bool>,
                 #[serde(default)]
                 respect_ignore_files: Option<bool>,
-                #[serde(default)]
+                #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
                 max_file_size: Option<usize>,
                 #[serde(default)]
                 search_hidden: Option<bool>,
@@ -604,9 +605,9 @@ impl ToolRegistry {
                 only_matching: Option<bool>,
                 #[serde(default)]
                 trim: Option<bool>,
-                #[serde(default)]
+                #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
                 max_result_bytes: Option<usize>,
-                #[serde(default)]
+                #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
                 timeout_secs: Option<u64>,
                 #[serde(default)]
                 extra_ignore_globs: Option<Vec<String>>,
@@ -640,12 +641,32 @@ impl ToolRegistry {
                 ));
             }
 
-            // Validate the path parameter to avoid security issues
-            if payload.path.contains("..") || payload.path.starts_with('/') {
+            // Validate and normalize the path parameter
+            let workspace_root = self.workspace_root_owned();
+            let mut search_path = payload.path.clone();
+
+            if search_path.starts_with('/') {
+                let abs_path = PathBuf::from(&search_path);
+                if let Ok(rel_path) = abs_path.strip_prefix(&workspace_root) {
+                    search_path = rel_path.to_string_lossy().into_owned();
+                } else {
+                    return Err(anyhow!(
+                        "Absolute path '{}' is outside the workspace. Path must be within the workspace: {}",
+                        search_path,
+                        workspace_root.display()
+                    ));
+                }
+            }
+
+            if search_path.contains("..") {
                 return Err(anyhow!(
-                    "Path must be a relative path and cannot contain '..' or start with '/'"
+                    "Path cannot contain '..' for security reasons. Provided: {}",
+                    search_path
                 ));
             }
+
+            // Update search_path to be used in GrepSearchInput
+            let search_path = if search_path.is_empty() { ".".to_string() } else { search_path };
 
             // Validate and enforce hard limits
             if let Some(max_results) = payload.max_results {
@@ -715,7 +736,7 @@ impl ToolRegistry {
 
             let input = GrepSearchInput {
                 pattern: payload.pattern.clone(),
-                path: payload.path.clone(),
+                path: search_path.clone(),
                 case_sensitive: payload.case_sensitive,
                 literal: payload.literal,
                 glob_pattern: payload.glob_pattern,

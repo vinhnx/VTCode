@@ -4,7 +4,6 @@
     "analyze_agent",
     "apply_patch",
     "close_pty_session",
-    "code_intelligence",
     "create_file",
     "create_pty_session",
     "debug_agent",
@@ -14,7 +13,6 @@
     "grep_file",
     "list_files",
     "list_pty_sessions",
-    "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
@@ -28,36 +26,29 @@
     "write_file"
   ],
   "policies": {
+    "grep_file": "allow",
+    "update_plan": "allow",
+    "read_file": "allow",
+    "edit_file": "allow",
     "analyze_agent": "allow",
-    "apply_patch": "prompt",
+    "apply_patch": "allow",
     "close_pty_session": "allow",
-    "create_file": "prompt",
+    "create_file": "allow",
     "create_pty_session": "allow",
     "debug_agent": "allow",
-    "delete_file": "prompt",
-    "edit_file": "allow",
-    "execute_code": "prompt",
-    "grep_file": "allow",
-    "list_files": "allow",
+    "delete_file": "allow",
+    "execute_code": "allow",
     "list_pty_sessions": "allow",
-    "read_file": "allow",
     "read_pty_session": "allow",
     "resize_pty_session": "allow",
-    "run_pty_cmd": "allow",
     "search_tools": "allow",
     "send_pty_input": "allow",
-    "update_plan": "allow",
-    "web_fetch": "prompt",
+    "web_fetch": "allow",
     "write_file": "allow",
+    "run_pty_cmd": "allow",
+    "list_files": "allow",
     "search_replace": "prompt",
-    "skill": "allow",
-    "code_intelligence": "prompt",
-    "mcp_convert_time": "prompt",
-    "mcp_time_convert_time": "prompt",
-    "mcp_fetch": "prompt",
-    "mcp_fetch_fetch": "prompt",
-    "mcp_get_current_time": "prompt",
-    "mcp_time_get_current_time": "prompt"
+    "skill": "prompt"
   },
   "constraints": {},
   "mcp": {
@@ -79,7 +70,10 @@
           "client": [
             "max_concurrent_connections",
             "request_timeout_seconds",
-            "retry_attempts"
+            "retry_attempts",
+            "startup_timeout_seconds",
+            "tool_timeout_seconds",
+            "experimental_use_rmcp_client"
           ],
           "server": [
             "enabled",
@@ -197,18 +191,6 @@
         }
       }
     },
-    "providers": {
-      "time": {
-        "tools": {
-          "get_current_time": "prompt",
-          "convert_time": "prompt"
-        }
-      },
-      "fetch": {
-        "tools": {
-          "fetch": "prompt"
-        }
-      }
-    }
+    "providers": {}
   }
 }
