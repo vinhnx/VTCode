@@ -126,10 +126,11 @@ pub(crate) async fn run_doctor_diagnostics(
             renderer,
             "  HITL Enabled",
             Ok((if cfg.security.human_in_the_loop {
-                    "Yes"
-                } else {
-                    "No"
-                }).to_string()),
+                "Yes"
+            } else {
+                "No"
+            })
+            .to_string()),
         )?;
 
         // Tool default policy

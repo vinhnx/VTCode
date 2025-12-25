@@ -287,10 +287,8 @@ pub async fn run_turn_loop(
                     if let Some(reasoning_text) = reasoning.as_ref()
                         && !reasoning_text.trim().is_empty()
                     {
-                        ctx.renderer.line(
-                            MessageStyle::Info,
-                            &format!(" {}", reasoning_text),
-                        )?;
+                        ctx.renderer
+                            .line(MessageStyle::Info, &format!(" {}", reasoning_text))?;
                     }
                 }
                 // Note: reasoning already rendered during streaming; don't fabricate announcements
@@ -439,10 +437,8 @@ pub async fn run_turn_loop(
                     if let Some(reasoning_text) = reasoning.as_ref()
                         && !reasoning_text.trim().is_empty()
                     {
-                        ctx.renderer.line(
-                            MessageStyle::Info,
-                            &format!(" {}", reasoning_text),
-                        )?;
+                        ctx.renderer
+                            .line(MessageStyle::Info, &format!(" {}", reasoning_text))?;
                     }
                 }
                 // Note: reasoning already rendered during streaming; don't fabricate announcements

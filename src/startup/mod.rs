@@ -25,8 +25,13 @@ fn validate_session_id_suffix(suffix: &str) -> Result<()> {
     if suffix.len() > 64 {
         bail!("Custom session ID suffix too long (maximum 64 characters)");
     }
-    if !suffix.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-        bail!("Custom session ID suffix must contain only alphanumeric characters, dashes, or underscores");
+    if !suffix
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        bail!(
+            "Custom session ID suffix must contain only alphanumeric characters, dashes, or underscores"
+        );
     }
     Ok(())
 }
@@ -61,7 +66,7 @@ pub enum SessionResumeMode {
     Interactive,
     Latest,
     Specific(String),
-    Fork(String),  // Fork from specific session ID
+    Fork(String), // Fork from specific session ID
 }
 
 impl StartupContext {
@@ -154,7 +159,7 @@ impl StartupContext {
             if value == "__interactive__" {
                 // --resume with interactive mode
                 if custom_session_id.is_some() {
-                    Some(SessionResumeMode::Interactive)  // Will fork after selection
+                    Some(SessionResumeMode::Interactive) // Will fork after selection
                 } else {
                     Some(SessionResumeMode::Interactive)
                 }

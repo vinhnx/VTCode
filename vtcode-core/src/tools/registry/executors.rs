@@ -552,10 +552,7 @@ impl ToolRegistry {
     /// Merged agent diagnostics tool (replaces debug_agent + analyze_agent)
     pub(super) fn agent_info_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
-            let mode = args
-                .get("mode")
-                .and_then(|v| v.as_str())
-                .unwrap_or("full");
+            let mode = args.get("mode").and_then(|v| v.as_str()).unwrap_or("full");
 
             let available_tools = self.available_tools().await;
             let workspace_root = self.workspace_root_str();

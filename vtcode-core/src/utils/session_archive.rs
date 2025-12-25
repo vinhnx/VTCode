@@ -276,7 +276,10 @@ pub struct SessionArchive {
 }
 
 impl SessionArchive {
-    pub async fn new(metadata: SessionArchiveMetadata, custom_suffix: Option<String>) -> Result<Self> {
+    pub async fn new(
+        metadata: SessionArchiveMetadata,
+        custom_suffix: Option<String>,
+    ) -> Result<Self> {
         let sessions_dir = resolve_sessions_dir().await?;
         let started_at = Utc::now();
         let path = generate_unique_archive_path(

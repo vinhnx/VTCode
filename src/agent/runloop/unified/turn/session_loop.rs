@@ -94,7 +94,10 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut resume_state = resume;
 
     loop {
-        let resume_ref = resume_state.as_ref();
+        // Take the pending resume request (if any) for this session iteration.
+        // New resume requests issued mid-session will populate `resume_state` again.
+        let resume_request = resume_state.take();
+        let resume_ref = resume_request.as_ref();
 
         let session_trigger = if resume_ref.is_some() {
             SessionStartTrigger::Resume
@@ -228,14 +231,18 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         transcript::clear();
 
-        if let Some(session) = resume_state.as_ref() {
+        if let Some(session) = resume_ref {
             let ended_local = session
                 .snapshot
                 .ended_at
                 .with_timezone(&Local)
                 .format("%Y-%m-%d %H:%M");
 
-            let action = if session.is_fork { "Forking" } else { "Resuming" };
+            let action = if session.is_fork {
+                "Forking"
+            } else {
+                "Resuming"
+            };
 
             renderer.line(
                 MessageStyle::Info,
@@ -253,45 +260,56 @@ pub(crate) async fn run_single_agent_loop_unified(
             )?;
 
             if session.is_fork {
-                renderer.line(
-                    MessageStyle::Info,
-                    "Starting independent forked session",
-                )?;
+                renderer.line(MessageStyle::Info, "Starting independent forked session")?;
             }
 
-            // Display full conversation history
+            // Display full conversation history with proper TUI styles (no truncation)
             if !session.history.is_empty() {
-                renderer.line_if_not_empty(MessageStyle::Output)?;
                 renderer.line(MessageStyle::Info, "Conversation history:")?;
 
                 for (idx, msg) in session.history.iter().enumerate() {
-                    let role_label = match msg.role {
-                        uni::MessageRole::User => "You",
-                        uni::MessageRole::Assistant => "Assistant",
-                        _ => "System",
+                    let (style, role_label) = match msg.role {
+                        uni::MessageRole::User => (MessageStyle::User, "You"),
+                        uni::MessageRole::Assistant => (MessageStyle::Response, "Assistant"),
+                        uni::MessageRole::Tool => (MessageStyle::ToolOutput, "Tool"),
+                        uni::MessageRole::System => (MessageStyle::Info, "System"),
                     };
 
-                    let content_preview = match &msg.content {
+                    let tool_suffix = msg
+                        .tool_call_id
+                        .as_ref()
+                        .map(|id| format!(" [tool_call_id: {}]", id))
+                        .unwrap_or_default();
+
+                    // For user messages, skip the numbered header to avoid clutter.
+                    if msg.role != uni::MessageRole::User {
+                        renderer.line(
+                            style,
+                            &format!("  [{}] {}{}:", idx + 1, role_label, tool_suffix),
+                        )?;
+                    }
+
+                    match &msg.content {
                         uni::MessageContent::Text(text) => {
-                            if text.len() > 200 {
-                                format!("{}...", &text[..200])
-                            } else {
-                                text.clone()
+                            for line in text.lines() {
+                                // Indent user text as well for alignment
+                                renderer.line(style, &format!("    {}", line))?;
                             }
                         }
                         uni::MessageContent::Parts(parts) => {
-                            format!("[{} content parts]", parts.len())
+                            renderer.line(
+                                style,
+                                &format!("    [content parts: {}]", parts.len()),
+                            )?;
                         }
-                    };
+                    }
 
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("  [{}] {}: {}", idx + 1, role_label, content_preview),
-                    )?;
+                    // Compact spacing between messages
+                    if idx + 1 < session.history.len() {
+                        renderer.line(style, "")?;
+                    }
                 }
             }
-
-            renderer.line_if_not_empty(MessageStyle::Output)?;
         }
 
         let workspace_label = config
@@ -308,10 +326,13 @@ pub(crate) async fn run_single_agent_loop_unified(
         };
         let header_provider_label = provider_label.clone();
         let mut session_archive_error: Option<String> = None;
-        let mut session_archive = if let Some(resume) = resume_state.as_ref() {
+        let mut session_archive = if let Some(resume) = resume_ref {
             if resume.is_fork {
                 // Fork: create new archive from source snapshot with custom ID
-                let custom_id = resume.identifier.strip_prefix("forked-").map(|s| s.to_string());
+                let custom_id = resume
+                    .identifier
+                    .strip_prefix("forked-")
+                    .map(|s| s.to_string());
                 match SessionArchive::fork(&resume.snapshot, custom_id).await {
                     Ok(archive) => Some(archive),
                     Err(err) => {
@@ -743,8 +764,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                     InlineLoopAction::ResumeSession(session_id) => {
                         // Load and resume the selected session
-                        use vtcode_core::utils::session_archive::find_session_by_identifier;
                         use vtcode_core::llm::provider::Message;
+                        use vtcode_core::utils::session_archive::find_session_by_identifier;
 
                         renderer.line(
                             MessageStyle::Info,
@@ -753,11 +774,15 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                         match find_session_by_identifier(&session_id).await {
                             Ok(Some(listing)) => {
-                                let history = if let Some(progress) = &listing.snapshot.progress {
-                                    progress.recent_messages.iter().map(Message::from).collect()
+                                // Prefer full archived messages; fall back to progress snapshot.
+                                let history_iter = if !listing.snapshot.messages.is_empty() {
+                                    listing.snapshot.messages.iter()
+                                } else if let Some(progress) = &listing.snapshot.progress {
+                                    progress.recent_messages.iter()
                                 } else {
-                                    listing.snapshot.messages.iter().map(Message::from).collect()
+                                    [].iter()
                                 };
+                                let history = history_iter.map(Message::from).collect();
 
                                 #[allow(unused_assignments)]
                                 {
@@ -1257,6 +1282,11 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
 
         // If the session ended with NewSession, restart the loop with fresh config
+        // If a new resume request was queued (e.g., via /sessions), start it now.
+        if resume_state.is_some() {
+            continue;
+        }
+
         if matches!(session_end_reason, SessionEndReason::NewSession) {
             // Reload config to pick up any changes
             vt_cfg =
