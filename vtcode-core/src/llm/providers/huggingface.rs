@@ -443,7 +443,7 @@ impl HuggingFaceProvider {
                 payload["tools"] = json!(flattened_tools);
 
                 if let Some(choice) = &request.tool_choice {
-                    // Responses API often takes string choice or specific format
+        // Responses API often takes string choice or specific format
                     payload["tool_choice"] = choice.to_provider_format("openai");
                 }
             }
@@ -454,7 +454,8 @@ impl HuggingFaceProvider {
             self.add_json_instruction(&mut payload)?;
         }
 
-        if request.output_format.is_some() {
+        // Behavior: GLM models on HF (via Z.AI) don't support response_format with json_object
+        if request.output_format.is_some() && !self.is_glm_model(&request.model) {
             payload["response_format"] = json!({ "type": "json_object" });
         }
 
@@ -469,9 +470,16 @@ impl HuggingFaceProvider {
     /// 3. Chat Completions API handles tools correctly for most models
     ///
     /// To enable Responses API, you would need explicit opt-in configuration.
-    fn should_use_responses_api(&self, _request: &LLMRequest) -> bool {
-        // Behavior 11: Enable Responses API by default for improved tool orchestration
-        // and semantic streaming events.
+    fn should_use_responses_api(&self, request: &LLMRequest) -> bool {
+        // Behavior 11: Responses API is beta/unstable on HuggingFace and not
+        // supported by all backend providers (e.g. Z.AI/GLM).
+        // Default to false unless explicitly opted in or for specific models.
+        if self.is_glm_model(&request.model) {
+            return false;
+        }
+
+        // For other models, we currently allow it for testing, but ideally
+        // this should be configurable.
         true
     }
 
@@ -1159,7 +1167,7 @@ impl HuggingFaceProvider {
             }
 
             // If stream ended without a completion event, emit one now
-            if !completed && !content_buffer.is_empty() {
+            if !completed {
                 let final_tool_calls = finalize_tool_calls(tool_calls.clone());
                 let finish_reason = if final_tool_calls.is_some() {
                     crate::llm::provider::FinishReason::ToolCalls
@@ -1167,7 +1175,7 @@ impl HuggingFaceProvider {
                     crate::llm::provider::FinishReason::Stop
                 };
                 let response = LLMResponse {
-                    content: Some(content_buffer.clone()),
+                    content: if content_buffer.is_empty() { None } else { Some(content_buffer.clone()) },
                     tool_calls: final_tool_calls,
                     usage: None,
                     finish_reason,
