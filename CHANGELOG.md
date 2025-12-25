@@ -3,6 +3,54 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.53.0] - 2025-12-25
+
+
+### Features
+    - feat: add agent option to CLI for temporary model override
+    - feat: enhance planning tool with quality validation and detailed descriptions for task phases
+    - feat: enhance input history navigation and improve session input handling
+    - feat: enhance tool execution logging and improve diff preview generation
+    - feat: improve error handling for create_file and update_plan methods, enhance logging for theme loading failures
+    - feat: implement adaptive TUI tick rate, coalesce scroll events, and enhance session management
+    - feat: implement adaptive TUI tick rate and coalesce scroll events
+    - feat: Add alias for /config command as /settings, enhance slash command descriptions, and introduce quiet mode in configuration
+    - feat: Improve terminal detection and configuration path resolution across operating systems, update LLM provider integrations, and refine agent slash commands and welcome flow.
+    - feat: Integrate `TimeoutsConfig` into LLM provider HTTP clients and refactor OpenRouter error handling.
+    - feat(llm): Introduce a centralized HTTP client factory, refactor providers to use it for consistent timeout configuration, and enhance API error parsing.
+    - feat: Improve tool input deserialization to handle quoted values, enhance `grep` path validation, and update tool policies.
+    - feat: Introduce GLM-4.7 Novita model, prepend system prompts in HuggingFace provider, skip GLM thinking parameter, and update tool policies.
+    - feat: Introduce `--quiet` flag and separate `stdout` for data and `stderr` for logs to improve CLI piping.
+    - feat: Refactor and expand slash command handling with new diagnostics, skills, tools, workspace, and context commands.
+    - feat: Implement terminal setup wizard with support for multiple terminals and features, and update LLM provider models.
+    - feat: add code intelligence tool with LSP-like navigation features
+
+
+### Bug Fixes
+    - fix: Disable JSON object output and Responses API for GLM models and refine streaming completion event content handling.
+    - fix: disable npm publishing in release.sh
+    - fix: remove npm installation due to GitHub Actions costs
+    - fix: rename npm package from vtcode-bin to vtcode
+
+
+### Documentation
+    - docs: Update README with new sections for Keyboard Shortcuts and macOS Alt Shortcut Troubleshooting; refine TODO list entries for clarity and consistency.
+    - docs: Add a comprehensive list of new features, bug fixes, and performance improvements to the project TODO list.
+    - docs: update changelog for v0.52.10 [skip ci]
+    - docs: update changelog for v0.52.9 [skip ci]
+    - docs: update installation instructions and scripts for npm package
+
+
+### Chores
+    - chore: release v0.52.10
+    - chore: release v0.52.9
+    - chore(deps): bump the all-rust-deps group with 21 updates
+    - chore: release v0.52.8
+    - chore: update npm version to 0.52.8
+    - chore: release v0.52.7
+    - chore(deps): bump DavidAnson/markdownlint-cli2-action from 21 to 22
+    - chore(deps): bump actions/cache from 4 to 5
+    - chore(deps): bump actions/upload-artifact from 5 to 6
 # [Version 0.52.10] - 2025-12-25
 
 
