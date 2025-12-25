@@ -31,6 +31,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "View the effective vtcode.toml configuration (including keyboard protocol settings)",
         },
         SlashCommandInfo {
+            name: "settings",
+            description: "View the effective vtcode.toml configuration (alias for /config)",
+        },
+        SlashCommandInfo {
             name: "model",
             description: "Launch the interactive model picker",
         },
