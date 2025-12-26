@@ -1212,13 +1212,15 @@ impl AgentRunner {
         let (config_value, system_prompt) = match ConfigManager::load_from_workspace(&workspace) {
             Ok(manager) => {
                 let cfg = manager.config().clone();
-                let prompt = compose_system_instruction_text(workspace.as_path(), Some(&cfg)).await;
+                let prompt =
+                    compose_system_instruction_text(workspace.as_path(), Some(&cfg), None).await;
                 (cfg, prompt)
             }
             Err(err) => {
                 warn!("Failed to load vtcode configuration for system prompt composition: {err:#}");
                 let cfg = VTCodeConfig::default();
-                let prompt = compose_system_instruction_text(workspace.as_path(), None).await;
+                let prompt =
+                    compose_system_instruction_text(workspace.as_path(), None, None).await;
                 (cfg, prompt)
             }
         };
@@ -1286,8 +1288,12 @@ impl AgentRunner {
         *self.loop_detector.borrow_mut() =
             LoopDetector::with_max_repeated_calls(self.config.tools.max_repeated_tool_calls.max(1));
 
-        self.system_prompt =
-            compose_system_instruction_text(self._workspace.as_path(), Some(self.config())).await;
+        self.system_prompt = compose_system_instruction_text(
+            self._workspace.as_path(),
+            Some(self.config()),
+            None, // No prompt_context
+        )
+        .await;
 
         self.tool_registry.apply_timeout_policy(&vt_cfg.timeouts);
         self.tool_registry.initialize_async().await?;

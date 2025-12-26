@@ -4,6 +4,24 @@
 
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
+# === System Prompt Enhancements (v0.54+) ===
+# Dynamic, context-aware additions to the system prompt for improved LLM performance
+
+# Include current date/time for temporal awareness (log analysis, scheduling, relative time)
+# Overhead: ~20 tokens | Default: true
+include_temporal_context = true
+
+# Use UTC instead of local time (useful for distributed teams, log analysis)
+# Default: false (uses system local time with timezone name)
+temporal_context_use_utc = false
+
+# Include current working directory for explicit workspace context
+# Overhead: ~10 tokens | Default: true
+include_working_directory = true
+
+# Note: Dynamic tool guidelines (e.g., "READ-ONLY MODE", tool preferences) are generated
+# automatically based on available tools and capability level - no configuration needed.
+
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
 provider = "openai"
 

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use crate::config::types::CapabilityLevel;
 
 /// Context information for prompt generation
 #[derive(Debug, Clone, Default)]
@@ -15,6 +16,10 @@ pub struct PromptContext {
     pub available_skills: Vec<(String, String)>,
     /// User preferences
     pub user_preferences: Option<UserPreferences>,
+    /// Capability level (inferred from tools or explicitly set)
+    pub capability_level: Option<CapabilityLevel>,
+    /// Current working directory (different from workspace root)
+    pub current_directory: Option<PathBuf>,
 }
 
 /// User preferences for prompt customization
@@ -68,5 +73,22 @@ impl PromptContext {
         for (name, description) in skills {
             self.add_skill(name, description);
         }
+    }
+
+    /// Set capability level explicitly
+    pub fn set_capability_level(&mut self, level: CapabilityLevel) {
+        self.capability_level = Some(level);
+    }
+
+    /// Infer capability level from available tools
+    pub fn infer_capability_level(&mut self) {
+        self.capability_level = Some(crate::prompts::guidelines::infer_capability_level(
+            &self.available_tools,
+        ));
+    }
+
+    /// Set current working directory
+    pub fn set_current_directory(&mut self, dir: PathBuf) {
+        self.current_directory = Some(dir);
     }
 }

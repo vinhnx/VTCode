@@ -167,6 +167,19 @@ pub struct AgentConfig {
     /// it will be retried up to this many times with exponential backoff
     #[serde(default = "default_max_task_retries")]
     pub max_task_retries: u32,
+
+    /// Include current date/time in system prompt for temporal awareness
+    /// Helps LLM understand context for time-sensitive tasks (default: true)
+    #[serde(default = "default_include_temporal_context")]
+    pub include_temporal_context: bool,
+
+    /// Use UTC instead of local time for temporal context (default: false)
+    #[serde(default)]
+    pub temporal_context_use_utc: bool,
+
+    /// Include current working directory in system prompt (default: true)
+    #[serde(default = "default_include_working_directory")]
+    pub include_working_directory: bool,
 }
 
 impl Default for AgentConfig {
@@ -203,6 +216,9 @@ impl Default for AgentConfig {
             checkpointing: AgentCheckpointingConfig::default(),
             vibe_coding: AgentVibeCodingConfig::default(),
             max_task_retries: default_max_task_retries(),
+            include_temporal_context: default_include_temporal_context(),
+            temporal_context_use_utc: false, // Default to local time
+            include_working_directory: default_include_working_directory(),
         }
     }
 }
@@ -337,6 +353,16 @@ const fn default_instruction_max_bytes() -> usize {
 #[inline]
 const fn default_max_task_retries() -> u32 {
     2 // Retry twice on transient failures
+}
+
+#[inline]
+const fn default_include_temporal_context() -> bool {
+    true // Enable by default - minimal overhead (~20 tokens)
+}
+
+#[inline]
+const fn default_include_working_directory() -> bool {
+    true // Enable by default - minimal overhead (~10 tokens)
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

@@ -893,14 +893,17 @@ impl FileOpsTool {
         let path_str = args
             .get("path")
             .or_else(|| args.get("file_path"))
+            .or_else(|| args.get("filepath"))
+            .or_else(|| args.get("target_path"))
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
                 let received = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
                 anyhow!(
-                    "Error: Invalid 'read_file' arguments. Missing required 'path' parameter.\n\
+                    "Error: Invalid 'read_file' arguments. Missing required path parameter.\n\
                     Received: {}\n\
-                    Expected: {{\"path\": \"/path/to/file\"}}\n\
-                    Optional params: offset, limit, mode, indentation",
+                    Expected: {{\"path\": \"file/path\"}} or {{\"file_path\": \"file/path\"}}\n\
+                    Accepted path parameters: path, file_path, filepath, target_path\n\
+                    Optional params: offset_lines, limit, max_bytes, max_tokens",
                     received
                 )
             })?;

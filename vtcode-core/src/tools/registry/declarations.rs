@@ -93,6 +93,34 @@ fn insert_bool_property(
     properties.insert(key.to_string(), value);
 }
 
+fn insert_integer_property(
+    properties: &mut Map<String, Value>,
+    key: &str,
+    description: &str,
+) {
+    insert_integer_property_with_default(properties, key, description, None);
+}
+
+fn insert_integer_property_with_default(
+    properties: &mut Map<String, Value>,
+    key: &str,
+    description: &str,
+    default: Option<i32>,
+) {
+    let mut value = json!({
+        "type": "integer",
+        "description": description,
+    });
+
+    if let Some(default_value) = default
+        && let Value::Object(ref mut obj) = value
+    {
+        obj.insert("default".to_string(), json!(default_value));
+    }
+
+    properties.insert(key.to_string(), value);
+}
+
 fn required_pairs(left: &[&str], right: &[&str]) -> Vec<Value> {
     let mut entries = Vec::with_capacity(left.len() * right.len());
     for lhs in left {
@@ -156,6 +184,13 @@ fn new_str_keys() -> &'static [&'static str] {
     static NEW_KEYS: OnceLock<Vec<&'static str>> = OnceLock::new();
     NEW_KEYS
         .get_or_init(|| build_alias_keys("new_str", NEW_STR_ALIASES))
+        .as_slice()
+}
+
+fn read_file_requirements() -> &'static [Value] {
+    static REQUIREMENTS: OnceLock<Vec<Value>> = OnceLock::new();
+    REQUIREMENTS
+        .get_or_init(|| required_single(path_keys()))
         .as_slice()
 }
 
@@ -339,19 +374,27 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         FunctionDeclaration {
             name: tools::READ_FILE.to_string(),
             description: "Read file contents. Returns content/status/message JSON. Supports chunked reads. Don't retry if status='success'.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "File path."},
-                    "offset_lines": {"type": "integer", "description": "Start line (1-based)."},
-                    "limit": {"type": "integer", "description": "Lines to read."},
-                    "max_bytes": {"type": "integer", "description": "Max bytes."},
-                    "chunk_lines": {"type": "integer", "description": "Chunk threshold.", "default": 2000},
-                    "max_lines": {"type": "integer", "description": "Deprecated."},
-                    "max_tokens": {"type": "integer", "description": "Token budget."}
-                },
-                "required": ["path"]
-            }),
+            parameters: {
+                let mut properties = Map::new();
+                insert_string_with_aliases(
+                    &mut properties,
+                    "path",
+                    "Workspace-relative or absolute path to the file to read",
+                    PATH_ALIAS_WITH_TARGET,
+                );
+                insert_integer_property(&mut properties, "offset_lines", "Start line number (1-based)");
+                insert_integer_property(&mut properties, "limit", "Maximum number of lines to read");
+                insert_integer_property(&mut properties, "max_bytes", "Maximum bytes to read");
+                insert_integer_property_with_default(&mut properties, "chunk_lines", "Line threshold for chunking", Some(2000));
+                insert_integer_property(&mut properties, "max_lines", "Deprecated - use limit instead");
+                insert_integer_property(&mut properties, "max_tokens", "Approximate token budget for response");
+
+                json!({
+                    "type": "object",
+                    "properties": properties,
+                    "anyOf": read_file_requirements()
+                })
+            },
         },
 
         // NOTE: create_file removed - use write_file with mode=fail_if_exists

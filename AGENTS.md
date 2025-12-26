@@ -101,6 +101,19 @@ Understanding these patterns requires reading multiple files across the codebase
 -   **ACP** (Agent Client Protocol): `vtcode-acp-client/` - Zed IDE integration
 -   **MCP** (Model Context Protocol): `vtcode-core/src/mcp/` - Extensible tooling via `rmcp`
 
+## Communication Style
+
+### Response Guidelines
+
+-   **No emoji**: Never use emojis in responses. Keep output professional and text-based.
+-   **Minimize exclamation points**: Use them sparingly; let the content speak for itself.
+-   **Be concise**: Answer directly without unnecessary preamble, elaboration, or summaries.
+-   **Avoid flattery**: Don't call ideas "good," "great," "interesting," or other positive adjectives. Respond directly to the request.
+-   **Focus on the task**: Only address the user's specific query. Skip tangential information unless critical.
+-   **One-to-three sentences**: Aim for brevity whenever possible. One-word answers are preferred for simple questions.
+-   **No long introductions**: Get to the point immediately.
+-   **Clean markdown**: Format responses with GitHub-flavored Markdown where appropriate.
+
 ## Code Style & Conventions
 
 ### Critical Standards from .github/copilot-instructions.md

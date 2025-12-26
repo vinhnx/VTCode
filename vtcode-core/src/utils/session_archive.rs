@@ -630,7 +630,7 @@ mod tests {
             "dark",
             "medium",
         );
-        let archive = SessionArchive::new(metadata.clone()).await?;
+        let archive = SessionArchive::new(metadata.clone(), None).await?;
         let transcript = vec!["line one".to_owned(), "line two".to_owned()];
         let messages = vec![
             SessionMessage::new(MessageRole::User, "Hello world"),
@@ -702,7 +702,7 @@ mod tests {
             "dark",
             "medium",
         );
-        let archive = SessionArchive::new(metadata).await?;
+        let archive = SessionArchive::new(metadata, None).await?;
         let recent = vec![SessionMessage::new(MessageRole::Assistant, "recent")];
         let usage = TokenUsageStats {
             total_tokens: 10,
@@ -746,7 +746,7 @@ mod tests {
             "dark",
             "medium",
         );
-        let archive = SessionArchive::new(metadata.clone()).await?;
+        let archive = SessionArchive::new(metadata.clone(), None).await?;
         let messages = vec![
             SessionMessage::new(MessageRole::User, "Hi"),
             SessionMessage::new(MessageRole::Assistant, "Hello"),
@@ -787,10 +787,10 @@ mod tests {
             .with_nanosecond(123_456_000)
             .unwrap();
 
-        let first_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at);
+        let first_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
         fs::write(&first_path, "{}").context("failed to create sentinel file")?;
 
-        let second_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at);
+        let second_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
 
         assert_ne!(first_path, second_path);
         let second_name = second_path
@@ -820,7 +820,7 @@ mod tests {
             .with_nanosecond(654_321_000)
             .expect("nanosecond set");
 
-        let path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at);
+        let path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
         let name = path
             .file_name()
             .and_then(|value| value.to_str())
@@ -846,7 +846,7 @@ mod tests {
             "light",
             "medium",
         );
-        let first_archive = SessionArchive::new(first_metadata.clone()).await?;
+        let first_archive = SessionArchive::new(first_metadata.clone(), None).await?;
         first_archive.finalize(
             vec!["first".to_owned()],
             1,
@@ -864,7 +864,7 @@ mod tests {
             "dark",
             "high",
         );
-        let second_archive = SessionArchive::new(second_metadata.clone()).await?;
+        let second_archive = SessionArchive::new(second_metadata.clone(), None).await?;
         second_archive.finalize(
             vec!["second".to_owned()],
             2,

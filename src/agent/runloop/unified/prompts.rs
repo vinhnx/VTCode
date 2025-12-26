@@ -1,11 +1,35 @@
 use std::path::Path;
+use vtcode_core::config::loader::ConfigManager;
+use vtcode_core::prompts::system::compose_system_instruction_text;
+use vtcode_core::prompts::PromptContext;
 
 pub(crate) async fn read_system_prompt(workspace: &Path, session_addendum: Option<&str>) -> String {
-    let content = vtcode_core::prompts::generate_system_instruction(&Default::default()).await;
-    let mut prompt = if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
-        text.to_string()
-    } else {
-        r#"# VT Code - Rust Coding Assistant
+    // Build PromptContext with available information (workspace and current directory)
+    // Tool information will be added when tools are initialized
+    let mut prompt_context = PromptContext::default();
+    prompt_context.workspace = Some(workspace.to_path_buf());
+
+    // Set current working directory
+    if let Ok(cwd) = std::env::current_dir() {
+        prompt_context.set_current_directory(cwd);
+    }
+
+    // Load configuration
+    let vt_cfg = ConfigManager::load_from_workspace(workspace)
+        .ok()
+        .map(|manager| manager.config().clone());
+
+    // Use the new compose_system_instruction_text with enhancements
+    let mut prompt = compose_system_instruction_text(
+        workspace,
+        vt_cfg.as_ref(),
+        Some(&prompt_context),
+    )
+    .await;
+
+    // Fallback prompt if composition fails (should rarely happen)
+    if prompt.is_empty() {
+        prompt = r#"# VT Code - Rust Coding Assistant
 
 Use tools immediately. Stop when done or blocked.
 
@@ -28,18 +52,11 @@ Use tools immediately. Stop when done or blocked.
 ## Rust
 - Idiomatic code with proper ownership/borrowing
 - Use cargo, rustfmt, clippy. Handle errors with Result/anyhow."#
-            .to_string()
-    };
-
-    if let Some(overview) = vtcode_core::utils::common::build_project_overview(workspace).await {
-        prompt.push_str("\n\n## PROJECT OVERVIEW\n");
-        prompt.push_str(&overview.as_prompt_block());
+                .to_string();
     }
 
-    if let Some(guidelines) = vtcode_core::prompts::system::read_agent_guidelines(workspace).await {
-        prompt.push_str("\n\n## AGENTS.MD GUIDELINES\n");
-        prompt.push_str(&guidelines);
-    }
+    // Note: PROJECT OVERVIEW and AGENTS.MD are now handled by compose_system_instruction_text
+    // The old code duplicated AGENTS.MD loading - removed to avoid duplication
 
     if let Some(addendum) = session_addendum {
         let trimmed = addendum.trim();
