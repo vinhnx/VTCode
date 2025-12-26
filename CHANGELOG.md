@@ -3,6 +3,35 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.53.2] - 2025-12-26
+
+
+### Features
+    - feat: Update default agent configuration to HuggingFace and refine tool schemas and prompt generation logic.
+    - feat: Introduce dynamic system prompt enhancements including temporal context and working directory awareness, along with refined tool usage guidelines for improved agent performance.
+    - feat: Enhance textual tool call parsing, pre-validate arguments, and refine tool failure detection to improve agent robustness.
+    - feat: Enhance session resume/fork logic and improve conversation history display during session startup.
+    - feat: add session resumption functionality and update related actions
+    - feat: implement session forking with custom session ID support
+    - feat: enhance documentation and prompts for clarity, consistency, and performance improvements
+    - feat: optimize ANSI syntax highlighting in diff renderer for improved performance
+
+
+### Refactors
+    - refactor: update reasoning labels for clarity in justification and session headers
+    - refactor: streamline toolset by merging agent diagnostics and removing deprecated tools
+    - refactor: simplify error handling in dotenv loading
+
+
+### Documentation
+    - docs: update changelog for v0.53.1 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.53.1 [skip ci]
+    - chore: release v0.53.1
+    - chore: remove completed tasks from TODO.md and improve memory usage for large conversations
+    - chore: update npm package.json to v0.53.0 [skip ci]
 # [Version 0.53.1] - 2025-12-26
 
 
