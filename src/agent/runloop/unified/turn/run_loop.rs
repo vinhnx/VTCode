@@ -2848,8 +2848,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         // 1. They all have the same signature (empty args)
                                         // 2. The model needs guidance, not a loop detection abort
                                         let error_str = format!("{:?}", error);
-                                        let is_missing_params_error = error_str.contains("Missing required")
-                                            || error_str.contains("Invalid") && error_str.contains("arguments");
+                                        let is_missing_params_error = error_str
+                                            .contains("Missing required")
+                                            || error_str.contains("Invalid")
+                                                && error_str.contains("arguments");
 
                                         if !is_missing_params_error {
                                             // Only increment failure counter for non-param-validation errors

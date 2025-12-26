@@ -537,7 +537,10 @@ mod tests {
 
         // Lightweight is optimized for simple operations (v4.2)
         assert!(result.len() > 100, "Lightweight should be >100 chars");
-        assert!(result.len() < 2000, "Lightweight should be compact (<2K chars)");
+        assert!(
+            result.len() < 2000,
+            "Lightweight should be compact (<2K chars)"
+        );
     }
 
     #[tokio::test]
@@ -617,12 +620,8 @@ mod tests {
         ctx.add_tool("grep_file".to_string());
         ctx.capability_level = Some(CapabilityLevel::FileReading);
 
-        let result = compose_system_instruction_text(
-            &PathBuf::from("."),
-            Some(&config),
-            Some(&ctx),
-        )
-        .await;
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
             result.contains("READ-ONLY MODE"),
@@ -643,12 +642,8 @@ mod tests {
         ctx.add_tool("grep_file".to_string());
         ctx.add_tool("list_files".to_string());
 
-        let result = compose_system_instruction_text(
-            &PathBuf::from("."),
-            Some(&config),
-            Some(&ctx),
-        )
-        .await;
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
             result.contains("grep_file") || result.contains("list_files"),
@@ -662,12 +657,8 @@ mod tests {
         config.agent.include_temporal_context = true;
         config.agent.temporal_context_use_utc = false; // Local time
 
-        let result = compose_system_instruction_text(
-            &PathBuf::from("."),
-            Some(&config),
-            None,
-        )
-        .await;
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
             result.contains("Current date and time:"),
@@ -690,12 +681,8 @@ mod tests {
         config.agent.include_temporal_context = true;
         config.agent.temporal_context_use_utc = true; // UTC format
 
-        let result = compose_system_instruction_text(
-            &PathBuf::from("."),
-            Some(&config),
-            None,
-        )
-        .await;
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
             result.contains("UTC"),
@@ -712,12 +699,8 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.agent.include_temporal_context = false;
 
-        let result = compose_system_instruction_text(
-            &PathBuf::from("."),
-            Some(&config),
-            None,
-        )
-        .await;
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
             !result.contains("Current date and time"),
@@ -733,12 +716,8 @@ mod tests {
         let mut ctx = PromptContext::default();
         ctx.set_current_directory(PathBuf::from("/tmp/test"));
 
-        let result = compose_system_instruction_text(
-            &PathBuf::from("."),
-            Some(&config),
-            Some(&ctx),
-        )
-        .await;
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
             result.contains("Current working directory"),
@@ -767,12 +746,8 @@ mod tests {
         let mut ctx = PromptContext::default();
         ctx.set_current_directory(PathBuf::from("/tmp/test"));
 
-        let result = compose_system_instruction_text(
-            &PathBuf::from("."),
-            Some(&config),
-            Some(&ctx),
-        )
-        .await;
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
             !result.contains("Current working directory"),
@@ -818,12 +793,8 @@ mod tests {
         ctx.infer_capability_level();
         ctx.set_current_directory(PathBuf::from("/workspace"));
 
-        let result = compose_system_instruction_text(
-            &PathBuf::from("."),
-            Some(&config),
-            Some(&ctx),
-        )
-        .await;
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         // Verify all enhancements present
         assert!(
@@ -838,10 +809,7 @@ mod tests {
             result.contains("Current working directory"),
             "Should have working directory"
         );
-        assert!(
-            result.contains("/workspace"),
-            "Should show workspace path"
-        );
+        assert!(result.contains("/workspace"), "Should show workspace path");
 
         // Verify specific guideline for this tool set
         assert!(

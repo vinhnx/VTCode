@@ -297,10 +297,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                         }
                         uni::MessageContent::Parts(parts) => {
-                            renderer.line(
-                                style,
-                                &format!("    [content parts: {}]", parts.len()),
-                            )?;
+                            renderer
+                                .line(style, &format!("    [content parts: {}]", parts.len()))?;
                         }
                     }
 

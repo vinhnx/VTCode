@@ -50,7 +50,10 @@ mod tests {
             context.contains("Current date and time (UTC):"),
             "Should include UTC label"
         );
-        assert!(context.contains("T"), "Should use RFC3339 format with T separator");
+        assert!(
+            context.contains("T"),
+            "Should use RFC3339 format with T separator"
+        );
         assert!(context.contains("Z"), "Should include Z timezone indicator");
     }
 
@@ -81,7 +84,10 @@ mod tests {
         assert!(!utc.is_empty(), "UTC context should not be empty");
         assert!(!local.is_empty(), "Local context should not be empty");
         assert!(utc.len() > 30, "UTC context should have reasonable length");
-        assert!(local.len() > 40, "Local context should have reasonable length");
+        assert!(
+            local.len() > 40,
+            "Local context should have reasonable length"
+        );
     }
 
     #[test]

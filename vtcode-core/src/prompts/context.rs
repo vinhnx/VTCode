@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use crate::config::types::CapabilityLevel;
+use std::path::PathBuf;
 
 /// Context information for prompt generation
 #[derive(Debug, Clone, Default)]

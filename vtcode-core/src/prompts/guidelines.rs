@@ -111,7 +111,10 @@ pub fn generate_tool_guidelines(
         return String::new();
     }
 
-    format!("\n\n## TOOL USAGE GUIDELINES\n\n{}", guidelines.join("\n\n"))
+    format!(
+        "\n\n## TOOL USAGE GUIDELINES\n\n{}",
+        guidelines.join("\n\n")
+    )
 }
 
 /// Infer capability level from available tools
@@ -368,10 +371,7 @@ mod tests {
     #[test]
     fn test_capability_inference_precedence() {
         // Code search should take precedence over editing
-        let tools = vec![
-            "edit_file".to_string(),
-            "code_intelligence".to_string(),
-        ];
+        let tools = vec!["edit_file".to_string(), "code_intelligence".to_string()];
         assert_eq!(
             infer_capability_level(&tools),
             CapabilityLevel::CodeSearch,
