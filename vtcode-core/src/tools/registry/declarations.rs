@@ -93,11 +93,7 @@ fn insert_bool_property(
     properties.insert(key.to_string(), value);
 }
 
-fn insert_integer_property(
-    properties: &mut Map<String, Value>,
-    key: &str,
-    description: &str,
-) {
+fn insert_integer_property(properties: &mut Map<String, Value>, key: &str, description: &str) {
     insert_integer_property_with_default(properties, key, description, None);
 }
 

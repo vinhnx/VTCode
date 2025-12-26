@@ -15,12 +15,12 @@ use crate::agent::runloop::unified::ui_interaction::{
 };
 #[cfg(debug_assertions)]
 use tracing::debug;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::llm::TokenCounter;
-use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::result_cache::ToolResultCache;
@@ -307,7 +307,8 @@ pub(crate) fn process_llm_response(
         if let Some(missing_params) = validate_required_tool_args(&name, &args) {
             // Show warning about missing parameters but don't add the tool call.
             // This allows the model to continue naturally instead of failing execution.
-            let tool_display = crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name);
+            let tool_display =
+                crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name);
             let missing_list = missing_params.join(", ");
             renderer.line(
                 MessageStyle::Info,
@@ -321,7 +322,10 @@ pub(crate) fn process_llm_response(
             let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
             let code_blocks = crate::agent::runloop::text_tools::extract_code_fence_blocks(&text);
             if !code_blocks.is_empty() {
-                crate::agent::runloop::tool_output::render_code_fence_blocks(renderer, &code_blocks)?;
+                crate::agent::runloop::tool_output::render_code_fence_blocks(
+                    renderer,
+                    &code_blocks,
+                )?;
                 renderer.line(MessageStyle::Output, "")?;
             }
             let (headline, _) =

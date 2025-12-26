@@ -1,7 +1,7 @@
 use std::path::Path;
 use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::prompts::system::compose_system_instruction_text;
 use vtcode_core::prompts::PromptContext;
+use vtcode_core::prompts::system::compose_system_instruction_text;
 
 pub(crate) async fn read_system_prompt(workspace: &Path, session_addendum: Option<&str>) -> String {
     // Build PromptContext with available information (workspace and current directory)
@@ -20,12 +20,8 @@ pub(crate) async fn read_system_prompt(workspace: &Path, session_addendum: Optio
         .map(|manager| manager.config().clone());
 
     // Use the new compose_system_instruction_text with enhancements
-    let mut prompt = compose_system_instruction_text(
-        workspace,
-        vt_cfg.as_ref(),
-        Some(&prompt_context),
-    )
-    .await;
+    let mut prompt =
+        compose_system_instruction_text(workspace, vt_cfg.as_ref(), Some(&prompt_context)).await;
 
     // Fallback prompt if composition fails (should rarely happen)
     if prompt.is_empty() {
@@ -52,7 +48,7 @@ Use tools immediately. Stop when done or blocked.
 ## Rust
 - Idiomatic code with proper ownership/borrowing
 - Use cargo, rustfmt, clippy. Handle errors with Result/anyhow."#
-                .to_string();
+            .to_string();
     }
 
     // Note: PROJECT OVERVIEW and AGENTS.MD are now handled by compose_system_instruction_text

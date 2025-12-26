@@ -102,11 +102,7 @@ impl ThemePalette {
             lighten(primary, 0.15), // Lighter than secondary for softer appearance
             background,
             MIN_CONTRAST,
-            &[
-                lighten(text_color, 0.1),
-                text_color,
-                fallback_light,
-            ],
+            &[lighten(text_color, 0.1), text_color, fallback_light],
         );
         // Reasoning style: Italic only (no bold) for thinking/reasoning output
         let reasoning_style = Self::style_from(reasoning_color, false).effects(Effects::ITALIC);

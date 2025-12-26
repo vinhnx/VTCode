@@ -790,7 +790,8 @@ mod tests {
         let first_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
         fs::write(&first_path, "{}").context("failed to create sentinel file")?;
 
-        let second_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
+        let second_path =
+            generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
 
         assert_ne!(first_path, second_path);
         let second_name = second_path

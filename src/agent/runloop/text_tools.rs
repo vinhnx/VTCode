@@ -1675,7 +1675,10 @@ mode: overwrite
         assert!(result.is_some(), "Should parse JSON after tool name");
         let (name, args) = result.unwrap();
         assert_eq!(name, "read_file");
-        assert_eq!(args.get("path").and_then(|v| v.as_str()), Some("/tmp/test.txt"));
+        assert_eq!(
+            args.get("path").and_then(|v| v.as_str()),
+            Some("/tmp/test.txt")
+        );
     }
 
     #[test]
@@ -1683,16 +1686,23 @@ mode: overwrite
         // When JSON appears after tool name with space
         let message = r#"<tool_call>read_file {"path": "/tmp/test.txt"}</tool_call>"#;
         let result = parse_tagged_tool_call(message);
-        assert!(result.is_some(), "Should parse JSON with space after tool name");
+        assert!(
+            result.is_some(),
+            "Should parse JSON with space after tool name"
+        );
         let (name, args) = result.unwrap();
         assert_eq!(name, "read_file");
-        assert_eq!(args.get("path").and_then(|v| v.as_str()), Some("/tmp/test.txt"));
+        assert_eq!(
+            args.get("path").and_then(|v| v.as_str()),
+            Some("/tmp/test.txt")
+        );
     }
 
     #[test]
     fn test_parse_tagged_tool_call_handles_nested_json() {
         // Nested JSON should be parsed correctly
-        let message = r#"<tool_call>run_pty_cmd{"command": "echo", "env": {"PATH": "/usr/bin"}}</tool_call>"#;
+        let message =
+            r#"<tool_call>run_pty_cmd{"command": "echo", "env": {"PATH": "/usr/bin"}}</tool_call>"#;
         let result = parse_tagged_tool_call(message);
         assert!(result.is_some(), "Should parse nested JSON");
         let (name, args) = result.unwrap();

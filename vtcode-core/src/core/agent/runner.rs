@@ -1219,8 +1219,7 @@ impl AgentRunner {
             Err(err) => {
                 warn!("Failed to load vtcode configuration for system prompt composition: {err:#}");
                 let cfg = VTCodeConfig::default();
-                let prompt =
-                    compose_system_instruction_text(workspace.as_path(), None, None).await;
+                let prompt = compose_system_instruction_text(workspace.as_path(), None, None).await;
                 (cfg, prompt)
             }
         };
