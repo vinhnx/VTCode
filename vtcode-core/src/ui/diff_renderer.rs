@@ -220,6 +220,7 @@ pub struct DiffRenderer {
     show_line_numbers: bool,
     context_lines: usize,
     use_colors: bool,
+    #[allow(dead_code)]
     pub(crate) palette: GitDiffPalette,
     // Pre-rendered ANSI codes for performance (cached)
     cached_styles: CachedStyles,
@@ -338,7 +339,7 @@ impl DiffRenderer {
 
         // Bullet: "▸" (3 bytes UTF-8)
         output.push_str(&self.cached_styles.bullet);
-        output.push_str("▸");
+        output.push('▸');
         output.push_str(&self.cached_styles.reset);
         output.push(' ');
 
@@ -422,6 +423,7 @@ impl DiffRenderer {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn paint(&self, style: &Style, text: &str) -> String {
         if self.use_colors {
             // CRITICAL: Apply style and reset without including newlines in the styled block

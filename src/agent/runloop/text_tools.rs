@@ -708,25 +708,23 @@ fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
                         _ => {}
                     }
                 }
-                if let Some(end) = json_end {
-                    if let Ok(parsed) = serde_json::from_str::<Value>(&json_content[..end]) {
-                        if let Some(obj) = parsed.as_object() {
-                            for (k, v) in obj {
-                                object.insert(k.clone(), v.clone());
-                            }
-                        }
+                if let Some(end) = json_end
+                    && let Ok(parsed) = serde_json::from_str::<Value>(&json_content[..end])
+                    && let Some(obj) = parsed.as_object()
+                {
+                    for (k, v) in obj {
+                        object.insert(k.clone(), v.clone());
                     }
                 }
             }
 
             // If JSON parsing didn't work, try key=value or key:value pairs
-            if object.is_empty() {
-                if let Some(parsed) = parse_key_value_arguments(content) {
-                    if let Some(obj) = parsed.as_object() {
-                        for (k, v) in obj {
-                            object.insert(k.clone(), v.clone());
-                        }
-                    }
+            if object.is_empty()
+                && let Some(parsed) = parse_key_value_arguments(content)
+                && let Some(obj) = parsed.as_object()
+            {
+                for (k, v) in obj {
+                    object.insert(k.clone(), v.clone());
                 }
             }
         }

@@ -566,7 +566,12 @@ impl ToolRegistry {
                     "available_tools_count": available_tools.len(),
                     "available_tools": available_tools,
                 })),
-                "full" | _ => Ok(json!({
+                "full" => Ok(json!({
+                    "tools_registered": available_tools.clone(),
+                    "workspace_root": workspace_root,
+                    "available_tools_count": available_tools.len(),
+                })),
+                _ => Ok(json!({
                     "tools_registered": available_tools.clone(),
                     "workspace_root": workspace_root,
                     "available_tools_count": available_tools.len(),

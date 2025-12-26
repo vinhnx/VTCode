@@ -570,17 +570,25 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                         "type": "array",
                         "description": "Plan steps with status. Required: 3-7 steps for quality. Include specific file paths with line numbers (e.g., 'Update validate_plan in plan.rs:395-417'). Order by dependencies. One in_progress at a time.",
                         "items": {
-                            "type": "object",
-                            "properties": {
-                                "step": {"type": "string", "description": "Step description with file path and line numbers"},
-                                "status": {
+                            "anyOf": [
+                                {
                                     "type": "string",
-                                    "enum": ["pending", "in_progress", "completed"],
-                                    "description": "Step status"
+                                    "description": "Simple step description"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "step": {"type": "string", "description": "Step description with file path and line numbers"},
+                                        "status": {
+                                            "type": "string",
+                                            "enum": ["pending", "in_progress", "completed"],
+                                            "description": "Step status (defaults to 'pending' if not specified)"
+                                        }
+                                    },
+                                    "required": ["step"],
+                                    "additionalProperties": false
                                 }
-                            },
-                            "required": ["step", "status"],
-                            "additionalProperties": false
+                            ]
                         }
                     }
                 },
