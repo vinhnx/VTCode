@@ -158,11 +158,7 @@ impl StartupContext {
         } else if let Some(value) = args.resume_session.as_ref() {
             if value == "__interactive__" {
                 // --resume with interactive mode
-                if custom_session_id.is_some() {
-                    Some(SessionResumeMode::Interactive) // Will fork after selection
-                } else {
-                    Some(SessionResumeMode::Interactive)
-                }
+                Some(SessionResumeMode::Interactive)
             } else {
                 // --resume with specific ID
                 if custom_session_id.is_some() {

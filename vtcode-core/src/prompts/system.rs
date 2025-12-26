@@ -329,26 +329,24 @@ pub async fn compose_system_instruction_text(
     }
 
     // ENHANCEMENT 2: Temporal context (metadata - goes at end)
-    if let Some(cfg) = vtcode_config {
-        if cfg.agent.include_temporal_context {
-            let temporal = generate_temporal_context(cfg.agent.temporal_context_use_utc);
-            instruction.push_str(&temporal);
-        }
+    if let Some(cfg) = vtcode_config
+        && cfg.agent.include_temporal_context
+    {
+        let temporal = generate_temporal_context(cfg.agent.temporal_context_use_utc);
+        instruction.push_str(&temporal);
     }
 
     // ENHANCEMENT 3: Working directory context (metadata - goes at end)
-    if let Some(cfg) = vtcode_config {
-        if cfg.agent.include_working_directory {
-            if let Some(ctx) = prompt_context {
-                if let Some(cwd) = &ctx.current_directory {
-                    let _ = write!(
-                        instruction,
-                        "\n\nCurrent working directory: {}",
-                        cwd.display()
-                    );
-                }
-            }
-        }
+    if let Some(cfg) = vtcode_config
+        && cfg.agent.include_working_directory
+        && let Some(ctx) = prompt_context
+        && let Some(cwd) = &ctx.current_directory
+    {
+        let _ = write!(
+            instruction,
+            "\n\nCurrent working directory: {}",
+            cwd.display()
+        );
     }
 
     instruction

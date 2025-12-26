@@ -152,7 +152,7 @@ impl Session {
             }
             let mut style = self.header_secondary_style();
             style = style.add_modifier(Modifier::ITALIC | Modifier::DIM);
-            spans.push(Span::styled(format!("{}", reasoning), style));
+            spans.push(Span::styled(reasoning.to_string(), style));
         }
 
         if spans.is_empty() {

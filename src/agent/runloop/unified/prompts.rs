@@ -6,8 +6,10 @@ use vtcode_core::prompts::system::compose_system_instruction_text;
 pub(crate) async fn read_system_prompt(workspace: &Path, session_addendum: Option<&str>) -> String {
     // Build PromptContext with available information (workspace and current directory)
     // Tool information will be added when tools are initialized
-    let mut prompt_context = PromptContext::default();
-    prompt_context.workspace = Some(workspace.to_path_buf());
+    let mut prompt_context = PromptContext {
+        workspace: Some(workspace.to_path_buf()),
+        ..Default::default()
+    };
 
     // Set current working directory
     if let Ok(cwd) = std::env::current_dir() {

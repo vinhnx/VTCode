@@ -83,10 +83,10 @@ impl FileOpsTool {
 
         // Try to get result from cache first for directories
         let cache_key = format!("dir_list:{}:hidden={}", input.path, input.include_hidden);
-        if base.is_dir() {
-            if let Some(cached_result) = FILE_CACHE.get_directory(&cache_key).await {
-                return Ok(cached_result);
-            }
+        if base.is_dir()
+            && let Some(cached_result) = FILE_CACHE.get_directory(&cache_key).await
+        {
+            return Ok(cached_result);
         }
 
         // Pre-allocate with reasonable estimate for directory entries
