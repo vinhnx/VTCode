@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "zai-org/GLM-4.7:novita"
+default_model = "gpt-oss:120b-cloud"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"
@@ -46,7 +46,7 @@ max_conversation_turns = 80
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 # For Gemini 3 Pro: Use "low" for fast responses, "high" for maximum reasoning depth, "medium" defaults to high (not yet generally available)
-reasoning_effort = "high"
+reasoning_effort = "medium"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -95,6 +95,9 @@ instruction_max_bytes = 16384
 instruction_files = []
 verbosity = "low"
 max_task_retries = 2
+include_temporal_context = true
+temporal_context_use_utc = false
+include_working_directory = true
 
 # Ripgrep dependency management - Auto-install ripgrep on startup for faster file search
 [agent.ripgrep]
@@ -599,7 +602,14 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
