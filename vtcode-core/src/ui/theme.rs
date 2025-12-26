@@ -97,16 +97,18 @@ impl ThemePalette {
                 fallback_light,
             ],
         );
+        // Reasoning color: Use dimmed primary accent for subtle, distinguishable appearance
         let reasoning_color = ensure_contrast(
-            lighten(secondary, ui::THEME_REASONING_COLOR_LIGHTEN_RATIO),
+            lighten(primary, 0.15), // Lighter than secondary for softer appearance
             background,
             MIN_CONTRAST,
             &[
-                lighten(secondary, ui::THEME_RESPONSE_COLOR_LIGHTEN_RATIO),
+                lighten(text_color, 0.1),
                 text_color,
                 fallback_light,
             ],
         );
+        // Reasoning style: Italic only (no bold) for thinking/reasoning output
         let reasoning_style = Self::style_from(reasoning_color, false).effects(Effects::ITALIC);
         // Make user messages more distinct using secondary accent color
         let user_color = ensure_contrast(

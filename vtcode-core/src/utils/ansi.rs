@@ -443,9 +443,21 @@ impl AnsiRenderer {
             let mut prepared: Vec<Vec<InlineSegment>> = Vec::new();
             let mut plain_lines: Vec<String> = Vec::new();
 
-            for line in lines {
+            for (line_idx, line) in lines.iter().enumerate() {
                 let (converted, plain) = sink.convert_plain_lines(line, &fallback);
-                for (mut segments, mut plain_line) in converted.into_iter().zip(plain.into_iter()) {
+                for (segment_idx, (mut segments, mut plain_line)) in converted.into_iter().zip(plain.into_iter()).enumerate() {
+                    // Add "Thinking:" prefix to the very first line only
+                    if *previous_line_count == 0 && line_idx == 0 && segment_idx == 0 && !plain_line.trim().is_empty() {
+                        segments.insert(
+                            0,
+                            InlineSegment {
+                                text: "Thinking: ".to_owned(),
+                                style: Arc::clone(&fallback_arc),
+                            },
+                        );
+                        plain_line.insert_str(0, "Thinking: ");
+                    }
+
                     if !indent.is_empty() && !plain_line.is_empty() {
                         segments.insert(
                             0,
@@ -489,8 +501,14 @@ impl AnsiRenderer {
         }
 
         if *previous_line_count == 0 {
-            for line in lines {
-                self.line(style, line)?;
+            for (idx, line) in lines.iter().enumerate() {
+                if idx == 0 && !line.trim().is_empty() {
+                    // Prepend "Thinking:" to first line
+                    let prefixed = format!("Thinking: {}", line);
+                    self.line(style, &prefixed)?;
+                } else {
+                    self.line(style, line)?;
+                }
             }
         } else if let Some(last) = lines.last() {
             self.line(style, last)?;
