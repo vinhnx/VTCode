@@ -84,4 +84,9 @@ impl PtySessionManager {
     pub fn active_sessions(&self) -> usize {
         self.active_sessions.load(Ordering::SeqCst)
     }
+
+    pub fn terminate_all(&self) {
+        self.manager.terminate_all_sessions();
+        self.active_sessions.store(0, Ordering::SeqCst);
+    }
 }

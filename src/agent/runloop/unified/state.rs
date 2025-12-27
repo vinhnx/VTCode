@@ -41,11 +41,21 @@ impl CtrlCState {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs();
+            .as_millis() as u64;
         let last = self.last_signal_time.swap(now, Ordering::SeqCst);
 
-        let window_secs = DOUBLE_CTRL_C_WINDOW.as_secs();
-        let is_within_window = last > 0 && now.saturating_sub(last) <= window_secs;
+        // Debounce: ignore signals within 200ms of each other
+        if last > 0 && now.saturating_sub(last) < 200 {
+            if self.exit_requested.load(Ordering::SeqCst) {
+                return CtrlCSignal::Exit;
+            }
+            if self.cancel_requested.load(Ordering::SeqCst) {
+                return CtrlCSignal::Cancel;
+            }
+        }
+
+        let window_ms = DOUBLE_CTRL_C_WINDOW.as_millis() as u64;
+        let is_within_window = last > 0 && now.saturating_sub(last) <= window_ms;
 
         if (self.cancel_requested.load(Ordering::SeqCst) || self.exit_armed.load(Ordering::SeqCst))
             && is_within_window

@@ -32,6 +32,7 @@ pub(crate) struct InputStatusState {
     pub(crate) context_utilization: Option<f64>,
     pub(crate) context_tokens: Option<usize>,
     pub(crate) semantic_value_per_token: Option<f64>,
+    pub(crate) is_cancelling: bool,
 }
 
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
@@ -141,6 +142,7 @@ pub(crate) async fn update_input_status_if_changed(
                 trimmed_reasoning,
                 state.context_utilization,
                 state.context_tokens,
+                state.is_cancelling,
             );
             (state.git_left.clone(), right)
         }
@@ -194,6 +196,7 @@ pub(crate) async fn update_input_status_if_changed(
                         trimmed_reasoning,
                         state.context_utilization,
                         state.context_tokens,
+                        state.is_cancelling,
                     );
                     (state.git_left.clone(), right)
                 }
@@ -204,6 +207,7 @@ pub(crate) async fn update_input_status_if_changed(
                     trimmed_reasoning,
                     state.context_utilization,
                     state.context_tokens,
+                    state.is_cancelling,
                 );
                 (state.git_left.clone(), right)
             }
@@ -242,12 +246,15 @@ pub(crate) fn build_model_status_with_context(
     reasoning: &str,
     context_utilization: Option<f64>,
     total_tokens: Option<usize>,
+    is_cancelling: bool,
 ) -> Option<String> {
-    if model.is_empty() {
-        return None;
+    let mut parts = Vec::new();
+
+    if is_cancelling {
+        parts.push("⚠ CANCELLING...".to_string());
     }
 
-    let mut parts = vec![model.to_string()];
+    parts.push(model.to_string());
 
     if let Some(tokens) = total_tokens {
         let formatted = if tokens >= 1_000_000 {
