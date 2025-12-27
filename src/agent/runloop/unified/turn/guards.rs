@@ -118,6 +118,12 @@ pub(crate) async fn run_proactive_guards(
         }
     }
 
+    // Final safety check: ensure we didn't exit the loop (e.g. max checks) while still in a dangerous state
+    let final_check = ctx.context_manager.pre_request_check(ctx.working_history);
+    if matches!(final_check, PreRequestAction::Block) {
+        anyhow::bail!("Context budget critical/overflow after trimming attempts. Conversation unsafe to proceed.");
+    }
+
     Ok(())
 }
 
