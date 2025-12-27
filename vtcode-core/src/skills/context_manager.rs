@@ -585,17 +585,8 @@ mod tests {
             description: "Test skill".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
-            license: None,
-            model: None,
-            mode: None,
             vtcode_native: Some(true),
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
 
         assert!(manager.register_skill_metadata(manifest).is_ok());
@@ -610,19 +601,7 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test skill".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
 
         manager.register_skill_metadata(manifest.clone()).unwrap();
