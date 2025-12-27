@@ -3,6 +3,45 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.54.1] - 2025-12-27
+
+
+### Features
+    - feat: Introduce `EnhancedSkillLoader` and `EnhancedSkill` for unified skill and tool management, and refactor skill discovery results across the agent and CLI.
+    - feat: add support for loading skill `references/` and `assets/` directories and introduce `ResourceType::Asset`
+    - feat: Reimplement skill management with a new skill model and dedicated modules.
+    - feat: Refine tool policies and skill loading for lazy-loaded capabilities, updating system prompts to reflect on-demand activation.
+    - feat: Implement lazy-loading and tiered disclosure for agent skills and tools, reducing default available tools and updating system prompts.
+    - feat: Introduce skill varieties and enhance skill listing/loading with filtering and dormant tool support
+    - feat: Implement `Tool` trait for `CliToolBridge` and integrate skill-based tool registration with `ToolRegistry`.
+    - feat: Add new Ollama cloud models and update reasoning model detection.
+    - feat: Implement on-demand skill loading with `LoadSkillTool` and `LoadSkillResourceTool`, and enable skill restoration from previous sessions.
+    - feat: Add `ListSkillsTool` for programmatic skill discovery, replacing direct skill prompt integration.
+    - feat: Add `LoadSkillTool` for progressive skill instruction loading, enhance skill context with path storage, and integrate skill discovery into agent setup.
+    - feat: introduce context summarization with adaptive trimming integration and new `Summarize` retention choice.
+    - feat: calculate context usage from history and add a final pre-request safety check after trimming.
+    - feat: Add `mcp::fetch` and `mcp::time` tools, simplify LSP client message handling, and remove outdated agent system analysis from TODO documentation.
+    - feat: Implement PTY session termination on Ctrl+C cancellation with debounced signal handling and status line feedback.
+    - feat: Implement timed double Ctrl+C for agent exit, deferring shutdown, and update the default model.
+    - feat: Add `--skip-release` option and enhance GitHub release verification logic with CI environment detection.
+    - feat: Implement LSP client and manager with agent slash commands, and add LLM provider caching tests.
+
+
+### Refactors
+    - refactor: Introduce a dedicated interaction loop for centralized user input and turn flow, updating session and context management.
+    - refactor: consistently use `adaptive_trim` with `pruning_ledger` across all proactive token budget guards.
+    - refactor: Restructure agent turn execution with new guard, context, and tool outcome modules, removing old loop detection, and updating LSP tools.
+
+
+### Documentation
+    - docs: Streamline TODO by removing verbose system skill enumeration and adding a focused task.
+    - docs: update changelog for v0.54.0 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.54.0 [skip ci]
+    - chore: release v0.54.0
+    - chore: update npm package.json to v0.53.2 [skip ci]
 # [Version 0.54.0] - 2025-12-27
 
 
