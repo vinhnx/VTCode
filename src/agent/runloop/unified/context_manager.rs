@@ -20,7 +20,7 @@ use vtcode_core::core::{
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::tree_sitter::TreeSitterAnalyzer;
 
-/// Action to take before making an LLM request based on proactive token budget analysis
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreRequestAction {
     /// Normal operation, proceed with request
@@ -31,6 +31,16 @@ pub enum PreRequestAction {
     TrimAggressive,
     /// Create checkpoint and potentially reset context (at CHECKPOINT threshold)
     Checkpoint,
+    /// Context overflow, unsafe to proceed
+    Block,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BudgetStatus {
+    Safe,
+    Warning(f64),
+    Critical(f64),
+    Overflow { estimated: usize, limit: usize },
 }
 
 pub(crate) struct ContextManager {
@@ -125,53 +135,62 @@ impl ContextManager {
         history_tokens + MODEL_RESPONSE_OVERHEAD
     }
 
+    /// Detailed check of budget status
+    pub(crate) fn check_budget_violation(&self, history: &[uni::Message]) -> BudgetStatus {
+        if !self.token_budget_enabled {
+            return BudgetStatus::Safe;
+        }
+
+        let estimated = self.estimate_request_tokens(history);
+        let max_tokens = self.trim_config.max_tokens;
+
+        if max_tokens == 0 {
+            return BudgetStatus::Safe;
+        }
+
+        if estimated > max_tokens {
+            return BudgetStatus::Overflow {
+                estimated,
+                limit: max_tokens,
+            };
+        }
+
+        let ratio = estimated as f64 / max_tokens as f64;
+        use vtcode_core::core::token_constants::{THRESHOLD_ALERT, THRESHOLD_WARNING};
+
+        if ratio >= THRESHOLD_ALERT {
+            BudgetStatus::Critical(ratio)
+        } else if ratio >= THRESHOLD_WARNING {
+            BudgetStatus::Warning(ratio)
+        } else {
+            BudgetStatus::Safe
+        }
+    }
+
     /// Check if the estimated token usage would exceed a given threshold
     /// Returns true if preemptive action (trimming) is recommended
     #[allow(dead_code)]
     pub(crate) fn will_exceed_threshold(&self, history: &[uni::Message], threshold: f64) -> bool {
-        if !self.token_budget_enabled {
-            return false;
+        match self.check_budget_violation(history) {
+            BudgetStatus::Safe => false,
+            BudgetStatus::Warning(r) | BudgetStatus::Critical(r) => r >= threshold,
+            BudgetStatus::Overflow { .. } => true,
         }
-
-        let estimated_tokens = self.estimate_request_tokens(history);
-        let max_tokens = self.trim_config.max_tokens;
-
-        if max_tokens == 0 {
-            return false;
-        }
-
-        let estimated_ratio = estimated_tokens as f64 / max_tokens as f64;
-        estimated_ratio >= threshold
     }
 
     /// Pre-request check that returns recommended action before making an LLM request.
     /// This enables proactive trimming BEFORE tokens are consumed rather than reacting afterwards.
     pub(crate) fn pre_request_check(&self, history: &[uni::Message]) -> PreRequestAction {
-        use vtcode_core::core::token_constants::{
-            THRESHOLD_ALERT, THRESHOLD_CHECKPOINT, THRESHOLD_WARNING,
-        };
 
         if !self.token_budget_enabled {
             return PreRequestAction::Proceed;
         }
 
-        let estimated_tokens = self.estimate_request_tokens(history);
-        let max_tokens = self.trim_config.max_tokens;
-
-        if max_tokens == 0 {
-            return PreRequestAction::Proceed;
-        }
-
-        let estimated_ratio = estimated_tokens as f64 / max_tokens as f64;
-
-        if estimated_ratio >= THRESHOLD_CHECKPOINT {
-            PreRequestAction::Checkpoint
-        } else if estimated_ratio >= THRESHOLD_ALERT {
-            PreRequestAction::TrimAggressive
-        } else if estimated_ratio >= THRESHOLD_WARNING {
-            PreRequestAction::TrimLight
-        } else {
-            PreRequestAction::Proceed
+        match self.check_budget_violation(history) {
+            BudgetStatus::Safe => PreRequestAction::Proceed,
+            BudgetStatus::Warning(_) => PreRequestAction::TrimLight,
+            BudgetStatus::Critical(_) => PreRequestAction::TrimAggressive,
+            BudgetStatus::Overflow { .. } => PreRequestAction::Block,
         }
     }
 
