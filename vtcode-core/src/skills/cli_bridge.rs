@@ -19,7 +19,10 @@
 //! - Standard installation paths (/usr/local/bin, ~/.local/bin, etc.)
 
 use crate::skills::types::{Skill, SkillManifest, SkillResource};
+use crate::tools::traits::Tool;
+use crate::tool_policy::ToolPolicy;
 use anyhow::{Context, Result, anyhow};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -232,7 +235,7 @@ impl CliToolBridge {
     }
 
     /// Execute the CLI tool with given arguments
-    pub async fn execute(&self, args: Value) -> Result<CliToolResult> {
+    pub async fn execute_internal(&self, args: Value) -> Result<CliToolResult> {
         info!(
             "Executing CLI tool: {} with args: {:?}",
             self.config.name, args
@@ -419,7 +422,33 @@ impl CliToolBridge {
             );
         }
 
-        Ok(skill)
+    Ok(skill)
+    }
+}
+
+#[async_trait]
+impl Tool for CliToolBridge {
+    fn name(&self) -> &'static str {
+        // We need a 'static str, so we leak the name.
+        // Since tools are discovered once and kept, this is acceptable.
+        Box::leak(self.config.name.clone().into_boxed_str())
+    }
+
+    fn description(&self) -> &'static str {
+        Box::leak(self.config.description.clone().into_boxed_str())
+    }
+
+    fn parameter_schema(&self) -> Option<Value> {
+        self.schema.clone()
+    }
+
+    fn default_permission(&self) -> ToolPolicy {
+        ToolPolicy::Prompt
+    }
+
+    async fn execute(&self, args: Value) -> Result<Value> {
+        let result = self.execute_internal(args).await?;
+        Ok(serde_json::to_value(result)?)
     }
 }
 
