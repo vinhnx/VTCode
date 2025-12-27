@@ -108,14 +108,7 @@ pub(crate) async fn handle_tool_failure(
         command_success: false,
         has_more: false,
     });
-    handle_pipeline_output(
-        &mut *ctx,
-        details.name,
-        details.args_val,
-        &outcome,
-        vt_cfg,
-    )
-    .await?;
+    handle_pipeline_output(&mut *ctx, details.name, details.args_val, &outcome, vt_cfg).await?;
 
     let error_content = serde_json::to_string(&error_json).unwrap_or_else(|_| "{}".to_string());
 

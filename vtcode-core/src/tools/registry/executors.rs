@@ -5,7 +5,6 @@ use crate::tools::editing::PatchLine;
 use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::Tool;
 use crate::tools::types::VTCodePtySession;
-use crate::tools::{PlanUpdateResult, UpdatePlanArgs};
 
 use crate::utils::diff::{DiffOptions, compute_diff};
 use crate::utils::serde_helpers::deserialize_opt_maybe_quoted;
@@ -520,32 +519,6 @@ impl ToolRegistry {
             }
 
             Ok(error_report)
-        })
-    }
-
-    pub(super) fn debug_agent_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
-        tracing::warn!("debug_agent is deprecated, use agent_info with mode=debug");
-        Box::pin(async move {
-            // Lightweight snapshot of registry state for diagnostics; this will not include full session context.
-            let tools = self.available_tools().await;
-            let workspace_root = self.workspace_root_str();
-            let stats = json!({
-                "tools_registered": tools,
-                "workspace_root": workspace_root,
-            });
-            Ok(stats)
-        })
-    }
-
-    pub(super) fn analyze_agent_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
-        tracing::warn!("analyze_agent is deprecated, use agent_info with mode=analyze");
-        Box::pin(async move {
-            // Aggregate some simple analysis metrics for the agent's behavior
-            let available_tools = self.available_tools().await;
-            Ok(json!({
-                "available_tools_count": available_tools.len(),
-                "available_tools": available_tools,
-            }))
         })
     }
 
@@ -1085,28 +1058,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(super) fn update_plan_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let manager = self.inventory.plan_manager();
-        Box::pin(async move {
-            let parsed: UpdatePlanArgs = serde_json::from_value(args.clone()).map_err(|error| {
-                anyhow!(
-                    "Error: Invalid 'update_plan' arguments. Provide an object like {{\"plan\": [\"step one\", {{\"step\": \"step two\", \"status\": \"in_progress\"}}], \"explanation\": \"optional focus\", \"phase\": \"understanding|design|review|final_plan\"}}. Deserialization failed: {}",
-                    error
-                )
-            })?;
 
-            if parsed.plan.is_empty() {
-                return Err(anyhow!(
-                    "Error: 'plan' must include at least one step. Example: {{\"plan\": [\"draft outline\", {{\"step\": \"implement fix\", \"status\": \"in_progress\"}}]}}"
-                ));
-            }
-            let updated_plan = manager
-                .update_plan(parsed)
-                .context("failed to update plan state")?;
-            let payload = PlanUpdateResult::success(updated_plan);
-            serde_json::to_value(payload).context("failed to serialize plan update result")
-        })
-    }
 
     pub(super) fn search_tools_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let mcp_client = self.mcp_client.clone();
@@ -1152,15 +1104,15 @@ impl ToolRegistry {
             let codex_home = home.join(".vtcode");
             let manager = SkillsManager::new(codex_home);
             let outcome = manager.skills_for_cwd(&workspace_root);
-            
+
             let query_lower = parsed.keyword.to_lowercase();
             // Filter skills
             for skill in outcome.skills {
                 let name_matches = skill.name.to_lowercase().contains(&query_lower);
                 let desc_matches = skill.description.to_lowercase().contains(&query_lower);
-                
+
                 if name_matches || desc_matches {
-                     all_results.push(crate::mcp::ToolDiscoveryResult {
+                    all_results.push(crate::mcp::ToolDiscoveryResult {
                         name: skill.name.clone(),
                         provider: "skill".to_string(),
                         description: skill.description.clone(),
@@ -1227,31 +1179,37 @@ impl ToolRegistry {
 
             if let Some(skill_meta) = outcome.skills.iter().find(|s| s.name == parsed.name) {
                 // Check if it's a traditional skill (SKILL.md)
-                if skill_meta.path.ends_with("SKILL.md") || skill_meta.path.file_name().and_then(|n| n.to_str()) == Some("SKILL.md") {
+                if skill_meta.path.ends_with("SKILL.md")
+                    || skill_meta.path.file_name().and_then(|n| n.to_str()) == Some("SKILL.md")
+                {
                     // Load the full skill
                     // We need to parse the manifest and instructions manually or rely on injection logic
                     // But injection uses just content. Here we want structure.
                     // We can reuse manifest::parse_skill_file
                     match crate::skills::manifest::parse_skill_file(&skill_meta.path) {
                         Ok((manifest, instructions)) => {
-                             let mut resources = json!({});
-                             if let Ok(loaded_resources) = crate::skills::load_skill_resources(&skill_meta.path) {
+                            let mut resources = json!({});
+                            if let Ok(loaded_resources) =
+                                crate::skills::load_skill_resources(&skill_meta.path)
+                            {
                                 for res in loaded_resources {
-                                    if let Some(path_str) = serde_json::to_value(res.path.clone()).ok().and_then(|v| v.as_str().map(|s| s.to_string())) {
+                                    if let Some(path_str) = serde_json::to_value(res.path.clone())
+                                        .ok()
+                                        .and_then(|v| v.as_str().map(|s| s.to_string()))
+                                    {
                                         resources[path_str] = json!({
                                             "type": format!("{:?}", res.resource_type),
                                             "path": res.path,
                                         });
                                     }
                                 }
-                             }
-                             
-                             let output = format!(
+                            }
+
+                            let output = format!(
                                 "=== Skill Loaded: {} ===\n\n{}\n\n(Resources listing not fully supported in new loader yet)\n",
-                                manifest.name,
-                                instructions
+                                manifest.name, instructions
                             );
-                            
+
                             Ok(json!({
                                 "success": true,
                                 "name": manifest.name,
@@ -1268,17 +1226,17 @@ impl ToolRegistry {
                         Err(e) => Ok(json!({
                             "success": false,
                             "error": format!("Failed to parse skill '{}': {}", parsed.name, e),
-                        }))
+                        })),
                     }
                 } else {
-                     Ok(json!({
+                    Ok(json!({
                         "success": false,
                         "error": format!("Skill '{}' is a CLI tool or system skill not supported for direct viewing", parsed.name),
                         "message": "CLI tool skills must be executed through the tool system."
                     }))
                 }
             } else {
-                 Ok(json!({
+                Ok(json!({
                     "success": false,
                     "error": format!("Skill '{}' not found", parsed.name),
                     "hint": "Use search_tools to discover available skills"
@@ -2108,10 +2066,13 @@ impl ToolRegistry {
                 // Apply byte fuse as secondary safeguard
                 if capture.output.len() > DEFAULT_PTY_OUTPUT_BYTE_FUSE {
                     // Truncate to byte limit with marker
-                    if let Some(truncate_point) = capture.output.char_indices()
+                    if let Some(truncate_point) = capture
+                        .output
+                        .char_indices()
                         .rev()
                         .find(|(byte_idx, _)| *byte_idx < DEFAULT_PTY_OUTPUT_BYTE_FUSE)
-                        .map(|(idx, _)| idx + 1) {
+                        .map(|(idx, _)| idx + 1)
+                    {
                         capture.output.truncate(truncate_point);
                         capture.output.push_str("\n[Output truncated]");
                     }
@@ -2696,7 +2657,8 @@ impl ToolRegistry {
                     if output.len() > max_tokens * 4 {
                         format!(
                             "{}\n[... truncated by max_tokens: {} ...]",
-                            &output[..max_tokens * 4.min(output.len())], max_tokens
+                            &output[..max_tokens * 4.min(output.len())],
+                            max_tokens
                         )
                     } else {
                         output
@@ -3932,7 +3894,8 @@ fn build_ephemeral_pty_response(
 4. Try without the -l (login) flag if using an interactive shell wrapper \
 Only retry if you have a substantively different approach, not just changing shell flags."
                     .to_string(),
-        ));
+            ),
+        );
 
         // Comprehensive explanation of the error and potential solutions
         obj.insert(
@@ -3963,7 +3926,7 @@ non-interactive flags like -c."
                     .to_string(),
             ),
         );
-        
+
         // Remove overly restrictive retry prevention flags to allow intelligent retry logic
         // The agent_instruction field now provides guidance instead of absolute prohibition
         obj.remove("do_not_retry");
@@ -4273,22 +4236,22 @@ fn contains_shell_metacharacters(command: &str) -> bool {
     // Shell metacharacters that have special meaning in shell syntax
     // Includes: pipes, redirects, conditionals, globbing, expansions, etc.
     let shell_metachars = [
-        '|', '>', '<', ';', '&', '(', ')', '$', '`', '\n',  // Original set
-        '[', ']', '{', '}', '~', '#', '=',                  // Added: globbing, expansions, comments
-        '*', '?',                                            // Added: wildcards
+        '|', '>', '<', ';', '&', '(', ')', '$', '`', '\n', // Original set
+        '[', ']', '{', '}', '~', '#', '=', // Added: globbing, expansions, comments
+        '*', '?', // Added: wildcards
     ];
-    
+
     // Check for unquoted shell metacharacters
     let mut in_single_quotes = false;
     let mut in_double_quotes = false;
     let mut escaped = false;
-    
+
     for ch in command.chars() {
         if escaped {
             escaped = false;
             continue;
         }
-        
+
         match ch {
             '\\' if !in_single_quotes => {
                 escaped = true;
@@ -4307,7 +4270,7 @@ fn contains_shell_metacharacters(command: &str) -> bool {
             _ => {}
         }
     }
-    
+
     false
 }
 
@@ -4608,21 +4571,27 @@ mod search_replace_exec_tests {
     fn test_contains_shell_metacharacters_detects_operators() {
         // Basic pipelines and redirects
         assert!(super::contains_shell_metacharacters("ls -R | head -n 200"));
-        assert!(super::contains_shell_metacharacters("echo hello > output.txt"));
-        assert!(super::contains_shell_metacharacters("grep pattern < input.txt"));
+        assert!(super::contains_shell_metacharacters(
+            "echo hello > output.txt"
+        ));
+        assert!(super::contains_shell_metacharacters(
+            "grep pattern < input.txt"
+        ));
         assert!(super::contains_shell_metacharacters("cmd1; cmd2"));
         assert!(super::contains_shell_metacharacters("echo hello &"));
-        
+
         // Command substitution and variables
         assert!(super::contains_shell_metacharacters("echo $(date)"));
         assert!(super::contains_shell_metacharacters("ls `which cargo`"));
         assert!(super::contains_shell_metacharacters("echo $HOME"));
-        
+
         // Newlines and conditionals
         assert!(super::contains_shell_metacharacters("ls\nwc -l"));
-        assert!(super::contains_shell_metacharacters("cargo build && cargo test"));
+        assert!(super::contains_shell_metacharacters(
+            "cargo build && cargo test"
+        ));
         assert!(super::contains_shell_metacharacters("cmd1 || cmd2"));
-        
+
         // Grouping and globbing (newly added)
         assert!(super::contains_shell_metacharacters("(cd dir && ls)"));
         assert!(super::contains_shell_metacharacters("ls *.rs"));
@@ -4637,14 +4606,20 @@ mod search_replace_exec_tests {
     #[test]
     fn test_contains_shell_metacharacters_respects_quoting() {
         // Pipes inside quotes should not trigger detection
-        assert!(!super::contains_shell_metacharacters("echo \"hello | world\""));
-        assert!(!super::contains_shell_metacharacters("echo 'hello | world'"));
-        
+        assert!(!super::contains_shell_metacharacters(
+            "echo \"hello | world\""
+        ));
+        assert!(!super::contains_shell_metacharacters(
+            "echo 'hello | world'"
+        ));
+
         // Backslash escape should not trigger detection
         assert!(!super::contains_shell_metacharacters("echo \\|"));
-        
+
         // But unquoted metacharacters should still be detected
-        assert!(super::contains_shell_metacharacters("echo \"hello\" | wc -l"));
+        assert!(super::contains_shell_metacharacters(
+            "echo \"hello\" | wc -l"
+        ));
     }
 
     #[test]

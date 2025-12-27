@@ -1,4 +1,4 @@
-use crate::skills::loader::{load_skills, SkillLoaderConfig};
+use crate::skills::loader::{SkillLoaderConfig, load_skills};
 use crate::skills::model::SkillLoadOutcome;
 use crate::skills::system::install_system_skills;
 use std::collections::HashMap;
@@ -36,7 +36,7 @@ impl SkillsManager {
         }
 
         let project_root = find_git_root(cwd);
-        
+
         let config = SkillLoaderConfig {
             codex_home: self.codex_home.clone(),
             cwd: cwd.to_path_buf(),
@@ -47,7 +47,7 @@ impl SkillsManager {
 
         let mut cache = self.cache_by_cwd.write().unwrap();
         cache.insert(cwd.to_path_buf(), outcome.clone());
-        
+
         outcome
     }
 

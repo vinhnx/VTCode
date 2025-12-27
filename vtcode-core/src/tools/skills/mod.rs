@@ -2,8 +2,8 @@ use crate::llm::provider::ToolDefinition;
 use crate::skills::file_references::FileReferenceValidator;
 use crate::skills::types::{Skill, SkillVariety};
 use crate::tool_policy::ToolPolicy;
-use crate::tools::traits::Tool;
 use crate::tools::registry::ToolRegistry;
+use crate::tools::traits::Tool;
 use anyhow::Context;
 use async_trait::async_trait;
 use serde_json::Value;
@@ -81,35 +81,36 @@ impl Tool for LoadSkillTool {
         // 1. Activate tool definition if it exists in dormant set
         let mut activation_status = "No associated tools to activate.";
         if let Some(tool_list) = &self.active_tools
-            && let Some(def) = self.dormant_tools.get(name) {
-                let mut active = tool_list.write().await;
-                // Check if already active to avoid duplicates
-                if !active
-                    .iter()
-                    .any(|t| t.function_name() == def.function_name())
-                {
-                    active.push(def.clone());
-                    
-                    // Also register the tool in the ToolRegistry if provided
-                    if let Some(registry_arc) = &self.tool_registry {
-                        let mut adapters = self.dormant_adapters.write().await;
-                        if let Some(adapter) = adapters.remove(name) {
-                            let mut registry = registry_arc.write().await;
-                            let reg = crate::tools::registry::ToolRegistration::from_tool(
-                                Box::leak(name.to_string().into_boxed_str()), 
-                                crate::config::types::CapabilityLevel::Basic,
-                                adapter,
-                            );
-                            let _ = registry.register_tool(reg);
-                        }
-                        activation_status = "Associated tools activated and added to context.";
-                    } else {
-                        activation_status = "Associated tools activated and added to context.";
+            && let Some(def) = self.dormant_tools.get(name)
+        {
+            let mut active = tool_list.write().await;
+            // Check if already active to avoid duplicates
+            if !active
+                .iter()
+                .any(|t| t.function_name() == def.function_name())
+            {
+                active.push(def.clone());
+
+                // Also register the tool in the ToolRegistry if provided
+                if let Some(registry_arc) = &self.tool_registry {
+                    let mut adapters = self.dormant_adapters.write().await;
+                    if let Some(adapter) = adapters.remove(name) {
+                        let mut registry = registry_arc.write().await;
+                        let reg = crate::tools::registry::ToolRegistration::from_tool(
+                            Box::leak(name.to_string().into_boxed_str()),
+                            crate::config::types::CapabilityLevel::Basic,
+                            adapter,
+                        );
+                        let _ = registry.register_tool(reg);
                     }
+                    activation_status = "Associated tools activated and added to context.";
                 } else {
-                    activation_status = "Associated tools were already active.";
+                    activation_status = "Associated tools activated and added to context.";
                 }
+            } else {
+                activation_status = "Associated tools were already active.";
             }
+        }
 
         // 2. Load instructions and discover resources
         let skills = self.skills.read().await;
@@ -152,7 +153,10 @@ impl Tool for LoadSkillTool {
             });
 
             // Add to active skills registry
-            self.active_skills.write().await.insert(name.to_string(), skill.clone());
+            self.active_skills
+                .write()
+                .await
+                .insert(name.to_string(), skill.clone());
 
             Ok(response)
         } else {
@@ -168,10 +172,7 @@ pub struct ListSkillsTool {
 }
 
 impl ListSkillsTool {
-    pub fn new(
-        skills: SkillMap,
-        dormant_tools: HashMap<String, ToolDefinition>,
-    ) -> Self {
+    pub fn new(skills: SkillMap, dormant_tools: HashMap<String, ToolDefinition>) -> Self {
         Self {
             skills,
             dormant_tools,
@@ -212,7 +213,10 @@ impl Tool for ListSkillsTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<Value> {
-        let query = args.get("query").and_then(|v| v.as_str()).map(|s| s.to_lowercase());
+        let query = args
+            .get("query")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_lowercase());
         let variety_filter = args.get("variety").and_then(|v| v.as_str());
 
         let skills = self.skills.read().await;
@@ -221,18 +225,20 @@ impl Tool for ListSkillsTool {
         for skill in skills.values() {
             let name = skill.name();
             let variety_str = format!("{:?}", skill.variety).to_lowercase();
-            
+
             // Apply variety filter
             if let Some(v_filter) = variety_filter
-                && !variety_str.contains(&v_filter.replace("_", "").to_lowercase()) {
-                    continue;
-                }
+                && !variety_str.contains(&v_filter.replace("_", "").to_lowercase())
+            {
+                continue;
+            }
 
             // Apply query filter
             if let Some(q) = &query
-                && !name.to_lowercase().contains(q) {
-                    continue;
-                }
+                && !name.to_lowercase().contains(q)
+            {
+                continue;
+            }
 
             skill_list.push(serde_json::json!({
                 "name": name,
@@ -247,15 +253,18 @@ impl Tool for ListSkillsTool {
             if !skills.contains_key(name) {
                 // Apply variety filter (all dormant are SystemUtility)
                 if let Some(v_filter) = variety_filter
-                    && !v_filter.to_lowercase().contains("system") && !v_filter.to_lowercase().contains("utility") {
-                        continue;
-                    }
+                    && !v_filter.to_lowercase().contains("system")
+                    && !v_filter.to_lowercase().contains("utility")
+                {
+                    continue;
+                }
 
                 // Apply query filter
                 if let Some(q) = &query
-                    && !name.to_lowercase().contains(q) {
-                        continue;
-                    }
+                    && !name.to_lowercase().contains(q)
+                {
+                    continue;
+                }
 
                 skill_list.push(serde_json::json!({
                     "name": name,
@@ -276,7 +285,10 @@ impl Tool for ListSkillsTool {
         // Group by variety for "better" discovery
         let mut grouped = HashMap::new();
         for skill in &skill_list {
-            let variety = skill.get("variety").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let variety = skill
+                .get("variety")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
             grouped
                 .entry(variety.to_string())
                 .or_insert_with(Vec::new)
@@ -290,7 +302,10 @@ impl Tool for ListSkillsTool {
 
         // Add context message for queries
         if query.is_some() || variety_filter.is_some() {
-            response.as_object_mut().unwrap().insert("filter_applied".to_string(), serde_json::json!(true));
+            response
+                .as_object_mut()
+                .unwrap()
+                .insert("filter_applied".to_string(), serde_json::json!(true));
         }
 
         Ok(response)

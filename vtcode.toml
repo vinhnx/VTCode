@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "XiaomiMiMo/MiMo-V2-Flash:novita"
+default_model = "nemotron-3-nano:30b-cloud"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"
@@ -34,7 +34,6 @@ system_prompt_mode = "default"
 
 tool_documentation_mode = "minimal"
 
-# Enable TODO planning helper mode for structured task management
 todo_planning_mode = true
 
 # UI surface to use ("auto", "alternate", "inline")
@@ -158,13 +157,11 @@ guideline_highlight_limit = 3
 usage_tips = [
     "Describe your current coding goal or ask for a quick status overview.",
     "Reference AGENTS.md guidelines when proposing changes.",
-    "Draft or refresh your TODO list with update_plan before coding.",
     "Use the Zed Assistant to interact with VT Code's ACP integration.",
 ]
 
 # List of recommended actions shown during onboarding
 recommended_actions = [
-    "Start the session by outlining a 3–6 step TODO plan via update_plan.",
     "Review the highlighted guidelines and share the task you want to tackle.",
     "Try using slash commands like /logs, /status, and /doctor for diagnostics.",
 ]
@@ -321,7 +318,6 @@ resize_pty_session = "allow"
 run_pty_cmd = "allow"
 run_terminal_cmd = "allow"
 send_pty_input = "allow"
-update_plan = "allow"
 write_file = "allow"
 # Command security configuration
 # Note: Safe command defaults are built into vtcode-core (80+ commands)
@@ -634,7 +630,6 @@ allowed_tools = [
     "read_pty_session",
     "resize_pty_session",
     "close_pty_session",
-    "update_plan",
     "apply_patch",
     "send_pty_input",
 ]

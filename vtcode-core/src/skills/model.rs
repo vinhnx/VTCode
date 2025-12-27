@@ -40,4 +40,3 @@ pub struct SkillLoadOutcome {
     pub skills: Vec<SkillMetadata>,
     pub errors: Vec<SkillErrorInfo>,
 }
-

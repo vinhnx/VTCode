@@ -16,7 +16,7 @@ pub struct SkillInstructions {
 }
 
 /// Builds injections for the specified skills.
-/// 
+///
 /// `skill_names` is a list of skill names that should be loaded (e.g. detected from user input).
 pub async fn build_skill_injections(
     skill_names: &[String],

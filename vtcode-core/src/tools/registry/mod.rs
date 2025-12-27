@@ -62,7 +62,6 @@ use crate::tools::summarizers::{
     file_ops::{EditSummarizer, ReadSummarizer},
     search::{GrepSummarizer, ListSummarizer},
 };
-use crate::tools::{PlanPhase, PlanSummary, TaskPlan};
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -74,7 +73,7 @@ use tracing::{debug, trace, warn};
 // Match agent runner throttle ceiling
 const LOOP_THROTTLE_MAX_MS: u64 = 500;
 
-use super::plan::PlanManager;
+
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
 use crate::ui::search::fuzzy_match;
 use std::collections::VecDeque;
@@ -84,15 +83,7 @@ use std::time::SystemTime;
 /// Callback for tool progress and output streaming
 pub type ToolProgressCallback = Arc<dyn Fn(&str, &str) + Send + Sync>;
 
-// Safe tools allowed during planning phases (read-only or plan-related)
-const PLANNING_ALLOWED_TOOLS: &[&str] = &[
-    tools::UPDATE_PLAN,
-    tools::READ_FILE,
-    tools::LIST_FILES,
-    tools::GREP_FILE,
-    tools::SEARCH_TOOLS,
-    tools::WEB_FETCH,
-];
+
 
 #[cfg(test)]
 use super::traits::Tool;
@@ -104,25 +95,16 @@ use crate::config::types::CapabilityLevel;
 pub struct HarnessContextSnapshot {
     pub session_id: String,
     pub task_id: Option<String>,
-    pub plan_version: u64,
-    pub plan_phase: Option<PlanPhase>,
-    pub plan_summary: PlanSummary,
 }
 
 impl HarnessContextSnapshot {
     pub fn new(
         session_id: String,
         task_id: Option<String>,
-        plan_version: u64,
-        plan_phase: Option<PlanPhase>,
-        plan_summary: PlanSummary,
     ) -> Self {
         Self {
             session_id,
             task_id,
-            plan_version,
-            plan_phase,
-            plan_summary,
         }
     }
 
@@ -131,13 +113,6 @@ impl HarnessContextSnapshot {
         json!({
             "session_id": self.session_id,
             "task_id": self.task_id,
-            "plan_version": self.plan_version,
-            "plan_phase": self.plan_phase.as_ref().map(|p| p.label()),
-            "plan_summary": {
-                "status": self.plan_summary.status.label(),
-                "total_steps": self.plan_summary.total_steps,
-                "completed_steps": self.plan_summary.completed_steps,
-            }
         })
     }
 }
@@ -608,14 +583,8 @@ impl HarnessContext {
         self.task_id = task_id;
     }
 
-    fn snapshot_with_plan(&self, plan: &TaskPlan) -> HarnessContextSnapshot {
-        HarnessContextSnapshot {
-            session_id: self.session_id.clone(),
-            task_id: self.task_id.clone(),
-            plan_version: plan.version,
-            plan_phase: plan.phase.clone(),
-            plan_summary: plan.summary.clone(),
-        }
+    pub fn snapshot(&self) -> HarnessContextSnapshot {
+        HarnessContextSnapshot::new(self.session_id.clone(), self.task_id.clone())
     }
 }
 
@@ -658,23 +627,11 @@ pub enum ToolPermissionDecision {
 
 impl ToolRegistry {
     pub async fn new(workspace_root: PathBuf) -> Self {
-        Self::build(workspace_root, PtyConfig::default(), true).await
+        Self::build(workspace_root, PtyConfig::default()).await
     }
 
     pub async fn new_with_config(workspace_root: PathBuf, pty_config: PtyConfig) -> Self {
-        Self::build(workspace_root, pty_config, true).await
-    }
-
-    pub async fn new_with_features(workspace_root: PathBuf, todo_planning_enabled: bool) -> Self {
-        Self::build(workspace_root, PtyConfig::default(), todo_planning_enabled).await
-    }
-
-    pub async fn new_with_config_and_features(
-        workspace_root: PathBuf,
-        pty_config: PtyConfig,
-        todo_planning_enabled: bool,
-    ) -> Self {
-        Self::build(workspace_root, pty_config, todo_planning_enabled).await
+        Self::build(workspace_root, pty_config).await
     }
 
     pub async fn new_with_custom_policy(
@@ -684,7 +641,6 @@ impl ToolRegistry {
         Self::build_with_policy(
             workspace_root,
             PtyConfig::default(),
-            true,
             Some(policy_manager),
         )
         .await
@@ -693,13 +649,11 @@ impl ToolRegistry {
     pub async fn new_with_custom_policy_and_config(
         workspace_root: PathBuf,
         pty_config: PtyConfig,
-        todo_planning_enabled: bool,
         policy_manager: ToolPolicyManager,
     ) -> Self {
         Self::build_with_policy(
             workspace_root,
             pty_config,
-            todo_planning_enabled,
             Some(policy_manager),
         )
         .await
@@ -708,19 +662,17 @@ impl ToolRegistry {
     async fn build(
         workspace_root: PathBuf,
         pty_config: PtyConfig,
-        todo_planning_enabled: bool,
     ) -> Self {
-        Self::build_with_policy(workspace_root, pty_config, todo_planning_enabled, None).await
+        Self::build_with_policy(workspace_root, pty_config, None).await
     }
 
     async fn build_with_policy(
         workspace_root: PathBuf,
         pty_config: PtyConfig,
-        todo_planning_enabled: bool,
         policy_manager: Option<ToolPolicyManager>,
     ) -> Self {
         let mut inventory = ToolInventory::new(workspace_root.clone());
-        register_builtin_tools(&mut inventory, todo_planning_enabled);
+        register_builtin_tools(&mut inventory);
 
         let pty_sessions = pty::PtySessionManager::new(workspace_root.clone(), pty_config);
 
@@ -1016,13 +968,7 @@ impl ToolRegistry {
         self.pty_sessions.terminate_all();
     }
 
-    pub fn plan_manager(&self) -> PlanManager {
-        self.inventory.plan_manager()
-    }
 
-    pub fn current_plan(&self) -> crate::tools::TaskPlan {
-        self.inventory.plan_manager().snapshot()
-    }
 
     /// Update harness session identifier used for structured tool telemetry
     pub fn set_harness_session(&mut self, session_id: impl Into<String>) {
@@ -1062,10 +1008,9 @@ impl ToolRegistry {
         }
     }
 
-    /// Snapshot harness context including current plan metadata
+    /// Snapshot harness context metadata
     pub fn harness_context_snapshot(&self) -> HarnessContextSnapshot {
-        let plan = self.current_plan();
-        self.harness_context.snapshot_with_plan(&plan)
+        self.harness_context.snapshot()
     }
 
     pub fn policy_manager_mut(&mut self) -> Result<&mut ToolPolicyManager> {
@@ -1452,8 +1397,7 @@ impl ToolRegistry {
             if self.has_mcp_tool(stripped).await {
                 return ToolTimeoutCategory::Mcp;
             }
-        } else if self.find_mcp_provider(name).is_some() || self.has_mcp_tool(name).await
-        {
+        } else if self.find_mcp_provider(name).is_some() || self.has_mcp_tool(name).await {
             return ToolTimeoutCategory::Mcp;
         }
 
@@ -1637,7 +1581,7 @@ impl ToolRegistry {
     pub async fn execute_tool_ref(&mut self, name: &str, args: &Value) -> Result<Value> {
         // Look up the canonical tool name by trying to resolve the alias
         // The inventory's registration_for() handles alias resolution
-        let (tool_name, tool_name_owned, display_name) = 
+        let (tool_name, tool_name_owned, display_name) =
             if let Some(registration) = self.inventory.registration_for(name) {
                 let canonical = registration.name().to_string();
                 let display = if canonical == name {
@@ -1652,7 +1596,7 @@ impl ToolRegistry {
                 let display_name = tool_name_owned.clone();
                 (tool_name_owned.clone(), tool_name_owned, display_name)
             };
-        
+
         let requested_name = name.to_string();
 
         // Clone args once at the start for error recording paths (clone only here)
@@ -1661,22 +1605,7 @@ impl ToolRegistry {
         let context_snapshot = self.harness_context_snapshot();
         let context_payload = context_snapshot.to_json();
 
-        // Enforce read-only planning mode: allow only safe tools during planning phases
-        if matches!(
-            context_snapshot.plan_phase,
-            Some(PlanPhase::Understanding | PlanPhase::Design | PlanPhase::Review)
-        ) && !planning_allowed(&tool_name)
-        {
-            return Err(anyhow!(
-                "Planning mode active (phase: {}). Only planning-allowed tools ({}) are permitted until phase is final_plan.",
-                context_snapshot
-                    .plan_phase
-                    .as_ref()
-                    .map(|p| p.label())
-                    .unwrap_or("planning"),
-                PLANNING_ALLOWED_TOOLS.join(", ")
-            ));
-        }
+
 
         // Validate arguments against schema if available
         if let Some(registration) = self.inventory.registration_for(&tool_name)
@@ -1707,16 +1636,7 @@ impl ToolRegistry {
             tool = %tool_name,
             requested = %name,
             session_id = %context_snapshot.session_id,
-            task_id = %context_snapshot.task_id.as_deref().unwrap_or(""),
-            plan_version = context_snapshot.plan_version,
-            plan_phase = %context_snapshot
-                .plan_phase
-                .as_ref()
-                .map(|p| p.label())
-                .unwrap_or(""),
-            plan_status = %context_snapshot.plan_summary.status.label(),
-            plan_total_steps = context_snapshot.plan_summary.total_steps,
-            plan_completed_steps = context_snapshot.plan_summary.completed_steps
+            task_id = %context_snapshot.task_id.as_deref().unwrap_or("")
         );
         let _span_guard = execution_span.enter();
 
@@ -1724,13 +1644,6 @@ impl ToolRegistry {
             tool = %tool_name,
             session_id = %context_snapshot.session_id,
             task_id = %context_snapshot.task_id.as_deref().unwrap_or(""),
-            plan_version = context_snapshot.plan_version,
-            plan_phase = %context_snapshot
-                .plan_phase
-                .as_ref()
-                .map(|p| p.label())
-                .unwrap_or(""),
-            plan_status = ?context_snapshot.plan_summary.status,
             "Executing tool with harness context"
         );
 
@@ -2201,7 +2114,7 @@ impl ToolRegistry {
                 tool_names.extend(self.inventory.registered_aliases());
                 tool_names.sort_unstable();
                 let available_tool_list = tool_names.join(", ");
-                
+
                 let error_msg = if tool_name != requested_name {
                     // An alias was attempted but didn't resolve to an actual tool
                     format!(
@@ -2212,18 +2125,19 @@ impl ToolRegistry {
                     )
                 } else {
                     // Find similar tools using fuzzy matching
-                    let similar_tools: Vec<String> = tool_names.iter()
+                    let similar_tools: Vec<String> = tool_names
+                        .iter()
                         .filter(|tool| fuzzy_match(&requested_name, tool))
-                        .take(3)  // Limit to 3 suggestions
+                        .take(3) // Limit to 3 suggestions
                         .cloned()
                         .collect();
-                    
+
                     let suggestion = if !similar_tools.is_empty() {
                         format!(" Did you mean: {}?", similar_tools.join(", "))
                     } else {
                         String::new()
                     };
-                    
+
                     format!(
                         "Tool '{}' not found in registry. Available tools: {}.{}",
                         display_name, available_tool_list, suggestion
@@ -2601,9 +2515,7 @@ impl ToolRegistry {
     }
 }
 
-fn planning_allowed(name: &str) -> bool {
-    PLANNING_ALLOWED_TOOLS.contains(&name)
-}
+
 
 impl ToolRegistry {
     /// Prompt for permission before starting long-running tool executions to avoid spinner conflicts
@@ -2763,7 +2675,6 @@ fn normalize_mcp_tool_identifier(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::plan::{PlanCompletionState, PlanStep, StepStatus, UpdatePlanArgs};
     use async_trait::async_trait;
     use serde_json::json;
     use std::time::Duration;
@@ -2825,38 +2736,6 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn harness_snapshot_tracks_session_task_and_plan() -> Result<()> {
-        let temp_dir = TempDir::new()?;
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-
-        registry.set_harness_session("session-test");
-        registry.set_harness_task(Some("task-123".to_owned()));
-
-        let plan_manager = registry.plan_manager();
-        let updated_plan = plan_manager.update_plan(UpdatePlanArgs {
-            explanation: Some("ensure snapshot captures plan state".to_owned()),
-            phase: None,
-            plan: vec![PlanStep {
-                step: "do-a-thing".to_owned(),
-                status: StepStatus::InProgress,
-            }],
-        })?;
-
-        let snapshot = registry.harness_context_snapshot();
-
-        assert_eq!(snapshot.session_id, "session-test");
-        assert_eq!(snapshot.task_id.as_deref(), Some("task-123"));
-        assert_eq!(snapshot.plan_version, updated_plan.version);
-        assert_eq!(snapshot.plan_phase, updated_plan.phase);
-        assert_eq!(snapshot.plan_summary.total_steps, 1);
-        assert_eq!(
-            snapshot.plan_summary.status,
-            PlanCompletionState::InProgress
-        );
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn execution_history_records_harness_context() -> Result<()> {
@@ -2886,12 +2765,6 @@ mod tests {
         assert_eq!(record.context.task_id.as_deref(), Some("task-history"));
         assert_eq!(record.args, args);
         assert!(record.success);
-
-        let current_plan = registry.current_plan();
-        assert_eq!(
-            record.context.plan_summary.total_steps,
-            current_plan.summary.total_steps
-        );
 
         Ok(())
     }

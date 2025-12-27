@@ -344,15 +344,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 break;
             }
 
-            // If we are in full-auto mode and the plan is still in progress,
-            // we should auto-continue by pushing "continue" to queued_inputs.
-            if full_auto {
-                let plan = tool_registry.current_plan();
-                if plan.summary.status == vtcode_core::tools::PlanCompletionState::InProgress {
-                    queued_inputs.push_back("continue".to_string());
-                }
-            }
-
             continue;
         }
 

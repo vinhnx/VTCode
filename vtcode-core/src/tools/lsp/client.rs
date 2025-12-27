@@ -145,9 +145,10 @@ impl LspClient {
                                 break;
                             }
                             if let Some(len_str) = line.strip_prefix("Content-Length: ")
-                                && let Ok(len) = len_str.parse::<usize>() {
-                                    content_length = len;
-                                }
+                                && let Ok(len) = len_str.parse::<usize>()
+                            {
+                                content_length = len;
+                            }
                         }
                         Err(_) => return, // Error
                     }
@@ -156,66 +157,62 @@ impl LspClient {
                 if content_length > 0 {
                     let mut body_buffer = vec![0u8; content_length];
                     if reader.read_exact(&mut body_buffer).await.is_ok()
-                        && let Ok(body_str) = String::from_utf8(body_buffer) {
-                            // Try to parse as generic generic JSON first to determine type
-                            if let Ok(value) = serde_json::from_str::<Value>(&body_str) {
-                                if let Some(id_val) = value.get("id") {
-                                    if value.get("method").is_some() {
-                                        // It's a Request from Server
-                                        // We should reply with MethodNotFound or similar to avoid hanging
-                                        let id = id_val.clone();
-                                        let response = json!({
-                                            "jsonrpc": "2.0",
-                                            "id": id,
-                                            "error": {
-                                                "code": -32601,
-                                                "message": "Method not found (client side)"
-                                            }
-                                        });
-                                        if let Ok(resp_str) = serde_json::to_string(&response) {
-                                            let _ = outbox_tx_clone.send(resp_str).await;
+                        && let Ok(body_str) = String::from_utf8(body_buffer)
+                    {
+                        // Try to parse as generic generic JSON first to determine type
+                        if let Ok(value) = serde_json::from_str::<Value>(&body_str) {
+                            if let Some(id_val) = value.get("id") {
+                                if value.get("method").is_some() {
+                                    // It's a Request from Server
+                                    // We should reply with MethodNotFound or similar to avoid hanging
+                                    let id = id_val.clone();
+                                    let response = json!({
+                                        "jsonrpc": "2.0",
+                                        "id": id,
+                                        "error": {
+                                            "code": -32601,
+                                            "message": "Method not found (client side)"
                                         }
-                                    } else {
-                                        // It's a Response to our request
-                                        if let Some(id) = id_val.as_i64() {
-                                            let mut pending = pending_requests_clone.lock().await;
-                                            if let Some(sender) = pending.remove(&id) {
-                                                let result = if let Some(error) = value.get("error")
-                                                {
-                                                    let code = error
-                                                        .get("code")
-                                                        .and_then(|c| c.as_i64())
-                                                        .unwrap_or(0);
-                                                    let msg = error
-                                                        .get("message")
-                                                        .and_then(|s| s.as_str())
-                                                        .unwrap_or("Unknown error");
-                                                    Err(anyhow::anyhow!(
-                                                        "LSP Error {}: {}",
-                                                        code,
-                                                        msg
-                                                    ))
-                                                } else {
-                                                    Ok(value
-                                                        .get("result")
-                                                        .cloned()
-                                                        .unwrap_or(Value::Null))
-                                                };
-                                                let _ = sender.send(result);
-                                            }
-                                        }
+                                    });
+                                    if let Ok(resp_str) = serde_json::to_string(&response) {
+                                        let _ = outbox_tx_clone.send(resp_str).await;
                                     }
                                 } else {
-                                    // Notification (no id)
-                                    if value.get("method").and_then(|s| s.as_str())
-                                        == Some("window/showMessage")
-                                    {
-                                        // Handle log message?
-                                        // println!("LSP Message: {:?}", value.get("params"));
+                                    // It's a Response to our request
+                                    if let Some(id) = id_val.as_i64() {
+                                        let mut pending = pending_requests_clone.lock().await;
+                                        if let Some(sender) = pending.remove(&id) {
+                                            let result = if let Some(error) = value.get("error") {
+                                                let code = error
+                                                    .get("code")
+                                                    .and_then(|c| c.as_i64())
+                                                    .unwrap_or(0);
+                                                let msg = error
+                                                    .get("message")
+                                                    .and_then(|s| s.as_str())
+                                                    .unwrap_or("Unknown error");
+                                                Err(anyhow::anyhow!("LSP Error {}: {}", code, msg))
+                                            } else {
+                                                Ok(value
+                                                    .get("result")
+                                                    .cloned()
+                                                    .unwrap_or(Value::Null))
+                                            };
+                                            let _ = sender.send(result);
+                                        }
                                     }
+                                }
+                            } else {
+                                // Notification (no id)
+                                if value.get("method").and_then(|s| s.as_str())
+                                    == Some("window/showMessage")
+                                {
+                                    // Handle log message?
+                                    // println!("LSP Message: {:?}", value.get("params"));
                                 }
                             }
                         }
+                    }
                 }
             }
         });

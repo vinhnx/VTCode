@@ -2039,8 +2039,8 @@ impl FileOpsTool {
             .chars()
             .filter(|c| crate::config::constants::context::CODE_INDICATOR_CHARS.contains(*c))
             .count();
-        let is_code =
-            bracket_count > (char_count / crate::config::constants::context::CODE_DETECTION_THRESHOLD);
+        let is_code = bracket_count
+            > (char_count / crate::config::constants::context::CODE_DETECTION_THRESHOLD);
         let head_ratio = if is_code {
             crate::config::constants::context::CODE_HEAD_RATIO_PERCENT
         } else {
@@ -2666,4 +2666,3 @@ mod paging_tests {
         );
     }
 }
-

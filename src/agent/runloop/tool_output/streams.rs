@@ -67,8 +67,10 @@ const DEFAULT_SPOOL_THRESHOLD: usize = 200_000;
 /// Maximum number of lines to display in code fence blocks
 const MAX_CODE_LINES: usize = 500;
 /// Preview window lines used by large-output previewing (kept local)
+#[allow(dead_code)]
 const PREVIEW_HEAD_LINES: usize = 15;
 /// Preview tail lines used by large-output previewing (kept local)
+#[allow(dead_code)]
 const PREVIEW_TAIL_LINES: usize = 15;
 /// Size threshold (bytes) at which to show minimal preview instead of full output
 const LARGE_OUTPUT_THRESHOLD_MB: usize = 1_000_000;
@@ -757,7 +759,6 @@ mod ansi_stripping_tests {
 /// we use balanced allocation (50/50) since logic can be distributed throughout.
 ///
 /// Why token-based is better than line-based:
-
 
 fn describe_code_fence_header(language: Option<&str>) -> String {
     let Some(lang) = language

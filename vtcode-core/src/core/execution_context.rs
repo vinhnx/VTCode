@@ -55,8 +55,6 @@ impl ExecutionContext {
         }
     }
 
-
-
     /// Check if loop detection should block execution
     ///
     /// # Arguments

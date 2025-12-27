@@ -260,10 +260,6 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
             ),
             HashSet::new(),
         ),
-        actual_name if actual_name == tool_names::UPDATE_PLAN => (
-            format!("{}Update task plan", if is_mcp_tool { "MCP " } else { "" }),
-            HashSet::new(),
-        ),
         "fetch" | "web_fetch" => {
             let (desc, used) = describe_fetch_action(args);
             (

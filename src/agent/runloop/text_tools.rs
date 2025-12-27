@@ -136,7 +136,6 @@ fn is_known_textual_tool(name: &str) -> bool {
             | tools::RUN_PTY_CMD
             | tools::GREP_FILE
             | tools::LIST_FILES
-            | tools::UPDATE_PLAN
             | tools::APPLY_PATCH
             | tools::READ_PTY_SESSION
             | tools::SEND_PTY_INPUT

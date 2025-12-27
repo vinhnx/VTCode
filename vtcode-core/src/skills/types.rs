@@ -22,7 +22,6 @@ pub enum SkillVariety {
     BuiltIn,
 }
 
-
 /// Skill manifest metadata from SKILL.md frontmatter
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillManifest {

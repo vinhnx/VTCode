@@ -9,12 +9,12 @@ use super::{SlashCommandContext, SlashCommandControl, SlashCommandOutcome};
 
 pub async fn handle_debug_agent(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     // Prefer tool-driven diagnostics when available
-    if ctx.tool_registry.has_tool(tools_consts::DEBUG_AGENT).await {
+    if ctx.tool_registry.has_tool(tools_consts::AGENT_INFO).await {
         ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::DEBUG_AGENT);
+            .mark_tool_preapproved(tools_consts::AGENT_INFO);
         match ctx
             .tool_registry
-            .execute_tool_ref(tools_consts::DEBUG_AGENT, &serde_json::json!({}))
+            .execute_tool_ref(tools_consts::AGENT_INFO, &serde_json::json!({"mode": "debug"}))
             .await
         {
             Ok(value) => {

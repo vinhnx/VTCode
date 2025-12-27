@@ -58,7 +58,6 @@ Use tools immediately. Stop when done or blocked.
 ## Strategy
 Stuck twice on same error? Change approach.
 
-## Planning (update_plan)
 Non-trivial tasks: exploration → design → final_plan
 - **understanding**: Read 5-10 files, find patterns
 - **design**: 3-7 steps with file:line refs, dependencies, complexity
@@ -124,7 +123,6 @@ scope → plan → execute → verify → document
 - 10+ calls without progress → explain blockers
 - 90%+ context → write .progress.md, prep reset
 
-## Planning (update_plan)
 1. **understanding**: Read 5-10 files, find similar implementations, document file:line refs
 2. **design**: 3-7 steps with paths, dependencies, complexity (simple/medium/complex)
 3. **final_plan**: Verify paths, order, acceptance criteria before implementation

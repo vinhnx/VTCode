@@ -4,7 +4,6 @@ use anstyle::{Color as AnsiColorEnum, Effects, Style as AnsiStyle};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::config::{constants::ui, types::ReasoningEffortLevel};
-use crate::tools::TaskPlan;
 
 #[derive(Clone, Debug)]
 pub struct InlineHeaderContext {
@@ -281,9 +280,6 @@ pub enum InlineCommand {
     SetQueuedInputs {
         entries: Vec<String>,
     },
-    SetPlan {
-        plan: TaskPlan,
-    },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
@@ -436,10 +432,6 @@ impl InlineHandle {
 
     pub fn set_queued_inputs(&self, entries: Vec<String>) {
         let _ = self.sender.send(InlineCommand::SetQueuedInputs { entries });
-    }
-
-    pub fn set_plan(&self, plan: TaskPlan) {
-        let _ = self.sender.send(InlineCommand::SetPlan { plan });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {

@@ -108,10 +108,6 @@ pub(crate) async fn initialize_session(
     full_auto: bool,
     resume: Option<&ResumeSession>,
 ) -> Result<SessionState> {
-    let todo_planning_enabled = vt_cfg
-        .map(|cfg| cfg.agent.todo_planning_mode)
-        .unwrap_or(true);
-
     let tool_documentation_mode = vt_cfg
         .map(|cfg| cfg.agent.tool_documentation_mode)
         .unwrap_or_default();
@@ -186,7 +182,7 @@ pub(crate) async fn initialize_session(
     let mut full_auto_allowlist: Option<Vec<String>> = None;
 
     let base_declarations =
-        build_function_declarations_with_mode(todo_planning_enabled, tool_documentation_mode);
+        build_function_declarations_with_mode(tool_documentation_mode);
     let mut tool_definitions: Vec<uni::ToolDefinition> = base_declarations
         .into_iter()
         .map(|decl| {
@@ -251,7 +247,7 @@ pub(crate) async fn initialize_session(
     let mut discovered_skill_adapters: Vec<vtcode_core::skills::executor::SkillToolAdapter> =
         Vec::new();
     let mut discovered_skills_map = HashMap::new();
-    
+
     // Initialize skill maps early for resume logic
     let library_skills_map = Arc::new(RwLock::new(HashMap::new()));
     let active_skills_map = Arc::new(RwLock::new(HashMap::new()));
@@ -274,9 +270,14 @@ pub(crate) async fn initialize_session(
                     skill_ctx.path().clone(),
                     String::new(), // Placeholder instructions for prompt-only listing
                 ) {
-                    discovered_skills_map
-                        .insert(lightweight_skill.name().to_string(), lightweight_skill.clone());
-                    library_skills_map.write().await.insert(lightweight_skill.name().to_string(), lightweight_skill);
+                    discovered_skills_map.insert(
+                        lightweight_skill.name().to_string(),
+                        lightweight_skill.clone(),
+                    );
+                    library_skills_map
+                        .write()
+                        .await
+                        .insert(lightweight_skill.name().to_string(), lightweight_skill);
                 }
             }
 
@@ -288,7 +289,10 @@ pub(crate) async fn initialize_session(
                             Ok(skill) => {
                                 discovered_skills_map
                                     .insert(skill.name().to_string(), skill.clone());
-                                library_skills_map.write().await.insert(skill.name().to_string(), skill.clone());
+                                library_skills_map
+                                    .write()
+                                    .await
+                                    .insert(skill.name().to_string(), skill.clone());
                                 let adapter =
                                     vtcode_core::skills::executor::SkillToolAdapter::new(skill);
                                 discovered_skill_adapters.push(adapter.clone());
@@ -334,10 +338,10 @@ pub(crate) async fn initialize_session(
                             && !tools_guard
                                 .iter()
                                 .any(|t| t.function_name() == def.function_name())
-                            {
-                                info!("Restoring active skill tool: {}", skill_name);
-                                tools_guard.push(def.clone());
-                            }
+                        {
+                            info!("Restoring active skill tool: {}", skill_name);
+                            tools_guard.push(def.clone());
+                        }
                     }
                 }
             }
@@ -358,7 +362,6 @@ pub(crate) async fn initialize_session(
     )
     .await;
 
-
     // Initialize MCP panel state
     let mcp_panel_state = if let Some(cfg) = vt_cfg {
         mcp_events::McpPanelState::new(cfg.mcp.ui.max_events, cfg.mcp.enabled)
@@ -368,8 +371,7 @@ pub(crate) async fn initialize_session(
 
     let _pty_config = vt_cfg.map(|cfg| cfg.pty.clone()).unwrap_or_default();
 
-    let mut tool_registry =
-        ToolRegistry::new_with_features(config.workspace.clone(), todo_planning_enabled).await;
+    let mut tool_registry = ToolRegistry::new(config.workspace.clone()).await;
     tool_registry.initialize_async().await?;
 
     if let Some(cfg) = vt_cfg {
@@ -465,7 +467,10 @@ pub(crate) async fn initialize_session(
     // 3. LoadSkill
     let mut dormant_adapters_map = HashMap::new();
     for adapter in discovered_skill_adapters {
-        dormant_adapters_map.insert(adapter.name().to_string(), Arc::new(adapter) as Arc<dyn vtcode_core::tools::traits::Tool>);
+        dormant_adapters_map.insert(
+            adapter.name().to_string(),
+            Arc::new(adapter) as Arc<dyn vtcode_core::tools::traits::Tool>,
+        );
     }
     let dormant_adapters = Arc::new(RwLock::new(dormant_adapters_map));
 
@@ -1062,8 +1067,8 @@ pub(crate) fn spawn_signal_handler(
 /// is left in a clean state even if normal finalization doesn't run.
 fn emergency_terminal_cleanup() {
     use ratatui::crossterm::{
-        terminal::{LeaveAlternateScreen, disable_raw_mode},
         execute,
+        terminal::{LeaveAlternateScreen, disable_raw_mode},
     };
     use std::io::{self, Write};
 
@@ -1158,6 +1163,4 @@ mod tests {
     use vtcode_core::utils::session_archive::{
         SessionArchiveMetadata, SessionMessage, SessionProgress, SessionSnapshot,
     };
-
-
 }

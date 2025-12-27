@@ -67,16 +67,16 @@ fn render_skills_full(skills: &[SkillMetadata]) -> String {
     }
 
     for skill in skill_list {
-        let native_flag = skill.manifest.as_ref()
+        let native_flag = skill
+            .manifest
+            .as_ref()
             .and_then(|m| m.vtcode_native)
             .unwrap_or(false);
-            
+
         let _ = writeln!(
             prompt,
             "- {}: {} (native: {})",
-            skill.name,
-            skill.description,
-            native_flag
+            skill.name, skill.description, native_flag
         );
     }
 
@@ -109,12 +109,14 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
     }
 
     for skill in skill_list {
-         let mode_flag = skill.manifest.as_ref()
+        let mode_flag = skill
+            .manifest
+            .as_ref()
             .and_then(|m| m.mode)
             .filter(|&m| m)
             .map(|_| " [mode]")
             .unwrap_or("");
-            
+
         let location = skill
             .path
             .file_name()
@@ -125,17 +127,12 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
             SkillScope::Repo => "repo",
             SkillScope::System => "system",
             SkillScope::Admin => "admin",
-
         };
 
         let _ = writeln!(
             prompt,
             "- {}{}: {} (dir: {}, scope: {})",
-            skill.name,
-            mode_flag,
-            skill.description,
-            location,
-            scope
+            skill.name, mode_flag, skill.description, location, scope
         );
     }
 
@@ -237,8 +234,8 @@ pub fn generate_skills_prompt_with_format(
 
 /// Test helper
 pub fn test_skills_prompt_generation() {
-    use std::path::PathBuf;
     use crate::skills::types::SkillManifest;
+    use std::path::PathBuf;
 
     let mut skills = Vec::new();
 

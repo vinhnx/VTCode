@@ -203,14 +203,9 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     // Code execution (requires confirmation)
     (tools::EXECUTE_CODE, ToolPolicy::Prompt),
     // Planning and meta tools
-    (tools::UPDATE_PLAN, ToolPolicy::Allow),
     (tools::SEARCH_TOOLS, ToolPolicy::Allow),
     (tools::SKILL, ToolPolicy::Allow),
     // Diagnostic and introspection tools
-    // DEBUG_AGENT: Low-level agent state inspection (diagnostic, read-only)
-    (tools::DEBUG_AGENT, ToolPolicy::Allow),
-    // ANALYZE_AGENT: Analyzes agent behavior patterns (diagnostic, read-only)
-    (tools::ANALYZE_AGENT, ToolPolicy::Allow),
     // Web operations (requires confirmation)
     (tools::WEB_FETCH, ToolPolicy::Prompt),
 ];

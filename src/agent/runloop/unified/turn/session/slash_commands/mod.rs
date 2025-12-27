@@ -55,6 +55,7 @@ pub struct SlashCommandContext<'a> {
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
     pub pruning_ledger:
         &'a Arc<RwLock<vtcode_core::core::pruning_decisions::PruningDecisionLedger>>,
+    #[allow(dead_code)]
     pub context_manager: &'a mut ContextManager,
     pub session_stats: &'a mut SessionStats,
     pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,

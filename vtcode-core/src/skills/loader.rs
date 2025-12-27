@@ -1,10 +1,12 @@
 use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig, discover_cli_tools};
+use crate::skills::container_validation::{
+    ContainerSkillsValidator, ContainerValidationReport, ContainerValidationResult,
+};
+use crate::skills::discovery::{DiscoveryResult, SkillDiscovery};
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome, SkillMetadata, SkillScope};
 use crate::skills::system::system_cache_root_dir;
 use crate::skills::types::{Skill, SkillContext, SkillManifest};
-use crate::skills::container_validation::{ContainerSkillsValidator, ContainerValidationReport, ContainerValidationResult};
-use crate::skills::discovery::{SkillDiscovery, DiscoveryResult};
-use anyhow::{Result, Context as _};
+use anyhow::{Context as _, Result};
 use dunce::canonicalize as normalize_path;
 use std::collections::{HashSet, VecDeque};
 use std::fs;
@@ -28,7 +30,7 @@ pub struct SkillRoot {
 pub fn load_skills(config: &SkillLoaderConfig) -> SkillLoadOutcome {
     let mut outcome = SkillLoadOutcome::default();
     let roots = skill_roots(config);
-    
+
     for root in roots {
         discover_skills_under_root(&root, &mut outcome);
     }
@@ -46,7 +48,9 @@ pub fn load_skills(config: &SkillLoaderConfig) -> SkillLoadOutcome {
 
     // Deduplicate by name
     let mut seen: HashSet<String> = HashSet::new();
-    outcome.skills.retain(|skill| seen.insert(skill.name.clone()));
+    outcome
+        .skills
+        .retain(|skill| seen.insert(skill.name.clone()));
 
     // Sort
     outcome.skills.sort_by(|a, b| a.name.cmp(&b.name));
@@ -76,8 +80,8 @@ fn skill_roots(config: &SkillLoaderConfig) -> Vec<SkillRoot> {
             scope: SkillScope::Repo,
             is_tool_root: false,
         });
-        
-         // Tool roots
+
+        // Tool roots
         roots.push(SkillRoot {
             path: project_root.join("tools"),
             scope: SkillScope::Repo,
@@ -144,13 +148,14 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
 
             if path.is_dir() {
                 queue.push_back(path.clone());
-                
+
                 // If this is a tool root or we are in a generic scan, check for tool directory structure
                 // Assuming tool dir has tool.json or executable
                 if root.is_tool_root
-                     && let Ok(Some(tool_meta)) = try_load_tool_from_dir(&path, root.scope) {
-                         outcome.skills.push(tool_meta);
-                     }
+                    && let Ok(Some(tool_meta)) = try_load_tool_from_dir(&path, root.scope)
+                {
+                    outcome.skills.push(tool_meta);
+                }
                 continue;
             }
 
@@ -177,9 +182,9 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
                     }
                 }
             } else if root.is_tool_root && is_executable_file(&path) {
-                 // Standalone executable tool?
-                 // We typically look for directories, but maybe standalone files too.
-                 // For now, let's stick to directory-based tools or tools with README.
+                // Standalone executable tool?
+                // We typically look for directories, but maybe standalone files too.
+                // For now, let's stick to directory-based tools or tools with README.
             }
         }
     }
@@ -189,7 +194,7 @@ fn try_load_tool_from_dir(path: &Path, scope: SkillScope) -> Result<Option<Skill
     // Check if it's a CLI tool directory (has tool.json or is executable inside)
     // Simplified: check for tool.json
     let tool_bridge = if path.join("tool.json").exists() {
-         CliToolBridge::from_directory(path)?
+        CliToolBridge::from_directory(path)?
     } else {
         // Heuristic: check for executable with same name as dir?
         // This is complex to reproduce exactly "discovery.rs" logic without code dupe.
@@ -199,7 +204,7 @@ fn try_load_tool_from_dir(path: &Path, scope: SkillScope) -> Result<Option<Skill
             Err(_) => return Ok(None),
         }
     };
-    
+
     tool_config_to_metadata(&tool_bridge.config, scope).map(Some)
 }
 
@@ -208,7 +213,7 @@ fn tool_config_to_metadata(config: &CliToolConfig, scope: SkillScope) -> Result<
         name: config.name.clone(),
         description: config.description.clone(),
         short_description: None,
-        path: config.executable_path.clone(), // Path to executable is the "path" of the skill? 
+        path: config.executable_path.clone(), // Path to executable is the "path" of the skill?
         // Or path to directory? Reference uses SKILL.md path.
         // Here we use executable path or tool directory.
         scope,
@@ -239,10 +244,9 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
                     Some("json") | Some("yaml") | Some("yml") => {
                         crate::skills::types::ResourceType::Reference
                     }
-                    _ => crate::skills::types::ResourceType::Other(format!(
-                        "{:?}",
-                        path.extension()
-                    )),
+                    _ => {
+                        crate::skills::types::ResourceType::Other(format!("{:?}", path.extension()))
+                    }
                 };
 
                 resources.push(crate::skills::types::SkillResource {
@@ -253,7 +257,7 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
             }
         }
     }
-    
+
     // Check for references/ directory
     let references_dir = skill_path.join("references");
     if references_dir.exists() {
@@ -272,10 +276,9 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
                     Some("json") | Some("yaml") | Some("yml") | Some("txt") | Some("csv") => {
                         crate::skills::types::ResourceType::Reference
                     }
-                    _ => crate::skills::types::ResourceType::Other(format!(
-                        "{:?}",
-                        path.extension()
-                    )),
+                    _ => {
+                        crate::skills::types::ResourceType::Other(format!("{:?}", path.extension()))
+                    }
                 };
 
                 resources.push(crate::skills::types::SkillResource {
@@ -371,7 +374,7 @@ impl EnhancedSkillLoader {
     /// Get a specific skill by name
     pub async fn get_skill(&mut self, name: &str) -> Result<EnhancedSkill> {
         let result = self.discovery.discover_all(&self.workspace_root).await?;
-        
+
         // Try traditional skills first
         for skill_ctx in &result.skills {
             if skill_ctx.manifest().name == name {
@@ -379,8 +382,9 @@ impl EnhancedSkillLoader {
                 let skill_md = path.join("SKILL.md");
                 let content = fs::read_to_string(&skill_md)
                     .context(format!("Failed to read SKILL.md at {}", skill_md.display()))?;
-                
-                let (manifest, instructions) = crate::skills::manifest::parse_skill_content(&content)?;
+
+                let (manifest, instructions) =
+                    crate::skills::manifest::parse_skill_content(&content)?;
                 let skill = Skill::new(manifest, path.clone(), instructions)?;
                 return Ok(EnhancedSkill::Traditional(skill));
             }
@@ -445,7 +449,7 @@ pub fn detect_skill_mentions(user_input: &str, available_skills: &[SkillManifest
 
     for skill in available_skills {
         let skill_name_lower = skill.name.to_lowercase();
-        
+
         // 1. Explicit $skill-name mention (case-insensitive)
         let trigger = format!("${}", skill_name_lower);
         if input_lower.contains(&trigger) {
@@ -454,11 +458,12 @@ pub fn detect_skill_mentions(user_input: &str, available_skills: &[SkillManifest
         }
 
         // 2. Description keyword matching (requires 2+ matches of significant words)
-        let keywords: Vec<&str> = skill.description
+        let keywords: Vec<&str> = skill
+            .description
             .split(|c: char| !c.is_alphanumeric())
             .filter(|s| s.len() > 3)
             .collect();
-            
+
         let mut matches = 0;
         for kw in keywords {
             if input_lower.contains(&kw.to_lowercase()) {

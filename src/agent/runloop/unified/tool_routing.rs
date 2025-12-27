@@ -393,7 +393,10 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         let mut registry_for_persist = tool_registry.clone();
         tokio::spawn(async move {
             if let Ok(manager) = registry_for_persist.policy_manager_mut() {
-                if let Err(err) = manager.set_policy(&tool_name_owned, ToolPolicy::Allow).await {
+                if let Err(err) = manager
+                    .set_policy(&tool_name_owned, ToolPolicy::Allow)
+                    .await
+                {
                     tracing::warn!(
                         "[background] Failed to persist auto-approval for '{}': {}",
                         tool_name_owned,
@@ -580,7 +583,10 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 });
             }
 
-            tracing::info!("✓ Returning ToolPermissionFlow::Approved for '{}'", tool_name);
+            tracing::info!(
+                "✓ Returning ToolPermissionFlow::Approved for '{}'",
+                tool_name
+            );
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::Denied => {

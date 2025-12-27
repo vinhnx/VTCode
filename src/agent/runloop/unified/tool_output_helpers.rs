@@ -105,7 +105,6 @@ pub fn handle_modified_files_common(
 
 /// Common logic for recording token usage
 
-
 /// Common logic for determining if a tool causes write effects
 pub fn check_write_effect_common(name: &str) -> bool {
     matches!(
@@ -134,13 +133,8 @@ pub async fn render_tool_output_common(
         exit_code,
     )?;
 
-    crate::agent::runloop::tool_output::render_tool_output(
-        renderer,
-        Some(name),
-        output,
-        vt_config,
-    )
-    .await
+    crate::agent::runloop::tool_output::render_tool_output(renderer, Some(name), output, vt_config)
+        .await
 }
 
 /// Common logic for rendering error messages

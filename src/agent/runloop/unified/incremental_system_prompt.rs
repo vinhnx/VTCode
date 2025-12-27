@@ -154,28 +154,8 @@ impl IncrementalSystemPrompt {
                     "\n# FULL-AUTO: Complete task autonomously until done or blocked."
                 );
             }
-
-            if let Some(plan) = &context.current_plan {
-                let _ = writeln!(
-                    prompt,
-                    "\n## PLAN (v{}) - {}/{} done",
-                    plan.version, plan.summary.completed_steps, plan.summary.total_steps
-                );
-                if let Some(explanation) = &plan.explanation {
-                    let _ = writeln!(prompt, "Goal: {}", explanation);
-                }
-                for (i, step) in plan.steps.iter().enumerate() {
-                    let mark = match step.status {
-                        vtcode_core::tools::StepStatus::Completed => "[x]",
-                        vtcode_core::tools::StepStatus::InProgress => "[>]",
-                        vtcode_core::tools::StepStatus::Pending => "[ ]",
-                    };
-                    let _ = writeln!(prompt, "{}. {} {}", i + 1, mark, step.step);
-                }
-                let _ = writeln!(prompt, "→ Continue to next step.");
-            }
         }
-        
+
         // Skill System Guide (Architectural context for the agent)
         let _ = writeln!(prompt, "\n# HOW TO USE SKILLS
 VTCode uses a tiered skill system to optimize context window usage.
@@ -190,7 +170,12 @@ VTCode uses a tiered skill system to optimize context window usage.
         let agent_skills: Vec<_> = context
             .discovered_skills
             .iter()
-            .filter(|s| matches!(s.variety, vtcode_core::skills::types::SkillVariety::AgentSkill))
+            .filter(|s| {
+                matches!(
+                    s.variety,
+                    vtcode_core::skills::types::SkillVariety::AgentSkill
+                )
+            })
             .collect();
 
         if !agent_skills.is_empty() {
@@ -204,7 +189,11 @@ VTCode uses a tiered skill system to optimize context window usage.
                 let _ = writeln!(prompt, "## {}{}", skill.name(), status);
                 let _ = writeln!(prompt, "{}", skill.description());
                 if skill.instructions.is_empty() {
-                    let _ = writeln!(prompt, "Use `load_skill(\"{}\")` to see full instructions.", skill.name());
+                    let _ = writeln!(
+                        prompt,
+                        "Use `load_skill(\"{}\")` to see full instructions.",
+                        skill.name()
+                    );
                 }
             }
         }
@@ -223,11 +212,7 @@ VTCode uses a tiered skill system to optimize context window usage.
         if !system_utils.is_empty() {
             let count = system_utils.len();
             // Get a few examples to show the agent what kind of tools are available
-            let examples: Vec<_> = system_utils
-                .iter()
-                .take(5)
-                .map(|s| s.name())
-                .collect();
+            let examples: Vec<_> = system_utils.iter().take(5).map(|s| s.name()).collect();
             let examples_str = if examples.len() < count {
                 format!("{}, ...", examples.join(", "))
             } else {
@@ -237,8 +222,7 @@ VTCode uses a tiered skill system to optimize context window usage.
             let _ = writeln!(
                 prompt,
                 "\n# SYSTEM UTILITIES\n- {} tools available ({}) via `list_skills` and `load_skill`.",
-                count,
-                examples_str
+                count, examples_str
             );
         }
 
@@ -299,7 +283,6 @@ pub struct SystemPromptContext {
     pub tool_usage_count: usize,
     pub error_count: usize,
     pub token_usage_ratio: f64,
-    pub current_plan: Option<vtcode_core::tools::TaskPlan>,
     pub full_auto: bool,
     /// Discovered skills for immediate awareness
     pub discovered_skills: Vec<vtcode_core::skills::types::Skill>,
@@ -315,10 +298,6 @@ impl SystemPromptContext {
         self.tool_usage_count.hash(&mut hasher);
         self.error_count.hash(&mut hasher);
         ((self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
-        if let Some(plan) = &self.current_plan {
-            plan.version.hash(&mut hasher);
-            plan.summary.completed_steps.hash(&mut hasher);
-        }
         self.full_auto.hash(&mut hasher);
         // We use skill names and versions for hashing
         for skill in &self.discovered_skills {
@@ -341,8 +320,7 @@ mod tests {
             conversation_length: 2,
             tool_usage_count: 1,
             error_count: 0,
-            token_usage_ratio: 0.1,
-            current_plan: None,
+            token_usage_ratio: 0.0,
             full_auto: false,
             discovered_skills: Vec::new(),
         };
@@ -374,11 +352,9 @@ mod tests {
             tool_usage_count: 0,
             error_count: 0,
             token_usage_ratio: 0.0,
-            current_plan: None,
             full_auto: false,
             discovered_skills: Vec::new(),
         };
-
         // Build initial prompt
         let _ = prompt_builder
             .get_system_prompt(base_prompt, 1, 1, 0, &context)

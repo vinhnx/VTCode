@@ -4,12 +4,8 @@ use crate::config::types::CapabilityLevel;
 use super::registration::ToolRegistration;
 use super::{ToolInventory, ToolRegistry};
 
-pub(super) fn register_builtin_tools(inventory: &mut ToolInventory, todo_planning_enabled: bool) {
+pub(super) fn register_builtin_tools(inventory: &mut ToolInventory) {
     for registration in builtin_tool_registrations() {
-        if !todo_planning_enabled && registration.name() == tools::UPDATE_PLAN {
-            continue;
-        }
-
         let tool_name = registration.name();
         if let Err(err) = inventory.register_tool(registration) {
             eprintln!("Warning: Failed to register tool '{}': {}", tool_name, err);
@@ -161,15 +157,7 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             false,
             ToolRegistry::web_fetch_executor,
         ),
-        // ============================================================
-        // PLANNING (1 tool)
-        // ============================================================
-        ToolRegistration::new(
-            tools::UPDATE_PLAN,
-            CapabilityLevel::Basic,
-            false,
-            ToolRegistry::update_plan_executor,
-        ),
+
         // ============================================================
         // SPECIAL TOOLS (3 exposed + 2 deprecated)
         // ============================================================
@@ -193,25 +181,5 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             false,
             ToolRegistry::agent_info_executor,
         ),
-        // Deprecated: use agent_info with mode=debug
-        ToolRegistration::new(
-            tools::DEBUG_AGENT,
-            CapabilityLevel::Basic,
-            false,
-            ToolRegistry::debug_agent_executor,
-        )
-        .with_llm_visibility(false)
-        .with_deprecated(true)
-        .with_deprecation_message("use agent_info with mode=debug"),
-        // Deprecated: use agent_info with mode=analyze
-        ToolRegistration::new(
-            tools::ANALYZE_AGENT,
-            CapabilityLevel::Basic,
-            false,
-            ToolRegistry::analyze_agent_executor,
-        )
-        .with_llm_visibility(false)
-        .with_deprecated(true)
-        .with_deprecation_message("use agent_info with mode=analyze"),
     ]
 }

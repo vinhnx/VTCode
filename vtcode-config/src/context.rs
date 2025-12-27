@@ -51,8 +51,6 @@ fn default_preserve_in_compression() -> bool {
     true
 }
 
-
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ContextFeaturesConfig {

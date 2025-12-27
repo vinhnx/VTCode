@@ -338,8 +338,6 @@ impl ContextManager {
         Ok(())
     }
 
-
-
     /// Get skill context (with automatic loading)
     pub fn get_skill_context(&self, name: &str) -> Option<SkillContextEntry> {
         let mut stats = self.stats.lock().unwrap();

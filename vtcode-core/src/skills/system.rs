@@ -6,7 +6,8 @@ use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-const SYSTEM_SKILLS_DIR: Dir = include_dir::include_dir!("$CARGO_MANIFEST_DIR/src/skills/assets/samples");
+const SYSTEM_SKILLS_DIR: Dir =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/src/skills/assets/samples");
 
 const SYSTEM_SKILLS_DIR_NAME: &str = ".system";
 const SKILLS_DIR_NAME: &str = "skills";
@@ -17,7 +18,9 @@ const SYSTEM_SKILLS_MARKER_SALT: &str = "v1";
 ///
 /// This is typically located at `CODEX_HOME/skills/.system`.
 pub(crate) fn system_cache_root_dir(codex_home: &Path) -> PathBuf {
-    codex_home.join(SKILLS_DIR_NAME).join(SYSTEM_SKILLS_DIR_NAME)
+    codex_home
+        .join(SKILLS_DIR_NAME)
+        .join(SYSTEM_SKILLS_DIR_NAME)
 }
 
 /// Installs embedded system skills into `CODEX_HOME/skills/.system`.
