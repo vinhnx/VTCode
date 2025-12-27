@@ -1418,19 +1418,12 @@ impl AgentRunner {
 
             // Agent execution loop uses max_turns for conversation flow
             for turn in 0..self.max_turns {
-                // Check token budget before each turn
-                let utilization = {
-                    let token_budget = self.context_optimizer.borrow().token_budget();
-                    if let Some(budget) = token_budget {
-                        budget.usage_ratio().await
-                    } else {
-                        0.0
-                    }
-                };
+                // Check context utilization before each turn
+                let utilization = self.context_optimizer.borrow().utilization().await;
                 if utilization > 0.90 {
                     // At 90%+ utilization, warn and consider stopping
                     warn!(
-                        "Token budget at {:.1}% - approaching limit",
+                        "Context at {:.1}% - approaching limit",
                         utilization * 100.0
                     );
                     task_state.warnings.push(format!(

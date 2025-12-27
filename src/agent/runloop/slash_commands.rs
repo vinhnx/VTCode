@@ -46,8 +46,6 @@ pub enum SlashCommandOutcome {
     },
     ClearConversation,
     ShowStatus,
-    ShowCost,
-    ShowContext,
     ManageMcp {
         action: McpCommandAction,
     },
@@ -228,14 +226,6 @@ pub async fn handle_slash_command(
             Ok(SlashCommandOutcome::ClearConversation)
         }
         "status" => Ok(SlashCommandOutcome::ShowStatus),
-        "cost" => Ok(SlashCommandOutcome::ShowCost),
-        "context" => {
-            if !args.is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /context")?;
-                return Ok(SlashCommandOutcome::Handled);
-            }
-            Ok(SlashCommandOutcome::ShowContext)
-        }
         "pruning-report" | "pruning_report" => Ok(SlashCommandOutcome::ShowPruningReport),
         "doctor" => {
             if !args.is_empty() {

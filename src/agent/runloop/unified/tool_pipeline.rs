@@ -166,7 +166,6 @@ pub(crate) async fn run_tool_call(
     default_placeholder: Option<String>,
     lifecycle_hooks: Option<&LifecycleHookEngine>,
     skip_confirmations: bool,
-    _token_budget: &Arc<vtcode_core::core::token_budget::TokenBudgetManager>,
     vt_cfg: Option<&VTCodeConfig>,
     turn_index: usize,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
@@ -1133,9 +1132,6 @@ mod tests {
             None,
             None,
             true,
-            &Arc::new(vtcode_core::core::token_budget::TokenBudgetManager::new(
-                vtcode_core::core::token_budget::TokenBudgetConfig::for_model("gpt-5", 4096),
-            )),
             None,
             0,
         )
@@ -1223,9 +1219,6 @@ mod tests {
             None,
             None,
             true,
-            &Arc::new(vtcode_core::core::token_budget::TokenBudgetManager::new(
-                vtcode_core::core::token_budget::TokenBudgetConfig::for_model("gpt-5", 4096),
-            )),
             None,
             1,
         )

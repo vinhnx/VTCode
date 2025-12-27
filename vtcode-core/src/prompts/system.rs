@@ -2,19 +2,18 @@
 //!
 //! # VT Code System Prompts
 //!
-//! Single source of truth for all system prompt variants with unified token budget constants.
+//! Single source of truth for all system prompt variants with unified token constants.
 //!
-//! ## Token Budget Constants (Unified)
+//! ## Token Constants (Unified)
 //!
-//! All token budget thresholds are now unified with authoritative values from:
-//! - `crate::core::token_budget::TokenBudgetConfig`: Warning (75%), Alert (85%)
-//! - `crate::core::context_optimizer`: Compact (90%), Checkpoint (95%)
-//! - `crate::core::token_budget::MAX_TOOL_RESPONSE_TOKENS`: 25,000 tokens per tool
+//! All token thresholds are unified with authoritative values from:
+//! - `crate::core::token_constants`: Warning (75%), Alert (85%), Compact (90%), Checkpoint (95%)
+//! - `crate::core::context_optimizer`: Output optimization based on thresholds
+//! - `crate::core::token_constants::MAX_TOOL_RESPONSE_TOKENS`: 25,000 tokens per tool
 //!
 //! This ensures consistent token management across:
 //! - System prompts (documented in DEFAULT_SYSTEM_PROMPT)
 //! - Context optimization (ContextOptimizer)
-//! - Token tracking (TokenBudgetManager)
 //! - Agent decision-making
 //!
 //! ## Prompt Variants

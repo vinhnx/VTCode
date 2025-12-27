@@ -1,4 +1,3 @@
-use crate::core::token_budget::TokenUsageStats;
 use crate::llm::provider::{Message, MessageContent, MessageRole};
 use crate::utils::dot_config::DotManager;
 use crate::utils::error_messages::*;
@@ -152,7 +151,7 @@ pub struct SessionProgress {
     #[serde(default)]
     pub tool_summaries: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub token_usage: Option<TokenUsageStats>,
+    pub token_usage: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_context_tokens: Option<usize>,
     /// Names of skills loaded at checkpoint time
@@ -172,7 +171,7 @@ pub struct SessionProgressArgs {
     pub distinct_tools: Vec<String>,
     pub recent_messages: Vec<SessionMessage>,
     pub turn_number: usize,
-    pub token_usage: Option<TokenUsageStats>,
+    pub token_usage: Option<String>,
     pub max_context_tokens: Option<usize>,
     pub loaded_skills: Option<Vec<String>>,
 }
@@ -644,7 +643,6 @@ fn is_session_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::token_budget::TokenUsageStats;
     use crate::llm::provider::ContentPart;
     use anyhow::anyhow;
     use chrono::{TimeZone, Timelike};
@@ -763,17 +761,13 @@ mod tests {
         );
         let archive = SessionArchive::new(metadata, None).await?;
         let recent = vec![SessionMessage::new(MessageRole::Assistant, "recent")];
-        let usage = TokenUsageStats {
-            total_tokens: 10,
-            ..TokenUsageStats::new()
-        };
 
         let path = archive.persist_progress(SessionProgressArgs {
             total_messages: 1,
             distinct_tools: vec!["tool_a".to_owned()],
             recent_messages: recent.clone(),
             turn_number: 2,
-            token_usage: Some(usage.clone()),
+            token_usage: Some("10 tokens".to_string()),
             max_context_tokens: Some(128),
             loaded_skills: None, // loaded_skills
         })?;
@@ -786,7 +780,7 @@ mod tests {
         let progress = snapshot.progress.expect("progress should exist");
         assert_eq!(progress.turn_number, 2);
         assert_eq!(progress.recent_messages, recent);
-        assert_eq!(progress.token_usage, Some(usage));
+        assert_eq!(progress.token_usage, Some("10 tokens".to_string()));
         assert_eq!(progress.tool_summaries, vec!["tool_a".to_string()]);
         assert_eq!(progress.max_context_tokens, Some(128));
         Ok(())

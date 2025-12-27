@@ -14,7 +14,6 @@ use tokio::task;
 use tokio::time::sleep;
 
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
 use vtcode_core::ui::tui::InlineHandle;
@@ -26,8 +25,6 @@ pub(crate) struct SessionStatusContext<'a> {
     pub config: &'a CoreAgentConfig,
     pub message_count: usize,
     pub stats: &'a SessionStats,
-    pub token_budget: &'a TokenBudgetManager,
-    pub token_budget_enabled: bool,
     pub max_tokens: usize,
     pub available_tools: usize,
 }
@@ -74,8 +71,6 @@ pub(crate) async fn display_session_status(
 
     display_token_cost(
         renderer,
-        ctx.token_budget,
-        ctx.token_budget_enabled,
         ctx.max_tokens,
         "  ",
     )
@@ -84,45 +79,15 @@ pub(crate) async fn display_session_status(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) async fn display_token_cost(
     renderer: &mut AnsiRenderer,
-    token_budget: &TokenBudgetManager,
-    token_budget_enabled: bool,
-    max_tokens: usize,
+    _max_tokens: usize,
     prefix: &str,
 ) -> Result<()> {
-    if !token_budget_enabled {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("{prefix}Token tracking is disabled for this session."),
-        )?;
-        return Ok(());
-    }
-
-    let stats = token_budget.get_stats().await;
-    let remaining = token_budget.remaining_tokens().await;
-    let usage = stats.usage_percentage(max_tokens);
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "{prefix}Token usage: {} tokens (~{:.1}% of {})",
-            stats.total_tokens, usage, max_tokens
-        ),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "{prefix}Breakdown – system: {} · user: {} · assistant: {} · tool: {} · ledger: {}",
-            stats.system_prompt_tokens,
-            stats.user_messages_tokens,
-            stats.assistant_messages_tokens,
-            stats.tool_results_tokens,
-            stats.decision_ledger_tokens
-        ),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("{prefix}Remaining budget (approx): {}", remaining),
+        &format!("{prefix}Token tracking is disabled."),
     )?;
     Ok(())
 }

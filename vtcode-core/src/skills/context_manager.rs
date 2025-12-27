@@ -7,7 +7,6 @@
 //! - Memory usage monitoring
 //! - Skill state persistence
 
-use crate::llm::token_metrics::TokenCounter;
 use crate::skills::types::{Skill, SkillManifest};
 use anyhow::{Result, anyhow};
 use lru::LruCache;
@@ -153,9 +152,6 @@ pub struct ContextManager {
     /// Current context usage in tokens
     current_token_usage: Arc<Mutex<usize>>,
 
-    /// Token counter for accurate sizing
-    token_counter: Arc<Mutex<TokenCounter>>,
-
     /// Context usage statistics
     stats: Arc<Mutex<ContextStats>>,
 }
@@ -190,7 +186,6 @@ impl ContextManager {
             active_skills: HashMap::new(),
             loaded_skills,
             current_token_usage: Arc::new(Mutex::new(0)),
-            token_counter: Arc::new(Mutex::new(TokenCounter::new())),
             stats: Arc::new(Mutex::new(ContextStats::default())),
         }
     }
@@ -344,10 +339,8 @@ impl ContextManager {
     }
 
     fn count_instruction_tokens(&self, instructions: &str) -> usize {
-        match self.token_counter.lock() {
-            Ok(mut counter) => counter.count_with_profiling("docs", instructions).max(1),
-            Err(_) => (instructions.len() / 4).max(1),
-        }
+        // Estimate tokens at ~4 characters per token
+        (instructions.len() / 4).max(1)
     }
 
     /// Get skill context (with automatic loading)

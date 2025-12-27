@@ -64,7 +64,6 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub loaded_skills:
         &'a Arc<tokio::sync::RwLock<std::collections::HashMap<String, vtcode_core::skills::Skill>>>,
     pub custom_prompts: &'a vtcode_core::prompts::CustomPromptRegistry,
-    pub token_budget_enabled: bool,
     pub trim_config: &'a crate::agent::runloop::context::ContextTrimConfig,
     pub default_placeholder: &'a mut Option<String>,
     pub follow_up_placeholder: &'a mut Option<String>,
@@ -292,7 +291,7 @@ pub(crate) async fn run_interaction_loop(
                             context_manager: ctx.context_manager,
                             session_stats: ctx.session_stats,
                             tools: ctx.tools,
-                            token_budget_enabled: ctx.token_budget_enabled,
+
                             trim_config: ctx.trim_config,
                             async_mcp_manager: ctx.async_mcp_manager.as_ref(),
                             mcp_panel_state: ctx.mcp_panel_state,
@@ -413,7 +412,6 @@ pub(crate) async fn run_interaction_loop(
                         Some(&tool_name),
                         &result,
                         ctx.vt_cfg.as_ref(),
-                        None,
                     )
                     .await?;
 

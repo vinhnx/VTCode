@@ -10,8 +10,8 @@
 //! Instead of hard line limits (e.g., "show first 128 + last 128 lines"), we use:
 //! - **Token budget**: 25,000 tokens max per tool response
 //! - **Head+Tail preservation**: Keep first ~50% and last ~50% of tokens
-//! - **Tokenizer-aware**: Uses HuggingFace tokenizers for accuracy, falls back to
-//!   character-based estimation (1 token ≈ 3.5 chars)
+//! - **Token-aware**: Uses heuristic approximation for token counting
+//!   (1 token ≈ 3.5 chars for regular content)
 //!
 //! ### Why Token-Based?
 //!
@@ -48,7 +48,6 @@ use smallvec::SmallVec;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::files::truncate_text_safe;
@@ -56,10 +55,6 @@ use super::large_output::{LargeOutputConfig, spool_large_output};
 use super::panels::{PanelContentLine, clamp_panel_text, render_panel};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
-use vtcode_core::core::token_constants::{
-    CODE_DETECTION_THRESHOLD, CODE_HEAD_RATIO_PERCENT, CODE_INDICATOR_CHARS,
-    LOG_HEAD_RATIO_PERCENT, TOKENS_PER_CHARACTER,
-};
 
 /// Maximum number of lines to display in inline mode before truncating
 const INLINE_STREAM_MAX_LINES: usize = 30;
@@ -96,7 +91,7 @@ fn calculate_preview_lines(content_size: usize) -> usize {
 #[cfg_attr(
     feature = "profiling",
     tracing::instrument(
-        skip(renderer, content, git_styles, ls_styles, config, token_budget),
+        skip(renderer, content, git_styles, ls_styles, config),
         level = "debug"
     )
 )]
@@ -112,7 +107,6 @@ pub(crate) async fn render_stream_section(
     fallback_style: MessageStyle,
     allow_ansi: bool,
     config: Option<&VTCodeConfig>,
-    token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
     use std::fmt::Write as FmtWrite;
 
@@ -130,37 +124,9 @@ pub(crate) async fn render_stream_section(
         strip_ansi_codes(content)
     };
 
-    // Apply token-based truncation if TokenBudgetManager is available
-    let (effective_normalized_content, was_truncated_by_tokens) = if let Some(budget) = token_budget
-    {
-        // Resolve configurable token budget and byte fuse from config
-        let (max_tokens, byte_fuse) = if let Some(cfg) = config {
-            let ctx_cfg = &cfg.context;
-            (
-                ctx_cfg.model_input_token_budget,
-                ctx_cfg.model_input_byte_fuse,
-            )
-        } else {
-            // Defaults: use unified constants from config
-            (
-                vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_TOKEN_BUDGET,
-                vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_BYTE_FUSE,
-            )
-        };
-
-        let (mut truncated_content, mut truncated_flag) =
-            truncate_content_by_tokens(normalized_content.as_ref(), max_tokens, budget).await;
-
-        // Apply byte fuse as a secondary safeguard
-        if truncated_content.len() > byte_fuse {
-            truncated_content = safe_truncate_to_bytes_with_marker(&truncated_content, byte_fuse);
-            truncated_flag = true;
-        }
-
-        (Cow::Owned(truncated_content), truncated_flag)
-    } else {
-        (normalized_content.clone(), false)
-    };
+    // Token budget logic removed - use normalized content as-is
+    let effective_normalized_content = normalized_content.clone();
+    let was_truncated_by_tokens = false;
 
     if let Some(tool) = tool_name
         && let Ok(Some(log_path)) =
@@ -791,148 +757,7 @@ mod ansi_stripping_tests {
 /// we use balanced allocation (50/50) since logic can be distributed throughout.
 ///
 /// Why token-based is better than line-based:
-/// 1. Tokens are what matter for LLM context window, not lines
-/// 2. Preserves both beginning context AND final results
-/// 3. Better for outputs where errors appear at the end (test failures, build logs)
-/// 4. More robust: 100 lines of code ≈ 2k tokens, 100 lines of prose ≈ 500 tokens
-///
-/// Fallback: If tokenization fails, uses character-based estimation (1 token ≈ 3.5 chars)
-async fn truncate_content_by_tokens(
-    content: &str,
-    max_tokens: usize,
-    token_budget: &TokenBudgetManager,
-) -> (String, bool) {
-    // Count total tokens in content
-    let total_tokens = match token_budget.count_tokens(content).await {
-        Ok(count) => count,
-        Err(_) => {
-            // If tokenization fails, fall back to character-based estimation
-            // More conservative than naive 1:4 ratio to account for punctuation
-            (content.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize
-        }
-    };
 
-    if total_tokens <= max_tokens {
-        return (content.to_owned(), false);
-    }
-
-    // Calculate how many tokens to take from head and tail
-    // Smart ratio: bias toward tail since most important info (errors, final state)
-    // appears at the end. Use LOG_HEAD_RATIO_PERCENT split for logs.
-    // Exception: if content is code, use CODE_HEAD_RATIO_PERCENT since logic can be anywhere.
-    // Detect code by checking for high density of brackets/operators
-    let char_count = content.len();
-    let bracket_count: usize = content
-        .chars()
-        .filter(|c| CODE_INDICATOR_CHARS.contains(c))
-        .count();
-    let is_code = bracket_count > (char_count / CODE_DETECTION_THRESHOLD);
-    let head_ratio = if is_code {
-        CODE_HEAD_RATIO_PERCENT // Code: keep balanced context
-    } else {
-        LOG_HEAD_RATIO_PERCENT // Logs/output: bias toward errors at end
-    };
-
-    let head_tokens = (max_tokens * head_ratio) / 100;
-    let _tail_tokens = max_tokens - head_tokens;
-
-    // Stream through lines once; capture head lines until head token budget
-    // and maintain a bounded tail buffer (VecDeque) to avoid allocating all lines.
-    use std::collections::VecDeque;
-
-    let mut head_lines: Vec<&str> = Vec::with_capacity(PREVIEW_HEAD_LINES);
-    let mut head_tokens_acc = 0usize;
-
-    let mut tail_buf: VecDeque<(&str, usize)> = VecDeque::with_capacity(PREVIEW_TAIL_LINES);
-    let _tail_tokens_acc = 0usize;
-    let mut total_lines = 0usize;
-
-    for line in content.lines() {
-        total_lines += 1;
-
-        // Head accumulation
-        if head_tokens_acc < head_tokens {
-            let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
-            if head_tokens_acc + line_tokens <= head_tokens || head_lines.is_empty() {
-                head_lines.push(line);
-                head_tokens_acc += line_tokens;
-            }
-        }
-
-        // Tail rolling buffer: keep last PREVIEW_TAIL_LINES lines
-        let est = line.len();
-        tail_buf.push_back((line, est));
-        if tail_buf.len() > PREVIEW_TAIL_LINES {
-            tail_buf.pop_front();
-        }
-    }
-
-    let head_line_idx = head_lines.len();
-    let head_content = if head_lines.is_empty() {
-        String::new()
-    } else {
-        let estimated_size = head_lines.iter().map(|l| l.len() + 1).sum::<usize>();
-        let mut buf = String::with_capacity(estimated_size);
-        for line in &head_lines {
-            buf.push_str(line);
-            buf.push('\n');
-        }
-        buf
-    };
-
-    let tail_start_idx = total_lines.saturating_sub(tail_buf.len());
-    let tail_content = if tail_buf.is_empty() {
-        String::new()
-    } else {
-        tail_buf
-            .iter()
-            .map(|(l, _)| *l)
-            .collect::<Vec<&str>>()
-            .join("\n")
-    };
-
-    // Combine head and tail
-    if tail_start_idx > head_line_idx {
-        // No overlap, safe to combine
-        let truncated_lines = tail_start_idx - head_line_idx;
-        if tail_start_idx < total_lines {
-            // Pre-calculate result size
-            let truncation_msg = format!("[... {} lines truncated ...]\n", truncated_lines);
-            let result_size = head_content.len() + 1 + truncation_msg.len() + tail_content.len();
-            let mut result = String::with_capacity(result_size);
-            result.push_str(head_content.trim_end());
-            result.push('\n');
-            result.push_str(&truncation_msg);
-            result.push_str(&tail_content);
-            (result.trim_end().to_string(), true)
-        } else {
-            (head_content.trim_end().to_string(), true)
-        }
-    } else {
-        // Overlap, just return head
-        (head_content.trim_end().to_string(), true)
-    }
-}
-
-fn safe_truncate_to_bytes_with_marker(s: &str, max_bytes: usize) -> String {
-    if s.len() <= max_bytes {
-        return s.to_string();
-    }
-
-    // Leave room for marker
-    let marker = "\n[... content truncated by byte fuse ...]";
-    let budget = max_bytes.saturating_sub(marker.len());
-    let cutoff = s
-        .char_indices()
-        .take_while(|(idx, _)| *idx < budget)
-        .map(|(idx, _)| idx)
-        .last()
-        .unwrap_or(budget);
-    let mut out = String::with_capacity(cutoff + marker.len());
-    out.push_str(&s[..cutoff]);
-    out.push_str(marker);
-    out
-}
 
 fn describe_code_fence_header(language: Option<&str>) -> String {
     let Some(lang) = language

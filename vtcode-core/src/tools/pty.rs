@@ -1146,43 +1146,19 @@ impl PtyManager {
                 let exit_code = exit_status_code(status);
 
                 // Apply max_tokens truncation if specified
-                let output_clone = output.clone();
                 if let Some(max_tokens) = max_tokens {
                     if max_tokens > 0 {
-                        use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
-                        use crate::core::token_budget::TokenBudgetManager;
-
-                        let rt = tokio::runtime::Handle::current();
-                        let token_budget = TokenBudgetManager::default();
-
-                        // Count tokens in the output
-                        let output_tokens = rt
-                            .block_on(async { token_budget.count_tokens(&output_clone).await })
-                            .unwrap_or(
-                                (output_clone.len() as f64
-                                    / crate::core::token_constants::TOKENS_PER_CHARACTER)
-                                    as usize,
-                            );
-
-                        if output_tokens > max_tokens {
-                            // Use the same head+tail truncation as file_ops
-                            let (truncated_output, _) = rt.block_on(async {
-                                truncate_content_by_tokens(&output_clone, max_tokens, &token_budget)
-                                    .await
-                            });
-                            output = format!(
-                                "{}\n[... truncated by max_tokens: {} ...]",
-                                truncated_output, max_tokens
-                            );
-                        } else {
-                            output = output_clone; // Keep original if no truncation needed
+                        // Simple byte-based truncation
+                        if output.len() > max_tokens * 4 {
+                            let truncate_point = (max_tokens * 4).min(output.len());
+                            output.truncate(truncate_point);
+                            output.push_str("\n[... truncated by max_tokens ...]");
                         }
                     } else {
-                        output = output_clone; // Keep original if max_tokens is not valid
+                        // Keep original if max_tokens is not valid
                     }
-                } else {
-                    output = output_clone; // Keep original if max_tokens is None
                 }
+                // Keep original if max_tokens is None
 
                 Ok(PtyCommandResult {
                     exit_code,

@@ -248,8 +248,6 @@ pub(crate) async fn handle_tool_call(
                     approval_recorder: ctx.approval_recorder,
                     decision_ledger: ctx.decision_ledger,
                     pruning_ledger: ctx.pruning_ledger,
-                    token_budget: ctx.token_budget,
-                    token_counter: ctx.token_counter,
                     tool_registry: ctx.tool_registry,
                     tools: ctx.tools,
                     cached_tools: ctx.cached_tools,
@@ -270,7 +268,7 @@ pub(crate) async fn handle_tool_call(
                 ctx.working_history,
                 turn_modified_files,
                 ctx.vt_cfg,
-                ctx.token_budget,
+
                 &traj,
             )
             .await?;
@@ -321,7 +319,6 @@ pub(crate) async fn handle_tool_execution_result(
     working_history: &mut Vec<uni::Message>,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
     vt_cfg: Option<&VTCodeConfig>,
-    local_token_budget: &Arc<vtcode_core::core::token_budget::TokenBudgetManager>,
     traj: &vtcode_core::core::trajectory::TrajectoryLogger,
 ) -> Result<()> {
     match &pipeline_outcome.status {
@@ -332,47 +329,12 @@ pub(crate) async fn handle_tool_execution_result(
             command_success: _,
             has_more: _,
         } => {
-            // Add successful tool result to history (token-aware aggregation)
-            // Determine per-call token budget (from args) or fall back to config
-            let mut call_max_tokens = None;
-            if let Some(mt) = args_val.get("max_tokens").and_then(|v| v.as_u64()) {
-                call_max_tokens = Some(mt as usize);
-            } else if let Some(ml) = args_val.get("max_lines").and_then(|v| v.as_u64()) {
-                // Map legacy max_lines to tokens
-                let est = (ml as usize)
-                    .saturating_mul(vtcode_core::core::token_constants::TOKENS_PER_LINE);
-                tracing::warn!(
-                    "`max_lines` is deprecated at tool call; mapping {} lines -> ~{} tokens for backward compatibility",
-                    ml,
-                    est
-                );
-                call_max_tokens = Some(est);
-            }
-
-            let (max_tokens, byte_fuse) = if let Some(cfg) = vt_cfg {
-                (
-                    cfg.context.model_input_token_budget,
-                    cfg.context.model_input_byte_fuse,
-                )
+            // Convert output to string for model
+            let content_for_model = if let Some(s) = output.as_str() {
+                s.to_string()
             } else {
-                (
-                    vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_TOKEN_BUDGET,
-                    vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_BYTE_FUSE,
-                )
+                serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
             };
-
-            // If call supplied a per-call max_tokens, prefer that (but clamp to config max)
-            let applied_max_tokens = call_max_tokens.map(|call| std::cmp::min(call, max_tokens));
-
-            let content_for_model =
-                crate::agent::runloop::token_trunc::aggregate_tool_output_for_model(
-                    tool_name,
-                    output,
-                    applied_max_tokens.unwrap_or(max_tokens),
-                    byte_fuse,
-                    local_token_budget,
-                )
-                .await;
 
             working_history.push(uni::Message::tool_response_with_origin(
                 tool_call_id,
@@ -387,7 +349,6 @@ pub(crate) async fn handle_tool_execution_result(
                 args_val,
                 pipeline_outcome,
                 vt_cfg,
-                local_token_budget,
                 traj,
             )
             .await?;
@@ -640,8 +601,6 @@ pub(crate) async fn run_turn_handle_tool_success(
     mcp_panel_state: &mut mcp_events::McpPanelState,
     tool_result_cache: &Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>,
     vt_cfg: Option<&VTCodeConfig>,
-    token_budget: &vtcode_core::core::token_budget::TokenBudgetManager,
-    token_counter: &Arc<tokio::sync::RwLock<vtcode_core::llm::TokenCounter>>,
     working_history: &mut Vec<uni::Message>,
     call_id: &str,
     dec_id: &str,
@@ -710,7 +669,6 @@ pub(crate) async fn run_turn_handle_tool_success(
             has_more,
         }),
         vt_cfg,
-        token_budget,
     )
     .await?;
 
@@ -767,12 +725,6 @@ pub(crate) async fn run_turn_handle_tool_success(
     }
 
     let content = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
-
-    // Track token usage for this tool result
-    {
-        let mut counter = token_counter.write().await;
-        counter.count_with_profiling("tool_output", &content);
-    }
 
     working_history.push(uni::Message::tool_response_with_origin(
         call_id.to_string(),
@@ -879,13 +831,11 @@ pub(crate) async fn run_turn_handle_tool_failure(
     call_id: &str,
     dec_id: &str,
     mcp_panel_state: &mut mcp_events::McpPanelState,
-    token_counter: &Arc<tokio::sync::RwLock<vtcode_core::llm::TokenCounter>>,
     decision_ledger: &Arc<
         tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
     >,
     tool_result_cache: Option<&Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>>,
     vt_cfg: Option<&VTCodeConfig>,
-    token_budget: &vtcode_core::core::token_budget::TokenBudgetManager,
 ) -> Result<()> {
     // Finish spinner / ensure redraw is caller's responsibility
     safe_force_redraw(handle, &mut Instant::now());
@@ -957,16 +907,8 @@ pub(crate) async fn run_turn_handle_tool_failure(
         &serde_json::json!({}),
         &outcome,
         vt_cfg,
-        token_budget,
     )
     .await?;
-
-    // Track error token usage
-    {
-        let mut counter = token_counter.write().await;
-        let error_content = serde_json::to_string(&error_json).unwrap_or_else(|_| "{}".to_string());
-        counter.count_with_profiling("tool_output", &error_content);
-    }
 
     working_history.push(uni::Message::tool_response_with_origin(
         call_id.to_string(),
@@ -1000,7 +942,6 @@ pub(crate) async fn run_turn_handle_tool_timeout(
     working_history: &mut Vec<uni::Message>,
     call_id: &str,
     dec_id: &str,
-    token_counter: &Arc<tokio::sync::RwLock<vtcode_core::llm::TokenCounter>>,
     decision_ledger: &Arc<
         tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
     >,
@@ -1020,12 +961,6 @@ pub(crate) async fn run_turn_handle_tool_timeout(
     let error_message = error.to_string();
     let err_json = serde_json::json!({ "error": error_message });
     let timeout_content = serde_json::to_string(&err_json).unwrap_or_else(|_| "{}".to_string());
-
-    // Track timeout error token usage
-    {
-        let mut counter = token_counter.write().await;
-        counter.count_with_profiling("tool_output", &timeout_content);
-    }
 
     working_history.push(uni::Message::tool_response_with_origin(
         call_id.to_string(),
@@ -1217,8 +1152,6 @@ pub(crate) async fn handle_text_response(
                         approval_recorder: ctx.approval_recorder,
                         decision_ledger: ctx.decision_ledger,
                         pruning_ledger: ctx.pruning_ledger,
-                        token_budget: ctx.token_budget,
-                        token_counter: ctx.token_counter,
                         tool_registry: ctx.tool_registry,
                         tools: ctx.tools,
                         cached_tools: ctx.cached_tools,
@@ -1239,7 +1172,7 @@ pub(crate) async fn handle_text_response(
                     ctx.working_history,
                     turn_modified_files,
                     ctx.vt_cfg,
-                    ctx.token_budget,
+
                     traj,
                 )
                 .await?;

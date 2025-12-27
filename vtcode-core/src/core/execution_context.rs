@@ -1,29 +1,24 @@
 //! Execution context for coordinating agent optimization components
 //!
 //! This module provides the ExecutionContext struct that integrates all optimization
-//! components (LoopDetector, TokenBudgetManager, ContextOptimizer, AutonomousExecutor,
+//! components (LoopDetector, ContextOptimizer, AutonomousExecutor,
 //! AgentBehaviorAnalyzer) into a cohesive framework for autonomous agent execution.
 
-use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use super::context_optimizer::{CompactMode, ContextOptimizer};
+use super::context_optimizer::ContextOptimizer;
 use super::loop_detector::LoopDetector;
-use super::token_budget::TokenBudgetManager;
 use crate::exec::agent_optimization::AgentBehaviorAnalyzer;
 use crate::tools::autonomous_executor::AutonomousExecutor;
 
 /// Execution context that coordinates all optimization components
 ///
 /// This struct provides a unified interface for managing agent execution with
-/// integrated loop detection, token budget management, context optimization,
-/// autonomous execution policy, and behavior analysis.
+/// integrated loop detection, context optimization, autonomous execution policy,
+/// and behavior analysis.
 #[derive(Clone)]
 pub struct ExecutionContext {
-    /// Token budget manager for tracking context window usage
-    pub token_budget: Arc<TokenBudgetManager>,
-
     /// Loop detector for identifying repetitive tool calls
     pub loop_detector: Arc<RwLock<LoopDetector>>,
 
@@ -35,9 +30,6 @@ pub struct ExecutionContext {
 
     /// Behavior analyzer for tracking patterns and recommendations
     pub behavior_analyzer: Arc<RwLock<AgentBehaviorAnalyzer>>,
-
-    /// Current compact mode state
-    compact_mode: Arc<RwLock<CompactMode>>,
 }
 
 impl ExecutionContext {
@@ -45,62 +37,25 @@ impl ExecutionContext {
     ///
     /// # Arguments
     ///
-    /// * `token_budget` - Token budget manager instance
     /// * `loop_detector` - Loop detector instance
     /// * `context_optimizer` - Context optimizer instance
     /// * `autonomous_executor` - Autonomous executor instance
     /// * `behavior_analyzer` - Behavior analyzer instance
     pub fn new(
-        token_budget: Arc<TokenBudgetManager>,
         loop_detector: Arc<RwLock<LoopDetector>>,
         context_optimizer: Arc<RwLock<ContextOptimizer>>,
         autonomous_executor: Arc<AutonomousExecutor>,
         behavior_analyzer: Arc<RwLock<AgentBehaviorAnalyzer>>,
     ) -> Self {
         Self {
-            token_budget,
             loop_detector,
             context_optimizer,
             autonomous_executor,
             behavior_analyzer,
-            compact_mode: Arc::new(RwLock::new(CompactMode::Normal)),
         }
     }
 
-    /// Get the current compact mode
-    pub async fn get_compact_mode(&self) -> CompactMode {
-        *self.compact_mode.read().await
-    }
 
-    /// Set the compact mode
-    pub async fn set_compact_mode(&self, mode: CompactMode) {
-        let mut compact_mode = self.compact_mode.write().await;
-        *compact_mode = mode;
-    }
-
-    /// Update compact mode based on current token budget usage
-    ///
-    /// This method checks the token budget usage and automatically activates
-    /// the appropriate compact mode using unified thresholds from token_constants:
-    /// - Normal: < THRESHOLD_COMPACT (90%) usage
-    /// - Compact: THRESHOLD_COMPACT-THRESHOLD_CHECKPOINT (90-95%) usage
-    /// - Checkpoint: > THRESHOLD_CHECKPOINT (95%) usage
-    pub async fn update_compact_mode_from_budget(&self) -> Result<CompactMode> {
-        use crate::core::token_constants::{THRESHOLD_CHECKPOINT, THRESHOLD_COMPACT};
-
-        let usage_ratio = self.token_budget.usage_ratio().await;
-
-        let new_mode = if usage_ratio >= THRESHOLD_CHECKPOINT {
-            CompactMode::Checkpoint
-        } else if usage_ratio >= THRESHOLD_COMPACT {
-            CompactMode::Compact
-        } else {
-            CompactMode::Normal
-        };
-
-        self.set_compact_mode(new_mode).await;
-        Ok(new_mode)
-    }
 
     /// Check if loop detection should block execution
     ///
@@ -211,19 +166,12 @@ impl ExecutionContext {
     pub async fn generate_status_report(&self) -> String {
         let mut report = String::new();
 
-        // Token budget status
         report.push_str("=== Execution Context Status ===\n\n");
-        report.push_str(&self.token_budget.generate_report().await);
-        report.push_str("\n\n");
-
-        // Compact mode status
-        let compact_mode = self.get_compact_mode().await;
-        report.push_str(&format!("Compact Mode: {:?}\n", compact_mode));
 
         // Loop detection status
         let detector = self.loop_detector.read().await;
         report.push_str(&format!(
-            "\nLoop Detection: {} tools tracked\n",
+            "Loop Detection: {} tools tracked\n",
             detector.get_tracked_tool_count()
         ));
 
@@ -234,7 +182,6 @@ impl ExecutionContext {
 impl Default for ExecutionContext {
     fn default() -> Self {
         Self::new(
-            Arc::new(TokenBudgetManager::default()),
             Arc::new(RwLock::new(LoopDetector::new())),
             Arc::new(RwLock::new(ContextOptimizer::new())),
             Arc::new(AutonomousExecutor::new()),
@@ -246,66 +193,6 @@ impl Default for ExecutionContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::token_budget::TokenBudgetConfig;
-
-    #[tokio::test]
-    async fn test_execution_context_creation() {
-        let context = ExecutionContext::default();
-
-        // Verify initial state
-        assert_eq!(context.get_compact_mode().await, CompactMode::Normal);
-        assert_eq!(context.token_budget.usage_ratio().await, 0.0);
-    }
-
-    #[tokio::test]
-    async fn test_compact_mode_updates() {
-        let context = ExecutionContext::default();
-
-        // Test manual mode setting
-        context.set_compact_mode(CompactMode::Compact).await;
-        assert_eq!(context.get_compact_mode().await, CompactMode::Compact);
-
-        context.set_compact_mode(CompactMode::Checkpoint).await;
-        assert_eq!(context.get_compact_mode().await, CompactMode::Checkpoint);
-    }
-
-    #[tokio::test]
-    async fn test_compact_mode_from_budget() {
-        let config = TokenBudgetConfig {
-            max_context_tokens: 1000,
-            ..Default::default()
-        };
-        let token_budget = Arc::new(TokenBudgetManager::new(config));
-
-        let context = ExecutionContext::new(
-            token_budget.clone(),
-            Arc::new(RwLock::new(LoopDetector::new())),
-            Arc::new(RwLock::new(ContextOptimizer::new())),
-            Arc::new(AutonomousExecutor::new()),
-            Arc::new(RwLock::new(AgentBehaviorAnalyzer::new())),
-        );
-
-        // Initially should be Normal
-        let mode = context.update_compact_mode_from_budget().await.unwrap();
-        assert_eq!(mode, CompactMode::Normal);
-
-        // Add tokens to reach 92% (should trigger Compact)
-        use crate::core::token_budget::ContextComponent;
-        token_budget
-            .record_tokens_for_component(ContextComponent::UserMessage, 920, None)
-            .await;
-
-        let mode = context.update_compact_mode_from_budget().await.unwrap();
-        assert_eq!(mode, CompactMode::Compact);
-
-        // Add more tokens to reach 96% (should trigger Checkpoint)
-        token_budget
-            .record_tokens_for_component(ContextComponent::UserMessage, 40, None)
-            .await;
-
-        let mode = context.update_compact_mode_from_budget().await.unwrap();
-        assert_eq!(mode, CompactMode::Checkpoint);
-    }
 
     #[tokio::test]
     async fn test_loop_detection_integration() {
@@ -351,8 +238,6 @@ mod tests {
 
         // Report should contain key sections
         assert!(report.contains("Execution Context Status"));
-        assert!(report.contains("Token Budget Report"));
-        assert!(report.contains("Compact Mode"));
         assert!(report.contains("Loop Detection"));
     }
 }

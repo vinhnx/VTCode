@@ -595,23 +595,6 @@ include_in_prompt = true
 # Preserve ledger during context compression
 preserve_in_compression = true
 
-# Token budget management - Track and limit token usage
-[context.token_budget]
-# Enable token usage tracking and budget enforcement
-enabled = false
-
-# Model to use for token counting (must match your actual model)
-model = "gpt-5-nano"
-
-# Percentage threshold to warn about token usage (0.75 = 75%)
-warning_threshold = 0.75
-
-# Percentage threshold to trigger context alerts (0.85 = 85%)
-alert_threshold = 0.85
-
-# Enable detailed component-level token tracking (increases overhead)
-detailed_tracking = false
-
 # AI model routing - Intelligent model selection
 # Telemetry and analytics
 [telemetry]
