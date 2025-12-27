@@ -1,7 +1,10 @@
 use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig, discover_cli_tools};
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome, SkillMetadata, SkillScope};
 use crate::skills::system::system_cache_root_dir;
-use anyhow::Result;
+use crate::skills::types::{Skill, SkillContext, SkillManifest};
+use crate::skills::container_validation::{ContainerSkillsValidator, ContainerValidationReport, ContainerValidationResult};
+use crate::skills::discovery::{SkillDiscovery, DiscoveryResult};
+use anyhow::{Result, Context as _};
 use dunce::canonicalize as normalize_path;
 use std::collections::{HashSet, VecDeque};
 use std::fs;
@@ -335,4 +338,141 @@ fn is_executable_file(path: &Path) -> bool {
         }
     }
     false
+}
+
+/// Enhanced skill variant for unified handling
+#[derive(Debug, Clone)]
+pub enum EnhancedSkill {
+    /// Traditional instruction-based skill
+    Traditional(Skill),
+    /// CLI-based tool skill
+    CliTool(CliToolBridge),
+}
+
+/// High-level loader that provides discovery and validation features
+pub struct EnhancedSkillLoader {
+    workspace_root: PathBuf,
+    discovery: SkillDiscovery,
+}
+
+impl EnhancedSkillLoader {
+    /// Create a new enhanced loader for workspace
+    pub fn new(workspace_root: PathBuf) -> Self {
+        Self {
+            workspace_root,
+            discovery: SkillDiscovery::new(),
+        }
+    }
+
+    /// Discover all available skills and tools
+    pub async fn discover_all_skills(&mut self) -> Result<DiscoveryResult> {
+        self.discovery.discover_all(&self.workspace_root).await
+    }
+
+    /// Get a specific skill by name
+    pub async fn get_skill(&mut self, name: &str) -> Result<EnhancedSkill> {
+        let result = self.discovery.discover_all(&self.workspace_root).await?;
+        
+        // Try traditional skills first
+        for skill_ctx in &result.skills {
+            if skill_ctx.manifest().name == name {
+                let path = skill_ctx.path();
+                let skill_md = path.join("SKILL.md");
+                let content = fs::read_to_string(&skill_md)
+                    .context(format!("Failed to read SKILL.md at {}", skill_md.display()))?;
+                
+                let (manifest, instructions) = crate::skills::manifest::parse_skill_content(&content)?;
+                let skill = Skill::new(manifest, path.clone(), instructions)?;
+                return Ok(EnhancedSkill::Traditional(skill));
+            }
+        }
+
+        // Try CLI tools
+        for tool_config in &result.tools {
+            if tool_config.name == name {
+                let bridge = CliToolBridge::new(tool_config.clone())?;
+                return Ok(EnhancedSkill::CliTool(bridge));
+            }
+        }
+
+        Err(anyhow::anyhow!("Skill '{}' not found", name))
+    }
+
+    /// Generate a comprehensive container validation report
+    pub async fn generate_validation_report(&mut self) -> Result<ContainerValidationReport> {
+        let result = self.discovery.discover_all(&self.workspace_root).await?;
+        let mut report = ContainerValidationReport::new();
+        let validator = ContainerSkillsValidator::new();
+
+        for skill_ctx in &result.skills {
+            match self.load_full_skill_from_ctx(skill_ctx) {
+                Ok(skill) => {
+                    let analysis = validator.analyze_skill(&skill);
+                    report.add_skill_analysis(skill.name().to_string(), analysis);
+                }
+                Err(e) => {
+                    report.add_incompatible_skill(
+                        skill_ctx.manifest().name.clone(),
+                        skill_ctx.manifest().description.clone(),
+                        format!("Load error: {}", e),
+                    );
+                }
+            }
+        }
+
+        report.finalize();
+        Ok(report)
+    }
+
+    /// Check container requirements for a skill
+    pub fn check_container_requirements(&self, skill: &Skill) -> ContainerValidationResult {
+        let validator = ContainerSkillsValidator::new();
+        validator.analyze_skill(skill)
+    }
+
+    fn load_full_skill_from_ctx(&self, ctx: &SkillContext) -> Result<Skill> {
+        let path = ctx.path();
+        let skill_md = path.join("SKILL.md");
+        let content = fs::read_to_string(&skill_md)?;
+        let (manifest, instructions) = crate::skills::manifest::parse_skill_content(&content)?;
+        Skill::new(manifest, path.clone(), instructions)
+    }
+}
+
+/// Detect skill mentions in user input using patterns and keywords
+pub fn detect_skill_mentions(user_input: &str, available_skills: &[SkillManifest]) -> Vec<String> {
+    let mut mentions = Vec::new();
+    let input_lower = user_input.to_lowercase();
+
+    for skill in available_skills {
+        let skill_name_lower = skill.name.to_lowercase();
+        
+        // 1. Explicit $skill-name mention (case-insensitive)
+        let trigger = format!("${}", skill_name_lower);
+        if input_lower.contains(&trigger) {
+            mentions.push(skill.name.clone());
+            continue;
+        }
+
+        // 2. Description keyword matching (requires 2+ matches of significant words)
+        let keywords: Vec<&str> = skill.description
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|s| s.len() > 3)
+            .collect();
+            
+        let mut matches = 0;
+        for kw in keywords {
+            if input_lower.contains(&kw.to_lowercase()) {
+                matches += 1;
+            }
+        }
+
+        if matches >= 2 {
+            mentions.push(skill.name.clone());
+        }
+    }
+
+    mentions.sort();
+    mentions.dedup();
+    mentions
 }

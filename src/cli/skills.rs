@@ -56,8 +56,8 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
         .discover_all_skills()
         .await
         .context("Failed to discover skills")?;
-    let skills = discovery_result.traditional_skills;
-    let cli_tools = discovery_result.cli_tools;
+    let skills = discovery_result.skills;
+    let cli_tools = discovery_result.tools;
 
     if skills.is_empty() && cli_tools.is_empty() {
         println!("No skills found.");

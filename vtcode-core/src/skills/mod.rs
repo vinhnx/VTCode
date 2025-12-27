@@ -153,6 +153,7 @@ pub use executor::execute_skill_with_sub_llm;
 pub use file_references::FileReferenceValidator;
 pub use loader::{
     load_skills, load_skill_resources, SkillLoaderConfig, SkillRoot,
+    EnhancedSkill, EnhancedSkillLoader, detect_skill_mentions,
 };
 
 pub use locations::{
