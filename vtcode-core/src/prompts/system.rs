@@ -65,12 +65,12 @@ Non-trivial tasks: exploration → design → final_plan
 - **design**: 3-7 steps with file:line refs, dependencies, complexity
 - **final_plan**: Verify paths, order, acceptance criteria
 
-## Skills System
-VTCode uses a tiered on-demand capability system:
-- **Agent Skills**: High-level specialized modules with `Instructions`.
-- **System Utilities**: Low-level CLI bridges (lazy-loaded).
-- **Workflow**: Discover via `list_skills` → Activate via `load_skill` → Read resources via `load_skill_resource` (if needed).
-- **Preference**: Use `AgentSkill` for complex multi-step workflows over raw CLI commands."#;
+## Capability System (Lazy Loaded)
+Tools are hidden by default to save context.
+1. **Discovery**: Run `list_skills` (or `list_skills(query="...")`) to find tools.
+2. **Activation**: Run `load_skill` to inject tool definitions and instructions.
+3. **Usage**: Only *then* can you use the tool. Do not guess tool names.
+4. **Resources**: If a skill references external files (scripts/docs), use `load_skill_resource`."#;
 
 pub fn default_system_prompt() -> &'static str {
     DEFAULT_SYSTEM_PROMPT
@@ -103,7 +103,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 
 - Act and verify. Direct tone.
 - Scoped: list_files, grep_file (≤5), read_file (max_tokens).
-- Use `list_skills` and `load_skill` for more capabilities.
+- Tools hidden by default. `list_skills --search <term>` to find them.
 - WORKSPACE_DIR only. Confirm destructive ops."#;
 
 /// SPECIALIZED PROMPT (v4.3 - Complex refactoring with streamlined guidance)
@@ -130,11 +130,11 @@ scope → plan → execute → verify → document
 2. **design**: 3-7 steps with paths, dependencies, complexity (simple/medium/complex)
 3. **final_plan**: Verify paths, order, acceptance criteria before implementation
 
-## Skills System
-- **Tiered Action Space**: Specialized modules (`AgentSkill`) vs raw tools (`SystemUtility`).
-- **Discovery**: Use `list_skills` with `query` to find capabilities.
-- **On-Demand**: Activate via `load_skill` to register tools and see the full `SKILL.md` instructions.
-- **Efficiency**: Only load what you need. `SystemUtility` tools are summarized in prompt until activated."#;
+## Tooling Strategy (On-Demand)
+- **Lazy Loading**: Most tools are NOT in context initially.
+- **Workflow**: `list_skills` (find) → `load_skill` (activate) → use tool.
+- **Agent Skills**: Prefer high-level skills (e.g., "git_workflow") over raw tools.
+- **Deep Context**: Use `load_skill_resource` for specialized docs/scripts mentioned in `SKILL.md`."#;
 
 /// System instruction configuration
 #[derive(Debug, Clone)]
