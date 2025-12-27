@@ -489,7 +489,10 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         metadata: None,
     };
 
-    Ok(SkillContext::MetadataOnly(manifest, config.executable_path.clone()))
+    Ok(SkillContext::MetadataOnly(
+        manifest,
+        config.executable_path.clone(),
+    ))
 }
 
 /// Progressive skill loader that can load full skill details on demand

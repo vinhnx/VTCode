@@ -3220,6 +3220,54 @@
           ]
         },
         "context": 131072
+      },
+      "glm-4.7:cloud": {
+        "id": "glm-4.7:cloud",
+        "name": "GLM 4.7 (cloud)",
+        "description": "Advancing the Coding Capability",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "minimax-m2.1:cloud": {
+        "id": "minimax-m2.1:cloud",
+        "name": "MiniMax-M2.1 (cloud)",
+        "description": "Exceptional multilingual capabilities to elevate code engineering",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "gemini-3-flash-preview:cloud": {
+        "id": "gemini-3-flash-preview:cloud",
+        "name": "Gemini 3 Flash Preview (cloud)",
+        "description": "Gemini 3 Flash offers frontier intelligence built for speed at a fraction of the cost.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
       }
     }
   },

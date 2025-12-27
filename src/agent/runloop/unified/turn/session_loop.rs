@@ -19,16 +19,12 @@ use super::context::TurnLoopResult as RunLoopTurnLoopResult;
 use super::finalization::finalize_session;
 use super::turn_loop::TurnLoopOutcome;
 
-
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::session_setup::{
-    SessionState, initialize_session, initialize_session_ui,
-    spawn_signal_handler,
+    SessionState, initialize_session, initialize_session_ui, spawn_signal_handler,
 };
 use crate::agent::runloop::unified::state::SessionStats;
-use crate::agent::runloop::unified::status_line::{
-    InputStatusState,
-};
+use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{SessionEndReason, SessionStartTrigger};
 
@@ -141,7 +137,6 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut last_known_mcp_tools: Vec<String> = Vec::new();
         let mut last_mcp_refresh = std::time::Instant::now();
 
-
         loop {
             let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
                 renderer: &mut renderer,
@@ -175,16 +170,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                 follow_up_placeholder: &mut follow_up_placeholder,
             };
 
-            let mut interaction_state = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
-                input_status_state: &mut input_status_state,
-                queued_inputs: &mut queued_inputs,
-                model_picker_state: &mut model_picker_state,
-                palette_state: &mut palette_state,
-                last_known_mcp_tools: &mut last_known_mcp_tools,
-                mcp_catalog_initialized: &mut mcp_catalog_initialized,
-                last_mcp_refresh: &mut last_mcp_refresh,
-                ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
-            };
+            let mut interaction_state =
+                crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
+                    input_status_state: &mut input_status_state,
+                    queued_inputs: &mut queued_inputs,
+                    model_picker_state: &mut model_picker_state,
+                    palette_state: &mut palette_state,
+                    last_known_mcp_tools: &mut last_known_mcp_tools,
+                    mcp_catalog_initialized: &mut mcp_catalog_initialized,
+                    last_mcp_refresh: &mut last_mcp_refresh,
+                    ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
+                };
 
             let interaction_outcome = crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(
                 &mut interaction_ctx,
@@ -192,7 +188,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             ).await?;
 
             use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
-            
+
             let input = match interaction_outcome {
                 InteractionOutcome::Exit { reason } => {
                     session_end_reason = reason;

@@ -261,38 +261,45 @@ pub(crate) async fn initialize_session(
     let tools = Arc::new(RwLock::new(tool_definitions));
 
     // Perform skill discovery (CLI tools)
-    let mut discovered_skill_adapters: Vec<vtcode_core::skills::executor::SkillToolAdapter> = Vec::new();
+    let mut discovered_skill_adapters: Vec<vtcode_core::skills::executor::SkillToolAdapter> =
+        Vec::new();
     let mut discovered_skills_map = HashMap::new();
     let mut dormant_tool_defs = HashMap::new();
-    
-    
+
     let mut skill_discovery = vtcode_core::skills::discovery::SkillDiscovery::new();
     match skill_discovery.discover_all(&config.workspace).await {
-         Ok(result) => {
-             info!("Discovered {} skills and {} CLI tools", result.skills.len(), result.tools.len());
-             
-             // Process Traditional Skills (Markdown)
-             for skill_ctx in result.skills {
+        Ok(result) => {
+            info!(
+                "Discovered {} skills and {} CLI tools",
+                result.skills.len(),
+                result.tools.len()
+            );
+
+            // Process Traditional Skills (Markdown)
+            for skill_ctx in result.skills {
                 // Create lightweight skill for prompt generation
                 if let Ok(lightweight_skill) = vtcode_core::skills::types::Skill::new(
                     skill_ctx.manifest().clone(),
                     skill_ctx.path().clone(),
                     String::new(), // Placeholder instructions for prompt-only listing
                 ) {
-                    discovered_skills_map.insert(lightweight_skill.name().to_string(), lightweight_skill);
+                    discovered_skills_map
+                        .insert(lightweight_skill.name().to_string(), lightweight_skill);
                 }
-             }
+            }
 
-             // Process CLI tools
-             for tool_config in result.tools {
-                 match vtcode_core::skills::cli_bridge::CliToolBridge::new(tool_config) {
-                     Ok(bridge) => {
-                         match bridge.to_skill() {
+            // Process CLI tools
+            for tool_config in result.tools {
+                match vtcode_core::skills::cli_bridge::CliToolBridge::new(tool_config) {
+                    Ok(bridge) => {
+                        match bridge.to_skill() {
                             Ok(skill) => {
-                                discovered_skills_map.insert(skill.name().to_string(), skill.clone());
-                                let adapter = vtcode_core::skills::executor::SkillToolAdapter::new(skill);
+                                discovered_skills_map
+                                    .insert(skill.name().to_string(), skill.clone());
+                                let adapter =
+                                    vtcode_core::skills::executor::SkillToolAdapter::new(skill);
                                 discovered_skill_adapters.push(adapter.clone());
-                                
+
                                 // Create definition but store in dormant map
                                 let def = uni::ToolDefinition::function(
                                     adapter.name().to_string(),
@@ -307,29 +314,32 @@ pub(crate) async fn initialize_session(
                                 dormant_tool_defs.insert(adapter.name().to_string(), def);
                             }
                             Err(e) => warn!("Failed to convert tool bridge to skill: {}", e),
-                         }
-                     }
-                     Err(e) => warn!("Failed to create bridge for tool: {}", e),
-                 }
-             }
+                        }
+                    }
+                    Err(e) => warn!("Failed to create bridge for tool: {}", e),
+                }
+            }
 
-             // On Resume: Auto-activate skills that were active in the previous session
-             if let Some(resume_session) = resume {
-                 let previously_active = &resume_session.snapshot.metadata.loaded_skills;
-                 if !previously_active.is_empty() {
-                     let mut tools_guard = tools.write().await;
-                     for skill_name in previously_active {
-                         if let Some(def) = dormant_tool_defs.get(skill_name) {
-                             if !tools_guard.iter().any(|t| t.function_name() == def.function_name()) {
-                                 info!("Restoring active skill tool: {}", skill_name);
-                                 tools_guard.push(def.clone());
-                             }
-                         }
-                     }
-                 }
-             }
-         }
-         Err(e) => warn!("Skill discovery failed: {}", e),
+            // On Resume: Auto-activate skills that were active in the previous session
+            if let Some(resume_session) = resume {
+                let previously_active = &resume_session.snapshot.metadata.loaded_skills;
+                if !previously_active.is_empty() {
+                    let mut tools_guard = tools.write().await;
+                    for skill_name in previously_active {
+                        if let Some(def) = dormant_tool_defs.get(skill_name) {
+                            if !tools_guard
+                                .iter()
+                                .any(|t| t.function_name() == def.function_name())
+                            {
+                                info!("Restoring active skill tool: {}", skill_name);
+                                tools_guard.push(def.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => warn!("Skill discovery failed: {}", e),
     }
 
     let trim_config = load_context_trim_config(vt_cfg);
@@ -378,7 +388,7 @@ pub(crate) async fn initialize_session(
     let mut tool_registry =
         ToolRegistry::new_with_features(config.workspace.clone(), todo_planning_enabled).await;
     tool_registry.initialize_async().await?;
-    
+
     if let Some(cfg) = vt_cfg {
         tool_registry.apply_commands_config(&cfg.commands);
         tool_registry.apply_timeout_policy(&cfg.timeouts);
@@ -416,22 +426,21 @@ pub(crate) async fn initialize_session(
     }
 
     // Now register all on-demand skill tools in the registry
-    
+
     // 1. ListSkills
-    let list_skills_tool = vtcode_core::tools::skills::ListSkillsTool::new(
-        shared_skills_map.clone()
-    );
+    let list_skills_tool =
+        vtcode_core::tools::skills::ListSkillsTool::new(shared_skills_map.clone());
     let list_skills_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
         "list_skills",
         vtcode_core::config::types::CapabilityLevel::Basic,
-        list_skills_tool
+        list_skills_tool,
     );
     let _ = tool_registry.register_tool(list_skills_reg);
-    
+
     // Add list_skills to active tool definitions
     {
-         let mut tools_guard = tools.write().await;
-         tools_guard.push(uni::ToolDefinition::function(
+        let mut tools_guard = tools.write().await;
+        tools_guard.push(uni::ToolDefinition::function(
              "list_skills".to_string(),
              "List all available skills that can be loaded. Use this to discover capabilities before loading them.".to_string(),
              serde_json::json!({
@@ -443,19 +452,18 @@ pub(crate) async fn initialize_session(
     }
 
     // 2. LoadSkillResource
-    let load_resource_tool = vtcode_core::tools::skills::LoadSkillResourceTool::new(
-        shared_skills_map.clone()
-    );
+    let load_resource_tool =
+        vtcode_core::tools::skills::LoadSkillResourceTool::new(shared_skills_map.clone());
     let load_resource_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
         "load_skill_resource",
         vtcode_core::config::types::CapabilityLevel::Basic,
-        load_resource_tool
+        load_resource_tool,
     );
     let _ = tool_registry.register_tool(load_resource_reg);
-    
+
     {
-         let mut tools_guard = tools.write().await;
-         tools_guard.push(uni::ToolDefinition::function(
+        let mut tools_guard = tools.write().await;
+        tools_guard.push(uni::ToolDefinition::function(
              "load_skill_resource".to_string(),
              "Load the content of a specific resource belonging to a skill. Use this when instructed by a skill's SKILL.md.".to_string(),
              serde_json::json!({
@@ -473,28 +481,28 @@ pub(crate) async fn initialize_session(
     let load_skill_tool = vtcode_core::tools::skills::LoadSkillTool::new(
         shared_skills_map.clone(),
         dormant_tool_defs,
-        Some(tools.clone())
+        Some(tools.clone()),
     );
     let load_skill_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
         "load_skill",
         vtcode_core::config::types::CapabilityLevel::Basic,
-        load_skill_tool
+        load_skill_tool,
     );
     let _ = tool_registry.register_tool(load_skill_reg);
-    
+
     {
-         let mut tools_guard = tools.write().await;
-         tools_guard.push(uni::ToolDefinition::function(
-             "load_skill".to_string(),
-             "Load a specific skill to see full instructions and activate its tools.".to_string(),
-             serde_json::json!({
+        let mut tools_guard = tools.write().await;
+        tools_guard.push(uni::ToolDefinition::function(
+            "load_skill".to_string(),
+            "Load a specific skill to see full instructions and activate its tools.".to_string(),
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"}
                 },
                 "required": ["name"]
-            })
-         ));
+            }),
+        ));
     }
 
     // 4. Discovered CLI tool adapters
@@ -503,7 +511,7 @@ pub(crate) async fn initialize_session(
         let reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
             name,
             vtcode_core::config::types::CapabilityLevel::Basic,
-            adapter
+            adapter,
         );
         let _ = tool_registry.register_tool(reg);
     }

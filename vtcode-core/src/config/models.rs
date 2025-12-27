@@ -323,6 +323,12 @@ pub enum ModelId {
     OllamaDevstral2123bCloud,
     /// MiniMax-M2 Cloud - MiniMax reasoning model via Ollama Cloud
     OllamaMinimaxM2Cloud,
+    /// GLM-4.7 Cloud - Cloud-hosted GLM-4.7 model served via Ollama Cloud
+    OllamaGlm47Cloud,
+    /// MiniMax-M2.1 Cloud - Cloud-hosted MiniMax-M2.1 model served via Ollama Cloud
+    OllamaMinimaxM21Cloud,
+    /// Gemini 3 Flash Preview Cloud - Google Gemini 3 Flash Preview via Ollama Cloud
+    OllamaGemini3FlashPreviewCloud,
     /// Nemotron-3-Nano 30B Cloud - NVIDIA Nemotron-3-Nano 30B via Ollama Cloud
     OllamaNemotron3Nano30bCloud,
 
@@ -539,11 +545,14 @@ impl ModelId {
 
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
+            ModelId::OllamaGlm47Cloud => models::ollama::GLM_47_CLOUD,
             ModelId::OllamaGemini3ProPreviewLatestCloud => {
                 models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD
             }
+            ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,
             ModelId::OllamaDevstral2123bCloud => models::ollama::DEVSTRAL_2_123B_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
+            ModelId::OllamaMinimaxM21Cloud => models::ollama::MINIMAX_M21_CLOUD,
             ModelId::OllamaNemotron3Nano30bCloud => models::ollama::NEMOTRON_3_NANO_30B_CLOUD,
             ModelId::LmStudioMetaLlama38BInstruct => models::lmstudio::META_LLAMA_3_8B_INSTRUCT,
             ModelId::LmStudioMetaLlama318BInstruct => models::lmstudio::META_LLAMA_31_8B_INSTRUCT,
@@ -669,9 +678,12 @@ impl ModelId {
             | ModelId::OllamaKimiK2ThinkingCloud
             | ModelId::OllamaQwen3Coder480bCloud
             | ModelId::OllamaGlm46Cloud
+            | ModelId::OllamaGlm47Cloud
             | ModelId::OllamaGemini3ProPreviewLatestCloud
+            | ModelId::OllamaGemini3FlashPreviewCloud
             | ModelId::OllamaDevstral2123bCloud
             | ModelId::OllamaMinimaxM2Cloud
+            | ModelId::OllamaMinimaxM21Cloud
             | ModelId::OllamaNemotron3Nano30bCloud => Provider::Ollama,
             ModelId::LmStudioMetaLlama38BInstruct
             | ModelId::LmStudioMetaLlama318BInstruct
@@ -883,6 +895,9 @@ impl ModelId {
             ModelId::OllamaDevstral2123bCloud => "Devstral 2 123B (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
             ModelId::OllamaNemotron3Nano30bCloud => "Nemotron-3-Nano 30B (cloud)",
+            ModelId::OllamaGlm47Cloud => "GLM-4.7 (cloud)",
+            ModelId::OllamaMinimaxM21Cloud => "MiniMax-M2.1 (cloud)",
+            ModelId::OllamaGemini3FlashPreviewCloud => "Gemini 3 Flash Preview (cloud)",
             ModelId::LmStudioMetaLlama38BInstruct => "Meta Llama 3 8B (LM Studio)",
             ModelId::LmStudioMetaLlama318BInstruct => "Meta Llama 3.1 8B (LM Studio)",
             ModelId::LmStudioQwen257BInstruct => "Qwen2.5 7B (LM Studio)",
@@ -1051,6 +1066,13 @@ impl ModelId {
             }
             ModelId::OllamaKimiK2ThinkingCloud => {
                 "MoonshotAI Kimi K2 thinking model via Ollama Cloud with explicit reasoning traces"
+            }
+            ModelId::OllamaGlm47Cloud => "Advancing the Coding Capability",
+            ModelId::OllamaMinimaxM21Cloud => {
+                "Exceptional multilingual capabilities to elevate code engineering"
+            }
+            ModelId::OllamaGemini3FlashPreviewCloud => {
+                "Gemini 3 Flash offers frontier intelligence built for speed at a fraction of the cost."
             }
 
             ModelId::OllamaGemini3ProPreviewLatestCloud => {
@@ -1225,9 +1247,12 @@ impl ModelId {
             ModelId::OllamaKimiK2ThinkingCloud,
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm46Cloud,
+            ModelId::OllamaGlm47Cloud,
             ModelId::OllamaGemini3ProPreviewLatestCloud,
+            ModelId::OllamaGemini3FlashPreviewCloud,
             ModelId::OllamaDevstral2123bCloud,
             ModelId::OllamaMinimaxM2Cloud,
+            ModelId::OllamaMinimaxM21Cloud,
             ModelId::OllamaNemotron3Nano30bCloud,
             // LM Studio models
             ModelId::LmStudioMetaLlama38BInstruct,
@@ -1353,6 +1378,7 @@ impl ModelId {
                 | ModelId::Gemini3FlashPreview
                 | ModelId::ZaiGlm45Flash
                 | ModelId::MinimaxM21Lightning
+                | ModelId::OllamaGemini3FlashPreviewCloud
         )
     }
 
@@ -1373,6 +1399,8 @@ impl ModelId {
                 | ModelId::ZaiGlm46DeepThinking
                 | ModelId::ZaiGlm45DeepThinking
                 | ModelId::MinimaxM21
+                | ModelId::OllamaGlm47Cloud
+                | ModelId::OllamaMinimaxM21Cloud
         )
     }
 
@@ -1511,6 +1539,9 @@ impl ModelId {
             ModelId::OllamaDevstral2123bCloud => "devstral-2",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaNemotron3Nano30bCloud => "nemotron-3",
+            ModelId::OllamaGlm47Cloud => "glm-4.7",
+            ModelId::OllamaMinimaxM21Cloud => "minimax-m2.1",
+            ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3",
             ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
             ModelId::LmStudioMetaLlama318BInstruct => "meta-llama-3.1",
             ModelId::LmStudioQwen257BInstruct => "qwen2.5",
@@ -1691,13 +1722,18 @@ impl FromStr for ModelId {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
             }
             s if s == models::ollama::GLM_46_CLOUD => Ok(ModelId::OllamaGlm46Cloud),
+            s if s == models::ollama::GLM_47_CLOUD => Ok(ModelId::OllamaGlm47Cloud),
             s if s == models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD => {
                 Ok(ModelId::OllamaGemini3ProPreviewLatestCloud)
+            }
+            s if s == models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD => {
+                Ok(ModelId::OllamaGemini3FlashPreviewCloud)
             }
             s if s == models::ollama::DEVSTRAL_2_123B_CLOUD => {
                 Ok(ModelId::OllamaDevstral2123bCloud)
             }
             s if s == models::ollama::MINIMAX_M2_CLOUD => Ok(ModelId::OllamaMinimaxM2Cloud),
+            s if s == models::ollama::MINIMAX_M21_CLOUD => Ok(ModelId::OllamaMinimaxM21Cloud),
             s if s == models::ollama::NEMOTRON_3_NANO_30B_CLOUD => {
                 Ok(ModelId::OllamaNemotron3Nano30bCloud)
             }
