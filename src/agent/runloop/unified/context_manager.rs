@@ -366,7 +366,18 @@ impl ContextManager {
         }
 
         let mut pruning_ledger = pruning_ledger;
-        let usage = self.token_budget.usage_ratio().await;
+        
+        // Use live calculation from history to ensure consistency with pre_request_check
+        // stored token_budget might be lagging if history was just modified
+        let estimated = self.estimate_request_tokens(history);
+        let max_tokens = self.trim_config.max_tokens;
+        
+        let usage = if max_tokens > 0 {
+             estimated as f64 / max_tokens as f64
+        } else {
+             0.0
+        };
+
         let mut outcome = ContextTrimOutcome::default();
 
         // Alert/compact: semantic prune first, then enforce window
