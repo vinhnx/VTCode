@@ -94,6 +94,7 @@ pub(crate) struct TurnProcessingContext<'a> {
             crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator,
         >,
     >,
+    pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub full_auto: bool,
 }
 
@@ -101,6 +102,7 @@ impl<'a> TurnProcessingContext<'a> {
     pub fn new(
         ctx: &'a mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_>,
         working_history: &'a mut Vec<uni::Message>,
+        provider_client: &'a mut Box<dyn uni::LLMProvider>,
         vt_cfg: Option<&'a VTCodeConfig>,
         full_auto: bool,
     ) -> Self {
@@ -130,6 +132,7 @@ impl<'a> TurnProcessingContext<'a> {
             default_placeholder: ctx.default_placeholder,
             tool_permission_cache: ctx.tool_permission_cache,
             safety_validator: ctx.safety_validator,
+            provider_client,
             full_auto,
         }
     }

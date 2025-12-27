@@ -242,7 +242,7 @@ impl ContextManager {
         history: &mut Vec<uni::Message>,
         mut pruning_ledger: Option<&mut PruningDecisionLedger>,
         turn_number: usize,
-    ) -> usize {
+    ) -> (usize, bool) {
         let before_len = history.len();
         if self.trim_config.semantic_compression {
             // Build metrics for all messages
@@ -304,7 +304,7 @@ impl ContextManager {
                         let retention_choice = match decision {
                             RetentionDecision::Keep => RetentionChoice::Keep,
                             RetentionDecision::Remove => RetentionChoice::Remove,
-                            RetentionDecision::Summarizable => RetentionChoice::Keep, // Keep for now
+                            RetentionDecision::Summarizable => RetentionChoice::Summarize,
                         };
 
                         let reason = format!(
@@ -342,9 +342,20 @@ impl ContextManager {
                 ledger.record_pruning_round();
             }
 
-            before_len.saturating_sub(history.len())
+            let total_summarizable = metrics_list
+                .iter()
+                .filter(|(idx, _)| {
+                    matches!(decisions.get(idx), Some(RetentionDecision::Summarizable))
+                })
+                .count();
+
+            // Return removed count and whether summarization is recommended
+            // Threshold: if > 10% of messages are summarizable or > 5 messages
+            let summarization_recommended = total_summarizable > 5 || (total_summarizable > 0 && total_summarizable >= history.len() / 10);
+
+            (before_len.saturating_sub(history.len()), summarization_recommended)
         } else {
-            0
+            (0, false)
         }
     }
 
@@ -382,12 +393,14 @@ impl ContextManager {
         // Alert/compact: semantic prune first, then enforce window
         if usage >= vtcode_core::core::token_constants::THRESHOLD_ALERT {
             let before_len = history.len();
-            self.prune_with_semantic_priority(history, pruning_ledger.as_deref_mut(), turn_number);
+            let (_semantic_removed, summarize_rec) = self.prune_with_semantic_priority(history, pruning_ledger.as_deref_mut(), turn_number);
             let window_outcome = self.enforce_context_window(history);
             let after_semantic = before_len.saturating_sub(history.len());
             let total_removed = after_semantic.saturating_add(window_outcome.removed_messages);
             outcome.removed_messages = total_removed;
-            outcome.phase = if total_removed > 0 {
+            outcome.phase = if summarize_rec {
+                TrimPhase::SummarizationRecommended
+            } else if total_removed > 0 {
                 TrimPhase::AlertSemantic
             } else {
                 window_outcome.phase
@@ -557,6 +570,65 @@ impl ContextManager {
             semantic_value_per_token: semantic_per_token,
             avg_semantic_score: avg_semantic,
         });
+    }
+
+    pub(crate) fn get_summarizable_indices(&mut self, history: &[uni::Message]) -> Vec<usize> {
+         if !self.trim_config.semantic_compression {
+             return Vec::new();
+         }
+
+         let mut metrics_list = Vec::new();
+         for (idx, msg) in history.iter().enumerate() {
+            if matches!(msg.role, uni::MessageRole::System) {
+                continue;
+            }
+
+            let semantic_score = if let Some(cache) = &self.semantic_score_cache {
+                cache
+                    .get(&(idx as u64))
+                    .copied()
+                    .unwrap_or(context_constants::DEFAULT_SEMANTIC_CACHE_SCORE)
+                    as u32
+                    * context_constants::SEMANTIC_SCORE_SCALING_FACTOR
+            } else {
+                context_constants::DEFAULT_SEMANTIC_SCORE
+            };
+
+            let message_type = match &msg.role {
+                uni::MessageRole::System => MessageType::System,
+                uni::MessageRole::User => MessageType::User,
+                uni::MessageRole::Assistant => MessageType::Assistant,
+                uni::MessageRole::Tool => MessageType::Tool,
+            };
+
+            let token_count = match &msg.content {
+                uni::MessageContent::Text(text) => (text.len()
+                    / context_constants::CHAR_PER_TOKEN_APPROXIMATION)
+                    .max(context_constants::MIN_TOKEN_COUNT),
+                uni::MessageContent::Parts(_) => context_constants::DEFAULT_TOKENS_FOR_PARTS,
+            };
+
+            metrics_list.push(MessageMetrics {
+                index: idx,
+                token_count,
+                semantic_score,
+                age_in_turns: (history.len().saturating_sub(idx + 1)) as u32,
+                message_type,
+            });
+         }
+
+         let decisions = self.context_pruner.prune_messages(&metrics_list);
+         
+         metrics_list.iter()
+            .enumerate()
+            .filter_map(|(_i, metrics)| {
+                if matches!(decisions.get(&metrics.index), Some(RetentionDecision::Summarizable)) {
+                    Some(metrics.index)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Convert LLM messages to MessageMetrics for ContextPruner analysis
