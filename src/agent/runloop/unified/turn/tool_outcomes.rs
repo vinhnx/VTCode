@@ -72,12 +72,14 @@ pub async fn apply_turn_outcome(
                     _ => {}
                 }
             }
+            ctx.ctrl_c_state.clear_cancel();
             Ok(())
         }
         TurnLoopResult::Blocked { reason: _ } => {
             *ctx.conversation_history = outcome.working_history.clone();
             ctx.handle.clear_input();
             ctx.handle.set_placeholder(ctx.default_placeholder.clone());
+            ctx.ctrl_c_state.clear_cancel();
             Ok(())
         }
         TurnLoopResult::Completed => {
@@ -116,6 +118,7 @@ pub async fn apply_turn_outcome(
                     ),
                 }
             }
+            ctx.ctrl_c_state.clear_cancel();
             Ok(())
         }
     }

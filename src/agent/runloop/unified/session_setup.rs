@@ -478,10 +478,18 @@ pub(crate) async fn initialize_session(
     }
 
     // 3. LoadSkill
+    let mut dormant_adapters_map = HashMap::new();
+    for adapter in discovered_skill_adapters {
+        dormant_adapters_map.insert(adapter.name().to_string(), Arc::new(adapter) as Arc<dyn vtcode_core::tools::traits::Tool>);
+    }
+    let dormant_adapters = Arc::new(RwLock::new(dormant_adapters_map));
+
     let load_skill_tool = vtcode_core::tools::skills::LoadSkillTool::new(
         shared_skills_map.clone(),
         dormant_tool_defs,
+        dormant_adapters,
         Some(tools.clone()),
+        Some(Arc::new(RwLock::new(tool_registry.clone()))),
     );
     let load_skill_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
         "load_skill",
@@ -506,15 +514,7 @@ pub(crate) async fn initialize_session(
     }
 
     // 4. Discovered CLI tool adapters
-    for adapter in discovered_skill_adapters {
-        let name = adapter.name();
-        let reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
-            name,
-            vtcode_core::config::types::CapabilityLevel::Basic,
-            adapter,
-        );
-        let _ = tool_registry.register_tool(reg);
-    }
+    // DEFERRED: Adapters are now kept in dormant_tool_defs and registered on-demand via load_skill
 
     let custom_prompts = CustomPromptRegistry::load(
         vt_cfg.map(|cfg| &cfg.agent.custom_prompts),

@@ -3,7 +3,8 @@ use crate::skills::file_references::FileReferenceValidator;
 use crate::skills::types::Skill;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::traits::Tool;
-use anyhow::Context;
+use crate::tools::registry::ToolRegistry;
+use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -17,19 +18,25 @@ type ToolDefList = Arc<RwLock<Vec<ToolDefinition>>>;
 pub struct LoadSkillTool {
     skills: SkillMap,
     dormant_tools: HashMap<String, ToolDefinition>,
+    dormant_adapters: Arc<RwLock<HashMap<String, Arc<dyn Tool>>>>,
     active_tools: Option<ToolDefList>,
+    tool_registry: Option<Arc<RwLock<ToolRegistry>>>,
 }
 
 impl LoadSkillTool {
     pub fn new(
         skills: SkillMap,
         dormant_tools: HashMap<String, ToolDefinition>,
+        dormant_adapters: Arc<RwLock<HashMap<String, Arc<dyn Tool>>>>,
         active_tools: Option<ToolDefList>,
+        tool_registry: Option<Arc<RwLock<ToolRegistry>>>,
     ) -> Self {
         Self {
             skills,
             dormant_tools,
+            dormant_adapters,
             active_tools,
+            tool_registry,
         }
     }
 }
@@ -79,7 +86,23 @@ impl Tool for LoadSkillTool {
                     .any(|t| t.function_name() == def.function_name())
                 {
                     active.push(def.clone());
-                    activation_status = "Associated tools activated and added to context.";
+                    
+                    // Also register the tool in the ToolRegistry if provided
+                    if let Some(registry_arc) = &self.tool_registry {
+                        let mut adapters = self.dormant_adapters.write().await;
+                        if let Some(adapter) = adapters.remove(name) {
+                            let mut registry = registry_arc.write().await;
+                            let reg = crate::tools::registry::ToolRegistration::from_tool(
+                                Box::leak(name.to_string().into_boxed_str()), 
+                                crate::config::types::CapabilityLevel::Basic,
+                                adapter,
+                            );
+                            let _ = registry.register_tool(reg);
+                        }
+                        activation_status = "Associated tools activated and added to context.";
+                    } else {
+                        activation_status = "Associated tools activated and added to context.";
+                    }
                 } else {
                     activation_status = "Associated tools were already active.";
                 }

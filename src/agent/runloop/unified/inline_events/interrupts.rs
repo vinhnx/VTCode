@@ -36,8 +36,10 @@ impl<'a> InlineInterruptCoordinator<'a> {
             if !*notice_displayed {
                 self.display_notice(renderer, handle, default_placeholder, queue)?;
                 *notice_displayed = true;
+                return Ok(true);
             }
-            return Ok(true);
+        } else {
+            *notice_displayed = false;
         }
 
         Ok(false)

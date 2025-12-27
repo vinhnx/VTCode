@@ -50,7 +50,7 @@ impl Default for DiscoveryConfig {
                 PathBuf::from("./vendor/tools"),
                 PathBuf::from("~/.vtcode/tools"),
             ],
-            auto_discover_system_tools: true,
+            auto_discover_system_tools: false,
             max_depth: 3,
             skill_patterns: vec!["SKILL.md".to_string()],
             tool_patterns: vec!["*.exe".to_string(), "*.sh".to_string(), "*.py".to_string()],
