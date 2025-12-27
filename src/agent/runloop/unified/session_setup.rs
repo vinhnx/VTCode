@@ -12,6 +12,7 @@ use tokio::sync::{Notify, RwLock};
 use tokio::time::{Duration, sleep};
 use tracing::{debug, error, info, warn};
 use vtcode_core::tools::ApprovalRecorder;
+use vtcode_core::tools::traits::Tool;
 
 use super::async_mcp_manager::AsyncMcpManager;
 use super::palettes::apply_prompt_style;
@@ -195,7 +196,7 @@ pub(crate) async fn initialize_session(
     )
     .context("Failed to initialize provider client")?;
 
-    let mut full_auto_allowlist = None;
+    let mut full_auto_allowlist: Option<Vec<String>> = None;
 
     let base_declarations =
         build_function_declarations_with_mode(todo_planning_enabled, tool_documentation_mode);
@@ -260,8 +261,10 @@ pub(crate) async fn initialize_session(
     let tools = Arc::new(RwLock::new(tool_definitions));
 
     // Perform skill discovery (CLI tools)
-    let mut discovered_skill_adapters = Vec::new();
+    let mut discovered_skill_adapters: Vec<vtcode_core::skills::executor::SkillToolAdapter> = Vec::new();
     let mut discovered_skills_map = HashMap::new();
+    let mut dormant_tool_defs = HashMap::new();
+    
     
     let mut skill_discovery = vtcode_core::skills::discovery::SkillDiscovery::new();
     match skill_discovery.discover_all(&config.workspace).await {
@@ -281,7 +284,6 @@ pub(crate) async fn initialize_session(
              }
 
              // Process CLI tools
-             let mut dormant_tool_defs = HashMap::new();
              for tool_config in result.tools {
                  match vtcode_core::skills::cli_bridge::CliToolBridge::new(tool_config) {
                      Ok(bridge) => {
@@ -311,7 +313,21 @@ pub(crate) async fn initialize_session(
                  }
              }
 
-             // Note: We DO NOT push to `tools` here. We rely on LoadSkillTool to activate them.
+             // On Resume: Auto-activate skills that were active in the previous session
+             if let Some(resume_session) = resume {
+                 let previously_active = &resume_session.snapshot.metadata.loaded_skills;
+                 if !previously_active.is_empty() {
+                     let mut tools_guard = tools.write().await;
+                     for skill_name in previously_active {
+                         if let Some(def) = dormant_tool_defs.get(skill_name) {
+                             if !tools_guard.iter().any(|t| t.function_name() == def.function_name()) {
+                                 info!("Restoring active skill tool: {}", skill_name);
+                                 tools_guard.push(def.clone());
+                             }
+                         }
+                     }
+                 }
+             }
          }
          Err(e) => warn!("Skill discovery failed: {}", e),
     }
@@ -325,7 +341,7 @@ pub(crate) async fn initialize_session(
     let mut token_budget_config = RuntimeTokenBudgetConfig::for_model(
         context_features
             .map(|cfg| cfg.token_budget.model.as_str())
-            .unwrap_or("gpt-5-nano"),
+            .unwrap_or("gpt- nano"),
         max_context_tokens,
     );
     if let Some(cfg) = context_features {
@@ -341,37 +357,14 @@ pub(crate) async fn initialize_session(
 
     let conversation_history = build_conversation_history_from_resume(resume, &token_budget).await;
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
-    let mut base_system_prompt = read_system_prompt(
+    let base_system_prompt = read_system_prompt(
         &config.workspace,
         session_bootstrap.prompt_addendum.as_deref(),
     )
     .await;
 
-    // Register ListSkills tool
-    let list_skills_tool = vtcode_core::tools::skills::ListSkillsTool::new(
-        Arc::new(RwLock::new(discovered_skills_map.clone()))
-    );
-    let list_skills_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
-        "list_skills",
-        vtcode_core::config::types::CapabilityLevel::General,
-        list_skills_tool
-    );
-    if let Err(e) = tool_registry.register_tool(list_skills_reg) {
-        warn!("Failed to register list_skills tool: {}", e);
-    }
-    // Add list_skills to tool definitions
-    {
-         let mut tools_guard = tools.write().await;
-         tools_guard.push(uni::ToolDefinition::function(
-             "list_skills".to_string(),
-             "List all available skills that can be loaded. Use this to discover capabilities before loading them.".to_string(),
-             serde_json::json!({
-                "type": "object",
-                "properties": {},
-                "additionalProperties": false
-            })
-         ));
-    }
+    // Wrap skills map early for tool registration
+    let shared_skills_map = Arc::new(RwLock::new(discovered_skills_map));
 
     // Initialize MCP panel state
     let mcp_panel_state = if let Some(cfg) = vt_cfg {
@@ -380,11 +373,12 @@ pub(crate) async fn initialize_session(
         mcp_events::McpPanelState::default()
     };
 
-    let pty_config = vt_cfg.map(|cfg| cfg.pty).unwrap_or_default();
+    let _pty_config = vt_cfg.map(|cfg| cfg.pty.clone()).unwrap_or_default();
 
     let mut tool_registry =
         ToolRegistry::new_with_features(config.workspace.clone(), todo_planning_enabled).await;
     tool_registry.initialize_async().await?;
+    
     if let Some(cfg) = vt_cfg {
         tool_registry.apply_commands_config(&cfg.commands);
         tool_registry.apply_timeout_policy(&cfg.timeouts);
@@ -399,44 +393,12 @@ pub(crate) async fn initialize_session(
         if cfg.mcp.enabled
             && let Some(ref manager) = async_mcp_manager
         {
-            // If we polled earlier and grabbed a ready client, prefer that.
             let status = manager.get_status().await;
             if let super::async_mcp_manager::McpInitStatus::Ready { client } = &status {
                 tool_registry = tool_registry.with_mcp_client(Arc::clone(client));
                 if let Err(err) = tool_registry.refresh_mcp_tools().await {
                     warn!("Failed to refresh MCP tools: {}", err);
-
-                    // Log which providers are configured to help with debugging
-                    if !cfg.mcp.providers.is_empty() {
-                        let provider_names: Vec<String> = cfg
-                            .mcp
-                            .providers
-                            .iter()
-                            .map(|p| format!("{} (enabled: {})", p.name, p.enabled))
-                            .collect();
-                        info!("Configured MCP providers: [{}]", provider_names.join(", "));
-                    }
                 }
-            } else {
-                debug!(
-                    "MCP client not ready during startup; it will be available later if it finishes initializing"
-                );
-
-                // Log the status for debugging
-                match &status {
-                    super::async_mcp_manager::McpInitStatus::Error { message } => {
-                        warn!("MCP initialization failed: {}", message);
-                    }
-                    super::async_mcp_manager::McpInitStatus::Initializing { progress } => {
-                        info!("MCP still initializing: {}", progress);
-                    }
-                    super::async_mcp_manager::McpInitStatus::Disabled => {
-                        info!("MCP is disabled");
-                    }
-                    super::async_mcp_manager::McpInitStatus::Ready { .. } => {
-                        // This case is handled above
-                    }
-                };
             }
         }
 
@@ -453,51 +415,97 @@ pub(crate) async fn initialize_session(
         }
     }
 
-    // Register discovered skills in registry
-    for adapter in discovered_skill_adapters {
-         use vtcode_core::tools::traits::Tool;
-         let name = adapter.name(); 
-         let reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
-             name,
-             vtcode_core::config::types::CapabilityLevel::General,
-             adapter
-         );
-         if let Err(e) = tool_registry.register_tool(reg) {
-             warn!("Failed to register skill tool {}: {}", name, e);
-         }
+    // Now register all on-demand skill tools in the registry
+    
+    // 1. ListSkills
+    let list_skills_tool = vtcode_core::tools::skills::ListSkillsTool::new(
+        shared_skills_map.clone()
+    );
+    let list_skills_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
+        "list_skills",
+        vtcode_core::config::types::CapabilityLevel::Basic,
+        list_skills_tool
+    );
+    let _ = tool_registry.register_tool(list_skills_reg);
+    
+    // Add list_skills to active tool definitions
+    {
+         let mut tools_guard = tools.write().await;
+         tools_guard.push(uni::ToolDefinition::function(
+             "list_skills".to_string(),
+             "List all available skills that can be loaded. Use this to discover capabilities before loading them.".to_string(),
+             serde_json::json!({
+                 "type": "object",
+                 "properties": {},
+                 "additionalProperties": false
+             })
+         ));
     }
 
-    // Register LoadSkill tool
+    // 2. LoadSkillResource
+    let load_resource_tool = vtcode_core::tools::skills::LoadSkillResourceTool::new(
+        shared_skills_map.clone()
+    );
+    let load_resource_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
+        "load_skill_resource",
+        vtcode_core::config::types::CapabilityLevel::Basic,
+        load_resource_tool
+    );
+    let _ = tool_registry.register_tool(load_resource_reg);
+    
+    {
+         let mut tools_guard = tools.write().await;
+         tools_guard.push(uni::ToolDefinition::function(
+             "load_skill_resource".to_string(),
+             "Load the content of a specific resource belonging to a skill. Use this when instructed by a skill's SKILL.md.".to_string(),
+             serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "skill_name": {"type": "string"},
+                    "resource_path": {"type": "string"}
+                },
+                "required": ["skill_name", "resource_path"]
+            })
+         ));
+    }
+
+    // 3. LoadSkill
     let load_skill_tool = vtcode_core::tools::skills::LoadSkillTool::new(
-        Arc::new(RwLock::new(discovered_skills_map.clone())),
+        shared_skills_map.clone(),
         dormant_tool_defs,
-        Some(tools.clone()) // Pass shared tools list for dynamic activation
+        Some(tools.clone())
     );
     let load_skill_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
         "load_skill",
-        vtcode_core::config::types::CapabilityLevel::General,
+        vtcode_core::config::types::CapabilityLevel::Basic,
         load_skill_tool
     );
-    if let Err(e) = tool_registry.register_tool(load_skill_reg) {
-        warn!("Failed to register load_skill tool: {}", e);
-    }
-    // Add load_skill to tool definitions
+    let _ = tool_registry.register_tool(load_skill_reg);
+    
     {
          let mut tools_guard = tools.write().await;
          tools_guard.push(uni::ToolDefinition::function(
              "load_skill".to_string(),
-             "Load detailed instructions for a specific skill and activate its associated tools. Use this when you want to understand/use a skill listed in your system prompt.".to_string(),
+             "Load a specific skill to see full instructions and activate its tools.".to_string(),
              serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "The name of the skill to load"
-                    }
+                    "name": {"type": "string"}
                 },
                 "required": ["name"]
             })
          ));
+    }
+
+    // 4. Discovered CLI tool adapters
+    for adapter in discovered_skill_adapters {
+        let name = adapter.name();
+        let reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
+            name,
+            vtcode_core::config::types::CapabilityLevel::Basic,
+            adapter
+        );
+        let _ = tool_registry.register_tool(reg);
     }
 
     let custom_prompts = CustomPromptRegistry::load(
@@ -553,7 +561,7 @@ pub(crate) async fn initialize_session(
         tool_permission_cache,
         search_metrics,
         custom_prompts,
-        loaded_skills: Arc::new(RwLock::new(discovered_skills_map)),
+        loaded_skills: shared_skills_map,
         approval_recorder,
         safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
     })

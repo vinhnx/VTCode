@@ -326,7 +326,7 @@ fn walk_directory(
                 // Add or update the skill
                 let discovered_skill = DiscoveredSkill {
                     location_type: location.location_type,
-                    skill_context: SkillContext::MetadataOnly(manifest.clone()),
+                    skill_context: SkillContext::MetadataOnly(manifest.clone(), dir.to_path_buf()),
                     skill_path: dir.to_path_buf(),
                     skill_name: skill_name.clone(),
                 };
@@ -394,7 +394,7 @@ impl SkillLocations {
 
                         let discovered_skill = DiscoveredSkill {
                             location_type: location.location_type,
-                            skill_context: SkillContext::MetadataOnly(manifest.clone()),
+                            skill_context: SkillContext::MetadataOnly(manifest.clone(), path.clone()),
                             skill_path: path.clone(),
                             skill_name: skill_name.clone(),
                         };

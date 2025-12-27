@@ -1155,7 +1155,7 @@ impl ToolRegistry {
                 let filtered: Vec<_> = skill_contexts
                     .into_iter()
                     .filter_map(|ctx| {
-                        if let SkillContext::MetadataOnly(manifest) = ctx {
+                        if let SkillContext::MetadataOnly(manifest, _) = ctx {
                             let name_matches = manifest.name.to_lowercase().contains(&query_lower);
                             let desc_matches =
                                 manifest.description.to_lowercase().contains(&query_lower);
