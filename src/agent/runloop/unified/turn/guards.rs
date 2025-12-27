@@ -57,10 +57,11 @@ pub(crate) async fn run_proactive_guards(
         let mut decision_ledger = ctx.decision_ledger.write().await;
         decision_ledger.auto_prune();
     }
-    {
-        let mut pruning_ledger = ctx.pruning_ledger.write().await;
-        pruning_ledger.auto_prune();
-    }
+    
+    // Acquire pruning ledger lock for the duration of the guards check
+    // This allows us to record any proactive trims that occur
+    let mut pruning_ledger = ctx.pruning_ledger.write().await;
+    pruning_ledger.auto_prune();
 
     // Proactive token budget check - trim BEFORE consuming tokens
     // We implement a "check-trim-verify" loop here to ensure safety
@@ -72,51 +73,47 @@ pub(crate) async fn run_proactive_guards(
     loop {
         checks += 1;
         if checks > MAX_CHECKS {
-            // Safety break to prevent infinite loops, though unlikely with our logic
+            // Safety break
             tracing::warn!("Proactive guard loop limit reached");
             break;
         }
 
         let pre_check = ctx.context_manager.pre_request_check(ctx.working_history);
         match pre_check {
+            PreRequestAction::Proceed => {
+                break;
+            }
+            PreRequestAction::TrimLight => {
+                tracing::debug!("Pre-request: light trim triggered at WARNING threshold");
+                // Use adaptive_trim to handle recording to ledger automatically
+                ctx.context_manager
+                    .adaptive_trim(ctx.working_history, Some(&mut *pruning_ledger), step_count)
+                    .await?;
+            }
+            PreRequestAction::TrimAggressive => {
+                tracing::debug!("Pre-request: aggressive trim triggered at ALERT threshold");
+                ctx.context_manager
+                    .adaptive_trim(ctx.working_history, Some(&mut *pruning_ledger), step_count)
+                    .await?;
+            }
             PreRequestAction::Checkpoint | PreRequestAction::Block => {
                 ctx.renderer.line(
                     MessageStyle::Info,
                     "[!] Context usage critical - applying aggressive trim",
                 )?;
-                // Apply aggressive trim to recover headroom
+                
                 let outcome = ctx
                     .context_manager
-                    .adaptive_trim(ctx.working_history, None, step_count)
+                    .adaptive_trim(ctx.working_history, Some(&mut *pruning_ledger), step_count)
                     .await?;
 
                 if !outcome.is_trimmed() {
-                    // If we couldn't trim and we are blocked, we must fail
+                    // If blocked and cannot trim further, we must fail
                     if matches!(pre_check, PreRequestAction::Block) {
                         anyhow::bail!("Context budget exceeded and could not be resolved by trimming. Please summarize or reset the conversation.");
                     }
-                    // For checkpoint/other states we might proceed with risk or force summarize next
                     break;
                 }
-                // Loop to verify again
-            }
-            PreRequestAction::TrimAggressive => {
-                tracing::debug!("Pre-request: aggressive trim triggered at ALERT threshold");
-                ctx.context_manager
-                    .adaptive_trim(ctx.working_history, None, step_count)
-                    .await?;
-                // Loop to verify again
-            }
-            PreRequestAction::TrimLight => {
-                tracing::debug!("Pre-request: light trim triggered at WARNING threshold");
-                // Light trim: just prune tool responses
-                ctx.context_manager
-                    .prune_tool_responses(ctx.working_history);
-                // Loop to verify again
-            }
-            PreRequestAction::Proceed => {
-                // Normal operation, no action needed, safe to proceed
-                break;
             }
         }
     }
