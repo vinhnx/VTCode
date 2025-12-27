@@ -208,13 +208,9 @@ impl LspClient {
                                     }
                                 } else {
                                     // Notification (no id)
-                                    if let Some(method) =
-                                        value.get("method").and_then(|s| s.as_str())
-                                    {
-                                        if method == "window/showMessage" {
-                                            // Handle log message?
-                                            // println!("LSP Message: {:?}", value.get("params"));
-                                        }
+                                    if value.get("method").and_then(|s| s.as_str()) == Some("window/showMessage") {
+                                        // Handle log message?
+                                        // println!("LSP Message: {:?}", value.get("params"));
                                     }
                                 }
                             }
