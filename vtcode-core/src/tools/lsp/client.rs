@@ -144,11 +144,10 @@ impl LspClient {
                                 // End of headers
                                 break;
                             }
-                            if let Some(len_str) = line.strip_prefix("Content-Length: ") {
-                                if let Ok(len) = len_str.parse::<usize>() {
+                            if let Some(len_str) = line.strip_prefix("Content-Length: ")
+                                && let Ok(len) = len_str.parse::<usize>() {
                                     content_length = len;
                                 }
-                            }
                         }
                         Err(_) => return, // Error
                     }
@@ -156,8 +155,8 @@ impl LspClient {
 
                 if content_length > 0 {
                     let mut body_buffer = vec![0u8; content_length];
-                    if reader.read_exact(&mut body_buffer).await.is_ok() {
-                        if let Ok(body_str) = String::from_utf8(body_buffer) {
+                    if reader.read_exact(&mut body_buffer).await.is_ok()
+                        && let Ok(body_str) = String::from_utf8(body_buffer) {
                             // Try to parse as generic generic JSON first to determine type
                             if let Ok(value) = serde_json::from_str::<Value>(&body_str) {
                                 if let Some(id_val) = value.get("id") {
@@ -217,7 +216,6 @@ impl LspClient {
                                 }
                             }
                         }
-                    }
                 }
             }
         });

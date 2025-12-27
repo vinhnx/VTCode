@@ -147,11 +147,10 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
                 
                 // If this is a tool root or we are in a generic scan, check for tool directory structure
                 // Assuming tool dir has tool.json or executable
-                if root.is_tool_root {
-                     if let Ok(Some(tool_meta)) = try_load_tool_from_dir(&path, root.scope) {
+                if root.is_tool_root
+                     && let Ok(Some(tool_meta)) = try_load_tool_from_dir(&path, root.scope) {
                          outcome.skills.push(tool_meta);
                      }
-                }
                 continue;
             }
 

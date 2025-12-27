@@ -211,7 +211,7 @@ impl CodeIntelligenceTool {
                     // The user wants "Improved precision", implying we should return the LSP result.
 
                     // For now, let's wrap the LSP result in CodeIntelligenceOutput
-                    if let Some(_) = result.get("result") {
+                    if result.get("result").is_some() {
                         return Ok(json!(CodeIntelligenceOutput {
                             success: true,
                             operation: input.operation.to_string(),

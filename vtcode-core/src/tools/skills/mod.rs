@@ -80,8 +80,8 @@ impl Tool for LoadSkillTool {
 
         // 1. Activate tool definition if it exists in dormant set
         let mut activation_status = "No associated tools to activate.";
-        if let Some(tool_list) = &self.active_tools {
-            if let Some(def) = self.dormant_tools.get(name) {
+        if let Some(tool_list) = &self.active_tools
+            && let Some(def) = self.dormant_tools.get(name) {
                 let mut active = tool_list.write().await;
                 // Check if already active to avoid duplicates
                 if !active
@@ -110,7 +110,6 @@ impl Tool for LoadSkillTool {
                     activation_status = "Associated tools were already active.";
                 }
             }
-        }
 
         // 2. Load instructions and discover resources
         let skills = self.skills.read().await;
@@ -224,18 +223,16 @@ impl Tool for ListSkillsTool {
             let variety_str = format!("{:?}", skill.variety).to_lowercase();
             
             // Apply variety filter
-            if let Some(v_filter) = variety_filter {
-                if !variety_str.contains(&v_filter.replace("_", "").to_lowercase()) {
+            if let Some(v_filter) = variety_filter
+                && !variety_str.contains(&v_filter.replace("_", "").to_lowercase()) {
                     continue;
                 }
-            }
 
             // Apply query filter
-            if let Some(q) = &query {
-                if !name.to_lowercase().contains(q) {
+            if let Some(q) = &query
+                && !name.to_lowercase().contains(q) {
                     continue;
                 }
-            }
 
             skill_list.push(serde_json::json!({
                 "name": name,
@@ -249,18 +246,16 @@ impl Tool for ListSkillsTool {
         for (name, def) in &self.dormant_tools {
             if !skills.contains_key(name) {
                 // Apply variety filter (all dormant are SystemUtility)
-                if let Some(v_filter) = variety_filter {
-                    if !v_filter.to_lowercase().contains("system") && !v_filter.to_lowercase().contains("utility") {
+                if let Some(v_filter) = variety_filter
+                    && !v_filter.to_lowercase().contains("system") && !v_filter.to_lowercase().contains("utility") {
                         continue;
                     }
-                }
 
                 // Apply query filter
-                if let Some(q) = &query {
-                    if !name.to_lowercase().contains(q) {
+                if let Some(q) = &query
+                    && !name.to_lowercase().contains(q) {
                         continue;
                     }
-                }
 
                 skill_list.push(serde_json::json!({
                     "name": name,
