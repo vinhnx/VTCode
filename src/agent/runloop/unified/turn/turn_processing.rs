@@ -25,8 +25,8 @@ pub(crate) async fn execute_llm_request(
     active_model: &str,
     max_tokens_opt: Option<u32>,
     parallel_cfg_opt: Option<ParallelToolConfig>,
-    provider_client: &dyn uni::LLMProvider,
 ) -> Result<(uni::LLMResponse, bool)> {
+    let provider_client = ctx.provider_client.as_ref();
     // Apply semantic pruning with decision tracking if configured
     if ctx.context_manager.trim_config().semantic_compression {
         let mut pruning_ledger_mut = ctx.pruning_ledger.write().await;

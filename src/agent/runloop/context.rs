@@ -77,6 +77,7 @@ pub(crate) enum TrimPhase {
     WarningToolPrune,
     AlertSemantic,
     WindowEnforced,
+    SummarizationRecommended,
 }
 
 /// Result of a context trimming operation

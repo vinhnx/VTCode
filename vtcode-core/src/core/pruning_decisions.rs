@@ -22,6 +22,7 @@ pub struct PruningDecision {
 pub enum RetentionChoice {
     Keep,
     Remove,
+    Summarize,
 }
 
 /// Statistics about pruning decisions for a session
@@ -226,6 +227,7 @@ impl PruningDecisionLedger {
             let action = match d.decision {
                 RetentionChoice::Keep => "KEEP",
                 RetentionChoice::Remove => "REMOVE",
+                RetentionChoice::Summarize => "SUMMARIZE",
             };
             let _ = writeln!(
                 out,
