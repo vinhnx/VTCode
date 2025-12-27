@@ -78,7 +78,7 @@ impl UnifiedToolResolver {
     /// Resolve a tool name to its actual implementation
     pub async fn resolve_tool(&self, tool_name: &str) -> Result<ToolResolution, ToolExecutionError> {
         let original_name = tool_name.to_string();
-        
+
         // Check cache first
         if let Some(cached) = self.get_cached_resolution(&original_name).await {
             return cached.ok_or_else(|| {
@@ -93,10 +93,10 @@ impl UnifiedToolResolver {
 
         // Perform resolution
         let resolution = self.perform_resolution(&original_name).await;
-        
+
         // Cache the result
         self.cache_resolution(&original_name, resolution.as_ref().ok()).await;
-        
+
         resolution.map_err(|e| {
             ToolExecutionError::new(
                 original_name.clone(),
@@ -121,10 +121,10 @@ impl UnifiedToolResolver {
 
         // Perform MCP presence check
         let has_tool = self.check_mcp_tool_presence(tool_name).await;
-        
+
         // Cache the result
         self.cache_mcp_presence(tool_name, has_tool).await;
-        
+
         has_tool
     }
 
@@ -175,6 +175,18 @@ impl UnifiedToolResolver {
                                 },
                                 needs_pty: true,
                                 resolved_name: format!("mcp_{}", resolved_name),
+                                original_name: tool_name.to_string(),
+                            });
+                        }
+                    }
+
+                    // Fallback: if MCP fetch is unavailable, route to built-in web_fetch
+                    if mcp_tool_name == "fetch" && self.inventory.has_tool("web_fetch") {
+                        if let Some(registration) = self.inventory.registration_for("web_fetch") {
+                            return Ok(ToolResolution {
+                                tool_type: ToolType::Builtin(Arc::new(registration.clone())),
+                                needs_pty: registration.uses_pty(),
+                                resolved_name: "web_fetch".to_string(),
                                 original_name: tool_name.to_string(),
                             });
                         }
@@ -241,7 +253,7 @@ impl UnifiedToolResolver {
     /// Cache resolution result
     async fn cache_resolution(&self, tool_name: &str, resolution: Option<&ToolResolution>) {
         let mut cache = self.resolution_cache.write().unwrap();
-        
+
         if let Some(res) = resolution {
             cache.insert(tool_name.to_string(), Ok(res.clone()));
         } else if self.cache_config.cache_negatives {
@@ -271,7 +283,7 @@ impl UnifiedToolResolver {
     pub async fn cache_stats(&self) -> CacheStats {
         let resolution_cache = self.resolution_cache.read().unwrap();
         let mcp_presence_cache = self.mcp_presence_cache.read().unwrap();
-        
+
         CacheStats {
             resolution_cache_entries: resolution_cache.len(),
             mcp_presence_cache_entries: mcp_presence_cache.len(),
@@ -294,7 +306,7 @@ mod tests {
     async fn test_builtin_tool_resolution() {
         let inventory = Arc::new(ToolInventory::new());
         let resolver = UnifiedToolResolver::new(inventory, None);
-        
+
         // This would need actual tool registrations to test properly
         // For now, just test the structure
         assert!(!resolver.has_tool("nonexistent_tool").await);
@@ -304,12 +316,12 @@ mod tests {
     async fn test_cache_operations() {
         let inventory = Arc::new(ToolInventory::new());
         let resolver = UnifiedToolResolver::new(inventory, None);
-        
+
         // Test cache stats
         let stats = resolver.cache_stats().await;
         assert_eq!(stats.resolution_cache_entries, 0);
         assert_eq!(stats.mcp_presence_cache_entries, 0);
-        
+
         // Clear caches
         resolver.clear_caches().await;
     }
@@ -318,7 +330,7 @@ mod tests {
     async fn test_tool_name_parsing() {
         let inventory = Arc::new(ToolInventory::new());
         let resolver = UnifiedToolResolver::new(inventory, None);
-        
+
         // Test MCP tool name parsing
         assert_eq!(resolver.check_mcp_tool_presence("mcp_some_tool").await, false);
         assert_eq!(resolver.check_mcp_tool_presence("some_tool").await, false);

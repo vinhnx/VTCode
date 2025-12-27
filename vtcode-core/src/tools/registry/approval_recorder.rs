@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Records tool approval decisions for learning
+#[derive(Clone)]
 pub struct ApprovalRecorder {
     manager: Arc<RwLock<JustificationManager>>,
 }

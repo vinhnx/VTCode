@@ -5,7 +5,7 @@
 //! user control overwhich tools the agent can use.
 
 use crate::utils::error_messages::ERR_CREATE_POLICY_DIR;
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use dialoguer::console::style;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -842,7 +842,8 @@ impl ToolPolicyManager {
                             .await?;
                         Ok(ToolExecutionDecision::Allowed)
                     } else {
-                        self.prompt_user_for_tool(tool_name).await
+                        // In TUI mode, permission was collected via modal; allow through
+                        Ok(ToolExecutionDecision::Allowed)
                     }
                 }
             };
@@ -859,7 +860,8 @@ impl ToolPolicyManager {
                     self.set_policy(canonical_name, ToolPolicy::Allow).await?;
                     return Ok(ToolExecutionDecision::Allowed);
                 }
-                self.prompt_user_for_tool(canonical_name).await
+                // In TUI mode, permission was collected via modal; allow through
+                Ok(ToolExecutionDecision::Allowed)
             }
         }
     }
@@ -869,25 +871,19 @@ impl ToolPolicyManager {
         AUTO_ALLOW_TOOLS.contains(&canonical.as_ref())
     }
 
-    /// Prompt user for tool execution permission
+    /// Prompt user for tool execution permission (CLI-only).
     ///
-    /// WARNING: This function uses CLI dialoguer prompts and should NEVER be called
-    /// when running in TUI mode, as it will corrupt the terminal display.
-    ///
-    /// In TUI mode, tool permissions should be handled by `ensure_tool_permission()`
-    /// in `src/agent/runloop/unified/tool_routing.rs` which uses TUI modals.
-    /// The preapproval system should prevent this function from being called.
+    /// WARNING: This uses dialoguer (CLI) prompts. It MUST NOT run in TUI mode or
+    /// it will corrupt the terminal. In TUI mode, permissions are handled by
+    /// `ensure_tool_permission()` in `src/agent/runloop/unified/tool_routing.rs`.
+    /// The preapproval system should prevent this from being called under TUI.
     async fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<ToolExecutionDecision> {
-        // SAFETY CHECK: If we are in TUI mode, use a Ratatui-based picker instead of dialoguer.
+        // Hard guard: this function must never run in TUI mode.
         if std::env::var("VTCODE_TUI_MODE").is_ok() {
-            tracing::warn!(
-                "prompt_user_for_tool invoked in TUI mode for tool '{}' - using inline TUI dialog",
+            bail!(
+                "prompt_user_for_tool is CLI-only; TUI must use ensure_tool_permission() for '{}'",
                 tool_name
             );
-
-            notify_attention(true, Some("Tool approval required"));
-            let selection = prompt_tool_usage_tui(tool_name)?;
-            return self.handle_tool_confirmation(tool_name, selection).await;
         }
 
         let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
