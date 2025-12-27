@@ -1589,6 +1589,18 @@ impl PtyManager {
         }
     }
 
+    pub fn terminate_all_sessions(&self) {
+        let session_ids: Vec<String> = {
+            let sessions = self.inner.sessions.lock();
+            sessions.keys().cloned().collect()
+        };
+        for id in session_ids {
+            if let Err(e) = self.close_session(&id) {
+                warn!("Failed to close PTY session {}: {}", id, e);
+            }
+        }
+    }
+
     fn session_handle(&self, session_id: &str) -> Result<Arc<PtySessionHandle>> {
         let sessions = self.inner.sessions.lock();
         sessions

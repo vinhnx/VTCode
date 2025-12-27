@@ -1232,6 +1232,10 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
 
         loop {
+            if ctrl_c_state.is_cancel_requested() {
+                tool_registry.terminate_all_pty_sessions();
+            }
+            input_status_state.is_cancelling = ctrl_c_state.is_cancel_requested();
             if let Err(error) = update_input_status_if_changed(
                 &handle,
                 &config.workspace,

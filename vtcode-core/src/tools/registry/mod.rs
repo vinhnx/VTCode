@@ -1007,9 +1007,12 @@ impl ToolRegistry {
     pub fn end_pty_session(&self) {
         self.pty_sessions.end_session();
     }
-
     pub fn active_pty_sessions(&self) -> usize {
         self.pty_sessions.active_sessions()
+    }
+
+    pub fn terminate_all_pty_sessions(&self) {
+        self.pty_sessions.terminate_all();
     }
 
     pub fn plan_manager(&self) -> PlanManager {
