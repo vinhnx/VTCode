@@ -3,6 +3,24 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.54.0] - 2025-12-27
+
+
+### Features
+    - feat: Implement LSP client and manager with agent slash commands, and add LLM provider caching tests.
+    - feat: Update default agent configuration to HuggingFace and refine tool schemas and prompt generation logic.
+    - feat: Introduce dynamic system prompt enhancements including temporal context and working directory awareness, along with refined tool usage guidelines for improved agent performance.
+    - feat: Enhance textual tool call parsing, pre-validate arguments, and refine tool failure detection to improve agent robustness.
+
+
+### Documentation
+    - docs: update changelog for v0.53.2 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.53.2 [skip ci]
+    - chore: release v0.53.2
+    - chore: update npm package.json to v0.53.1 [skip ci]
 # [Version 0.53.2] - 2025-12-26
 
 
