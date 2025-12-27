@@ -130,6 +130,7 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
         requires_container: yaml.requires_container,
         disallow_container: yaml.disallow_container,
         compatibility: yaml.compatibility,
+        variety: crate::skills::types::SkillVariety::AgentSkill,
         metadata: yaml.metadata,
     };
 

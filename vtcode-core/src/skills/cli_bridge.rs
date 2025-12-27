@@ -401,6 +401,7 @@ impl CliToolBridge {
             requires_container: None,
             disallow_container: None,
             compatibility: None,
+            variety: crate::skills::types::SkillVariety::SystemUtility,
             metadata: None,
         };
 

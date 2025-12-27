@@ -1045,6 +1045,17 @@ impl ToolDefinition {
         }
     }
 
+    /// Get the description for easy access
+    pub fn description(&self) -> &str {
+        if let Some(func) = &self.function {
+            &func.description
+        } else if let Some(shell) = &self.shell {
+            &shell.description
+        } else {
+            ""
+        }
+    }
+
     /// Validate that this tool definition is properly formed
     pub fn validate(&self) -> Result<(), String> {
         match self.tool_type.as_str() {

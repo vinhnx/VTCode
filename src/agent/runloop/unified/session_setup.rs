@@ -428,8 +428,10 @@ pub(crate) async fn initialize_session(
     // Now register all on-demand skill tools in the registry
 
     // 1. ListSkills
-    let list_skills_tool =
-        vtcode_core::tools::skills::ListSkillsTool::new(shared_skills_map.clone());
+    let list_skills_tool = vtcode_core::tools::skills::ListSkillsTool::new(
+        shared_skills_map.clone(),
+        dormant_tool_defs.clone(),
+    );
     let list_skills_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
         "list_skills",
         vtcode_core::config::types::CapabilityLevel::Basic,
@@ -603,6 +605,7 @@ pub(crate) async fn initialize_session_ui(
         session_state.trim_config,
         session_state.token_budget.clone(),
         session_state.token_budget_enabled,
+        session_state.loaded_skills.clone(),
     );
 
     let active_styles = theme::active_styles();
