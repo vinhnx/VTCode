@@ -175,6 +175,72 @@ impl IncrementalSystemPrompt {
                 let _ = writeln!(prompt, "→ Continue to next step.");
             }
         }
+        
+        // Skill System Guide (Architectural context for the agent)
+        let _ = writeln!(prompt, "\n# HOW TO USE SKILLS
+VTCode uses a tiered skill system to optimize context window usage.
+1. **Discovery**: Use `list_skills` (with optional `query` or `variety`) to find capabilities.
+2. **Activation**: Use `load_skill(name=\"...\")` to activate a skill. This:
+   - Registers associated tools into your available toolset.
+   - Provides detailed `Instructions` (SKILL.md) for specialized workflows.
+3. **Execution**: Avoid manual low-level commands if an `AgentSkill` exists for the task.
+4. **Resources**: If a skill references additional files (scripts/ or references/), use `load_skill_resource` to read them on-demand.");
+
+        // Skills Section
+        let agent_skills: Vec<_> = context
+            .discovered_skills
+            .iter()
+            .filter(|s| matches!(s.variety, vtcode_core::skills::types::SkillVariety::AgentSkill))
+            .collect();
+
+        if !agent_skills.is_empty() {
+            let _ = writeln!(prompt, "\n# AVAILABLE SKILLS");
+            for skill in agent_skills {
+                let status = if !skill.instructions.is_empty() {
+                    " [ACTIVE]"
+                } else {
+                    ""
+                };
+                let _ = writeln!(prompt, "## {}{}", skill.name(), status);
+                let _ = writeln!(prompt, "{}", skill.description());
+                if skill.instructions.is_empty() {
+                    let _ = writeln!(prompt, "Use `load_skill(\"{}\")` to see full instructions.", skill.name());
+                }
+            }
+        }
+
+        let system_utils: Vec<_> = context
+            .discovered_skills
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.variety,
+                    vtcode_core::skills::types::SkillVariety::SystemUtility
+                )
+            })
+            .collect();
+
+        if !system_utils.is_empty() {
+            let count = system_utils.len();
+            // Get a few examples to show the agent what kind of tools are available
+            let examples: Vec<_> = system_utils
+                .iter()
+                .take(5)
+                .map(|s| s.name())
+                .collect();
+            let examples_str = if examples.len() < count {
+                format!("{}, ...", examples.join(", "))
+            } else {
+                examples.join(", ")
+            };
+
+            let _ = writeln!(
+                prompt,
+                "\n# SYSTEM UTILITIES\n- {} tools available ({}) via `list_skills` and `load_skill`.",
+                count,
+                examples_str
+            );
+        }
 
         prompt
     }
@@ -235,6 +301,8 @@ pub struct SystemPromptContext {
     pub token_usage_ratio: f64,
     pub current_plan: Option<vtcode_core::tools::TaskPlan>,
     pub full_auto: bool,
+    /// Discovered skills for immediate awareness
+    pub discovered_skills: Vec<vtcode_core::skills::types::Skill>,
 }
 
 impl SystemPromptContext {
@@ -252,6 +320,11 @@ impl SystemPromptContext {
             plan.summary.completed_steps.hash(&mut hasher);
         }
         self.full_auto.hash(&mut hasher);
+        // We use skill names and versions for hashing
+        for skill in &self.discovered_skills {
+            skill.name().hash(&mut hasher);
+            skill.manifest.version.hash(&mut hasher);
+        }
         hasher.finish()
     }
 }

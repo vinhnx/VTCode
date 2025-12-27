@@ -8,7 +8,7 @@
 
 use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig, discover_cli_tools};
 use crate::skills::manifest::parse_skill_file;
-use crate::skills::types::{SkillContext, SkillManifest};
+use crate::skills::types::{SkillContext, SkillManifest, SkillVariety};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -486,6 +486,7 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         requires_container: None,
         disallow_container: None,
         compatibility: None,
+        variety: SkillVariety::SystemUtility,
         metadata: None,
     };
 

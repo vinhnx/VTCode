@@ -7,6 +7,19 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// Skill variety indicating the type of skill
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillVariety {
+    /// High-level instruction-based skill (Agent Skills spec)
+    #[default]
+    AgentSkill,
+    /// Low-level CLI tool bridge
+    SystemUtility,
+    /// Native VTCode functionality
+    BuiltIn,
+}
+
 /// Skill scope indicating where the skill is defined
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -87,6 +100,9 @@ pub struct SkillManifest {
     /// Environment/platform requirements (1-500 chars, Agent Skills spec)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compatibility: Option<String>,
+    /// The variety of this skill
+    #[serde(default)]
+    pub variety: SkillVariety,
     /// Arbitrary key-value metadata (Agent Skills spec)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
@@ -321,6 +337,9 @@ pub struct Skill {
     /// Level 2: Instructions from SKILL.md body (<5K tokens, loaded when triggered)
     pub instructions: String,
 
+    /// Skill variety
+    pub variety: SkillVariety,
+
     /// Level 3: Bundled resources (lazy-loaded on demand)
     pub resources: HashMap<String, SkillResource>,
 }
@@ -342,6 +361,7 @@ impl Skill {
             SkillScope::User
         };
         Ok(Skill {
+            variety: manifest.variety,
             manifest,
             path,
             scope,
@@ -359,6 +379,7 @@ impl Skill {
     ) -> anyhow::Result<Self> {
         manifest.validate()?;
         Ok(Skill {
+            variety: manifest.variety,
             manifest,
             path,
             scope,

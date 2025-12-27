@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use anyhow::{Result, bail};
 use tracing::{debug, warn};
@@ -63,6 +64,7 @@ impl ContextManager {
         trim_config: ContextTrimConfig,
         token_budget: Arc<TokenBudgetManager>,
         token_budget_enabled: bool,
+        loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
     ) -> Self {
         let (semantic_analyzer, semantic_score_cache) = if trim_config.semantic_compression {
             match TreeSitterAnalyzer::new() {
@@ -91,7 +93,7 @@ impl ContextManager {
             semantic_score_cache,
             context_pruner,
             last_efficiency: None,
-            loaded_skills: Arc::new(RwLock::new(HashMap::new())),
+            loaded_skills,
         }
     }
 
@@ -469,6 +471,13 @@ impl ContextManager {
             },
             current_plan,
             full_auto,
+            discovered_skills: self
+                .loaded_skills
+                .read()
+                .await
+                .values()
+                .cloned()
+                .collect(),
         };
 
         // Use incremental builder to avoid redundant cloning and processing
@@ -716,7 +725,13 @@ mod tests {
         };
         let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
         let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
-        let mut manager = ContextManager::new("sys".into(), trim_config, Arc::clone(&budget), true);
+        let mut manager = ContextManager::new(
+            "sys".into(),
+            trim_config,
+            Arc::clone(&budget),
+            true,
+            Arc::new(RwLock::new(HashMap::new())),
+        );
 
         let mut history = make_tool_history(8);
         let mut stats = vtcode_core::core::token_budget::TokenUsageStats::new();
@@ -741,7 +756,13 @@ mod tests {
         };
         let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
         let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
-        let mut manager = ContextManager::new("sys".into(), trim_config, Arc::clone(&budget), true);
+        let mut manager = ContextManager::new(
+            "sys".into(),
+            trim_config,
+            Arc::clone(&budget),
+            true,
+            Arc::new(RwLock::new(HashMap::new())),
+        );
 
         // Build a history that exceeds the context window
         let mut history: Vec<uni::Message> = (0..10)
@@ -777,7 +798,13 @@ mod tests {
         let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
         let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
         // Note: token_budget_enabled = false
-        let manager = ContextManager::new("sys".into(), trim_config, budget, false);
+        let manager = ContextManager::new(
+            "sys".into(),
+            trim_config,
+            budget,
+            false,
+            Arc::new(RwLock::new(HashMap::new())),
+        );
 
         let history = vec![uni::Message::user("hello".to_string())];
         assert_eq!(
@@ -794,7 +821,13 @@ mod tests {
         };
         let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
         let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
-        let manager = ContextManager::new("sys".into(), trim_config, budget, true);
+        let manager = ContextManager::new(
+            "sys".into(),
+            trim_config,
+            budget,
+            true,
+            Arc::new(RwLock::new(HashMap::new())),
+        );
 
         // Create history that's ~80% of max tokens (above WARNING threshold of 0.75)
         // At 4 chars/token, 8000 tokens = 32000 chars, minus 2000 overhead = 30000 chars
@@ -814,7 +847,13 @@ mod tests {
         };
         let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
         let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
-        let manager = ContextManager::new("sys".into(), trim_config, budget, true);
+        let manager = ContextManager::new(
+            "sys".into(),
+            trim_config,
+            budget,
+            true,
+            Arc::new(RwLock::new(HashMap::new())),
+        );
 
         // Small message should be under any threshold
         let history = vec![uni::Message::user("hi".to_string())];
