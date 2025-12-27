@@ -11,7 +11,7 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "deepseek-v3.2:cloud"
+default_model = "gpt-oss:120b-cloud"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"

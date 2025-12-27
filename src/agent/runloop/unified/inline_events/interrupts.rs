@@ -61,7 +61,7 @@ impl<'a> InlineInterruptCoordinator<'a> {
         renderer.line_if_not_empty(MessageStyle::Output)?;
         renderer.line(
             MessageStyle::Info,
-            "Interrupt received. Agent loop stopped. Press Ctrl+C again to exit.",
+            "Interrupt received. Stopping task... (Press Ctrl+C again within 2s to exit)",
         )?;
         handle.clear_input();
         handle.set_placeholder(default_placeholder.clone());

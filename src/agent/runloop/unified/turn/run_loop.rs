@@ -1150,6 +1150,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
         }
 
+
         let async_mcp_manager_for_signal = async_mcp_manager.clone();
         {
             let state = ctrl_c_state.clone();
@@ -1166,28 +1167,27 @@ pub(crate) async fn run_single_agent_loop_unified(
                     let signal = state.register_signal();
                     notify.notify_waiters();
 
-                    // Send shutdown command to session to ensure terminal cleanup
-                    handle_for_signal.shutdown();
-
-                    // Shutdown MCP client on interrupt using async manager
-                    if let Some(mcp_manager) = &async_mcp_manager_for_signal
-                        && let Err(e) = mcp_manager.shutdown().await
-                    {
-                        let error_msg = e.to_string();
-                        if error_msg.contains("EPIPE")
-                            || error_msg.contains("Broken pipe")
-                            || error_msg.contains("write EPIPE")
-                        {
-                            eprintln!(
-                                "Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}",
-                                e
-                            );
-                        } else {
-                            eprintln!("Warning: Failed to shutdown MCP client on interrupt: {}", e);
-                        }
-                    }
-
                     if matches!(signal, CtrlCSignal::Exit) {
+                        // Send shutdown command to session to ensure terminal cleanup
+                        handle_for_signal.shutdown();
+
+                        // Shutdown MCP client on interrupt using async manager
+                        if let Some(mcp_manager) = &async_mcp_manager_for_signal
+                            && let Err(e) = mcp_manager.shutdown().await
+                        {
+                            let error_msg = e.to_string();
+                            if error_msg.contains("EPIPE")
+                                || error_msg.contains("Broken pipe")
+                                || error_msg.contains("write EPIPE")
+                            {
+                                eprintln!(
+                                    "Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}",
+                                    e
+                                );
+                            } else {
+                                eprintln!("Warning: Failed to shutdown MCP client on interrupt: {}", e);
+                            }
+                        }
                         break;
                     }
                 }
