@@ -59,7 +59,7 @@ const JSON_INSTRUCTION: &str = "Return JSON that matches the provided schema.";
 ///
 /// # Explicit provider - force specific provider
 /// deepseek-ai/DeepSeek-R1:together
-/// MiniMaxAI/MiniMax-M2:novita
+/// MiniMaxAI/MiniMax-M2.1:novita
 /// ```
 ///
 /// Configure preferences: https://hf.co/settings/inference-providers
@@ -196,8 +196,8 @@ impl HuggingFaceProvider {
             return Err(LLMError::Provider {
                 message: format_llm_error(
                     PROVIDER_NAME,
-                    "Model 'MiniMax-M2' requires explicit provider selection. \
-                    Use 'MiniMaxAI/MiniMax-M2:novita' to access via Novita.\n\n\
+                    "MiniMax models require explicit provider selection (:novita suffix). \
+                    Use 'MiniMaxAI/MiniMax-M2.1:novita'.\n\n\
                     Provider selection guide: https://huggingface.co/docs/inference-providers/guide#provider-selection",
                 ),
                 metadata: None,
@@ -259,21 +259,14 @@ impl HuggingFaceProvider {
             "stream": request.stream,
         });
 
-        // Behavior 6: Support 'thinking' parameter for reasoning models
-        // Borrows logic from ZAI and DeepSeek native providers
-        if self.supports_reasoning_effort(&request.model) {
-            let api_model = request.model.to_lowercase();
-
-            // Behavior 18: Skip 'thinking' parameter for GLM models in Chat API on HF router
-            // to avoid 400 "Invalid API parameter" errors. Reasoning is often automatic
-            // for GLM-4.7 or handled via the Responses API.
-            if is_glm {
-                // Skip adding thinking parameter for GLM in Chat API
-            } else if api_model.contains("deepseek-r1") || api_model.contains("v3.2") {
-                // Generic 'thinking' trigger for other reasoning models
-                payload["thinking"] = json!({ "type": "enabled" });
-            }
+        // Behavior 17: Enable tool streaming for GLM models (4.6, 4.7+)
+        if request.stream && request.tools.is_some() && is_glm {
+            payload["tool_stream"] = json!(true);
         }
+
+        // Behavior 6: Thinking/Reasoning parameters are currently only supported via Responses API (beta)
+        // Adding them to Chat Completions API causes "Extra inputs are not permitted, field: 'thinking'" errors
+        // on Hugging Face router for models like DeepSeek-V3.2.
 
         // Behavior 2: Use max_tokens (not max_completion_tokens)
         if let Some(max_tokens) = request.max_tokens {
@@ -301,6 +294,10 @@ impl HuggingFaceProvider {
             payload["top_p"] = json!(top_p);
         }
 
+        if let Some(top_k) = request.top_k {
+            payload["top_k"] = json!(top_k);
+        }
+
         // Behavior 4: Skip presence_penalty and frequency_penalty
         // (Don't add these parameters at all for HF)
 
@@ -326,6 +323,28 @@ impl HuggingFaceProvider {
     fn is_deepseek_model(&self, model: &str) -> bool {
         let lower = model.to_ascii_lowercase();
         lower.contains("deepseek")
+    }
+
+    /// Check if model is a MiniMax model
+    fn is_minimax_model(&self, model: &str) -> bool {
+        let lower = model.to_ascii_lowercase();
+        lower.contains("minimax")
+    }
+
+    /// Apply model-specific default parameters
+    fn apply_model_defaults(&self, request: &mut LLMRequest) {
+        if self.is_minimax_model(&request.model) {
+            // MiniMax recommended parameters: temperature=1.0, top_p=0.95, top_k=40
+            if request.temperature.is_none() {
+                request.temperature = Some(1.0);
+            }
+            if request.top_p.is_none() {
+                request.top_p = Some(0.95);
+            }
+            if request.top_k.is_none() {
+                request.top_k = Some(40);
+            }
+        }
     }
 
     /// Behavior 9: Add JSON schema instruction for Responses API
@@ -499,23 +518,13 @@ impl HuggingFaceProvider {
         if let Some(top_p) = request.top_p {
             payload["top_p"] = json!(top_p);
         }
+        if let Some(top_k) = request.top_k {
+            payload["top_k"] = json!(top_k);
+        }
 
-        // Behavior 1: Add tools with flattened schema for Responses API
         if let Some(tools) = &request.tools {
-            let mut flattened_tools = Vec::new();
-            for tool in tools {
-                if let Some(func) = &tool.function {
-                    flattened_tools.push(json!({
-                        "type": "function",
-                        "name": func.name,
-                        "description": func.description,
-                        "parameters": func.parameters
-                    }));
-                }
-            }
-
-            if !flattened_tools.is_empty() {
-                payload["tools"] = json!(flattened_tools);
+            if let Some(serialized) = self.serialize_tools_huggingface(tools) {
+                payload["tools"] = json!(serialized);
 
                 if let Some(choice) = &request.tool_choice {
                     // Responses API often takes string choice or specific format
@@ -545,17 +554,13 @@ impl HuggingFaceProvider {
     /// 3. Chat Completions API handles tools correctly for most models
     ///
     /// To enable Responses API, you would need explicit opt-in configuration.
-    fn should_use_responses_api(&self, request: &LLMRequest) -> bool {
-        // Behavior 11: Responses API is beta/unstable on HuggingFace and not
-        // supported by all backend providers (e.g. Z.AI/GLM).
-        // Default to false unless explicitly opted in or for specific models.
-        if self.is_glm_model(&request.model) {
-            return false;
-        }
-
-        // For other models, we currently allow it for testing, but ideally
-        // this should be configurable.
-        true
+    fn should_use_responses_api(&self, _request: &LLMRequest) -> bool {
+        // Behavior 11: Responses API is beta/unstable on HuggingFace.
+        // It has caused issues with tool calling on many providers (Novita, Together)
+        // and specifically DeepSeek and GLM models on the HF router.
+        //
+        // MANDATORY: Use Chat Completions API (/v1/chat/completions) which is more stable.
+        false
     }
 
     /// Behavior 15: Format HF-specific error messages
@@ -916,6 +921,9 @@ impl LLMProvider for HuggingFaceProvider {
             request.model = self.model.clone();
         }
 
+        // Apply model-specific defaults before validation
+        self.apply_model_defaults(&mut request);
+
         self.validate_request(&request)?;
 
         // Behavior 10: Normalize and validate model
@@ -951,6 +959,9 @@ impl LLMProvider for HuggingFaceProvider {
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
         }
+
+        // Apply model-specific defaults before validation
+        self.apply_model_defaults(&mut request);
 
         self.validate_request(&request)?;
         request.stream = true;
@@ -1368,5 +1379,91 @@ mod tests {
         assert_eq!(input[3]["type"], "function_call_output");
         assert_eq!(input[3]["call_id"], "call_123");
         assert_eq!(input[3]["output"], "Sunny");
+    }
+
+    #[test]
+    fn test_should_use_responses_api_is_always_false() {
+        let provider = HuggingFaceProvider::new("test-key".to_string());
+        let mut request = LLMRequest::default();
+        
+        // All models should use Chat Completion API by default for stability
+        request.model = "meta-llama/Llama-3.3-70B-Instruct".to_string();
+        assert!(!provider.should_use_responses_api(&request));
+
+        request.model = "deepseek-ai/DeepSeek-V3.2".to_string();
+        assert!(!provider.should_use_responses_api(&request));
+
+        request.model = "zai-org/GLM-4.7:novita".to_string();
+        assert!(!provider.should_use_responses_api(&request));
+    }
+
+    #[test]
+    fn test_format_chat_completions_glm_tool_stream() {
+        let provider = HuggingFaceProvider::new("test-key".to_string());
+        let mut request = LLMRequest::default();
+        request.model = "zai-org/GLM-4.7:novita".to_string();
+        request.messages = vec![Message::user("Hello".to_string())];
+        request.stream = true;
+        request.tools = Some(vec![ToolDefinition::function(
+            "test_tool".to_string(),
+            "test".to_string(),
+            json!({}),
+        )]);
+
+        let result = provider
+            .format_for_chat_completions(&request)
+            .expect("Failed to format");
+        assert_eq!(result["tool_stream"], true);
+
+        // Non-GLM should not have tool_stream
+        request.model = "meta-llama/Llama-3.3-70B-Instruct".to_string();
+        let result = provider
+            .format_for_chat_completions(&request)
+            .expect("Failed to format");
+        assert!(result.get("tool_stream").is_none());
+    }
+
+    #[test]
+    fn test_minimax_model_defaults() {
+        let provider = HuggingFaceProvider::new("test-key".to_string());
+        let mut request = LLMRequest::default();
+        
+        // Test MiniMax-M2.1:novita
+        request.model = "MiniMaxAI/MiniMax-M2.1:novita".to_string();
+        provider.apply_model_defaults(&mut request);
+        
+        assert_eq!(request.temperature, Some(1.0));
+        assert_eq!(request.top_p, Some(0.95));
+        assert_eq!(request.top_k, Some(40));
+        
+        // Test MiniMax-M2.1:novita
+        let mut request2 = LLMRequest::default();
+        request2.model = "MiniMaxAI/MiniMax-M2.1:novita".to_string();
+        provider.apply_model_defaults(&mut request2);
+        
+        assert_eq!(request2.temperature, Some(1.0));
+        assert_eq!(request2.top_p, Some(0.95));
+        assert_eq!(request2.top_k, Some(40));
+        
+        // Test that existing values are not overridden
+        let mut request3 = LLMRequest::default();
+        request3.model = "MiniMaxAI/MiniMax-M2.1:novita".to_string();
+        request3.temperature = Some(0.5);
+        request3.top_p = Some(0.9);
+        request3.top_k = Some(20);
+        provider.apply_model_defaults(&mut request3);
+        
+        assert_eq!(request3.temperature, Some(0.5)); // Should not change
+        assert_eq!(request3.top_p, Some(0.9)); // Should not change
+        assert_eq!(request3.top_k, Some(20)); // Should not change
+        
+        // Test non-MiniMax model
+        let mut request4 = LLMRequest::default();
+        request4.model = "deepseek-ai/DeepSeek-V3.2:novita".to_string();
+        provider.apply_model_defaults(&mut request4);
+        
+        assert_eq!(request4.temperature, None); // Should remain None
+        assert_eq!(request4.top_p, None); // Should remain None
+        assert_eq!(request4.top_k, None); // Should remain None
     }
 }

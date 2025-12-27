@@ -3668,3 +3668,75 @@ mod streaming_tests {
         }
     }
 }
+#[cfg(test)]
+mod caching_tests {
+    use super::*;
+    use crate::config::core::PromptCachingConfig;
+    use serde_json::json;
+
+    #[test]
+    fn test_openai_prompt_cache_retention() {
+        // Setup configuration with retention
+        let mut config = PromptCachingConfig::default();
+        config.enabled = true;
+        config.providers.openai.enabled = true;
+        config.providers.openai.prompt_cache_retention = Some("24h".to_string());
+
+        // Initialize provider
+        let provider =
+            OpenAIProvider::from_config(Some("key".into()), None, None, Some(config), None, None);
+
+        // Create a dummy request for a Responses API model
+        // Must use an exact model name from RESPONSES_API_MODELS
+        let request = provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: crate::config::constants::models::openai::GPT_5_1_CODEX.to_string(),
+            ..Default::default()
+        };
+
+        // We need to access private method `convert_to_openai_responses_format`
+        // OR we can test `convert_to_openai_format` if it calls it, but `convert_to_openai_format`
+        // is for Chat Completions. The Responses API conversion is private.
+        // However, since we are inside the module (submodule), we can access private methods of parent if we import them?
+        // No, `mod caching_tests` is a child module. Parent private items are visible to child modules
+        // in Rust 2018+ if we use `super::`.
+
+        // Let's verify visibility. `convert_to_openai_responses_format` is private `fn`.
+        // Child modules can verify it.
+
+        let json_result = provider.convert_to_openai_responses_format(&request);
+
+        assert!(json_result.is_ok());
+        let json = json_result.unwrap();
+
+        // Verify the field is present
+        assert_eq!(json["prompt_cache_retention"], json!("24h"));
+    }
+
+    #[test]
+    fn test_openai_prompt_cache_retention_skipped_for_chat_api() {
+        // Setup configuration with retention
+        let mut config = PromptCachingConfig::default();
+        config.enabled = true;
+        config.providers.openai.enabled = true;
+        config.providers.openai.prompt_cache_retention = Some("24h".to_string());
+
+        let provider =
+            OpenAIProvider::from_config(Some("key".into()), None, None, Some(config), None, None);
+
+        // Standard GPT-4o model (Chat Completions API)
+        let request = provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: "gpt-4o".to_string(),
+            ..Default::default()
+        };
+
+        // This uses the standard chat format conversion
+        let json_result = provider.convert_to_openai_format(&request);
+        assert!(json_result.is_ok());
+        let json = json_result.unwrap();
+
+        // Should NOT have prompt_cache_retention
+        assert!(json.get("prompt_cache_retention").is_none());
+    }
+}

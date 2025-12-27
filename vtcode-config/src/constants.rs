@@ -195,7 +195,7 @@ pub mod models {
             // Recommended VLM
             ZAI_GLM_45V,
             // Novita inference provider models
-            MINIMAX_M2_NOVITA,
+            MINIMAX_M2_1_NOVITA,
             DEEPSEEK_V32_NOVITA,
             XIAOMI_MIMO_V2_FLASH_NOVITA,
         ];
@@ -220,8 +220,7 @@ pub mod models {
 
         // Recommended VLM
         pub const ZAI_GLM_45V: &str = "zai-org/GLM-4.5V:zai-org";
-        // Novita inference provider models
-        pub const MINIMAX_M2_NOVITA: &str = "MiniMaxAI/MiniMax-M2:novita";
+        pub const MINIMAX_M2_1_NOVITA: &str = "MiniMaxAI/MiniMax-M2.1:novita";
         pub const DEEPSEEK_V32_NOVITA: &str = "deepseek-ai/DeepSeek-V3.2:novita";
         pub const XIAOMI_MIMO_V2_FLASH_NOVITA: &str = "XiaomiMiMo/MiMo-V2-Flash:novita";
 
@@ -241,6 +240,7 @@ pub mod models {
             MOONSHOT_KIMI_K2_THINKING,
             ZAI_GLM_45V,
             DEEPSEEK_V32_NOVITA,
+            MINIMAX_M2_1_NOVITA,
             XIAOMI_MIMO_V2_FLASH_NOVITA,
         ];
     }

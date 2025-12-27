@@ -239,8 +239,8 @@ pub enum ModelId {
     HuggingFaceGlm47,
     /// MoonshotAI Kimi K2 Thinking via Hugging Face router
     HuggingFaceKimiK2Thinking,
-    /// MiniMax M2 via Novita on Hugging Face router
-    HuggingFaceMinimaxM2Novita,
+    /// MiniMax M2.1 via Novita on Hugging Face router - Enhanced reasoning
+    HuggingFaceMinimaxM21Novita,
     /// DeepSeek V3.2 via Novita on Hugging Face router
     HuggingFaceDeepseekV32Novita,
     /// Xiaomi MiMo-V2-Flash via Novita on Hugging Face router
@@ -602,7 +602,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
             ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
             ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
-            ModelId::HuggingFaceMinimaxM2Novita => models::huggingface::MINIMAX_M2_NOVITA,
+            ModelId::HuggingFaceMinimaxM21Novita => models::huggingface::MINIMAX_M2_1_NOVITA,
             ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
@@ -645,7 +645,7 @@ impl ModelId {
             | ModelId::HuggingFaceOpenAIGptOss120b
             | ModelId::HuggingFaceGlm47
             | ModelId::HuggingFaceKimiK2Thinking
-            | ModelId::HuggingFaceMinimaxM2Novita
+            | ModelId::HuggingFaceMinimaxM21Novita
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita => Provider::HuggingFace,
             ModelId::XaiGrok4
@@ -779,7 +779,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
             ModelId::HuggingFaceGlm47 => "GLM-4.7 (HF)",
             ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
-            ModelId::HuggingFaceMinimaxM2Novita => "MiniMax-M2 (Novita)",
+            ModelId::HuggingFaceMinimaxM21Novita => "MiniMax-M2.1 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
             // MiniMax models
@@ -948,8 +948,8 @@ impl ModelId {
             ModelId::HuggingFaceKimiK2Thinking => {
                 "MoonshotAI Kimi K2 Thinking via Hugging Face router"
             }
-            ModelId::HuggingFaceMinimaxM2Novita => {
-                "MiniMax-M2 model via Novita inference provider on HuggingFace router."
+            ModelId::HuggingFaceMinimaxM21Novita => {
+                "MiniMax-M2.1 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
             }
             ModelId::HuggingFaceDeepseekV32Novita => {
                 "DeepSeek-V3.2 via Novita inference provider on HuggingFace router."
@@ -1034,7 +1034,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b,
             ModelId::HuggingFaceGlm47,
             ModelId::HuggingFaceKimiK2Thinking,
-            ModelId::HuggingFaceMinimaxM2Novita,
+            ModelId::HuggingFaceMinimaxM21Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
         ];
@@ -1300,9 +1300,9 @@ impl ModelId {
             ModelId::MinimaxM2 => "M2",
             ModelId::HuggingFaceDeepseekV32 | ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
-            ModelId::HuggingFaceMinimaxM2Novita => "m2",
             ModelId::HuggingFaceGlm47 => "4.7",
             ModelId::HuggingFaceKimiK2Thinking => "k2",
+            ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
             ModelId::HuggingFaceOpenAIGptOss20b | ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             _ => unreachable!(),
         }
@@ -1413,8 +1413,8 @@ impl FromStr for ModelId {
             s if s == models::huggingface::MOONSHOT_KIMI_K2_THINKING => {
                 Ok(ModelId::HuggingFaceKimiK2Thinking)
             }
-            s if s == models::huggingface::MINIMAX_M2_NOVITA => {
-                Ok(ModelId::HuggingFaceMinimaxM2Novita)
+            s if s == models::huggingface::MINIMAX_M2_1_NOVITA => {
+                Ok(ModelId::HuggingFaceMinimaxM21Novita)
             }
             s if s == models::huggingface::DEEPSEEK_V32_NOVITA => {
                 Ok(ModelId::HuggingFaceDeepseekV32Novita)

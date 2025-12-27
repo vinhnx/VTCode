@@ -281,18 +281,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                         .map(|id| format!(" [tool_call_id: {}]", id))
                         .unwrap_or_default();
 
-                    // For user messages, skip the numbered header to avoid clutter.
-                    if msg.role != uni::MessageRole::User {
-                        renderer.line(
-                            style,
-                            &format!("  [{}] {}{}:", idx + 1, role_label, tool_suffix),
-                        )?;
-                    }
+                    renderer.line(
+                        style,
+                        &format!("  [{}] {}{}:", idx + 1, role_label, tool_suffix),
+                    )?;
 
                     match &msg.content {
                         uni::MessageContent::Text(text) => {
                             for line in text.lines() {
-                                // Indent user text as well for alignment
                                 renderer.line(style, &format!("    {}", line))?;
                             }
                         }

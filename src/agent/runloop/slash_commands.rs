@@ -54,6 +54,9 @@ pub enum SlashCommandOutcome {
     RunDoctor,
     DebugAgent,
     AnalyzeAgent,
+    ManageLsp {
+        action: LspCommandAction,
+    },
     ManageWorkspaceDirectories {
         command: WorkspaceDirectoryCommand,
     },
@@ -69,6 +72,13 @@ pub enum SlashCommandOutcome {
         prompt: String,
     },
     StartTerminalSetup,
+}
+
+#[derive(Clone, Debug)]
+pub enum LspCommandAction {
+    Status,
+    Detect,
+    Help,
 }
 
 #[derive(Clone, Debug)]
@@ -347,6 +357,43 @@ pub async fn handle_slash_command(
                     render_mcp_usage(renderer)?;
                     Ok(SlashCommandOutcome::Handled)
                 }
+            }
+        }
+        "lsp" => {
+             if args.is_empty() {
+                return Ok(SlashCommandOutcome::ManageLsp {
+                    action: LspCommandAction::Status,
+                });
+            }
+            
+            let tokens = match shell_split(args) {
+                Ok(tokens) => tokens,
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to parse arguments: {}", err),
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            };
+
+            if tokens.is_empty() {
+                return Ok(SlashCommandOutcome::ManageLsp {
+                    action: LspCommandAction::Status,
+                });
+            }
+
+            let subcommand = tokens[0].to_ascii_lowercase();
+            match subcommand.as_str() {
+                "status" => Ok(SlashCommandOutcome::ManageLsp {
+                    action: LspCommandAction::Status,
+                }),
+                "detect" => Ok(SlashCommandOutcome::ManageLsp {
+                    action: LspCommandAction::Detect,
+                }),
+                _ => Ok(SlashCommandOutcome::ManageLsp {
+                   action: LspCommandAction::Help,
+                }),
             }
         }
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
