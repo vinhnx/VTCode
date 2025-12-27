@@ -140,9 +140,13 @@ double check and refine src/agent/runloop/unified/tool_routing.rs
 
 --
 
-remove heuristic token counter model=gpt-5-nano tokenizer="<model-default>" error=Failed to load tokenizer 'openai-community/gpt-4o-mini-tokenizer': request error: https://huggingface.co/openai-community/gpt-4o-mini-tokenizer/resolve/main/tokenizer.json: status code 401
+remove heuristic token counter
+
+eg: model=gpt-5-nano tokenizer="<model-default>" error=Failed to load tokenizer 'openai-community/gpt-4o-mini-tokenizer': request error: https://huggingface.co/openai-community/gpt-4o-mini-tokenizer/resolve/main/tokenizer.json: status code 401
 
 remove tokenizer completely
+
+remove map_model_to_pretrained in token_budget.rs
 
 --
 

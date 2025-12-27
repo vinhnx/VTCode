@@ -709,7 +709,19 @@ impl McpClient {
         }
 
         Err(anyhow!(
-            "Tool '{}' not found on any MCP provider",
+            "Tool '{}' not found on any MCP provider.\n\n\
+            To use this tool:\n\
+            1. Install the MCP server: `uv tool install mcp-server-{}`\n\
+            2. Add to vtcode.toml:\n   \
+               [[mcp.providers]]\n   \
+               name = \"{}\"\n   \
+               command = \"uvx\"\n   \
+               args = [\"mcp-server-{}\"]\n\
+            3. Restart VT Code\n\n\
+            Or use the built-in alternative if available (e.g., web_fetch instead of mcp_fetch)",
+            tool_name,
+            tool_name,
+            tool_name,
             tool_name
         ))
     }
