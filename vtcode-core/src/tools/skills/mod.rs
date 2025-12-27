@@ -141,7 +141,7 @@ impl Tool for LoadSkillTool {
                 .map(|p| p.to_string_lossy().to_string())
                 .collect();
 
-            let mut response = serde_json::json!({
+            let response = serde_json::json!({
                 "name": skill.name(),
                 "variety": skill.variety,
                 "instructions": instructions,

@@ -344,6 +344,7 @@ mod tests {
             token_usage_ratio: 0.1,
             current_plan: None,
             full_auto: false,
+            discovered_skills: Vec::new(),
         };
 
         // First call - should build from scratch
@@ -375,6 +376,7 @@ mod tests {
             token_usage_ratio: 0.0,
             current_plan: None,
             full_auto: false,
+            discovered_skills: Vec::new(),
         };
 
         // Build initial prompt

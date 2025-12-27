@@ -260,8 +260,8 @@ Shortcuts:
 
         SkillCommandAction::List { query } => {
             let discovery_result = loader.discover_all_skills().await?;
-            let mut skills = discovery_result.traditional_skills;
-
+            let mut skills = discovery_result.skills;
+            let _cli_tools = discovery_result.tools;
             // Apply query filter if provided
             if let Some(q) = query {
                 let q_lower = q.to_lowercase();
@@ -394,9 +394,9 @@ pub async fn detect_mentioned_skills(
     // Discover available skills
     let discovery_result = loader.discover_all_skills().await?;
     let manifests: Vec<SkillManifest> = discovery_result
-        .traditional_skills
+        .skills
         .iter()
-        .map(|ctx| ctx.manifest().clone())
+        .map(|s| s.manifest().clone())
         .collect();
 
     // Detect mentions using the same logic as vtcode-core
