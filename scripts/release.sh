@@ -267,6 +267,21 @@ load_env_file() {
     fi
 }
 
+# Cleanup function to restore original GitHub account on exit
+cleanup_gh_account() {
+    local target_account="vinhnguyenxuan-ct"
+    
+    # Only try cleanup if we switched accounts
+    if [[ "${GH_ACCOUNT_SWITCHED:-false}" == "true" ]]; then
+        print_info "Performing cleanup - switching back to original account..."
+        if switch_gh_account "$target_account" "cleanup"; then
+            print_success "Switched back to original account"
+        else
+            print_warning "Could not switch back - manual switch may be needed: gh auth switch -u $target_account"
+        fi
+    fi
+}
+
 check_branch() {
     local current_branch
     current_branch=$(git branch --show-current)
@@ -700,6 +715,71 @@ update_vscode_extension_version() {
 #     rm -f /tmp/zed_checksum_update.py
 # }
 
+# Switch GitHub CLI to a different authenticated account (non-interactive)
+# Args:
+#   $1: target_account - GitHub username to switch to
+#   $2: operation - Description of the operation (for logging)
+# Returns:
+#   0 if switch successful, 1 otherwise
+switch_gh_account() {
+    local target_account=$1
+    local operation=$2
+
+    if ! command -v gh &> /dev/null; then
+        print_warning "GitHub CLI (gh) not available - skipping account switch"
+        return 1
+    fi
+
+    print_info "Switching GitHub CLI to account: $target_account ($operation)"
+    
+    # Switch without prompts using -u flag
+    local output
+    if output=$(gh auth switch -u "$target_account" 2>&1); then
+        print_success "Switched to GitHub account: $target_account"
+        return 0
+    else
+        print_error "Failed to switch to GitHub account: $target_account"
+        print_error "Details: $output"
+        return 1
+    fi
+}
+
+# Verify that GitHub CLI is authenticated with the expected account
+# Args:
+#   $1: expected_account - GitHub username to verify
+# Returns:
+#   0 if account matches, 1 otherwise
+verify_gh_account() {
+    local expected_account=$1
+
+    if ! command -v gh &> /dev/null; then
+        print_error "GitHub CLI (gh) is required but not installed"
+        return 1
+    fi
+
+    if ! gh auth status >/dev/null 2>&1; then
+        print_error "GitHub CLI is not authenticated"
+        return 1
+    fi
+
+    local current_account
+    # Extract account name more robustly using sed instead of awk
+    current_account=$(gh auth status 2>&1 | grep "Logged in to github.com as" | sed 's/.*as //' | tr -d ' ')
+    
+    if [[ -z "$current_account" ]]; then
+        print_error "Could not determine current GitHub account"
+        return 1
+    fi
+    
+    if [[ "$current_account" != "$expected_account" ]]; then
+        print_error "Expected GitHub account '$expected_account' but got '$current_account'"
+        return 1
+    fi
+
+    print_success "GitHub CLI authenticated with account: $expected_account"
+    return 0
+}
+
 run_release() {
     local release_argument=$1
     local dry_run_flag=$2
@@ -795,6 +875,9 @@ run_prerelease() {
 }
 
 main() {
+    # Set up cleanup trap to restore GitHub account on exit
+    trap cleanup_gh_account EXIT
+    
     local release_argument=''
     local increment_type=''
     local dry_run=false
@@ -1010,33 +1093,34 @@ main() {
         fi
     fi
 
-    # Verify GitHub CLI authentication before starting uploads
-    print_info "Verifying GitHub CLI authentication..."
-    if ! command -v gh &> /dev/null; then
-        print_error "GitHub CLI (gh) is required for binary uploads but not installed"
-        print_info "Install from: https://cli.github.com/"
-        exit 1
-    fi
+    # Only switch accounts if we're doing binary operations
+    if [[ "$skip_binaries" == 'false' ]]; then
+        # Verify GitHub CLI and switch to vinhnx account for release operations
+        print_info "Verifying GitHub CLI authentication for binary operations..."
+        if ! command -v gh &> /dev/null; then
+            print_error "GitHub CLI (gh) is required for binary uploads but not installed"
+            print_info "Install from: https://cli.github.com/"
+            exit 1
+        fi
 
-    local expected_account="vinhnx"
-    if ! gh auth status >/dev/null 2>&1; then
-        print_error "GitHub CLI is not authenticated. Please run: gh auth login"
-        exit 1
-    fi
+        local expected_account="vinhnx"
+        
+        # Attempt to switch to vinhnx account automatically (no prompts)
+        if ! switch_gh_account "$expected_account" "binary uploads and GitHub operations"; then
+            print_error "Cannot continue without switching to GitHub account: $expected_account"
+            print_info "Ensure the account is authenticated with: gh auth login"
+            exit 1
+        fi
 
-    if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
-        print_error "Not logged in to GitHub account: $expected_account"
-        print_info "Run: gh auth login --hostname github.com"
-        exit 1
+        # Verify we're on the correct account
+        if ! verify_gh_account "$expected_account"; then
+            print_error "GitHub CLI authentication failed for account: $expected_account"
+            exit 1
+        fi
+        
+        # Mark that we switched accounts so cleanup will run
+        GH_ACCOUNT_SWITCHED=true
     fi
-
-    if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
-        print_error "GitHub account '$expected_account' is not active"
-        print_info "Run: gh auth switch --hostname github.com --user $expected_account"
-        exit 1
-    fi
-
-    print_success "GitHub CLI authenticated with correct account: $expected_account"
 
     # Perform post-release operations
     # 1. Publish npm package (DISABLED - avoids GitHub Actions build costs)
