@@ -2035,12 +2035,13 @@ impl OpenAIProvider {
 
     /// Parse harmony tool name from recipient or tool reference
     fn parse_harmony_tool_name(recipient: &str) -> String {
-        // Handle formats like "repo_browser.list_files" or "container.exec"
+        // Handle harmony format namespace mappings (e.g., "repo_browser.list_files" -> "list_files")
+        // Direct tool name aliases are handled by canonical_tool_name() in the registry
         match recipient {
-            "repo_browser.list_files" | "list_files" => "list_files".to_string(),
-            "repo_browser.read_file" | "read_file" => "read_file".to_string(),
-            "repo_browser.write_file" | "write_file" => "write_file".to_string(),
-            "container.exec" | "exec" => "run_pty_cmd".to_string(),
+            "repo_browser.list_files" => "list_files".to_string(),
+            "repo_browser.read_file" => "read_file".to_string(),
+            "repo_browser.write_file" => "write_file".to_string(),
+            "container.exec" => "run_pty_cmd".to_string(),
             "bash" => "bash".to_string(),
             "grep" => "grep_file".to_string(),
             _ => {
@@ -2410,11 +2411,15 @@ mod tests {
             OpenAIProvider::parse_harmony_tool_name("container.exec"),
             "run_pty_cmd"
         );
-        assert_eq!(OpenAIProvider::parse_harmony_tool_name("bash"), "bash");
         assert_eq!(
             OpenAIProvider::parse_harmony_tool_name("unknown.tool"),
             "tool"
         );
+        // Direct tool names (not harmony namespaces) pass through
+        // Alias resolution happens in canonical_tool_name()
+        assert_eq!(OpenAIProvider::parse_harmony_tool_name("exec"), "exec");
+        assert_eq!(OpenAIProvider::parse_harmony_tool_name("exec_pty_cmd"), "exec_pty_cmd");
+        assert_eq!(OpenAIProvider::parse_harmony_tool_name("exec_code"), "exec_code");
         assert_eq!(OpenAIProvider::parse_harmony_tool_name("simple"), "simple");
     }
 

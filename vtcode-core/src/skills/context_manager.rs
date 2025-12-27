@@ -241,13 +241,13 @@ impl ContextManager {
         let mut current_usage = self.current_token_usage.lock().unwrap();
         let mut stats = self.stats.lock().unwrap();
 
-        // Calculate token cost using tokenizer
-        let instruction_tokens = self.count_instruction_tokens(&instructions);
+        // Calculate simple size metric (characters) instead of tokens
+        let instruction_size = instructions.len();
 
-        // Check context budget
-        if *current_usage + instruction_tokens > self.config.max_context_tokens {
+        // Check context budget (using character count instead of tokens)
+        if *current_usage + instruction_size > self.config.max_context_tokens {
             // Need to evict skills to make room
-            self.evict_skills_to_make_room(instruction_tokens)?;
+            self.evict_skills_to_make_room(instruction_size)?;
         }
 
         // Get or create entry
@@ -265,21 +265,21 @@ impl ContextManager {
         // Update entry
         entry.level = ContextLevel::Instructions;
         entry.instructions = Some(instructions.clone());
-        entry.usage.token_cost = instruction_tokens;
+        entry.usage.token_cost = instruction_size;
         entry.memory_size += instructions.len();
 
         // Update usage
-        *current_usage += instruction_tokens;
+        *current_usage += instruction_size;
         stats.current_token_usage = *current_usage;
         stats.peak_token_usage = stats.peak_token_usage.max(*current_usage);
-        stats.total_tokens_loaded += instruction_tokens as u64;
+        stats.total_tokens_loaded += instruction_size as u64;
 
         // Cache the entry
         loaded_skills.put(name.to_string(), entry);
 
         info!(
-            "Loaded instructions for skill: {} ({} tokens)",
-            name, instruction_tokens
+            "Loaded instructions for skill: {} ({} chars)",
+            name, instruction_size
         );
 
         Ok(())
@@ -292,10 +292,10 @@ impl ContextManager {
         let mut current_usage = self.current_token_usage.lock().unwrap();
         let mut stats = self.stats.lock().unwrap();
 
-        // Calculate token cost for resources and instructions
-        let instruction_tokens = self.count_instruction_tokens(&skill.instructions);
-        let resource_tokens = skill.list_resources().len() * self.config.resource_token_cost;
-        let incremental_cost = instruction_tokens + resource_tokens;
+        // Calculate size-based cost for resources and instructions (characters instead of tokens)
+        let instruction_size = skill.instructions.len();
+        let resource_size = skill.list_resources().len() * self.config.resource_token_cost * 4; // Approximate
+        let incremental_cost = instruction_size + resource_size;
 
         // Check context budget
         if *current_usage + incremental_cost > self.config.max_context_tokens {
@@ -338,10 +338,7 @@ impl ContextManager {
         Ok(())
     }
 
-    fn count_instruction_tokens(&self, instructions: &str) -> usize {
-        // Estimate tokens at ~4 characters per token
-        (instructions.len() / 4).max(1)
-    }
+
 
     /// Get skill context (with automatic loading)
     pub fn get_skill_context(&self, name: &str) -> Option<SkillContextEntry> {

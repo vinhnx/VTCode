@@ -484,7 +484,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewpor
     let has_more = palette.has_more_items();
     let more_text = format!(
         "  ... ({} more items)",
-        palette.total_items() - (palette.current_page_number() * 20)
+        palette.total_items().saturating_sub(palette.current_page_number() * 20)
     );
 
     // Render using generic helper
@@ -633,7 +633,7 @@ pub fn render_prompt_palette(session: &mut Session, frame: &mut Frame<'_>, viewp
     let has_more = palette.has_more_items();
     let more_text = format!(
         "  ... ({} more items)",
-        palette.total_items() - (palette.current_page_number() * 20)
+        palette.total_items().saturating_sub(palette.current_page_number() * 20)
     );
 
     // Render using generic helper
