@@ -593,7 +593,7 @@ mod tests {
 
         let bridge = CliToolBridge::new(config).unwrap();
         let result = bridge
-            .execute(Value::String("hello world".to_string()))
+            .execute_internal(Value::String("hello world".to_string()))
             .await
             .unwrap();
 

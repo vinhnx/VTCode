@@ -391,17 +391,9 @@ mod tests {
             description: "A test skill for validation".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test Author".to_string()),
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
             allowed_tools: Some("Read Write Bash".to_string()),
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
             compatibility: Some("Designed for VTCode".to_string()),
-            metadata: None,
+            ..Default::default()
         };
 
         // Note: We can't easily test directory validation without creating temp dirs

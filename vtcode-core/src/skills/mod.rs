@@ -114,14 +114,20 @@ pub mod executor;
 pub mod file_references;
 pub mod loader;
 pub mod locations;
+pub mod model;
 pub mod manifest;
 pub mod prompt_integration;
 pub mod skill_file_tracker;
 pub mod streaming;
 pub mod templates;
 pub mod types;
+pub mod injection;
+pub mod manager;
+pub mod render;
+pub mod system;
 pub mod validation;
 pub mod validation_report;
+
 
 pub use authoring::{
     SkillAuthor, SkillFrontmatter, ValidationReport as AuthoringValidationReport,
@@ -146,9 +152,9 @@ pub use enhanced_validator::ComprehensiveSkillValidator;
 pub use executor::execute_skill_with_sub_llm;
 pub use file_references::FileReferenceValidator;
 pub use loader::{
-    EnhancedDiscoveryResult, EnhancedDiscoveryStats, EnhancedSkill, EnhancedSkillLoader,
-    LegacySkillLoader, SearchPathType,
+    load_skills, load_skill_resources, SkillLoaderConfig, SkillRoot,
 };
+
 pub use locations::{
     DiscoveredSkill, DiscoveryStats as LocationDiscoveryStats, SkillLocation, SkillLocationType,
     SkillLocations,
@@ -158,11 +164,16 @@ pub use prompt_integration::{
     SkillsRenderMode, generate_skills_prompt, generate_skills_prompt_with_mode,
 };
 pub use streaming::{StreamEvent, StreamingConfig, StreamingExecution, StreamingSkillExecutor};
+pub use injection::{SkillInjections, build_skill_injections};
+pub use manager::SkillsManager;
+pub use model::{SkillErrorInfo, SkillLoadOutcome, SkillMetadata};
+pub use render::render_skills_section;
+
 pub use templates::{
     SkillTemplate, SkillTemplateBuilder, TemplateEngine, TemplateType, TemplateVariable,
 };
 pub use types::{
-    Skill, SkillContext, SkillErrorInfo, SkillManifest, SkillMetadata, SkillRegistryEntry,
+    Skill, SkillContext, SkillManifest, SkillRegistryEntry,
     SkillResource, SkillScope,
 };
 pub use validation::{SkillValidator, ValidationConfig, ValidationReport, ValidationStatus};

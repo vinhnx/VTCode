@@ -472,17 +472,7 @@ mod tests {
             description: "Generate PDFs".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
 
         let instructions = r#"
@@ -517,17 +507,8 @@ mod tests {
             description: "Generate spreadsheets".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
-            license: None,
-            model: None,
-            mode: None,
             vtcode_native: Some(true),
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
 
         let instructions = r#"
@@ -570,17 +551,7 @@ mod tests {
             description: "Generate PDFs".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
 
         let instructions = r#"

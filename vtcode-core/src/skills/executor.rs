@@ -329,19 +329,8 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test skill".to_string(),
-            version: None,
-            author: None,
             vtcode_native: Some(true),
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
-            license: None,
-            mode: None,
-            model: None,
+            ..Default::default()
         };
 
         let skill = Skill::new(
@@ -360,19 +349,8 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test skill".to_string(),
-            version: None,
-            author: None,
             vtcode_native: Some(true),
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
-            license: None,
-            mode: None,
-            model: None,
+            ..Default::default()
         };
 
         let skill = Skill::new(
@@ -397,19 +375,8 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test skill".to_string(),
-            version: None,
-            author: None,
             vtcode_native: Some(true),
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
-            license: None,
-            mode: None,
-            model: None,
+            ..Default::default()
         };
 
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), "Instructions".to_string())

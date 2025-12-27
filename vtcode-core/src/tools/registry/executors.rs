@@ -1146,36 +1146,24 @@ impl ToolRegistry {
                 }
             }
 
-            // Also search local skills (using EnhancedSkillLoader for .claude/skills/ with SKILL.md)
-            use crate::skills::{EnhancedSkillLoader, SkillContext};
-            let mut loader = EnhancedSkillLoader::new(workspace_root);
-            if let Ok(discovery_result) = loader.discover_all_skills().await {
-                let skill_contexts = discovery_result.traditional_skills;
-                let query_lower = parsed.keyword.to_lowercase();
-                let filtered: Vec<_> = skill_contexts
-                    .into_iter()
-                    .filter_map(|ctx| {
-                        if let SkillContext::MetadataOnly(manifest, _) = ctx {
-                            let name_matches = manifest.name.to_lowercase().contains(&query_lower);
-                            let desc_matches =
-                                manifest.description.to_lowercase().contains(&query_lower);
-                            if name_matches || desc_matches {
-                                Some(manifest)
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                // Convert skill results to tool format for consistent response
-                for manifest in filtered {
-                    all_results.push(crate::mcp::ToolDiscoveryResult {
-                        name: manifest.name.clone(),
+            // Also search local skills (using SkillsManager)
+            use crate::skills::SkillsManager;
+            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+            let codex_home = home.join(".vtcode");
+            let manager = SkillsManager::new(codex_home);
+            let outcome = manager.skills_for_cwd(&workspace_root);
+            
+            let query_lower = parsed.keyword.to_lowercase();
+            // Filter skills
+            for skill in outcome.skills {
+                let name_matches = skill.name.to_lowercase().contains(&query_lower);
+                let desc_matches = skill.description.to_lowercase().contains(&query_lower);
+                
+                if name_matches || desc_matches {
+                     all_results.push(crate::mcp::ToolDiscoveryResult {
+                        name: skill.name.clone(),
                         provider: "skill".to_string(),
-                        description: manifest.description.clone(),
+                        description: skill.description.clone(),
                         relevance_score: 1.0,
                         input_schema: None,
                     });
@@ -1230,93 +1218,71 @@ impl ToolRegistry {
             let parsed: SkillArgs =
                 serde_json::from_value(args).context("skill requires 'name' field")?;
 
-            // Load skill using EnhancedSkillLoader (reads .claude/skills/*/SKILL.md)
-            use crate::skills::{EnhancedSkillLoader, loader::EnhancedSkill};
-            let mut loader = EnhancedSkillLoader::new(workspace_root.clone());
+            // Load skill using SkillsManager
+            use crate::skills::SkillsManager;
+            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+            let codex_home = home.join(".vtcode");
+            let manager = SkillsManager::new(codex_home);
+            let outcome = manager.skills_for_cwd(&workspace_root);
 
-            // Ensure skills are discovered before trying to load them
-            // This fixes the issue where skills loaded via CLI aren't available to the skill tool
-            match loader.discover_all_skills().await {
-                Ok(_) => {
-                    // Skills discovered successfully, continue with loading
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to discover skills: {}. Proceeding anyway.", e);
-                    // Continue even if discovery fails - skill might still be loadable
-                }
-            }
-
-            match loader.get_skill(&parsed.name).await {
-                Ok(enhanced_skill) => {
-                    // Extract traditional skill from enhanced skill
-                    if let EnhancedSkill::Traditional(skill) = enhanced_skill {
-                        let mut resources = json!({});
-
-                        // Include resources if available
-                        for (path, resource) in skill.resources.iter() {
-                            resources[path] = json!({
-                                "type": format!("{:?}", resource.resource_type),
-                                "path": resource.path,
-                            });
+            if let Some(skill_meta) = outcome.skills.iter().find(|s| s.name == parsed.name) {
+                // Check if it's a traditional skill (SKILL.md)
+                if skill_meta.path.ends_with("SKILL.md") || skill_meta.path.file_name().and_then(|n| n.to_str()) == Some("SKILL.md") {
+                    // Load the full skill
+                    // We need to parse the manifest and instructions manually or rely on injection logic
+                    // But injection uses just content. Here we want structure.
+                    // We can reuse manifest::parse_skill_file
+                    match crate::skills::manifest::parse_skill_file(&skill_meta.path) {
+                        Ok((manifest, instructions)) => {
+                             let mut resources = json!({});
+                             if let Ok(loaded_resources) = crate::skills::load_skill_resources(&skill_meta.path) {
+                                for res in loaded_resources {
+                                    if let Some(path_str) = serde_json::to_value(res.path.clone()).ok().and_then(|v| v.as_str().map(|s| s.to_string())) {
+                                        resources[path_str] = json!({
+                                            "type": format!("{:?}", res.resource_type),
+                                            "path": res.path,
+                                        });
+                                    }
+                                }
+                             }
+                             
+                             let output = format!(
+                                "=== Skill Loaded: {} ===\n\n{}\n\n(Resources listing not fully supported in new loader yet)\n",
+                                manifest.name,
+                                instructions
+                            );
+                            
+                            Ok(json!({
+                                "success": true,
+                                "name": manifest.name,
+                                "description": manifest.description,
+                                "version": manifest.version,
+                                "author": manifest.author,
+                                "instructions": instructions,
+                                "resources": resources,
+                                "output": output,
+                                "message": format!("Skill '{}' loaded.", manifest.name),
+                                "file_tracking_enabled": true
+                            }))
                         }
-
-                        // Format output to emphasize instructions for agent to follow
-                        let mut output = format!(
-                            "=== Skill Loaded: {} ===\n\n{}\n\n=== Resources Available ===\n{}\n",
-                            skill.manifest.name,
-                            skill.instructions,
-                            if resources.as_object().map(|r| r.is_empty()).unwrap_or(true) {
-                                "No additional resources".to_string()
-                            } else {
-                                serde_json::to_string_pretty(&resources).unwrap_or_default()
-                            }
-                        );
-
-                        // Add file tracking information if the skill mentions file generation
-                        use crate::skills::skill_file_tracker::SkillFileTracker;
-                        let _tracker = SkillFileTracker::new(workspace_root.clone());
-
-                        // Scan the instructions for file generation patterns
-                        if skill.instructions.contains("output")
-                            || skill.instructions.contains("generate")
-                            || skill.instructions.contains("create")
-                            || skill.instructions.contains(".pdf")
-                            || skill.instructions.contains(".xlsx")
-                            || skill.instructions.contains(".csv")
-                        {
-                            output.push_str("
-=== Auto File Tracking ===
-This skill generates files. After execution, file locations will be automatically detected and reported.
-");
-                        }
-
-                        output.push_str("\n⚠️  IMPORTANT: Follow the instructions above to complete the task. Do NOT call this tool again.");
-
-                        Ok(json!({
-                            "success": true,
-                            "name": skill.manifest.name,
-                            "description": skill.manifest.description,
-                            "version": skill.manifest.version,
-                            "author": skill.manifest.author,
-                            "instructions": skill.instructions,
-                            "resources": resources,
-                            "output": output,
-                            "message": format!("Skill '{}' loaded. Read 'output' field for complete instructions.", skill.manifest.name),
-                            "file_tracking_enabled": true  // NEW: Flag indicating auto-tracking is available
-                        }))
-                    } else {
-                        Ok(json!({
+                        Err(e) => Ok(json!({
                             "success": false,
-                            "error": format!("Skill '{}' is not a traditional skill and cannot be loaded directly", parsed.name),
-                            "message": "CLI tool skills must be executed through the tool system, not loaded as instructions"
+                            "error": format!("Failed to parse skill '{}': {}", parsed.name, e),
                         }))
                     }
+                } else {
+                     Ok(json!({
+                        "success": false,
+                        "error": format!("Skill '{}' is a CLI tool or system skill not supported for direct viewing", parsed.name),
+                        "message": "CLI tool skills must be executed through the tool system."
+                    }))
                 }
-                Err(e) => Ok(json!({
+            } else {
+                 Ok(json!({
                     "success": false,
-                    "error": format!("Failed to load skill '{}': {}", parsed.name, e),
+                    "error": format!("Skill '{}' not found", parsed.name),
                     "hint": "Use search_tools to discover available skills"
-                })),
+                }))
             }
         })
     }

@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+pub use crate::skills::model::{SkillErrorInfo, SkillMetadata, SkillScope};
+
 /// Skill variety indicating the type of skill
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -20,35 +22,9 @@ pub enum SkillVariety {
     BuiltIn,
 }
 
-/// Skill scope indicating where the skill is defined
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum SkillScope {
-    /// User-level skill (~/.vtcode/skills or ~/.claude/skills)
-    #[default]
-    User,
-    /// Repository-level skill (.vtcode/skills or .codex/skills in project root)
-    Repo,
-}
-
-/// Skill metadata for protocol/API responses (matches Codex protocol)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SkillMetadata {
-    pub name: String,
-    pub description: String,
-    pub path: PathBuf,
-    pub scope: SkillScope,
-}
-
-/// Skill error information (matches Codex protocol)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SkillErrorInfo {
-    pub path: PathBuf,
-    pub message: String,
-}
 
 /// Skill manifest metadata from SKILL.md frontmatter
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillManifest {
     /// Unique identifier (lowercase, hyphens, max 64 chars)
     pub name: String,
@@ -106,6 +82,29 @@ pub struct SkillManifest {
     /// Arbitrary key-value metadata (Agent Skills spec)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
+}
+
+impl Default for SkillManifest {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: None,
+            variety: SkillVariety::AgentSkill,
+            metadata: None,
+        }
+    }
 }
 
 impl SkillManifest {
@@ -491,19 +490,7 @@ mod tests {
         let m = SkillManifest {
             name: "my-skill".to_string(),
             description: "A test skill".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
         assert!(m.validate().is_ok());
     }
@@ -513,19 +500,7 @@ mod tests {
         let m = SkillManifest {
             name: "a".repeat(65),
             description: "Valid description".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
         assert!(m.validate().is_err());
     }
@@ -535,19 +510,7 @@ mod tests {
         let m = SkillManifest {
             name: "anthropic-skill".to_string(),
             description: "Valid description".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
         assert!(m.validate().is_err());
     }
@@ -557,22 +520,10 @@ mod tests {
         let manifest = SkillManifest {
             name: "test".to_string(),
             description: "Test".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
 
-        let meta_ctx = SkillContext::MetadataOnly(manifest.clone());
+        let meta_ctx = SkillContext::MetadataOnly(manifest.clone(), PathBuf::from("/test"));
         assert_eq!(meta_ctx.tokens(), 100);
     }
 
@@ -582,19 +533,8 @@ mod tests {
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
             compatibility: Some("Designed for VTCode".to_string()),
-            metadata: None,
+            ..Default::default()
         };
         assert!(m.validate().is_ok());
 
@@ -602,19 +542,8 @@ mod tests {
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
             compatibility: Some("".to_string()),
-            metadata: None,
+            ..Default::default()
         };
         assert!(m.validate().is_err());
 
@@ -622,19 +551,8 @@ mod tests {
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
             compatibility: Some("a".repeat(501)),
-            metadata: None,
+            ..Default::default()
         };
         assert!(m.validate().is_err());
     }
@@ -645,19 +563,8 @@ mod tests {
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
             allowed_tools: Some("Read Write Bash".to_string()),
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
         assert!(m.validate().is_ok());
 
@@ -665,19 +572,8 @@ mod tests {
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
             allowed_tools: Some("".to_string()),
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
         assert!(m.validate().is_err());
 
@@ -689,19 +585,8 @@ mod tests {
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
             allowed_tools: Some(tools),
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            metadata: None,
+            ..Default::default()
         };
         assert!(m.validate().is_err());
     }
@@ -715,20 +600,19 @@ mod tests {
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
+            version: Some("1.0.0".to_string()),
+            author: Some("Test Author".to_string()),
             metadata: Some(metadata),
+            ..Default::default()
         };
         assert!(m.validate().is_ok());
     }
 }
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            version: Some("1.0.0".to_string()),
+            author: Some("Test Author".to_string()),
+            metadata: Some(metadata),
+            ..Default::default()
+        };

@@ -3,8 +3,7 @@
 //! Dynamically injects available skills information into system prompt,
 //! similar to OpenAI Codex's approach.
 
-use crate::skills::types::{Skill, SkillScope};
-use std::collections::HashMap;
+use crate::skills::model::{SkillMetadata, SkillScope};
 use std::fmt::Write;
 
 // Re-export PromptFormat from config for consistency
@@ -33,13 +32,13 @@ const SKILL_USAGE_RULES: &str = r#"
 "#;
 
 /// Generate skills section for system prompt (full mode - backward compatible)
-pub fn generate_skills_prompt(skills: &HashMap<String, Skill>) -> String {
+pub fn generate_skills_prompt(skills: &[SkillMetadata]) -> String {
     generate_skills_prompt_with_mode(skills, SkillsRenderMode::Full)
 }
 
 /// Generate skills section with specified rendering mode
 pub fn generate_skills_prompt_with_mode(
-    skills: &HashMap<String, Skill>,
+    skills: &[SkillMetadata],
     mode: SkillsRenderMode,
 ) -> String {
     if skills.is_empty() {
@@ -53,13 +52,13 @@ pub fn generate_skills_prompt_with_mode(
 }
 
 /// Render skills in full mode (legacy format with all metadata)
-fn render_skills_full(skills: &HashMap<String, Skill>) -> String {
+fn render_skills_full(skills: &[SkillMetadata]) -> String {
     let mut prompt = String::from("\n\n## Available Skills\n");
     prompt.push_str("The following skills are loaded and available for use. Each skill provides specialized capabilities. Reference skills by name when they would be helpful.\n\n");
 
     // Sort skills by name for stable ordering
-    let mut skill_list: Vec<_> = skills.values().collect();
-    skill_list.sort_by_key(|skill| skill.name());
+    let mut skill_list: Vec<_> = skills.iter().collect();
+    skill_list.sort_by_key(|skill| &skill.name);
 
     // Show up to 10 skills (like tools)
     let overflow = skill_list.len().saturating_sub(10);
@@ -68,12 +67,16 @@ fn render_skills_full(skills: &HashMap<String, Skill>) -> String {
     }
 
     for skill in skill_list {
+        let native_flag = skill.manifest.as_ref()
+            .and_then(|m| m.vtcode_native)
+            .unwrap_or(false);
+            
         let _ = writeln!(
             prompt,
             "- {}: {} (native: {})",
-            skill.name(),
-            skill.description(),
-            skill.manifest.vtcode_native.unwrap_or(false)
+            skill.name,
+            skill.description,
+            native_flag
         );
     }
 
@@ -89,15 +92,15 @@ fn render_skills_full(skills: &HashMap<String, Skill>) -> String {
 /// This reduces token usage by 40-60% compared to full mode by omitting
 /// version, author, and native flags. Follows OpenAI Codex's pattern of
 /// showing only essential metadata in the system prompt.
-fn render_skills_lean(skills: &HashMap<String, Skill>) -> String {
+fn render_skills_lean(skills: &[SkillMetadata]) -> String {
     let mut prompt = String::from("\n\n## Skills\n");
     prompt.push_str(
         "Available skills (name: description + directory + scope). Content on disk; open SKILL.md when triggered.\n\n",
 	);
 
     // Sort skills by name for stable ordering
-    let mut skill_list: Vec<_> = skills.values().collect();
-    skill_list.sort_by_key(|skill| skill.name());
+    let mut skill_list: Vec<_> = skills.iter().collect();
+    skill_list.sort_by_key(|skill| &skill.name);
 
     // Show up to 10 skills to keep prompt lean
     let overflow = skill_list.len().saturating_sub(10);
@@ -106,10 +109,12 @@ fn render_skills_lean(skills: &HashMap<String, Skill>) -> String {
     }
 
     for skill in skill_list {
-        let mode_flag = match skill.manifest.mode {
-            Some(true) => " [mode]",
-            _ => "",
-        };
+         let mode_flag = skill.manifest.as_ref()
+            .and_then(|m| m.mode)
+            .filter(|&m| m)
+            .map(|_| " [mode]")
+            .unwrap_or("");
+            
         let location = skill
             .path
             .file_name()
@@ -118,14 +123,17 @@ fn render_skills_lean(skills: &HashMap<String, Skill>) -> String {
         let scope = match skill.scope {
             SkillScope::User => "user",
             SkillScope::Repo => "repo",
+            SkillScope::System => "system",
+            SkillScope::Admin => "admin",
+
         };
 
         let _ = writeln!(
             prompt,
             "- {}{}: {} (dir: {}, scope: {})",
-            skill.name(),
+            skill.name,
             mode_flag,
-            skill.description(),
+            skill.description,
             location,
             scope
         );
@@ -145,7 +153,7 @@ fn render_skills_lean(skills: &HashMap<String, Skill>) -> String {
 ///
 /// Wraps skills in `<available_skills>` tags for improved safety and isolation.
 /// This is the recommended format per the Agent Skills specification.
-pub fn generate_skills_prompt_xml(skills: &HashMap<String, Skill>) -> String {
+pub fn generate_skills_prompt_xml(skills: &[SkillMetadata]) -> String {
     if skills.is_empty() {
         return String::new();
     }
@@ -153,8 +161,8 @@ pub fn generate_skills_prompt_xml(skills: &HashMap<String, Skill>) -> String {
     let mut xml = String::from("\n<available_skills>\n");
 
     // Sort skills by name for stable ordering
-    let mut skill_list: Vec<_> = skills.values().collect();
-    skill_list.sort_by_key(|skill| skill.name());
+    let mut skill_list: Vec<_> = skills.iter().collect();
+    skill_list.sort_by_key(|skill| &skill.name);
 
     // Show up to 10 skills to keep prompt lean
     let overflow = skill_list.len().saturating_sub(10);
@@ -164,11 +172,11 @@ pub fn generate_skills_prompt_xml(skills: &HashMap<String, Skill>) -> String {
 
     for skill in skill_list {
         xml.push_str("  <skill>\n");
-        let _ = writeln!(xml, "    <name>{}</name>", xml_escape(skill.name()));
+        let _ = writeln!(xml, "    <name>{}</name>", xml_escape(&skill.name));
         let _ = writeln!(
             xml,
             "    <description>{}</description>",
-            xml_escape(skill.description())
+            xml_escape(&skill.description)
         );
         let _ = writeln!(
             xml,
@@ -177,20 +185,22 @@ pub fn generate_skills_prompt_xml(skills: &HashMap<String, Skill>) -> String {
         );
 
         // Optional fields per Agent Skills spec
-        if let Some(ref compatibility) = skill.manifest.compatibility {
-            let _ = writeln!(
-                xml,
-                "    <compatibility>{}</compatibility>",
-                xml_escape(compatibility)
-            );
-        }
+        if let Some(manifest) = &skill.manifest {
+            if let Some(ref compatibility) = manifest.compatibility {
+                let _ = writeln!(
+                    xml,
+                    "    <compatibility>{}</compatibility>",
+                    xml_escape(compatibility)
+                );
+            }
 
-        if let Some(ref allowed_tools) = skill.manifest.allowed_tools {
-            let _ = writeln!(
-                xml,
-                "    <allowed-tools>{}</allowed-tools>",
-                xml_escape(allowed_tools)
-            );
+            if let Some(ref allowed_tools) = manifest.allowed_tools {
+                let _ = writeln!(
+                    xml,
+                    "    <allowed-tools>{}</allowed-tools>",
+                    xml_escape(allowed_tools)
+                );
+            }
         }
 
         xml.push_str("  </skill>\n");
@@ -215,7 +225,7 @@ fn xml_escape(s: &str) -> String {
 
 /// Generate skills prompt with format specification
 pub fn generate_skills_prompt_with_format(
-    skills: &HashMap<String, Skill>,
+    skills: &[SkillMetadata],
     render_mode: SkillsRenderMode,
     format: PromptFormat,
 ) -> String {
@@ -228,35 +238,40 @@ pub fn generate_skills_prompt_with_format(
 /// Test helper
 pub fn test_skills_prompt_generation() {
     use std::path::PathBuf;
+    use crate::skills::types::SkillManifest;
 
-    let mut skills = HashMap::new();
+    let mut skills = Vec::new();
 
     // Add a test skill
-    let skill = Skill::new(
-        crate::skills::types::SkillManifest {
-            name: "pdf-analyzer".to_string(),
-            description: "Analyze PDF documents".to_string(),
-            version: Some("1.0.0".to_string()),
-            author: Some("Test".to_string()),
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: Some(true),
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            variety: crate::skills::types::SkillVariety::AgentSkill,
-            metadata: None,
-        },
-        PathBuf::from("/tmp/test"),
-        "Instructions".to_string(),
-    )
-    .unwrap();
+    let manifest = SkillManifest {
+        name: "pdf-analyzer".to_string(),
+        description: "Analyze PDF documents".to_string(),
+        version: Some("1.0.0".to_string()),
+        author: Some("Test".to_string()),
+        license: None,
+        model: None,
+        mode: None,
+        vtcode_native: Some(true),
+        allowed_tools: None,
+        disable_model_invocation: None,
+        when_to_use: None,
+        requires_container: None,
+        disallow_container: None,
+        compatibility: None,
+        variety: crate::skills::types::SkillVariety::AgentSkill,
+        metadata: None,
+    };
 
-    skills.insert("pdf-analyzer".to_string(), skill);
+    let skill = SkillMetadata {
+        name: manifest.name.clone(),
+        description: manifest.description.clone(),
+        short_description: None,
+        path: PathBuf::from("/tmp/test"),
+        scope: SkillScope::User,
+        manifest: Some(manifest),
+    };
+
+    skills.push(skill);
 
     let prompt = generate_skills_prompt(&skills);
     assert!(prompt.contains("pdf-analyzer"));
@@ -270,7 +285,7 @@ mod tests {
 
     #[test]
     fn test_empty_skills() {
-        let skills = HashMap::new();
+        let skills = Vec::new();
         let prompt = generate_skills_prompt(&skills);
         assert!(prompt.is_empty());
     }
@@ -282,33 +297,38 @@ mod tests {
 
     #[test]
     fn test_lean_rendering_mode() {
-        let mut skills = HashMap::new();
+        use crate::skills::types::SkillManifest;
+        let mut skills = Vec::new();
 
-        let skill = Skill::new(
-            crate::skills::types::SkillManifest {
-                name: "test-skill".to_string(),
-                description: "Test skill description".to_string(),
-                version: Some("1.0.0".to_string()),
-                author: Some("Test Author".to_string()),
-                license: None,
-                model: None,
-                mode: None,
-                vtcode_native: Some(true),
-                allowed_tools: None,
-                disable_model_invocation: None,
-                when_to_use: None,
-                requires_container: None,
-                disallow_container: None,
-                compatibility: None,
-                variety: crate::skills::types::SkillVariety::AgentSkill,
-                metadata: None,
-            },
-            PathBuf::from("/tmp/test-skill"),
-            "Test instructions".to_string(),
-        )
-        .unwrap();
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill description".to_string(),
+            version: Some("1.0.0".to_string()),
+            author: Some("Test Author".to_string()),
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: Some(true),
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: None,
+            variety: crate::skills::types::SkillVariety::AgentSkill,
+            metadata: None,
+        };
 
-        skills.insert("test-skill".to_string(), skill);
+        let skill = SkillMetadata {
+            name: manifest.name.clone(),
+            description: manifest.description.clone(),
+            short_description: None,
+            path: PathBuf::from("/tmp/test-skill"),
+            scope: SkillScope::User,
+            manifest: Some(manifest),
+        };
+
+        skills.push(skill);
 
         let lean_prompt = generate_skills_prompt_with_mode(&skills, SkillsRenderMode::Lean);
 
@@ -328,35 +348,40 @@ mod tests {
 
     #[test]
     fn test_full_vs_lean_token_savings() {
-        let mut skills = HashMap::new();
+        use crate::skills::types::SkillManifest;
+        let mut skills = Vec::new();
 
         // Create multiple skills to demonstrate savings (lean mode benefits from fewer per-skill tokens)
         for i in 0..5 {
-            let skill = Skill::new(
-                crate::skills::types::SkillManifest {
-                    name: format!("skill-{}", i),
-                    description: format!("Example skill number {}", i),
-                    version: Some("2.1.0".to_string()),
-                    author: Some("Developer Name".to_string()),
-                    license: None,
-                    model: None,
-                    mode: None,
-                    vtcode_native: Some(true),
-                    allowed_tools: None,
-                    disable_model_invocation: None,
-                    when_to_use: None,
-                    requires_container: None,
-                    disallow_container: None,
-                    compatibility: None,
-                    variety: crate::skills::types::SkillVariety::AgentSkill,
-                    metadata: None,
-                },
-                PathBuf::from(format!("/path/to/skill-{}", i)),
-                "Instructions".to_string(),
-            )
-            .unwrap();
+            let manifest = SkillManifest {
+                name: format!("skill-{}", i),
+                description: format!("Example skill number {}", i),
+                version: Some("2.1.0".to_string()),
+                author: Some("Developer Name".to_string()),
+                license: None,
+                model: None,
+                mode: None,
+                vtcode_native: Some(true),
+                allowed_tools: None,
+                disable_model_invocation: None,
+                when_to_use: None,
+                requires_container: None,
+                disallow_container: None,
+                compatibility: None,
+                variety: crate::skills::types::SkillVariety::AgentSkill,
+                metadata: None,
+            };
 
-            skills.insert(format!("skill-{}", i), skill);
+            let skill = SkillMetadata {
+                name: manifest.name.clone(),
+                description: manifest.description.clone(),
+                short_description: None,
+                path: PathBuf::from(format!("/path/to/skill-{}", i)),
+                scope: SkillScope::User,
+                manifest: Some(manifest),
+            };
+
+            skills.push(skill);
         }
 
         let full_prompt = generate_skills_prompt_with_mode(&skills, SkillsRenderMode::Full);
@@ -377,37 +402,42 @@ mod tests {
 
     #[test]
     fn test_xml_generation() {
-        let mut skills = HashMap::new();
+        use crate::skills::types::SkillManifest;
+        let mut skills = Vec::new();
         use std::collections::HashMap as StdHashMap;
 
         let mut metadata = StdHashMap::new();
         metadata.insert("author".to_string(), "Test Author".to_string());
 
-        let skill = Skill::new(
-            crate::skills::types::SkillManifest {
-                name: "test-xml-skill".to_string(),
-                description: "Test XML generation".to_string(),
-                version: None,
-                author: None,
-                license: None,
-                model: None,
-                mode: None,
-                vtcode_native: None,
-                allowed_tools: Some("Read Write Bash".to_string()),
-                disable_model_invocation: None,
-                when_to_use: None,
-                requires_container: None,
-                disallow_container: None,
-                compatibility: Some("Designed for VTCode".to_string()),
-                variety: crate::skills::types::SkillVariety::AgentSkill,
-                metadata: Some(metadata),
-            },
-            PathBuf::from("/tmp/test-xml-skill"),
-            "Test instructions".to_string(),
-        )
-        .unwrap();
+        let manifest = SkillManifest {
+            name: "test-xml-skill".to_string(),
+            description: "Test XML generation".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: Some("Read Write Bash".to_string()),
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: Some("Designed for VTCode".to_string()),
+            variety: crate::skills::types::SkillVariety::AgentSkill,
+            metadata: Some(metadata),
+        };
 
-        skills.insert("test-xml-skill".to_string(), skill);
+        let skill = SkillMetadata {
+            name: manifest.name.clone(),
+            description: manifest.description.clone(),
+            short_description: None,
+            path: PathBuf::from("/tmp/test-xml-skill"),
+            scope: SkillScope::User,
+            manifest: Some(manifest),
+        };
+
+        skills.push(skill);
 
         let xml_prompt = generate_skills_prompt_xml(&skills);
 
@@ -429,33 +459,38 @@ mod tests {
 
     #[test]
     fn test_xml_escaping() {
-        let mut skills = HashMap::new();
+        use crate::skills::types::SkillManifest;
+        let mut skills = Vec::new();
 
-        let skill = Skill::new(
-            crate::skills::types::SkillManifest {
-                name: "test-escape".to_string(),
-                description: "Test <special> & \"characters\"".to_string(),
-                version: None,
-                author: None,
-                license: None,
-                model: None,
-                mode: None,
-                vtcode_native: None,
-                allowed_tools: None,
-                disable_model_invocation: None,
-                when_to_use: None,
-                requires_container: None,
-                disallow_container: None,
-                compatibility: None,
-                variety: crate::skills::types::SkillVariety::AgentSkill,
-                metadata: None,
-            },
-            PathBuf::from("/tmp/test"),
-            "Instructions".to_string(),
-        )
-        .unwrap();
+        let manifest = SkillManifest {
+            name: "test-escape".to_string(),
+            description: "Test <special> & \"characters\"".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: None,
+            variety: crate::skills::types::SkillVariety::AgentSkill,
+            metadata: None,
+        };
 
-        skills.insert("test-escape".to_string(), skill);
+        let skill = SkillMetadata {
+            name: manifest.name.clone(),
+            description: manifest.description.clone(),
+            short_description: None,
+            path: PathBuf::from("/tmp/test"),
+            scope: SkillScope::User,
+            manifest: Some(manifest),
+        };
+
+        skills.push(skill);
 
         let xml_prompt = generate_skills_prompt_xml(&skills);
 
@@ -467,33 +502,38 @@ mod tests {
 
     #[test]
     fn test_prompt_format_selection() {
-        let mut skills = HashMap::new();
+        use crate::skills::types::SkillManifest;
+        let mut skills = Vec::new();
 
-        let skill = Skill::new(
-            crate::skills::types::SkillManifest {
-                name: "test-format".to_string(),
-                description: "Test format selection".to_string(),
-                version: None,
-                author: None,
-                license: None,
-                model: None,
-                mode: None,
-                vtcode_native: None,
-                allowed_tools: None,
-                disable_model_invocation: None,
-                when_to_use: None,
-                requires_container: None,
-                disallow_container: None,
-                compatibility: None,
-                variety: crate::skills::types::SkillVariety::AgentSkill,
-                metadata: None,
-            },
-            PathBuf::from("/tmp/test"),
-            "Instructions".to_string(),
-        )
-        .unwrap();
+        let manifest = SkillManifest {
+            name: "test-format".to_string(),
+            description: "Test format selection".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: None,
+            variety: crate::skills::types::SkillVariety::AgentSkill,
+            metadata: None,
+        };
 
-        skills.insert("test-format".to_string(), skill);
+        let skill = SkillMetadata {
+            name: manifest.name.clone(),
+            description: manifest.description.clone(),
+            short_description: None,
+            path: PathBuf::from("/tmp/test"),
+            scope: SkillScope::User,
+            manifest: Some(manifest),
+        };
+
+        skills.push(skill);
 
         let xml_output =
             generate_skills_prompt_with_format(&skills, SkillsRenderMode::Lean, PromptFormat::Xml);
