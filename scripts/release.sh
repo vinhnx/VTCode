@@ -64,6 +64,7 @@ Options:
   --skip-npm          Skip npm publish step
   --skip-binaries     Skip building and uploading binaries
   --skip-docs         Skip docs.rs rebuild trigger
+  --skip-release      Skip GitHub release verification (for CI/CD or manual releases)
   --trusted-publishers-info  Show information about trusted publishers setup
   --verify-trusted-publishing  Verify trusted publishing setup
   -h, --help          Show this help message
@@ -801,6 +802,7 @@ main() {
     local skip_npm=false
     local skip_binaries=false
     local skip_docs=false
+    local skip_release_check=false
     local pre_release=false
     local pre_release_suffix='alpha.0'
     local show_trusted_publishers=false
@@ -860,6 +862,10 @@ main() {
                 ;;
             --skip-docs)
                 skip_docs=true
+                shift
+                ;;
+            --skip-release)
+                skip_release_check=true
                 shift
                 ;;
 
@@ -952,29 +958,57 @@ main() {
     git push origin main && git push --tags origin
     print_success "Commits and tags pushed successfully"
 
-    # Wait for GitHub release to be created by cargo-release
-    print_info "Waiting for GitHub release v$released_version to be created..."
-    local retry_count=0
-    local max_retries=30  # Increased from 10 to 30 (up to 60 seconds)
-    while ! gh release view "v$released_version" >/dev/null 2>&1; do
-        retry_count=$((retry_count + 1))
-        if [[ $retry_count -gt $max_retries ]]; then
-            print_warning "GitHub release v$released_version not found after $max_retries attempts"
-            print_warning "You may need to create the release manually or wait longer"
-            print_info "Try running this script again with --skip-release flag"
-            exit 1
-        fi
-        if [[ $retry_count -eq 1 ]]; then
-            print_info "Release not found yet, will keep checking..."
-        fi
-        # Show progress every 5 attempts
-        if [[ $((retry_count % 5)) -eq 0 ]]; then
-            print_info "Still waiting... (attempt $retry_count/$max_retries)"
-        fi
-        sleep 2
-    done
+    # Inform user about GitHub Actions workflows that will run
+    print_info "GitHub Actions workflows triggered:"
+    print_info "  - Release workflow: Creates GitHub release and changelog"
+    print_info "  - Release-on-tag workflow: Builds and uploads binaries"
+    print_info "These workflows may take 5-15 minutes to complete depending on platform builds"
 
-    print_success "GitHub release v$released_version confirmed created"
+    # Check if we should skip GitHub release verification
+    if [[ "$skip_release_check" == 'true' ]]; then
+        print_info "Skipping GitHub release verification as requested"
+    else
+        # Detect if we're in CI environment
+        local in_ci=false
+        if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" || -n "${GITLAB_CI:-}" || -n "${CIRCLECI:-}" || -n "${TRAVIS:-}" ]]; then
+            in_ci=true
+            print_info "Running in CI environment - skipping GitHub release wait (GitHub Actions handles this)"
+            skip_release_check=true
+        fi
+
+        if [[ "$skip_release_check" != 'true' ]]; then
+            # Wait for GitHub release to be created by GitHub Actions
+            print_info "Waiting for GitHub release v$released_version to be created by GitHub Actions..."
+            local retry_count=0
+            local max_retries=90  # Increased to 3 minutes (90 attempts × 2 seconds) to accommodate GitHub Actions
+            while ! gh release view "v$released_version" >/dev/null 2>&1; do
+                retry_count=$((retry_count + 1))
+                if [[ $retry_count -gt $max_retries ]]; then
+                    print_warning "GitHub release v$released_version not found after $max_retries attempts"
+                    print_warning "GitHub Actions may still be running or the release may need to be created manually"
+                    print_info "You can skip this check in the future with --skip-release flag"
+                    if [[ "$in_ci" == false ]]; then
+                        read -p "Continue anyway? (y/N): " -n 1 -r
+                        echo
+                        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                            exit 1
+                        fi
+                    fi
+                    break
+                fi
+                if [[ $retry_count -eq 1 ]]; then
+                    print_info "Release not found yet, will keep checking... (GitHub Actions may take a few minutes)"
+                fi
+                # Show progress every 10 attempts
+                if [[ $((retry_count % 10)) -eq 0 ]]; then
+                    print_info "Still waiting... (attempt $retry_count/$max_retries) - GitHub Actions may still be building"
+                fi
+                sleep 2
+            done
+
+            print_success "GitHub release v$released_version confirmed created"
+        fi
+    fi
 
     # Verify GitHub CLI authentication before starting uploads
     print_info "Verifying GitHub CLI authentication..."
@@ -1004,7 +1038,7 @@ main() {
 
     print_success "GitHub CLI authenticated with correct account: $expected_account"
 
-    # Perform post-release operations sequentially
+    # Perform post-release operations
     # 1. Publish npm package (DISABLED - avoids GitHub Actions build costs)
     if [[ "$skip_npm" == 'false' ]]; then
         print_warning "npm publishing is disabled to avoid build costs"
@@ -1019,7 +1053,12 @@ main() {
 
         if ! build_and_upload_binaries "$released_version"; then
             print_error "Binary build/upload failed"
-            exit 1
+            # In CI environments, don't exit on binary build failure as GitHub Actions handles this
+            if [[ "$in_ci" == true ]]; then
+                print_warning "Continuing in CI environment despite binary build failure (GitHub Actions handles binary builds)"
+            else
+                exit 1
+            fi
         fi
     fi
 
@@ -1052,8 +1091,16 @@ main() {
     print_success 'Release process finished'
     print_info "GitHub Release should now contain changelog notes generated by cargo-release"
     print_info "All commits, tags, and releases have been pushed to the remote repository"
-    print_info "Binary assets have been uploaded to the GitHub release"
+    if [[ "$skip_binaries" == 'false' && "$in_ci" != 'true' ]]; then
+        print_info "Binary assets have been uploaded to the GitHub release"
+    else
+        print_info "Binary assets will be uploaded by GitHub Actions (release-on-tag workflow)"
+    fi
     print_info "Install VT Code via: cargo install vtcode or brew install vinhnx/tap/vtcode"
+    print_info ""
+    print_info "GitHub Actions workflows status:"
+    print_info "  Check: https://github.com/vinhnx/vtcode/actions for workflow progress"
+    print_info "  Release assets will be available at: https://github.com/vinhnx/vtcode/releases/tag/v$released_version"
 }
 
 main "$@"
