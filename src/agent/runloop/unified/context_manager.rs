@@ -6,7 +6,7 @@ use anyhow::{Result, bail};
 use tracing::{debug, warn};
 
 use crate::agent::runloop::context::{
-    ContextTrimConfig, ContextTrimOutcome, TrimPhase, apply_aggressive_trim_unified,
+    ContextTrimConfig, ContextTrimOutcome, apply_aggressive_trim_unified,
     enforce_unified_context_window, prune_unified_tool_responses,
 };
 use crate::agent::runloop::unified::incremental_system_prompt::{
@@ -511,8 +511,7 @@ impl ContextManager {
 
         metrics_list
             .iter()
-            .enumerate()
-            .filter_map(|(_i, metrics)| {
+            .filter_map(|metrics| {
                 if matches!(
                     decisions.get(&metrics.index),
                     Some(RetentionDecision::Summarizable)

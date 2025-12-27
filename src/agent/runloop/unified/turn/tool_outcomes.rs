@@ -269,7 +269,7 @@ pub(crate) async fn handle_tool_call(
                 turn_modified_files,
                 ctx.vt_cfg,
 
-                &traj,
+                traj,
             )
             .await?;
         }

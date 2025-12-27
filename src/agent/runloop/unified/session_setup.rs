@@ -330,15 +330,14 @@ pub(crate) async fn initialize_session(
                         }
 
                         // Restore associated tools
-                        if let Some(def) = dormant_tool_defs.get(skill_name) {
-                            if !tools_guard
+                        if let Some(def) = dormant_tool_defs.get(skill_name)
+                            && !tools_guard
                                 .iter()
                                 .any(|t| t.function_name() == def.function_name())
                             {
                                 info!("Restoring active skill tool: {}", skill_name);
                                 tools_guard.push(def.clone());
                             }
-                        }
                     }
                 }
             }
@@ -1051,7 +1050,7 @@ pub(crate) fn spawn_signal_handler(
             if matches!(signal, super::state::CtrlCSignal::Exit) {
                 // Emergency terminal cleanup on forced exit
                 // This ensures ANSI sequences don't leak to the terminal on double Ctrl+C
-                let _ = emergency_terminal_cleanup();
+                emergency_terminal_cleanup();
                 break;
             }
         }

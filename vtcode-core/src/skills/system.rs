@@ -102,7 +102,7 @@ fn write_embedded_dir(dir: &Dir<'_>, dest: &Path) -> Result<(), SystemSkillsErro
                 fs::create_dir_all(&subdir_dest).map_err(|source| {
                     SystemSkillsError::io("create system skills subdir", source)
                 })?;
-                write_embedded_dir(subdir, &dest)?; // Note: write_embedded_dir handles relative path inside, but here we recurse?
+                write_embedded_dir(subdir, dest)?; // Note: write_embedded_dir handles relative path inside, but here we recurse?
                 // Wait, include_dir recursion:
                 // include_dir entries paths are relative to the root of the Dir.
                 // But write_embedded_dir assumes `dir` is the root to write to `dest`.
