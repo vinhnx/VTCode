@@ -305,6 +305,48 @@ impl DecisionTracker {
             out
         }
     }
+
+    /// Prune decisions older than the specified duration (in seconds)
+    /// Returns the number of decisions removed
+    pub fn prune_old_decisions(&mut self, max_age_secs: u64) -> usize {
+        let now = current_timestamp();
+        let cutoff = now.saturating_sub(max_age_secs);
+        let before_len = self.decisions.len();
+
+        self.decisions.retain(|d| d.timestamp >= cutoff);
+
+        before_len.saturating_sub(self.decisions.len())
+    }
+
+    /// Prune decisions to keep only the most recent N entries
+    /// Returns the number of decisions removed
+    pub fn prune_to_count(&mut self, max_count: usize) -> usize {
+        if self.decisions.len() <= max_count {
+            return 0;
+        }
+
+        let excess = self.decisions.len() - max_count;
+        self.decisions.drain(0..excess);
+        excess
+    }
+
+    /// Auto-prune based on sensible defaults: keep last 500 decisions or last 30 minutes
+    /// Call this periodically (e.g., at turn start) to prevent unbounded growth
+    pub fn auto_prune(&mut self) -> usize {
+        const MAX_DECISIONS: usize = 500;
+        const MAX_AGE_SECS: u64 = 30 * 60; // 30 minutes
+
+        let by_age = self.prune_old_decisions(MAX_AGE_SECS);
+        let by_count = self.prune_to_count(MAX_DECISIONS);
+
+        by_age + by_count
+    }
+
+    /// Get the current decision count
+    #[inline]
+    pub fn decision_count(&self) -> usize {
+        self.decisions.len()
+    }
 }
 
 /// Transparency report for the current session

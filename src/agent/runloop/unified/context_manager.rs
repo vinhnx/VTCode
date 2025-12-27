@@ -20,6 +20,19 @@ use vtcode_core::core::{
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::tree_sitter::TreeSitterAnalyzer;
 
+/// Action to take before making an LLM request based on proactive token budget analysis
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreRequestAction {
+    /// Normal operation, proceed with request
+    Proceed,
+    /// Light trimming recommended (at WARNING threshold)
+    TrimLight,
+    /// Aggressive trimming required (at ALERT threshold)
+    TrimAggressive,
+    /// Create checkpoint and potentially reset context (at CHECKPOINT threshold)
+    Checkpoint,
+}
+
 pub(crate) struct ContextManager {
     trim_config: ContextTrimConfig,
     token_budget: Arc<TokenBudgetManager>,
@@ -82,6 +95,7 @@ impl ContextManager {
         Arc::clone(&self.token_budget)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn token_budget_enabled(&self) -> bool {
         self.token_budget_enabled
     }
@@ -89,6 +103,75 @@ impl ContextManager {
     pub(crate) async fn reset_token_budget(&self) {
         if self.token_budget_enabled {
             self.token_budget.reset().await;
+        }
+    }
+
+    /// Estimate the total tokens that would be used for the current conversation state
+    /// Includes history + estimated overhead for the next model response
+    pub(crate) fn estimate_request_tokens(&self, history: &[uni::Message]) -> usize {
+        let history_tokens: usize = history
+            .iter()
+            .map(|msg| match &msg.content {
+                uni::MessageContent::Text(text) => (text.len()
+                    / context_constants::CHAR_PER_TOKEN_APPROXIMATION)
+                    .max(context_constants::MIN_TOKEN_COUNT),
+                uni::MessageContent::Parts(_) => context_constants::DEFAULT_TOKENS_FOR_PARTS,
+            })
+            .sum();
+
+        // Add estimated overhead for model response (typ. ~2000 tokens avg)
+        const MODEL_RESPONSE_OVERHEAD: usize = 2000;
+
+        history_tokens + MODEL_RESPONSE_OVERHEAD
+    }
+
+    /// Check if the estimated token usage would exceed a given threshold
+    /// Returns true if preemptive action (trimming) is recommended
+    #[allow(dead_code)]
+    pub(crate) fn will_exceed_threshold(&self, history: &[uni::Message], threshold: f64) -> bool {
+        if !self.token_budget_enabled {
+            return false;
+        }
+
+        let estimated_tokens = self.estimate_request_tokens(history);
+        let max_tokens = self.trim_config.max_tokens;
+
+        if max_tokens == 0 {
+            return false;
+        }
+
+        let estimated_ratio = estimated_tokens as f64 / max_tokens as f64;
+        estimated_ratio >= threshold
+    }
+
+    /// Pre-request check that returns recommended action before making an LLM request.
+    /// This enables proactive trimming BEFORE tokens are consumed rather than reacting afterwards.
+    pub(crate) fn pre_request_check(&self, history: &[uni::Message]) -> PreRequestAction {
+        use vtcode_core::core::token_constants::{
+            THRESHOLD_ALERT, THRESHOLD_CHECKPOINT, THRESHOLD_WARNING,
+        };
+
+        if !self.token_budget_enabled {
+            return PreRequestAction::Proceed;
+        }
+
+        let estimated_tokens = self.estimate_request_tokens(history);
+        let max_tokens = self.trim_config.max_tokens;
+
+        if max_tokens == 0 {
+            return PreRequestAction::Proceed;
+        }
+
+        let estimated_ratio = estimated_tokens as f64 / max_tokens as f64;
+
+        if estimated_ratio >= THRESHOLD_CHECKPOINT {
+            PreRequestAction::Checkpoint
+        } else if estimated_ratio >= THRESHOLD_ALERT {
+            PreRequestAction::TrimAggressive
+        } else if estimated_ratio >= THRESHOLD_WARNING {
+            PreRequestAction::TrimLight
+        } else {
+            PreRequestAction::Proceed
         }
     }
 
@@ -572,5 +655,58 @@ mod tests {
             "unexpected phase: {:?}",
             outcome.phase
         );
+    }
+
+    #[test]
+    fn pre_request_check_returns_proceed_when_budget_disabled() {
+        let trim_config = ContextTrimConfig {
+            max_tokens: 100_000,
+            ..ContextTrimConfig::default()
+        };
+        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
+        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
+        // Note: token_budget_enabled = false
+        let manager = ContextManager::new("sys".into(), trim_config, budget, false);
+
+        let history = vec![uni::Message::user("hello".to_string())];
+        assert_eq!(
+            manager.pre_request_check(&history),
+            super::PreRequestAction::Proceed
+        );
+    }
+
+    #[test]
+    fn pre_request_check_returns_trim_at_warning_threshold() {
+        let trim_config = ContextTrimConfig {
+            max_tokens: 10_000, // Small window for easy testing
+            ..ContextTrimConfig::default()
+        };
+        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
+        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
+        let manager = ContextManager::new("sys".into(), trim_config, budget, true);
+
+        // Create history that's ~80% of max tokens (above WARNING threshold of 0.75)
+        // At 4 chars/token, 8000 tokens = 32000 chars, minus 2000 overhead = 30000 chars
+        let history = vec![uni::Message::user("x".repeat(30000))];
+        let action = manager.pre_request_check(&history);
+        assert!(matches!(
+            action,
+            super::PreRequestAction::TrimLight | super::PreRequestAction::TrimAggressive
+        ));
+    }
+
+    #[test]
+    fn will_exceed_threshold_returns_false_when_under() {
+        let trim_config = ContextTrimConfig {
+            max_tokens: 100_000,
+            ..ContextTrimConfig::default()
+        };
+        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
+        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
+        let manager = ContextManager::new("sys".into(), trim_config, budget, true);
+
+        // Small message should be under any threshold
+        let history = vec![uni::Message::user("hi".to_string())];
+        assert!(!manager.will_exceed_threshold(&history, 0.75));
     }
 }

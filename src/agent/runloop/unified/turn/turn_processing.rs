@@ -1,59 +1,22 @@
 use anyhow::Result;
-use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::Notify;
 use tokio::task;
-
-use crate::agent::runloop::mcp_events::McpPanelState;
-use crate::agent::runloop::unified::context_manager::ContextManager;
-use crate::agent::runloop::unified::extract_action_from_messages;
-#[allow(unused_imports)]
-use crate::agent::runloop::unified::reasoning;
-use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
-use crate::agent::runloop::unified::ui_interaction::{
-    PlaceholderSpinner, stream_and_render_response,
-};
-#[cfg(debug_assertions)]
 use tracing::debug;
-use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
-use vtcode_core::core::token_budget::TokenBudgetManager;
-use vtcode_core::llm::TokenCounter;
+
+use crate::agent::runloop::unified::extract_action_from_messages;
+use crate::agent::runloop::unified::turn::context::{
+    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext, TurnProcessingResult,
+};
+use crate::agent::runloop::unified::turn::guards::{
+    handle_turn_balancer, validate_required_tool_args,
+};
+use crate::agent::runloop::unified::ui_interaction::stream_and_render_response;
+use std::collections::{BTreeSet, HashMap};
+use std::path::PathBuf;
+use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
-use vtcode_core::tools::ToolRegistry;
-use vtcode_core::tools::result_cache::ToolResultCache;
-use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
-
-/// Context for turn processing operations
-#[allow(dead_code)]
-pub(crate) struct TurnProcessingContext<'a> {
-    pub renderer: &'a mut AnsiRenderer,
-    pub handle: &'a InlineHandle,
-    pub session_stats: &'a mut SessionStats,
-    pub mcp_panel_state: &'a mut McpPanelState,
-    pub tool_result_cache: &'a Arc<tokio::sync::RwLock<ToolResultCache>>,
-    pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
-    pub decision_ledger: &'a Arc<tokio::sync::RwLock<DecisionTracker>>,
-    pub pruning_ledger: &'a Arc<tokio::sync::RwLock<PruningDecisionLedger>>,
-    pub token_budget: &'a Arc<TokenBudgetManager>,
-    pub token_counter: &'a Arc<tokio::sync::RwLock<TokenCounter>>,
-    pub working_history: &'a mut Vec<uni::Message>,
-    pub tool_registry: &'a mut ToolRegistry,
-    pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
-    /// Cached tool definitions for efficient reuse (HP-3 optimization)
-    pub cached_tools: &'a Option<Arc<Vec<uni::ToolDefinition>>>,
-    pub ctrl_c_state: &'a Arc<CtrlCState>,
-    pub ctrl_c_notify: &'a Arc<Notify>,
-    pub vt_cfg: Option<&'a VTCodeConfig>,
-    pub context_manager: &'a mut ContextManager,
-    pub last_forced_redraw: &'a mut Instant,
-    pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
-    pub full_auto: bool,
-}
 
 /// Execute an LLM request and return the response
 pub(crate) async fn execute_llm_request(
@@ -136,7 +99,8 @@ pub(crate) async fn execute_llm_request(
     };
 
     let action_suggestion = extract_action_from_messages(ctx.working_history);
-    let thinking_spinner = PlaceholderSpinner::new(
+    use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
+    let _spinner = PlaceholderSpinner::new(
         ctx.handle,
         ctx.input_status_state.left.clone(),
         ctx.input_status_state.right.clone(),
@@ -161,7 +125,7 @@ pub(crate) async fn execute_llm_request(
     }
 
     if let Err(err) = provider_client.validate_request(&request) {
-        thinking_spinner.finish();
+        _spinner.finish();
         return Err(anyhow::Error::new(err));
     }
 
@@ -169,7 +133,7 @@ pub(crate) async fn execute_llm_request(
         stream_and_render_response(
             provider_client,
             request,
-            &thinking_spinner,
+            &_spinner,
             ctx.renderer,
             ctx.ctrl_c_state,
             ctx.ctrl_c_notify,
@@ -179,7 +143,7 @@ pub(crate) async fn execute_llm_request(
         let provider_name = provider_client.name().to_string();
 
         if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
-            thinking_spinner.finish();
+            _spinner.finish();
             Err(uni::LLMError::Provider {
                 message: vtcode_core::llm::error_display::format_llm_error(
                     &provider_name,
@@ -194,11 +158,11 @@ pub(crate) async fn execute_llm_request(
             tokio::pin!(cancel_notifier);
             let outcome = tokio::select! {
                 res = &mut generate_future => {
-                    thinking_spinner.finish();
+                    _spinner.finish();
                     res.map(|resp| (resp, false))
                 }
                 _ = &mut cancel_notifier => {
-                    thinking_spinner.finish();
+                    _spinner.finish();
                     Err(uni::LLMError::Provider {
                         message: vtcode_core::llm::error_display::format_llm_error(
                             &provider_name,
@@ -231,7 +195,7 @@ pub(crate) async fn execute_llm_request(
         Ok(result) => result,
         Err(error) => {
             // Finish spinner before returning error to remove it from transcript
-            thinking_spinner.finish();
+            _spinner.finish();
             return Err(anyhow::Error::new(error));
         }
     };
@@ -245,27 +209,74 @@ pub(crate) async fn execute_llm_request(
 // are now imported from crate::agent::runloop::unified::reasoning
 
 /// Result of processing a single turn
-#[allow(dead_code)]
-pub(crate) enum TurnProcessingResult {
-    /// Turn resulted in tool calls that need to be executed
-    ToolCalls {
-        tool_calls: Vec<uni::ToolCall>,
-        assistant_text: String,
-        reasoning: Option<String>,
-    },
-    /// Turn resulted in a text response
-    TextResponse {
-        text: String,
-        reasoning: Option<String>,
-    },
-    /// Turn resulted in no actionable output
-    Empty,
-    /// Turn was completed successfully
-    Completed,
-    /// Turn was cancelled by user
-    Cancelled,
-    /// Turn was aborted due to error
-    Aborted,
+
+/// Dispatch the appropriate response handler based on the processing result.
+pub(crate) async fn handle_turn_processing_result(
+    ctx: &mut TurnProcessingContext<'_>,
+    processing_result: TurnProcessingResult,
+    response_streamed: bool,
+    step_count: usize,
+    repeated_tool_attempts: &mut HashMap<String, usize>,
+    turn_modified_files: &mut BTreeSet<PathBuf>,
+    traj: &TrajectoryLogger,
+    session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
+) -> Result<TurnHandlerOutcome> {
+    match processing_result {
+        TurnProcessingResult::ToolCalls {
+            tool_calls,
+            assistant_text,
+            reasoning,
+        } => {
+            crate::agent::runloop::unified::turn::tool_outcomes::handle_assistant_response(
+                ctx,
+                assistant_text,
+                reasoning,
+                response_streamed,
+            )?;
+
+            for tool_call in &tool_calls {
+                if let Some(outcome) =
+                    crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_call(
+                        ctx,
+                        tool_call,
+                        repeated_tool_attempts,
+                        turn_modified_files,
+                        traj,
+                    )
+                    .await?
+                {
+                    return Ok(outcome);
+                }
+            }
+            // Fall through to balancer
+        }
+        TurnProcessingResult::TextResponse { text, reasoning } => {
+            return crate::agent::runloop::unified::turn::tool_outcomes::handle_text_response(
+                ctx,
+                text,
+                reasoning,
+                response_streamed,
+                step_count,
+                repeated_tool_attempts,
+                turn_modified_files,
+                traj,
+                session_end_reason,
+            )
+            .await;
+        }
+        TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
+            return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed));
+        }
+        TurnProcessingResult::Cancelled => {
+            *session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
+            return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled));
+        }
+        TurnProcessingResult::Aborted => {
+            return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Aborted));
+        }
+    };
+
+    Ok(handle_turn_balancer(ctx, step_count, repeated_tool_attempts).await)
 }
 
 /// Process an LLM response and return a `TurnProcessingResult` describing whether
@@ -374,42 +385,4 @@ pub(crate) fn process_llm_response(
     }
 
     Ok(TurnProcessingResult::Empty)
-}
-
-/// Validates that a textual tool call has required arguments before execution.
-/// Returns `None` if valid, or `Some(missing_params)` if validation fails.
-///
-/// This prevents executing tools with empty args that will just fail,
-/// allowing the model to continue naturally instead of hitting loop detection.
-fn validate_required_tool_args(name: &str, args: &serde_json::Value) -> Option<Vec<&'static str>> {
-    let required: &[&str] = match name {
-        n if n == tool_names::READ_FILE => &["path"],
-        n if n == tool_names::WRITE_FILE => &["path", "content"],
-        n if n == tool_names::EDIT_FILE => &["path", "old_string", "new_string"],
-        n if n == tool_names::LIST_FILES => &["path"],
-        n if n == tool_names::GREP_FILE => &["pattern"],
-        n if n == tool_names::RUN_PTY_CMD => &["command"],
-        n if n == tool_names::APPLY_PATCH => &["patch"],
-        _ => &[],
-    };
-
-    if required.is_empty() {
-        return None;
-    }
-
-    let missing: Vec<&'static str> = required
-        .iter()
-        .filter(|key| {
-            args.get(*key)
-                .map(|v| v.is_null() || (v.is_string() && v.as_str().unwrap_or("").is_empty()))
-                .unwrap_or(true)
-        })
-        .copied()
-        .collect();
-
-    if missing.is_empty() {
-        None
-    } else {
-        Some(missing)
-    }
 }

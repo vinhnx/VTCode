@@ -78,24 +78,23 @@ impl ToolCallSafetyValidator {
         self.max_per_session = max_per_session;
     }
 
-    /// Override the per-second rate limit (e.g., from runtime config)
+    #[allow(dead_code)]
+    pub fn rate_limit_per_second(&self) -> usize {
+        self.rate_limit_per_second
+    }
+
+    #[allow(dead_code)]
     pub fn set_rate_limit_per_second(&mut self, limit: usize) {
         if limit > 0 {
             self.rate_limit_per_second = limit;
         }
     }
 
-    /// Override the per-minute rate limit (None disables minute-based throttling)
+    #[allow(dead_code)]
     pub fn set_rate_limit_per_minute(&mut self, limit: Option<usize>) {
         self.rate_limit_per_minute = limit.filter(|v| *v > 0);
     }
 
-    /// Inspect the current rate limit for coordination with outer caps.
-    pub fn rate_limit_per_second(&self) -> usize {
-        self.rate_limit_per_second
-    }
-
-    /// Inspect the current per-minute rate limit.
     #[allow(dead_code)]
     pub fn rate_limit_per_minute(&self) -> Option<usize> {
         self.rate_limit_per_minute
@@ -204,6 +203,7 @@ pub struct CallValidation {
     #[allow(dead_code)]
     pub is_destructive: bool,
     /// Whether confirmation is required
+    #[allow(dead_code)]
     pub requires_confirmation: bool,
     /// Whether execution is allowed
     #[allow(dead_code)]

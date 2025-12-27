@@ -1,18 +1,3 @@
-system prompt https://github.com/Piebald-AI/claude-code-system-prompts/blob/main/system-prompts/system-prompt-main-system-prompt.md
-
---
-
-https://github.com/Piebald-AI/claude-code-system-prompts/
-
---
-
-
-
---
-
-Add LSP (Language Server Protocol) tool for code intelligence features like go-to-definition, find references, and hover documentation
-
---
 
 remove this for simplicity
 
@@ -21,8 +6,151 @@ Adaptive context trimming near budget thresholds
 • Token budget enforcement
 
 --
+VTCode Agent System Analysis
+Summary
+The VTCode agent system implements a robust, multi-layered agent loop architecture designed for code assistance tasks. Key findings from the report:
 
+Architecture Overview
+3-tier nested loop structure: Session → Turn → Tool Execution
+Core entry point: run_single_agent_loop() in 
+src/agent/agents.rs
+Main loop implementation: ~3,218 lines in run_loop.rs
+Performance Metrics & Capabilities
+Component	Metric/Feature
+Mode-Based Execution	77% complexity reduction through selective tool loading
+Tool Pipeline	Parallel execution, caching for read-only operations
+Context Management	Adaptive trimming, semantic compression, token budget enforcement
+Safety Mechanisms	Loop detection, HITL approval, timeout handling, Ctrl+C support
+Key Strengths
+Comprehensive decision tracking via a transparency ledger
+Session resilience with resumption, forking, and snapshot/checkpoint support
+Human-in-the-Loop (HITL) for destructive operations with git diff integration
+Trait-based tool abstraction providing a single source of truth
+Analysis: Weaknesses, Inefficiencies & Vulnerabilities
+1. Complexity & Maintainability Concerns
+Issue	Evidence
+Monolithic file size	run_loop.rs is ~3,218 lines—difficult to maintain, test, and extend
+Nested loop coupling	The three-tier loop structure may create tight coupling, making individual loop logic harder to modify independently
+2. Resource Management Gaps
+Token budget enforcement is reactive: Adaptive trimming occurs near thresholds, risking edge-case overflows
+Timeout handling lacks granularity: No evidence of per-tool-type timeout customization (e.g., LLM calls vs. file operations)
+3. Loop Detection Limitations
+Signature-based detection may miss semantic loops where tool calls vary slightly but achieve the same ineffective outcome
+Configurable threshold could be misconfigured, either catching false positives or missing actual loops
+4. Security & Safety Observations
+HITL approval scope unclear: The report doesn't specify which operations always require approval vs. which can be auto-approved
+Permission checking pipeline may have bypass vectors if tool definitions are incorrectly categorized
+MCP (Model Context Protocol) support introduces external protocol surface area—potential for deserialization or injection attacks
+5. Scalability Concerns
+Parallel tool execution is implemented but no load balancing or rate limiting is mentioned
+Decision ledger growth: Comprehensive tracking of all decisions could lead to memory pressure in long sessions
+Session stats accumulation: SessionStats tracking "across session" may not have proper eviction policies
+6. User Experience Gaps
+Transparency reports are generated but delivery/formatting for different user skill levels is unclear
+Error recovery strategies exist but user-facing error messaging isn't detailed
+Recommendations
+High Priority (Immediate Impact)
+Recommendation	Rationale	Feasibility
+1. Refactor run_loop.rs	Split the 3,218-line file into smaller, focused modules (e.g., turn_processing.rs, tool_dispatch.rs, context_ops.rs)	⭐⭐⭐⭐ High
+2. Implement proactive token budget guards	Add pre-request token estimation to prevent threshold violations before they occur	⭐⭐⭐⭐ High
+3. Add semantic loop detection	Enhance loop detection with embedding-based similarity checking for tool call outcomes, not just signatures	⭐⭐⭐ Medium
+Security Enhancements
+Recommendation	Rationale	Feasibility
+4. Formalize HITL policy	Create an explicit whitelist/blacklist for auto-approved operations with security audit trail	⭐⭐⭐⭐ High
+5. Sandbox MCP inputs	Add schema validation and input sanitization for all MCP protocol messages	⭐⭐⭐ Medium
+6. Add tool permission auditing	Log all permission decisions with cryptographic integrity for compliance/debugging	⭐⭐⭐ Medium
+Scalability Improvements
+Recommendation	Rationale	Feasibility
+7. Implement decision ledger pruning	Add time-based or count-based eviction to prevent unbounded memory growth	⭐⭐⭐⭐ High
+8. Add tool execution rate limiting	Prevent resource exhaustion during parallel execution bursts	⭐⭐⭐⭐ High
+9. Per-tool-type timeout configuration	Allow LLM calls to have longer timeouts than file operations	⭐⭐⭐⭐ High
+User Experience
+Recommendation	Rationale	Feasibility
+10. Tiered transparency reports	Offer "summary" vs. "detailed" views based on user preference/skill level	⭐⭐⭐ Medium
+11. Enhanced error messages with remediation hints	Transform technical errors into actionable guidance for users	⭐⭐⭐ Medium
+12. Add progress estimation	Use decision ledger data to estimate remaining work in complex tasks	⭐⭐ Low-Medium
+Architectural Improvements
+Recommendation	Rationale	Feasibility
+13. Decouple loop tiers	Use message-passing or event-driven architecture between session/turn/tool loops	⭐⭐ Low-Medium
+14. Add telemetry hooks	Instrument the agent loop for observability (latency, error rates, resource usage)	⭐⭐⭐ Medium
+15. Implement tool result caching TTL	Add time-to-live for cached read-only results to prevent stale data issues	⭐⭐⭐⭐ High
+Priority Implementation Roadmap
+mermaid
+gantt
+    title VTCode Improvement Priorities
+    dateFormat  YYYY-MM-DD
+    section Phase 1 (Quick Wins)
+    Refactor run_loop.rs           :a1, 2024-01-01, 14d
+    Proactive token guards         :a2, after a1, 7d
+    Decision ledger pruning        :a3, after a1, 5d
+    
+    section Phase 2 (Security)
+    Formalize HITL policy          :b1, after a2, 7d
+    MCP input sandboxing           :b2, after b1, 10d
+    
+    section Phase 3 (UX & Scale)
+    Tiered transparency reports    :c1, after b2, 7d
+    Semantic loop detection        :c2, after c1, 14d
+The most impactful immediate change would be refactoring run_loop.rs—the current 3,218-line file is a maintenance risk that will compound over time. This single change would make all subsequent improvements easier to implement and test.
 
-analyze and improve 
+--
 
-Now let me summarize the core agent loop analysis:\n\n## Core Agent Loop Analysis\n\nBased on my analysis of the VT Code codebase, here's a comprehensive overview of the core agent loop architecture:\n\n### Entry Points\n\n**Primary Entry**: `src/agent/agents.rs::run_single_agent_loop()`\n- Loads configuration from workspace\n- Creates provider client and tool registry\n- Initializes session components\n- Delegates to unified turn loop\n\n**Main Loop**: `src/agent/runloop/unified/turn/run_loop.rs`\n- ~3,218 lines implementing the core agent loop\n- Located in `run_single_agent_loop_unified()` function\n\n### Loop Structure\n\nThe agent loop is a nested structure:\n\n```\nsession_loop (outer)\n  └─ turn_loop (middle)\n      └─ tool_execution_loop (inner)\n```\n\n**Session Loop** (`session_loop.rs`):\n- Handles session lifecycle\n- Manages TUI initialization and cleanup\n- Supports session resumption and forking\n- Handles slash commands\n- Manages terminal state restoration\n\n**Turn Loop** (`run_loop.rs:1974`):\n- Main processing loop labeled `'outer`\n- Executes individual conversation turns\n- Manages context trimming and budget enforcement\n- Handles tool calls and responses\n- Implements self-review mechanism\n\n**Tool Execution Loop** (within turn processing):\n- Processes multiple tool calls per turn\n- Supports parallel tool execution\n- Implements tool caching\n- Handles tool permissions and approvals\n\n### Key Components\n\n**Context Management** (`context_manager.rs`):\n- Adaptive context trimming near budget thresholds\n- Semantic compression and pruning\n- Token budget enforcement\n- System prompt building with incremental updates\n\n**Tool Pipeline** (`tool_pipeline.rs`):\n- Permission checking and HITL (Human-in-the-Loop) approval\n- Tool result caching for read-only tools\n- Timeout handling with cancellation\n- Modified files tracking\n\n**Loop Detection** (`loop_detection.rs`):\n- Tracks repeated tool call signatures\n- Configurable threshold for loop detection\n- Selective signature reset capability\n- Turn balancer to prevent low-signal churn\n\n**Decision Tracking** (`decision_tracker.rs`):\n- Records all agent decisions\n- Tracks outcomes (success/failure)\n- Generates transparency reports\n- Confidence scoring\n\n**State Management** (`state.rs`):\n- `CtrlCState`: Handles cancellation and exit signals\n- `SessionStats`: Tracks tool usage across session\n\n### Core Flow\n\n1. **Session Setup** (`session_setup.rs`):\n   - Load configuration and initialize provider\n   - Build tool definitions with mode-based declarations\n   - Create context manager with trim configuration\n   - Initialize MCP (Model Context Protocol) support\n\n2. **Turn Processing**:\n   - Build system prompt with incremental updates\n   - Execute LLM request with streaming\n   - Parse response for tool calls and final text\n   - Handle tool calls through permission pipeline\n   - Cache tool results for read-only operations\n   - Update decision ledger\n\n3. **Context Management**:\n   - Adaptive trimming at budget thresholds\n   - Turn balancer triggers compaction on repeated calls\n   - Semantic pruning based on message importance\n   - Token budget enforcement\n\n4. **Error Handling**:\n   - Tool failure handling with enhanced error messages\n   - Timeout detection and cancellation\n   - Loop detection and prevention\n   - Error recovery strategies\n\n### Safety Mechanisms\n\n1. **Loop Prevention**:\n   - Repeated tool call tracking\n   - Turn balancer limits low-signal churn\n   - Configurable repeat thresholds\n\n2. **Human-in-the-Loop**:\n   - Tool permission checks\n   - Destructive operation confirmation\n   - Git diff integration for change review\n\n3. **Resource Management**:\n   - Token budget enforcement\n   - Context window limits\n   - Tool execution timeouts\n   - Ctrl+C signal handling\n\n4. **Recovery**:\n   - Error recovery manager with strategies\n   - Snapshot/checkpoint support\n   - Session resumption capability\n\n### Key Patterns\n\n**Mode-Based Execution**: 77% complexity reduction through mode-based tool selection and execution\n\n**Trait-Based Tools**: Single source of truth for content search and file operations\n\n**Incremental System Prompt**: Dynamic prompt building based on conversation state\n\n**Decision Ledger**: Comprehensive tracking of all agent actions and outcomes\n\n**Semantic Pruning**: Context compression based on message importance and age\n\nThe loop is designed to be robust, safe, and efficient while maintaining transparency through comprehensive decision tracking and reportingq
+VTCode Agent System Refactoring Plan
+Refactor the monolithic 
+run_loop.rs
+ (3,223 lines) to improve maintainability, following the high-priority recommendations from the analysis.
+
+User Review Required
+IMPORTANT
+
+This refactoring will extract functions from 
+run_loop.rs
+ into new modules. The public API remains unchanged—
+run_single_agent_loop_unified()
+ will still be the main entry point.
+
+Proposed Changes
+Phase 1: Extract Tool Outcome Handlers (This Session)
+The following functions (lines 122-836) will be extracted to a new module:
+
+[NEW] 
+tool_outcomes.rs
+Function	Lines	Purpose
+run_turn_prepare_tool_call
+122-287	Permission checking and HITL flow
+run_turn_execute_tool
+289-361	Tool execution with caching
+run_turn_handle_tool_success
+363-606	Success outcome processing
+run_turn_handle_tool_failure
+608-730	Failure outcome processing
+run_turn_handle_tool_timeout
+732-789	Timeout outcome processing
+run_turn_handle_tool_cancelled
+791-836	Cancellation outcome processing
+[MODIFY] 
+run_loop.rs
+Remove extracted functions (~714 lines)
+Add mod tool_outcomes; use tool_outcomes::*;
+Resulting size: ~2,509 lines (22% reduction)
+[MODIFY] 
+mod.rs
+Add mod tool_outcomes; declaration
+Future Phases (Not This Session)
+Phase	Description
+Phase 2	Token budget guards in 
+context_manager.rs
+Phase 3	Decision ledger pruning in decision_tracker.rs
+Phase 4	HITL policy formalization
+Verification Plan
+Automated Tests
+# 1. Check compilation
+cargo check --all-targets
+# 2. Run lints  
+cargo clippy --all-targets --all-features -- -D warnings
+# 3. Run existing tests
+cargo test --lib
+# 4. Run integration tests
+cargo test --test integration_tests
+Manual Verification
+None required—this is a pure refactoring with no behavioral changes.
