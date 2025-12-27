@@ -1161,7 +1161,7 @@ impl LLMProvider for AnthropicProvider {
 }
 
 #[cfg(test)]
-mod tests {
+mod caching_tests {
     use super::*;
     use crate::config::core::PromptCachingConfig;
     use crate::llm::provider::{Message, ToolDefinition};
@@ -1315,6 +1315,45 @@ mod tests {
             .expect("beta header present when caching enabled");
         assert!(beta_header.contains("prompt-caching-2024-07-31"));
         assert!(beta_header.contains("extended-cache-ttl-2025-04-11"));
+    }
+
+    #[test]
+    fn test_prompt_cache_beta_headers() {
+        // Test 1: Caching disabled
+        let provider = AnthropicProvider::new("test-key".to_string());
+        assert_eq!(provider.prompt_cache_beta_header_value(), None);
+
+        // Test 2: Caching enabled, default TTL (explicitly disable extended to ensure 5m behavior)
+        let mut config = PromptCachingConfig::default();
+        config.enabled = true;
+        config.providers.anthropic.extended_ttl_seconds = None;
+
+        let provider = AnthropicProvider::from_config(
+            Some("key".into()),
+            None,
+            None,
+            Some(config.clone()),
+            None,
+            None,
+        );
+        assert_eq!(
+            provider.prompt_cache_beta_header_value(),
+            Some("prompt-caching-2024-07-31".to_string())
+        );
+
+        // Test 3: Caching enabled, 1h TTL (requires extended header)
+        config.providers.anthropic.extended_ttl_seconds = Some(3600);
+        let provider = AnthropicProvider::from_config(
+            Some("key".into()),
+            None,
+            None,
+            Some(config.clone()),
+            None,
+            None,
+        );
+        let header = provider.prompt_cache_beta_header_value().unwrap();
+        assert!(header.contains("prompt-caching-2024-07-31"));
+        assert!(header.contains("extended-cache-ttl-2025-04-11"));
     }
 
     #[test]

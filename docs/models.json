@@ -633,12 +633,12 @@
           "structured_output": true
         }
       },
-      "MiniMaxAI/MiniMax-M2:novita": {
-        "id": "MiniMaxAI/MiniMax-M2:novita",
-        "name": "MiniMax-M2 (Novita)",
-        "description": "MiniMax-M2 model via Novita inference provider on HuggingFace router.",
-        "reasoning": false,
-        "tool_call": false,
+      "MiniMaxAI/MiniMax-M2.1:novita": {
+        "id": "MiniMaxAI/MiniMax-M2.1:novita",
+        "name": "MiniMax-M2.1 (Novita)",
+        "description": "MiniMax-M2.1 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities.",
+        "reasoning": true,
+        "tool_call": true,
         "modalities": {
           "input": [
             "text"
@@ -649,7 +649,7 @@
         },
         "context": 204800,
         "capabilities": {
-          "structured_output": false
+          "structured_output": true
         }
       },
       "deepseek-ai/DeepSeek-V3.2:novita": {

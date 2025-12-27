@@ -142,6 +142,7 @@ pub mod generation_helpers;
 pub mod grep_cache;
 pub mod grep_file;
 pub mod handlers;
+pub mod lsp;
 pub mod mcp;
 pub mod names;
 pub mod path_env;
@@ -196,6 +197,7 @@ pub use fallback_chains::{
     FallbackStep,
 };
 pub use grep_file::GrepSearchManager;
+pub use lsp::LspTool;
 pub use plan::{
     PlanCompletionState, PlanManager, PlanPhase, PlanStep, PlanSummary, PlanUpdateResult,
     StepStatus, TaskPlan, UpdatePlanArgs,
