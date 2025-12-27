@@ -252,7 +252,71 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
         }
     }
     
-    // Also check for references/ directory if needed, pattern is similar.
+    // Check for references/ directory
+    let references_dir = skill_path.join("references");
+    if references_dir.exists() {
+        for entry in fs::read_dir(&references_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_file() {
+                let rel_path = path
+                    .strip_prefix(skill_path)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                let resource_type = match path.extension().and_then(|e| e.to_str()) {
+                    Some("md") => crate::skills::types::ResourceType::Reference,
+                    Some("json") | Some("yaml") | Some("yml") | Some("txt") | Some("csv") => {
+                        crate::skills::types::ResourceType::Reference
+                    }
+                    _ => crate::skills::types::ResourceType::Other(format!(
+                        "{:?}",
+                        path.extension()
+                    )),
+                };
+
+                resources.push(crate::skills::types::SkillResource {
+                    path: rel_path,
+                    resource_type,
+                    content: None,
+                });
+            }
+        }
+    }
+
+    // Check for assets/ directory
+    let assets_dir = skill_path.join("assets");
+    if assets_dir.exists() {
+        for entry in fs::read_dir(&assets_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_file() {
+                let rel_path = path
+                    .strip_prefix(skill_path)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                let resource_type = match path.extension().and_then(|e| e.to_str()) {
+                    Some("png") | Some("jpg") | Some("jpeg") | Some("gif") | Some("svg") => {
+                        crate::skills::types::ResourceType::Asset
+                    }
+                    Some("json") | Some("yaml") | Some("yml") | Some("txt") | Some("csv") => {
+                        crate::skills::types::ResourceType::Asset
+                    }
+                    _ => crate::skills::types::ResourceType::Asset,
+                };
+
+                resources.push(crate::skills::types::SkillResource {
+                    path: rel_path,
+                    resource_type,
+                    content: None,
+                });
+            }
+        }
+    }
+
     Ok(resources)
 }
 

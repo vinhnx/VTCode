@@ -306,6 +306,8 @@ pub enum ResourceType {
     Script,
     /// Reference data (JSON, schemas, templates, etc.)
     Reference,
+    /// Static assets (images, data files, templates)
+    Asset,
     /// Other resource types
     Other(String),
 }
@@ -608,11 +610,3 @@ mod tests {
         assert!(m.validate().is_ok());
     }
 }
-        let m = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test description".to_string(),
-            version: Some("1.0.0".to_string()),
-            author: Some("Test Author".to_string()),
-            metadata: Some(metadata),
-            ..Default::default()
-        };
