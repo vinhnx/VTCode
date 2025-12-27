@@ -231,6 +231,8 @@ pub(crate) async fn handle_tool_call(
 
             ctx.tool_registry.clear_progress_callback();
 
+            let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);
+
             // Handle the result
             handle_tool_execution_result(
                 &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
@@ -261,7 +263,7 @@ pub(crate) async fn handle_tool_call(
                 tool_call.id.clone(),
                 tool_name,
                 &args_val,
-                &tool_result,
+                &pipeline_outcome,
                 ctx.working_history,
                 turn_modified_files,
                 ctx.vt_cfg,
@@ -312,20 +314,20 @@ pub(crate) async fn handle_tool_execution_result(
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
-    tool_result: &ToolExecutionStatus,
+    pipeline_outcome: &ToolPipelineOutcome,
     working_history: &mut Vec<uni::Message>,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
     vt_cfg: Option<&VTCodeConfig>,
     local_token_budget: &Arc<vtcode_core::core::token_budget::TokenBudgetManager>,
     traj: &vtcode_core::core::trajectory::TrajectoryLogger,
 ) -> Result<()> {
-    match tool_result {
+    match &pipeline_outcome.status {
         ToolExecutionStatus::Success {
             output,
             stdout: _,
-            modified_files,
-            command_success,
-            has_more,
+            modified_files: _,
+            command_success: _,
+            has_more: _,
         } => {
             // Add successful tool result to history (token-aware aggregation)
             // Determine per-call token budget (from args) or fall back to config
@@ -375,21 +377,14 @@ pub(crate) async fn handle_tool_execution_result(
                 tool_name.to_string(),
             ));
 
-            // Build a ToolPipelineOutcome to leverage centralized handling
-            let pipeline_outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
-                output: output.clone(),
-                stdout: None,
-                modified_files: modified_files.clone(),
-                command_success: *command_success,
-                has_more: *has_more,
-            });
+
 
             // Build a small RunLoopContext to reuse the generic `handle_pipeline_output`
             let (_any_write, mod_files, last_stdout) = crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
                 ctx,
                 tool_name,
                 args_val,
-                &pipeline_outcome,
+                pipeline_outcome,
                 vt_cfg,
                 local_token_budget,
                 traj,
@@ -471,7 +466,7 @@ pub(crate) async fn handle_tool_execution_result(
 
     // Handle MCP events
     if tool_name.starts_with("mcp_") {
-        match tool_result {
+        match &pipeline_outcome.status {
             ToolExecutionStatus::Success { output, .. } => {
                 let mut mcp_event = mcp_events::McpEvent::new(
                     "mcp".to_string(),
@@ -1208,6 +1203,8 @@ pub(crate) async fn handle_text_response(
                 )
                 .await;
 
+                let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);
+
                 handle_tool_execution_result(
                     &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
                         renderer: ctx.renderer,
@@ -1237,7 +1234,7 @@ pub(crate) async fn handle_text_response(
                     tool_call.id.clone(),
                     call_tool_name,
                     &call_args_val,
-                    &tool_result,
+                    &pipeline_outcome,
                     ctx.working_history,
                     turn_modified_files,
                     ctx.vt_cfg,

@@ -1,6 +1,6 @@
 
 remove this for simplicity
 
-Adaptive context trimming near budget thresholds
-• Semantic compression and pruning
-• Token budget enforcement
+- [x] Adaptive context trimming near budget thresholds
+- [x] Semantic compression and pruning
+- [x] Token budget enforcement

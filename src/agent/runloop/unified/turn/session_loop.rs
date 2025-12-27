@@ -1,52 +1,33 @@
-use crate::agent::runloop::unified::turn::session::slash_commands::{
-    SlashCommandContext, SlashCommandControl,
-};
 use anyhow::Result;
 use ratatui::crossterm::terminal::disable_raw_mode;
 use std::collections::VecDeque;
 use std::io::Write;
-use std::sync::Arc;
+
 use std::time::Instant;
 
-use crate::agent::runloop::unified::turn::session::slash_commands;
-use vtcode_core::llm::provider::{self as uni};
-
-use tracing::warn;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_core::utils::at_pattern::parse_at_patterns;
 use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
 
 use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
-use crate::agent::runloop::prompt::refine_and_enrich_prompt;
-use crate::agent::runloop::slash_commands::handle_slash_command;
-use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
+use crate::agent::runloop::model_picker::ModelPickerState;
 
 use super::context::TurnLoopResult as RunLoopTurnLoopResult;
 use super::finalization::finalize_session;
 use super::turn_loop::TurnLoopOutcome;
-use super::utils::render_hook_messages;
-use super::workspace::refresh_vt_config;
-use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
 
-use crate::agent::runloop::unified::display::display_user_message;
-use crate::agent::runloop::unified::inline_events::{
-    InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
-};
-// loop_detection not used in session loop refactor
-use crate::agent::runloop::unified::model_selection::finalize_model_selection;
+
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::session_setup::{
-    SessionState, build_mcp_tool_definitions, initialize_session, initialize_session_ui,
+    SessionState, initialize_session, initialize_session_ui,
     spawn_signal_handler,
 };
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::status_line::{
-    InputStatusState, update_context_efficiency, update_input_status_if_changed,
+    InputStatusState,
 };
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{SessionEndReason, SessionStartTrigger};
@@ -159,529 +140,71 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
         let mut last_known_mcp_tools: Vec<String> = Vec::new();
         let mut last_mcp_refresh = std::time::Instant::now();
-        const MCP_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
 
         loop {
-            if let Err(error) = update_input_status_if_changed(
-                &handle,
-                &config.workspace,
-                &config.model,
-                config.reasoning_effort.as_str(),
-                vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
-                &mut input_status_state,
-            )
-            .await
-            {
-                warn!(
-                    workspace = %config.workspace.display(),
-                    error = ?error,
-                    "Failed to refresh status line"
-                );
-            }
-
-            // Update context efficiency metrics in status line
-            if let Some(efficiency) = context_manager.last_efficiency() {
-                update_context_efficiency(
-                    &mut input_status_state,
-                    efficiency.context_utilization_percent,
-                    efficiency.total_tokens,
-                    efficiency.semantic_value_per_token,
-                );
-            }
-
-            if ctrl_c_state.is_exit_requested() {
-                session_end_reason = SessionEndReason::Exit;
-                break;
-            }
-
-            let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
-
-            if let Some(mcp_manager) = &async_mcp_manager {
-                // Handle initial MCP client setup
-                if !mcp_catalog_initialized {
-                    match mcp_manager.get_status().await {
-                        McpInitStatus::Ready { client } => {
-                            tool_registry.set_mcp_client(Arc::clone(&client));
-                            match tool_registry.refresh_mcp_tools().await {
-                                Ok(()) => {
-                                    let mut registered_tools = 0usize;
-                                    match tool_registry.list_mcp_tools().await {
-                                        Ok(mcp_tools) => {
-                                            let new_definitions =
-                                                build_mcp_tool_definitions(&mcp_tools);
-                                            registered_tools = new_definitions.len();
-                                            let _updated_snapshot = {
-                                                let mut guard = tools.write().await;
-                                                guard.retain(|tool| {
-                                                    !tool
-                                                        .function
-                                                        .as_ref()
-                                                        .unwrap()
-                                                        .name
-                                                        .starts_with("mcp_")
-                                                });
-                                                guard.extend(new_definitions);
-                                                guard.clone()
-                                            };
-
-                                            // Enumerate MCP tools after initial setup (silently)
-                                            McpToolManager::enumerate_mcp_tools_after_initial_setup(
-                                                &mut tool_registry,
-                                                &tools,
-                                                mcp_tools,
-                                                &mut last_known_mcp_tools,
-                                            ).await?;
-                                        }
-                                        Err(err) => {
-                                            warn!(
-                                                "Failed to enumerate MCP tools after refresh: {err}"
-                                            );
-                                        }
-                                    }
-
-                                    renderer.line(
-                                            MessageStyle::Info,
-                                            &format!(
-                                                "MCP tools ready ({} registered). Use /mcp tools to inspect the catalog.",
-                                                registered_tools
-                                            ),
-                                        )?;
-                                    renderer.line_if_not_empty(MessageStyle::Output)?;
-                                }
-                                Err(err) => {
-                                    warn!(
-                                        "Failed to refresh MCP tools after initialization: {err}"
-                                    );
-                                    renderer.line(
-                                        MessageStyle::Error,
-                                        &format!("Failed to index MCP tools: {}", err),
-                                    )?;
-                                    renderer.line_if_not_empty(MessageStyle::Output)?;
-                                }
-                            }
-                            mcp_catalog_initialized = true;
-                        }
-                        McpInitStatus::Error { message } => {
-                            renderer
-                                .line(MessageStyle::Error, &format!("MCP Error: {}", message))?;
-                            renderer.line_if_not_empty(MessageStyle::Output)?;
-                            mcp_catalog_initialized = true;
-                        }
-                        McpInitStatus::Initializing { .. } | McpInitStatus::Disabled => {}
-                    }
-                }
-
-                // Dynamic MCP tool refresh - check for new/updated tools after initialization
-                if mcp_catalog_initialized && last_mcp_refresh.elapsed() >= MCP_REFRESH_INTERVAL {
-                    last_mcp_refresh = std::time::Instant::now();
-
-                    if let Ok(known_tools) = tool_registry.list_mcp_tools().await {
-                        let current_tool_keys: Vec<String> = known_tools
-                            .iter()
-                            .map(|t| format!("{}-{}", t.provider, t.name))
-                            .collect();
-
-                        // Check if there are new or changed tools
-                        if current_tool_keys != last_known_mcp_tools {
-                            match tool_registry.refresh_mcp_tools().await {
-                                Ok(()) => {
-                                    match tool_registry.list_mcp_tools().await {
-                                        Ok(new_mcp_tools) => {
-                                            let new_definitions =
-                                                build_mcp_tool_definitions(&new_mcp_tools);
-                                            let _updated_snapshot = {
-                                                let mut guard = tools.write().await;
-                                                guard.retain(|tool| {
-                                                    !tool
-                                                        .function
-                                                        .as_ref()
-                                                        .unwrap()
-                                                        .name
-                                                        .starts_with("mcp_")
-                                                });
-                                                guard.extend(new_definitions);
-                                                guard.clone()
-                                            };
-
-                                            // Enumerate MCP tools after refresh (silently)
-                                            McpToolManager::enumerate_mcp_tools_after_refresh(
-                                                &mut tool_registry,
-                                                &tools,
-                                                &mut last_known_mcp_tools,
-                                            )
-                                            .await?;
-                                        }
-                                        Err(err) => {
-                                            warn!(
-                                                "Failed to enumerate MCP tools after refresh: {err}"
-                                            );
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    warn!(
-                                        "Failed to refresh MCP tools during dynamic update: {err}"
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            let resources = InlineEventLoopResources {
+            let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
                 renderer: &mut renderer,
+                session: &mut session,
                 handle: &handle,
-                interrupts,
-                ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
-                default_placeholder: &default_placeholder,
-                queued_inputs: &mut queued_inputs,
-                model_picker_state: &mut model_picker_state,
-                palette_state: &mut palette_state,
+                ctrl_c_state: &ctrl_c_state,
+                ctrl_c_notify: &ctrl_c_notify,
                 config: &mut config,
                 vt_cfg: &mut vt_cfg,
                 provider_client: &mut provider_client,
                 session_bootstrap: &session_bootstrap,
+                async_mcp_manager: &async_mcp_manager,
+                tool_registry: &mut tool_registry,
+                tools: &tools,
+                conversation_history: &mut conversation_history,
+                decision_ledger: &decision_ledger,
+                pruning_ledger: &pruning_ledger,
+                context_manager: &mut context_manager,
+                session_stats: &mut session_stats,
+                mcp_panel_state: &mut mcp_panel_state,
+                linked_directories: &mut linked_directories,
+                lifecycle_hooks: lifecycle_hooks.as_ref(),
                 full_auto,
+                approval_recorder: &approval_recorder,
+                tool_permission_cache: &tool_permission_cache,
+                loaded_skills: &loaded_skills,
+                custom_prompts: &custom_prompts,
+                token_budget_enabled,
+                trim_config: &trim_config,
+                default_placeholder: &mut default_placeholder,
+                follow_up_placeholder: &mut follow_up_placeholder,
             };
 
-            let mut input_owned =
-                match poll_inline_loop_action(&mut session, &ctrl_c_notify, resources).await? {
-                    InlineLoopAction::Continue => continue,
-                    InlineLoopAction::Submit(text) => text,
-                    InlineLoopAction::Exit(reason) => {
-                        session_end_reason = reason;
-                        break;
-                    }
-                    InlineLoopAction::ResumeSession(session_id) => {
-                        // Load and resume the selected session
-                        use vtcode_core::llm::provider::Message;
-                        use vtcode_core::utils::session_archive::find_session_by_identifier;
+            let mut interaction_state = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
+                input_status_state: &mut input_status_state,
+                queued_inputs: &mut queued_inputs,
+                model_picker_state: &mut model_picker_state,
+                palette_state: &mut palette_state,
+                last_known_mcp_tools: &mut last_known_mcp_tools,
+                mcp_catalog_initialized: &mut mcp_catalog_initialized,
+                last_mcp_refresh: &mut last_mcp_refresh,
+                ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
+            };
 
-                        renderer.line(
-                            MessageStyle::Info,
-                            &format!("Loading session: {}", session_id),
-                        )?;
+            let interaction_outcome = crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(
+                &mut interaction_ctx,
+                &mut interaction_state,
+            ).await?;
 
-                        match find_session_by_identifier(&session_id).await {
-                            Ok(Some(listing)) => {
-                                // Prefer full archived messages; fall back to progress snapshot.
-                                let history_iter = if !listing.snapshot.messages.is_empty() {
-                                    listing.snapshot.messages.iter()
-                                } else if let Some(progress) = &listing.snapshot.progress {
-                                    progress.recent_messages.iter()
-                                } else {
-                                    [].iter()
-                                };
-                                let history = history_iter.map(Message::from).collect();
-
-                                #[allow(unused_assignments)]
-                                {
-                                    resume_state = Some(ResumeSession {
-                                        identifier: listing.identifier(),
-                                        snapshot: listing.snapshot.clone(),
-                                        history,
-                                        path: listing.path.clone(),
-                                        is_fork: false,
-                                    });
-                                }
-
-                                renderer.line(
-                                    MessageStyle::Info,
-                                    &format!("Restarting with session: {}", session_id),
-                                )?;
-                                session_end_reason = SessionEndReason::Completed;
-                                break; // Exit current loop to restart with resumed session
-                            }
-                            Ok(None) => {
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    &format!("Session not found: {}", session_id),
-                                )?;
-                                continue;
-                            }
-                            Err(err) => {
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    &format!("Failed to load session: {}", err),
-                                )?;
-                                continue;
-                            }
-                        }
-                    }
-                };
-
-            if input_owned.is_empty() {
-                continue;
-            }
-
-            if let Err(err) = refresh_vt_config(&config.workspace, &config, &mut vt_cfg).await {
-                warn!(
-                    workspace = %config.workspace.display(),
-                    error = ?err,
-                    "Failed to refresh workspace configuration"
-                );
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to reload configuration: {err}"),
-                )?;
-            }
-
-            // Check for MCP status changes and report errors
-            if let Some(mcp_manager) = &async_mcp_manager {
-                let mcp_status = mcp_manager.get_status().await;
-                if mcp_status.is_error()
-                    && let Some(error_msg) = mcp_status.get_error_message()
-                {
-                    renderer.line(MessageStyle::Error, &format!("MCP Error: {}", error_msg))?;
-                    renderer.line(
-                        MessageStyle::Info,
-                        "Use /mcp to check status or update your vtcode.toml configuration.",
-                    )?;
-                }
-            }
-
-            if let Some(next_placeholder) = follow_up_placeholder.take() {
-                handle.set_placeholder(Some(next_placeholder.clone()));
-                default_placeholder = Some(next_placeholder);
-            }
-
-            match input_owned.as_str() {
-                "" => continue,
-                "exit" | "quit" => {
-                    renderer.line(MessageStyle::Info, "✓")?;
-                    session_end_reason = SessionEndReason::Exit;
+            use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
+            
+            let input = match interaction_outcome {
+                InteractionOutcome::Exit { reason } => {
+                    session_end_reason = reason;
                     break;
                 }
-                "help" => {
-                    renderer.line(MessageStyle::Info, "Commands: exit, help")?;
-                    continue;
+                InteractionOutcome::Resume { resume_session } => {
+                    resume_state = Some(resume_session);
+                    session_end_reason = SessionEndReason::Completed; // Will be ignored by loop restart logic but sets state
+                    break; // Restart loop
                 }
-                input if input.starts_with('/') => {
-                    // Handle slash commands
-                    if let Some(command_input) = input.strip_prefix('/') {
-                        let outcome =
-                            handle_slash_command(command_input, &mut renderer, &custom_prompts)
-                                .await?;
-                        let command_result = slash_commands::handle_outcome(
-                            outcome,
-                            SlashCommandContext {
-                                renderer: &mut renderer,
-                                handle: &handle,
-                                session: &mut session,
-                                config: &mut config,
-                                vt_cfg: &mut vt_cfg,
-                                provider_client: &mut provider_client,
-                                session_bootstrap: &session_bootstrap,
-                                model_picker_state: &mut model_picker_state,
-                                palette_state: &mut palette_state,
-                                tool_registry: &mut tool_registry,
-                                conversation_history: &mut conversation_history,
-                                decision_ledger: &decision_ledger,
-                                pruning_ledger: &pruning_ledger,
-                                context_manager: &mut context_manager,
-                                session_stats: &mut session_stats,
-                                tools: &tools,
-                                token_budget_enabled,
-                                trim_config: &trim_config,
-                                async_mcp_manager: async_mcp_manager.as_ref(),
-                                mcp_panel_state: &mut mcp_panel_state,
-                                linked_directories: &mut linked_directories,
-                                ctrl_c_state: &ctrl_c_state,
-                                ctrl_c_notify: &ctrl_c_notify,
-                                default_placeholder: &default_placeholder,
-                                lifecycle_hooks: lifecycle_hooks.as_ref(),
-                                full_auto,
-                                approval_recorder: Some(&approval_recorder),
-                                tool_permission_cache: &tool_permission_cache,
-                                loaded_skills: &loaded_skills,
-                            },
-                        )
-                        .await?;
-                        match command_result {
-                            SlashCommandControl::SubmitPrompt(prompt) => {
-                                input_owned = prompt;
-                            }
-                            SlashCommandControl::Continue => continue,
-                            SlashCommandControl::BreakWithReason(reason) => {
-                                session_end_reason = reason;
-                                break;
-                            }
-                            SlashCommandControl::BreakWithoutReason => break,
-                        }
-                    }
-                }
-                _ => {}
-            }
-
-            if let Some(hooks) = &lifecycle_hooks {
-                match hooks.run_user_prompt_submit(input_owned.as_str()).await {
-                    Ok(outcome) => {
-                        render_hook_messages(&mut renderer, &outcome.messages)?;
-                        if !outcome.allow_prompt {
-                            handle.clear_input();
-                            continue;
-                        }
-                        for context in outcome.additional_context {
-                            if !context.trim().is_empty() {
-                                conversation_history.push(uni::Message::system(context));
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to run prompt hooks: {}", err),
-                        )?;
-                    }
-                }
-            }
-
-            if let Some(picker) = model_picker_state.as_mut() {
-                let progress = picker.handle_input(&mut renderer, input_owned.as_str())?;
-                match progress {
-                    ModelPickerProgress::InProgress => continue,
-                    ModelPickerProgress::NeedsRefresh => {
-                        picker.refresh_dynamic_models(&mut renderer).await?;
-                        continue;
-                    }
-                    ModelPickerProgress::Cancelled => {
-                        model_picker_state = None;
-                        continue;
-                    }
-                    ModelPickerProgress::Completed(selection) => {
-                        let picker_state = model_picker_state.take().unwrap();
-                        if let Err(err) = finalize_model_selection(
-                            &mut renderer,
-                            &picker_state,
-                            selection,
-                            &mut config,
-                            &mut vt_cfg,
-                            &mut provider_client,
-                            &session_bootstrap,
-                            &handle,
-                            full_auto,
-                        )
-                        .await
-                        {
-                            renderer.line(
-                                MessageStyle::Error,
-                                &format!("Failed to apply model selection: {}", err),
-                            )?;
-                        }
-                        continue;
-                    }
-                }
-            }
-
-            let input = input_owned.as_str();
-
-            // Check for explicit "run <command>" pattern BEFORE processing
-            // This bypasses LLM interpretation and executes the command directly
-            if let Some((tool_name, tool_args)) =
-                crate::agent::runloop::unified::shell::detect_explicit_run_command(input)
-            {
-                // Display the user message
-                display_user_message(&mut renderer, input)?;
-
-                // Add user message to history
-                conversation_history.push(uni::Message::user(input.to_string()));
-
-                // Execute the tool directly via tool registry
-                let tool_call_id = format!("explicit_run_{}", conversation_history.len());
-                match tool_registry.execute_tool_ref(&tool_name, &tool_args).await {
-                    Ok(result) => {
-                        // Render the command output using the standard tool output renderer
-                        crate::agent::runloop::tool_output::render_tool_output(
-                            &mut renderer,
-                            Some(&tool_name),
-                            &result,
-                            vt_cfg.as_ref(),
-                            None,
-                        )
-                        .await?;
-
-                        // Add tool response to history
-                        let result_str = serde_json::to_string(&result).unwrap_or_default();
-                        conversation_history.push(uni::Message::tool_response(
-                            tool_call_id.clone(),
-                            result_str,
-                        ));
-                    }
-                    Err(err) => {
-                        renderer.line(MessageStyle::Error, &format!("Command failed: {}", err))?;
-                        conversation_history.push(uni::Message::tool_response(
-                            tool_call_id.clone(),
-                            format!("{{\"error\": \"{}\"}}", err),
-                        ));
-                    }
-                }
-
-                // Clear input and continue to next iteration
-                handle.clear_input();
-                handle.set_placeholder(default_placeholder.clone());
-                continue;
-            }
-
-            // Process @ patterns to embed images as base64 content
-            let processed_content = match parse_at_patterns(input, &config.workspace).await {
-                Ok(content) => content,
-                Err(e) => {
-                    // Log the error but continue with original input as text
-                    tracing::warn!("Failed to parse @ patterns: {}", e);
-                    uni::MessageContent::text(input.to_string())
-                }
+                InteractionOutcome::Continue { input } => input,
             };
-
-            // Apply prompt refinement and vibe coding enrichment if enabled
-            let refined_content = match &processed_content {
-                uni::MessageContent::Text(text) => {
-                    let refined_text =
-                        refine_and_enrich_prompt(text, &config, vt_cfg.as_ref()).await;
-                    uni::MessageContent::text(refined_text)
-                }
-                uni::MessageContent::Parts(parts) => {
-                    let mut refined_parts = Vec::new();
-                    for part in parts {
-                        match part {
-                            uni::ContentPart::Text { text } => {
-                                let refined_text =
-                                    refine_and_enrich_prompt(text, &config, vt_cfg.as_ref()).await;
-                                refined_parts.push(uni::ContentPart::text(refined_text));
-                            }
-                            _ => refined_parts.push(part.clone()),
-                        }
-                    }
-                    uni::MessageContent::parts(refined_parts)
-                }
-            };
-
-            // Display the user message with inline border decoration
-            match &refined_content {
-                uni::MessageContent::Text(text) => display_user_message(&mut renderer, text)?,
-                uni::MessageContent::Parts(parts) => {
-                    // For multi-part content, display the text parts concatenated
-                    let mut display_parts = Vec::new();
-                    for part in parts {
-                        if let uni::ContentPart::Text { text } = part {
-                            display_parts.push(text.as_str());
-                        }
-                    }
-                    let display_text = display_parts.join(" ");
-                    display_user_message(&mut renderer, &display_text)?;
-                }
-            }
-
-            // Spinner is displayed via the input status in the inline handle
-            // No need to show a separate message here
-
-            // Create user message with processed content using the appropriate constructor
-            let user_message = match refined_content {
-                uni::MessageContent::Text(text) => uni::Message::user(text),
-                uni::MessageContent::Parts(parts) => uni::Message::user_with_parts(parts),
-            };
-
-            conversation_history.push(user_message);
             // Removed: Tool response pruning
             // Removed: Context window enforcement to respect token limits
 
@@ -743,7 +266,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 safety_validator: &safety_validator,
             };
             let outcome = match crate::agent::runloop::unified::turn::run_turn_loop(
-                input,
+                &input,
                 working_history.clone(),
                 turn_loop_ctx,
                 &config,

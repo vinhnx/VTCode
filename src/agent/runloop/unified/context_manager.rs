@@ -29,8 +29,7 @@ pub enum PreRequestAction {
     TrimLight,
     /// Aggressive trimming required (at ALERT threshold)
     TrimAggressive,
-    /// Create checkpoint and potentially reset context (at CHECKPOINT threshold)
-    Checkpoint,
+
     /// Context overflow, unsafe to proceed
     Block,
 }

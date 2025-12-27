@@ -21,7 +21,8 @@ pub(crate) fn validate_required_tool_args(
         n if n == tool_names::WRITE_FILE => &["path", "content"],
         n if n == tool_names::EDIT_FILE => &["path", "old_string", "new_string"],
         n if n == tool_names::LIST_FILES => &["path"],
-        n if n == tool_names::GREP_FILE => &["pattern"],
+        n if n == tool_names::GREP_FILE => &["pattern", "path"], // Require path for grep to avoid searching whole project root by default
+        n if n == tool_names::CODE_INTELLIGENCE => &["operation"], // Operation is always required
         n if n == tool_names::RUN_PTY_CMD => &["command"],
         n if n == tool_names::APPLY_PATCH => &["patch"],
         _ => &[],
@@ -96,7 +97,7 @@ pub(crate) async fn run_proactive_guards(
                     .adaptive_trim(ctx.working_history, Some(&mut *pruning_ledger), step_count)
                     .await?;
             }
-            PreRequestAction::Checkpoint | PreRequestAction::Block => {
+            PreRequestAction::Block => {
                 ctx.renderer.line(
                     MessageStyle::Info,
                     "[!] Context usage critical - applying aggressive trim",

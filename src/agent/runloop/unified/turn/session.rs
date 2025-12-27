@@ -1,3 +1,4 @@
+pub mod interaction_loop;
 pub mod slash_commands;
 
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
