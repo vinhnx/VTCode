@@ -72,8 +72,6 @@ pub(crate) struct TurnProcessingContext<'a> {
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub pruning_ledger:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::pruning_decisions::PruningDecisionLedger>>,
-    pub token_budget: &'a Arc<vtcode_core::core::token_budget::TokenBudgetManager>,
-    pub token_counter: &'a Arc<tokio::sync::RwLock<vtcode_core::llm::TokenCounter>>,
     pub working_history: &'a mut Vec<uni::Message>,
     pub tool_registry: &'a mut vtcode_core::tools::registry::ToolRegistry,
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
@@ -115,8 +113,6 @@ impl<'a> TurnProcessingContext<'a> {
             approval_recorder: ctx.approval_recorder,
             decision_ledger: ctx.decision_ledger,
             pruning_ledger: ctx.pruning_ledger,
-            token_budget: ctx.token_budget,
-            token_counter: ctx.token_counter,
             working_history,
             tool_registry: ctx.tool_registry,
             tools: ctx.tools,

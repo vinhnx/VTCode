@@ -2,7 +2,7 @@
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_output_helpers::{
-    check_write_effect_common, record_token_usage_common, render_error_common,
+    check_write_effect_common, render_error_common,
     render_tool_output_common,
 };
 use anyhow::Result;
@@ -11,7 +11,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -26,7 +25,6 @@ pub(crate) async fn handle_pipeline_output(
     args_val: &serde_json::Value,
     outcome: &ToolPipelineOutcome,
     vt_config: Option<&VTCodeConfig>,
-    token_budget: &TokenBudgetManager,
 ) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
     let mut any_write_effect = false;
     let mut turn_modified_files: Vec<PathBuf> = Vec::new();
@@ -60,13 +58,9 @@ pub(crate) async fn handle_pipeline_output(
                     output,
                     *command_success,
                     vt_config,
-                    token_budget,
                 )
                 .await?;
             }
-
-            // Record token usage
-            record_token_usage_common(name, output, token_budget, vt_config).await?;
 
             last_tool_stdout = if *command_success {
                 stdout.clone()
@@ -120,7 +114,6 @@ pub(crate) async fn handle_pipeline_output_renderer(
     args_val: &serde_json::Value,
     outcome: &ToolPipelineOutcome,
     vt_config: Option<&VTCodeConfig>,
-    token_budget: &TokenBudgetManager,
 ) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
     use crate::agent::runloop::mcp_events;
     use crate::agent::runloop::tool_output::render_tool_output;
@@ -161,33 +154,7 @@ pub(crate) async fn handle_pipeline_output_renderer(
                 )?;
             }
 
-            // Extract and record max_tokens usage if present in tool output
-            if let Some(applied_max_tokens) =
-                output.get("applied_max_tokens").and_then(|v| v.as_u64())
-            {
-                let context = format!(
-                    "Tool: {}, Command: {}",
-                    name,
-                    output
-                        .get("command")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or(&args_val.to_string())
-                );
-                let _ = token_budget
-                    .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
-                    .await;
-
-                // Also record to global token budget for CLI access
-                if let Some(global_token_budget) =
-                    vtcode_core::core::global_token_manager::get_global_token_budget()
-                {
-                    let _ = global_token_budget
-                        .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
-                        .await;
-                }
-            }
-
-            render_tool_output(renderer, Some(name), output, vt_config, Some(token_budget)).await?;
+            render_tool_output(renderer, Some(name), output, vt_config).await?;
 
             last_tool_stdout = if *command_success {
                 stdout.clone()
@@ -239,7 +206,6 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
     args_val: &serde_json::Value,
     outcome: &ToolPipelineOutcome,
     vt_config: Option<&VTCodeConfig>,
-    token_budget: &TokenBudgetManager,
     traj: &TrajectoryLogger,
 ) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
     // Build a RunLoopContext on top of the TurnLoopContext so we can reuse the generic handler
@@ -267,7 +233,6 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
         args_val,
         outcome,
         vt_config,
-        token_budget,
     )
     .await
 }
@@ -328,7 +293,6 @@ mod tests {
             &serde_json::json!({}),
             &outcome,
             None::<&VTCodeConfig>,
-            &TokenBudgetManager::default(),
         )
         .await
         .expect("render should succeed");
@@ -375,7 +339,6 @@ mod tests {
             &serde_json::json!({}),
             &outcome,
             None::<&VTCodeConfig>,
-            &TokenBudgetManager::default(),
         )
         .await
         .expect("render should succeed");
@@ -451,7 +414,6 @@ mod tests {
             &serde_json::json!({}),
             &outcome,
             None::<&VTCodeConfig>,
-            &TokenBudgetManager::default(),
         )
         .await
         .expect("handle should succeed");
@@ -530,7 +492,6 @@ mod tests {
             &serde_json::json!({}),
             &outcome,
             None::<&VTCodeConfig>,
-            &TokenBudgetManager::default(),
         )
         .await
         .expect("handle should succeed");

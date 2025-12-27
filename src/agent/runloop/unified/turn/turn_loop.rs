@@ -17,9 +17,7 @@ use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::llm::TokenCounter;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry};
@@ -63,8 +61,6 @@ pub struct TurnLoopContext<'a> {
     pub approval_recorder: &'a Arc<ApprovalRecorder>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
     pub pruning_ledger: &'a Arc<RwLock<PruningDecisionLedger>>,
-    pub token_budget: &'a Arc<TokenBudgetManager>,
-    pub token_counter: &'a Arc<RwLock<TokenCounter>>,
     pub tool_registry: &'a mut ToolRegistry,
     pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
     /// Cached tool definitions for efficient reuse (HP-3 optimization)

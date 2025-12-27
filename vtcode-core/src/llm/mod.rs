@@ -175,7 +175,6 @@ pub mod provider_base; // Shared provider utilities to eliminate duplicate code
 pub mod http_client;
 pub mod providers;
 pub mod rig_adapter;
-pub mod token_metrics;
 pub mod tool_bridge;
 pub mod types;
 pub mod utils; // Shared utilities for request/response processing // Centralized HTTP client factory
@@ -197,5 +196,4 @@ pub use tool_bridge::{
     ToolExecution, ToolIntent, ToolIntentExtractor,
 };
 
-pub use token_metrics::{TokenCounter, TokenMetrics, TokenTypeMetrics};
 pub use types::{BackendKind, LLMError, LLMResponse};

@@ -8,7 +8,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::utils::ansi::AnsiRenderer;
 
@@ -26,7 +25,6 @@ pub async fn handle_mcp_event_common(
     is_success: bool,
     renderer: &mut AnsiRenderer,
     vt_config: Option<&VTCodeConfig>,
-    token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
     let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
         "mcp".to_string(),
@@ -42,7 +40,6 @@ pub async fn handle_mcp_event_common(
                 Some(&format!("mcp_{}", tool_name)),
                 output_val,
                 vt_config,
-                token_budget,
             )
             .await?;
         }
@@ -59,7 +56,6 @@ pub async fn handle_mcp_event_common(
             Some(&format!("mcp_{}", tool_name)),
             &error_json,
             vt_config,
-            token_budget,
         )
         .await?;
     }
@@ -108,38 +104,7 @@ pub fn handle_modified_files_common(
 }
 
 /// Common logic for recording token usage
-pub async fn record_token_usage_common(
-    name: &str,
-    output: &serde_json::Value,
-    token_budget: &TokenBudgetManager,
-    _vt_config: Option<&VTCodeConfig>,
-) -> Result<()> {
-    // Extract and record max_tokens usage if present in tool output
-    if let Some(applied_max_tokens) = output.get("applied_max_tokens").and_then(|v| v.as_u64()) {
-        let context = format!(
-            "Tool: {}, Command: {}",
-            name,
-            output
-                .get("command")
-                .and_then(|v| v.as_str())
-                .unwrap_or(name)
-        );
 
-        token_budget
-            .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
-            .await;
-
-        // Also record to global token budget for CLI access
-        if let Some(global_token_budget) =
-            vtcode_core::core::global_token_manager::get_global_token_budget()
-        {
-            global_token_budget
-                .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
-                .await;
-        }
-    }
-    Ok(())
-}
 
 /// Common logic for determining if a tool causes write effects
 pub fn check_write_effect_common(name: &str) -> bool {
@@ -157,7 +122,6 @@ pub async fn render_tool_output_common(
     output: &serde_json::Value,
     command_success: bool,
     vt_config: Option<&VTCodeConfig>,
-    token_budget: &TokenBudgetManager,
 ) -> Result<()> {
     let status_icon = if command_success { "✓" } else { "✗" };
     let exit_code = output.get("exit_code").and_then(|v| v.as_i64());
@@ -175,7 +139,6 @@ pub async fn render_tool_output_common(
         Some(name),
         output,
         vt_config,
-        Some(token_budget),
     )
     .await
 }
@@ -201,8 +164,7 @@ pub async fn handle_tool_success_common(
     stdout: &Option<String>,
     modified_files: &[PathBuf],
     command_success: bool,
-    vt_config: Option<&VTCodeConfig>,
-    token_budget: &TokenBudgetManager,
+    _vt_config: Option<&VTCodeConfig>,
     tool_result_cache: Option<&Arc<RwLock<ToolResultCache>>>,
     any_write_effect: &mut bool,
     turn_modified_files: &mut Vec<PathBuf>,
@@ -213,9 +175,6 @@ pub async fn handle_tool_success_common(
 
     // Cache successful tool results
     cache_tool_result_common(tool_result_cache, name, args_val, output).await?;
-
-    // Record token usage
-    record_token_usage_common(name, output, token_budget, vt_config).await?;
 
     // Handle modified files
     handle_modified_files_common(

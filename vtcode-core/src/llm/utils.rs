@@ -198,15 +198,10 @@ pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>)
 
 /// Estimate token count for text (rough approximation)
 ///
-/// Note: This delegates to the centralized `CharacterRatioTokenEstimator` in `core::token_estimator`
-/// for consistency across the codebase. Uses byte length / 4 with minimum of 1.
+/// Uses byte length / 4 with minimum of 1 for consistency.
 #[inline]
 pub fn estimate_token_count(text: &str) -> usize {
-    use crate::core::token_estimator::{CharacterRatioTokenEstimator, TokenEstimator};
-
-    // Use the shared estimator for consistency
-    static ESTIMATOR: CharacterRatioTokenEstimator = CharacterRatioTokenEstimator::new(4);
-    ESTIMATOR.estimate_tokens(text)
+    (text.len() / 4).max(1)
 }
 
 /// Truncate text to approximate token limit

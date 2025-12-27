@@ -47,7 +47,7 @@ pub(crate) async fn execute_llm_request(
             .enforce_context_window(ctx.working_history);
     }
     // HP-1: Eliminate unnecessary clone - work directly on working_history
-    ctx.context_manager.reset_token_budget().await;
+
     let current_plan = ctx.tool_registry.current_plan();
     let plan_opt = if current_plan.summary.total_steps > 0 {
         Some(current_plan)

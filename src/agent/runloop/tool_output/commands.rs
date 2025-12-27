@@ -7,7 +7,6 @@ use shell_words::split as shell_split;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::streams::{render_stream_section, resolve_stdout_tail_limit, strip_ansi_codes};
@@ -20,7 +19,6 @@ pub(crate) async fn render_terminal_command_panel(
     ls_styles: &LsStyles,
     vt_config: Option<&VTCodeConfig>,
     allow_ansi: bool,
-    token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
     // Check if stdout is JSON containing command output (from execute_code tool)
     let mut stdout_raw = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
@@ -202,7 +200,6 @@ pub(crate) async fn render_terminal_command_panel(
             MessageStyle::ToolOutput, // Dimmed, non-italic style for tool output
             allow_ansi,
             vt_config,
-            token_budget,
         )
         .await?;
     }
@@ -221,7 +218,6 @@ pub(crate) async fn render_terminal_command_panel(
             MessageStyle::Error, // Error output
             allow_ansi,
             vt_config,
-            token_budget,
         )
         .await?;
     }

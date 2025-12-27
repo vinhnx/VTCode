@@ -9,7 +9,6 @@ pub mod man_pages;
 pub mod help;
 pub mod models_commands;
 pub mod rate_limiter;
-pub mod token_commands;
 pub mod tool_policy_commands;
 
 pub use args::*;

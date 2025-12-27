@@ -1565,6 +1565,24 @@ pub mod context {
     /// Default byte fuse (bytes) applied as a secondary safeguard after token truncation
     /// Protects against pathological payload sizes that tokenization may not catch.
     pub const DEFAULT_MODEL_INPUT_BYTE_FUSE: usize = 10 * 1024; // 10 KiB
+
+    /// Approximate tokens per line for estimating token budgets
+    pub const TOKENS_PER_LINE: usize = 10;
+
+    /// Approximate tokens per character for estimating token budgets
+    pub const TOKENS_PER_CHARACTER: usize = 1;
+
+    /// Characters that indicate code content (brackets, braces, etc.)
+    pub const CODE_INDICATOR_CHARS: &str = "{}()[]<>;:=";
+
+    /// Detection threshold for code vs non-code content
+    pub const CODE_DETECTION_THRESHOLD: usize = 10;
+
+    /// Head ratio percentage for code files
+    pub const CODE_HEAD_RATIO_PERCENT: usize = 60;
+
+    /// Head ratio percentage for log files
+    pub const LOG_HEAD_RATIO_PERCENT: usize = 20;
 }
 
 /// Chunking constants for large file handling

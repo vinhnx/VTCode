@@ -9,7 +9,6 @@ mod skills_commands;
 mod slash_commands;
 mod telemetry;
 mod text_tools;
-mod token_trunc;
 mod tool_output;
 mod ui;
 pub mod unified;

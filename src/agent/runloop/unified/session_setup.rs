@@ -31,11 +31,8 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
-use vtcode_core::core::token_budget::{
-    TokenBudgetConfig as RuntimeTokenBudgetConfig, TokenBudgetManager,
-};
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::llm::{TokenCounter, factory::create_provider_with_config, provider as uni};
+use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 use vtcode_core::mcp::{McpClient, McpToolInfo};
 use vtcode_core::models::ModelId;
 use vtcode_core::prompts::CustomPromptRegistry;
@@ -67,9 +64,6 @@ pub(crate) struct SessionState {
     pub full_auto_allowlist: Option<Vec<String>>,
     pub async_mcp_manager: Option<Arc<AsyncMcpManager>>,
     pub mcp_panel_state: mcp_events::McpPanelState,
-    pub token_budget: Arc<TokenBudgetManager>,
-    pub token_budget_enabled: bool,
-    pub token_counter: Arc<RwLock<TokenCounter>>,
     pub tool_result_cache: Arc<RwLock<ToolResultCache>>,
     pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
     #[allow(dead_code)]
@@ -102,14 +96,7 @@ pub(crate) struct SessionUISetup {
 
 async fn build_conversation_history_from_resume(
     resume: Option<&ResumeSession>,
-    token_budget: &TokenBudgetManager,
 ) -> Vec<uni::Message> {
-    if let Some(progress) = resume.and_then(|session| session.snapshot.progress.clone())
-        && let Some(usage) = progress.token_usage
-    {
-        token_budget.restore_stats(usage).await;
-    }
-
     resume
         .map(|session| session.history.clone())
         .unwrap_or_default()
@@ -360,29 +347,11 @@ pub(crate) async fn initialize_session(
     }
 
     let trim_config = load_context_trim_config(vt_cfg);
-    let context_features = vt_cfg.map(|cfg| &cfg.context);
-    let token_budget_enabled = context_features
-        .map(|cfg| cfg.token_budget.enabled)
-        .unwrap_or(true);
-    let max_context_tokens = trim_config.max_tokens;
-    let mut token_budget_config = RuntimeTokenBudgetConfig::for_model(
-        context_features
-            .map(|cfg| cfg.token_budget.model.as_str())
-            .unwrap_or("gpt- nano"),
-        max_context_tokens,
-    );
-    if let Some(cfg) = context_features {
-        token_budget_config.warning_threshold = cfg.token_budget.warning_threshold;
-        token_budget_config.alert_threshold = cfg.token_budget.alert_threshold;
-        token_budget_config.detailed_tracking = cfg.token_budget.detailed_tracking;
-        token_budget_config.tokenizer_id = cfg.token_budget.tokenizer.clone();
-    }
-    let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
 
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let pruning_ledger = Arc::new(RwLock::new(PruningDecisionLedger::new()));
 
-    let conversation_history = build_conversation_history_from_resume(resume, &token_budget).await;
+    let conversation_history = build_conversation_history_from_resume(resume).await;
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
     let base_system_prompt = read_system_prompt(
         &config.workspace,
@@ -544,7 +513,6 @@ pub(crate) async fn initialize_session(
         CustomPromptRegistry::default()
     });
 
-    let token_counter = Arc::new(RwLock::new(TokenCounter::new()));
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128))); // 128-entry cache
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new())); // Session-scoped
     let search_metrics = Arc::new(RwLock::new(SearchMetrics::new())); // Track search performance
@@ -580,9 +548,6 @@ pub(crate) async fn initialize_session(
         full_auto_allowlist,
         async_mcp_manager,
         mcp_panel_state,
-        token_budget,
-        token_budget_enabled,
-        token_counter,
         tool_result_cache,
         tool_permission_cache,
         search_metrics,
@@ -619,8 +584,6 @@ pub(crate) async fn initialize_session_ui(
     let context_manager = super::context_manager::ContextManager::new(
         session_state.base_system_prompt.clone(),
         session_state.trim_config,
-        session_state.token_budget.clone(),
-        session_state.token_budget_enabled,
         session_state.loaded_skills.clone(),
     );
 
@@ -1192,55 +1155,10 @@ mod tests {
     use super::*;
     use chrono::Utc;
     use std::path::PathBuf;
-    use vtcode_core::core::token_budget::TokenUsageStats;
     use vtcode_core::llm::provider::{Message, MessageRole};
     use vtcode_core::utils::session_archive::{
         SessionArchiveMetadata, SessionMessage, SessionProgress, SessionSnapshot,
     };
 
-    #[tokio::test]
-    async fn resume_restores_token_budget_stats() {
-        let budget_cfg = RuntimeTokenBudgetConfig::for_model("test-model", 100);
-        let budget = TokenBudgetManager::new(budget_cfg);
 
-        let usage = TokenUsageStats {
-            total_tokens: 42,
-            ..TokenUsageStats::new()
-        };
-
-        let session_messages = vec![SessionMessage::new(MessageRole::Assistant, "hi")];
-        let snapshot = SessionSnapshot {
-            metadata: SessionArchiveMetadata::new(
-                "ws", "/tmp/ws", "model", "provider", "theme", "medium",
-            ),
-            started_at: Utc::now(),
-            ended_at: Utc::now(),
-            total_messages: 1,
-            distinct_tools: vec!["tool_a".to_string()],
-            transcript: Vec::new(),
-            messages: session_messages.clone(),
-            progress: Some(SessionProgress {
-                turn_number: 2,
-                recent_messages: session_messages.clone(),
-                tool_summaries: vec!["tool_a".to_string()],
-                token_usage: Some(usage.clone()),
-                max_context_tokens: Some(100),
-                loaded_skills: Vec::new(),
-            }),
-        };
-
-        let resume = ResumeSession {
-            identifier: "resume-1".to_string(),
-            snapshot,
-            history: session_messages.iter().map(Message::from).collect(),
-            path: PathBuf::new(),
-            is_fork: false,
-        };
-
-        let history = build_conversation_history_from_resume(Some(&resume), &budget).await;
-        let restored = budget.get_stats().await;
-
-        assert_eq!(history.len(), 1);
-        assert_eq!(restored.total_tokens, usage.total_tokens);
-    }
 }

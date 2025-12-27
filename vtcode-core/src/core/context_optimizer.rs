@@ -1,41 +1,23 @@
-//! Context optimization for efficient token usage
+//! Context optimization for efficient context usage
 //!
 //! Implements context engineering principles from AGENTS.md:
 //! - Per-tool output curation (max 5 grep results, summarize 50+ files)
-//! - Token budget awareness (90%/95% thresholds)
 //! - Semantic context over volume
-//! - Progressive compaction
 
 use crate::config::constants::tools;
-use crate::core::token_budget::{TokenBudgetManager, TokenUsageStats};
-use crate::core::token_constants::{THRESHOLD_CHECKPOINT, THRESHOLD_COMPACT};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::path::Path;
-use std::sync::Arc;
 use tokio::fs;
-
-// Re-export unified constants for backward compatibility and clarity
-/// Compact threshold: Begin compacting at 90% usage
-pub const COMPACT_THRESHOLD: f64 = THRESHOLD_COMPACT;
-
-/// Checkpoint threshold: Create checkpoint at 95% usage
-pub const CHECKPOINT_THRESHOLD: f64 = THRESHOLD_CHECKPOINT;
 
 /// Maximum results to show per tool
 const MAX_GREP_RESULTS: usize = 5;
 const MAX_LIST_FILES: usize = 50;
 const MAX_FILE_LINES: usize = 2000;
 
-/// Compact mode levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CompactMode {
-    Normal,     // <90%
-    Compact,    // 90-95%
-    Checkpoint, // >95%
-}
+
 
 /// Checkpoint state for context reset
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,85 +26,45 @@ pub struct CheckpointState {
     pub completed_steps: Vec<String>,
     pub current_work: String,
     pub next_steps: Vec<String>,
-    pub token_usage: TokenUsageStats,
     pub key_files: Vec<String>,
     pub timestamp: u64,
 }
 
 /// Context optimization manager
 pub struct ContextOptimizer {
-    token_budget: Option<Arc<TokenBudgetManager>>,
     history: VecDeque<ContextEntry>,
-    compact_mode: CompactMode,
 }
 
 #[derive(Debug, Clone)]
 struct ContextEntry {
     tool_name: String,
     result: Value,
-    tokens: usize,
-    compacted: bool,
 }
 
 impl ContextOptimizer {
-    /// Create a new context optimizer without token budget integration
+    /// Create a new context optimizer
     pub fn new() -> Self {
         Self {
-            token_budget: None,
             history: VecDeque::new(),
-            compact_mode: CompactMode::Normal,
-        }
-    }
-
-    /// Create a new context optimizer with token budget integration
-    pub fn with_token_budget(token_budget: Arc<TokenBudgetManager>) -> Self {
-        Self {
-            token_budget: Some(token_budget),
-            history: VecDeque::new(),
-            compact_mode: CompactMode::Normal,
         }
     }
 
     /// Get current budget utilization (0.0 to 1.0)
     pub async fn utilization(&self) -> f64 {
-        if let Some(ref budget) = self.token_budget {
-            budget.usage_ratio().await
-        } else {
-            0.0
-        }
-    }
-
-    /// Get a cloned token budget handle for external async use
-    pub fn token_budget(&self) -> Option<Arc<TokenBudgetManager>> {
-        self.token_budget.clone()
+        0.0
     }
 
     /// Check if checkpoint is needed
     pub async fn needs_checkpoint(&self) -> bool {
-        self.utilization().await >= CHECKPOINT_THRESHOLD
+        self.utilization().await >= 0.85
     }
 
-    /// Check if compaction is needed
+    /// Check if compaction is needed (disabled - always false)
     pub async fn needs_compaction(&self) -> bool {
-        self.utilization().await >= COMPACT_THRESHOLD
+        false
     }
 
-    /// Get current compact mode
-    pub fn compact_mode(&self) -> CompactMode {
-        self.compact_mode
-    }
 
-    /// Update compact mode based on current utilization
-    pub async fn update_compact_mode(&mut self) {
-        let util = self.utilization().await;
-        self.compact_mode = if util >= CHECKPOINT_THRESHOLD {
-            CompactMode::Checkpoint
-        } else if util >= COMPACT_THRESHOLD {
-            CompactMode::Compact
-        } else {
-            CompactMode::Normal
-        };
-    }
 
     /// Optimize tool result based on tool type and budget
     pub async fn optimize_result(&mut self, tool_name: &str, result: Value) -> Value {
@@ -135,22 +77,10 @@ impl ContextOptimizer {
         };
 
         // Estimate tokens (rough: 1 token ≈ 4 chars)
-        let tokens = optimized.to_string().len() / 4;
-
         self.history.push_back(ContextEntry {
             tool_name: tool_name.to_string(),
             result: optimized.clone(),
-            tokens,
-            compacted: false,
         });
-
-        // Update compact mode based on current utilization
-        self.update_compact_mode().await;
-
-        // Auto-compact if needed
-        if self.needs_compaction().await {
-            self.compact_history();
-        }
 
         optimized
     }
@@ -367,16 +297,12 @@ impl ContextOptimizer {
         result
     }
 
-    /// Compact history to free up tokens while preserving critical information
+    /// Compact history while preserving critical information
     /// Preserves: file paths, line numbers, error messages
     fn compact_history(&mut self) {
-        // Compact oldest entries first
+        // Compact oldest entries first - token tracking removed
         for entry in self.history.iter_mut() {
-            if entry.compacted {
-                continue;
-            }
-
-            let compacted = match entry.tool_name.as_str() {
+            entry.result = match entry.tool_name.as_str() {
                 tools::GREP_FILE => {
                     // Preserve file paths and line numbers from grep results
                     Self::compact_grep_entry(&entry.result)
@@ -398,12 +324,6 @@ impl ContextOptimizer {
                     Self::compact_generic_entry(&entry.result, &entry.tool_name)
                 }
             };
-
-            let new_tokens = compacted.to_string().len() / 4;
-
-            entry.result = compacted;
-            entry.tokens = new_tokens;
-            entry.compacted = true;
         }
     }
 
@@ -583,18 +503,11 @@ impl ContextOptimizer {
         next_steps: Vec<String>,
         key_files: Vec<String>,
     ) -> CheckpointState {
-        let token_usage = if let Some(ref budget) = self.token_budget {
-            budget.get_stats().await
-        } else {
-            crate::core::token_budget::TokenUsageStats::new()
-        };
-
         CheckpointState {
             task_description,
             completed_steps,
             current_work,
             next_steps,
-            token_usage,
             key_files,
             timestamp: crate::utils::current_timestamp(),
         }
@@ -622,20 +535,7 @@ impl ContextOptimizer {
 
     /// Get budget status message
     pub async fn budget_status(&self) -> String {
-        let util = self.utilization().await;
-        if util >= CHECKPOINT_THRESHOLD {
-            format!(
-                "[WARN] Token budget at {:.1}% - checkpoint recommended",
-                util * 100.0
-            )
-        } else if util >= COMPACT_THRESHOLD {
-            format!(
-                "[WARN] Token budget at {:.1}% - compaction active",
-                util * 100.0
-            )
-        } else {
-            format!("[OK] Token budget at {:.1}%", util * 100.0)
-        }
+        "[INFO] Context optimization disabled".to_string()
     }
 }
 
@@ -648,7 +548,6 @@ impl Default for ContextOptimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::token_budget::TokenBudgetConfig;
     use serde_json::json;
 
     #[tokio::test]
@@ -698,99 +597,11 @@ mod tests {
         assert!(optimized["note"].is_string());
     }
 
-    #[tokio::test]
-    async fn test_budget_thresholds_with_token_budget() {
-        let mut config = TokenBudgetConfig::default();
-        config.max_context_tokens = 1000;
-        let budget = Arc::new(TokenBudgetManager::new(config));
 
-        let optimizer = ContextOptimizer::with_token_budget(budget.clone());
-
-        assert!(!optimizer.needs_compaction().await);
-
-        // Simulate 90% usage
-        budget
-            .record_tokens_for_component(
-                crate::core::token_budget::ContextComponent::UserMessage,
-                900,
-                None,
-            )
-            .await;
-        assert!(optimizer.needs_compaction().await);
-        assert!(!optimizer.needs_checkpoint().await);
-
-        // Simulate 95% usage
-        budget
-            .record_tokens_for_component(
-                crate::core::token_budget::ContextComponent::UserMessage,
-                50,
-                None,
-            )
-            .await;
-        assert!(optimizer.needs_checkpoint().await);
-    }
-
-    #[tokio::test]
-    async fn test_compact_mode_updates() {
-        let mut config = TokenBudgetConfig::default();
-        config.max_context_tokens = 1000;
-        let budget = Arc::new(TokenBudgetManager::new(config));
-
-        let mut optimizer = ContextOptimizer::with_token_budget(budget.clone());
-
-        assert_eq!(optimizer.compact_mode(), CompactMode::Normal);
-
-        // Simulate 90% usage
-        budget
-            .record_tokens_for_component(
-                crate::core::token_budget::ContextComponent::UserMessage,
-                900,
-                None,
-            )
-            .await;
-        optimizer.update_compact_mode().await;
-        assert_eq!(optimizer.compact_mode(), CompactMode::Compact);
-
-        // Simulate 95% usage
-        budget
-            .record_tokens_for_component(
-                crate::core::token_budget::ContextComponent::UserMessage,
-                50,
-                None,
-            )
-            .await;
-        optimizer.update_compact_mode().await;
-        assert_eq!(optimizer.compact_mode(), CompactMode::Checkpoint);
-    }
-
-    #[tokio::test]
-    async fn test_checkpoint_creation() {
-        let config = TokenBudgetConfig::default();
-        let budget = Arc::new(TokenBudgetManager::new(config));
-        let optimizer = ContextOptimizer::with_token_budget(budget);
-
-        let checkpoint = optimizer
-            .create_checkpoint(
-                "Test task".to_string(),
-                vec!["Step 1".to_string(), "Step 2".to_string()],
-                "Current work".to_string(),
-                vec!["Next step".to_string()],
-                vec!["file1.rs".to_string()],
-            )
-            .await;
-
-        assert_eq!(checkpoint.task_description, "Test task");
-        assert_eq!(checkpoint.completed_steps.len(), 2);
-        assert_eq!(checkpoint.current_work, "Current work");
-        assert_eq!(checkpoint.next_steps.len(), 1);
-        assert_eq!(checkpoint.key_files.len(), 1);
-    }
 
     #[tokio::test]
     async fn test_checkpoint_save_load() {
-        let config = TokenBudgetConfig::default();
-        let budget = Arc::new(TokenBudgetManager::new(config));
-        let optimizer = ContextOptimizer::with_token_budget(budget);
+        let optimizer = ContextOptimizer::new();
 
         let checkpoint = optimizer
             .create_checkpoint(

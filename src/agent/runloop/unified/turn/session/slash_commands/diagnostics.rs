@@ -2,7 +2,7 @@ use anyhow::{Result, Context};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::config::constants::tools as tools_consts;
 use vtcode_core::llm::provider as uni;
-use crate::agent::runloop::unified::ui_interaction::{display_session_status, display_token_cost};
+use crate::agent::runloop::unified::ui_interaction::display_session_status;
 use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
 
 use super::{SlashCommandContext, SlashCommandControl, SlashCommandOutcome};
@@ -149,25 +149,12 @@ pub async fn handle_analyze_agent(ctx: &SlashCommandContext<'_>) -> Result<Slash
         )?;
     }
 
-    // Show current token budget status if enabled
-    if ctx.token_budget_enabled {
-        let token_budget = ctx.context_manager.token_budget();
-        ctx.renderer.line(
-            MessageStyle::Output,
-            &format!(
-                "  Current token budget: {}/{}",
-                token_budget.get_stats().await.total_tokens,
-                ctx.trim_config.max_tokens
-            ),
-        )?;
-    }
-
+    // Token budget is disabled in VT Code
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }
 
 pub async fn handle_show_status(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    let token_budget = ctx.context_manager.token_budget();
     let tool_count = ctx.tools.read().await.len();
     display_session_status(
         ctx.renderer,
@@ -175,8 +162,8 @@ pub async fn handle_show_status(ctx: &SlashCommandContext<'_>) -> Result<SlashCo
             config: ctx.config,
             message_count: ctx.conversation_history.len(),
             stats: ctx.session_stats,
-            token_budget: token_budget.as_ref(),
-            token_budget_enabled: ctx.token_budget_enabled,
+            token_budget: None,
+            token_budget_enabled: false,
             max_tokens: ctx.trim_config.max_tokens,
             available_tools: tool_count,
         },
@@ -185,78 +172,7 @@ pub async fn handle_show_status(ctx: &SlashCommandContext<'_>) -> Result<SlashCo
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_show_cost(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    let token_budget = ctx.context_manager.token_budget();
-    ctx.renderer
-        .line(MessageStyle::Info, "Token usage summary:")?;
-    display_token_cost(
-        ctx.renderer,
-        token_budget.as_ref(),
-        ctx.token_budget_enabled,
-        ctx.trim_config.max_tokens,
-        "",
-    )
-    .await?;
-    Ok(SlashCommandControl::Continue)
-}
 
-pub async fn handle_show_context(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    use crate::agent::runloop::context_usage::{ContextUsageInfo, render_context_usage};
-
-    // Build context usage info from current session state
-    let mut info = ContextUsageInfo::new(
-        &ctx.config.model,
-        ctx.trim_config.max_tokens,
-    );
-
-    // Get token budget stats
-    let token_budget = ctx.context_manager.token_budget();
-    let budget_stats = token_budget.get_stats().await;
-    info.current_tokens = budget_stats.total_tokens;
-
-    // Estimate system prompt tokens (approximately 10% of typical usage)
-    info.system_prompt_tokens = ctx.trim_config.max_tokens / 30;
-
-    // Count tools as system tools tokens
-    let tool_count = ctx.tools.read().await.len();
-    info.system_tools_tokens = tool_count * 50; // ~50 tokens per tool definition
-
-    // Count messages tokens from conversation history
-    info.messages_tokens = ctx.conversation_history.iter()
-        .map(|msg| msg.content.as_text().len() / 4)
-        .sum();
-
-    // Add loaded skills
-    let loaded_skills = ctx.loaded_skills.read().await;
-    for (name, skill) in loaded_skills.iter() {
-        let tokens = skill.instruction_tokens();
-        // Determine scope based on path
-        let path_str = skill.path.to_string_lossy();
-        if path_str.contains("/.vtcode/skills") || path_str.contains("/.claude/skills") {
-            info.user_skills.push(crate::agent::runloop::context_usage::ContextItem::new(name, tokens));
-        } else {
-            info.project_skills.push(crate::agent::runloop::context_usage::ContextItem::new(name, tokens));
-        }
-    }
-
-    // Sort skills by token count
-    info.user_skills.sort_by(|a, b| b.tokens.cmp(&a.tokens));
-    info.project_skills.sort_by(|a, b| b.tokens.cmp(&a.tokens));
-
-    // Add MCP tools from tool registry
-    if let Ok(mcp_tools) = ctx.tool_registry.list_mcp_tools().await {
-        for tool in mcp_tools {
-            // Estimate ~100 tokens per MCP tool
-            info.add_mcp_tool(&tool.name, 100);
-        }
-    }
-
-    // Render the context usage visualization
-    render_context_usage(ctx.renderer, &info)?;
-
-    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-    Ok(SlashCommandControl::Continue)
-}
 
 pub async fn handle_show_pruning_report(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "Pruning Report:")?;

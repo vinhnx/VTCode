@@ -58,7 +58,6 @@ pub struct SlashCommandContext<'a> {
     pub context_manager: &'a mut ContextManager,
     pub session_stats: &'a mut SessionStats,
     pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
-    pub token_budget_enabled: bool,
     pub trim_config: &'a ContextTrimConfig,
     pub async_mcp_manager: Option<&'a Arc<AsyncMcpManager>>,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
@@ -112,8 +111,6 @@ pub async fn handle_outcome(
         }
         SlashCommandOutcome::ClearConversation => handlers::handle_clear_conversation(ctx).await,
         SlashCommandOutcome::ShowStatus => handlers::handle_show_status(ctx).await,
-        SlashCommandOutcome::ShowCost => handlers::handle_show_cost(ctx).await,
-        SlashCommandOutcome::ShowContext => handlers::handle_show_context(ctx).await,
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
         SlashCommandOutcome::ManageLsp { action } => lsp::handle_manage_lsp(ctx, action).await,
         SlashCommandOutcome::RunDoctor => handlers::handle_run_doctor(ctx).await,

@@ -1,6 +1,5 @@
 use crate::config::constants::prompt_cache;
 use crate::config::core::PromptCachingConfig;
-use crate::core::token_estimator::CharacterRatioTokenEstimator;
 use crate::llm::provider::{Message, MessageContent, MessageRole};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -9,8 +8,10 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
 
-/// Shared token estimator for prompt caching (reuses core implementation)
-static TOKEN_ESTIMATOR: CharacterRatioTokenEstimator = CharacterRatioTokenEstimator::new(4);
+/// Simple token estimator: bytes / 4 with minimum of 1
+fn estimate_tokens(text: &str) -> usize {
+    (text.len() / 4).max(1)
+}
 
 /// Cached prompt entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -366,8 +367,8 @@ impl PromptOptimizer {
             .await?;
 
         // Calculate tokens saved (rough estimate)
-        let original_tokens = Self::estimate_tokens(original_prompt);
-        let optimized_tokens = Self::estimate_tokens(&optimized);
+        let original_tokens = estimate_tokens(original_prompt);
+        let optimized_tokens = estimate_tokens(&optimized);
         let tokens_saved = original_tokens.saturating_sub(optimized_tokens);
 
         // Create cache entry
@@ -376,7 +377,7 @@ impl PromptOptimizer {
             original_prompt: original_prompt.to_string(),
             optimized_prompt: optimized.clone(),
             model_used: target_model.to_string(),
-            tokens_saved: Some(tokens_saved),
+            tokens_saved: Some(tokens_saved.try_into().unwrap_or(u32::MAX)),
             quality_score: Some(0.8), // Placeholder quality score
             created_at: PromptCache::current_timestamp(),
             last_used: PromptCache::current_timestamp(),
@@ -454,11 +455,10 @@ impl PromptOptimizer {
             .unwrap_or_else(|| original_prompt.to_string()))
     }
 
-    /// Estimate token count using shared estimator
+    /// Estimate token count (bytes / 4, minimum 1)
     #[inline]
-    fn estimate_tokens(text: &str) -> u32 {
-        use crate::core::token_estimator::TokenEstimator;
-        TOKEN_ESTIMATOR.estimate_tokens(text) as u32
+    fn estimate_tokens_u32(text: &str) -> u32 {
+        estimate_tokens(text) as u32
     }
 
     /// Get cache statistics

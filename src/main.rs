@@ -256,11 +256,6 @@ async fn run() -> Result<()> {
         Some(Commands::Man { command, output }) => {
             cli::handle_man_command(command.clone(), output.clone()).await?;
         }
-        Some(Commands::Tokens { command }) => {
-            vtcode_core::cli::token_commands::handle_token_command(command)
-                .await
-                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
-        }
         Some(Commands::ListSkills {}) => {
             let skills_options = cli::SkillsCommandOptions {
                 workspace: startup.workspace.clone(),

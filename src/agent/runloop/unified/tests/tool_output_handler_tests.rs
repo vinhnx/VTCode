@@ -3,7 +3,6 @@ use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::mcp_events::McpPanelState;
 use vtcode_core::tools::result_cache::{ToolResultCache, ToolCacheKey};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -46,7 +45,6 @@ async fn handle_pipeline_output_renderer_invalidates_cache_and_records_tool() {
         &json!({}),
         &pipeline_outcome,
         None,
-        &TokenBudgetManager::new(0),
     )
     .await
     .expect("handler should succeed");

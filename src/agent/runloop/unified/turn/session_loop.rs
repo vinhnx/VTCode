@@ -106,15 +106,12 @@ pub(crate) async fn run_single_agent_loop_unified(
             trajectory: traj,
             async_mcp_manager,
             mut mcp_panel_state,
-            token_budget,
-            token_counter,
             tool_result_cache,
             tool_permission_cache,
             approval_recorder,
             trim_config,
             loaded_skills,
             custom_prompts,
-            token_budget_enabled,
             safety_validator,
             ..
         } = session_state;
@@ -164,7 +161,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 tool_permission_cache: &tool_permission_cache,
                 loaded_skills: &loaded_skills,
                 custom_prompts: &custom_prompts,
-                token_budget_enabled,
                 trim_config: &trim_config,
                 default_placeholder: &mut default_placeholder,
                 follow_up_placeholder: &mut follow_up_placeholder,
@@ -246,8 +242,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 approval_recorder: &approval_recorder,
                 decision_ledger: &decision_ledger,
                 pruning_ledger: &pruning_ledger,
-                token_budget: &token_budget,
-                token_counter: &token_counter,
                 tool_registry: &mut tool_registry,
                 tools: &tools,
                 cached_tools: &cached_tools,
@@ -328,7 +322,6 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 let progress_turn = next_checkpoint_turn.saturating_sub(1).max(1);
                 let distinct_tools = session_stats.sorted_tools();
-                let budget_usage = token_budget.get_stats().await;
 
                 let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
 
@@ -337,7 +330,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     distinct_tools: distinct_tools.clone(),
                     recent_messages,
                     turn_number: progress_turn,
-                    token_usage: Some(budget_usage),
+                    token_usage: None,
                     max_context_tokens: Some(trim_config.max_tokens),
                     loaded_skills: Some(skill_names),
                 }) {

@@ -2,10 +2,8 @@
 use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -23,7 +21,6 @@ pub(crate) async fn handle_tool_execution_result(
     working_history: &mut Vec<uni::Message>,
     turn_modified_files: &mut BTreeSet<PathBuf>,
     vt_cfg: Option<&VTCodeConfig>,
-    local_token_budget: &Arc<TokenBudgetManager>,
     traj: &TrajectoryLogger,
 ) -> Result<()> {
     match tool_result {
@@ -51,30 +48,14 @@ pub(crate) async fn handle_tool_execution_result(
                 call_max_tokens = Some(est);
             }
 
-            let (max_tokens, byte_fuse) = if let Some(cfg) = vt_cfg {
-                (
-                    cfg.context.model_input_token_budget,
-                    cfg.context.model_input_byte_fuse,
-                )
-            } else {
-                (
-                    vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_TOKEN_BUDGET,
-                    vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_BYTE_FUSE,
-                )
+            // Token budget logic removed - use output directly
+            let applied_max_tokens = call_max_tokens;
+
+            let content_for_model = match output {
+                Value::String(s) => s.clone(),
+                Value::Object(obj) => serde_json::to_string(obj).unwrap_or_default(),
+                _ => output.to_string(),
             };
-
-            // If call supplied a per-call max_tokens, prefer that (but clamp to config max)
-            let applied_max_tokens = call_max_tokens.map(|call| std::cmp::min(call, max_tokens));
-
-            let content_for_model =
-                crate::agent::runloop::token_trunc::aggregate_tool_output_for_model(
-                    tool_name,
-                    output,
-                    applied_max_tokens.unwrap_or(max_tokens),
-                    byte_fuse,
-                    local_token_budget,
-                )
-                .await;
 
             working_history.push(uni::Message::tool_response_with_origin(
                 tool_call_id,
@@ -98,7 +79,6 @@ pub(crate) async fn handle_tool_execution_result(
                 args_val,
                 &pipeline_outcome,
                 vt_cfg,
-                local_token_budget,
                 traj,
             )
             .await?;

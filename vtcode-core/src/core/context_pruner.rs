@@ -336,7 +336,7 @@ mod tests {
     }
 
     #[test]
-    fn test_respects_token_budget() {
+    fn test_respects_max_tokens_limit() {
         let pruner = ContextPruner::new(500);
         let messages = create_test_messages();
 
@@ -393,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prune_with_high_token_budget() {
+    fn test_prune_with_generous_budget() {
         let pruner = ContextPruner::new(10000);
         let messages = create_test_messages();
 

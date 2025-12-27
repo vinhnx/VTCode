@@ -133,14 +133,6 @@ vtcode-config = { path = "../vtcode-config", version = "0.54.1" }
 vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.54.1" }
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.54.1" }
 
-# Token counting for attention budget management
-# Note: 'http' feature required for from_pretrained(), adds ~2MB to binary
-# Could be made optional if local tokenizer files are acceptable
-tokenizers = { version = "0.22", default-features = false, features = [
-    "http",
-    "fancy-regex",
-] }
-
 # Schema generation
 schemars = { workspace = true, optional = true }
 

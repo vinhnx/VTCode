@@ -12,7 +12,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -38,7 +37,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
     args_val: &serde_json::Value,
     outcome: &ToolPipelineOutcome,
     vt_config: Option<&VTCodeConfig>,
-    token_budget: &TokenBudgetManager,
 ) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
     let mut any_write_effect = false;
     let mut turn_modified_files: Vec<PathBuf> = Vec::new();
@@ -72,7 +70,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     output,
                     &modified_files_pathbuf,
                     vt_config,
-                    Some(token_budget),
                 )
                 .await?;
             } else {
@@ -86,7 +83,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     &modified_files_pathbuf,
                     *command_success,
                     vt_config,
-                    token_budget,
                     &mut any_write_effect,
                     &mut turn_modified_files,
                     &mut last_tool_stdout,
@@ -108,7 +104,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     &error.to_string(),
                     &vtcode_core::tools::registry::classify_error(error),
                     vt_config,
-                    Some(token_budget),
                 )
                 .await?;
             } else {
@@ -122,7 +117,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     &[],
                     &vtcode_core::tools::registry::classify_error(error),
                     vt_config,
-                    token_budget,
                     &mut any_write_effect,
                     &mut turn_modified_files,
                     &mut last_tool_stdout,
@@ -142,7 +136,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     &error.message,
                     &vtcode_core::tools::registry::ToolErrorType::Timeout,
                     vt_config,
-                    Some(token_budget),
                 )
                 .await?;
             } else {
@@ -155,7 +148,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     &[],
                     &vtcode_core::tools::registry::ToolErrorType::Timeout,
                     vt_config,
-                    token_budget,
                     &mut any_write_effect,
                     &mut turn_modified_files,
                     &mut last_tool_stdout,
@@ -176,7 +168,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     error_msg,
                     &vtcode_core::tools::registry::ToolErrorType::ExecutionError,
                     vt_config,
-                    Some(token_budget),
                 )
                 .await?;
             } else {
@@ -189,7 +180,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     &[],
                     &vtcode_core::tools::registry::ToolErrorType::ExecutionError,
                     vt_config,
-                    token_budget,
                     &mut any_write_effect,
                     &mut turn_modified_files,
                     &mut last_tool_stdout,
@@ -214,7 +204,6 @@ async fn handle_mcp_tool_success<C: ToolOutputContext>(
     output: &serde_json::Value,
     _modified_files: &[PathBuf],
     vt_config: Option<&VTCodeConfig>,
-    token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
     let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
         "mcp".to_string(),
@@ -228,7 +217,6 @@ async fn handle_mcp_tool_success<C: ToolOutputContext>(
         Some(&format!("mcp_{}", tool_name)),
         output,
         vt_config,
-        token_budget,
     )
     .await?;
     mcp_event.success(None);
@@ -246,7 +234,6 @@ async fn handle_regular_tool_success<C: ToolOutputContext>(
     modified_files: &[PathBuf],
     command_success: bool,
     _vt_config: Option<&VTCodeConfig>,
-    _token_budget: &TokenBudgetManager,
     any_write_effect: &mut bool,
     turn_modified_files: &mut Vec<PathBuf>,
     last_tool_stdout: &mut Option<String>,
@@ -297,7 +284,6 @@ async fn handle_mcp_tool_failure<C: ToolOutputContext>(
     error: &str,
     _error_kind: &vtcode_core::tools::registry::ToolErrorType,
     vt_config: Option<&VTCodeConfig>,
-    token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
     let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
         "mcp".to_string(),
@@ -313,7 +299,6 @@ async fn handle_mcp_tool_failure<C: ToolOutputContext>(
         Some(&format!("mcp_{}", tool_name)),
         &error_json,
         vt_config,
-        token_budget,
     )
     .await?;
     mcp_event.success(None);
@@ -331,7 +316,6 @@ async fn handle_regular_tool_failure<C: ToolOutputContext>(
     modified_files: &[PathBuf],
     _error_kind: &vtcode_core::tools::registry::ToolErrorType,
     _vt_config: Option<&VTCodeConfig>,
-    _token_budget: &TokenBudgetManager,
     any_write_effect: &mut bool,
     turn_modified_files: &mut Vec<PathBuf>,
     last_tool_stdout: &mut Option<String>,
@@ -363,7 +347,6 @@ async fn handle_tool_blocked<C: ToolOutputContext>(
     args_val: &serde_json::Value,
     reason: &str,
     _vt_config: Option<&VTCodeConfig>,
-    _token_budget: &TokenBudgetManager,
 ) -> Result<()> {
     // Record trajectory
     let blocked_message = format!("Tool '{}' was blocked: {}", name, reason);

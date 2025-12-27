@@ -2022,29 +2022,29 @@ impl FileOpsTool {
             mt
         } else if let Some(ml) = input.max_lines {
             // Map legacy max_lines to an approximate token count
-            ml.saturating_mul(crate::core::token_constants::TOKENS_PER_LINE)
+            ml.saturating_mul(crate::config::constants::context::TOKENS_PER_LINE)
         } else if let Some(chunk_lines) = input.chunk_lines {
             // Convert chunk_lines to tokens (approx)
-            chunk_lines.saturating_mul(crate::core::token_constants::TOKENS_PER_LINE)
+            chunk_lines.saturating_mul(crate::config::constants::context::TOKENS_PER_LINE)
         } else {
             // Default to reading CHUNK_START_LINES + CHUNK_END_LINES lines; convert to tokens
             (crate::config::constants::chunking::CHUNK_START_LINES
                 + crate::config::constants::chunking::CHUNK_END_LINES)
-                .saturating_mul(crate::core::token_constants::TOKENS_PER_LINE)
+                .saturating_mul(crate::config::constants::context::TOKENS_PER_LINE)
         };
 
         // Determine if content is code (bracket density heuristic)
         let char_count = content.len();
         let bracket_count: usize = content
             .chars()
-            .filter(|c| crate::core::token_constants::CODE_INDICATOR_CHARS.contains(c))
+            .filter(|c| crate::config::constants::context::CODE_INDICATOR_CHARS.contains(*c))
             .count();
         let is_code =
-            bracket_count > (char_count / crate::core::token_constants::CODE_DETECTION_THRESHOLD);
+            bracket_count > (char_count / crate::config::constants::context::CODE_DETECTION_THRESHOLD);
         let head_ratio = if is_code {
-            crate::core::token_constants::CODE_HEAD_RATIO_PERCENT
+            crate::config::constants::context::CODE_HEAD_RATIO_PERCENT
         } else {
-            crate::core::token_constants::LOG_HEAD_RATIO_PERCENT
+            crate::config::constants::context::LOG_HEAD_RATIO_PERCENT
         };
 
         let head_tokens = (tokens_budget * head_ratio) / 100;
@@ -2058,7 +2058,7 @@ impl FileOpsTool {
                 break;
             }
             let line_tokens = (line.len() as f64
-                / crate::core::token_constants::TOKENS_PER_CHARACTER)
+                / crate::config::constants::context::TOKENS_PER_CHARACTER as f64)
                 .ceil() as usize;
             if acc_tokens + line_tokens <= head_tokens || head_lines.is_empty() {
                 head_lines.push(*line);
@@ -2076,7 +2076,7 @@ impl FileOpsTool {
                 break;
             }
             let line_tokens = (line.len() as f64
-                / crate::core::token_constants::TOKENS_PER_CHARACTER)
+                / crate::config::constants::context::TOKENS_PER_CHARACTER as f64)
                 .ceil() as usize;
             if acc_tail + line_tokens <= tail_tokens || tail_lines.is_empty() {
                 tail_lines.push(*line);
@@ -2136,7 +2136,7 @@ impl FileOpsTool {
                 applied_max_tokens = Some(mt);
             } else if let Some(ml) = input.max_lines {
                 // Map legacy max_lines to an approximate token count
-                let est = ml.saturating_mul(crate::core::token_constants::TOKENS_PER_LINE);
+                let est = ml.saturating_mul(crate::config::constants::context::TOKENS_PER_LINE);
                 tracing::warn!(
                     "`max_lines` is deprecated; mapping {} lines -> ~{} tokens for backward compatibility",
                     ml,

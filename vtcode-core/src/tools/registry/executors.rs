@@ -2105,29 +2105,18 @@ impl ToolRegistry {
                     extract_build_errors_and_summary(&capture.output, setup.max_tokens);
                 truncated = true;
             } else {
-                // Generic head+tail truncation for other commands
-                use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
-                use crate::core::token_budget::TokenBudgetManager;
-
-                let token_budget = TokenBudgetManager::default();
-                let (truncated_output, was_truncated) =
-                    truncate_content_by_tokens(&capture.output, setup.max_tokens, &token_budget)
-                        .await;
-
-                if was_truncated {
-                    capture.output = truncated_output;
+                // Apply byte fuse as secondary safeguard
+                if capture.output.len() > DEFAULT_PTY_OUTPUT_BYTE_FUSE {
+                    // Truncate to byte limit with marker
+                    if let Some(truncate_point) = capture.output.char_indices()
+                        .rev()
+                        .find(|(byte_idx, _)| *byte_idx < DEFAULT_PTY_OUTPUT_BYTE_FUSE)
+                        .map(|(idx, _)| idx + 1) {
+                        capture.output.truncate(truncate_point);
+                        capture.output.push_str("\n[Output truncated]");
+                    }
                     truncated = true;
                 }
-            }
-
-            // Apply byte fuse as secondary safeguard
-            if capture.output.len() > DEFAULT_PTY_OUTPUT_BYTE_FUSE {
-                use crate::core::agent::runloop::token_trunc::safe_truncate_to_bytes_with_marker;
-                capture.output = safe_truncate_to_bytes_with_marker(
-                    &capture.output,
-                    DEFAULT_PTY_OUTPUT_BYTE_FUSE,
-                );
-                truncated = true;
             }
 
             // Add truncation notice if output was reduced
@@ -2698,25 +2687,20 @@ impl ToolRegistry {
         let mut response = snapshot_to_map(snapshot, view_args.view);
         response.insert("success".to_string(), Value::Bool(true));
 
-        // Apply max_tokens truncation if specified
+        // Process output with optional truncation
         let processed_output = if let Some(output) = output {
             let output = filter_pty_output(&strip_ansi(&output));
             if let Some(max_tokens) = view_args.max_tokens {
                 if max_tokens > 0 {
-                    use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
-                    use crate::core::token_budget::TokenBudgetManager;
-
-                    // Use a temporary token budget manager for truncation
-                    let token_budget = TokenBudgetManager::default();
-
-                    // Since we're already in an async context, we can await directly
-                    let (truncated_output, _) =
-                        truncate_content_by_tokens(&output, max_tokens, &token_budget).await;
-
-                    format!(
-                        "{}\n[... truncated by max_tokens: {} ...]",
-                        truncated_output, max_tokens
-                    )
+                    // Simple byte-based truncation
+                    if output.len() > max_tokens * 4 {
+                        format!(
+                            "{}\n[... truncated by max_tokens: {} ...]",
+                            &output[..max_tokens * 4.min(output.len())], max_tokens
+                        )
+                    } else {
+                        output
+                    }
                 } else {
                     output // Keep original if max_tokens is not valid
                 }
@@ -4029,7 +4013,7 @@ fn generate_command_not_found_message(cmd: &str) -> String {
 ///
 /// This dramatically reduces output size while preserving actionable information.
 fn extract_build_errors_and_summary(output: &str, max_tokens: usize) -> String {
-    use crate::core::token_constants::TOKENS_PER_CHARACTER;
+    const TOKENS_PER_CHARACTER: f64 = 0.25;
 
     let lines: Vec<&str> = output.lines().collect();
     let total_lines = lines.len();

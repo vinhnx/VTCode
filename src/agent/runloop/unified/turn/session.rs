@@ -3,11 +3,7 @@ pub mod slash_commands;
 
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use anyhow::Result;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::token_budget::TokenBudgetManager;
-use vtcode_core::llm::TokenCounter;
 use vtcode_core::llm::provider as uni;
 // session_loop is its own module at turn/session_loop.rs
 
@@ -21,14 +17,12 @@ pub struct ToolFailureDetails<'a> {
 
 /// Centralized handling for tool failures discovered in the run loop.
 /// This function renders an informative error, adds an MCP event if applicable,
-/// counts tokens, updates the decision ledger, and appends a tool response to the conversation history.
+/// updates the decision ledger, and appends a tool response to the conversation history.
 #[allow(dead_code)]
 pub(crate) async fn handle_tool_failure(
     ctx: &mut RunLoopContext<'_>,
     details: ToolFailureDetails<'_>,
     vt_cfg: Option<&VTCodeConfig>,
-    token_budget: &Arc<TokenBudgetManager>,
-    token_counter: &Arc<RwLock<TokenCounter>>,
     working_history: &mut Vec<uni::Message>,
     last_tool_stdout: &mut Option<String>,
 ) -> Result<()> {
@@ -120,15 +114,10 @@ pub(crate) async fn handle_tool_failure(
         details.args_val,
         &outcome,
         vt_cfg,
-        token_budget,
     )
     .await?;
 
     let error_content = serde_json::to_string(&error_json).unwrap_or_else(|_| "{}".to_string());
-    {
-        let mut counter = token_counter.write().await;
-        counter.count_with_profiling("tool_output", &error_content);
-    }
 
     working_history.push(uni::Message::tool_response_with_origin(
         details.call_id.to_string(),

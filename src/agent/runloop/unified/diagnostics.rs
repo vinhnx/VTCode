@@ -98,13 +98,8 @@ pub(crate) async fn run_doctor_diagnostics(
             Ok(format!("{}", cfg.context.max_context_tokens)),
         )?;
 
-        // Token budget status
-        let token_budget_status = if cfg.context.token_budget.enabled {
-            format!("Enabled (model: {})", cfg.context.token_budget.model)
-        } else {
-            "Disabled".to_string()
-        };
-        render_doctor_check(renderer, "  Token Budget", Ok(token_budget_status))?;
+        // Token budget status (disabled)
+        render_doctor_check(renderer, "  Token Budget", Ok("Disabled".to_string()))?;
 
         // Decision ledger status
         let ledger_status = if cfg.context.ledger.enabled {

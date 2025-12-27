@@ -14,7 +14,6 @@ use crate::agent::runloop::unified::incremental_system_prompt::{
 };
 use vtcode_core::constants::context as context_constants;
 use vtcode_core::core::pruning_decisions::{PruningDecisionLedger, RetentionChoice};
-use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
 use vtcode_core::core::{
     ContextEfficiency, ContextPruner, MessageMetrics, MessageType, RetentionDecision,
 };
@@ -44,8 +43,6 @@ pub enum BudgetStatus {
 
 pub(crate) struct ContextManager {
     trim_config: ContextTrimConfig,
-    token_budget: Arc<TokenBudgetManager>,
-    token_budget_enabled: bool,
     base_system_prompt: String,
     incremental_prompt_builder: IncrementalSystemPrompt,
     #[allow(dead_code)]
@@ -62,8 +59,6 @@ impl ContextManager {
     pub(crate) fn new(
         base_system_prompt: String,
         trim_config: ContextTrimConfig,
-        token_budget: Arc<TokenBudgetManager>,
-        token_budget_enabled: bool,
         loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
     ) -> Self {
         let (semantic_analyzer, semantic_score_cache) = if trim_config.semantic_compression {
@@ -85,8 +80,6 @@ impl ContextManager {
 
         Self {
             trim_config,
-            token_budget,
-            token_budget_enabled,
             base_system_prompt: base_system_prompt.clone(),
             incremental_prompt_builder: IncrementalSystemPrompt::new(),
             semantic_analyzer,
@@ -99,21 +92,6 @@ impl ContextManager {
 
     pub(crate) fn trim_config(&self) -> ContextTrimConfig {
         self.trim_config
-    }
-
-    pub(crate) fn token_budget(&self) -> Arc<TokenBudgetManager> {
-        Arc::clone(&self.token_budget)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn token_budget_enabled(&self) -> bool {
-        self.token_budget_enabled
-    }
-
-    pub(crate) async fn reset_token_budget(&self) {
-        if self.token_budget_enabled {
-            self.token_budget.reset().await;
-        }
     }
 
     /// Estimate the total tokens that would be used for the current conversation state
@@ -136,35 +114,9 @@ impl ContextManager {
     }
 
     /// Detailed check of budget status
-    pub(crate) fn check_budget_violation(&self, history: &[uni::Message]) -> BudgetStatus {
-        if !self.token_budget_enabled {
-            return BudgetStatus::Safe;
-        }
-
-        let estimated = self.estimate_request_tokens(history);
-        let max_tokens = self.trim_config.max_tokens;
-
-        if max_tokens == 0 {
-            return BudgetStatus::Safe;
-        }
-
-        if estimated > max_tokens {
-            return BudgetStatus::Overflow {
-                estimated,
-                limit: max_tokens,
-            };
-        }
-
-        let ratio = estimated as f64 / max_tokens as f64;
-        use vtcode_core::core::token_constants::{THRESHOLD_ALERT, THRESHOLD_WARNING};
-
-        if ratio >= THRESHOLD_ALERT {
-            BudgetStatus::Critical(ratio)
-        } else if ratio >= THRESHOLD_WARNING {
-            BudgetStatus::Warning(ratio)
-        } else {
-            BudgetStatus::Safe
-        }
+    /// Token budgeting is disabled, always returns Safe
+    pub(crate) fn check_budget_violation(&self, _history: &[uni::Message]) -> BudgetStatus {
+        BudgetStatus::Safe
     }
 
     /// Check if the estimated token usage would exceed a given threshold
@@ -179,18 +131,9 @@ impl ContextManager {
     }
 
     /// Pre-request check that returns recommended action before making an LLM request.
-    /// This enables proactive trimming BEFORE tokens are consumed rather than reacting afterwards.
-    pub(crate) fn pre_request_check(&self, history: &[uni::Message]) -> PreRequestAction {
-        if !self.token_budget_enabled {
-            return PreRequestAction::Proceed;
-        }
-
-        match self.check_budget_violation(history) {
-            BudgetStatus::Safe => PreRequestAction::Proceed,
-            BudgetStatus::Warning(_) => PreRequestAction::TrimLight,
-            BudgetStatus::Critical(_) => PreRequestAction::TrimAggressive,
-            BudgetStatus::Overflow { .. } => PreRequestAction::Block,
-        }
+    /// Token budgeting is disabled, always returns Proceed.
+    pub(crate) fn pre_request_check(&self, _history: &[uni::Message]) -> PreRequestAction {
+        PreRequestAction::Proceed
     }
 
     #[allow(dead_code)]
@@ -371,66 +314,12 @@ impl ContextManager {
     /// Adaptive trim based on budget thresholds; returns structured outcome
     pub(crate) async fn adaptive_trim(
         &mut self,
-        history: &mut Vec<uni::Message>,
-        pruning_ledger: Option<&mut PruningDecisionLedger>,
-        turn_number: usize,
+        _history: &mut Vec<uni::Message>,
+        _pruning_ledger: Option<&mut PruningDecisionLedger>,
+        _turn_number: usize,
     ) -> Result<ContextTrimOutcome> {
-        if !self.token_budget_enabled {
-            return Ok(ContextTrimOutcome::default());
-        }
-
-        let mut pruning_ledger = pruning_ledger;
-
-        // Use live calculation from history to ensure consistency with pre_request_check
-        // stored token_budget might be lagging if history was just modified
-        let estimated = self.estimate_request_tokens(history);
-        let max_tokens = self.trim_config.max_tokens;
-
-        let usage = if max_tokens > 0 {
-            estimated as f64 / max_tokens as f64
-        } else {
-            0.0
-        };
-
-        let mut outcome = ContextTrimOutcome::default();
-
-        // Alert/compact: semantic prune first, then enforce window
-        if usage >= vtcode_core::core::token_constants::THRESHOLD_ALERT {
-            let before_len = history.len();
-            let (_semantic_removed, summarize_rec) = self.prune_with_semantic_priority(
-                history,
-                pruning_ledger.as_deref_mut(),
-                turn_number,
-            );
-            let window_outcome = self.enforce_context_window(history);
-            let after_semantic = before_len.saturating_sub(history.len());
-            let total_removed = after_semantic.saturating_add(window_outcome.removed_messages);
-            outcome.removed_messages = total_removed;
-            outcome.phase = if summarize_rec {
-                TrimPhase::SummarizationRecommended
-            } else if total_removed > 0 {
-                TrimPhase::AlertSemantic
-            } else {
-                window_outcome.phase
-            };
-        } else if usage >= vtcode_core::core::token_constants::THRESHOLD_WARNING {
-            // Warning: light prune of tool responses
-            let removed = self.prune_tool_responses(history);
-            outcome.removed_messages = removed;
-            if removed > 0 {
-                outcome.phase = TrimPhase::WarningToolPrune;
-            }
-        }
-
-        // Track efficiency after any action
-        if outcome.is_trimmed() {
-            self.record_efficiency_after_trim(history, &outcome);
-            if let Some(ledger) = pruning_ledger {
-                ledger.record_pruning_round();
-            }
-        }
-
-        Ok(outcome)
+        // Token budgeting is disabled, no trimming needed
+        Ok(ContextTrimOutcome::default())
     }
 
     pub(crate) async fn build_system_prompt(
@@ -447,7 +336,7 @@ impl ContextManager {
         let config = SystemPromptConfig {
             base_prompt: self.base_system_prompt.clone(),
             enable_retry_context: retry_attempts > 0,
-            enable_token_tracking: self.token_budget_enabled,
+            enable_token_tracking: false,
             max_retry_attempts: 3, // This could be configurable
         };
 
@@ -464,11 +353,7 @@ impl ContextManager {
                         || msg.content.as_text().contains("failed")
                 })
                 .count(),
-            token_usage_ratio: if self.token_budget_enabled {
-                self.token_budget.usage_ratio().await
-            } else {
-                0.0
-            },
+            token_usage_ratio: 0.0,
             current_plan,
             full_auto,
             discovered_skills: self
@@ -491,16 +376,6 @@ impl ContextManager {
                 &context,
             )
             .await;
-
-        if self.token_budget_enabled {
-            self.token_budget
-                .count_tokens_for_component(
-                    &system_prompt,
-                    ContextComponent::SystemPrompt,
-                    Some(&format!("base_system_{}", retry_attempts)),
-                )
-                .await?;
-        }
 
         Ok(system_prompt)
     }
@@ -700,8 +575,6 @@ impl ContextManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vtcode_core::core::token_budget::TokenBudgetConfig;
-    use vtcode_core::core::token_constants::{THRESHOLD_ALERT, THRESHOLD_WARNING};
 
     fn make_tool_history(len: usize) -> Vec<uni::Message> {
         let mut history = Vec::new();
@@ -723,29 +596,25 @@ mod tests {
             max_tokens: 100,
             ..ContextTrimConfig::default()
         };
-        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
-        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
         let mut manager = ContextManager::new(
             "sys".into(),
             trim_config,
-            Arc::clone(&budget),
-            true,
             Arc::new(RwLock::new(HashMap::new())),
         );
 
-        let mut history = make_tool_history(8);
-        let mut stats = vtcode_core::core::token_budget::TokenUsageStats::new();
-        stats.total_tokens =
-            (THRESHOLD_WARNING * trim_config.max_tokens as f64).ceil() as usize + 5;
-        budget.restore_stats(stats).await;
+        // Build a history that would need trimming
+        let mut history: Vec<uni::Message> = (0..50)
+            .map(|_| uni::Message::assistant("x".repeat(200)))
+            .collect();
 
         let outcome = manager
             .adaptive_trim(&mut history, None, 1)
             .await
             .expect("adaptive trim should succeed");
 
-        assert_eq!(outcome.phase, TrimPhase::WarningToolPrune);
-        assert!(outcome.removed_messages > 0);
+        // Token budgeting is disabled, so no trimming should occur
+        assert_eq!(outcome.phase, TrimPhase::None);
+        assert_eq!(outcome.removed_messages, 0);
     }
 
     #[tokio::test]
@@ -754,13 +623,9 @@ mod tests {
             max_tokens: 40,
             ..ContextTrimConfig::default()
         };
-        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
-        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
         let mut manager = ContextManager::new(
             "sys".into(),
             trim_config,
-            Arc::clone(&budget),
-            true,
             Arc::new(RwLock::new(HashMap::new())),
         );
 
@@ -769,24 +634,14 @@ mod tests {
             .map(|_| uni::Message::assistant("x".repeat(200)))
             .collect();
 
-        let mut stats = vtcode_core::core::token_budget::TokenUsageStats::new();
-        stats.total_tokens = (THRESHOLD_ALERT * trim_config.max_tokens as f64).ceil() as usize + 10;
-        budget.restore_stats(stats).await;
-
         let outcome = manager
             .adaptive_trim(&mut history, None, 2)
             .await
             .expect("adaptive trim should succeed");
 
-        assert!(outcome.is_trimmed());
-        assert!(
-            matches!(
-                outcome.phase,
-                TrimPhase::AlertSemantic | TrimPhase::WindowEnforced
-            ),
-            "unexpected phase: {:?}",
-            outcome.phase
-        );
+        // Token budgeting is disabled, so no trimming should occur
+        assert_eq!(outcome.phase, TrimPhase::None);
+        assert_eq!(outcome.removed_messages, 0);
     }
 
     #[test]
@@ -795,14 +650,10 @@ mod tests {
             max_tokens: 100_000,
             ..ContextTrimConfig::default()
         };
-        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
-        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
-        // Note: token_budget_enabled = false
+        // Token budgeting is disabled - should always return Proceed
         let manager = ContextManager::new(
             "sys".into(),
             trim_config,
-            budget,
-            false,
             Arc::new(RwLock::new(HashMap::new())),
         );
 
@@ -814,29 +665,25 @@ mod tests {
     }
 
     #[test]
-    fn pre_request_check_returns_trim_at_warning_threshold() {
+    fn pre_request_check_returns_proceed_when_budget_disabled_with_large_history() {
         let trim_config = ContextTrimConfig {
             max_tokens: 10_000, // Small window for easy testing
             ..ContextTrimConfig::default()
         };
-        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
-        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
+        // Token budgeting is disabled, so should always return Proceed
         let manager = ContextManager::new(
             "sys".into(),
             trim_config,
-            budget,
-            true,
             Arc::new(RwLock::new(HashMap::new())),
         );
 
-        // Create history that's ~80% of max tokens (above WARNING threshold of 0.75)
+        // Create history that's ~80% of max tokens
         // At 4 chars/token, 8000 tokens = 32000 chars, minus 2000 overhead = 30000 chars
         let history = vec![uni::Message::user("x".repeat(30000))];
         let action = manager.pre_request_check(&history);
-        assert!(matches!(
-            action,
-            super::PreRequestAction::TrimLight | super::PreRequestAction::TrimAggressive
-        ));
+        
+        // With token budgeting disabled, should return Proceed even with large history
+        assert_eq!(action, super::PreRequestAction::Proceed);
     }
 
     #[test]
@@ -845,13 +692,9 @@ mod tests {
             max_tokens: 100_000,
             ..ContextTrimConfig::default()
         };
-        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
-        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
         let manager = ContextManager::new(
             "sys".into(),
             trim_config,
-            budget,
-            true,
             Arc::new(RwLock::new(HashMap::new())),
         );
 

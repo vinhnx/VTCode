@@ -23,7 +23,6 @@ use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::McpRendererProfile;
-use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use commands::render_terminal_command_panel;
@@ -41,7 +40,6 @@ pub(crate) async fn render_tool_output(
     tool_name: Option<&str>,
     val: &Value,
     vt_config: Option<&VTCodeConfig>,
-    token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
     let allow_tool_ansi = vt_config.map(|cfg| cfg.ui.allow_tool_ansi).unwrap_or(false);
 
@@ -68,7 +66,6 @@ pub(crate) async fn render_tool_output(
                 &ls_styles,
                 vt_config,
                 allow_tool_ansi,
-                token_budget,
             )
             .await;
         }
@@ -92,7 +89,6 @@ pub(crate) async fn render_tool_output(
                 &ls_styles,
                 vt_config,
                 allow_tool_ansi,
-                token_budget,
             )
             .await;
         }
@@ -156,7 +152,6 @@ pub(crate) async fn render_tool_output(
             MessageStyle::ToolOutput,
             allow_tool_ansi,
             vt_config,
-            token_budget,
         )
         .await?;
     } else if let Some(stdout) = val.get("stdout").and_then(Value::as_str) {
@@ -172,7 +167,6 @@ pub(crate) async fn render_tool_output(
             MessageStyle::ToolOutput,
             allow_tool_ansi,
             vt_config,
-            token_budget,
         )
         .await?;
     }
@@ -189,7 +183,6 @@ pub(crate) async fn render_tool_output(
             MessageStyle::Error,
             allow_tool_ansi,
             vt_config,
-            token_budget,
         )
         .await?;
     }
