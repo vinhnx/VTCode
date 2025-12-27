@@ -347,11 +347,30 @@ pub(crate) async fn initialize_session(
     )
     .await;
 
-    // Append skills information to system prompt
-    use vtcode_core::skills::prompt_integration::{generate_skills_prompt_with_mode, SkillsRenderMode};
-    if !discovered_skills_map.is_empty() {
-        let skills_prompt = generate_skills_prompt_with_mode(&discovered_skills_map, SkillsRenderMode::Lean);
-        base_system_prompt.push_str(&skills_prompt);
+    // Register ListSkills tool
+    let list_skills_tool = vtcode_core::tools::skills::ListSkillsTool::new(
+        Arc::new(RwLock::new(discovered_skills_map.clone()))
+    );
+    let list_skills_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
+        "list_skills",
+        vtcode_core::config::types::CapabilityLevel::General,
+        list_skills_tool
+    );
+    if let Err(e) = tool_registry.register_tool(list_skills_reg) {
+        warn!("Failed to register list_skills tool: {}", e);
+    }
+    // Add list_skills to tool definitions
+    {
+         let mut tools_guard = tools.write().await;
+         tools_guard.push(uni::ToolDefinition::function(
+             "list_skills".to_string(),
+             "List all available skills that can be loaded. Use this to discover capabilities before loading them.".to_string(),
+             serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+            })
+         ));
     }
 
     // Initialize MCP panel state

@@ -102,3 +102,61 @@ impl Tool for LoadSkillTool {
         }
     }
 }
+
+/// Tool to list all available skills
+pub struct ListSkillsTool {
+    skills: SkillMap,
+}
+
+impl ListSkillsTool {
+    pub fn new(skills: SkillMap) -> Self {
+        Self { skills }
+    }
+}
+
+#[async_trait]
+impl Tool for ListSkillsTool {
+    fn name(&self) -> &'static str {
+        "list_skills"
+    }
+
+    fn description(&self) -> &'static str {
+        "List all available skills that can be loaded. Use this to discover capabilities before loading them."
+    }
+
+    fn parameter_schema(&self) -> Option<Value> {
+        Some(serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }))
+    }
+
+    fn default_permission(&self) -> ToolPolicy {
+        ToolPolicy::Allow
+    }
+
+    async fn execute(&self, _args: Value) -> anyhow::Result<Value> {
+        let skills = self.skills.read().unwrap();
+        let mut skill_list = Vec::new();
+
+        for skill in skills.values() {
+            skill_list.push(serde_json::json!({
+                "name": skill.name(),
+                "description": skill.description(),
+            }));
+        }
+        
+        // Sort by name for stable output
+        skill_list.sort_by(|a, b| {
+            let na = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let nb = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            na.cmp(nb)
+        });
+
+        Ok(serde_json::json!({
+            "count": skill_list.len(),
+            "skills": skill_list
+        }))
+    }
+}
