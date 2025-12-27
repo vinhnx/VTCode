@@ -408,7 +408,7 @@ impl Skill {
 #[derive(Debug, Clone)]
 pub enum SkillContext {
     /// Level 1: Only metadata (~100 tokens)
-    MetadataOnly(SkillManifest),
+    MetadataOnly(SkillManifest, PathBuf),
     /// Level 2: Metadata + instructions (<5K tokens)
     WithInstructions(Skill),
     /// Level 3: Full skill with resources loaded
@@ -419,16 +419,25 @@ impl SkillContext {
     /// Get manifest from any context level
     pub fn manifest(&self) -> &SkillManifest {
         match self {
-            SkillContext::MetadataOnly(m) => m,
+            SkillContext::MetadataOnly(m, _) => m,
             SkillContext::WithInstructions(s) => &s.manifest,
             SkillContext::Full(s) => &s.manifest,
+        }
+    }
+
+    /// Get path from any context level
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            SkillContext::MetadataOnly(_, p) => p,
+            SkillContext::WithInstructions(s) => &s.path,
+            SkillContext::Full(s) => &s.path,
         }
     }
 
     /// Get skill (requires Level 2+)
     pub fn skill(&self) -> Option<&Skill> {
         match self {
-            SkillContext::MetadataOnly(_) => None,
+            SkillContext::MetadataOnly(_, _) => None,
             SkillContext::WithInstructions(s) => Some(s),
             SkillContext::Full(s) => Some(s),
         }
@@ -437,7 +446,7 @@ impl SkillContext {
     /// Estimated tokens consumed in system prompt
     pub fn tokens(&self) -> usize {
         match self {
-            SkillContext::MetadataOnly(_) => 100,
+            SkillContext::MetadataOnly(_, _) => 100,
             SkillContext::WithInstructions(s) => 100 + s.instruction_tokens(),
             SkillContext::Full(s) => 100 + s.instruction_tokens() + (s.resources.len() * 50),
         }

@@ -156,6 +156,7 @@ pub mod result_cache;
 pub mod result_metadata;
 pub mod search_metrics;
 pub mod shell;
+pub mod skills;
 pub mod smart_cache;
 pub mod summarizers;
 pub mod terminal_app;
