@@ -2,10 +2,13 @@ use crate::skills::types::Skill;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::traits::Tool;
 use crate::llm::provider::ToolDefinition;
+use crate::skills::file_references::FileReferenceValidator;
+use anyhow::Context;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 type SkillMap = Arc<RwLock<HashMap<String, Skill>>>;
 type ToolDefList = Arc<RwLock<Vec<ToolDefinition>>>;
@@ -61,9 +64,9 @@ impl Tool for LoadSkillTool {
         let mut activation_status = "No associated tools to activate.";
         if let Some(tool_list) = &self.active_tools {
             if let Some(def) = self.dormant_tools.get(name) {
-                let mut active = tool_list.write().unwrap();
+                let mut active = tool_list.write().await;
                 // Check if already active to avoid duplicates
-                if !active.iter().any(|t| t.name == def.name) {
+                if !active.iter().any(|t| t.function_name() == def.function_name()) {
                     active.push(def.clone());
                     activation_status = "Associated tools activated and added to context.";
                 } else {
@@ -72,8 +75,8 @@ impl Tool for LoadSkillTool {
             }
         }
 
-        // 2. Load instructions
-        let skills = self.skills.read().unwrap();
+        // 2. Load instructions and discover resources
+        let skills = self.skills.read().await;
         if let Some(skill) = skills.get(name) {
             let instructions = if skill.instructions.is_empty() {
                 // Determine path to SKILL.md
@@ -90,10 +93,16 @@ impl Tool for LoadSkillTool {
                 skill.instructions.clone()
             };
 
+            // Discover Level 3 Resources
+            let validator = FileReferenceValidator::new(skill.path.clone());
+            let resources = validator.list_valid_references();
+            let resource_names: Vec<String> = resources.iter().map(|p| p.to_string_lossy().to_string()).collect();
+
             Ok(serde_json::json!({
                 "name": skill.name(),
                 "instructions": instructions,
                 "activation_status": activation_status,
+                "resources": resource_names,
                 "path": skill.path,
                 "description": skill.description()
             }))
@@ -137,7 +146,7 @@ impl Tool for ListSkillsTool {
     }
 
     async fn execute(&self, _args: Value) -> anyhow::Result<Value> {
-        let skills = self.skills.read().unwrap();
+        let skills = self.skills.read().await;
         let mut skill_list = Vec::new();
 
         for skill in skills.values() {
@@ -158,5 +167,80 @@ impl Tool for ListSkillsTool {
             "count": skill_list.len(),
             "skills": skill_list
         }))
+    }
+}
+
+/// Tool to load a specific resource from a skill (Level 3)
+pub struct LoadSkillResourceTool {
+    skills: SkillMap,
+}
+
+impl LoadSkillResourceTool {
+    pub fn new(skills: SkillMap) -> Self {
+        Self { skills }
+    }
+}
+
+#[async_trait]
+impl Tool for LoadSkillResourceTool {
+    fn name(&self) -> &'static str {
+        "load_skill_resource"
+    }
+
+    fn description(&self) -> &'static str {
+        "Load the content of a specific resource (script, template, data) belonging to a skill. Use this when instructed by a skill's SKILL.md."
+    }
+
+    fn parameter_schema(&self) -> Option<Value> {
+        Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "skill_name": {
+                    "type": "string",
+                    "description": "The name of the skill"
+                },
+                "resource_path": {
+                    "type": "string",
+                    "description": "The relative path of the resource (e.g. 'scripts/helper.py')"
+                }
+            },
+            "required": ["skill_name", "resource_path"]
+        }))
+    }
+
+    fn default_permission(&self) -> ToolPolicy {
+        ToolPolicy::Allow
+    }
+
+    async fn execute(&self, args: Value) -> anyhow::Result<Value> {
+        let skill_name = args
+            .get("skill_name")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing 'skill_name' argument"))?;
+        let resource_path = args
+            .get("resource_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing 'resource_path' argument"))?;
+
+        let skills = self.skills.read().await;
+        if let Some(skill) = skills.get(skill_name) {
+            // Security check: must be relative and within skill path
+            let full_path = skill.path.join(resource_path);
+            if !full_path.exists() {
+                return Err(anyhow::anyhow!("Resource '{}' not found in skill '{}'", resource_path, skill_name));
+            }
+
+            // Read content (limit size for safety)
+            let content = std::fs::read_to_string(&full_path)
+                .context(format!("Failed to read resource at {}", full_path.display()))?;
+
+            Ok(serde_json::json!({
+                "skill_name": skill_name,
+                "resource_path": resource_path,
+                "content": content
+            }))
+        } else {
+            Err(anyhow::anyhow!("Skill '{}' not found", skill_name))
+        }
     }
 }

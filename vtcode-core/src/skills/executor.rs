@@ -193,6 +193,7 @@ pub async fn execute_skill_with_sub_llm(
 }
 
 /// Adapter implementing Tool trait for a Skill
+#[derive(Clone)]
 pub struct SkillToolAdapter {
     skill: Skill,
 }
