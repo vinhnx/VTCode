@@ -6,5 +6,5 @@ remove this for simplicity
 - [x] Token budget enforcement
 - [x] Context Caching (Provider-level)
 - [x] Context Summarization (Active loop)
-- [ ] Context Retrieval (Session Archive Search)
-- [ ] Layered Action Space (Skills Enhancement)
+- [x] Context Retrieval (Session Archive Search)
+- [x] Layered Action Space (Skills Enhancement)

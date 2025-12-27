@@ -259,6 +259,63 @@ pub(crate) async fn initialize_session(
 
     let tools = Arc::new(RwLock::new(tool_definitions));
 
+    // Perform skill discovery (CLI tools)
+    let mut discovered_skill_adapters = Vec::new();
+    let mut discovered_skills_map = HashMap::new();
+    
+    let mut skill_discovery = vtcode_core::skills::discovery::SkillDiscovery::new();
+    match skill_discovery.discover_all(&config.workspace).await {
+         Ok(result) => {
+             info!("Discovered {} skills and {} CLI tools", result.skills.len(), result.tools.len());
+             
+             // Process Traditional Skills (Markdown)
+             for skill_ctx in result.skills {
+                // Create lightweight skill for prompt generation
+                if let Ok(lightweight_skill) = vtcode_core::skills::types::Skill::new(
+                    skill_ctx.manifest().clone(),
+                    skill_ctx.path().clone(),
+                    String::new(), // Placeholder instructions for prompt-only listing
+                ) {
+                    discovered_skills_map.insert(lightweight_skill.name().to_string(), lightweight_skill);
+                }
+             }
+
+             // Process CLI tools
+             let mut dormant_tool_defs = HashMap::new();
+             for tool_config in result.tools {
+                 match vtcode_core::skills::cli_bridge::CliToolBridge::new(tool_config) {
+                     Ok(bridge) => {
+                         match bridge.to_skill() {
+                            Ok(skill) => {
+                                discovered_skills_map.insert(skill.name().to_string(), skill.clone());
+                                let adapter = vtcode_core::skills::executor::SkillToolAdapter::new(skill);
+                                discovered_skill_adapters.push(adapter.clone());
+                                
+                                // Create definition but store in dormant map
+                                let def = uni::ToolDefinition::function(
+                                    adapter.name().to_string(),
+                                    format!("(SKILL) {}", adapter.description()),
+                                    adapter.parameter_schema().unwrap_or(serde_json::json!({
+                                        "type": "object",
+                                        "properties": {
+                                            "input": {"type": "string", "description": "Input arguments"}
+                                        }
+                                    }))
+                                );
+                                dormant_tool_defs.insert(adapter.name().to_string(), def);
+                            }
+                            Err(e) => warn!("Failed to convert tool bridge to skill: {}", e),
+                         }
+                     }
+                     Err(e) => warn!("Failed to create bridge for tool: {}", e),
+                 }
+             }
+
+             // Note: We DO NOT push to `tools` here. We rely on LoadSkillTool to activate them.
+         }
+         Err(e) => warn!("Skill discovery failed: {}", e),
+    }
+
     let trim_config = load_context_trim_config(vt_cfg);
     let context_features = vt_cfg.map(|cfg| &cfg.context);
     let token_budget_enabled = context_features
@@ -284,11 +341,18 @@ pub(crate) async fn initialize_session(
 
     let conversation_history = build_conversation_history_from_resume(resume, &token_budget).await;
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
-    let base_system_prompt = read_system_prompt(
+    let mut base_system_prompt = read_system_prompt(
         &config.workspace,
         session_bootstrap.prompt_addendum.as_deref(),
     )
     .await;
+
+    // Append skills information to system prompt
+    use vtcode_core::skills::prompt_integration::{generate_skills_prompt_with_mode, SkillsRenderMode};
+    if !discovered_skills_map.is_empty() {
+        let skills_prompt = generate_skills_prompt_with_mode(&discovered_skills_map, SkillsRenderMode::Lean);
+        base_system_prompt.push_str(&skills_prompt);
+    }
 
     // Initialize MCP panel state
     let mcp_panel_state = if let Some(cfg) = vt_cfg {
@@ -296,6 +360,8 @@ pub(crate) async fn initialize_session(
     } else {
         mcp_events::McpPanelState::default()
     };
+
+    let pty_config = vt_cfg.map(|cfg| cfg.pty).unwrap_or_default();
 
     let mut tool_registry =
         ToolRegistry::new_with_features(config.workspace.clone(), todo_planning_enabled).await;
@@ -368,6 +434,53 @@ pub(crate) async fn initialize_session(
         }
     }
 
+    // Register discovered skills in registry
+    for adapter in discovered_skill_adapters {
+         use vtcode_core::tools::traits::Tool;
+         let name = adapter.name(); 
+         let reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
+             name,
+             vtcode_core::config::types::CapabilityLevel::General,
+             adapter
+         );
+         if let Err(e) = tool_registry.register_tool(reg) {
+             warn!("Failed to register skill tool {}: {}", name, e);
+         }
+    }
+
+    // Register LoadSkill tool
+    let load_skill_tool = vtcode_core::tools::skills::LoadSkillTool::new(
+        Arc::new(RwLock::new(discovered_skills_map.clone())),
+        dormant_tool_defs,
+        Some(tools.clone()) // Pass shared tools list for dynamic activation
+    );
+    let load_skill_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
+        "load_skill",
+        vtcode_core::config::types::CapabilityLevel::General,
+        load_skill_tool
+    );
+    if let Err(e) = tool_registry.register_tool(load_skill_reg) {
+        warn!("Failed to register load_skill tool: {}", e);
+    }
+    // Add load_skill to tool definitions
+    {
+         let mut tools_guard = tools.write().await;
+         tools_guard.push(uni::ToolDefinition::function(
+             "load_skill".to_string(),
+             "Load detailed instructions for a specific skill and activate its associated tools. Use this when you want to understand/use a skill listed in your system prompt.".to_string(),
+             serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The name of the skill to load"
+                    }
+                },
+                "required": ["name"]
+            })
+         ));
+    }
+
     let custom_prompts = CustomPromptRegistry::load(
         vt_cfg.map(|cfg| &cfg.agent.custom_prompts),
         &config.workspace,
@@ -421,7 +534,7 @@ pub(crate) async fn initialize_session(
         tool_permission_cache,
         search_metrics,
         custom_prompts,
-        loaded_skills: Arc::new(RwLock::new(HashMap::new())),
+        loaded_skills: Arc::new(RwLock::new(discovered_skills_map)),
         approval_recorder,
         safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
     })

@@ -217,7 +217,7 @@ impl SkillDiscovery {
 
                     match parse_skill_file(&path) {
                         Ok((manifest, _instructions)) => {
-                            skills.push(SkillContext::MetadataOnly(manifest));
+                            skills.push(SkillContext::MetadataOnly(manifest, path.to_path_buf()));
                             stats.skills_found += 1;
                             info!(
                                 "Discovered skill: {} from {}",
@@ -489,7 +489,7 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         metadata: None,
     };
 
-    Ok(SkillContext::MetadataOnly(manifest))
+    Ok(SkillContext::MetadataOnly(manifest, config.executable_path.clone()))
 }
 
 /// Progressive skill loader that can load full skill details on demand
