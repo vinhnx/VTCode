@@ -59,10 +59,7 @@ impl ContextOptimizer {
         self.utilization().await >= 0.85
     }
 
-    /// Check if compaction is needed (disabled - always false)
-    pub async fn needs_compaction(&self) -> bool {
-        false
-    }
+
 
 
 
@@ -161,46 +158,19 @@ impl ContextOptimizer {
         result
     }
 
-    /// Optimize read_file - truncate based on max_tokens parameter or default limits
+    /// Optimize read_file - basic size limiting without token counting
     fn optimize_read_file_result(&self, result: Value) -> Value {
         if let Some(obj) = result.as_object()
             && let Some(content) = obj.get("content").and_then(|v| v.as_str())
         {
-            let max_file_lines = MAX_FILE_LINES;
+            let lines: Vec<&str> = content.lines().collect();
+            let is_truncated = lines.len() > MAX_FILE_LINES;
 
-            // Calculate exact token count using tokenizer
-            let estimated_tokens = self.count_tokens(content);
-
-            // Check if max_tokens was specified in the result
-            let max_tokens = obj
-                .get("max_tokens")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as usize)
-                .or_else(|| {
-                    obj.get("metadata")
-                        .and_then(|m| m.get("applied_max_tokens"))
-                        .and_then(|v| v.as_u64())
-                        .map(|v| v as usize)
-                });
-
-            let should_truncate = if let Some(max_tok) = max_tokens {
-                estimated_tokens > max_tok
+            let final_content = if is_truncated {
+                // Simple line-based truncation
+                lines[..MAX_FILE_LINES].join("\n")
             } else {
-                let lines: Vec<&str> = content.lines().collect();
-                lines.len() > max_file_lines
-            };
-
-            let (final_content, is_truncated) = if should_truncate {
-                // If we have a max_tokens limit, use it for smarter truncation
-                // Default to ~8000 tokens (2000 lines * 4) if not specified
-                let token_limit = max_tokens.unwrap_or(MAX_FILE_LINES * 4);
-
-                // Use token-based truncation if possible (more accurate)
-                // Otherwise fall back to line-based
-                let truncated = self.truncate_content(content, token_limit);
-                (truncated, true)
-            } else {
-                (content.to_string(), false)
+                content.to_string()
             };
 
             // Reconstruct the object to ensure consistent field ordering and presence
@@ -230,11 +200,6 @@ impl ContextOptimizer {
 
             if is_truncated {
                 standardized_obj.insert("is_truncated".to_string(), json!(true));
-                standardized_obj.insert("original_tokens".to_string(), json!(estimated_tokens));
-
-                if let Some(omitted) = obj.get("omitted_line_count") {
-                    standardized_obj.insert("omitted_line_count".to_string(), omitted.clone());
-                }
             }
 
             return Value::Object(standardized_obj);
@@ -243,26 +208,7 @@ impl ContextOptimizer {
         result
     }
 
-    /// Estimate tokens (rough approximation)
-    fn count_tokens(&self, text: &str) -> usize {
-        text.len() / 4
-    }
 
-    /// Truncate content while preserving line boundaries if possible
-    fn truncate_content(&self, content: &str, token_limit: usize) -> String {
-        let char_limit = token_limit * 4;
-        if content.len() <= char_limit {
-            return content.to_string();
-        }
-
-        let truncated = &content[..char_limit];
-        // Try to cut at last newline to avoid partial lines
-        if let Some(last_newline) = truncated.rfind('\n') {
-            truncated[..last_newline].to_string()
-        } else {
-            truncated.to_string()
-        }
-    }
 
     /// Optimize command output - extract errors only
     /// Optimize command output - extract errors only
@@ -270,12 +216,11 @@ impl ContextOptimizer {
         if let Some(obj) = result.as_object()
             && let Some(stdout) = obj.get("stdout").and_then(|v| v.as_str())
         {
-            // Use same limit as files (approx 2000 lines / 8000 tokens)
-            let max_tokens = MAX_FILE_LINES * 4;
-            let current_tokens = self.count_tokens(stdout);
+            let lines: Vec<&str> = stdout.lines().collect();
+            let is_truncated = lines.len() > MAX_FILE_LINES;
 
-            if current_tokens > max_tokens {
-                let truncated = self.truncate_content(stdout, max_tokens);
+            if is_truncated {
+                let truncated = lines[..MAX_FILE_LINES].join("\n");
                 let lines_count = stdout.lines().count();
 
                 // Clone the original object to preserve exit_code, stderr, etc.
@@ -283,7 +228,6 @@ impl ContextOptimizer {
                 new_obj.insert("stdout".to_string(), json!(truncated));
                 new_obj.insert("is_truncated".to_string(), json!(true));
                 new_obj.insert("original_lines".to_string(), json!(lines_count));
-                new_obj.insert("original_tokens".to_string(), json!(current_tokens));
                 new_obj.insert(
                     "note".to_string(),
                     json!(
@@ -297,202 +241,7 @@ impl ContextOptimizer {
         result
     }
 
-    /// Compact history while preserving critical information
-    /// Preserves: file paths, line numbers, error messages
-    fn compact_history(&mut self) {
-        // Compact oldest entries first - token tracking removed
-        for entry in self.history.iter_mut() {
-            entry.result = match entry.tool_name.as_str() {
-                tools::GREP_FILE => {
-                    // Preserve file paths and line numbers from grep results
-                    Self::compact_grep_entry(&entry.result)
-                }
-                tools::LIST_FILES => {
-                    // Preserve file paths and counts
-                    Self::compact_list_files_entry(&entry.result)
-                }
-                tools::READ_FILE => {
-                    // Preserve file path and line range
-                    Self::compact_read_file_entry(&entry.result)
-                }
-                "shell" | tools::RUN_PTY_CMD => {
-                    // Preserve error messages and exit codes
-                    Self::compact_command_entry(&entry.result)
-                }
-                _ => {
-                    // Generic compaction - preserve any error fields
-                    Self::compact_generic_entry(&entry.result, &entry.tool_name)
-                }
-            };
-        }
-    }
 
-    /// Compact grep entry while preserving paths and line numbers
-    fn compact_grep_entry(result: &Value) -> Value {
-        if let Some(obj) = result.as_object() {
-            let mut preserved = serde_json::Map::new();
-            preserved.insert("tool".to_string(), json!(tools::GREP_FILE));
-
-            // Preserve file paths and line numbers
-            if let Some(matches) = obj.get("matches").and_then(|v| v.as_array()) {
-                let paths_and_lines: Vec<_> = matches
-                    .iter()
-                    .filter_map(|m| {
-                        let path = m.get("path").or_else(|| m.get("file"))?;
-                        let line = m.get("line").or_else(|| m.get("line_number"));
-                        Some(json!({
-                            "path": path,
-                            "line": line
-                        }))
-                    })
-                    .collect();
-                preserved.insert("matches".to_string(), json!(paths_and_lines));
-            }
-
-            if let Some(total) = obj.get("total") {
-                preserved.insert("total".to_string(), total.clone());
-            }
-
-            preserved.insert(
-                "note".to_string(),
-                json!("Grep results compacted - paths and line numbers preserved"),
-            );
-            return Value::Object(preserved);
-        }
-        json!({"tool": tools::GREP_FILE, "note": "Compacted"})
-    }
-
-    /// Compact list_files entry while preserving paths
-    fn compact_list_files_entry(result: &Value) -> Value {
-        if let Some(obj) = result.as_object() {
-            let mut preserved = serde_json::Map::new();
-            preserved.insert("tool".to_string(), json!(tools::LIST_FILES));
-
-            // Preserve total count and sample of paths
-            if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
-                preserved.insert("total_files".to_string(), json!(files.len()));
-                let sample: Vec<_> = files.iter().take(3).cloned().collect();
-                preserved.insert("sample_paths".to_string(), json!(sample));
-            } else if let Some(total) = obj.get("total_files") {
-                preserved.insert("total_files".to_string(), total.clone());
-                if let Some(sample) = obj.get("sample") {
-                    preserved.insert("sample_paths".to_string(), sample.clone());
-                }
-            }
-
-            preserved.insert(
-                "note".to_string(),
-                json!("File list compacted - count and sample preserved"),
-            );
-            return Value::Object(preserved);
-        }
-        json!({"tool": tools::LIST_FILES, "note": "Compacted"})
-    }
-
-    /// Compact read_file entry while preserving path and line range
-    fn compact_read_file_entry(result: &Value) -> Value {
-        if let Some(obj) = result.as_object() {
-            let mut preserved = serde_json::Map::new();
-            preserved.insert("tool".to_string(), json!(tools::READ_FILE));
-
-            // Preserve file path
-            if let Some(path) = obj.get("path").or_else(|| obj.get("file")) {
-                preserved.insert("path".to_string(), path.clone());
-            }
-
-            // Preserve line range information
-            if let Some(start) = obj.get("start_line") {
-                preserved.insert("start_line".to_string(), start.clone());
-            }
-            if let Some(end) = obj.get("end_line") {
-                preserved.insert("end_line".to_string(), end.clone());
-            }
-            if let Some(total) = obj.get("total_lines") {
-                preserved.insert("total_lines".to_string(), total.clone());
-            }
-
-            preserved.insert(
-                "note".to_string(),
-                json!("File content compacted - path and line range preserved"),
-            );
-            return Value::Object(preserved);
-        }
-        json!({"tool": tools::READ_FILE, "note": "Compacted"})
-    }
-
-    /// Compact command entry while preserving errors
-    fn compact_command_entry(result: &Value) -> Value {
-        if let Some(obj) = result.as_object() {
-            let mut preserved = serde_json::Map::new();
-            preserved.insert("tool".to_string(), json!("command"));
-
-            // Preserve exit code
-            if let Some(exit_code) = obj.get("exit_code").or_else(|| obj.get("code")) {
-                preserved.insert("exit_code".to_string(), exit_code.clone());
-            }
-
-            // Preserve error messages
-            if let Some(stderr) = obj.get("stderr").and_then(|v| v.as_str())
-                && !stderr.is_empty()
-            {
-                // Keep first 200 chars of stderr
-                let truncated = if stderr.len() > 200 {
-                    format!("{}...", &stderr[..200])
-                } else {
-                    stderr.to_string()
-                };
-                preserved.insert("stderr".to_string(), json!(truncated));
-            }
-
-            // Preserve error lines from stdout
-            if let Some(errors) = obj.get("errors") {
-                preserved.insert("errors".to_string(), errors.clone());
-            }
-
-            preserved.insert(
-                "note".to_string(),
-                json!("Command output compacted - errors preserved"),
-            );
-            return Value::Object(preserved);
-        }
-        json!({"tool": "command", "note": "Compacted"})
-    }
-
-    /// Compact generic entry while preserving error fields
-    fn compact_generic_entry(result: &Value, tool_name: &str) -> Value {
-        if let Some(obj) = result.as_object() {
-            let mut preserved = serde_json::Map::new();
-            preserved.insert("tool".to_string(), json!(tool_name));
-
-            // Preserve any error-related fields
-            for key in [
-                "error",
-                "errors",
-                "error_message",
-                "stderr",
-                "exit_code",
-                "status",
-            ] {
-                if let Some(value) = obj.get(key) {
-                    preserved.insert(key.to_string(), value.clone());
-                }
-            }
-
-            // Preserve any path-related fields
-            for key in ["path", "file", "files", "directory"] {
-                if let Some(value) = obj.get(key) {
-                    preserved.insert(key.to_string(), value.clone());
-                }
-            }
-
-            preserved.insert(
-                "note".to_string(),
-                json!("Output compacted - errors and paths preserved"),
-            );
-            return Value::Object(preserved);
-        }
-        json!({"tool": tool_name, "note": "Compacted"})
-    }
 
     /// Create checkpoint state for context reset
     pub async fn create_checkpoint(
@@ -629,143 +378,7 @@ mod tests {
         let _ = std::fs::remove_file(&temp_path);
     }
 
-    #[tokio::test]
-    async fn test_read_file_token_based_truncation() {
-        let mut optimizer = ContextOptimizer::new();
 
-        // Create a large file content
-        let large_content = "line\n".repeat(5000);
-        let result = json!({
-            "content": large_content,
-            "max_tokens": 1000
-        });
 
-        let optimized = optimizer.optimize_result(tools::READ_FILE, result).await;
 
-        assert!(optimized["truncated"].as_bool().unwrap_or(false));
-        assert!(optimized["estimated_tokens"].is_number());
-        assert_eq!(optimized["max_tokens"], 1000);
-    }
-
-    #[tokio::test]
-    async fn test_read_file_truncation_preserves_status() {
-        let mut optimizer = ContextOptimizer::new();
-
-        // Create a large file content to force truncation
-        let large_content = "line\n".repeat(5000);
-        let result = json!({
-            "content": large_content,
-            "max_tokens": 100, // Force truncation
-            "status": "success",
-            "message": "Successfully read file"
-        });
-
-        let optimized = optimizer.optimize_result(tools::READ_FILE, result).await;
-
-        // Verify truncation happened
-        assert!(optimized["is_truncated"].as_bool().unwrap());
-
-        // Verify status/message preserved
-        assert_eq!(optimized["status"], "success");
-        assert_eq!(optimized["message"], "Successfully read file");
-    }
-
-    #[tokio::test]
-    async fn test_history_compaction_preserves_paths() {
-        let mut optimizer = ContextOptimizer::new();
-
-        // Add grep result with paths and line numbers
-        let grep_result = json!({
-            "matches": [
-                {"path": "src/main.rs", "line": 42, "text": "error"},
-                {"path": "src/lib.rs", "line": 100, "text": "error"}
-            ],
-            "total": 2
-        });
-
-        optimizer
-            .optimize_result(tools::GREP_FILE, grep_result)
-            .await;
-
-        // Trigger compaction
-        optimizer.compact_history();
-
-        // Check that paths and line numbers are preserved
-        let compacted = &optimizer.history[0].result;
-        assert_eq!(compacted["tool"], tools::GREP_FILE);
-        assert!(compacted["matches"].is_array());
-        let matches = compacted["matches"].as_array().unwrap();
-        assert_eq!(matches[0]["path"], "src/main.rs");
-        assert_eq!(matches[0]["line"], 42);
-    }
-
-    #[tokio::test]
-    async fn test_history_compaction_preserves_errors() {
-        let mut optimizer = ContextOptimizer::new();
-
-        // Add command result with errors
-        let cmd_result = json!({
-            "exit_code": 1,
-            "stderr": "Error: file not found at line 42",
-            "stdout": "some output"
-        });
-
-        optimizer.optimize_result("shell", cmd_result).await;
-
-        // Trigger compaction
-        optimizer.compact_history();
-
-        // Check that errors are preserved
-        let compacted = &optimizer.history[0].result;
-        assert_eq!(compacted["tool"], "command");
-        assert_eq!(compacted["exit_code"], 1);
-        assert!(compacted["stderr"].as_str().unwrap().contains("Error"));
-    }
-
-    #[tokio::test]
-    async fn test_list_files_compaction_preserves_paths() {
-        let mut optimizer = ContextOptimizer::new();
-
-        // Add list_files result
-        let files: Vec<_> = (0..10).map(|i| json!(format!("file{}.rs", i))).collect();
-        let result = json!({"files": files});
-
-        optimizer.optimize_result(tools::LIST_FILES, result).await;
-
-        // Trigger compaction
-        optimizer.compact_history();
-
-        // Check that file count and sample are preserved
-        let compacted = &optimizer.history[0].result;
-        assert_eq!(compacted["tool"], tools::LIST_FILES);
-        assert_eq!(compacted["total_files"], 10);
-        assert!(compacted["sample_paths"].is_array());
-    }
-
-    #[tokio::test]
-    async fn test_read_file_compaction_preserves_line_range() {
-        let mut optimizer = ContextOptimizer::new();
-
-        // Add read_file result with line range
-        let result = json!({
-            "path": "src/main.rs",
-            "content": "some content",
-            "start_line": 10,
-            "end_line": 50,
-            "total_lines": 100
-        });
-
-        optimizer.optimize_result(tools::READ_FILE, result).await;
-
-        // Trigger compaction
-        optimizer.compact_history();
-
-        // Check that path and line range are preserved
-        let compacted = &optimizer.history[0].result;
-        assert_eq!(compacted["tool"], tools::READ_FILE);
-        assert_eq!(compacted["path"], "src/main.rs");
-        assert_eq!(compacted["start_line"], 10);
-        assert_eq!(compacted["end_line"], 50);
-        assert_eq!(compacted["total_lines"], 100);
-    }
 }

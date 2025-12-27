@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use serde_json;
 
 use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
 use vtcode_core::config::constants::tools as tools_consts;
@@ -52,7 +53,7 @@ pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCom
                 ctx.renderer
                     .line(MessageStyle::Info, "Debug information (tool):")?;
                 ctx.renderer
-                    .line(MessageStyle::Output, &value.to_string())?;
+                    .line(MessageStyle::Output, &serde_json::to_string_pretty(&value)?)?;
                 return Ok(SlashCommandControl::Continue);
             }
             Err(err) => {
@@ -126,7 +127,7 @@ pub async fn handle_analyze_agent(ctx: SlashCommandContext<'_>) -> Result<SlashC
                 ctx.renderer
                     .line(MessageStyle::Info, "Agent analysis (tool):")?;
                 ctx.renderer
-                    .line(MessageStyle::Output, &value.to_string())?;
+                    .line(MessageStyle::Output, &serde_json::to_string_pretty(&value)?)?;
                 return Ok(SlashCommandControl::Continue);
             }
             Err(err) => {

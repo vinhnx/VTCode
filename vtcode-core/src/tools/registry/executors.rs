@@ -3914,53 +3914,60 @@ fn build_ephemeral_pty_response(
         && code == Some(127)
         && let Value::Object(ref mut obj) = response
     {
-        // Add multiple explicit "STOP" signals to prevent agent from trying workarounds
+        // Set flags to indicate this is a command-not-found error, but allow intelligent retries
+        // Fatal error remains true as this command failed, but we won't block all retries
         obj.insert("fatal_error".to_string(), Value::Bool(true));
-        obj.insert("do_not_attempt_workarounds".to_string(), Value::Bool(true));
-        obj.insert("do_not_retry".to_string(), Value::Bool(true));
+        obj.insert("command_not_found".to_string(), Value::Bool(true));
         obj.insert("final".to_string(), Value::Bool(true));
 
-        // CRITICAL: Direct instruction to agent not to retry
+        // Allow agent to retry with alternative approaches for exit code 127
+        // but provide clear guidance about what might work
         obj.insert(
-                "agent_instruction".to_string(),
-                Value::String(
-                    "AGENT: Do NOT run any more commands related to this tool. Do NOT try different shells. \
-                     Do NOT try bash -lc, sh -lc, or workarounds. The tool is not installed. \
-                     STOP all command attempts. Follow the solution in the output field. \
-                     If you are tempted to retry or try a workaround, STOP. You already have the answer."
-                        .to_string(),
-                ),
-            );
+            "agent_instruction".to_string(),
+            Value::String(
+                "AGENT: The command was not found (exit code 127). Before retrying, consider: \
+1. Check if this is a shell built-in that needs interactive mode (without -c flag) \
+2. Verify the command exists with 'which <command>' or 'command -v <command>' \
+3. For shell functions/aliases, ensure the shell is properly initialized \
+4. Try without the -l (login) flag if using an interactive shell wrapper \
+Only retry if you have a substantively different approach, not just changing shell flags."
+                    .to_string(),
+        ));
 
-        // Comprehensive explanation of why retrying won't work
+        // Comprehensive explanation of the error and potential solutions
         obj.insert(
             "critical_note".to_string(),
             Value::String(
-                "EXIT CODE 127 IS FINAL. The operating system shell searched the entire PATH \
-                     and could not find this executable. This is NOT a shell compatibility issue. \
-                     Retrying with bash, sh, zsh, or different escaping WILL FAIL. \
-                     The ONLY solutions are: (1) Install the tool, (2) Add its directory to PATH, \
-                     (3) Use a different tool. Read the 'output' field for specific instructions."
+                "EXIT CODE 127: Command not found. The operating system searched PATH and could not \
+find this executable. This typically means: (1) The tool is not installed, \
+(2) It's not in a PATH directory, or (3) It's a shell built-in/alias not available \
+in non-interactive mode. Review the 'output' field for specific details."
                     .to_string(),
             ),
         );
         obj.insert(
             "suggestion".to_string(),
             Value::String(
-                "DO NOT RETRY with: different shells, diagnostic commands (which/--version), \
-                     shell wrappers (bash -lc, sh -lc), or any command variations. \
-                     This will cause an infinite loop of exit code 127 errors."
+                "Potential solutions: Install the tool, add its directory to PATH, use an alternative \
+command, or if it's a shell built-in, ensure proper shell initialization. Avoid retrying \
+with minor shell flag variations unless you have reason to believe it will succeed."
                     .to_string(),
             ),
         );
         obj.insert(
-                "error_explanation".to_string(),
-                Value::String(
-                    "Exit code 127: Command not found. The OS searched PATH. The tool is not installed \
-                     or not in a directory that's in PATH. No shell workaround will fix this."
-                        .to_string(),
-                ),
-            );
+            "error_explanation".to_string(),
+            Value::String(
+                "Exit code 127 indicates 'command not found'. The OS searched all directories in PATH. \
+For interactive shell commands, ensure proper shell initialization or try without \
+non-interactive flags like -c."
+                    .to_string(),
+            ),
+        );
+        
+        // Remove overly restrictive retry prevention flags to allow intelligent retry logic
+        // The agent_instruction field now provides guidance instead of absolute prohibition
+        obj.remove("do_not_retry");
+        obj.remove("do_not_attempt_workarounds");
     }
 
     add_unified_metadata(
@@ -4251,7 +4258,57 @@ fn tokenize_command_string(command: &str, _shell_hint: Option<&str>) -> Result<V
     // Normalize natural language patterns before tokenization
     let normalized = normalize_natural_language_command(&sanitized);
 
+    // Check if command contains shell metacharacters that require raw shell execution
+    // If so, return as a single command string to be executed with shell -c
+    if contains_shell_metacharacters(&normalized) {
+        return Ok(vec![normalized]);
+    }
+
     split(&normalized).map_err(|err| anyhow!(err))
+}
+
+/// Detect shell metacharacters that require passing the entire command to shell -c
+/// rather than tokenizing into individual arguments
+fn contains_shell_metacharacters(command: &str) -> bool {
+    // Shell metacharacters that have special meaning in shell syntax
+    // Includes: pipes, redirects, conditionals, globbing, expansions, etc.
+    let shell_metachars = [
+        '|', '>', '<', ';', '&', '(', ')', '$', '`', '\n',  // Original set
+        '[', ']', '{', '}', '~', '#', '=',                  // Added: globbing, expansions, comments
+        '*', '?',                                            // Added: wildcards
+    ];
+    
+    // Check for unquoted shell metacharacters
+    let mut in_single_quotes = false;
+    let mut in_double_quotes = false;
+    let mut escaped = false;
+    
+    for ch in command.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        
+        match ch {
+            '\\' if !in_single_quotes => {
+                escaped = true;
+            }
+            '"' if !in_single_quotes => {
+                in_double_quotes = !in_double_quotes;
+            }
+            '\'' if !in_double_quotes => {
+                in_single_quotes = !in_single_quotes;
+            }
+            _ if !in_single_quotes && !in_double_quotes => {
+                if shell_metachars.contains(&ch) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    false
 }
 
 /// Normalize natural language command patterns to proper shell syntax.
@@ -4545,5 +4602,70 @@ mod search_replace_exec_tests {
         assert!(backup_exists);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_contains_shell_metacharacters_detects_operators() {
+        // Basic pipelines and redirects
+        assert!(super::contains_shell_metacharacters("ls -R | head -n 200"));
+        assert!(super::contains_shell_metacharacters("echo hello > output.txt"));
+        assert!(super::contains_shell_metacharacters("grep pattern < input.txt"));
+        assert!(super::contains_shell_metacharacters("cmd1; cmd2"));
+        assert!(super::contains_shell_metacharacters("echo hello &"));
+        
+        // Command substitution and variables
+        assert!(super::contains_shell_metacharacters("echo $(date)"));
+        assert!(super::contains_shell_metacharacters("ls `which cargo`"));
+        assert!(super::contains_shell_metacharacters("echo $HOME"));
+        
+        // Newlines and conditionals
+        assert!(super::contains_shell_metacharacters("ls\nwc -l"));
+        assert!(super::contains_shell_metacharacters("cargo build && cargo test"));
+        assert!(super::contains_shell_metacharacters("cmd1 || cmd2"));
+        
+        // Grouping and globbing (newly added)
+        assert!(super::contains_shell_metacharacters("(cd dir && ls)"));
+        assert!(super::contains_shell_metacharacters("ls *.rs"));
+        assert!(super::contains_shell_metacharacters("rm file.?"));
+        assert!(super::contains_shell_metacharacters("ls [a-z]*"));
+        assert!(super::contains_shell_metacharacters("echo {a,b,c}"));
+        assert!(super::contains_shell_metacharacters("cd ~/projects"));
+        assert!(super::contains_shell_metacharacters("VAR=value cmd"));
+        assert!(super::contains_shell_metacharacters("echo hello # comment"));
+    }
+
+    #[test]
+    fn test_contains_shell_metacharacters_respects_quoting() {
+        // Pipes inside quotes should not trigger detection
+        assert!(!super::contains_shell_metacharacters("echo \"hello | world\""));
+        assert!(!super::contains_shell_metacharacters("echo 'hello | world'"));
+        
+        // Backslash escape should not trigger detection
+        assert!(!super::contains_shell_metacharacters("echo \\|"));
+        
+        // But unquoted metacharacters should still be detected
+        assert!(super::contains_shell_metacharacters("echo \"hello\" | wc -l"));
+    }
+
+    #[test]
+    fn test_contains_shell_metacharacters_handles_newlines() {
+        assert!(super::contains_shell_metacharacters("cmd1\ncmd2"));
+        assert!(!super::contains_shell_metacharacters("echo 'line1\nline2'"));
+    }
+
+    #[test]
+    fn test_tokenize_command_string_preserves_shell_commands() {
+        // Commands with shell metacharacters should be returned as single strings
+        let result = super::tokenize_command_string("ls -R | head -n 200", None);
+        assert!(result.is_ok());
+        let parts = result.unwrap();
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0], "ls -R | head -n 200");
+
+        // Commands without metacharacters should be tokenized normally
+        let result = super::tokenize_command_string("cargo build --release", None);
+        assert!(result.is_ok());
+        let parts = result.unwrap();
+        assert_eq!(parts, vec!["cargo", "build", "--release"]);
     }
 }

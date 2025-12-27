@@ -76,6 +76,7 @@ const LOOP_THROTTLE_MAX_MS: u64 = 500;
 
 use super::plan::PlanManager;
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
+use crate::ui::search::fuzzy_match;
 use std::collections::VecDeque;
 use std::sync::RwLock;
 use std::time::SystemTime;
@@ -1437,10 +1438,9 @@ impl ToolRegistry {
     }
 
     pub async fn timeout_category_for(&mut self, name: &str) -> ToolTimeoutCategory {
-        let canonical_name = canonical_tool_name(name);
-        let tool_name = canonical_name.as_ref();
-
-        if let Some(registration) = self.inventory.registration_for(tool_name) {
+        // Resolve alias through registration lookup
+        let registration_opt = self.inventory.registration_for(name);
+        if let Some(registration) = registration_opt {
             return if registration.uses_pty() {
                 ToolTimeoutCategory::Pty
             } else {
@@ -1452,7 +1452,7 @@ impl ToolRegistry {
             if self.has_mcp_tool(stripped).await {
                 return ToolTimeoutCategory::Mcp;
             }
-        } else if self.find_mcp_provider(tool_name).is_some() || self.has_mcp_tool(tool_name).await
+        } else if self.find_mcp_provider(name).is_some() || self.has_mcp_tool(name).await
         {
             return ToolTimeoutCategory::Mcp;
         }
@@ -1492,8 +1492,12 @@ impl ToolRegistry {
         };
 
         // Get canonical tool name for summarizer lookup
-        let canonical_name = canonical_tool_name(name);
-        let tool_name = canonical_name.as_ref();
+        // Resolve alias through registration lookup first
+        let tool_name = if let Some(registration) = self.inventory.registration_for(name) {
+            registration.name()
+        } else {
+            name // Fallback to original name if not found
+        };
 
         // Check if we have a summarizer for this tool
         match tool_name {
@@ -1631,16 +1635,25 @@ impl ToolRegistry {
     /// Reference-taking version of execute_tool to avoid cloning by callers
     /// that already have access to an existing `Value`.
     pub async fn execute_tool_ref(&mut self, name: &str, args: &Value) -> Result<Value> {
-        let canonical_name = canonical_tool_name(name);
-        let tool_name = canonical_name.as_ref();
-        // Cache tool_name as owned String once for all record usage
-        let tool_name_owned = tool_name.to_string();
+        // Look up the canonical tool name by trying to resolve the alias
+        // The inventory's registration_for() handles alias resolution
+        let (tool_name, tool_name_owned, display_name) = 
+            if let Some(registration) = self.inventory.registration_for(name) {
+                let canonical = registration.name().to_string();
+                let display = if canonical == name {
+                    canonical.clone()
+                } else {
+                    format!("{} (alias for {})", name, canonical)
+                };
+                (canonical.clone(), canonical.clone(), display)
+            } else {
+                // If not found in registration, use the name as-is (for potential MCP tools or error handling)
+                let tool_name_owned = name.to_string();
+                let display_name = tool_name_owned.clone();
+                (tool_name_owned.clone(), tool_name_owned, display_name)
+            };
+        
         let requested_name = name.to_string();
-        let display_name = if tool_name == name {
-            tool_name_owned.clone()
-        } else {
-            format!("{} (alias for {})", name, tool_name)
-        };
 
         // Clone args once at the start for error recording paths (clone only here)
         let args_for_recording = args.clone();
@@ -1652,7 +1665,7 @@ impl ToolRegistry {
         if matches!(
             context_snapshot.plan_phase,
             Some(PlanPhase::Understanding | PlanPhase::Design | PlanPhase::Review)
-        ) && !planning_allowed(tool_name)
+        ) && !planning_allowed(&tool_name)
         {
             return Err(anyhow!(
                 "Planning mode active (phase: {}). Only planning-allowed tools ({}) are permitted until phase is final_plan.",
@@ -1666,7 +1679,7 @@ impl ToolRegistry {
         }
 
         // Validate arguments against schema if available
-        if let Some(registration) = self.inventory.registration_for(tool_name)
+        if let Some(registration) = self.inventory.registration_for(&tool_name)
             && let Some(schema) = registration.parameter_schema()
             && let Err(errors) = jsonschema::validate(schema, args)
         {
@@ -1677,7 +1690,7 @@ impl ToolRegistry {
             ));
         }
 
-        let timeout_category = self.timeout_category_for(tool_name).await;
+        let timeout_category = self.timeout_category_for(&tool_name).await;
 
         if let Some(backoff) = self.should_circuit_break(timeout_category) {
             warn!(
@@ -1781,8 +1794,8 @@ impl ToolRegistry {
         }
 
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
-        let loop_limit = self.execution_history.loop_limit_for(tool_name);
-        let (is_loop, repeat_count, _) = self.execution_history.detect_loop(tool_name, args);
+        let loop_limit = self.execution_history.loop_limit_for(&tool_name);
+        let (is_loop, repeat_count, _) = self.execution_history.detect_loop(&tool_name, args);
         if is_loop && repeat_count > 1 {
             let delay_ms = (25 * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
             if delay_ms > 0 {
@@ -1843,7 +1856,7 @@ impl ToolRegistry {
         }
 
         if self.policy_gateway.has_full_auto_allowlist()
-            && !self.policy_gateway.is_allowed_in_full_auto(tool_name)
+            && !self.policy_gateway.is_allowed_in_full_auto(&tool_name)
         {
             let _error = ToolExecutionError::new(
                 tool_name_owned.clone(),
@@ -1877,14 +1890,14 @@ impl ToolRegistry {
             .context("tool denied by full-auto allowlist"));
         }
 
-        let skip_policy_prompt = self.policy_gateway.take_preapproved(tool_name);
+        let skip_policy_prompt = self.policy_gateway.take_preapproved(&tool_name);
 
         let decision = if skip_policy_prompt {
             ToolExecutionDecision::Allowed
         } else {
             // In TUI mode, permission should have been collected via ensure_tool_permission().
             // If not preapproved, check policy as fallback.
-            self.policy_gateway.should_execute_tool(tool_name).await?
+            self.policy_gateway.should_execute_tool(&tool_name).await?
         };
 
         if !decision.is_allowed() {
@@ -1922,7 +1935,7 @@ impl ToolRegistry {
 
         let args = match self
             .policy_gateway
-            .apply_policy_constraints(tool_name, args)
+            .apply_policy_constraints(&tool_name, args)
         {
             Ok(processed_args) => processed_args,
             Err(err) => {
@@ -1962,7 +1975,7 @@ impl ToolRegistry {
         let mut mcp_lookup_error: Option<anyhow::Error> = None;
 
         // Check if it's a standard tool first
-        if let Some(registration) = self.inventory.registration_for(tool_name) {
+        if let Some(registration) = self.inventory.registration_for(&tool_name) {
             needs_pty = registration.uses_pty();
             tool_exists = true;
         }
@@ -2162,7 +2175,7 @@ impl ToolRegistry {
                 let mcp_name =
                     mcp_tool_name.expect("mcp_tool_name should be set when is_mcp_tool is true");
                 self.execute_mcp_tool(&mcp_name, args).await
-            } else if let Some(registration) = self.inventory.registration_for(tool_name) {
+            } else if let Some(registration) = self.inventory.registration_for(&tool_name) {
                 // Log deprecation warning if tool is deprecated
                 if registration.is_deprecated() {
                     if let Some(msg) = registration.deprecation_message() {
@@ -2182,10 +2195,45 @@ impl ToolRegistry {
                 }
             } else {
                 // This should theoretically never happen since we checked tool_exists above
+                // Generate helpful error message with available tools
+                let available_tools = self.inventory.available_tools();
+                let mut tool_names = available_tools.to_vec();
+                tool_names.extend(self.inventory.registered_aliases());
+                tool_names.sort_unstable();
+                let available_tool_list = tool_names.join(", ");
+                
+                let error_msg = if tool_name != requested_name {
+                    // An alias was attempted but didn't resolve to an actual tool
+                    format!(
+                        "Tool '{}' (registered alias for '{}') not found in registry. \
+                        Available tools: {}. \
+                        Note: Tool aliases are defined during tool registration.",
+                        requested_name, tool_name, available_tool_list
+                    )
+                } else {
+                    // Find similar tools using fuzzy matching
+                    let similar_tools: Vec<String> = tool_names.iter()
+                        .filter(|tool| fuzzy_match(&requested_name, tool))
+                        .take(3)  // Limit to 3 suggestions
+                        .cloned()
+                        .collect();
+                    
+                    let suggestion = if !similar_tools.is_empty() {
+                        format!(" Did you mean: {}?", similar_tools.join(", "))
+                    } else {
+                        String::new()
+                    };
+                    
+                    format!(
+                        "Tool '{}' not found in registry. Available tools: {}.{}",
+                        display_name, available_tool_list, suggestion
+                    )
+                };
+
                 let error = ToolExecutionError::new(
                     tool_name_owned.clone(),
                     ToolErrorType::ToolNotFound,
-                    "Tool not found in registry".to_string(),
+                    error_msg.clone(),
                 );
 
                 self.execution_history
@@ -2195,7 +2243,7 @@ impl ToolRegistry {
                         is_mcp_tool,
                         mcp_provider.clone(),
                         args_for_recording.clone(),
-                        "Tool not found in registry".to_string(),
+                        error_msg,
                         context_snapshot.clone(),
                         timeout_category_label.clone(),
                         base_timeout_ms,
@@ -2602,6 +2650,7 @@ impl ToolRegistry {
             }
         };
 
+        // Check full-auto allowlist first (aligned with policy_gateway behavior)
         if self.policy_gateway.has_full_auto_allowlist()
             && !self.policy_gateway.is_allowed_in_full_auto(full_name)
         {
@@ -2616,14 +2665,22 @@ impl ToolRegistry {
                 }
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
-                    // Always prompt for explicit "prompt" policy, even in full-auto mode
-                    // This ensures human-in-the-loop approval for sensitive operations
-                    Ok(ToolPermissionDecision::Prompt)
+                    // In full-auto mode with Prompt policy, we still need to check
+                    // if this specific tool is in the allowlist
+                    if self.policy_gateway.has_full_auto_allowlist() {
+                        // If we reach here, the tool is in the allowlist (checked above)
+                        // but has Prompt policy, so we should prompt
+                        Ok(ToolPermissionDecision::Prompt)
+                    } else {
+                        // In normal mode with Prompt policy, default to prompt for MCP tools
+                        // (MCP tools don't have risk metadata for auto-approval like built-in tools)
+                        Ok(ToolPermissionDecision::Prompt)
+                    }
                 }
             }
         } else {
             // Policy manager not available - default to prompt for safety
-            // instead of auto-approving
+            // This aligns with MCP tools' default_permission of Prompt
             Ok(ToolPermissionDecision::Prompt)
         }
     }

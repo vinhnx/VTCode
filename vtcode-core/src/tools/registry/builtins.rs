@@ -54,7 +54,8 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             CapabilityLevel::Bash,
             true,
             ToolRegistry::run_pty_cmd_executor,
-        ),
+        )
+        .with_aliases(["exec_pty_cmd", "exec"]),
         // PTY session tools: hidden from LLM (internal use only)
         ToolRegistration::new(
             tools::CREATE_PTY_SESSION,
@@ -183,7 +184,8 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             CapabilityLevel::Bash,
             false,
             ToolRegistry::execute_code_executor,
-        ),
+        )
+        .with_aliases(["exec_code"]),
         // Merged agent diagnostics tool
         ToolRegistration::new(
             tools::AGENT_INFO,

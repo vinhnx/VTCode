@@ -2,12 +2,20 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tracing::info;
 
 use super::registration::{ToolMetadata, ToolRegistration};
 use crate::tools::command::CommandTool;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::plan::PlanManager;
+
+/// Metrics for alias usage tracking
+#[derive(Debug, Default, Clone)]
+pub struct AliasMetrics {
+    /// Map of alias name to (canonical_name, usage_count)
+    pub usage: HashMap<String, (String, u64)>,
+}
 
 #[derive(Debug, Clone)]
 struct ToolCacheEntry {
@@ -20,11 +28,14 @@ struct ToolCacheEntry {
 pub(super) struct ToolInventory {
     workspace_root: PathBuf,
     tools: HashMap<String, ToolCacheEntry>,
+    /// Map of lowercase alias name to canonical tool name
     aliases: HashMap<String, String>,
     frequently_used: HashSet<String>,
     last_cache_cleanup: Instant,
     /// HP-7: Maintain sorted list of tool names for O(1) available_tools() calls
     sorted_names: Vec<String>,
+    /// Track alias usage for analytics and debugging
+    alias_metrics: Arc<std::sync::Mutex<AliasMetrics>>,
 
     // Common tools that are used frequently
     file_ops_tool: FileOpsTool,
@@ -49,12 +60,25 @@ impl ToolInventory {
             frequently_used: HashSet::new(),
             last_cache_cleanup: Instant::now(),
             sorted_names: Vec::new(),
+            alias_metrics: Arc::new(std::sync::Mutex::new(AliasMetrics::default())),
             file_ops_tool,
             command_tool,
             grep_search,
             plan_manager,
         }
     }
+
+    /// Get alias usage metrics for debugging and analytics
+    pub fn alias_metrics(&self) -> AliasMetrics {
+        self.alias_metrics.lock().unwrap().clone()
+    }
+
+    /// Reset alias metrics
+    pub fn reset_alias_metrics(&self) {
+        *self.alias_metrics.lock().unwrap() = AliasMetrics::default();
+    }
+
+
 
     pub fn workspace_root(&self) -> &PathBuf {
         &self.workspace_root
@@ -108,24 +132,74 @@ impl ToolInventory {
             self.frequently_used.insert(name.clone());
         }
 
-        // Register aliases associated with this tool
-        for alias in aliases {
-            let target = name.clone();
-            // Avoid overwriting existing alias mappings
-            self.aliases.entry(alias).or_insert_with(|| target);
+        // Register case-insensitive aliases and track metrics
+        if !aliases.is_empty() {
+            self.register_aliases(&name, &aliases);
         }
 
         // Clean up old cache entries if needed
         self.cleanup_cache_if_needed();
 
+        // Validate aliases don't conflict with existing tool names (case-insensitive)
+        for alias in &aliases {
+            if self.tools.contains_key(alias) {
+                return Err(anyhow::anyhow!(
+                    "Cannot register alias '{}' for tool '{}': alias conflicts with existing tool name",
+                    alias, name
+                ));
+            }
+            // Also check if it conflicts with an existing alias
+            let alias_lower = alias.to_ascii_lowercase();
+            if self.aliases.contains_key(&alias_lower) {
+                let existing_target = self.aliases.get(&alias_lower).unwrap();
+                return Err(anyhow::anyhow!(
+                    "Cannot register alias '{}' for tool '{}': alias already exists for tool '{}'",
+                    alias, name, existing_target
+                ));
+            }
+        }
+
         Ok(())
     }
 
+    /// Register case-insensitive aliases for a tool and track metrics
+    fn register_aliases(&mut self, tool_name: &str, aliases: &[String]) {
+        for alias in aliases {
+            let alias_lower = alias.to_ascii_lowercase();
+            let target = tool_name.to_owned();
+            
+            // Store lowercase -> canonical mapping
+            self.aliases.insert(alias_lower.clone(), target.clone());
+            
+            // Initialize metrics for this alias
+            self.alias_metrics.lock().unwrap().usage.insert(
+                alias_lower,
+                (target, 0)
+            );
+        }
+    }
+
     pub fn registration_for(&mut self, name: &str) -> Option<&mut ToolRegistration> {
-        // Check if name exists directly or resolve via alias
+        // Check if name exists directly or resolve via case-insensitive alias
+        let name_lower = name.to_ascii_lowercase();
         let resolved_name = if self.tools.contains_key(name) {
             name.to_owned()
-        } else if let Some(aliased) = self.aliases.get(name) {
+        } else if let Some(aliased) = self.aliases.get(&name_lower) {
+            // Track alias usage metrics
+            if let Some((canonical, count)) = self.alias_metrics
+                .lock()
+                .unwrap()
+                .usage
+                .get_mut(&name_lower)
+            {
+                *count += 1;
+                info!(
+                    alias = %name,
+                    canonical = %canonical,
+                    count = *count,
+                    "Tool alias resolved and usage tracked"
+                );
+            }
             aliased.clone()
         } else {
             return None;
@@ -146,7 +220,8 @@ impl ToolInventory {
     }
 
     pub fn has_tool(&self, name: &str) -> bool {
-        self.tools.contains_key(name) || self.aliases.contains_key(name)
+        let name_lower = name.to_ascii_lowercase();
+        self.tools.contains_key(name) || self.aliases.contains_key(&name_lower)
     }
 
     pub fn available_tools(&self) -> &[String] {
@@ -156,6 +231,11 @@ impl ToolInventory {
 
     pub fn registered_aliases(&self) -> Vec<String> {
         self.aliases.keys().cloned().collect()
+    }
+
+    /// Get all registered aliases with their canonical targets
+    pub fn all_aliases(&self) -> Vec<(String, String)> {
+        self.aliases.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 
     /// Snapshot registration metadata for policy/catalog synchronization
