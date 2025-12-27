@@ -5,9 +5,9 @@ use anyhow::Result;
 use std::collections::HashMap;
 use vtcode_core::utils::ansi::MessageStyle;
 
+use crate::agent::runloop::context::TrimPhase;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
-use crate::agent::runloop::context::TrimPhase;
 
 /// Validates that a textual tool call has required arguments before execution.
 /// Returns `None` if valid, or `Some(missing_params)` if validation fails.
@@ -60,7 +60,7 @@ pub(crate) async fn run_proactive_guards(
         let mut decision_ledger = ctx.decision_ledger.write().await;
         decision_ledger.auto_prune();
     }
-    
+
     // Acquire pruning ledger lock for the duration of the guards check
     // This allows us to record any proactive trims that occur
     let mut pruning_ledger = ctx.pruning_ledger.write().await;
@@ -89,10 +89,11 @@ pub(crate) async fn run_proactive_guards(
             PreRequestAction::TrimLight => {
                 tracing::debug!("Pre-request: light trim triggered at WARNING threshold");
                 // Use adaptive_trim to handle recording to ledger automatically
-                let outcome = ctx.context_manager
+                let outcome = ctx
+                    .context_manager
                     .adaptive_trim(ctx.working_history, Some(&mut *pruning_ledger), step_count)
                     .await?;
-                
+
                 if matches!(outcome.phase, TrimPhase::SummarizationRecommended) {
                     drop(pruning_ledger); // Release lock before summarization
                     attempt_context_summarization(ctx).await?;
@@ -101,7 +102,8 @@ pub(crate) async fn run_proactive_guards(
             }
             PreRequestAction::TrimAggressive => {
                 tracing::debug!("Pre-request: aggressive trim triggered at ALERT threshold");
-                let outcome = ctx.context_manager
+                let outcome = ctx
+                    .context_manager
                     .adaptive_trim(ctx.working_history, Some(&mut *pruning_ledger), step_count)
                     .await?;
 
@@ -116,24 +118,26 @@ pub(crate) async fn run_proactive_guards(
                     MessageStyle::Info,
                     "[!] Context usage critical - applying aggressive trim",
                 )?;
-                
+
                 let outcome = ctx
                     .context_manager
                     .adaptive_trim(ctx.working_history, Some(&mut *pruning_ledger), step_count)
                     .await?;
 
                 if matches!(outcome.phase, TrimPhase::SummarizationRecommended) {
-                     drop(pruning_ledger); // Release lock before summarization
-                     attempt_context_summarization(ctx).await?;
-                     pruning_ledger = ctx.pruning_ledger.write().await; // Re-acquire
-                     // Continue loop to re-check budget
-                     continue;
+                    drop(pruning_ledger); // Release lock before summarization
+                    attempt_context_summarization(ctx).await?;
+                    pruning_ledger = ctx.pruning_ledger.write().await; // Re-acquire
+                    // Continue loop to re-check budget
+                    continue;
                 }
 
                 if !outcome.is_trimmed() {
                     // If blocked and cannot trim further, we must fail
                     if matches!(pre_check, PreRequestAction::Block) {
-                        anyhow::bail!("Context budget exceeded and could not be resolved by trimming. Please summarize or reset the conversation.");
+                        anyhow::bail!(
+                            "Context budget exceeded and could not be resolved by trimming. Please summarize or reset the conversation."
+                        );
                     }
                     break;
                 }
@@ -144,7 +148,9 @@ pub(crate) async fn run_proactive_guards(
     // Final safety check: ensure we didn't exit the loop (e.g. max checks) while still in a dangerous state
     let final_check = ctx.context_manager.pre_request_check(ctx.working_history);
     if matches!(final_check, PreRequestAction::Block) {
-        anyhow::bail!("Context budget critical/overflow after trimming attempts. Conversation unsafe to proceed.");
+        anyhow::bail!(
+            "Context budget critical/overflow after trimming attempts. Conversation unsafe to proceed."
+        );
     }
 
     Ok(())
@@ -209,7 +215,9 @@ pub(crate) async fn handle_turn_balancer(
 
 async fn attempt_context_summarization(ctx: &mut TurnProcessingContext<'_>) -> Result<()> {
     // 1. Get indices of summarizable messages
-    let indices = ctx.context_manager.get_summarizable_indices(ctx.working_history);
+    let indices = ctx
+        .context_manager
+        .get_summarizable_indices(ctx.working_history);
     if indices.is_empty() {
         return Ok(());
     }
@@ -245,10 +253,10 @@ async fn attempt_context_summarization(ctx: &mut TurnProcessingContext<'_>) -> R
         // Not enough contiguous messages to justify summarization overhead
         return Ok(());
     }
-    
+
     let start_idx = *best_range.start();
     let end_idx = *best_range.end(); // inclusive
-    
+
     // Safety check
     if end_idx >= ctx.working_history.len() {
         return Ok(());
@@ -256,32 +264,40 @@ async fn attempt_context_summarization(ctx: &mut TurnProcessingContext<'_>) -> R
 
     ctx.renderer.line(
         MessageStyle::Info,
-        &format!("[Context] Summarizing {} messages (indices {}-{}) to save tokens...", best_count, start_idx, end_idx)
+        &format!(
+            "[Context] Summarizing {} messages (indices {}-{}) to save tokens...",
+            best_count, start_idx, end_idx
+        ),
     )?;
 
     // 3. Create summarization request
     let messages_to_summarize = &ctx.working_history[start_idx..=end_idx];
-    
+
     let mut summary_request_messages = Vec::new();
     summary_request_messages.push(uni::Message::system("You are a helpful assistant. Please summarize the following conversation segment concisely, preserving key technical details, decisions, and tool outputs. Output ONLY the summary.".to_string()));
     summary_request_messages.extend_from_slice(messages_to_summarize);
-    
+
     let request = uni::LLMRequest {
         messages: summary_request_messages,
-        model: ctx.vt_cfg.as_ref().map(|c| c.agent.small_model.model.clone()).unwrap_or_else(|| "claude-3-5-sonnet-latest".to_string()),
+        model: ctx
+            .vt_cfg
+            .as_ref()
+            .map(|c| c.agent.small_model.model.clone())
+            .unwrap_or_else(|| "claude-3-5-sonnet-latest".to_string()),
         max_tokens: Some(1000),
         temperature: Some(0.3),
         ..Default::default()
     };
-    
+
     // 4. Execute LLM call
     let response = ctx.provider_client.generate(request).await;
-    
+
     match response {
         Ok(resp) => {
             if let Some(text) = resp.content {
-                let summary_msg = uni::Message::system(format!("(Summary of previous interaction: {})", text));
-                
+                let summary_msg =
+                    uni::Message::system(format!("(Summary of previous interaction: {})", text));
+
                 // 5. Replace messages
                 // Remove the range
                 // Determine how many to remove
@@ -289,17 +305,20 @@ async fn attempt_context_summarization(ctx: &mut TurnProcessingContext<'_>) -> R
                 ctx.working_history.drain(start_idx..=end_idx);
                 // Insert summary
                 ctx.working_history.insert(start_idx, summary_msg);
-                
+
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    &format!("[Context] Successfully summarized {} messages.", remove_count)
+                    &format!(
+                        "[Context] Successfully summarized {} messages.",
+                        remove_count
+                    ),
                 )?;
             }
         }
         Err(e) => {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!("[Context] Summarization failed: {}", e)
+                &format!("[Context] Summarization failed: {}", e),
             )?;
         }
     }

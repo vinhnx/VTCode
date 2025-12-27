@@ -20,7 +20,6 @@ use vtcode_core::core::{
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::tree_sitter::TreeSitterAnalyzer;
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreRequestAction {
     /// Normal operation, proceed with request
@@ -180,7 +179,6 @@ impl ContextManager {
     /// Pre-request check that returns recommended action before making an LLM request.
     /// This enables proactive trimming BEFORE tokens are consumed rather than reacting afterwards.
     pub(crate) fn pre_request_check(&self, history: &[uni::Message]) -> PreRequestAction {
-
         if !self.token_budget_enabled {
             return PreRequestAction::Proceed;
         }
@@ -351,9 +349,13 @@ impl ContextManager {
 
             // Return removed count and whether summarization is recommended
             // Threshold: if > 10% of messages are summarizable or > 5 messages
-            let summarization_recommended = total_summarizable > 5 || (total_summarizable > 0 && total_summarizable >= history.len() / 10);
+            let summarization_recommended = total_summarizable > 5
+                || (total_summarizable > 0 && total_summarizable >= history.len() / 10);
 
-            (before_len.saturating_sub(history.len()), summarization_recommended)
+            (
+                before_len.saturating_sub(history.len()),
+                summarization_recommended,
+            )
         } else {
             (0, false)
         }
@@ -376,16 +378,16 @@ impl ContextManager {
         }
 
         let mut pruning_ledger = pruning_ledger;
-        
+
         // Use live calculation from history to ensure consistency with pre_request_check
         // stored token_budget might be lagging if history was just modified
         let estimated = self.estimate_request_tokens(history);
         let max_tokens = self.trim_config.max_tokens;
-        
+
         let usage = if max_tokens > 0 {
-             estimated as f64 / max_tokens as f64
+            estimated as f64 / max_tokens as f64
         } else {
-             0.0
+            0.0
         };
 
         let mut outcome = ContextTrimOutcome::default();
@@ -393,7 +395,11 @@ impl ContextManager {
         // Alert/compact: semantic prune first, then enforce window
         if usage >= vtcode_core::core::token_constants::THRESHOLD_ALERT {
             let before_len = history.len();
-            let (_semantic_removed, summarize_rec) = self.prune_with_semantic_priority(history, pruning_ledger.as_deref_mut(), turn_number);
+            let (_semantic_removed, summarize_rec) = self.prune_with_semantic_priority(
+                history,
+                pruning_ledger.as_deref_mut(),
+                turn_number,
+            );
             let window_outcome = self.enforce_context_window(history);
             let after_semantic = before_len.saturating_sub(history.len());
             let total_removed = after_semantic.saturating_add(window_outcome.removed_messages);
@@ -573,12 +579,12 @@ impl ContextManager {
     }
 
     pub(crate) fn get_summarizable_indices(&mut self, history: &[uni::Message]) -> Vec<usize> {
-         if !self.trim_config.semantic_compression {
-             return Vec::new();
-         }
+        if !self.trim_config.semantic_compression {
+            return Vec::new();
+        }
 
-         let mut metrics_list = Vec::new();
-         for (idx, msg) in history.iter().enumerate() {
+        let mut metrics_list = Vec::new();
+        for (idx, msg) in history.iter().enumerate() {
             if matches!(msg.role, uni::MessageRole::System) {
                 continue;
             }
@@ -615,14 +621,18 @@ impl ContextManager {
                 age_in_turns: (history.len().saturating_sub(idx + 1)) as u32,
                 message_type,
             });
-         }
+        }
 
-         let decisions = self.context_pruner.prune_messages(&metrics_list);
-         
-         metrics_list.iter()
+        let decisions = self.context_pruner.prune_messages(&metrics_list);
+
+        metrics_list
+            .iter()
             .enumerate()
             .filter_map(|(_i, metrics)| {
-                if matches!(decisions.get(&metrics.index), Some(RetentionDecision::Summarizable)) {
+                if matches!(
+                    decisions.get(&metrics.index),
+                    Some(RetentionDecision::Summarizable)
+                ) {
                     Some(metrics.index)
                 } else {
                     None

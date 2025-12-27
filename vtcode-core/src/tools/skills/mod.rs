@@ -1,8 +1,8 @@
+use crate::llm::provider::ToolDefinition;
+use crate::skills::file_references::FileReferenceValidator;
 use crate::skills::types::Skill;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::traits::Tool;
-use crate::llm::provider::ToolDefinition;
-use crate::skills::file_references::FileReferenceValidator;
 use anyhow::Context;
 use async_trait::async_trait;
 use serde_json::Value;
@@ -21,8 +21,16 @@ pub struct LoadSkillTool {
 }
 
 impl LoadSkillTool {
-    pub fn new(skills: SkillMap, dormant_tools: HashMap<String, ToolDefinition>, active_tools: Option<ToolDefList>) -> Self {
-        Self { skills, dormant_tools, active_tools }
+    pub fn new(
+        skills: SkillMap,
+        dormant_tools: HashMap<String, ToolDefinition>,
+        active_tools: Option<ToolDefList>,
+    ) -> Self {
+        Self {
+            skills,
+            dormant_tools,
+            active_tools,
+        }
     }
 }
 
@@ -66,7 +74,10 @@ impl Tool for LoadSkillTool {
             if let Some(def) = self.dormant_tools.get(name) {
                 let mut active = tool_list.write().await;
                 // Check if already active to avoid duplicates
-                if !active.iter().any(|t| t.function_name() == def.function_name()) {
+                if !active
+                    .iter()
+                    .any(|t| t.function_name() == def.function_name())
+                {
                     active.push(def.clone());
                     activation_status = "Associated tools activated and added to context.";
                 } else {
@@ -82,12 +93,15 @@ impl Tool for LoadSkillTool {
                 // Determine path to SKILL.md
                 let skill_file = skill.path.join("SKILL.md");
                 if skill_file.exists() {
-                     match std::fs::read_to_string(&skill_file) {
+                    match std::fs::read_to_string(&skill_file) {
                         Ok(content) => content,
-                        Err(e) => format!("Error reading skill file: {}", e)
+                        Err(e) => format!("Error reading skill file: {}", e),
                     }
                 } else {
-                    format!("No detailed instructions available for {}. {}", name, activation_status)
+                    format!(
+                        "No detailed instructions available for {}. {}",
+                        name, activation_status
+                    )
                 }
             } else {
                 skill.instructions.clone()
@@ -96,7 +110,10 @@ impl Tool for LoadSkillTool {
             // Discover Level 3 Resources
             let validator = FileReferenceValidator::new(skill.path.clone());
             let resources = validator.list_valid_references();
-            let resource_names: Vec<String> = resources.iter().map(|p| p.to_string_lossy().to_string()).collect();
+            let resource_names: Vec<String> = resources
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect();
 
             Ok(serde_json::json!({
                 "name": skill.name(),
@@ -155,7 +172,7 @@ impl Tool for ListSkillsTool {
                 "description": skill.description(),
             }));
         }
-        
+
         // Sort by name for stable output
         skill_list.sort_by(|a, b| {
             let na = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
@@ -227,12 +244,18 @@ impl Tool for LoadSkillResourceTool {
             // Security check: must be relative and within skill path
             let full_path = skill.path.join(resource_path);
             if !full_path.exists() {
-                return Err(anyhow::anyhow!("Resource '{}' not found in skill '{}'", resource_path, skill_name));
+                return Err(anyhow::anyhow!(
+                    "Resource '{}' not found in skill '{}'",
+                    resource_path,
+                    skill_name
+                ));
             }
 
             // Read content (limit size for safety)
-            let content = std::fs::read_to_string(&full_path)
-                .context(format!("Failed to read resource at {}", full_path.display()))?;
+            let content = std::fs::read_to_string(&full_path).context(format!(
+                "Failed to read resource at {}",
+                full_path.display()
+            ))?;
 
             Ok(serde_json::json!({
                 "skill_name": skill_name,

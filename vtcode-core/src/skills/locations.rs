@@ -394,7 +394,10 @@ impl SkillLocations {
 
                         let discovered_skill = DiscoveredSkill {
                             location_type: location.location_type,
-                            skill_context: SkillContext::MetadataOnly(manifest.clone(), path.clone()),
+                            skill_context: SkillContext::MetadataOnly(
+                                manifest.clone(),
+                                path.clone(),
+                            ),
                             skill_path: path.clone(),
                             skill_name: skill_name.clone(),
                         };

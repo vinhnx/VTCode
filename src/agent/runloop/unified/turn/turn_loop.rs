@@ -142,8 +142,13 @@ pub async fn run_turn_loop(
         }
 
         // Prepare turn processing context
-        let mut turn_processing_ctx =
-            TurnProcessingContext::new(&mut ctx, &mut working_history, provider_client, vt_cfg, full_auto);
+        let mut turn_processing_ctx = TurnProcessingContext::new(
+            &mut ctx,
+            &mut working_history,
+            provider_client,
+            vt_cfg,
+            full_auto,
+        );
 
         // === PROACTIVE GUARDS (HP-2: Pre-request checks) ===
         // === PROACTIVE GUARDS (HP-2: Pre-request checks) ===

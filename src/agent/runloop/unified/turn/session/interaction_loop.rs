@@ -15,6 +15,7 @@ use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::slash_commands::handle_slash_command;
+use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
@@ -23,9 +24,8 @@ use crate::agent::runloop::unified::inline_events::{
 use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::ActivePalette;
-use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
-use crate::agent::runloop::tool_output::render_tool_output;
+use crate::agent::runloop::welcome::SessionBootstrap;
 
 use crate::agent::runloop::unified::turn::session::slash_commands;
 use crate::agent::runloop::unified::turn::session::slash_commands::{
@@ -48,21 +48,21 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub tool_registry: &'a mut vtcode_core::tools::registry::ToolRegistry,
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
     pub conversation_history: &'a mut Vec<uni::Message>,
-    pub decision_ledger: &'a Arc<
-        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
-    >,
-    pub pruning_ledger: &'a Arc<
-        tokio::sync::RwLock<vtcode_core::core::pruning_decisions::PruningDecisionLedger>,
-    >,
+    pub decision_ledger:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    pub pruning_ledger:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::core::pruning_decisions::PruningDecisionLedger>>,
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
     pub session_stats: &'a mut SessionStats,
     pub mcp_panel_state: &'a mut crate::agent::runloop::mcp_events::McpPanelState,
-    pub linked_directories: &'a mut Vec<crate::agent::runloop::unified::workspace_links::LinkedDirectory>,
+    pub linked_directories:
+        &'a mut Vec<crate::agent::runloop::unified::workspace_links::LinkedDirectory>,
     pub lifecycle_hooks: Option<&'a crate::hooks::lifecycle::LifecycleHookEngine>,
     pub full_auto: bool,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
-    pub loaded_skills: &'a Arc<tokio::sync::RwLock<std::collections::HashMap<String, vtcode_core::skills::Skill>>>,
+    pub loaded_skills:
+        &'a Arc<tokio::sync::RwLock<std::collections::HashMap<String, vtcode_core::skills::Skill>>>,
     pub custom_prompts: &'a vtcode_core::prompts::CustomPromptRegistry,
     pub token_budget_enabled: bool,
     pub trim_config: &'a crate::agent::runloop::context::ContextTrimConfig,
@@ -250,8 +250,7 @@ pub(crate) async fn run_interaction_loop(
         }
 
         if let Some(next_placeholder) = ctx.follow_up_placeholder.take() {
-            ctx.handle
-                .set_placeholder(Some(next_placeholder.clone()));
+            ctx.handle.set_placeholder(Some(next_placeholder.clone()));
             *ctx.default_placeholder = Some(next_placeholder);
         }
 
@@ -342,8 +341,7 @@ pub(crate) async fn run_interaction_loop(
                     }
                     for context in outcome.additional_context {
                         if !context.trim().is_empty() {
-                            ctx.conversation_history
-                                .push(uni::Message::system(context));
+                            ctx.conversation_history.push(uni::Message::system(context));
                         }
                     }
                 }
@@ -436,23 +434,20 @@ pub(crate) async fn run_interaction_loop(
             }
 
             ctx.handle.clear_input();
-            ctx.handle
-                .set_placeholder(ctx.default_placeholder.clone());
+            ctx.handle.set_placeholder(ctx.default_placeholder.clone());
             continue;
         }
 
-        let processed_content = match vtcode_core::utils::at_pattern::parse_at_patterns(
-            input,
-            &ctx.config.workspace,
-        )
-        .await
-        {
-            Ok(content) => content,
-            Err(e) => {
-                tracing::warn!("Failed to parse @ patterns: {}", e);
-                uni::MessageContent::text(input.to_string())
-            }
-        };
+        let processed_content =
+            match vtcode_core::utils::at_pattern::parse_at_patterns(input, &ctx.config.workspace)
+                .await
+            {
+                Ok(content) => content,
+                Err(e) => {
+                    tracing::warn!("Failed to parse @ patterns: {}", e);
+                    uni::MessageContent::text(input.to_string())
+                }
+            };
 
         let refined_content = match &processed_content {
             uni::MessageContent::Text(text) => {
@@ -546,7 +541,9 @@ async fn handle_mcp_updates(
                                 .await?;
                             }
                             Err(err) => {
-                                tracing::warn!("Failed to enumerate MCP tools after refresh: {err}");
+                                tracing::warn!(
+                                    "Failed to enumerate MCP tools after refresh: {err}"
+                                );
                             }
                         }
 

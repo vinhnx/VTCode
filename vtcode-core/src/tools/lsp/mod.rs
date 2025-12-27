@@ -96,8 +96,7 @@ impl LspTool {
         let canonical = full_path.canonicalize().unwrap_or(full_path);
         let url = url::Url::from_file_path(canonical)
             .map_err(|_| anyhow::anyhow!("Invalid file path"))?;
-        url
-            .to_string()
+        url.to_string()
             .parse()
             .map_err(|_| anyhow::anyhow!("Failed to parse Uri"))
     }
