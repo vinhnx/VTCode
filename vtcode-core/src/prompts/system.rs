@@ -63,7 +63,14 @@ Stuck twice on same error? Change approach.
 Non-trivial tasks: exploration → design → final_plan
 - **understanding**: Read 5-10 files, find patterns
 - **design**: 3-7 steps with file:line refs, dependencies, complexity
-- **final_plan**: Verify paths, order, acceptance criteria"#;
+- **final_plan**: Verify paths, order, acceptance criteria
+
+## Skills System
+VTCode uses a tiered on-demand capability system:
+- **Agent Skills**: High-level specialized modules with `Instructions`.
+- **System Utilities**: Low-level CLI bridges (lazy-loaded).
+- **Workflow**: Discover via `list_skills` → Activate via `load_skill` → Read resources via `load_skill_resource` (if needed).
+- **Preference**: Use `AgentSkill` for complex multi-step workflows over raw CLI commands."#;
 
 pub fn default_system_prompt() -> &'static str {
     DEFAULT_SYSTEM_PROMPT
@@ -86,6 +93,7 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VTCode, an expert coding assistan
 - Use JSON named params for tools.
 - Read files before editing.
 - Verify changes with tests or `cargo check`.
+- Use `list_skills` and `load_skill` to discover and activate capabilities.
 - Be direct; avoid filler or code dumping.
 - Stop when done."#;
 
@@ -95,6 +103,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 
 - Act and verify. Direct tone.
 - Scoped: list_files, grep_file (≤5), read_file (max_tokens).
+- Use `list_skills` and `load_skill` for more capabilities.
 - WORKSPACE_DIR only. Confirm destructive ops."#;
 
 /// SPECIALIZED PROMPT (v4.3 - Complex refactoring with streamlined guidance)
@@ -119,7 +128,13 @@ scope → plan → execute → verify → document
 ## Planning (update_plan)
 1. **understanding**: Read 5-10 files, find similar implementations, document file:line refs
 2. **design**: 3-7 steps with paths, dependencies, complexity (simple/medium/complex)
-3. **final_plan**: Verify paths, order, acceptance criteria before implementation"#;
+3. **final_plan**: Verify paths, order, acceptance criteria before implementation
+
+## Skills System
+- **Tiered Action Space**: Specialized modules (`AgentSkill`) vs raw tools (`SystemUtility`).
+- **Discovery**: Use `list_skills` with `query` to find capabilities.
+- **On-Demand**: Activate via `load_skill` to register tools and see the full `SKILL.md` instructions.
+- **Efficiency**: Only load what you need. `SystemUtility` tools are summarized in prompt until activated."#;
 
 /// System instruction configuration
 #[derive(Debug, Clone)]
@@ -167,17 +182,12 @@ pub async fn read_agent_guidelines(project_root: &Path) -> Option<String> {
 ///
 /// ## Skills Integration Note
 ///
-/// Skills are **NOT** included in the system prompt. Per the Agent Skills specification,
-/// skills are loaded on-demand via `/skills load <name>` commands and registered as
-/// callable tools in the tool registry. This approach:
+/// VTCode implements a **Tiered Disclosure** model for skills:
+/// 1. **Discovery Profile**: Names and descriptions are available via `list_skills` and summarized in the system prompt.
+/// 2. **Active Instructions**: Full `SKILL.md` content is loaded via `load_skill` and then persists in the incremental system prompt.
+/// 3. **Deep Resources**: Level 3 assets (scripts, technical refs) are lazy-loaded via `load_skill_resource`.
 ///
-/// - Follows the on-demand loading model (spec requirement)
-/// - Avoids bloating system prompt with unused skills metadata
-/// - Allows progressive disclosure of skill instructions
-/// - Enables dynamic skill loading/unloading during sessions
-///
-/// When a skill is loaded, it becomes available as a tool that the LLM can invoke
-/// via tool use, rather than being shown as text in the prompt.
+/// This approach follows the Agent Skills spec while optimizing context usage.
 ///
 /// # Arguments
 /// * `project_root` - Root directory of the project

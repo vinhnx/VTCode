@@ -17,6 +17,7 @@ type ToolDefList = Arc<RwLock<Vec<ToolDefinition>>>;
 /// Tool to load skill instructions on demand (Progressive Disclosure)
 pub struct LoadSkillTool {
     skills: SkillMap,
+    active_skills: SkillMap,
     dormant_tools: HashMap<String, ToolDefinition>,
     dormant_adapters: Arc<RwLock<HashMap<String, Arc<dyn Tool>>>>,
     active_tools: Option<ToolDefList>,
@@ -26,6 +27,7 @@ pub struct LoadSkillTool {
 impl LoadSkillTool {
     pub fn new(
         skills: SkillMap,
+        active_skills: SkillMap,
         dormant_tools: HashMap<String, ToolDefinition>,
         dormant_adapters: Arc<RwLock<HashMap<String, Arc<dyn Tool>>>>,
         active_tools: Option<ToolDefList>,
@@ -33,6 +35,7 @@ impl LoadSkillTool {
     ) -> Self {
         Self {
             skills,
+            active_skills,
             dormant_tools,
             dormant_adapters,
             active_tools,
@@ -138,7 +141,7 @@ impl Tool for LoadSkillTool {
                 .map(|p| p.to_string_lossy().to_string())
                 .collect();
 
-            Ok(serde_json::json!({
+            let mut response = serde_json::json!({
                 "name": skill.name(),
                 "variety": skill.variety,
                 "instructions": instructions,
@@ -147,7 +150,12 @@ impl Tool for LoadSkillTool {
                 "resources": resource_names,
                 "path": skill.path,
                 "description": skill.description()
-            }))
+            });
+
+            // Add to active skills registry
+            self.active_skills.write().await.insert(name.to_string(), skill.clone());
+
+            Ok(response)
         } else {
             Err(anyhow::anyhow!("Skill '{}' not found", name))
         }

@@ -320,12 +320,25 @@ pub(crate) async fn initialize_session(
                 }
             }
 
+            // Initialize skill maps early for resume logic
+            let library_skills_map = Arc::new(RwLock::new(discovered_skills_map));
+            let active_skills_map = Arc::new(RwLock::new(HashMap::new()));
+
             // On Resume: Auto-activate skills that were active in the previous session
             if let Some(resume_session) = resume {
                 let previously_active = &resume_session.snapshot.metadata.loaded_skills;
                 if !previously_active.is_empty() {
                     let mut tools_guard = tools.write().await;
+                    let mut active_skills = active_skills_map.write().await;
+                    let library_skills = library_skills_map.read().await;
+
                     for skill_name in previously_active {
+                        // Restore to active registry
+                        if let Some(skill) = library_skills.get(skill_name) {
+                            active_skills.insert(skill_name.clone(), skill.clone());
+                        }
+
+                        // Restore associated tools
                         if let Some(def) = dormant_tool_defs.get(skill_name) {
                             if !tools_guard
                                 .iter()
@@ -373,8 +386,6 @@ pub(crate) async fn initialize_session(
     )
     .await;
 
-    // Wrap skills map early for tool registration
-    let shared_skills_map = Arc::new(RwLock::new(discovered_skills_map));
 
     // Initialize MCP panel state
     let mcp_panel_state = if let Some(cfg) = vt_cfg {
@@ -429,7 +440,7 @@ pub(crate) async fn initialize_session(
 
     // 1. ListSkills
     let list_skills_tool = vtcode_core::tools::skills::ListSkillsTool::new(
-        shared_skills_map.clone(),
+        library_skills_map.clone(),
         dormant_tool_defs.clone(),
     );
     let list_skills_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
@@ -455,7 +466,7 @@ pub(crate) async fn initialize_session(
 
     // 2. LoadSkillResource
     let load_resource_tool =
-        vtcode_core::tools::skills::LoadSkillResourceTool::new(shared_skills_map.clone());
+        vtcode_core::tools::skills::LoadSkillResourceTool::new(library_skills_map.clone());
     let load_resource_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
         "load_skill_resource",
         vtcode_core::config::types::CapabilityLevel::Basic,
@@ -487,7 +498,8 @@ pub(crate) async fn initialize_session(
     let dormant_adapters = Arc::new(RwLock::new(dormant_adapters_map));
 
     let load_skill_tool = vtcode_core::tools::skills::LoadSkillTool::new(
-        shared_skills_map.clone(),
+        library_skills_map.clone(),
+        active_skills_map.clone(),
         dormant_tool_defs,
         dormant_adapters,
         Some(tools.clone()),
@@ -571,7 +583,7 @@ pub(crate) async fn initialize_session(
         tool_permission_cache,
         search_metrics,
         custom_prompts,
-        loaded_skills: shared_skills_map,
+        loaded_skills: active_skills_map,
         approval_recorder,
         safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
     })

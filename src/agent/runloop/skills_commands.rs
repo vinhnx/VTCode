@@ -18,7 +18,7 @@ pub enum SkillCommandAction {
     /// Show help
     Help,
     /// List available skills
-    List,
+    List { query: Option<String> },
     /// Create a new skill from template
     Create { name: String, path: Option<PathBuf> },
     /// Validate a skill
@@ -41,7 +41,7 @@ pub enum SkillCommandOutcome {
     /// Command handled, display info
     Handled { message: String },
     /// Load skill into session
-    LoadSkill { skill: Skill },
+    LoadSkill { skill: Skill, message: String },
     /// Unload skill from session
     UnloadSkill { name: String },
     /// Execute skill with input
@@ -65,8 +65,8 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
         return Ok(Some(SkillCommandAction::Help));
     }
 
-    if rest == "list" {
-        return Ok(Some(SkillCommandAction::List));
+    if rest == "list" || rest == "--list" || rest == "-l" {
+        return Ok(Some(SkillCommandAction::List { query: None }));
     }
 
     if rest == "help" || rest == "--help" || rest == "-h" {
@@ -75,7 +75,16 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
 
     let parts: Vec<&str> = rest.splitn(2, ' ').collect();
     match parts[0] {
-        "create" => {
+        "search" | "--search" | "-s" => {
+            if let Some(query) = parts.get(1) {
+                Ok(Some(SkillCommandAction::List {
+                    query: Some(query.to_string()),
+                }))
+            } else {
+                Err(anyhow::anyhow!("search: query string required"))
+            }
+        }
+        "create" | "--create" => {
             if let Some(name) = parts.get(1) {
                 // Optional: parse --path flag
                 let mut name_str = name.to_string();
@@ -99,7 +108,7 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                 Err(anyhow::anyhow!("create: skill name required"))
             }
         }
-        "validate" => {
+        "validate" | "--validate" => {
             if let Some(name) = parts.get(1) {
                 Ok(Some(SkillCommandAction::Validate {
                     name: name.to_string(),
@@ -108,7 +117,7 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                 Err(anyhow::anyhow!("validate: skill name required"))
             }
         }
-        "package" => {
+        "package" | "--package" => {
             if let Some(name) = parts.get(1) {
                 Ok(Some(SkillCommandAction::Package {
                     name: name.to_string(),
@@ -117,7 +126,7 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                 Err(anyhow::anyhow!("package: skill name required"))
             }
         }
-        "load" => {
+        "load" | "--load" => {
             if let Some(name) = parts.get(1) {
                 Ok(Some(SkillCommandAction::Load {
                     name: name.to_string(),
@@ -126,7 +135,7 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                 Err(anyhow::anyhow!("load: skill name required"))
             }
         }
-        "unload" => {
+        "unload" | "--unload" => {
             if let Some(name) = parts.get(1) {
                 Ok(Some(SkillCommandAction::Unload {
                     name: name.to_string(),
@@ -135,7 +144,7 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                 Err(anyhow::anyhow!("unload: skill name required"))
             }
         }
-        "use" => {
+        "use" | "--use" | "exec" | "--exec" => {
             if let Some(rest_str) = parts.get(1) {
                 let use_parts: Vec<&str> = rest_str.splitn(2, ' ').collect();
                 if let Some(name) = use_parts.first() {
@@ -151,7 +160,7 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                 Err(anyhow::anyhow!("use: skill name required"))
             }
         }
-        "info" => {
+        "info" | "--info" | "show" | "--show" => {
             if let Some(name) = parts.get(1) {
                 Ok(Some(SkillCommandAction::Info {
                     name: name.to_string(),
@@ -177,25 +186,21 @@ pub async fn handle_skill_command(
             let help_text = r#"Skills Commands:
 
 Authoring:
-  /skills create <name> [--path <dir>]  Create new skill from template
-  /skills validate <name>                Validate skill structure
-  /skills package <name>                 Package skill to .skill file
+  /skills --create <name> [--path <dir>]   Create new skill from template
+  /skills --validate <name>               Validate skill structure
+  /skills --package <name>                Package skill to .skill file
 
 Management:
-  /skills list                           List available skills
-  /skills load <name>                    Load skill into session
-  /skills unload <name>                  Unload skill from session
-  /skills info <name>                    Show skill details
-  /skills use <name> <input>             Execute skill with input
+  /skills --list [query]                  List available skills (optional search)
+  /skills --search <query>                Search for skills by name/description
+  /skills --load <name>                   Load skill into session
+  /skills --unload <name>                 Unload skill from session
+  /skills --info <name>                   Show skill details
+  /skills --use <name> <input>            Execute skill with input
 
-Examples:
-  /skills create pdf-analyzer
-  /skills validate pdf-analyzer
-  /skills package pdf-analyzer
-  /skills load pdf-analyzer
-  /skills info pdf-analyzer
+Shortcuts:
+  /skills -l [query], /skills -s <query>, /skills -h"#;
 
-For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
 
             Ok(SkillCommandOutcome::Handled {
                 message: help_text.to_string(),
@@ -253,13 +258,23 @@ For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
             }
         }
 
-        SkillCommandAction::List => {
+        SkillCommandAction::List { query } => {
             let discovery_result = loader.discover_all_skills().await?;
-            let skills = discovery_result.traditional_skills;
+            let mut skills = discovery_result.traditional_skills;
+
+            // Apply query filter if provided
+            if let Some(q) = query {
+                let q_lower = q.to_lowercase();
+                skills.retain(|ctx| {
+                    let manifest = ctx.manifest();
+                    manifest.name.to_lowercase().contains(&q_lower)
+                        || manifest.description.to_lowercase().contains(&q_lower)
+                });
+            }
 
             if skills.is_empty() {
                 return Ok(SkillCommandOutcome::Handled {
-                    message: "No skills found. Create one with: /skills create <path>".to_string(),
+                    message: "No matching skills found.".to_string(),
                 });
             }
 
@@ -271,8 +286,9 @@ For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
                     manifest.name, manifest.description
                 ));
             }
-            output
-                .push_str("\nUse `/skills info <name>` for details, `/skills load <name>` to load");
+            output.push_str(
+                "\nUse `/skills --info <name>` for details, `/skills --load <name>` to load",
+            );
 
             Ok(SkillCommandOutcome::Handled { message: output })
         }
@@ -280,7 +296,11 @@ For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
         SkillCommandAction::Load { name } => match loader.get_skill(&name).await {
             Ok(enhanced_skill) => match enhanced_skill {
                 vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-                    Ok(SkillCommandOutcome::LoadSkill { skill })
+                    let message = format!(
+                        "✓ Loaded skill: {}\nℹ Instructions are now [ACTIVE] and persistent in the agent prompt.",
+                        skill.name()
+                    );
+                    Ok(SkillCommandOutcome::LoadSkill { skill, message })
                 }
                 vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
                     Ok(SkillCommandOutcome::Error {
@@ -401,14 +421,25 @@ mod tests {
 
     #[test]
     fn test_parse_skills_list() {
-        let result = parse_skill_command("/skills list").unwrap();
-        assert!(matches!(result, Some(SkillCommandAction::List)));
+        let result = parse_skill_command("/skills --list").unwrap();
+        assert!(matches!(result, Some(SkillCommandAction::List { query: None })));
+    }
+
+    #[test]
+    fn test_parse_skills_search() {
+        let result = parse_skill_command("/skills --search rust").unwrap();
+        match result {
+            Some(SkillCommandAction::List { query: Some(q) }) => {
+                assert_eq!(q, "rust");
+            }
+            _ => panic!("Expected List with query variant"),
+        }
     }
 
     #[test]
     fn test_parse_skills_list_default() {
         let result = parse_skill_command("/skills").unwrap();
-        assert!(matches!(result, Some(SkillCommandAction::List)));
+        assert!(matches!(result, Some(SkillCommandAction::Help)));
     }
 
     #[test]

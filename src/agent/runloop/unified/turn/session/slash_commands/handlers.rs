@@ -946,7 +946,7 @@ pub async fn handle_manage_skills(
             ctx.renderer.line(MessageStyle::Info, &message)?;
             Ok(SlashCommandControl::Continue)
         }
-        SkillCommandOutcome::LoadSkill { skill } => {
+        SkillCommandOutcome::LoadSkill { skill, message } => {
             let skill_name = skill.name().to_string();
 
             // Create adapter and register as tool in tool registry
@@ -974,7 +974,7 @@ pub async fn handle_manage_skills(
 
             ctx.renderer.line(
                 MessageStyle::Info,
-                &format!("Loaded skill: {} - {}", skill.name(), skill.description()),
+                &message,
             )?;
             Ok(SlashCommandControl::Continue)
         }
