@@ -75,9 +75,7 @@ use self::transcript::TranscriptReflowCache;
 #[cfg(test)]
 use super::types::InlineHeaderHighlight;
 use crate::prompts::CustomPromptRegistry;
-#[cfg(test)]
-use crate::tools::PlanSummary;
-use crate::tools::TaskPlan;
+// use crate::tools::TaskPlan; // Commented out - plan functionality removed
 use crate::ui::tui::log::{LogEntry, highlight_log_entry};
 
 const USER_PREFIX: &str = "";
@@ -115,7 +113,6 @@ pub struct Session {
     // --- UI State ---
     slash_palette: SlashPalette,
     navigation_state: ListState,
-    plan_navigation_state: ListState,
     input_enabled: bool,
     cursor_visible: bool,
     pub(crate) needs_redraw: bool,
@@ -147,7 +144,6 @@ pub struct Session {
     pub(crate) modal: Option<ModalState>,
     wizard_modal: Option<WizardModalState>,
     pub(crate) show_timeline_pane: bool,
-    pub(crate) plan: TaskPlan,
     line_revision_counter: u64,
     /// Track the first line that needs reflow/update to avoid O(N) scans
     first_dirty_line: Option<usize>,
@@ -246,8 +242,7 @@ impl Session {
 
             // --- UI State ---
             slash_palette: SlashPalette::new(),
-            navigation_state: ListState::default(),
-            plan_navigation_state: ListState::default(),
+            navigation_state: ListState::default(), // Kept for backward compatibility
             input_enabled: true,
             cursor_visible: true,
             needs_redraw: true,
@@ -276,7 +271,6 @@ impl Session {
             modal: None,
             wizard_modal: None,
             show_timeline_pane,
-            plan: TaskPlan::default(),
             header_rows: initial_header_rows,
             line_revision_counter: 0,
             first_dirty_line: None,
@@ -472,9 +466,6 @@ impl Session {
             InlineCommand::SetQueuedInputs { entries } => {
                 self.set_queued_inputs_entries(entries);
                 self.mark_dirty();
-            }
-            InlineCommand::SetPlan { plan } => {
-                self.set_plan(plan);
             }
             InlineCommand::SetCursorVisible(value) => {
                 self.cursor_visible = value;
@@ -727,11 +718,6 @@ impl Session {
         render::render_prompt_palette(self, frame, viewport);
     }
 
-    fn set_plan(&mut self, plan: TaskPlan) {
-        self.plan = plan;
-        self.mark_dirty();
-    }
-
     pub fn apply_view_rows(&mut self, rows: u16) {
         let resolved = rows.max(2);
         if self.view_rows != resolved {
@@ -781,7 +767,6 @@ impl Session {
 mod tests {
     use super::prompt_palette;
     use super::*;
-    use crate::tools::{PlanStep, StepStatus};
     use crate::ui::tui::style::ratatui_style_from_inline;
     use crate::ui::tui::{InlineSegment, InlineTextStyle, InlineTheme};
     use chrono::Utc;
@@ -1859,45 +1844,6 @@ mod tests {
             .expect("failed to render session with timeline");
 
         assert_eq!(session.navigation_state.selected(), Some(1));
-    }
-
-    #[test]
-    fn plan_sidebar_highlights_active_step() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
-
-        let mut plan = TaskPlan::default();
-        plan.steps = vec![
-            PlanStep {
-                step: "Outline approach".to_string(),
-                status: StepStatus::InProgress,
-            },
-            PlanStep {
-                step: "Implement fix".to_string(),
-                status: StepStatus::Pending,
-            },
-        ];
-        plan.summary = PlanSummary::from_steps(&plan.steps);
-        plan.version = 1;
-        plan.updated_at = Utc::now();
-
-        session.handle_command(InlineCommand::SetPlan { plan });
-
-        let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
-        let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
-        terminal
-            .draw(|frame| session.render(frame))
-            .expect("failed to render session with plan sidebar");
-
-        assert!(session.should_show_plan());
-        assert_eq!(session.navigation_state.selected(), Some(0));
-
-        let title: String = session
-            .timeline_block_title()
-            .spans
-            .iter()
-            .map(|span| span.content.clone().into_owned())
-            .collect();
-        assert!(title.contains(ui::NAVIGATION_BLOCK_TITLE));
     }
 
     #[test]

@@ -377,13 +377,11 @@ guideline_highlight_limit = 3
 usage_tips = [
     "Describe your current coding goal or ask for a quick status overview.",
     "Reference AGENTS.md guidelines when proposing changes.",
-    "Draft or refresh your TODO list with update_plan before coding.",
     "Prefer asking for targeted file reads or diffs before editing.",
 ]
 
 # List of recommended actions shown during onboarding
 recommended_actions = [
-    "Start the session by outlining a 3–6 step TODO plan via update_plan.",
     "Review the highlighted guidelines and share the task you want to tackle.",
     "Ask for a workspace tour if you need more context.",
 ]
@@ -449,7 +447,6 @@ resize_pty_session = "allow"      # Resize PTY sessions (no confirmation needed)
 run_pty_cmd = "prompt"            # Run commands in PTY (requires confirmation)
 
 send_pty_input = "prompt"         # Send input to PTY (requires confirmation)
-update_plan = "allow"             # Update task plans (no confirmation needed)
 write_file = "allow"              # Write files (no confirmation needed)
 
 # Command security - Define safe and dangerous command patterns

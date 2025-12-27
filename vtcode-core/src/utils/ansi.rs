@@ -1,5 +1,4 @@
 use crate::config::loader::SyntaxHighlightingConfig;
-use crate::tools::TaskPlan;
 use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
 use crate::ui::theme;
 use crate::ui::tui::{
@@ -110,12 +109,6 @@ impl AnsiRenderer {
             sink.set_highlight_config(config.clone());
         }
         self.highlight_config = config;
-    }
-
-    pub fn set_plan(&mut self, plan: &TaskPlan) {
-        if let Some(sink) = &mut self.sink {
-            sink.set_plan(plan.clone());
-        }
     }
 
     /// Check if the last line rendered was empty
@@ -767,10 +760,6 @@ impl InlineSink {
     #[allow(dead_code)]
     fn clear_screen(&self) {
         self.handle.clear_screen();
-    }
-
-    fn set_plan(&self, plan: TaskPlan) {
-        self.handle.set_plan(plan);
     }
 
     fn resolve_fallback_style(&self, style: Style) -> InlineTextStyle {

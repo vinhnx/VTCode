@@ -550,61 +550,14 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                 "required": ["url", "prompt"]
             }),
         },
-
-        // ============================================================
-        // PLANNING
-        // ============================================================
-        FunctionDeclaration {
-            name: tools::UPDATE_PLAN.to_string(),
-            description: "Update task plan. Phases: understanding, design (3-7 steps with file:line), review, final_plan.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "explanation": {"type": "string", "description": "Plan summary or context from exploration phase - what files were read, what patterns were found"},
-                    "phase": {
-                        "type": "string",
-                        "description": "Current planning phase: understanding (gather context, read 5-10 files), design (propose approaches with file paths), review (validate plan quality), or final_plan (ready to execute - requires file paths and proper breakdown)",
-                        "enum": ["understanding", "design", "review", "final_plan"]
-                    },
-                    "plan": {
-                        "type": "array",
-                        "description": "Plan steps with status. Required: 3-7 steps for quality. Include specific file paths with line numbers (e.g., 'Update validate_plan in plan.rs:395-417'). Order by dependencies. One in_progress at a time.",
-                        "items": {
-                            "anyOf": [
-                                {
-                                    "type": "string",
-                                    "description": "Simple step description"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "step": {"type": "string", "description": "Step description with file path and line numbers"},
-                                        "status": {
-                                            "type": "string",
-                                            "enum": ["pending", "in_progress", "completed"],
-                                            "description": "Step status (defaults to 'pending' if not specified)"
-                                        }
-                                    },
-                                    "required": ["step"],
-                                    "additionalProperties": false
-                                }
-                            ]
-                        }
-                    }
-                },
-                "required": ["plan"],
-                "additionalProperties": false
-            }),
-        },
     ]
 }
 
 pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
-    build_function_declarations_with_mode(true, ToolDocumentationMode::default())
+    build_function_declarations_with_mode(ToolDocumentationMode::default())
 }
 
 pub fn build_function_declarations_with_mode(
-    todo_planning_enabled: bool,
     tool_documentation_mode: ToolDocumentationMode,
 ) -> Vec<FunctionDeclaration> {
     // Select base declarations based on documentation mode
@@ -640,11 +593,6 @@ pub fn build_function_declarations_with_mode(
         apply_metadata_overrides(&mut declarations);
     }
 
-    // Remove update_plan tool if todo planning is disabled
-    if !todo_planning_enabled {
-        declarations.retain(|decl| decl.name != tools::UPDATE_PLAN);
-    }
-
     declarations
 }
 
@@ -662,14 +610,10 @@ pub fn build_function_declarations_for_level(level: CapabilityLevel) -> Vec<Func
     declarations
         .into_iter()
         .filter(|fd| {
-            tool_capabilities
-                .get(fd.name.as_str())
-                .map(|required| level >= *required)
-                .unwrap_or(false)
+            tool_capabilities.get(fd.name.as_str()).map(|required| level >= *required).unwrap_or(false)
         })
         .collect()
-}
-
+    }
 fn apply_metadata_overrides(declarations: &mut [FunctionDeclaration]) {
     let registrations = builtin_tool_registrations();
     let mut metadata_by_name: HashMap<&str, _> = registrations
@@ -686,7 +630,6 @@ fn apply_metadata_overrides(declarations: &mut [FunctionDeclaration]) {
         }
     }
 }
-
 fn annotate_parameters(params: &mut Value, meta: &super::registration::ToolMetadata) {
     let Value::Object(map) = params else {
         return;

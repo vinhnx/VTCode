@@ -165,7 +165,9 @@ impl<'a> Widget for FilePaletteWidget<'a> {
                 list_items.push(ListItem::new(Line::from(Span::styled(
                     format!(
                         "  ... ({} more items)",
-                        self.palette.total_items().saturating_sub(self.palette.current_page_number() * 20)
+                        self.palette
+                            .total_items()
+                            .saturating_sub(self.palette.current_page_number() * 20)
                     ),
                     continuation_style,
                 ))));
@@ -385,7 +387,9 @@ impl<'a> Widget for PromptPaletteWidget<'a> {
                 list_items.push(ListItem::new(Line::from(Span::styled(
                     format!(
                         "  ... ({} more items)",
-                        self.palette.total_items().saturating_sub(self.palette.current_page_number() * 20)
+                        self.palette
+                            .total_items()
+                            .saturating_sub(self.palette.current_page_number() * 20)
                     ),
                     continuation_style,
                 ))));

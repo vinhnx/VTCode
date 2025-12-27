@@ -201,7 +201,6 @@ Management:
 Shortcuts:
   /skills -l [query], /skills -s <query>, /skills -h"#;
 
-
             Ok(SkillCommandOutcome::Handled {
                 message: help_text.to_string(),
             })
@@ -422,7 +421,10 @@ mod tests {
     #[test]
     fn test_parse_skills_list() {
         let result = parse_skill_command("/skills --list").unwrap();
-        assert!(matches!(result, Some(SkillCommandAction::List { query: None })));
+        assert!(matches!(
+            result,
+            Some(SkillCommandAction::List { query: None })
+        ));
     }
 
     #[test]

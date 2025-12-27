@@ -69,12 +69,7 @@ pub(crate) async fn display_session_status(
         )?;
     }
 
-    display_token_cost(
-        renderer,
-        ctx.max_tokens,
-        "  ",
-    )
-    .await?;
+    display_token_cost(renderer, ctx.max_tokens, "  ").await?;
 
     Ok(())
 }

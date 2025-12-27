@@ -48,16 +48,9 @@ pub(crate) async fn execute_llm_request(
     }
     // HP-1: Eliminate unnecessary clone - work directly on working_history
 
-    let current_plan = ctx.tool_registry.current_plan();
-    let plan_opt = if current_plan.summary.total_steps > 0 {
-        Some(current_plan)
-    } else {
-        None
-    };
-
     let system_prompt = ctx
         .context_manager
-        .build_system_prompt(ctx.working_history, step_count, plan_opt, ctx.full_auto)
+        .build_system_prompt(ctx.working_history, step_count, ctx.full_auto)
         .await?;
 
     let use_streaming = provider_client.supports_streaming();
@@ -209,7 +202,6 @@ pub(crate) async fn execute_llm_request(
 // are now imported from crate::agent::runloop::unified::reasoning
 
 /// Result of processing a single turn
-
 /// Dispatch the appropriate response handler based on the processing result.
 pub(crate) async fn handle_turn_processing_result(
     ctx: &mut TurnProcessingContext<'_>,

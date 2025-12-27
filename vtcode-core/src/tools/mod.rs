@@ -146,7 +146,6 @@ pub mod lsp;
 pub mod mcp;
 pub mod names;
 pub mod path_env;
-pub mod plan;
 pub mod plugins;
 pub mod pty;
 pub mod rate_limiter;
@@ -199,10 +198,6 @@ pub use fallback_chains::{
 };
 pub use grep_file::GrepSearchManager;
 pub use lsp::LspTool;
-pub use plan::{
-    PlanCompletionState, PlanManager, PlanPhase, PlanStep, PlanSummary, PlanUpdateResult,
-    StepStatus, TaskPlan, UpdatePlanArgs,
-};
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
 pub use registry::{

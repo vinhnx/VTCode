@@ -53,7 +53,6 @@ pub struct AgentConfig {
     #[serde(default = "default_enable_split_tool_results")]
     pub enable_split_tool_results: bool,
 
-    /// Enable TODO planning workflow integrations (update_plan tool, onboarding hints)
     #[serde(default = "default_todo_planning_mode")]
     pub todo_planning_mode: bool,
 
@@ -569,12 +568,10 @@ const fn default_guideline_highlight_limit() -> usize {
 const DEFAULT_USAGE_TIPS: &[&str] = &[
     "Describe your current coding goal or ask for a quick status overview.",
     "Reference AGENTS.md guidelines when proposing changes.",
-    "Draft or refresh your TODO list with update_plan before coding.",
     "Prefer asking for targeted file reads or diffs before editing.",
 ];
 
 const DEFAULT_RECOMMENDED_ACTIONS: &[&str] = &[
-    "Start the session by outlining a 3–6 step TODO plan via update_plan.",
     "Review the highlighted guidelines and share the task you want to tackle.",
     "Ask for a workspace tour if you need more context.",
 ];

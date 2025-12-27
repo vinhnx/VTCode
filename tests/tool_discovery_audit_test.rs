@@ -45,10 +45,7 @@ fn audit_tool_system_completeness() {
         // Code execution
         ("execute_code", "Execute Python or JavaScript code"),
         // Planning and introspection
-        ("update_plan", "Update internal task plan"),
         ("search_tools", "Search available tools"),
-        ("debug_agent", "Debug agent state"),
-        ("analyze_agent", "Analyze agent behavior"),
         // Web operations
         ("web_fetch", "Fetch web page content"),
     ];
@@ -73,10 +70,7 @@ fn audit_tool_system_completeness() {
         "send_pty_input",
         "close_pty_session",
         "execute_code",
-        "update_plan",
         "search_tools",
-        "debug_agent",
-        "analyze_agent",
         "web_fetch",
     ]);
 
@@ -224,7 +218,7 @@ fn audit_tool_categories() {
         ("Planning & Meta", vec!["update_plan", "search_tools"]),
         (
             "Diagnostic & Introspection",
-            vec!["debug_agent", "analyze_agent"],
+            vec!["agent_info"],
         ),
         ("Network", vec!["web_fetch"]),
     ]);
@@ -269,8 +263,6 @@ fn audit_tool_policy_distribution() {
                 "close_pty_session",
                 "update_plan",
                 "search_tools",
-                "debug_agent",
-                "analyze_agent",
             ],
         ),
         (
@@ -342,10 +334,6 @@ fn audit_acp_tool_selection_reasoning() {
         ),
         ("execute_code", "Security risk in editor integration"),
         ("web_fetch", "Network access restricted in editor"),
-        ("update_plan", "Internal agent feature, not for editor"),
-        ("search_tools", "Metadata query, local-only use"),
-        ("debug_agent", "Internal diagnostics"),
-        ("analyze_agent", "Internal diagnostics"),
         (
             "*_pty_session",
             "Terminal operations not available in editor",

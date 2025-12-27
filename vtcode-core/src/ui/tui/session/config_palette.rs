@@ -124,7 +124,7 @@ impl ConfigPalette {
             kind: ConfigItemKind::Bool {
                 value: config.agent.todo_planning_mode,
             },
-            description: Some("Enable update_plan tool and onboarding hints".to_string()),
+            description: Some("Enable TODO planning mode and onboarding hints".to_string()),
         });
 
         // Checkpointing

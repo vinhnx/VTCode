@@ -20,11 +20,8 @@ use crate::tools::names::canonical_tool_name;
 const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::GREP_FILE,
     tools::LIST_FILES,
-    tools::UPDATE_PLAN,
     tools::READ_FILE,
     tools::SEARCH_TOOLS,
-    tools::DEBUG_AGENT,
-    tools::ANALYZE_AGENT,
     tools::LIST_PTY_SESSIONS,
     tools::READ_PTY_SESSION,
     tools::RUN_PTY_CMD,

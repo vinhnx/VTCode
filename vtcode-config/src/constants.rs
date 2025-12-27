@@ -964,14 +964,11 @@ pub mod tools {
     pub const CREATE_FILE: &str = "create_file";
     pub const APPLY_PATCH: &str = "apply_patch";
     pub const SEARCH_REPLACE: &str = "search_replace";
-    pub const UPDATE_PLAN: &str = "update_plan";
     pub const WEB_FETCH: &str = "web_fetch";
     pub const SEARCH_TOOLS: &str = "search_tools";
     pub const SKILL: &str = "skill";
     pub const EXECUTE_CODE: &str = "execute_code";
 
-    pub const DEBUG_AGENT: &str = "debug_agent";
-    pub const ANALYZE_AGENT: &str = "analyze_agent";
     pub const CODE_INTELLIGENCE: &str = "code_intelligence";
 
     /// Merged agent diagnostics tool (replaces debug_agent + analyze_agent)

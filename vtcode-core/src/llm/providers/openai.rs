@@ -2418,8 +2418,14 @@ mod tests {
         // Direct tool names (not harmony namespaces) pass through
         // Alias resolution happens in canonical_tool_name()
         assert_eq!(OpenAIProvider::parse_harmony_tool_name("exec"), "exec");
-        assert_eq!(OpenAIProvider::parse_harmony_tool_name("exec_pty_cmd"), "exec_pty_cmd");
-        assert_eq!(OpenAIProvider::parse_harmony_tool_name("exec_code"), "exec_code");
+        assert_eq!(
+            OpenAIProvider::parse_harmony_tool_name("exec_pty_cmd"),
+            "exec_pty_cmd"
+        );
+        assert_eq!(
+            OpenAIProvider::parse_harmony_tool_name("exec_code"),
+            "exec_code"
+        );
         assert_eq!(OpenAIProvider::parse_harmony_tool_name("simple"), "simple");
     }
 
@@ -3745,4 +3751,3 @@ mod caching_tests {
         assert!(json.get("prompt_cache_retention").is_none());
     }
 }
-

@@ -17,8 +17,6 @@ const MAX_GREP_RESULTS: usize = 5;
 const MAX_LIST_FILES: usize = 50;
 const MAX_FILE_LINES: usize = 2000;
 
-
-
 /// Checkpoint state for context reset
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointState {
@@ -36,6 +34,7 @@ pub struct ContextOptimizer {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct ContextEntry {
     tool_name: String,
     result: Value,
@@ -50,18 +49,14 @@ impl ContextOptimizer {
     }
 
     /// Get current budget utilization (0.0 to 1.0)
-    pub async fn utilization(&self) -> f64 {
+    pub fn utilization(&self) -> f64 {
         0.0
     }
 
     /// Check if checkpoint is needed
-    pub async fn needs_checkpoint(&self) -> bool {
-        self.utilization().await >= 0.85
+    pub fn needs_checkpoint(&self) -> bool {
+        self.utilization() >= 0.85
     }
-
-
-
-
 
     /// Optimize tool result based on tool type and budget
     pub async fn optimize_result(&mut self, tool_name: &str, result: Value) -> Value {
@@ -208,8 +203,6 @@ impl ContextOptimizer {
         result
     }
 
-
-
     /// Optimize command output - extract errors only
     /// Optimize command output - extract errors only
     fn optimize_command_result(&self, result: Value) -> Value {
@@ -240,8 +233,6 @@ impl ContextOptimizer {
         }
         result
     }
-
-
 
     /// Create checkpoint state for context reset
     pub async fn create_checkpoint(
@@ -346,8 +337,6 @@ mod tests {
         assert!(optimized["note"].is_string());
     }
 
-
-
     #[tokio::test]
     async fn test_checkpoint_save_load() {
         let optimizer = ContextOptimizer::new();
@@ -377,8 +366,4 @@ mod tests {
         // Cleanup
         let _ = std::fs::remove_file(&temp_path);
     }
-
-
-
-
 }

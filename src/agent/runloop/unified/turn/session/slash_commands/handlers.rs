@@ -41,12 +41,12 @@ use crate::agent::runloop::unified::turn::config_modal::load_config_modal_conten
 
 pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     // Prefer tool-driven diagnostics when available
-    if ctx.tool_registry.has_tool(tools_consts::DEBUG_AGENT).await {
+    if ctx.tool_registry.has_tool(tools_consts::AGENT_INFO).await {
         ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::DEBUG_AGENT);
+            .mark_tool_preapproved(tools_consts::AGENT_INFO);
         match ctx
             .tool_registry
-            .execute_tool_ref(tools_consts::DEBUG_AGENT, &serde_json::json!({}))
+            .execute_tool_ref(tools_consts::AGENT_INFO, &serde_json::json!({"mode": "debug"}))
             .await
         {
             Ok(value) => {
@@ -59,7 +59,7 @@ pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCom
             Err(err) => {
                 ctx.renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to invoke debug_agent tool: {}", err),
+                    &format!("Failed to invoke agent_info tool: {}", err),
                 )?;
             }
         }
@@ -113,14 +113,14 @@ pub async fn handle_analyze_agent(ctx: SlashCommandContext<'_>) -> Result<SlashC
     // Prefer tool-driven analysis when available
     if ctx
         .tool_registry
-        .has_tool(tools_consts::ANALYZE_AGENT)
+        .has_tool(tools_consts::AGENT_INFO)
         .await
     {
         ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::ANALYZE_AGENT);
+            .mark_tool_preapproved(tools_consts::AGENT_INFO);
         match ctx
             .tool_registry
-            .execute_tool_ref(tools_consts::ANALYZE_AGENT, &serde_json::json!({}))
+            .execute_tool_ref(tools_consts::AGENT_INFO, &serde_json::json!({"mode": "analyze"}))
             .await
         {
             Ok(value) => {
@@ -133,7 +133,7 @@ pub async fn handle_analyze_agent(ctx: SlashCommandContext<'_>) -> Result<SlashC
             Err(err) => {
                 ctx.renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to invoke analyze_agent tool: {}", err),
+                    &format!("Failed to invoke agent_info tool: {}", err),
                 )?;
             }
         }
@@ -522,10 +522,8 @@ pub async fn handle_clear_conversation(
     }
     transcript::clear();
     ctx.renderer.clear_screen();
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "Cleared conversation history.",
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, "Cleared conversation history.")?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }
@@ -545,8 +543,6 @@ pub async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCom
     .await?;
     Ok(SlashCommandControl::Continue)
 }
-
-
 
 pub async fn handle_manage_mcp(
     ctx: SlashCommandContext<'_>,
@@ -882,10 +878,7 @@ pub async fn handle_manage_skills(
                 .await
                 .insert(skill_name.clone(), skill.clone());
 
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &message,
-            )?;
+            ctx.renderer.line(MessageStyle::Info, &message)?;
             Ok(SlashCommandControl::Continue)
         }
         SkillCommandOutcome::UnloadSkill { name } => {

@@ -21,6 +21,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::tree_sitter::TreeSitterAnalyzer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum PreRequestAction {
     /// Normal operation, proceed with request
     Proceed,
@@ -34,6 +35,7 @@ pub enum PreRequestAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub enum BudgetStatus {
     Safe,
     Warning(f64),
@@ -96,6 +98,7 @@ impl ContextManager {
 
     /// Estimate the total tokens that would be used for the current conversation state
     /// Includes history + estimated overhead for the next model response
+    #[allow(dead_code)]
     pub(crate) fn estimate_request_tokens(&self, history: &[uni::Message]) -> usize {
         let history_tokens: usize = history
             .iter()
@@ -326,7 +329,6 @@ impl ContextManager {
         &mut self,
         attempt_history: &[uni::Message],
         retry_attempts: usize,
-        current_plan: Option<vtcode_core::tools::TaskPlan>,
         full_auto: bool,
     ) -> Result<String> {
         if self.base_system_prompt.trim().is_empty() {
@@ -354,15 +356,8 @@ impl ContextManager {
                 })
                 .count(),
             token_usage_ratio: 0.0,
-            current_plan,
             full_auto,
-            discovered_skills: self
-                .loaded_skills
-                .read()
-                .await
-                .values()
-                .cloned()
-                .collect(),
+            discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
         };
 
         // Use incremental builder to avoid redundant cloning and processing
@@ -680,7 +675,7 @@ mod tests {
         // At 4 chars/token, 8000 tokens = 32000 chars, minus 2000 overhead = 30000 chars
         let history = vec![uni::Message::user("x".repeat(30000))];
         let action = manager.pre_request_check(&history);
-        
+
         // With token budgeting disabled, should return Proceed even with large history
         assert_eq!(action, super::PreRequestAction::Proceed);
     }

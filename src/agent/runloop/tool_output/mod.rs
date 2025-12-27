@@ -3,7 +3,6 @@ mod files;
 pub(crate) mod large_output;
 mod mcp;
 mod panels;
-mod plan;
 mod streams;
 mod styles;
 
@@ -31,7 +30,6 @@ use mcp::{
     render_context7_output, render_generic_output, render_sequential_output,
     resolve_renderer_profile,
 };
-use plan::render_plan_update;
 use streams::{render_stream_section, resolve_stdout_tail_limit};
 use styles::{GitStyles, LsStyles};
 
@@ -44,7 +42,6 @@ pub(crate) async fn render_tool_output(
     let allow_tool_ansi = vt_config.map(|cfg| cfg.ui.allow_tool_ansi).unwrap_or(false);
 
     match tool_name {
-        Some(tools::UPDATE_PLAN) => return render_plan_update(renderer, val),
         Some(tools::WRITE_FILE) | Some(tools::CREATE_FILE) => {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();

@@ -235,18 +235,6 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         },
     );
 
-    // PLANNING & DEBUGGING
-    sigs.insert(
-        tools::UPDATE_PLAN,
-        ToolSignature {
-            name: tools::UPDATE_PLAN,
-            brief: "Update TODO plan",
-            required_params: vec![("todos", "array", "Task list")],
-            common_params: vec![],
-            token_estimate: 35,
-        },
-    );
-
     // Merged agent diagnostics tool
     sigs.insert(
         tools::AGENT_INFO,

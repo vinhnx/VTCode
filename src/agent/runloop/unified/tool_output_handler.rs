@@ -2,8 +2,7 @@
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_output_helpers::{
-    check_write_effect_common, render_error_common,
-    render_tool_output_common,
+    check_write_effect_common, render_error_common, render_tool_output_common,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -227,14 +226,7 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
         traj,
     };
 
-    handle_pipeline_output(
-        &mut run_ctx,
-        name,
-        args_val,
-        outcome,
-        vt_config,
-    )
-    .await
+    handle_pipeline_output(&mut run_ctx, name, args_val, outcome, vt_config).await
 }
 
 #[cfg(test)]

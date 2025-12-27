@@ -33,11 +33,7 @@ fn test_all_tools_have_policies() {
         "close_pty_session",
         // Code execution and meta
         "execute_code",
-        "update_plan",
         "search_tools",
-        // Diagnostics
-        "debug_agent",
-        "analyze_agent",
         // Web operations
         "web_fetch",
     ];
@@ -64,10 +60,7 @@ fn test_all_tools_have_policies() {
             "send_pty_input",
             "close_pty_session",
             "execute_code",
-            "update_plan",
             "search_tools",
-            "debug_agent",
-            "analyze_agent",
             "web_fetch",
         ]
         .iter()
@@ -107,10 +100,7 @@ fn test_tool_policy_categories_documented() {
         ("send_pty_input", "Prompt - active interaction"),
         ("close_pty_session", "Allow - cleanup operation"),
         ("execute_code", "Prompt - code execution risk"),
-        ("update_plan", "Allow - internal planning"),
         ("search_tools", "Allow - metadata query"),
-        ("debug_agent", "Allow - diagnostic read-only"),
-        ("analyze_agent", "Allow - diagnostic read-only"),
         ("web_fetch", "Prompt - network access"),
     ];
 
@@ -122,7 +112,7 @@ fn test_tool_policy_categories_documented() {
 
     assert_eq!(
         tool_policies.len(),
-        21,
+        18,
         "Policy count mismatch - verify all tools documented"
     );
 }
@@ -150,8 +140,6 @@ fn test_no_tools_in_constants_without_declarations() {
         "execute_code",
         "update_plan",
         "search_tools",
-        "debug_agent",
-        "analyze_agent",
         "web_fetch",
     ];
 
@@ -162,8 +150,6 @@ fn test_no_tools_in_constants_without_declarations() {
             "run_pty_cmd",
             "search_tools",
             "execute_code",
-            "debug_agent",
-            "analyze_agent",
             "read_file",
             "create_file",
             "delete_file",
@@ -270,10 +256,7 @@ fn test_tool_policy_consistency() {
         ("list_pty_sessions", "Allow"),
         ("resize_pty_session", "Allow"),
         ("close_pty_session", "Allow"),
-        ("update_plan", "Allow"),
         ("search_tools", "Allow"),
-        ("debug_agent", "Allow"),
-        ("analyze_agent", "Allow"),
         // Prompt category: requires user confirmation
         ("delete_file", "Prompt"),
         ("apply_patch", "Prompt"),
@@ -290,7 +273,7 @@ fn test_tool_policy_consistency() {
 
     assert_eq!(
         expected_policies.len(),
-        21,
+        18,
         "Policy mapping completeness check"
     );
 }

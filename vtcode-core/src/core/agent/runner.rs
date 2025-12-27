@@ -26,7 +26,7 @@ use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolCall, To
 use crate::llm::{AnyClient, make_client};
 use crate::mcp::McpClient;
 use crate::prompts::system::compose_system_instruction_text;
-use crate::tools::{PlanPhase, ToolRegistry, build_function_declarations};
+use crate::tools::{ToolRegistry, build_function_declarations};
 
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;
@@ -1419,13 +1419,10 @@ impl AgentRunner {
             // Agent execution loop uses max_turns for conversation flow
             for turn in 0..self.max_turns {
                 // Check context utilization before each turn
-                let utilization = self.context_optimizer.borrow().utilization().await;
+                let utilization = self.context_optimizer.borrow().utilization();
                 if utilization > 0.90 {
                     // At 90%+ utilization, warn and consider stopping
-                    warn!(
-                        "Context at {:.1}% - approaching limit",
-                        utilization * 100.0
-                    );
+                    warn!("Context at {:.1}% - approaching limit", utilization * 100.0);
                     task_state.warnings.push(format!(
                         "Token budget at {}% - approaching context limit",
                         (utilization * 100.0) as u32
@@ -1644,26 +1641,6 @@ impl AgentRunner {
                 }
 
                 if let Some(tool_calls) = effective_tool_calls.filter(|tc| !tc.is_empty()) {
-                    let plan_phase = self.tool_registry.current_plan().phase;
-                    if matches!(
-                        plan_phase,
-                        Some(PlanPhase::Understanding | PlanPhase::Design | PlanPhase::Review)
-                    ) {
-                        let warning_message = format!(
-                            "Planning mode active (phase: {}). Tool calls are blocked until final_plan.",
-                            plan_phase.as_ref().map(|p| p.label()).unwrap_or("planning"),
-                        );
-                        self.record_warning(
-                            &agent_prefix,
-                            &mut task_state,
-                            &mut event_recorder,
-                            &warning_message,
-                        );
-                        task_state.completion_outcome = TaskOutcome::StoppedNoAction;
-                        task_state.has_completed = true;
-                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                        break;
-                    }
 
                     let can_parallelize = tool_calls.len() > 1
                         && tool_calls.iter().all(|call| {

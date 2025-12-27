@@ -34,7 +34,6 @@ default_model = "gpt-5-nano"
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
 
-# Enable TODO planning helper mode for structured task management
 todo_planning_mode = true
 
 # UI surface to use ("auto", "alternate", "inline")
@@ -156,13 +155,11 @@ extra_directories = []
 # Maximum file size for custom prompts (in kilobytes)
 max_file_size_kb = 64
 
-# Custom API keys for specific providers
 [agent.custom_api_keys]
 # Moonshot AI API key (for specific provider access)
 moonshot = "sk-sDj3JUXDbfARCYKNL4q7iGWRtWuhL1M4O6zzgtDpN3Yxt9EA"
 
 # Checkpointing configuration for session persistence
-[agent.checkpointing]
 # Enable automatic session checkpointing
 enabled = false
 
@@ -317,7 +314,6 @@ allow_list = [
   "tar",
   "zip",
   "unzip",
-  "gzip",
   "gunzip",
   "bzip2",
   "bunzip2",
@@ -626,7 +622,6 @@ show_timeline_pane = true
 mode = "auto"
 
 # How often to refresh status line (milliseconds)
-refresh_interval_ms = 2000
 
 # Timeout for command execution in status line (milliseconds)
 command_timeout_ms = 200

@@ -22,11 +22,8 @@ const SAFE_AUTONOMOUS_TOOLS: &[&str] = &[
     tools::LIST_FILES,
     tools::READ_FILE,
     tools::SEARCH_TOOLS,
-    tools::DEBUG_AGENT,
-    tools::ANALYZE_AGENT,
     tools::LIST_PTY_SESSIONS,
     tools::READ_PTY_SESSION,
-    tools::UPDATE_PLAN,
 ];
 
 /// Tools that require verification before execution

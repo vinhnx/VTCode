@@ -455,12 +455,6 @@ impl PromptOptimizer {
             .unwrap_or_else(|| original_prompt.to_string()))
     }
 
-    /// Estimate token count (bytes / 4, minimum 1)
-    #[inline]
-    fn estimate_tokens_u32(text: &str) -> u32 {
-        estimate_tokens(text) as u32
-    }
-
     /// Get cache statistics
     pub fn cache_stats(&self) -> CacheStats {
         self.cache.stats()

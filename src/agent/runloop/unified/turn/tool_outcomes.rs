@@ -268,7 +268,6 @@ pub(crate) async fn handle_tool_call(
                 ctx.working_history,
                 turn_modified_files,
                 ctx.vt_cfg,
-
                 traj,
             )
             .await?;
@@ -1172,7 +1171,6 @@ pub(crate) async fn handle_text_response(
                     ctx.working_history,
                     turn_modified_files,
                     ctx.vt_cfg,
-
                     traj,
                 )
                 .await?;

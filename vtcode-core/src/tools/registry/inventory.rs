@@ -8,7 +8,6 @@ use super::registration::{ToolMetadata, ToolRegistration};
 use crate::tools::command::CommandTool;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
-use crate::tools::plan::PlanManager;
 
 /// Metrics for alias usage tracking
 #[derive(Debug, Default, Clone)]
@@ -41,7 +40,6 @@ pub(super) struct ToolInventory {
     file_ops_tool: FileOpsTool,
     command_tool: CommandTool,
     grep_search: Arc<GrepSearchManager>,
-    plan_manager: PlanManager,
 }
 
 impl ToolInventory {
@@ -50,8 +48,6 @@ impl ToolInventory {
         let command_tool = CommandTool::new(workspace_root.clone());
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
         let file_ops_tool = FileOpsTool::new(workspace_root.clone(), Arc::clone(&grep_search));
-        let plan_file = workspace_root.join(".vtcode").join("plan.md");
-        let plan_manager = PlanManager::with_plan_file(Some(plan_file));
 
         Self {
             workspace_root,
@@ -64,21 +60,20 @@ impl ToolInventory {
             file_ops_tool,
             command_tool,
             grep_search,
-            plan_manager,
         }
     }
 
     /// Get alias usage metrics for debugging and analytics
+    #[allow(dead_code)]
     pub fn alias_metrics(&self) -> AliasMetrics {
         self.alias_metrics.lock().unwrap().clone()
     }
 
     /// Reset alias metrics
+    #[allow(dead_code)]
     pub fn reset_alias_metrics(&self) {
         *self.alias_metrics.lock().unwrap() = AliasMetrics::default();
     }
-
-
 
     pub fn workspace_root(&self) -> &PathBuf {
         &self.workspace_root
@@ -99,10 +94,6 @@ impl ToolInventory {
 
     pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {
         self.grep_search.clone()
-    }
-
-    pub fn plan_manager(&self) -> PlanManager {
-        self.plan_manager.clone()
     }
 
     pub fn register_tool(&mut self, registration: ToolRegistration) -> anyhow::Result<()> {
@@ -145,7 +136,8 @@ impl ToolInventory {
             if self.tools.contains_key(alias) {
                 return Err(anyhow::anyhow!(
                     "Cannot register alias '{}' for tool '{}': alias conflicts with existing tool name",
-                    alias, name
+                    alias,
+                    name
                 ));
             }
             // Also check if it conflicts with an existing alias
@@ -154,7 +146,9 @@ impl ToolInventory {
                 let existing_target = self.aliases.get(&alias_lower).unwrap();
                 return Err(anyhow::anyhow!(
                     "Cannot register alias '{}' for tool '{}': alias already exists for tool '{}'",
-                    alias, name, existing_target
+                    alias,
+                    name,
+                    existing_target
                 ));
             }
         }
@@ -167,15 +161,16 @@ impl ToolInventory {
         for alias in aliases {
             let alias_lower = alias.to_ascii_lowercase();
             let target = tool_name.to_owned();
-            
+
             // Store lowercase -> canonical mapping
             self.aliases.insert(alias_lower.clone(), target.clone());
-            
+
             // Initialize metrics for this alias
-            self.alias_metrics.lock().unwrap().usage.insert(
-                alias_lower,
-                (target, 0)
-            );
+            self.alias_metrics
+                .lock()
+                .unwrap()
+                .usage
+                .insert(alias_lower, (target, 0));
         }
     }
 
@@ -186,7 +181,8 @@ impl ToolInventory {
             name.to_owned()
         } else if let Some(aliased) = self.aliases.get(&name_lower) {
             // Track alias usage metrics
-            if let Some((canonical, count)) = self.alias_metrics
+            if let Some((canonical, count)) = self
+                .alias_metrics
                 .lock()
                 .unwrap()
                 .usage
@@ -234,8 +230,12 @@ impl ToolInventory {
     }
 
     /// Get all registered aliases with their canonical targets
+    #[allow(dead_code)]
     pub fn all_aliases(&self) -> Vec<(String, String)> {
-        self.aliases.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        self.aliases
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// Snapshot registration metadata for policy/catalog synchronization

@@ -70,10 +70,6 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
             session.set_queued_inputs_entries(entries);
             mark_dirty(session);
         }
-        InlineCommand::SetPlan { plan } => {
-            session.plan = plan;
-            mark_dirty(session);
-        }
         InlineCommand::SetCursorVisible(value) => {
             session.cursor_visible = value;
         }

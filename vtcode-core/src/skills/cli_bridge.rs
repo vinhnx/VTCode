@@ -19,8 +19,8 @@
 //! - Standard installation paths (/usr/local/bin, ~/.local/bin, etc.)
 
 use crate::skills::types::{Skill, SkillManifest, SkillResource};
-use crate::tools::traits::Tool;
 use crate::tool_policy::ToolPolicy;
+use crate::tools::traits::Tool;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -423,7 +423,7 @@ impl CliToolBridge {
             );
         }
 
-    Ok(skill)
+        Ok(skill)
     }
 }
 
