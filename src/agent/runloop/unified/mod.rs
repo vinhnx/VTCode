@@ -8,7 +8,6 @@ mod driver;
 mod incremental_system_prompt;
 mod inline_events;
 mod intent_extractor;
-mod loop_detection;
 
 mod mcp_support;
 mod mcp_tool_manager;

@@ -360,12 +360,12 @@ pub async fn handle_slash_command(
             }
         }
         "lsp" => {
-             if args.is_empty() {
+            if args.is_empty() {
                 return Ok(SlashCommandOutcome::ManageLsp {
                     action: LspCommandAction::Status,
                 });
             }
-            
+
             let tokens = match shell_split(args) {
                 Ok(tokens) => tokens,
                 Err(err) => {
@@ -392,7 +392,7 @@ pub async fn handle_slash_command(
                     action: LspCommandAction::Detect,
                 }),
                 _ => Ok(SlashCommandOutcome::ManageLsp {
-                   action: LspCommandAction::Help,
+                    action: LspCommandAction::Help,
                 }),
             }
         }

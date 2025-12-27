@@ -35,3 +35,23 @@ pub(crate) fn render_hook_messages(
 
     Ok(())
 }
+pub(crate) fn should_trigger_turn_balancer(
+    step_count: usize,
+    max_tool_loops: usize,
+    repeated: usize,
+    repeat_limit: usize,
+) -> bool {
+    step_count > max_tool_loops / 2 && repeated >= repeat_limit
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn balancer_triggers_only_after_halfway_and_repeats() {
+        assert!(should_trigger_turn_balancer(11, 20, 3, 3));
+        assert!(!should_trigger_turn_balancer(9, 20, 3, 3));
+        assert!(!should_trigger_turn_balancer(12, 20, 2, 3));
+    }
+}

@@ -1,33 +1,36 @@
 use anyhow::{Context, Result};
 use lsp_types::{
-    ClientCapabilities, ClientInfo, InitializeParams, InitializeResult, InitializedParams, OneOf,
+    ClientCapabilities, ClientInfo, InitializeParams, InitializeResult, InitializedParams,
     ServerCapabilities, TraceValue, WorkDoneProgressParams,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use lsp_types::Uri;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
+use tokio::process::{Child, Command};
 use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
 
 #[derive(Debug)]
 pub struct LspClient {
+    #[allow(dead_code)]
     child: Mutex<Option<Child>>,
     outbox_tx: tokio::sync::mpsc::Sender<String>,
     next_id: AtomicI64,
     pending_requests: Arc<Mutex<HashMap<i64, oneshot::Sender<Result<Value>>>>>,
+    #[allow(dead_code)]
     reader_handle: Mutex<Option<JoinHandle<()>>>,
+    #[allow(dead_code)]
     stderr_handle: Mutex<Option<JoinHandle<()>>>,
     server_capabilities: Arc<Mutex<Option<ServerCapabilities>>>,
     workspace_root: PathBuf,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 enum JsonRpcMessage {
@@ -51,6 +54,7 @@ struct JsonRpcNotification {
     params: Option<Value>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug)]
 struct JsonRpcResponse {
     jsonrpc: String,
@@ -61,6 +65,7 @@ struct JsonRpcResponse {
     id: Option<i64>, // Response to our requests (which use i64)
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug)]
 struct JsonRpcError {
     code: i64,
@@ -84,7 +89,7 @@ impl LspClient {
         let stderr = child.stderr.take().context("Failed to open stderr")?;
 
         // Clone stdin for the reader loop to reply to requests
-        // let stdin_for_reader = stdin.try_clone().await.ok(); 
+        // let stdin_for_reader = stdin.try_clone().await.ok();
         // Actually ChildStdin in tokio doesn't implement Clone. We need to wrap it in Arc<Mutex> to share,
         // but it's already in the struct. The reader loop needs a way to write back.
         // Solution: Create a generic "Sender" channel that the reader can use to queue messages to be written to stdin?
@@ -247,6 +252,7 @@ impl LspClient {
         Ok(client)
     }
 
+    #[allow(deprecated)]
     pub async fn initialize(&self) -> Result<()> {
         let root_uri: lsp_types::Uri = url::Url::from_directory_path(&self.workspace_root)
             .map_err(|_| anyhow::anyhow!("Invalid workspace root path"))?

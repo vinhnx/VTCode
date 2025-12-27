@@ -1,12 +1,11 @@
 use crate::tools::lsp::client::LspClient;
 use crate::tools::traits::Tool;
 use anyhow::{Context, Result};
-use lsp_types::{
-    GotoDefinitionParams, Hover, HoverParams, Location, LocationLink, PartialResultParams,
-    Position, ReferenceContext, ReferenceParams, TextDocumentIdentifier,
-    TextDocumentPositionParams, WorkDoneProgressParams,
-};
 use lsp_types::Uri;
+use lsp_types::{
+    GotoDefinitionParams, HoverParams, PartialResultParams, Position, ReferenceContext,
+    ReferenceParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -95,8 +94,12 @@ impl LspTool {
         };
 
         let canonical = full_path.canonicalize().unwrap_or(full_path);
-        let url = url::Url::from_file_path(canonical).map_err(|_| anyhow::anyhow!("Invalid file path"))?;
-        Ok(url.to_string().parse().map_err(|_| anyhow::anyhow!("Failed to parse Uri"))?)
+        let url = url::Url::from_file_path(canonical)
+            .map_err(|_| anyhow::anyhow!("Invalid file path"))?;
+        Ok(url
+            .to_string()
+            .parse()
+            .map_err(|_| anyhow::anyhow!("Failed to parse Uri"))?)
     }
 }
 

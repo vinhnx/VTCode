@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::process::Command;
 
 /// Detects if common LSP servers are available in the PATH

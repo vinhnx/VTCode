@@ -16,7 +16,6 @@ use vtcode_core::{
 };
 
 #[tokio::test]
-#[ignore]
 async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let config = AgentConfig {
@@ -36,10 +35,11 @@ async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
         checkpointing_storage_dir: None,
         checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+        quiet: false,
     };
     let mut agent = Agent::new(config).await?;
     agent.update_session_stats(5, 3, 1);
-    sleep(Duration::from_millis(10)).await;
+    sleep(Duration::from_millis(1100)).await;
     let metrics = handle_stats_command(&agent, false, "json".to_string()).await?;
     assert_eq!(metrics.total_api_calls, 5);
     assert_eq!(metrics.tool_execution_count, 3);

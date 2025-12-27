@@ -1385,7 +1385,7 @@ mod tests {
     fn test_should_use_responses_api_is_always_false() {
         let provider = HuggingFaceProvider::new("test-key".to_string());
         let mut request = LLMRequest::default();
-        
+
         // All models should use Chat Completion API by default for stability
         request.model = "meta-llama/Llama-3.3-70B-Instruct".to_string();
         assert!(!provider.should_use_responses_api(&request));
@@ -1427,24 +1427,24 @@ mod tests {
     fn test_minimax_model_defaults() {
         let provider = HuggingFaceProvider::new("test-key".to_string());
         let mut request = LLMRequest::default();
-        
+
         // Test MiniMax-M2.1:novita
         request.model = "MiniMaxAI/MiniMax-M2.1:novita".to_string();
         provider.apply_model_defaults(&mut request);
-        
+
         assert_eq!(request.temperature, Some(1.0));
         assert_eq!(request.top_p, Some(0.95));
         assert_eq!(request.top_k, Some(40));
-        
+
         // Test MiniMax-M2.1:novita
         let mut request2 = LLMRequest::default();
         request2.model = "MiniMaxAI/MiniMax-M2.1:novita".to_string();
         provider.apply_model_defaults(&mut request2);
-        
+
         assert_eq!(request2.temperature, Some(1.0));
         assert_eq!(request2.top_p, Some(0.95));
         assert_eq!(request2.top_k, Some(40));
-        
+
         // Test that existing values are not overridden
         let mut request3 = LLMRequest::default();
         request3.model = "MiniMaxAI/MiniMax-M2.1:novita".to_string();
@@ -1452,16 +1452,16 @@ mod tests {
         request3.top_p = Some(0.9);
         request3.top_k = Some(20);
         provider.apply_model_defaults(&mut request3);
-        
+
         assert_eq!(request3.temperature, Some(0.5)); // Should not change
         assert_eq!(request3.top_p, Some(0.9)); // Should not change
         assert_eq!(request3.top_k, Some(20)); // Should not change
-        
+
         // Test non-MiniMax model
         let mut request4 = LLMRequest::default();
         request4.model = "deepseek-ai/DeepSeek-V3.2:novita".to_string();
         provider.apply_model_defaults(&mut request4);
-        
+
         assert_eq!(request4.temperature, None); // Should remain None
         assert_eq!(request4.top_p, None); // Should remain None
         assert_eq!(request4.top_k, None); // Should remain None

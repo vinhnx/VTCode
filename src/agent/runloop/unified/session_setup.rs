@@ -1,14 +1,17 @@
+use super::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
 use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
 use anyhow::{Context, Result};
 use chrono::Local;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::{Notify, RwLock};
 use tokio::time::{Duration, sleep};
 use tracing::{debug, error, info, warn};
+use vtcode_core::tools::ApprovalRecorder;
 
 use super::async_mcp_manager::AsyncMcpManager;
 use super::palettes::apply_prompt_style;
@@ -75,6 +78,8 @@ pub(crate) struct SessionState {
 
     /// Skills loaded in current session (name -> Skill mapping)
     pub loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
+    pub approval_recorder: Arc<ApprovalRecorder>,
+    pub safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,
 }
 
 #[allow(dead_code)]
@@ -91,6 +96,7 @@ pub(crate) struct SessionUISetup {
     pub context_manager: super::context_manager::ContextManager,
     pub default_placeholder: Option<String>,
     pub follow_up_placeholder: Option<String>,
+    pub next_checkpoint_turn: usize,
 }
 
 async fn build_conversation_history_from_resume(
@@ -377,6 +383,12 @@ pub(crate) async fn initialize_session(
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new())); // Session-scoped
     let search_metrics = Arc::new(RwLock::new(SearchMetrics::new())); // Track search performance
 
+    let cache_dir = std::env::var("HOME")
+        .ok()
+        .map(|home| PathBuf::from(home).join(".vtcode").join("cache"))
+        .unwrap_or_else(|| PathBuf::from(".vtcode/cache"));
+    let approval_recorder = Arc::new(ApprovalRecorder::new(cache_dir));
+
     // HP-3: Cache tool definitions once for efficient reuse across turns
     let cached_tools = {
         let guard = tools.read().await;
@@ -410,6 +422,8 @@ pub(crate) async fn initialize_session(
         search_metrics,
         custom_prompts,
         loaded_skills: Arc::new(RwLock::new(HashMap::new())),
+        approval_recorder,
+        safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
     })
 }
 
@@ -535,10 +549,18 @@ pub(crate) async fn initialize_session_ui(
             .ended_at
             .with_timezone(&Local)
             .format("%Y-%m-%d %H:%M");
+
+        let action = if session.is_fork {
+            "Forking"
+        } else {
+            "Resuming"
+        };
+
         renderer.line(
             vtcode_core::utils::ansi::MessageStyle::Info,
             &format!(
-                "Resuming session {} · ended {} · {} messages",
+                "{} session {} · ended {} · {} messages",
+                action,
                 session.identifier,
                 ended_local,
                 session.message_count()
@@ -548,6 +570,63 @@ pub(crate) async fn initialize_session_ui(
             vtcode_core::utils::ansi::MessageStyle::Info,
             &format!("Previous archive: {}", session.path.display()),
         )?;
+
+        if session.is_fork {
+            renderer.line(
+                vtcode_core::utils::ansi::MessageStyle::Info,
+                "Starting independent forked session",
+            )?;
+        }
+
+        // Display full conversation history for context (compact but complete)
+        if !session.history.is_empty() {
+            renderer.line(
+                vtcode_core::utils::ansi::MessageStyle::Info,
+                "Conversation history:",
+            )?;
+
+            for (idx, msg) in session.history.iter().enumerate() {
+                let (style, role_label) = match msg.role {
+                    uni::MessageRole::User => (vtcode_core::utils::ansi::MessageStyle::User, "You"),
+                    uni::MessageRole::Assistant => (
+                        vtcode_core::utils::ansi::MessageStyle::Response,
+                        "Assistant",
+                    ),
+                    uni::MessageRole::Tool => {
+                        (vtcode_core::utils::ansi::MessageStyle::ToolOutput, "Tool")
+                    }
+                    uni::MessageRole::System => {
+                        (vtcode_core::utils::ansi::MessageStyle::Info, "System")
+                    }
+                };
+
+                let tool_suffix = msg
+                    .tool_call_id
+                    .as_ref()
+                    .map(|id| format!(" [tool_call_id: {}]", id))
+                    .unwrap_or_default();
+
+                renderer.line(
+                    style,
+                    &format!("  [{}] {}{}:", idx + 1, role_label, tool_suffix),
+                )?;
+
+                match &msg.content {
+                    uni::MessageContent::Text(text) => {
+                        for line in text.lines() {
+                            renderer.line(style, &format!("    {}", line))?;
+                        }
+                    }
+                    uni::MessageContent::Parts(parts) => {
+                        renderer.line(style, &format!("    [content parts: {}]", parts.len()))?;
+                    }
+                }
+
+                if idx + 1 < session.history.len() {
+                    renderer.line(style, "")?;
+                }
+            }
+        }
         renderer.line_if_not_empty(vtcode_core::utils::ansi::MessageStyle::Output)?;
     }
 
@@ -565,28 +644,6 @@ pub(crate) async fn initialize_session_ui(
         config.provider.clone()
     };
     let header_provider_label = provider_label.clone();
-    let archive_metadata = SessionArchiveMetadata::new(
-        workspace_label,
-        workspace_path,
-        config.model.clone(),
-        provider_label,
-        config.theme.clone(),
-        config.reasoning_effort.as_str().to_string(),
-    );
-    let mut session_archive_error: Option<String> = None;
-    let session_archive = match SessionArchive::new(archive_metadata, None).await {
-        Ok(archive) => Some(archive),
-        Err(err) => {
-            session_archive_error = Some(err.to_string());
-            None
-        }
-    };
-
-    if let (Some(hooks), Some(archive)) = (&lifecycle_hooks, session_archive.as_ref()) {
-        hooks
-            .update_transcript_path(Some(archive.path().to_path_buf()))
-            .await;
-    }
 
     // Setup checkpoint manager
     let mut checkpoint_config = SnapshotConfig::new(config.workspace.clone());
@@ -602,6 +659,121 @@ pub(crate) async fn initialize_session_ui(
             None
         }
     };
+
+    let mut session_archive_error: Option<String> = None;
+    let session_archive = if let Some(resume) = resume_state {
+        if resume.is_fork {
+            // Fork: create new archive from source snapshot with custom ID
+            let custom_id = resume
+                .identifier
+                .strip_prefix("forked-")
+                .map(|s| s.to_string());
+            match SessionArchive::fork(&resume.snapshot, custom_id).await {
+                Ok(archive) => Some(archive),
+                Err(err) => {
+                    session_archive_error = Some(err.to_string());
+                    None
+                }
+            }
+        } else {
+            // Resume: create normal archive (resume doesn't modify original)
+            let archive_metadata = SessionArchiveMetadata::new(
+                workspace_label,
+                workspace_path,
+                config.model.clone(),
+                provider_label,
+                config.theme.clone(),
+                config.reasoning_effort.as_str().to_string(),
+            );
+            match SessionArchive::new(archive_metadata, None).await {
+                Ok(archive) => Some(archive),
+                Err(err) => {
+                    session_archive_error = Some(err.to_string());
+                    None
+                }
+            }
+        }
+    } else {
+        // New session: create normal archive
+        let archive_metadata = SessionArchiveMetadata::new(
+            workspace_label,
+            workspace_path,
+            config.model.clone(),
+            provider_label,
+            config.theme.clone(),
+            config.reasoning_effort.as_str().to_string(),
+        );
+        match SessionArchive::new(archive_metadata, None).await {
+            Ok(archive) => Some(archive),
+            Err(err) => {
+                session_archive_error = Some(err.to_string());
+                None
+            }
+        }
+    };
+
+    if let (Some(hooks), Some(archive)) = (&lifecycle_hooks, session_archive.as_ref()) {
+        hooks
+            .update_transcript_path(Some(archive.path().to_path_buf()))
+            .await;
+    }
+
+    // Run session start hooks
+    if let Some(hooks) = &lifecycle_hooks {
+        match hooks.run_session_start().await {
+            Ok(outcome) => {
+                render_hook_messages(&mut renderer, &outcome.messages)?;
+                for context in outcome.additional_context {
+                    if !context.trim().is_empty() {
+                        session_state
+                            .conversation_history
+                            .push(uni::Message::system(context));
+                    }
+                }
+            }
+            Err(err) => {
+                renderer.line(
+                    vtcode_core::utils::ansi::MessageStyle::Error,
+                    &format!("Failed to run session start hooks: {}", err),
+                )?;
+            }
+        }
+    }
+
+    // Connect PTY session tracking from tool registry to session state
+    let pty_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    session_state
+        .tool_registry
+        .set_active_pty_sessions(pty_counter.clone());
+
+    // Display full-auto mode information if enabled
+    if full_auto && let Some(allowlist) = session_state.full_auto_allowlist.as_ref() {
+        if allowlist.is_empty() {
+            renderer.line(
+                vtcode_core::utils::ansi::MessageStyle::Info,
+                "Full-auto mode enabled with no tool permissions; tool calls will be skipped.",
+            )?;
+        } else {
+            renderer.line(
+                vtcode_core::utils::ansi::MessageStyle::Info,
+                &format!(
+                    "Full-auto mode enabled. Permitted tools: {}",
+                    allowlist.join(", ")
+                ),
+            )?;
+        }
+    }
+
+    // Report MCP background initialization status
+    if let Some(mcp_manager) = &session_state.async_mcp_manager {
+        let mcp_status = mcp_manager.get_status().await;
+        if mcp_status.is_initializing() {
+            renderer.line(
+                vtcode_core::utils::ansi::MessageStyle::Info,
+                "MCP is still initializing in the background...",
+            )?;
+        }
+    }
 
     handle.set_theme(theme_spec.clone());
     apply_prompt_style(&handle);
@@ -692,6 +864,11 @@ pub(crate) async fn initialize_session_ui(
         renderer.line_if_not_empty(vtcode_core::utils::ansi::MessageStyle::Output)?;
     }
 
+    let next_checkpoint_turn = checkpoint_manager
+        .as_ref()
+        .and_then(|manager| manager.next_turn_number().ok())
+        .unwrap_or(1);
+
     Ok(SessionUISetup {
         renderer,
         session,
@@ -705,6 +882,46 @@ pub(crate) async fn initialize_session_ui(
         context_manager,
         default_placeholder,
         follow_up_placeholder,
+        next_checkpoint_turn,
+    })
+}
+
+pub(crate) fn spawn_signal_handler(
+    ctrl_c_state: Arc<CtrlCState>,
+    ctrl_c_notify: Arc<Notify>,
+    async_mcp_manager: Option<Arc<AsyncMcpManager>>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        loop {
+            if tokio::signal::ctrl_c().await.is_err() {
+                break;
+            }
+
+            let signal = ctrl_c_state.register_signal();
+            ctrl_c_notify.notify_waiters();
+
+            // Shutdown MCP client on interrupt using async manager
+            if let Some(mcp_manager) = &async_mcp_manager
+                && let Err(e) = mcp_manager.shutdown().await
+            {
+                let error_msg = e.to_string();
+                if error_msg.contains("EPIPE")
+                    || error_msg.contains("Broken pipe")
+                    || error_msg.contains("write EPIPE")
+                {
+                    eprintln!(
+                        "Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}",
+                        e
+                    );
+                } else {
+                    eprintln!("Warning: Failed to shutdown MCP client on interrupt: {}", e);
+                }
+            }
+
+            if matches!(signal, super::state::CtrlCSignal::Exit) {
+                break;
+            }
+        }
     })
 }
 
@@ -821,6 +1038,7 @@ mod tests {
             snapshot,
             history: session_messages.iter().map(Message::from).collect(),
             path: PathBuf::new(),
+            is_fork: false,
         };
 
         let history = build_conversation_history_from_resume(Some(&resume), &budget).await;
