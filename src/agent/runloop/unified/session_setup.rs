@@ -264,6 +264,10 @@ pub(crate) async fn initialize_session(
     let mut discovered_skill_adapters: Vec<vtcode_core::skills::executor::SkillToolAdapter> =
         Vec::new();
     let mut discovered_skills_map = HashMap::new();
+    
+    // Initialize skill maps early for resume logic
+    let library_skills_map = Arc::new(RwLock::new(HashMap::new()));
+    let active_skills_map = Arc::new(RwLock::new(HashMap::new()));
     let mut dormant_tool_defs = HashMap::new();
 
     let mut skill_discovery = vtcode_core::skills::discovery::SkillDiscovery::new();
@@ -284,7 +288,8 @@ pub(crate) async fn initialize_session(
                     String::new(), // Placeholder instructions for prompt-only listing
                 ) {
                     discovered_skills_map
-                        .insert(lightweight_skill.name().to_string(), lightweight_skill);
+                        .insert(lightweight_skill.name().to_string(), lightweight_skill.clone());
+                    library_skills_map.write().await.insert(lightweight_skill.name().to_string(), lightweight_skill);
                 }
             }
 
@@ -296,6 +301,7 @@ pub(crate) async fn initialize_session(
                             Ok(skill) => {
                                 discovered_skills_map
                                     .insert(skill.name().to_string(), skill.clone());
+                                library_skills_map.write().await.insert(skill.name().to_string(), skill.clone());
                                 let adapter =
                                     vtcode_core::skills::executor::SkillToolAdapter::new(skill);
                                 discovered_skill_adapters.push(adapter.clone());
@@ -321,8 +327,6 @@ pub(crate) async fn initialize_session(
             }
 
             // Initialize skill maps early for resume logic
-            let library_skills_map = Arc::new(RwLock::new(discovered_skills_map));
-            let active_skills_map = Arc::new(RwLock::new(HashMap::new()));
 
             // On Resume: Auto-activate skills that were active in the previous session
             if let Some(resume_session) = resume {
