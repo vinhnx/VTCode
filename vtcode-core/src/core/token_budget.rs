@@ -732,11 +732,8 @@ fn resolve_local_tokenizer_path(identifier: &str) -> Option<PathBuf> {
 fn map_model_to_pretrained(model: &str) -> &'static str {
     let normalized = model.to_ascii_lowercase();
 
-    if normalized.contains("gpt-4o") || normalized.contains("gpt-5") {
-        "openai-community/gpt-4o-mini-tokenizer"
-    } else if normalized.contains("gpt") {
-        "openai-community/gpt2"
-    } else if normalized.contains("gemini") {
+    // Avoid remote tokenizer fetches that can fail without auth; prefer a local, permissive default.
+    if normalized.contains("gemini") {
         "google/gemma-2b"
     } else if normalized.contains("claude") {
         "Xenova/claude-3-haiku-20240307"
@@ -745,6 +742,7 @@ fn map_model_to_pretrained(model: &str) -> &'static str {
     } else if normalized.contains("qwen") {
         "Qwen/Qwen1.5-7B-Chat"
     } else {
+        // Default to gpt2 tokenizer to avoid heuristic fallbacks that require remote downloads.
         "openai-community/gpt2"
     }
 }

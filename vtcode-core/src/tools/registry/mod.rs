@@ -1882,6 +1882,8 @@ impl ToolRegistry {
         let decision = if skip_policy_prompt {
             ToolExecutionDecision::Allowed
         } else {
+            // In TUI mode, permission should have been collected via ensure_tool_permission().
+            // If not preapproved, check policy as fallback.
             self.policy_gateway.should_execute_tool(tool_name).await?
         };
 
@@ -2626,10 +2628,20 @@ impl ToolRegistry {
         }
     }
 
-    /// Mark a tool as pre-approved, but only for specific internal diagnostic tools.
-    /// This prevents accidental bypass of permission gates for arbitrary tools.
+    /// Mark a tool as pre-approved.
+    ///
+    /// In TUI mode we already showed the inline approval modal, so we allow preapproval for
+    /// any tool to avoid re-prompting in the CLI layer. In CLI mode we keep the legacy
+    /// allowlist restriction.
     pub fn mark_tool_preapproved(&mut self, name: &str) {
-        // Allowlist of tools that can be preapproved (typically for slash commands)
+        // Allow all when TUI mode is active (approval already captured by modal)
+        if std::env::var("VTCODE_TUI_MODE").is_ok() {
+            self.policy_gateway.preapprove(name);
+            tracing::debug!(tool = %name, "Preapproved tool in TUI mode");
+            return;
+        }
+
+        // Legacy CLI allowlist of tools that can be preapproved
         const PREAPPROVABLE_TOOLS: &[&str] = &["debug_agent", "analyze_agent"];
 
         if PREAPPROVABLE_TOOLS.contains(&name) {

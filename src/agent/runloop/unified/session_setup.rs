@@ -1086,10 +1086,39 @@ pub(crate) fn spawn_signal_handler(
             }
 
             if matches!(signal, super::state::CtrlCSignal::Exit) {
+                // Emergency terminal cleanup on forced exit
+                // This ensures ANSI sequences don't leak to the terminal on double Ctrl+C
+                let _ = emergency_terminal_cleanup();
                 break;
             }
         }
     })
+}
+
+/// Emergency cleanup for terminal state when process is about to exit
+/// This is called when double Ctrl+C is pressed to ensure the terminal
+/// is left in a clean state even if normal finalization doesn't run.
+fn emergency_terminal_cleanup() {
+    use ratatui::crossterm::{
+        terminal::{LeaveAlternateScreen, disable_raw_mode},
+        execute,
+    };
+    use std::io::{self, Write};
+
+    let mut stderr = io::stderr();
+
+    // Attempt to leave alternate screen - this is the most critical
+    // operation to prevent ANSI escape codes from leaking
+    let _ = execute!(stderr, LeaveAlternateScreen);
+
+    // Disable raw mode
+    let _ = disable_raw_mode();
+
+    // Flush stderr to ensure commands are processed
+    let _ = stderr.flush();
+
+    // Brief delay to allow terminal to process cleanup commands
+    std::thread::sleep(std::time::Duration::from_millis(10));
 }
 
 fn build_single_mcp_tool_definition(tool: &McpToolInfo) -> uni::ToolDefinition {

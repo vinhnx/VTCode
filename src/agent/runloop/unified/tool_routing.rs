@@ -387,15 +387,27 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
     if !hook_requires_prompt && tool_name == tool_names::RUN_PTY_CMD {
         tool_registry.mark_tool_preapproved(tool_name);
-        if let Ok(manager) = tool_registry.policy_manager_mut()
-            && let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await
-        {
-            tracing::warn!(
-                "Failed to persist auto-approval for '{}': {}",
-                tool_name,
-                err
-            );
-        }
+
+        // Persist policy in background to avoid blocking
+        let tool_name_owned = tool_name.to_string();
+        let mut registry_for_persist = tool_registry.clone();
+        tokio::spawn(async move {
+            if let Ok(manager) = registry_for_persist.policy_manager_mut() {
+                if let Err(err) = manager.set_policy(&tool_name_owned, ToolPolicy::Allow).await {
+                    tracing::warn!(
+                        "[background] Failed to persist auto-approval for '{}': {}",
+                        tool_name_owned,
+                        err
+                    );
+                } else {
+                    tracing::debug!(
+                        "[background] Successfully persisted auto-approval for '{}'",
+                        tool_name_owned
+                    );
+                }
+            }
+        });
+
         return Ok(ToolPermissionFlow::Approved);
     }
 
@@ -462,9 +474,17 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Once);
             }
 
-            // Record approval decision for pattern learning
+            // Record approval decision for pattern learning (fire-and-forget to avoid UI stalls)
             if let Some(recorder) = approval_recorder {
-                let _ = recorder.record_approval(tool_name, true, None).await;
+                let tool_name_owned = tool_name.to_string();
+                let recorder_cloned = recorder.clone();
+                tokio::spawn(async move {
+                    let _ = tokio::time::timeout(
+                        Duration::from_millis(500),
+                        recorder_cloned.record_approval(&tool_name_owned, true, None),
+                    )
+                    .await;
+                });
             }
 
             Ok(ToolPermissionFlow::Approved)
@@ -479,35 +499,48 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Session);
             }
 
-            // Record approval decision for pattern learning
+            // Record approval decision for pattern learning (fire-and-forget)
             if let Some(recorder) = approval_recorder {
-                let _ = recorder.record_approval(tool_name, true, None).await;
+                let tool_name_owned = tool_name.to_string();
+                let recorder_cloned = recorder.clone();
+                tokio::spawn(async move {
+                    let _ = tokio::time::timeout(
+                        Duration::from_millis(500),
+                        recorder_cloned.record_approval(&tool_name_owned, true, None),
+                    )
+                    .await;
+                });
             }
 
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::ApprovedPermanent => {
-            // Permanent approval - mark and persist to policy
+            // Permanent approval - mark and persist to policy SYNCHRONOUSLY
             tool_registry.mark_tool_preapproved(tool_name);
+            tracing::info!("✓ Tool '{}' marked as preapproved", tool_name);
 
-            // Cache permission grant permanently
+            // Cache permission grant permanently (synchronous - immediate effect)
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
                 perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Permanent);
+                tracing::info!("✓ Tool '{}' cached as permanently approved", tool_name);
             }
 
-            // Try to persist to policy manager first
-            if let Ok(manager) = tool_registry.policy_manager_mut()
-                && let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await
-            {
-                tracing::warn!(
-                    "Failed to persist permanent approval for '{}': {}",
-                    tool_name,
-                    err
-                );
+            // Persist to policy manager IMMEDIATELY (not in background)
+            // This ensures the policy is saved before execution continues
+            if let Ok(manager) = tool_registry.policy_manager_mut() {
+                if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
+                    tracing::warn!(
+                        "Failed to persist permanent approval for '{}': {}",
+                        tool_name,
+                        err
+                    );
+                } else {
+                    tracing::info!("✓ Policy persisted for '{}'", tool_name);
+                }
             }
 
-            // Also try MCP tool policy persistence
+            // Also persist MCP tool policy
             if let Err(err) = tool_registry
                 .persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
                 .await
@@ -519,11 +552,35 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 );
             }
 
-            // Record approval decision for pattern learning
+            // Record approval decision for pattern learning (fire-and-forget)
             if let Some(recorder) = approval_recorder {
-                let _ = recorder.record_approval(tool_name, true, None).await;
+                let tool_name_owned = tool_name.to_string();
+                let recorder_cloned = recorder.clone();
+                tokio::spawn(async move {
+                    match tokio::time::timeout(
+                        Duration::from_millis(500),
+                        recorder_cloned.record_approval(&tool_name_owned, true, None),
+                    )
+                    .await
+                    {
+                        Ok(Ok(())) => tracing::info!(
+                            "✓ Tool '{}' approval recorded (background)",
+                            tool_name_owned
+                        ),
+                        Ok(Err(err)) => tracing::warn!(
+                            "[background] Failed to record approval for '{}': {}",
+                            tool_name_owned,
+                            err
+                        ),
+                        Err(_) => tracing::warn!(
+                            "[background] Timed out recording approval for '{}'",
+                            tool_name_owned
+                        ),
+                    }
+                });
             }
 
+            tracing::info!("✓ Returning ToolPermissionFlow::Approved for '{}'", tool_name);
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::Denied => {
