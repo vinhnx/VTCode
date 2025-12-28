@@ -1,0 +1,24 @@
+{
+  "hook_event_name": "Status",
+  "cwd": "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode",
+  "workspace": {
+    "current_dir": "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode",
+    "project_dir": "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode"
+  },
+  "model": {
+    "id": "ollama/nemotron-3-nano:30b-cloud",
+    "display_name": "Nemotron 3 Nano"
+  },
+  "runtime": {
+    "reasoning_effort": "medium"
+  },
+  "git": {
+    "branch": "main",
+    "dirty": true
+  },
+  "version": "0.1.0",
+  "context": {
+    "utilization_percent": 65.5,
+    "total_tokens": 12500
+  }
+}
