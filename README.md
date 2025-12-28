@@ -106,12 +106,12 @@ VT Code can integrate with code editors like Zed. To configure ACP, refer to the
 
 VT Code implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), enabling communication and interoperability between AI agents. The A2A protocol supports:
 
-- **Agent Discovery**: Via Agent Cards at `/.well-known/agent-card.json`
-- **Task Lifecycle Management**: States like `submitted`, `working`, `completed`, `failed`
-- **Real-time Streaming**: Via Server-Sent Events (SSE)
-- **Rich Content Types**: Text, file, and structured data parts
-- **Push Notifications**: Webhook-based async updates
-- **JSON-RPC 2.0**: Over HTTP(S) for interoperability
+-   **Agent Discovery**: Via Agent Cards at `/.well-known/agent-card.json`
+-   **Task Lifecycle Management**: States like `submitted`, `working`, `completed`, `failed`
+-   **Real-time Streaming**: Via Server-Sent Events (SSE)
+-   **Rich Content Types**: Text, file, and structured data parts
+-   **Push Notifications**: Webhook-based async updates
+-   **JSON-RPC 2.0**: Over HTTP(S) for interoperability
 
 For more information about A2A protocol support, see [A2A Protocol Documentation](./docs/a2a-protocol.md).
 
@@ -199,8 +199,8 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
     -   [Interactive mode](./docs/user-guide/interactive-mode.md)
     -   [Command line interface](./docs/user-guide/commands.md)
     -   [Custom prompts](./docs/user-guide/custom-prompts.md)
-  -   [Subagents](./docs/subagents/SUBAGENTS.md)
-    -   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
+-   [Subagents](./docs/subagents/SUBAGENTS.md)
+-   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
 -   [**AI Provider Setup**](./docs/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
     -   [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
     -   [OpenRouter](./docs/providers/openrouter.md)
