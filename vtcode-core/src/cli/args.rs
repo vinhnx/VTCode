@@ -873,6 +873,107 @@ pub enum Commands {
     /// Shows all available agent skills with descriptions
     #[command(name = "list-skills")]
     ListSkills {},
+
+    /// **Manage plugin marketplaces and plugins**
+    ///
+    /// Plugin marketplaces allow you to discover and install plugins
+    /// that extend VTCode's functionality with new commands, tools, and capabilities.
+    ///
+    /// Features:
+    ///   • Add/remove marketplace sources (GitHub, Git, local, remote)
+    ///   • Install/uninstall plugins from marketplaces
+    ///   • Enable/disable installed plugins
+    ///   • Update marketplace listings
+    ///
+    /// Examples:
+    ///   vtcode marketplace add anthropics/claude-code    # Add a marketplace
+    ///   vtcode marketplace list                        # List configured marketplaces
+    ///   vtcode plugin install commit-commands @claude-code  # Install a plugin
+    ///   vtcode plugin list                             # List installed plugins
+    #[command(subcommand)]
+    Marketplace(MarketplaceSubcommand),
+
+    /// **Manage plugins installed from marketplaces**
+    ///
+    /// Install, uninstall, and manage plugins that extend VTCode's functionality.
+    ///
+    /// Examples:
+    ///   vtcode plugin install commit-commands @claude-code  # Install a plugin
+    ///   vtcode plugin list                             # List installed plugins
+    ///   vtcode plugin uninstall commit-commands        # Uninstall a plugin
+    #[command(subcommand)]
+    Plugin(PluginSubcommand),
+}
+
+/// Marketplace subcommands
+#[derive(Debug, Subcommand, Clone)]
+pub enum MarketplaceSubcommand {
+    /// Add a new marketplace source
+    #[command(name = "add")]
+    Add {
+        /// Marketplace source (GitHub: owner/repo, Git: URL, Local: path, Remote: URL)
+        source: String,
+        /// Optional ID for the marketplace (auto-generated if not provided)
+        #[arg(long)]
+        id: Option<String>,
+    },
+
+    /// List all configured marketplaces
+    #[command(name = "list")]
+    List,
+
+    /// Remove a marketplace
+    #[command(name = "remove")]
+    Remove {
+        /// Marketplace ID to remove
+        id: String,
+    },
+
+    /// Update marketplace listings
+    #[command(name = "update")]
+    Update {
+        /// Marketplace ID to update (update all if not specified)
+        id: Option<String>,
+    },
+}
+
+/// Plugin management subcommands
+#[derive(Debug, Subcommand, Clone)]
+pub enum PluginSubcommand {
+    /// Install a plugin from a marketplace
+    #[command(name = "install")]
+    Install {
+        /// Plugin name to install
+        name: String,
+        /// Marketplace name (format: plugin-name @marketplace-name)
+        #[arg(long, short = 'm')]
+        marketplace: Option<String>,
+    },
+
+    /// List installed plugins
+    #[command(name = "list")]
+    List,
+
+    /// Uninstall a plugin
+    #[command(name = "uninstall")]
+    Uninstall {
+        /// Plugin name to uninstall
+        name: String,
+    },
+
+    /// Enable a plugin
+    #[command(name = "enable")]
+    Enable {
+        /// Plugin name to enable
+        name: String,
+    },
+
+    /// Disable a plugin
+    #[command(name = "disable")]
+    Disable {
+        /// Plugin name to disable
+        name: String,
+    },
 }
 
 /// Token-related subcommands
