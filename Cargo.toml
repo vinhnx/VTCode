@@ -29,6 +29,7 @@ default-run = "vtcode"
 [workspace.dependencies]
 base64 = "0.22.1"
 crossterm = "0.28"
+md5 = "0.7"
 schemars = "1.1.0"
 thiserror = "2.0.17"
 unicode-width = "0.2.0"
@@ -137,6 +138,7 @@ dotenvy = "0.15"
 dirs = "6.0"
 # Hashing for large output file paths
 sha2 = "0.10"
+md5 = { workspace = true }
 # ANSI styling
 anstyle = "1.0"
 anstyle-git = "1.1"

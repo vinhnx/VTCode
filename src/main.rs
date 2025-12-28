@@ -331,6 +331,43 @@ async fn run() -> Result<()> {
                 }
             }
         }
+        Some(Commands::Marketplace(marketplace_cmd)) => {
+            use vtcode_core::cli::args::MarketplaceSubcommand;
+            match marketplace_cmd {
+                MarketplaceSubcommand::Add { source, id } => {
+                    cli::handle_marketplace_add(source.clone(), id.clone()).await?;
+                }
+                MarketplaceSubcommand::List => {
+                    cli::handle_marketplace_list().await?;
+                }
+                MarketplaceSubcommand::Remove { id } => {
+                    cli::handle_marketplace_remove(id.clone()).await?;
+                }
+                MarketplaceSubcommand::Update { id } => {
+                    cli::handle_marketplace_update(id.clone()).await?;
+                }
+            }
+        }
+        Some(Commands::Plugin(plugin_cmd)) => {
+            use vtcode_core::cli::args::PluginSubcommand;
+            match plugin_cmd {
+                PluginSubcommand::Install { name, marketplace } => {
+                    cli::handle_plugin_install(name.clone(), marketplace.clone()).await?;
+                }
+                PluginSubcommand::List => {
+                    cli::handle_plugin_list().await?;
+                }
+                PluginSubcommand::Uninstall { name } => {
+                    cli::handle_plugin_uninstall(name.clone()).await?;
+                }
+                PluginSubcommand::Enable { name } => {
+                    cli::handle_plugin_enable(name.clone()).await?;
+                }
+                PluginSubcommand::Disable { name } => {
+                    cli::handle_plugin_disable(name.clone()).await?;
+                }
+            }
+        }
         _ => {
             // Default to chat
             cli::handle_chat_command(core_cfg, skip_confirmations, full_auto_requested).await?;
