@@ -198,7 +198,7 @@ mod tests {
         // but we're testing that serialization works
         let result = notifier.send_event(&config, event).await;
         assert!(result.is_err());
-        
+
         if let Err(e) = result {
             // Should be network error, not serialization error
             match e {

@@ -111,14 +111,12 @@ async fn handle_rpc(
         }
         METHOD_TASKS_GET => handle_tasks_get(&state, request.params, request.id.clone()).await,
         METHOD_TASKS_LIST => handle_tasks_list(&state, request.params, request.id.clone()).await,
-        METHOD_TASKS_CANCEL => {
-            handle_tasks_cancel(&state, request.params, request.id.clone()).await
-                METHOD_TASKS_PUSH_CONFIG_SET => {
-                    handle_push_config_set(&state, request.params, request.id.clone()).await
-                }
-                METHOD_TASKS_PUSH_CONFIG_GET => {
-                    handle_push_config_get(&state, request.params, request.id.clone()).await
-                }
+        METHOD_TASKS_CANCEL => handle_tasks_cancel(&state, request.params, request.id.clone()).await,
+        METHOD_TASKS_PUSH_CONFIG_SET => {
+            handle_push_config_set(&state, request.params, request.id.clone()).await
+        }
+        METHOD_TASKS_PUSH_CONFIG_GET => {
+            handle_push_config_get(&state, request.params, request.id.clone()).await
         }
         _ => {
             return Err(A2aErrorResponse::method_not_found(
