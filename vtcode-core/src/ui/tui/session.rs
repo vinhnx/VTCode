@@ -48,6 +48,7 @@ mod ansi_utils;
 mod command;
 pub mod config_palette;
 mod editing;
+mod vim_mode;
 
 mod events;
 mod message_renderer;
@@ -162,6 +163,9 @@ pub struct Session {
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,
+
+    // --- Vim Mode ---
+    pub(crate) vim_state: crate::ui::tui::session::vim_mode::VimState,
 
     // --- PTY Session Management ---
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,

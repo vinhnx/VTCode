@@ -155,14 +155,26 @@ async fn run() -> Result<()> {
 
     if let Some(print_value) = print_mode {
         let prompt = build_print_prompt(print_value)?;
-        cli::handle_ask_single_command(core_cfg, Some(prompt), cli::AskCommandOptions::default())
+        let options = cli::AskCommandOptions {
+            output_format: None, // This will be set when we handle the Ask subcommand
+            allowed_tools: args.allowed_tools.clone(),
+            disallowed_tools: args.disallowed_tools.clone(),
+            skip_confirmations: startup.skip_confirmations,
+        };
+        cli::handle_ask_single_command(core_cfg.clone(), Some(prompt), options)
             .await?;
         return Ok(());
     }
 
     // Handle potential prompt from workspace_path argument (when user runs `vtcode "prompt"`)
     if let Some(prompt) = potential_prompt {
-        cli::handle_ask_single_command(core_cfg, Some(prompt), cli::AskCommandOptions::default())
+        let options = cli::AskCommandOptions {
+            output_format: None,
+            allowed_tools: args.allowed_tools.clone(),
+            disallowed_tools: args.disallowed_tools.clone(),
+            skip_confirmations: startup.skip_confirmations,
+        };
+        cli::handle_ask_single_command(core_cfg.clone(), Some(prompt), options)
             .await?;
         return Ok(());
     }
@@ -174,7 +186,7 @@ async fn run() -> Result<()> {
 
     if let Some(resume_mode) = &startup.session_resume {
         cli::handle_resume_session_command(
-            core_cfg,
+            core_cfg.clone(),
             resume_mode.clone(),
             startup.custom_session_id.clone(),
             skip_confirmations,
@@ -201,7 +213,7 @@ async fn run() -> Result<()> {
             vtcode_core::cli::models_commands::handle_models_command(&args, command).await?;
         }
         Some(Commands::Chat) => {
-            cli::handle_chat_command(core_cfg, skip_confirmations, full_auto_requested).await?;
+            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested).await?;
         }
         Some(Commands::Ask {
             prompt,
@@ -209,6 +221,9 @@ async fn run() -> Result<()> {
         }) => {
             let options = cli::AskCommandOptions {
                 output_format: *output_format,
+                allowed_tools: args.allowed_tools.clone(),
+                disallowed_tools: args.disallowed_tools.clone(),
+                skip_confirmations: skip_confirmations,
             };
             cli::handle_ask_single_command(core_cfg, prompt.clone(), options).await?;
         }
@@ -223,11 +238,11 @@ async fn run() -> Result<()> {
                 events_path: events.clone(),
                 last_message_file: last_message_file.clone(),
             };
-            cli::handle_exec_command(core_cfg, cfg, options, prompt.clone()).await?;
+            cli::handle_exec_command(core_cfg.clone(), cfg, options, prompt.clone()).await?;
         }
         Some(Commands::ChatVerbose) => {
             // Reuse chat path; verbose behavior is handled in the module if applicable
-            cli::handle_chat_command(core_cfg, skip_confirmations, full_auto_requested).await?;
+            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested).await?;
         }
         Some(Commands::Analyze { analysis_type }) => {
             let analysis_type = match analysis_type.as_str() {
@@ -245,29 +260,29 @@ async fn run() -> Result<()> {
                     cli::analyze::AnalysisType::Full
                 }
             };
-            cli::handle_analyze_command(core_cfg, analysis_type).await?;
+            cli::handle_analyze_command(core_cfg.clone(), analysis_type).await?;
         }
         Some(Commands::Trajectory { file, top }) => {
-            cli::handle_trajectory_logs_command(core_cfg, file.clone(), *top).await?;
+            cli::handle_trajectory_logs_command(core_cfg.clone(), file.clone(), Some(*top)).await?;
         }
         Some(Commands::CreateProject { name, features }) => {
-            cli::handle_create_project_command(core_cfg, name, features).await?;
+            cli::handle_create_project_command(core_cfg.clone(), name, features).await?;
         }
 
         Some(Commands::Revert { turn, partial }) => {
-            cli::handle_revert_command(core_cfg, *turn, partial.clone()).await?;
+            cli::handle_revert_command(core_cfg.clone(), *turn, partial.clone()).await?;
         }
         Some(Commands::Snapshots) => {
-            cli::handle_snapshots_command(core_cfg).await?;
+            cli::handle_snapshots_command(core_cfg.clone()).await?;
         }
         Some(Commands::CleanupSnapshots { max }) => {
-            cli::handle_cleanup_snapshots_command(core_cfg, Some(*max)).await?;
+            cli::handle_cleanup_snapshots_command(core_cfg.clone(), Some(*max)).await?;
         }
         Some(Commands::Init) => {
             cli::handle_init_command(&startup.workspace, false, false).await?;
         }
         Some(Commands::Config { output, global }) => {
-            cli::handle_config_command(output.as_deref(), *global).await?;
+            cli::handle_config_command(output.clone(), *global).await?;
         }
         Some(Commands::InitProject {
             name,
@@ -288,7 +303,7 @@ async fn run() -> Result<()> {
                 output: output.clone(),
                 max_tasks: *max_tasks,
             };
-            cli::handle_benchmark_command(core_cfg, cfg, options, full_auto_requested).await?;
+            cli::handle_benchmark_command(core_cfg.clone(), cfg, options, full_auto_requested).await?;
         }
         Some(Commands::Man { command, output }) => {
             cli::handle_man_command(command.clone(), output.clone()).await?;

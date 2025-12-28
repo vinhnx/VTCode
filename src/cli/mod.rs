@@ -9,14 +9,22 @@ pub use vtcode_core::cli::a2a;
 pub use vtcode_core::mcp::cli::handle_mcp_command;
 pub use vtcode_core::skills::*;
 
+pub mod analyze;
+
 pub struct AskCommandOptions {
     pub output_format: Option<vtcode_core::cli::args::AskOutputFormat>,
+    pub allowed_tools: Vec<String>,
+    pub disallowed_tools: Vec<String>,
+    pub skip_confirmations: bool,
 }
 
 impl Default for AskCommandOptions {
     fn default() -> Self {
         Self {
             output_format: None,
+            allowed_tools: Vec::new(),
+            disallowed_tools: Vec::new(),
+            skip_confirmations: false,
         }
     }
 }
@@ -163,11 +171,12 @@ pub async fn handle_acp_command(
 }
 
 pub async fn handle_ask_single_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _prompt: Option<String>,
-    _options: AskCommandOptions,
+    core_cfg: vtcode_core::config::types::AgentConfig,
+    prompt: Option<String>,
+    options: AskCommandOptions,
 ) -> Result<()> {
-    Err(anyhow::anyhow!("Ask command not implemented in this stub"))
+    // Import the actual implementation from the ask module
+    crate::cli::ask::handle_ask_command(&core_cfg, prompt, options).await
 }
 
 pub async fn handle_chat_command(
@@ -181,17 +190,15 @@ pub async fn handle_chat_command(
 pub async fn handle_exec_command(
     _core_cfg: vtcode_core::config::types::AgentConfig,
     _cfg: &VTCodeConfig,
+    _options: ExecCommandOptions,
     _prompt: Option<String>,
-    _json: bool,
-    _events_path: Option<PathBuf>,
-    _last_message_file: Option<PathBuf>,
 ) -> Result<()> {
     Err(anyhow::anyhow!("Exec command not implemented in this stub"))
 }
 
 pub async fn handle_analyze_command(
     _core_cfg: vtcode_core::config::types::AgentConfig,
-    _analysis_type: String,
+    _analysis_type: analyze::AnalysisType,
 ) -> Result<()> {
     Err(anyhow::anyhow!("Analyze command not implemented in this stub"))
 }
@@ -239,7 +246,7 @@ pub async fn handle_init_command(
     Err(anyhow::anyhow!("Init command not implemented in this stub"))
 }
 
-pub async fn handle_config_command(_output: Option<&str>, _global: bool) -> Result<()> {
+pub async fn handle_config_command(_output: Option<PathBuf>, _global: bool) -> Result<()> {
     Err(anyhow::anyhow!("Config command not implemented in this stub"))
 }
 
@@ -254,17 +261,14 @@ pub async fn handle_init_project_command(
 pub async fn handle_benchmark_command(
     _core_cfg: vtcode_core::config::types::AgentConfig,
     _cfg: &VTCodeConfig,
-    _task_file: Option<PathBuf>,
-    _inline_task: Option<String>,
-    _output: Option<PathBuf>,
-    _max_tasks: Option<usize>,
+    _options: BenchmarkCommandOptions,
     _full_auto_requested: bool,
 ) -> Result<()> {
     Err(anyhow::anyhow!("Benchmark command not implemented in this stub"))
 }
 
 pub async fn handle_man_command(
-    _command: vtcode_core::cli::man_commands::ManSubcommand,
+    _command: Option<String>,
     _output: Option<PathBuf>,
 ) -> Result<()> {
     Err(anyhow::anyhow!("Man command not implemented in this stub"))
@@ -272,11 +276,39 @@ pub async fn handle_man_command(
 
 pub async fn handle_resume_session_command(
     _core_cfg: &vtcode_core::config::types::AgentConfig,
-    _resume_mode: vtcode_core::session::ResumeMode,
+    _resume_session: Option<String>,
     _custom_session_id: Option<String>,
     _skip_confirmations: bool,
 ) -> Result<()> {
     Err(anyhow::anyhow!("Resume session command not implemented in this stub"))
+}
+
+pub async fn handle_skills_list(_skills_options: &SkillsCommandOptions) -> Result<()> {
+    Err(anyhow::anyhow!("Skills list command not implemented in this stub"))
+}
+
+pub async fn handle_skills_load(_skills_options: &SkillsCommandOptions, _name: &str, _path: PathBuf) -> Result<()> {
+    Err(anyhow::anyhow!("Skills load command not implemented in this stub"))
+}
+
+pub async fn handle_skills_info(_skills_options: &SkillsCommandOptions, _name: &str) -> Result<()> {
+    Err(anyhow::anyhow!("Skills info command not implemented in this stub"))
+}
+
+pub async fn handle_skills_create(_path: &PathBuf) -> Result<()> {
+    Err(anyhow::anyhow!("Skills create command not implemented in this stub"))
+}
+
+pub async fn handle_skills_validate(_path: &PathBuf) -> Result<()> {
+    Err(anyhow::anyhow!("Skills validate command not implemented in this stub"))
+}
+
+pub async fn handle_skills_validate_all(_skills_options: &SkillsCommandOptions) -> Result<()> {
+    Err(anyhow::anyhow!("Skills validate all command not implemented in this stub"))
+}
+
+pub async fn handle_skills_config(_skills_options: &SkillsCommandOptions) -> Result<()> {
+    Err(anyhow::anyhow!("Skills config command not implemented in this stub"))
 }
 
 pub async fn handle_auto_task_command(
