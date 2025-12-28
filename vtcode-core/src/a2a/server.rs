@@ -181,6 +181,8 @@ async fn handle_stream(
     let mut rx = state.event_tx.subscribe();
     let task_id_clone = task_id.clone();
     let context_id = params.context_id.clone();
+    let notifier = state.webhook_notifier.clone();
+    let task_manager = state.task_manager.clone();
 
     // Create stream from broadcast receiver using async_stream
     let stream = async_stream::stream! {
@@ -197,6 +199,17 @@ async fn handle_stream(
                     };
 
                     if matches {
+                        // Fire webhook asynchronously (best-effort)
+                        let notifier = notifier.clone();
+                        let task_manager = task_manager.clone();
+                        let task_id_for_hook = task_id_clone.clone();
+                        let event_for_hook = event.clone();
+                        tokio::spawn(async move {
+                            if let Some(cfg) = task_manager.get_webhook_config(&task_id_for_hook).await {
+                                let _ = notifier.send_event(&cfg, event_for_hook).await;
+                            }
+                        });
+
                         let is_final = event.is_final();
                         let json = serde_json::to_string(&SendStreamingMessageResponse { event })
                             .unwrap_or_default();
