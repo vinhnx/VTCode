@@ -81,7 +81,8 @@ pub(crate) async fn update_input_status_if_changed(
         };
 
         if should_refresh_git {
-            match git_status_summary(workspace) {
+            let workspace_buf = workspace.to_path_buf();
+            match tokio::task::spawn_blocking(move || git_status_summary(&workspace_buf)).await? {
                 Ok(Some(summary)) => {
                     let indicator = if summary.dirty {
                         ui::HEADER_GIT_DIRTY_SUFFIX
