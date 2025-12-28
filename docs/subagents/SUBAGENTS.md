@@ -30,13 +30,13 @@ VT Code automatically delegates tasks to appropriate subagents, or you can invok
 
 ## Built-in Subagents
 
-| Name | Purpose | Model | Tools |
-|------|---------|-------|-------|
-| `explore` | Fast read-only codebase search | haiku | list_files, grep_file, read_file, run_pty_cmd |
-| `plan` | Research for planning mode | sonnet | list_files, grep_file, read_file, run_pty_cmd |
-| `general` | Multi-step tasks with full capabilities | sonnet | all |
-| `code-reviewer` | Code quality and security review | inherit | read_file, grep_file, list_files, run_pty_cmd |
-| `debugger` | Error investigation and fixes | inherit | read_file, edit_file, run_pty_cmd, grep_file, list_files |
+| Name            | Purpose                                 | Model   | Tools                                                    |
+| --------------- | --------------------------------------- | ------- | -------------------------------------------------------- |
+| `explore`       | Fast read-only codebase search          | haiku   | list_files, grep_file, read_file, run_pty_cmd            |
+| `plan`          | Research for planning mode              | sonnet  | list_files, grep_file, read_file, run_pty_cmd            |
+| `general`       | Multi-step tasks with full capabilities | sonnet  | all                                                      |
+| `code-reviewer` | Code quality and security review        | inherit | read_file, grep_file, list_files, run_pty_cmd            |
+| `debugger`      | Error investigation and fixes           | inherit | read_file, edit_file, run_pty_cmd, grep_file, list_files |
 
 ## Configuration
 
@@ -44,12 +44,12 @@ VT Code automatically delegates tasks to appropriate subagents, or you can invok
 
 ```markdown
 ---
-name: agent-name           # Required: unique identifier (lowercase, hyphens)
-description: When to use   # Required: natural language description
-tools: tool1, tool2        # Optional: comma-separated tools (inherits all if omitted)
-model: sonnet              # Optional: sonnet, opus, haiku, inherit, or model ID
-permissionMode: default    # Optional: default, acceptEdits, bypassPermissions, plan, ignore
-skills: skill1, skill2     # Optional: skills to auto-load
+name: agent-name # Required: unique identifier (lowercase, hyphens)
+description: When to use # Required: natural language description
+tools: tool1, tool2 # Optional: comma-separated tools (inherits all if omitted)
+model: sonnet # Optional: sonnet, opus, haiku, inherit, or model ID
+permissionMode: default # Optional: default, acceptEdits, bypassPermissions, plan, ignore
+skills: skill1, skill2 # Optional: skills to auto-load
 ---
 
 System prompt goes here (markdown body)
@@ -57,32 +57,32 @@ System prompt goes here (markdown body)
 
 ### Model Selection
 
-| Value | Behavior |
-|-------|----------|
-| `inherit` | Use the same model as the main conversation |
-| `sonnet` | Use Sonnet-equivalent (default for subagents) |
-| `opus` | Use Opus-equivalent |
-| `haiku` | Use Haiku-equivalent (fast, for exploration) |
-| `model-id` | Use a specific model ID |
+| Value      | Behavior                                      |
+| ---------- | --------------------------------------------- |
+| `inherit`  | Use the same model as the main conversation   |
+| `sonnet`   | Use Sonnet-equivalent (default for subagents) |
+| `opus`     | Use Opus-equivalent                           |
+| `haiku`    | Use Haiku-equivalent (fast, for exploration)  |
+| `model-id` | Use a specific model ID                       |
 
 ### Permission Modes
 
-| Mode | Behavior |
-|------|----------|
-| `default` | Normal permission prompts |
-| `acceptEdits` | Auto-accept file edits |
+| Mode                | Behavior                       |
+| ------------------- | ------------------------------ |
+| `default`           | Normal permission prompts      |
+| `acceptEdits`       | Auto-accept file edits         |
 | `bypassPermissions` | Bypass all prompts (dangerous) |
-| `plan` | Read-only, research mode |
-| `ignore` | Continue on permission errors |
+| `plan`              | Read-only, research mode       |
+| `ignore`            | Continue on permission errors  |
 
 ## File Locations
 
-| Type | Location | Priority |
-|------|----------|----------|
-| Project | `.vtcode/agents/` | Highest |
-| CLI | `--agents` JSON flag | High |
-| User | `~/.vtcode/agents/` | Medium |
-| Built-in | Compiled into binary | Lowest |
+| Type     | Location             | Priority |
+| -------- | -------------------- | -------- |
+| Project  | `.vtcode/agents/`    | Highest  |
+| CLI      | `--agents` JSON flag | High     |
+| User     | `~/.vtcode/agents/`  | Medium   |
+| Built-in | Compiled into binary | Lowest   |
 
 Project-level subagents take precedence over user-level when names conflict.
 
@@ -115,10 +115,10 @@ Subagents can be resumed to continue previous conversations:
 
 ## Orchestrator Flow
 
-- When a task fits a subagent's specialty or needs parallel focus, call `spawn_subagent` with a concise task prompt plus any relevant context (files, constraints, prior attempts).
-- If a specific agent is obvious, set `subagent_type`; otherwise omit to let the registry pick the best candidate.
-- For follow-ups, include the `resume` agent_id so the same subagent continues with its preserved context.
-- After the subagent returns, relay a brief summary and the `agent_id` back to the user, and continue main-agent reasoning with the subagent's findings.
+-   When a task fits a subagent's specialty or needs parallel focus, call `spawn_subagent` with a concise task prompt plus any relevant context (files, constraints, prior attempts).
+-   If a specific agent is obvious, set `subagent_type`; otherwise omit to let the registry pick the best candidate.
+-   For follow-ups, include the `resume` agent_id so the same subagent continues with its preserved context.
+-   After the subagent returns, relay a brief summary and the `agent_id` back to the user, and continue main-agent reasoning with the subagent's findings.
 
 ## Best Practices
 
@@ -157,9 +157,10 @@ println!("Agent {} completed: {}", result.agent_id, result.output);
 ## Example Subagents
 
 See `docs/examples/agents/` for complete examples:
-- `code-reviewer.md` - Code review specialist
-- `test-runner.md` - Test automation expert
-- `data-scientist.md` - Data analysis expert
+
+-   `code-reviewer.md` - Code review specialist
+-   `test-runner.md` - Test automation expert
+-   `data-scientist.md` - Data analysis expert
 
 ## Architecture
 

@@ -7,6 +7,12 @@ All notable changes to vtcode will be documented in this file.
 
 
 ### Features
+    - feat(subagents): add subagent system for delegating tasks to specialized agents
+        - Built-in subagents: explore (haiku, read-only), plan (sonnet, research), general (sonnet, full), code-reviewer, debugger
+        - `spawn_subagent` tool with resume, thoroughness, parent_context params
+        - Custom agents via Markdown with YAML frontmatter in `.vtcode/agents/` or `~/.vtcode/agents/`
+        - System prompts updated to guide orchestrator delegation
+        - Documentation: `docs/subagents/SUBAGENTS.md`
     - feat(notifications): add toggle for terminal notifications in config
     - feat(cli): add support for multiple workspaces and enhanced security controls
     - feat(release): enhance GitHub account handling for CI environments

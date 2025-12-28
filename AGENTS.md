@@ -128,6 +128,15 @@ Understanding these patterns requires reading multiple files across the codebase
         - Improvement designs: `docs/MCP_IMPROVEMENTS.md` (planned enhancements)
         - Implementation roadmap: `docs/MCP_ROADMAP.md` (detailed next steps)
 
+### Subagent System
+
+-   **Location**: `vtcode-core/src/subagents/`, `vtcode-config/src/subagent.rs`
+-   **Purpose**: Delegate tasks to specialized agents with isolated context
+-   **Built-in Subagents**: `explore` (haiku, read-only), `plan` (sonnet, research), `general` (sonnet, full), `code-reviewer`, `debugger`
+-   **Tool**: `spawn_subagent` with params: `prompt`, `subagent_type`, `resume`, `thoroughness`, `parent_context`
+-   **Custom Agents**: Define in `.vtcode/agents/` (project) or `~/.vtcode/agents/` (user) as Markdown with YAML frontmatter
+-   **Documentation**: `docs/subagents/SUBAGENTS.md`
+
 ## Communication Style
 
 ### Response Guidelines
