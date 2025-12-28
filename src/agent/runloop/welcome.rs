@@ -143,6 +143,7 @@ fn terminal_info_highlight() -> InlineHeaderHighlight {
                     TerminalFeature::CopyPaste => "Copy/Paste",
                     TerminalFeature::ShellIntegration => "Shell Integration",
                     TerminalFeature::ThemeSync => "Theme Sync",
+                    TerminalFeature::Notifications => "Notifications",
                 })
                 .collect();
 

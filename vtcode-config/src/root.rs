@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::status_line::StatusLineConfig;
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -8,41 +10,6 @@ pub enum ToolOutputMode {
     #[default]
     Compact,
     Full,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-#[derive(Default)]
-pub enum StatusLineMode {
-    #[default]
-    Auto,
-    Command,
-    Hidden,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct StatusLineConfig {
-    #[serde(default = "default_status_line_mode")]
-    pub mode: StatusLineMode,
-    #[serde(default)]
-    pub command: Option<String>,
-    #[serde(default = "default_status_line_refresh_interval_ms")]
-    pub refresh_interval_ms: u64,
-    #[serde(default = "default_status_line_command_timeout_ms")]
-    pub command_timeout_ms: u64,
-}
-
-impl Default for StatusLineConfig {
-    fn default() -> Self {
-        Self {
-            mode: default_status_line_mode(),
-            command: None,
-            refresh_interval_ms: default_status_line_refresh_interval_ms(),
-            command_timeout_ms: default_status_line_command_timeout_ms(),
-        }
-    }
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -208,17 +175,6 @@ fn default_show_timeline_pane() -> bool {
     crate::constants::ui::INLINE_SHOW_TIMELINE_PANE
 }
 
-fn default_status_line_mode() -> StatusLineMode {
-    StatusLineMode::Auto
-}
-
-fn default_status_line_refresh_interval_ms() -> u64 {
-    crate::constants::ui::STATUS_LINE_REFRESH_INTERVAL_MS
-}
-
-fn default_status_line_command_timeout_ms() -> u64 {
-    crate::constants::ui::STATUS_LINE_COMMAND_TIMEOUT_MS
-}
 
 /// Kitty keyboard protocol configuration
 /// Reference: https://sw.kovidgoyal.net/kitty/keyboard-protocol/

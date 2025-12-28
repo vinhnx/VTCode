@@ -49,6 +49,18 @@ pub fn generate_config(
                 config_sections.push("# Theme colors will be configured separately".to_string());
                 config_sections.push(String::new());
             }
+            crate::terminal_setup::detector::TerminalFeature::Notifications => {
+                config_sections.push("# System notifications".to_string());
+                config_sections.push(
+                    r#"terminal:
+  bell: true
+  notifications:
+    enabled: true
+    shellIntegration: true
+"#
+                    .to_string(),
+                );
+            }
         }
     }
 

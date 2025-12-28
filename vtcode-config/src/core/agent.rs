@@ -166,6 +166,10 @@ pub struct AgentConfig {
     /// Include current working directory in system prompt (default: true)
     #[serde(default = "default_include_working_directory")]
     pub include_working_directory: bool,
+
+    /// Enable Vim mode for enhanced text editing (default: false)
+    #[serde(default = "default_vim_mode_enabled")]
+    pub vim_mode_enabled: bool,
 }
 
 impl Default for AgentConfig {
@@ -203,6 +207,7 @@ impl Default for AgentConfig {
             include_temporal_context: default_include_temporal_context(),
             temporal_context_use_utc: false, // Default to local time
             include_working_directory: default_include_working_directory(),
+            vim_mode_enabled: default_vim_mode_enabled(),
         }
     }
 }
@@ -328,6 +333,11 @@ const fn default_include_temporal_context() -> bool {
 #[inline]
 const fn default_include_working_directory() -> bool {
     true // Enable by default - minimal overhead (~10 tokens)
+}
+
+#[inline]
+const fn default_vim_mode_enabled() -> bool {
+    false // Disabled by default to maintain standard UX
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

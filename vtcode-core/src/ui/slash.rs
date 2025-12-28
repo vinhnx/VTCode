@@ -107,6 +107,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Start a new session",
         },
         SlashCommandInfo {
+            name: "rewind",
+            description: "Rewind to a previous checkpoint (usage: /rewind [turn] or /rewind [conversation|code|both])",
+        },
+        SlashCommandInfo {
             name: "docs",
             description: "Open vtcode documentation in web browser",
         },

@@ -186,8 +186,8 @@ async fn run() -> Result<()> {
 
     if let Some(resume_mode) = &startup.session_resume {
         cli::handle_resume_session_command(
-            core_cfg.clone(),
-            resume_mode.clone(),
+            &core_cfg,
+            None, // resume session ID - we're using custom_session_id instead
             startup.custom_session_id.clone(),
             skip_confirmations,
         )
@@ -225,7 +225,7 @@ async fn run() -> Result<()> {
                 disallowed_tools: args.disallowed_tools.clone(),
                 skip_confirmations: skip_confirmations,
             };
-            cli::handle_ask_single_command(core_cfg, prompt.clone(), options).await?;
+            cli::handle_ask_single_command(core_cfg.clone(), prompt.clone(), options).await?;
         }
         Some(Commands::Exec {
             json,
@@ -324,7 +324,9 @@ async fn run() -> Result<()> {
                     cli::handle_skills_list(&skills_options).await?;
                 }
                 SkillsSubcommand::Load { name, path } => {
-                    cli::handle_skills_load(&skills_options, name, path.clone()).await?;
+                    if let Some(path_val) = path {
+                        cli::handle_skills_load(&skills_options, name, path_val.to_path_buf()).await?;
+                    }
                 }
                 SkillsSubcommand::Info { name } => {
                     cli::handle_skills_info(&skills_options, name).await?;
@@ -385,7 +387,7 @@ async fn run() -> Result<()> {
         }
         _ => {
             // Default to chat
-            cli::handle_chat_command(core_cfg, skip_confirmations, full_auto_requested).await?;
+            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested).await?;
         }
     }
 

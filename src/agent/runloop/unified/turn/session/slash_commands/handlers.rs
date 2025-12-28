@@ -894,6 +894,83 @@ pub async fn handle_manage_skills(
     }
 }
 
+pub async fn handle_rewind_to_turn(
+    ctx: SlashCommandContext<'_>,
+    turn: usize,
+    scope: vtcode_core::core::agent::snapshots::RevertScope,
+) -> Result<SlashCommandControl> {
+    // Check if checkpoint manager is available
+    if let Some(manager) = ctx.checkpoint_manager {
+        // Attempt to restore the snapshot
+        match manager.restore_snapshot(turn, scope).await {
+            Ok(Some(restored)) => {
+                // Update conversation history if scope includes conversation
+                if scope.includes_conversation() {
+                    *ctx.conversation_history = restored.conversation.iter().map(|msg| uni::Message::from(msg)).collect();
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        &format!("Restored conversation history from turn {} ({} messages)", turn, restored.conversation.len()),
+                    )?;
+                }
+
+                // Report code changes if scope includes code
+                if scope.includes_code() {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        &format!("Applied code changes from turn {}", turn),
+                    )?;
+                }
+
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    &format!("Successfully rewound to turn {} with scope {:?}", turn, scope),
+                )?;
+            }
+            Ok(None) => {
+                ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!("No checkpoint found for turn {}", turn),
+                )?;
+            }
+            Err(err) => {
+                ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to restore checkpoint for turn {}: {}", turn, err),
+                )?;
+            }
+        }
+    } else {
+        // Fallback to CLI command guidance if checkpoint manager is not available
+        ctx.renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Rewinding to turn {} with scope {:?}...",
+                turn, scope
+            ),
+        )?;
+
+        ctx.renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Use: `vtcode revert --turn {} --partial {}` from command line",
+                turn,
+                match scope {
+                    vtcode_core::core::agent::snapshots::RevertScope::Conversation => "conversation",
+                    vtcode_core::core::agent::snapshots::RevertScope::Code => "code",
+                    vtcode_core::core::agent::snapshots::RevertScope::Both => "both",
+                }
+            ),
+        )?;
+
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Note: In-chat rewind requires access to the checkpoint manager.",
+        )?;
+    }
+
+    Ok(SlashCommandControl::Continue)
+}
+
 pub async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "✓")?;
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))

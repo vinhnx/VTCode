@@ -55,10 +55,12 @@ pub(crate) async fn update_input_status_if_changed(
     model: &str,
     reasoning: &str,
     status_config: Option<&StatusLineConfig>,
+    vim_mode_enabled: bool,
+    vim_mode_normal: bool,
     state: &mut InputStatusState,
 ) -> Result<()> {
     let mode = status_config
-        .map(|cfg| cfg.mode)
+        .map(|cfg| cfg.mode.clone())
         .unwrap_or(StatusLineMode::Auto);
 
     if matches!(mode, StatusLineMode::Hidden) {
@@ -144,6 +146,8 @@ pub(crate) async fn update_input_status_if_changed(
                 state.context_utilization,
                 state.context_tokens,
                 state.is_cancelling,
+                vim_mode_enabled,
+                vim_mode_normal,
             );
             (state.git_left.clone(), right)
         }
@@ -198,6 +202,8 @@ pub(crate) async fn update_input_status_if_changed(
                         state.context_utilization,
                         state.context_tokens,
                         state.is_cancelling,
+                        vim_mode_enabled,
+                        vim_mode_normal,
                     );
                     (state.git_left.clone(), right)
                 }
@@ -209,6 +215,8 @@ pub(crate) async fn update_input_status_if_changed(
                     state.context_utilization,
                     state.context_tokens,
                     state.is_cancelling,
+                    vim_mode_enabled,
+                    vim_mode_normal,
                 );
                 (state.git_left.clone(), right)
             }
@@ -229,13 +237,26 @@ pub(crate) async fn update_input_status_if_changed(
 }
 
 #[allow(dead_code)]
-fn build_model_status_right(model: &str, reasoning: &str) -> Option<String> {
+fn build_model_status_right(model: &str, reasoning: &str, vim_mode_enabled: bool, vim_mode_normal: bool) -> Option<String> {
+    let mut parts = Vec::new();
+
+    if vim_mode_enabled {
+        let vim_status = if vim_mode_normal { "VIM:N" } else { "VIM:I" };
+        parts.push(vim_status.to_string());
+    }
+
     if model.is_empty() {
         None
     } else if reasoning.is_empty() {
-        Some(model.to_string())
+        if parts.is_empty() {
+            Some(model.to_string())
+        } else {
+            parts.push(model.to_string());
+            Some(parts.join(" | "))
+        }
     } else {
-        Some(format!("{} ({})", model, reasoning))
+        parts.push(format!("{} ({})", model, reasoning));
+        Some(parts.join(" | "))
     }
 }
 
@@ -248,11 +269,18 @@ pub(crate) fn build_model_status_with_context(
     context_utilization: Option<f64>,
     total_tokens: Option<usize>,
     is_cancelling: bool,
+    vim_mode_enabled: bool,
+    vim_mode_normal: bool,
 ) -> Option<String> {
     let mut parts = Vec::new();
 
     if is_cancelling {
         parts.push("⚠ CANCELLING...".to_string());
+    }
+
+    if vim_mode_enabled {
+        let vim_status = if vim_mode_normal { "VIM:N" } else { "VIM:I" };
+        parts.push(vim_status.to_string());
     }
 
     parts.push(model.to_string());

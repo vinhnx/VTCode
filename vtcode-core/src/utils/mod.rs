@@ -110,6 +110,7 @@ pub mod diff;
 pub mod diff_styles;
 pub mod dot_config;
 pub mod error_messages;
+pub mod file_workflow;
 pub mod image_processing;
 pub mod migration;
 pub mod path;

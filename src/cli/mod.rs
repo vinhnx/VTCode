@@ -176,7 +176,12 @@ pub async fn handle_ask_single_command(
     options: AskCommandOptions,
 ) -> Result<()> {
     // Import the actual implementation from the ask module
-    crate::cli::ask::handle_ask_command(&core_cfg, prompt, options).await
+    let prompt_vec = if let Some(p) = prompt {
+        vec![p]
+    } else {
+        vec![]
+    };
+    vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec).await
 }
 
 pub async fn handle_chat_command(

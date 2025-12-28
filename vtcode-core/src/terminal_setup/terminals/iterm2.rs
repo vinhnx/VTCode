@@ -63,6 +63,16 @@ pub fn generate_config(
                     .push("4. VT Code theme colors can be manually configured here".to_string());
                 instructions.push(String::new());
             }
+            crate::terminal_setup::detector::TerminalFeature::Notifications => {
+                instructions.push(format!("{}. SYSTEM NOTIFICATIONS", i + 1));
+                instructions.push(String::new());
+                instructions.push("1. Open iTerm2 Preferences (Cmd+,)".to_string());
+                instructions.push("2. Navigate to Profiles → Terminal".to_string());
+                instructions.push("3. Enable 'Silence bell' and Filter Alerts → 'Send escape sequence-generated alerts'".to_string());
+                instructions.push("4. Set your preferred notification delay".to_string());
+                instructions.push("5. For shell integration notifications, consider using tools like terminal-notifier".to_string());
+                instructions.push(String::new());
+            }
         }
     }
 

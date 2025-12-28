@@ -22,6 +22,8 @@ pub struct LifecycleHooksConfig {
     pub pre_tool_use: Vec<HookGroupConfig>,
     #[serde(default)]
     pub post_tool_use: Vec<HookGroupConfig>,
+    #[serde(default)]
+    pub task_completion: Vec<HookGroupConfig>,
 }
 
 impl LifecycleHooksConfig {
@@ -31,6 +33,7 @@ impl LifecycleHooksConfig {
             && self.user_prompt_submit.is_empty()
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
+            && self.task_completion.is_empty()
     }
 }
 
@@ -79,6 +82,7 @@ impl LifecycleHooksConfig {
         validate_groups(&self.user_prompt_submit, "user_prompt_submit")?;
         validate_groups(&self.pre_tool_use, "pre_tool_use")?;
         validate_groups(&self.post_tool_use, "post_tool_use")?;
+        validate_groups(&self.task_completion, "task_completion")?;
         Ok(())
     }
 }

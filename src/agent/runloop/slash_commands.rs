@@ -69,6 +69,11 @@ pub enum SlashCommandOutcome {
         prompt: String,
     },
     StartTerminalSetup,
+    ToggleVimMode,
+    RewindToTurn {
+        turn: usize,
+        scope: vtcode_core::core::agent::snapshots::RevertScope,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -537,6 +542,86 @@ pub async fn handle_slash_command(
             }
             Ok(SlashCommandOutcome::NewSession)
         }
+        "rewind" => {
+            // Parse arguments for rewind command
+            let tokens: Vec<&str> = args.trim().split_whitespace().collect();
+
+            if tokens.is_empty() {
+                // Show available snapshots when no arguments provided
+                renderer.line(
+                    MessageStyle::Info,
+                    "Available rewind options:",
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "  /rewind <turn_number> - Rewind to specific turn",
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "  /rewind conversation - Rewind conversation only",
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "  /rewind code - Rewind code changes only",
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "  /rewind both - Rewind both conversation and code",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+
+            // Parse the arguments
+            let mut turn_number: Option<usize> = None;
+            let mut scope_str: Option<&str> = None;
+
+            for token in &tokens {
+                if let Ok(turn) = token.parse::<usize>() {
+                    turn_number = Some(turn);
+                } else {
+                    scope_str = Some(token);
+                }
+            }
+
+            // Determine the revert scope
+            let scope = if let Some(scope_str) = scope_str {
+                match scope_str.to_ascii_lowercase().as_str() {
+                    "conversation" | "chat" => vtcode_core::core::agent::snapshots::RevertScope::Conversation,
+                    "code" | "files" => vtcode_core::core::agent::snapshots::RevertScope::Code,
+                    "both" | "full" => vtcode_core::core::agent::snapshots::RevertScope::Both,
+                    _ => {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Unknown revert scope '{}'. Use conversation, code, or both.", scope_str),
+                        )?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                }
+            } else {
+                // Default to both if no scope specified
+                vtcode_core::core::agent::snapshots::RevertScope::Both
+            };
+
+            // Use turn number if provided, otherwise use a default behavior
+            if let Some(turn) = turn_number {
+                // Return a command to handle the revert with specific turn and scope
+                Ok(SlashCommandOutcome::RewindToTurn {
+                    turn,
+                    scope,
+                })
+            } else {
+                // If no turn number, show available snapshots
+                renderer.line(
+                    MessageStyle::Info,
+                    "Please specify a turn number to rewind to.",
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Use /snapshots to see available checkpoints.",
+                )?;
+                Ok(SlashCommandOutcome::Handled)
+            }
+        }
         "docs" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /docs")?;
@@ -629,6 +714,17 @@ pub async fn handle_slash_command(
             };
             render_help(renderer, specific_cmd)?;
             Ok(SlashCommandOutcome::Handled)
+        }
+        "vim" => {
+            if !args.is_empty() {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Usage: /vim (no arguments supported yet)",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+
+            Ok(SlashCommandOutcome::ToggleVimMode)
         }
         "terminal-setup" => {
             if !args.is_empty() {
