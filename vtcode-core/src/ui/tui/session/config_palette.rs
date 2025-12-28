@@ -177,6 +177,16 @@ impl ConfigPalette {
             description: Some("Enable Model Context Protocol support".to_string()),
         });
 
+        // Vim Mode
+        items.push(ConfigItem {
+            key: "agent.vim_mode_enabled".to_string(),
+            label: "Vim Mode".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.agent.vim_mode_enabled,
+            },
+            description: Some("Enable Vim-style keybindings for text editing".to_string()),
+        });
+
         // -- Limits & Session Section --
 
         // Max Context Tokens
@@ -568,6 +578,10 @@ impl ConfigPalette {
                 }
                 "mcp.enabled" => {
                     self.config.mcp.enabled = !self.config.mcp.enabled;
+                    changed = true;
+                }
+                "agent.vim_mode_enabled" => {
+                    self.config.agent.vim_mode_enabled = !self.config.agent.vim_mode_enabled;
                     changed = true;
                 }
                 "ui.inline_viewport_rows"

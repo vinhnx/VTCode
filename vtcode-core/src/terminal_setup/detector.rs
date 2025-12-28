@@ -29,6 +29,7 @@ pub enum TerminalFeature {
     CopyPaste,
     ShellIntegration,
     ThemeSync,
+    Notifications,
 }
 
 impl TerminalType {
@@ -99,20 +100,23 @@ impl TerminalType {
             // Alacritty supports all features
             (TerminalType::Alacritty, _) => true,
 
-            // Zed: multiline and theme only
+            // Zed: multiline, theme, and notifications only
             (TerminalType::Zed, TerminalFeature::Multiline) => true,
             (TerminalType::Zed, TerminalFeature::ThemeSync) => true,
+            (TerminalType::Zed, TerminalFeature::Notifications) => true,
             (TerminalType::Zed, _) => false,
 
             // Warp: has built-in multiline support, no manual config needed
             (TerminalType::Warp, TerminalFeature::Multiline) => false, // Built-in
+            (TerminalType::Warp, TerminalFeature::Notifications) => true, // Built-in
             (TerminalType::Warp, _) => false,
 
             // iTerm2 supports all features but requires manual setup
             (TerminalType::ITerm2, _) => true,
 
-            // VS Code: only multiline
+            // VS Code: multiline and notifications
             (TerminalType::VSCode, TerminalFeature::Multiline) => true,
+            (TerminalType::VSCode, TerminalFeature::Notifications) => true,
             (TerminalType::VSCode, _) => false,
 
             // Windows Terminal supports all features
@@ -304,6 +308,7 @@ impl TerminalFeature {
             TerminalFeature::CopyPaste => "Enhanced Copy/Paste",
             TerminalFeature::ShellIntegration => "Shell Integration",
             TerminalFeature::ThemeSync => "Theme Synchronization",
+            TerminalFeature::Notifications => "System Notifications",
         }
     }
 }
@@ -319,13 +324,24 @@ mod tests {
         assert!(TerminalType::Ghostty.supports_feature(TerminalFeature::CopyPaste));
         assert!(TerminalType::Ghostty.supports_feature(TerminalFeature::ShellIntegration));
         assert!(TerminalType::Ghostty.supports_feature(TerminalFeature::ThemeSync));
+        assert!(TerminalType::Ghostty.supports_feature(TerminalFeature::Notifications));
 
-        // VS Code supports only multiline
+        // VS Code supports multiline and notifications
         assert!(TerminalType::VSCode.supports_feature(TerminalFeature::Multiline));
+        assert!(TerminalType::VSCode.supports_feature(TerminalFeature::Notifications));
         assert!(!TerminalType::VSCode.supports_feature(TerminalFeature::CopyPaste));
+
+        // Zed supports multiline, theme sync, and notifications
+        assert!(TerminalType::Zed.supports_feature(TerminalFeature::Multiline));
+        assert!(TerminalType::Zed.supports_feature(TerminalFeature::ThemeSync));
+        assert!(TerminalType::Zed.supports_feature(TerminalFeature::Notifications));
+
+        // Warp supports notifications
+        assert!(TerminalType::Warp.supports_feature(TerminalFeature::Notifications));
 
         // Unknown supports nothing
         assert!(!TerminalType::Unknown.supports_feature(TerminalFeature::Multiline));
+        assert!(!TerminalType::Unknown.supports_feature(TerminalFeature::Notifications));
     }
 
     #[test]

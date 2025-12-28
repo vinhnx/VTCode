@@ -64,6 +64,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub custom_prompts: &'a vtcode_core::prompts::CustomPromptRegistry,
     pub default_placeholder: &'a mut Option<String>,
     pub follow_up_placeholder: &'a mut Option<String>,
+    pub checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
 }
 
 pub(crate) struct InteractionState<'a> {
@@ -91,6 +92,9 @@ pub(crate) async fn run_interaction_loop(
 
     loop {
         // Refresh status line
+        let vim_mode_enabled = ctx.vt_cfg.as_ref().map(|cfg| cfg.agent.vim_mode_enabled).unwrap_or(false);
+        let vim_mode_normal = false; // No vim state in interaction loop
+
         if let Err(error) =
             crate::agent::runloop::unified::status_line::update_input_status_if_changed(
                 ctx.handle,
@@ -98,6 +102,8 @@ pub(crate) async fn run_interaction_loop(
                 &ctx.config.model,
                 ctx.config.reasoning_effort.as_str(),
                 ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
+                vim_mode_enabled,
+                vim_mode_normal,
                 state.input_status_state,
             )
             .await
@@ -290,6 +296,7 @@ pub(crate) async fn run_interaction_loop(
                             approval_recorder: Some(ctx.approval_recorder),
                             tool_permission_cache: ctx.tool_permission_cache,
                             loaded_skills: ctx.loaded_skills,
+                            checkpoint_manager: ctx.checkpoint_manager,
                         },
                     )
                     .await?;

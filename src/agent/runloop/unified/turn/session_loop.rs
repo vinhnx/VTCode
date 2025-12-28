@@ -164,6 +164,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 custom_prompts: &custom_prompts,
                 default_placeholder: &mut default_placeholder,
                 follow_up_placeholder: &mut follow_up_placeholder,
+                checkpoint_manager: checkpoint_manager.as_ref(),
             };
 
             let mut interaction_state =

@@ -103,6 +103,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return None;
     }
 
+    // Handle Vim mode keybindings
+    if session.vim_state.is_normal() {
+        return crate::ui::tui::session::vim_handler::handle_vim_mode_key(session, &key);
+    }
+
     match key.code {
         KeyCode::Char('c') | KeyCode::Char('C') if has_control => {
             session.mark_dirty();
@@ -133,15 +138,21 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     .map(|s| s.load(std::sync::atomic::Ordering::Relaxed))
                     .unwrap_or(0);
 
-                if is_double_escape && active_pty_count > 0 {
-                    // Double-escape with active PTY sessions: force cancel them
+                if is_double_escape {
+                    // Double-escape: trigger rewind functionality
+                    session.mark_dirty();
+                    Some(InlineEvent::Submit("/rewind".to_string()))
+                } else if active_pty_count > 0 {
+                    // Single escape with active PTY sessions: force cancel them
                     session.mark_dirty();
                     Some(InlineEvent::ForceCancelPtySession)
-                } else if is_double_escape && !session.input_manager.content().is_empty() {
+                } else if !session.input_manager.content().is_empty() {
+                    // Single escape with content: clear input
                     crate::ui::tui::session::command::clear_input(session);
                     session.mark_dirty();
                     None
                 } else {
+                    // Single escape with no content: cancel
                     session.mark_dirty();
                     Some(InlineEvent::Cancel)
                 }

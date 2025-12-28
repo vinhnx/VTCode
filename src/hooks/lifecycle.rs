@@ -884,6 +884,41 @@ impl LifecycleHookEngine {
         Ok(outcome)
     }
 
+    pub async fn run_task_completion(
+        &self,
+        task_name: &str,
+        status: &str,
+        details: Option<&Value>,
+    ) -> Result<Vec<HookMessage>> {
+        let mut messages = Vec::new();
+
+        if self.inner.hooks.task_completion.is_empty() {
+            return Ok(messages);
+        }
+
+        let payload = self
+            .build_task_completion_payload(task_name, status, details)
+            .await?;
+
+        for group in &self.inner.hooks.task_completion {
+            if !group.matcher.matches(task_name) {
+                continue;
+            }
+
+            for command in &group.commands {
+                match self.execute_command("TaskCompletion", command, &payload).await {
+                    Ok(result) => interpret_task_completion(command, &result, &mut messages),
+                    Err(err) => messages.push(HookMessage::error(format!(
+                        "TaskCompletion hook `{}` failed: {err}",
+                        command.command
+                    ))),
+                }
+            }
+        }
+
+        Ok(messages)
+    }
+
     pub async fn update_transcript_path(&self, path: Option<PathBuf>) {
         let mut state = self.inner.state.lock().await;
         state.transcript_path = path;
@@ -957,6 +992,25 @@ impl LifecycleHookEngine {
             "tool_name": tool_name,
             "tool_input": tool_input.cloned().unwrap_or(Value::Null),
             "tool_response": tool_output.clone(),
+            "transcript_path": transcript_path,
+        }))
+    }
+
+    async fn build_task_completion_payload(
+        &self,
+        task_name: &str,
+        status: &str,
+        details: Option<&Value>,
+    ) -> Result<Value> {
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
+        let transcript_path = self.current_transcript_path().await;
+        Ok(json!({
+            "session_id": self.inner.session_id,
+            "cwd": cwd,
+            "hook_event_name": "TaskCompletion",
+            "task_name": task_name,
+            "status": status,
+            "details": details.cloned().unwrap_or(Value::Null),
             "transcript_path": transcript_path,
         }))
     }
@@ -1212,6 +1266,7 @@ struct CompiledLifecycleHooks {
     user_prompt_submit: Vec<CompiledHookGroup>,
     pre_tool_use: Vec<CompiledHookGroup>,
     post_tool_use: Vec<CompiledHookGroup>,
+    task_completion: Vec<CompiledHookGroup>,
 }
 
 impl CompiledLifecycleHooks {
@@ -1222,6 +1277,7 @@ impl CompiledLifecycleHooks {
             user_prompt_submit: compile_groups(&config.user_prompt_submit)?,
             pre_tool_use: compile_groups(&config.pre_tool_use)?,
             post_tool_use: compile_groups(&config.post_tool_use)?,
+            task_completion: compile_groups(&config.task_completion)?,
         })
     }
 
@@ -1231,6 +1287,7 @@ impl CompiledLifecycleHooks {
             && self.user_prompt_submit.is_empty()
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
+            && self.task_completion.is_empty()
     }
 }
 
@@ -1724,5 +1781,34 @@ fn interpret_post_tool(
         outcome
             .messages
             .push(HookMessage::info(result.stdout.trim().to_owned()));
+    }
+}
+
+fn interpret_task_completion(
+    command: &HookCommandConfig,
+    result: &HookCommandResult,
+    messages: &mut Vec<HookMessage>,
+) {
+    handle_timeout(command, result, messages);
+    if result.timed_out {
+        return;
+    }
+
+    if let Some(code) = result.exit_code
+        && code != 0
+    {
+        handle_non_zero_exit(command, result, code, messages, false);
+    }
+
+    if !result.stderr.trim().is_empty() {
+        messages.push(HookMessage::warning(format!(
+            "TaskCompletion hook `{}` stderr: {}",
+            command.command,
+            result.stderr.trim()
+        )));
+    }
+
+    if !result.stdout.trim().is_empty() {
+        messages.push(HookMessage::info(result.stdout.trim().to_owned()));
     }
 }

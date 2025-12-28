@@ -57,8 +57,9 @@ pub use validation::{ValidationResult, validate_config, validate_model_exists};
 pub use validator::{ConfigValidator, ModelsDatabase, ValidationResult as ConfigValidationResult};
 pub use vtcode_config::TimeoutsConfig;
 pub use vtcode_config::root::{
-    KeyboardProtocolConfig, PtyConfig, StatusLineConfig, StatusLineMode, ToolOutputMode, UiConfig,
+    KeyboardProtocolConfig, PtyConfig, ToolOutputMode, UiConfig,
 };
+pub use vtcode_config::status_line::{StatusLineConfig, StatusLineMode};
 
 /// Convert KeyboardProtocolConfig to KeyboardEnhancementFlags
 pub fn keyboard_protocol_to_flags(

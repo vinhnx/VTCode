@@ -44,6 +44,13 @@ pub fn generate_config(
                 config_lines.push("# Theme colors will be configured separately".to_string());
                 config_lines.push(String::new());
             }
+            crate::terminal_setup::detector::TerminalFeature::Notifications => {
+                config_lines.push("# System notifications".to_string());
+                config_lines.push("bell_on_tab yes".to_string());
+                config_lines.push("visual_bell_duration 0.1".to_string());
+                config_lines.push("enable_audio_bell no".to_string());
+                config_lines.push(String::new());
+            }
         }
     }
 

@@ -39,6 +39,11 @@ pub fn generate_config(
                 config_lines.push("# Theme will be configured separately".to_string());
                 config_lines.push(String::new());
             }
+            crate::terminal_setup::detector::TerminalFeature::Notifications => {
+                config_lines.push("# System notifications".to_string());
+                config_lines.push("bell = true".to_string());
+                config_lines.push(String::new());
+            }
         }
     }
 

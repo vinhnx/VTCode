@@ -63,6 +63,16 @@ pub fn generate_config(
                 instructions.push("3. Add terminal color overrides in settings.json".to_string());
                 instructions.push(String::new());
             }
+            crate::terminal_setup::detector::TerminalFeature::Notifications => {
+                instructions.push(format!("{}. SYSTEM NOTIFICATIONS", i + 1));
+                instructions.push(String::new());
+                instructions.push("VS Code terminal supports notifications through:".to_string());
+                instructions.push("1. Settings → Terminal → Integrated → Bell Duration".to_string());
+                instructions.push("2. Enable 'Terminal > Integrated: Enable Bell'".to_string());
+                instructions.push("3. For external notifications, consider using extensions like 'Notification Test'".to_string());
+                instructions.push("4. Shell integration can trigger notifications via terminal bell '\\a'".to_string());
+                instructions.push(String::new());
+            }
         }
     }
 

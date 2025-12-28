@@ -40,6 +40,11 @@ pub fn generate_config(
                 config_sections.push("// Theme colors will be configured separately".to_string());
                 config_sections.push(String::new());
             }
+            crate::terminal_setup::detector::TerminalFeature::Notifications => {
+                config_sections.push("// System notifications: Not supported in Zed terminal".to_string());
+                config_sections.push("// Use Zed's notification system instead".to_string());
+                config_sections.push(String::new());
+            }
         }
     }
 

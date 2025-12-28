@@ -48,6 +48,7 @@ mod ansi_utils;
 mod command;
 pub mod config_palette;
 mod editing;
+mod vim_handler;
 mod vim_mode;
 
 mod events;
@@ -294,6 +295,9 @@ impl Session {
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),
 
+            // --- Vim Mode ---
+            vim_state: crate::ui::tui::session::vim_mode::VimState::new(),
+
             // --- PTY Session Management ---
             active_pty_sessions: None,
         };
@@ -408,6 +412,19 @@ impl Session {
     pub fn scroll_offset(&self) -> usize {
         self.scroll_manager.offset()
     }
+
+    /// Scroll to the top of the transcript
+    pub(super) fn scroll_to_top(&mut self) {
+        self.scroll_manager.scroll_to_top();
+        self.mark_dirty();
+    }
+
+    /// Scroll to the bottom of the transcript
+    pub(super) fn scroll_to_bottom(&mut self) {
+        self.scroll_manager.scroll_to_bottom();
+        self.mark_dirty();
+    }
+
 
     /// Expose default style for tests.
     #[allow(dead_code)]

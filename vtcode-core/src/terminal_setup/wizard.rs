@@ -60,6 +60,7 @@ pub async fn run_terminal_setup_wizard(
         TerminalFeature::CopyPaste,
         TerminalFeature::ShellIntegration,
         TerminalFeature::ThemeSync,
+        TerminalFeature::Notifications,
     ];
 
     for feature in &features {

@@ -6,9 +6,9 @@ use anyhow::Result;
 
 /// Generate Warp configuration (mostly informational since Warp has built-in features)
 pub fn generate_config(
-    _features: &[crate::terminal_setup::detector::TerminalFeature],
+    features: &[crate::terminal_setup::detector::TerminalFeature],
 ) -> Result<String> {
-    let info = r#"# Warp Terminal Configuration
+    let mut info = r#"# Warp Terminal Configuration
 
 Warp has built-in support for most features:
 
@@ -17,10 +17,20 @@ Warp has built-in support for most features:
 ✓ Shell Integration: Built-in with command history and navigation
 ✓ Themes: Use Warp's built-in theme system
 
-No additional configuration needed for VTCode!
-"#;
+"#.to_string();
 
-    Ok(info.to_string())
+    // Check if notifications feature is requested
+    if features.contains(&crate::terminal_setup::detector::TerminalFeature::Notifications) {
+        info.push_str("\n## System Notifications\n");
+        info.push_str("✓ Notifications: Warp supports system notifications through:\n");
+        info.push_str("  - Built-in notification system\n");
+        info.push_str("  - Terminal bell (\\a) for task completion alerts\n");
+        info.push_str("  - No additional configuration needed\n");
+    }
+
+    info.push_str("\nNo additional configuration needed for VTCode!\n");
+
+    Ok(info)
 }
 
 #[cfg(test)]

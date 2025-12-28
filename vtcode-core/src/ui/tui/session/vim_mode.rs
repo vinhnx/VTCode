@@ -12,13 +12,15 @@ pub enum VimMode {
 pub struct VimState {
     pub mode: VimMode,
     pub last_command: Option<char>,
+    pub pending_command: Option<char>, // For multi-key commands like dd, gg, etc.
 }
 
 impl Default for VimState {
     fn default() -> Self {
         Self {
-            mode: VimMode::Normal,
+            mode: VimMode::Normal, // Start in normal mode to match Vim behavior
             last_command: None,
+            pending_command: None,
         }
     }
 }
@@ -49,6 +51,37 @@ impl VimState {
             VimMode::Normal => self.handle_normal_mode(key),
             VimMode::Insert => self.handle_insert_mode(key),
         }
+    }
+
+    pub fn handle_key_event_with_pending(&mut self, key: &KeyEvent) -> VimAction {
+        // If we have a pending command, check if this key completes it
+        if let Some(pending) = self.pending_command {
+            let result = self.handle_pending_command(pending, Some(match key.code {
+                KeyCode::Char(c) => c,
+                _ => return VimAction::None,
+            }));
+
+            // Clear the pending command after processing
+            self.pending_command = None;
+
+            if result != VimAction::None {
+                return result;
+            }
+        }
+
+        // Handle the key normally
+        let action = match self.mode {
+            VimMode::Normal => self.handle_normal_mode(key),
+            VimMode::Insert => self.handle_insert_mode(key),
+        };
+
+        // If the action is a pending command, store it for the next key
+        if let VimAction::PendingCommand(cmd) = action {
+            self.pending_command = Some(cmd);
+            return VimAction::None; // Don't process anything else yet
+        }
+
+        action
     }
 
     fn handle_normal_mode(&mut self, key: &KeyEvent) -> VimAction {
