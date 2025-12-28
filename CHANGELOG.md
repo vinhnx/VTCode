@@ -3,6 +3,65 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.55.0] - 2025-12-28
+
+
+### Features
+    - feat(a2a): complete CLI integration and documentation\n\n- Add full A2A CLI with serve, discover, send-task, list-tasks, get-task, cancel-task commands\n- Create comprehensive CLI handlers for all A2A operations\n- Fix streaming event handling with proper pinning\n- Update server.rs Box<dyn Stream> return type for axum compatibility\n- Add completion summary document\n- All checks pass: cargo check --package vtcode-core\n\nImplements: A2A Protocol Phase 4 - CLI integration and user-facing features
+    - feat(a2a): add A2A client with streaming support\n\n- New A2aClient for discovery, task ops, push config, and streaming\n- SSE client parses streaming events without extra deps\n- Simple incremental request IDs and HTTPS agent card fetch\n- Tests added for SSE parsing helpers\n\nTests: cargo test --package vtcode-core --lib a2a (39/39)
+    - feat(a2a): trigger webhooks on streaming events\n\n- Add webhook_notifier to server state and wire into streaming pipeline\n- Fire webhooks for status updates and messages when broadcasted\n- Fix SSRF-safe config retrieval and avoid Option to_string() error\n- Clean up unused tracing import in webhook module\n- Tests: all A2A suites pass (37/37)
+    - feat(a2a): finish push notification config storage and RPC wiring\n\n- Add webhook config storage to TaskManager (set/get/remove) with SSRF validation\n- Wire JSON-RPC handlers for pushNotificationConfig set/get\n- Fix server dispatch and imports\n- All A2A tests pass (37/37) including server + webhook
+    - feat(a2a): add webhook notifier for push notifications (Phase 3.2 partial)
+    - feat(a2a): implement full SSE streaming support (Phase 3.1)
+    - feat: implement Agent2Agent (A2A) Protocol support (Phase 1 & 2)
+    - feat: Add async method to InlineSession for receiving next event
+    - feat: Remove the `plan` tool and associated components, and update related tool and skill management logic.
+    - feat: Refactor tool permission handling for TUI-only mode and update default LLM provider configuration.
+    - feat: Add GitHub account switching and cleanup functionality in release script
+    - feat: Introduce `EnhancedSkillLoader` and `EnhancedSkill` for unified skill and tool management, and refactor skill discovery results across the agent and CLI.
+    - feat: add support for loading skill `references/` and `assets/` directories and introduce `ResourceType::Asset`
+    - feat: Reimplement skill management with a new skill model and dedicated modules.
+    - feat: Refine tool policies and skill loading for lazy-loaded capabilities, updating system prompts to reflect on-demand activation.
+    - feat: Implement lazy-loading and tiered disclosure for agent skills and tools, reducing default available tools and updating system prompts.
+    - feat: Introduce skill varieties and enhance skill listing/loading with filtering and dormant tool support
+    - feat: Implement `Tool` trait for `CliToolBridge` and integrate skill-based tool registration with `ToolRegistry`.
+    - feat: Add new Ollama cloud models and update reasoning model detection.
+    - feat: Implement on-demand skill loading with `LoadSkillTool` and `LoadSkillResourceTool`, and enable skill restoration from previous sessions.
+    - feat: Add `ListSkillsTool` for programmatic skill discovery, replacing direct skill prompt integration.
+    - feat: Add `LoadSkillTool` for progressive skill instruction loading, enhance skill context with path storage, and integrate skill discovery into agent setup.
+    - feat: introduce context summarization with adaptive trimming integration and new `Summarize` retention choice.
+    - feat: calculate context usage from history and add a final pre-request safety check after trimming.
+    - feat: Add `mcp::fetch` and `mcp::time` tools, simplify LSP client message handling, and remove outdated agent system analysis from TODO documentation.
+    - feat: Implement PTY session termination on Ctrl+C cancellation with debounced signal handling and status line feedback.
+    - feat: Implement timed double Ctrl+C for agent exit, deferring shutdown, and update the default model.
+    - feat: Add `--skip-release` option and enhance GitHub release verification logic with CI environment detection.
+
+
+### Refactors
+    - refactor(a2a): clean up unused imports and improve webhook handling
+    - refactor: Enhance analysis command to support multiple analysis types and improve error handling
+    - refactor: Update tool policies to prompt-based for MCP time functions and improve session handling with cancellation support
+    - refactor: Remove unused agent diagnostic tools from TODO documentation
+    - refactor: Refine tool policies by removing unused tools, changing several to prompt-based, and making `wrap_text` test-only.
+    - refactor: overhaul TUI, tool policy, and context management, adding new documentation and tests.
+    - refactor: Remove token budget management and related token estimation/truncation components, and add associated documentation and verification scripts.
+    - refactor: improve error message for missing MCP tools with installation instructions
+    - refactor: Introduce a dedicated interaction loop for centralized user input and turn flow, updating session and context management.
+    - refactor: consistently use `adaptive_trim` with `pruning_ledger` across all proactive token budget guards.
+    - refactor: Restructure agent turn execution with new guard, context, and tool outcome modules, removing old loop detection, and updating LSP tools.
+
+
+### Documentation
+    - docs(a2a): add comprehensive documentation for A2A Protocol implementation
+    - docs(a2a): add Phase 3 implementation status tracker
+    - docs: update changelog for v0.54.1 [skip ci]
+    - docs: Streamline TODO by removing verbose system skill enumeration and adding a focused task.
+
+
+### Chores
+    - chore: update npm package.json to v0.54.1 [skip ci]
+    - chore: release v0.54.1
+    - chore: update npm package.json to v0.54.0 [skip ci]
 # [Version 0.54.1] - 2025-12-27
 
 
