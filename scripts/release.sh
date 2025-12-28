@@ -271,6 +271,12 @@ load_env_file() {
 cleanup_gh_account() {
     local target_account="vinhnguyenxuan-ct"
     
+    # Don't try to switch back if GITHUB_TOKEN is set (CI environment)
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        print_info "GITHUB_TOKEN is set - skipping account cleanup (not needed for token authentication)"
+        return 0
+    fi
+    
     # Only try cleanup if we switched accounts
     if [[ "${GH_ACCOUNT_SWITCHED:-false}" == "true" ]]; then
         print_info "Performing cleanup - switching back to original account..."
@@ -720,7 +726,7 @@ update_vscode_extension_version() {
 #   $1: target_account - GitHub username to switch to
 #   $2: operation - Description of the operation (for logging)
 # Returns:
-#   0 if switch successful, 1 otherwise
+#   0 if switch successful or not needed, 1 if critical failure
 switch_gh_account() {
     local target_account=$1
     local operation=$2
@@ -728,6 +734,13 @@ switch_gh_account() {
     if ! command -v gh &> /dev/null; then
         print_warning "GitHub CLI (gh) not available - skipping account switch"
         return 1
+    fi
+
+    # If GITHUB_TOKEN is set, we're in a CI environment or using token auth
+    # In this case, we don't need to switch accounts - the token provides authentication
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        print_info "GITHUB_TOKEN environment variable is set - using token authentication (no account switch needed)"
+        return 0
     fi
 
     print_info "Switching GitHub CLI to account: $target_account ($operation)"
@@ -748,7 +761,7 @@ switch_gh_account() {
 # Args:
 #   $1: expected_account - GitHub username to verify
 # Returns:
-#   0 if account matches, 1 otherwise
+#   0 if authenticated (either via token or account), 1 otherwise
 verify_gh_account() {
     local expected_account=$1
 
@@ -757,6 +770,18 @@ verify_gh_account() {
         return 1
     fi
 
+    # If GITHUB_TOKEN is set, verify token authentication works
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        if gh auth status >/dev/null 2>&1; then
+            print_success "GitHub CLI authenticated with GITHUB_TOKEN"
+            return 0
+        else
+            print_error "GITHUB_TOKEN is set but GitHub CLI authentication failed"
+            return 1
+        fi
+    fi
+
+    # Traditional account verification for non-token auth
     if ! gh auth status >/dev/null 2>&1; then
         print_error "GitHub CLI is not authenticated"
         return 1
