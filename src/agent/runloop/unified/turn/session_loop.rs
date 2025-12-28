@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 use std::io::Write;
 
 use std::time::Instant;
+use tokio_util::sync::CancellationToken;
 
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -116,10 +117,13 @@ pub(crate) async fn run_single_agent_loop_unified(
             ..
         } = session_state;
 
+        let cancel_token = CancellationToken::new();
+        let _cancel_guard = CancelGuard(cancel_token.clone());
         let _signal_handler = spawn_signal_handler(
             ctrl_c_state.clone(),
             ctrl_c_notify.clone(),
             async_mcp_manager.clone(),
+            cancel_token.clone(),
         );
 
         let mut session_stats = SessionStats::default();
@@ -425,5 +429,14 @@ impl Drop for TerminalCleanupGuard {
         // Wait for terminal to finish processing any pending operations
         // This prevents incomplete writes from corrupting the terminal
         std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// Guard that ensures a CancellationToken is cancelled when dropped
+struct CancelGuard(CancellationToken);
+
+impl Drop for CancelGuard {
+    fn drop(&mut self) {
+        self.0.cancel();
     }
 }

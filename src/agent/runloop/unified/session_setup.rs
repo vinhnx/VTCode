@@ -10,6 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::{Notify, RwLock};
 use tokio::time::{Duration, sleep};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::traits::Tool;
@@ -942,34 +943,6 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
-    // Run session start hooks
-    if let Some(hooks) = &lifecycle_hooks {
-        match hooks.run_session_start().await {
-            Ok(outcome) => {
-                render_hook_messages(&mut renderer, &outcome.messages)?;
-                for context in outcome.additional_context {
-                    if !context.trim().is_empty() {
-                        session_state
-                            .conversation_history
-                            .push(uni::Message::system(context));
-                    }
-                }
-            }
-            Err(err) => {
-                renderer.line(
-                    vtcode_core::utils::ansi::MessageStyle::Error,
-                    &format!("Failed to run session start hooks: {}", err),
-                )?;
-            }
-        }
-    }
-
-    // Connect PTY session tracking from tool registry to session state
-    let pty_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    session_state
-        .tool_registry
-        .set_active_pty_sessions(pty_counter.clone());
-
     // Setup header context
     let mode_label = match (config.ui_surface, full_auto) {
         (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
@@ -1024,39 +997,43 @@ pub(crate) fn spawn_signal_handler(
     ctrl_c_state: Arc<CtrlCState>,
     ctrl_c_notify: Arc<Notify>,
     async_mcp_manager: Option<Arc<AsyncMcpManager>>,
+    cancel_token: CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
-            if tokio::signal::ctrl_c().await.is_err() {
-                break;
-            }
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    let signal = ctrl_c_state.register_signal();
+                    ctrl_c_notify.notify_waiters();
 
-            let signal = ctrl_c_state.register_signal();
-            ctrl_c_notify.notify_waiters();
+                    // Shutdown MCP client on interrupt using async manager
+                    if let Some(mcp_manager) = &async_mcp_manager
+                        && let Err(e) = mcp_manager.shutdown().await
+                    {
+                        let error_msg = e.to_string();
+                        if error_msg.contains("EPIPE")
+                            || error_msg.contains("Broken pipe")
+                            || error_msg.contains("write EPIPE")
+                        {
+                            eprintln!(
+                                "Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}",
+                                e
+                            );
+                        } else {
+                            eprintln!("Warning: Failed to shutdown MCP client on interrupt: {}", e);
+                        }
+                    }
 
-            // Shutdown MCP client on interrupt using async manager
-            if let Some(mcp_manager) = &async_mcp_manager
-                && let Err(e) = mcp_manager.shutdown().await
-            {
-                let error_msg = e.to_string();
-                if error_msg.contains("EPIPE")
-                    || error_msg.contains("Broken pipe")
-                    || error_msg.contains("write EPIPE")
-                {
-                    eprintln!(
-                        "Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}",
-                        e
-                    );
-                } else {
-                    eprintln!("Warning: Failed to shutdown MCP client on interrupt: {}", e);
+                    if matches!(signal, super::state::CtrlCSignal::Exit) {
+                        // Emergency terminal cleanup on forced exit
+                        // This ensures ANSI sequences don't leak to the terminal on double Ctrl+C
+                        emergency_terminal_cleanup();
+                        break;
+                    }
                 }
-            }
-
-            if matches!(signal, super::state::CtrlCSignal::Exit) {
-                // Emergency terminal cleanup on forced exit
-                // This ensures ANSI sequences don't leak to the terminal on double Ctrl+C
-                emergency_terminal_cleanup();
-                break;
+                _ = cancel_token.cancelled() => {
+                    break;
+                }
             }
         }
     })
