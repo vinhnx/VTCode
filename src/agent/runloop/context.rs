@@ -223,7 +223,7 @@ pub(crate) fn enforce_unified_context_window(
     history: &mut Vec<uni::Message>,
     config: ContextTrimConfig,
     analyzer: Option<&mut TreeSitterAnalyzer>,
-    cache: Option<&mut HashMap<u64, u8>>,
+    cache: Option<&mut dyn SemanticScoreCache>,
 ) -> ContextTrimOutcome {
     if history.is_empty() || history.len() == 1 {
         return ContextTrimOutcome::default();
@@ -415,11 +415,14 @@ struct CodeBlock {
 ///
 /// Messages with higher scores contain more valuable content (functions, classes, etc.)
 /// and should be preserved during trimming operations.
+///
+/// **Note**: The cache parameter accepts a trait object implementing semantic caching.
+/// This allows both HashMap-based and bounded LRU-based implementations.
 #[allow(dead_code)]
 fn compute_semantic_scores(
     history: &[uni::Message],
     analyzer: Option<&mut TreeSitterAnalyzer>,
-    cache: Option<&mut HashMap<u64, u8>>,
+    cache: Option<&mut dyn SemanticScoreCache>,
     config: &ContextTrimConfig,
 ) -> Vec<u8> {
     if !config.semantic_compression || history.is_empty() {
@@ -430,8 +433,8 @@ fn compute_semantic_scores(
         return vec![0; history.len()];
     };
 
-    if let Some(cache_map) = cache {
-        compute_scores_with_cache(history, analyzer, config, cache_map)
+    if let Some(cache_obj) = cache {
+        compute_scores_with_cache(history, analyzer, config, cache_obj)
     } else {
         history
             .iter()
@@ -440,21 +443,39 @@ fn compute_semantic_scores(
     }
 }
 
+/// Trait for semantic score caching with unified interface
+/// Allows swapping between HashMap and bounded LRU implementations
+pub(crate) trait SemanticScoreCache {
+    fn get(&mut self, key: u64) -> Option<u8>;
+    fn insert(&mut self, key: u64, score: u8);
+}
+
+/// Implements SemanticScoreCache for HashMap (legacy fallback)
+impl SemanticScoreCache for HashMap<u64, u8> {
+    fn get(&mut self, key: u64) -> Option<u8> {
+        HashMap::get(self, &key).copied()
+    }
+
+    fn insert(&mut self, key: u64, score: u8) {
+        HashMap::insert(self, key, score);
+    }
+}
+
 /// Computes scores using a cache to avoid redundant analysis
 fn compute_scores_with_cache(
     history: &[uni::Message],
     analyzer: &mut TreeSitterAnalyzer,
     config: &ContextTrimConfig,
-    cache_map: &mut HashMap<u64, u8>,
+    cache: &mut dyn SemanticScoreCache,
 ) -> Vec<u8> {
     let mut scores = Vec::with_capacity(history.len());
     for message in history {
         let cache_key = message_semantic_hash(message);
-        let score = if let Some(&cached) = cache_map.get(&cache_key) {
+        let score = if let Some(cached) = cache.get(cache_key) {
             cached
         } else {
             let computed = compute_semantic_score(message, analyzer, config);
-            cache_map.insert(cache_key, computed);
+            cache.insert(cache_key, computed);
             computed
         };
         scores.push(score);

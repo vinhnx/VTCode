@@ -141,6 +141,7 @@ pub mod http_client;
 pub mod instructions;
 pub mod llm;
 pub mod mcp;
+pub mod memory; // Memory monitoring and pressure detection
 pub mod metrics;
 pub mod models;
 pub mod orchestrator;
@@ -199,6 +200,7 @@ pub use mcp::{
     tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult},
     validate_mcp_config,
 };
+pub use memory::{MemoryCheckpoint, MemoryMonitor, MemoryPressure, MemoryReport};
 pub use orchestrator::{
     DistributedOrchestrator, ExecutionTarget, ExecutorRegistry, LocalExecutor, ScheduledWork,
     WorkExecutor,

@@ -58,6 +58,38 @@ pub fn load_skills(config: &SkillLoaderConfig) -> SkillLoadOutcome {
     outcome
 }
 
+/// Lightweight metadata discovery that avoids parsing SKILL.md files.
+/// Returns skill stubs with only name, description, and path (no manifest parsing).
+/// This is much faster for listing available skills.
+pub fn discover_skill_metadata_lightweight(config: &SkillLoaderConfig) -> SkillLoadOutcome {
+    let mut outcome = SkillLoadOutcome::default();
+    let roots = skill_roots(config);
+
+    for root in roots {
+        discover_metadata_under_root(&root, &mut outcome);
+    }
+
+    // Optionally discover system CLI tools
+    if let Ok(system_tools) = discover_cli_tools() {
+        for tool in system_tools {
+            if let Ok(skill) = tool_config_to_metadata(&tool, SkillScope::System) {
+                outcome.skills.push(skill);
+            }
+        }
+    }
+
+    // Deduplicate by name
+    let mut seen: HashSet<String> = HashSet::new();
+    outcome
+        .skills
+        .retain(|skill| seen.insert(skill.name.clone()));
+
+    // Sort
+    outcome.skills.sort_by(|a, b| a.name.cmp(&b.name));
+
+    outcome
+}
+
 fn skill_roots(config: &SkillLoaderConfig) -> Vec<SkillRoot> {
     let mut roots = Vec::new();
 
@@ -185,6 +217,74 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
                 // Standalone executable tool?
                 // We typically look for directories, but maybe standalone files too.
                 // For now, let's stick to directory-based tools or tools with README.
+            }
+        }
+    }
+}
+
+/// Lightweight metadata discovery without parsing SKILL.md files.
+/// Extracts skill name and description from filesystem structure only.
+/// Much faster than full discovery, suitable for quick skill listing.
+fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) {
+    let Ok(root_path) = normalize_path(&root.path) else {
+        return;
+    };
+
+    if !root_path.is_dir() {
+        return;
+    }
+
+    let mut queue: VecDeque<PathBuf> = VecDeque::from([root_path]);
+    while let Some(dir) = queue.pop_front() {
+        let entries = match fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(e) => {
+                tracing::debug!("failed to read skills dir {}: {e:#}", dir.display());
+                continue;
+            }
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let file_name = match path.file_name().and_then(|f| f.to_str()) {
+                Some(name) => name,
+                None => continue,
+            };
+
+            if file_name.starts_with('.') {
+                continue;
+            }
+
+            if path.is_dir() {
+                queue.push_back(path.clone());
+
+                // For tools, try to extract metadata without full parsing
+                if root.is_tool_root {
+                    if let Ok(Some(tool_meta)) = try_load_tool_from_dir(&path, root.scope) {
+                        outcome.skills.push(tool_meta);
+                    }
+                }
+                continue;
+            }
+
+            // Check for SKILL.md but only extract stub metadata
+            // Extract skill name from parent directory name as fallback
+            if file_name == "SKILL.md" {
+                if let Some(skill_dir_name) = path.parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                {
+                    // Create minimal metadata stub without parsing
+                    // This allows quick skill listing with ~50-100 tokens instead of full manifest parsing
+                    outcome.skills.push(SkillMetadata {
+                        name: skill_dir_name.to_string(),
+                        description: format!("Skill from {}", skill_dir_name), // Placeholder
+                        short_description: None,
+                        path: path.clone(),
+                        scope: root.scope,
+                        manifest: None, // Important: Don't parse manifest
+                    });
+                }
             }
         }
     }
