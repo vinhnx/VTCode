@@ -71,3 +71,89 @@ default_ceiling_seconds = 180
 pty_ceiling_seconds = 300
 # Maximum duration for streaming API responses in seconds
 streaming_ceiling_seconds = 600
+
+# Lifecycle hooks - Execute shell commands in response to agent events
+# For documentation and examples, see: docs/guides/lifecycle-hooks.md
+[hooks.lifecycle]
+# Pre-tool use hooks - Run before tools execute, can block or validate
+pre_tool_use = [
+  # Example: Block modifications to sensitive files
+  {
+    matcher = "Edit|Write",
+    hooks = [
+      {
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/file_protection.py",
+        timeout_seconds = 10
+      }
+    ]
+  },
+  # Example: Log bash command execution
+  {
+    matcher = "Bash",
+    hooks = [
+      {
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/log-bash-commands.sh",
+        timeout_seconds = 5
+      }
+    ]
+  }
+]
+
+# Post-tool use hooks - Run after tools execute successfully
+post_tool_use = [
+  # Example: Run formatters after file modifications
+  {
+    matcher = "Write|Edit",
+    hooks = [
+      {
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/code_formatter.sh"
+      }
+    ]
+  },
+  # Example: Format markdown files after editing
+  {
+    matcher = "Write|Edit",
+    hooks = [
+      {
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/markdown_formatter.py"
+      }
+    ]
+  }
+]
+
+# User prompt submit hooks - Run when user submits a prompt
+user_prompt_submit = [
+  # Example: Send notification when user submits a prompt
+  {
+    hooks = [
+      {
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/notification.sh",
+        timeout_seconds = 5
+      }
+    ]
+  }
+]
+
+# Session start hooks - Run when a session begins
+session_start = [
+  # Example: Send notification when session starts
+  {
+    hooks = [
+      {
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/notification.sh"
+      }
+    ]
+  }
+]
+
+# Session end hooks - Run when a session ends
+session_end = [
+  # Example: Send notification when session ends
+  {
+    hooks = [
+      {
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/notification.sh"
+      }
+    ]
+  }
+]
