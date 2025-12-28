@@ -576,7 +576,7 @@ mod tests {
         let json = serde_json::to_string(&response).expect("serialize");
         assert!(json.contains("streaming-response"));
         assert!(json.contains("message"));
-        
+
         let deserialized: SendStreamingMessageResponse =
             serde_json::from_str(&json).expect("deserialize");
         match deserialized.event {
@@ -598,7 +598,7 @@ mod tests {
         let json = serde_json::to_string(&config).expect("serialize");
         let deserialized: TaskPushNotificationConfig =
             serde_json::from_str(&json).expect("deserialize");
-        
+
         assert_eq!(deserialized.task_id, "task-1");
         assert_eq!(deserialized.url, "https://example.com/webhook");
         assert!(deserialized.authentication.is_some());
