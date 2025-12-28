@@ -23,7 +23,7 @@ pub mod trajectory;
 
 // Re-export command handlers for backward compatibility
 pub use acp::handle_acp_command;
-pub use analyze::{handle_analyze_command, AnalysisType};
+pub use analyze::{AnalysisType, handle_analyze_command};
 pub use ask::{AskCommandOptions, handle_ask_command as handle_ask_single_command};
 pub use auto::handle_auto_task_command;
 pub use benchmark::{BenchmarkCommandOptions, handle_benchmark_command};
@@ -60,7 +60,8 @@ pub fn set_workspace_env(path: &Path) {
 pub fn set_additional_dirs_env(dirs: &[PathBuf]) {
     // Set the main additional directories as a colon-separated list
     if !dirs.is_empty() {
-        let dirs_str = dirs.iter()
+        let dirs_str = dirs
+            .iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect::<Vec<_>>()
             .join(":");
@@ -68,7 +69,7 @@ pub fn set_additional_dirs_env(dirs: &[PathBuf]) {
             std::env::set_var("ADDITIONAL_DIRS", dirs_str);
         }
     }
-    
+
     // Also set individual variables for backwards compatibility
     for (idx, dir) in dirs.iter().enumerate() {
         let var_name = format!("ADDITIONAL_DIR_{}", idx);

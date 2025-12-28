@@ -25,7 +25,6 @@ pub(crate) struct SessionStatusContext<'a> {
     pub config: &'a CoreAgentConfig,
     pub message_count: usize,
     pub stats: &'a SessionStats,
-    pub max_tokens: usize,
     pub available_tools: usize,
 }
 
@@ -68,8 +67,6 @@ pub(crate) async fn display_session_status(
             ),
         )?;
     }
-
-    display_token_cost(renderer, ctx.max_tokens, "  ").await?;
 
     Ok(())
 }

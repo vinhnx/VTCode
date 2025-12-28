@@ -64,19 +64,11 @@ class SkillFile:
     content: str
     size_bytes: int
     access_pattern: AccessPattern
-    token_count: int = 0
     last_loaded: Optional[datetime] = None
     load_count: int = 0
-    
+
     def __post_init__(self):
-        self.token_count = self.count_tokens()
         self.size_bytes = len(self.content.encode('utf-8'))
-    
-    def count_tokens(self) -> int:
-        """Count tokens in content (simplified estimation)."""
-        # Simple token count: approximately 1 token per 4 characters
-        # This is a rough estimate - real Claude tokenization is more complex
-        return len(self.content) // 4
     
     def should_load(self, context: Dict[str, Any]) -> bool:
         """Determine if this file should be loaded based on access pattern."""
@@ -94,16 +86,9 @@ class SkillInstruction:
     id: str
     text: str
     required: bool = True
-    token_count: int = 0
     priority: int = 1
     dependencies: List[str] = field(default_factory=list)
     
-    def __post_init__(self):
-        self.token_count = self.count_tokens()
-    
-    def count_tokens(self) -> int:
-        """Count tokens in instruction text."""
-        return len(self.text) // 4
 
 @dataclass 
 class EnhancedSkillManifest:

@@ -1071,10 +1071,9 @@ impl TreeSitterAnalyzer {
             Some(highlighter) => {
                 // **Fix #3**: Use cached parser instead of creating new one on every call
                 // This eliminates the 2-5ms overhead of Parser::new() + set_language() per call
-                let parser = self
-                    .parsers
-                    .get_mut(&language)
-                    .ok_or_else(|| TreeSitterError::UnsupportedLanguage(format!("{:?}", language)))?;
+                let parser = self.parsers.get_mut(&language).ok_or_else(|| {
+                    TreeSitterError::UnsupportedLanguage(format!("{:?}", language))
+                })?;
 
                 let tree = parser.parse(content, None).ok_or_else(|| {
                     TreeSitterError::ParseError("Failed to parse content".to_string())

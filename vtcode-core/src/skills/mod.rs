@@ -152,7 +152,7 @@ pub use executor::execute_skill_with_sub_llm;
 pub use file_references::FileReferenceValidator;
 pub use loader::{
     EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig, SkillRoot, detect_skill_mentions,
-    load_skill_resources, load_skills, discover_skill_metadata_lightweight,
+    discover_skill_metadata_lightweight, load_skill_resources, load_skills,
 };
 
 pub use injection::{SkillInjections, build_skill_injections};

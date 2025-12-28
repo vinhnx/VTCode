@@ -402,10 +402,6 @@ impl AnthropicProvider {
             }
         });
 
-        let max_tokens = value
-            .get("max_tokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u32);
         let temperature = value
             .get("temperature")
             .and_then(|v| v.as_f64())
@@ -445,7 +441,6 @@ impl AnthropicProvider {
             system_prompt,
             tools,
             model,
-            max_tokens,
             temperature,
             stream,
             tool_choice,
@@ -806,10 +801,8 @@ impl AnthropicProvider {
 
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
+            max_tokens: request.max_tokens.unwrap_or(4096), // Default to 4096 tokens if not specified
             messages,
-            max_tokens: request
-                .max_tokens
-                .unwrap_or(defaults::ANTHROPIC_DEFAULT_MAX_TOKENS),
             system: system_value,
             temperature: if self.supports_reasoning_effort(&request.model) {
                 None
@@ -1250,7 +1243,6 @@ mod caching_tests {
             system_prompt: Some("You are a weather assistant".to_string()),
             tools: Some(vec![tool]),
             model: models::CLAUDE_SONNET_4_5.to_string(),
-            max_tokens: Some(512),
             temperature: Some(0.2),
             ..Default::default()
         }

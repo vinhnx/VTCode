@@ -5,8 +5,8 @@
 
 #[cfg(test)]
 mod config_verification {
-    use vtcode_config::VTCodeConfig;
     use std::time::Duration;
+    use vtcode_config::VTCodeConfig;
 
     /// Test: Verify optimized cache constants are exported
     #[test]
@@ -22,8 +22,7 @@ mod config_verification {
         // Verify capacity constant exists
         use crate::cache::DEFAULT_MAX_CACHE_CAPACITY;
         assert_eq!(
-            DEFAULT_MAX_CACHE_CAPACITY,
-            1_000,
+            DEFAULT_MAX_CACHE_CAPACITY, 1_000,
             "Max cache capacity should be 1,000 entries (optimized from 10k)"
         );
 
@@ -41,8 +40,7 @@ mod config_verification {
 
         // Verify PTY scrollback is optimized to 25MB
         assert_eq!(
-            config.pty.max_scrollback_bytes,
-            25_000_000,
+            config.pty.max_scrollback_bytes, 25_000_000,
             "PTY max scrollback should be 25MB (optimized from 50MB)"
         );
 
@@ -58,12 +56,24 @@ mod config_verification {
         let config = VTCodeConfig::default();
 
         // Verify reasonable bounds
-        assert!(config.pty.max_scrollback_bytes > 1_000_000, "PTY scrollback too small");
-        assert!(config.pty.max_scrollback_bytes < 100_000_000, "PTY scrollback too large");
+        assert!(
+            config.pty.max_scrollback_bytes > 1_000_000,
+            "PTY scrollback too small"
+        );
+        assert!(
+            config.pty.max_scrollback_bytes < 100_000_000,
+            "PTY scrollback too large"
+        );
 
         // Verify scrollback lines is reasonable
-        assert!(config.pty.scrollback_lines > 0, "Scrollback lines should be positive");
-        assert!(config.pty.scrollback_lines < 10_000, "Scrollback lines shouldn't be huge");
+        assert!(
+            config.pty.scrollback_lines > 0,
+            "Scrollback lines should be positive"
+        );
+        assert!(
+            config.pty.scrollback_lines < 10_000,
+            "Scrollback lines shouldn't be huge"
+        );
 
         println!(
             "✅ Default config reasonable: scrollback_lines={}, max_bytes={}",
@@ -79,10 +89,16 @@ mod config_verification {
 
         // Simulated override values
         let increased_scrollback = 52_428_800; // 50MB (original)
-        assert!(increased_scrollback > 25_000_000, "Override should allow larger values");
+        assert!(
+            increased_scrollback > 25_000_000,
+            "Override should allow larger values"
+        );
 
         let decreased_scrollback = 5_000_000; // 5MB (minimal)
-        assert!(decreased_scrollback < 25_000_000, "Override should allow smaller values");
+        assert!(
+            decreased_scrollback < 25_000_000,
+            "Override should allow smaller values"
+        );
 
         println!(
             "✅ Config override capability verified: can set scrollback to {}MB - {}MB",
@@ -97,12 +113,18 @@ mod config_verification {
         let config = VTCodeConfig::default();
 
         // Check that defaults are used (not hardcoded larger values)
-        assert!(config.pty.max_scrollback_bytes <= 25_000_000, "PTY using optimized default");
+        assert!(
+            config.pty.max_scrollback_bytes <= 25_000_000,
+            "PTY using optimized default"
+        );
 
         // Components should accept the configuration
         assert!(config.pty.enabled, "PTY should be enabled by default");
         assert!(config.pty.default_rows > 0, "PTY should have default rows");
-        assert!(config.pty.default_cols > 0, "PTY should have default columns");
+        assert!(
+            config.pty.default_cols > 0,
+            "PTY should have default columns"
+        );
 
         println!(
             "✅ Optimized defaults integrated: PTY{}x{}, scrollback={}MB",

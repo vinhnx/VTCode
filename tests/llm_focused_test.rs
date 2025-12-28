@@ -156,7 +156,6 @@ fn test_anthropic_tool_message_handling() {
         system_prompt: None,
         tools: None,
         model: models::CLAUDE_SONNET_4_5.to_string(),
-        max_tokens: None,
         temperature: None,
         stream: false,
         tool_choice: None,

@@ -2,7 +2,6 @@ use crate::agent::runloop::unified::state::SessionStats;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
@@ -24,7 +23,6 @@ pub(crate) struct RunLoopContext<'a> {
     pub tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
     pub tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
-    pub pruning_ledger: &'a Arc<RwLock<PruningDecisionLedger>>,
     pub session_stats: &'a mut SessionStats,
     pub mcp_panel_state: &'a mut McpPanelState,
     pub approval_recorder: &'a ApprovalRecorder,

@@ -175,10 +175,10 @@ impl ToolResultCache {
     }
 
     /// Clear cache entries for a specific file (selective eviction, not full clear)
-    /// 
+    ///
     /// This now uses granular eviction to remove only entries related to the changed file,
     /// avoiding the cache thrashing that occurred when the entire cache was cleared.
-    /// 
+    ///
     /// # Impact
     /// - Before: Full cache clear on any file change → 90% hit rate drop
     /// - After: Selective removal → 10-15% hit rate impact only

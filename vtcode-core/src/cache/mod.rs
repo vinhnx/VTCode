@@ -248,7 +248,7 @@ where
 
     /// Invalidate cache entries matching a key prefix (selective eviction)
     /// This replaces the old "clear entire cache" behavior with granular eviction
-    /// 
+    ///
     /// # Example
     /// ```ignore
     /// cache.invalidate_prefix("grep_file:/workspace/src/");
@@ -269,7 +269,7 @@ where
 
     /// Invalidate entries for a specific target path (e.g., file path)
     /// This is a convenience wrapper for file-based invalidation
-    /// 
+    ///
     /// # Example
     /// ```ignore
     /// cache.invalidate_path("/workspace/src/main.rs");
@@ -302,7 +302,7 @@ where
     }
 
     /// Evict entries under memory pressure (aggressive cleanup)
-    /// 
+    ///
     /// When memory pressure increases:
     /// 1. Remove all expired entries first
     /// 2. Evict least useful entries until target percentage reached
@@ -310,7 +310,7 @@ where
     pub fn evict_under_pressure(&mut self, target_reduction_percent: u32) -> u64 {
         // Clamp percentage to 0-100
         let target_percent = std::cmp::min(100, target_reduction_percent);
-        
+
         // Remove expired entries first (most efficient cleanup)
         let expired_before = self.entries.len();
         self.remove_expired_entries();
@@ -361,7 +361,7 @@ where
                     .duration_since(entry.last_accessed)
                     .unwrap_or_default()
                     .as_secs();
-                
+
                 // Recency factor: recent entries get higher score
                 let recency_factor = std::cmp::max(1, 3600 / (age_secs + 1));
                 let usefulness_score = entry.access_count * recency_factor as u64;
@@ -519,27 +519,28 @@ mod tests {
     #[test]
     fn test_pressure_aware_total_memory() {
         let mut cache = UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
-        
+
         // Insert three entries with known sizes
         cache.insert(TestKey("k1".into()), "v1".to_string(), 100);
         cache.insert(TestKey("k2".into()), "v2".to_string(), 200);
         cache.insert(TestKey("k3".into()), "v3".to_string(), 300);
-        
+
         // Total should be 600 bytes
         assert_eq!(cache.total_memory_bytes(), 600);
     }
 
     #[test]
     fn test_pressure_aware_reduce_ttl() {
-        let mut cache: UnifiedCache<TestKey, String> = UnifiedCache::new(10, Duration::from_secs(300), EvictionPolicy::Lru);
-        
+        let mut cache: UnifiedCache<TestKey, String> =
+            UnifiedCache::new(10, Duration::from_secs(300), EvictionPolicy::Lru);
+
         // Original TTL is 300s
         assert_eq!(cache.ttl.as_secs(), 300);
-        
+
         // Reduce by 40% (Warning pressure)
         let new_ttl = cache.reduce_ttl(0.4);
         assert_eq!(new_ttl.as_secs(), 120); // 300 * 0.4 = 120s
-        
+
         // Reduce by 10% (Critical pressure)
         let new_ttl = cache.reduce_ttl(0.1);
         assert_eq!(new_ttl.as_secs(), 12); // 120 * 0.1 = 12s
@@ -547,15 +548,16 @@ mod tests {
 
     #[test]
     fn test_pressure_aware_evict_under_pressure() {
-        let mut cache: UnifiedCache<TestKey, String> = UnifiedCache::new(20, Duration::from_secs(3600), EvictionPolicy::Lru);
-        
+        let mut cache: UnifiedCache<TestKey, String> =
+            UnifiedCache::new(20, Duration::from_secs(3600), EvictionPolicy::Lru);
+
         // Insert 10 entries
         for i in 0..10 {
             cache.insert(TestKey(format!("key_{}", i)), format!("value_{}", i), 100);
         }
-        
+
         assert_eq!(cache.len(), 10);
-        
+
         // Evict to 50% (remove 5 entries)
         let removed = cache.evict_under_pressure(50);
         assert_eq!(removed, 5);
@@ -564,19 +566,20 @@ mod tests {
 
     #[test]
     fn test_pressure_aware_clear_least_used() {
-        let mut cache: UnifiedCache<TestKey, String> = UnifiedCache::new(20, Duration::from_secs(3600), EvictionPolicy::Lru);
-        
+        let mut cache: UnifiedCache<TestKey, String> =
+            UnifiedCache::new(20, Duration::from_secs(3600), EvictionPolicy::Lru);
+
         // Insert 10 entries
         for i in 0..10 {
             cache.insert(TestKey(format!("key_{}", i)), format!("value_{}", i), 100);
         }
-        
+
         // Access some entries to mark them as used
         let _ = cache.get(&TestKey("key_0".into()));
         let _ = cache.get(&TestKey("key_1".into()));
-        
+
         assert_eq!(cache.len(), 10);
-        
+
         // Clear 30% least used
         let removed = cache.clear_least_used(30);
         assert!(removed <= 4, "Should remove ~3 entries (30% of 10)");
@@ -585,35 +588,36 @@ mod tests {
 
     #[test]
     fn test_pressure_aware_entries_by_usefulness() {
-        let mut cache: UnifiedCache<TestKey, String> = UnifiedCache::new(20, Duration::from_secs(3600), EvictionPolicy::Lru);
-        
+        let mut cache: UnifiedCache<TestKey, String> =
+            UnifiedCache::new(20, Duration::from_secs(3600), EvictionPolicy::Lru);
+
         // Insert and access entries with different patterns
         cache.insert(TestKey("hot".into()), "value".to_string(), 100);
         cache.insert(TestKey("cold".into()), "value".to_string(), 100);
         cache.insert(TestKey("warm".into()), "value".to_string(), 100);
-        
+
         // Access "hot" multiple times
         for _ in 0..5 {
             let _ = cache.get(&TestKey("hot".into()));
         }
-        
+
         // Access "warm" once
         let _ = cache.get(&TestKey("warm".into()));
-        
+
         // "cold" is never accessed after insert
-        
+
         let usefulness = cache.entries_by_usefulness();
         assert_eq!(usefulness.len(), 3);
-        
+
         // "hot" should be first (most useful)
-        assert_eq!(usefulness[0].0 .0, "hot");
+        assert_eq!(usefulness[0].0.0, "hot");
     }
 
     #[test]
     fn test_pressure_aware_estimate_entry_cost() {
         let entry = CacheEntry::new("test_value".to_string(), 1000);
         let cost = UnifiedCache::<TestKey, String>::estimate_entry_cost(&entry);
-        
+
         // Cost should be at least the value size + overhead
         assert!(cost >= 1000);
         assert!(cost <= 1200); // Should be close to 1100 (1000 + 100 overhead)

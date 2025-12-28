@@ -41,7 +41,10 @@ impl AnalysisType {
 }
 
 /// Handle the analyze command
-pub async fn handle_analyze_command(config: &CoreAgentConfig, analysis_type: AnalysisType) -> Result<()> {
+pub async fn handle_analyze_command(
+    config: &CoreAgentConfig,
+    analysis_type: AnalysisType,
+) -> Result<()> {
     println!("{}", style("[ANALYZE]").blue().bold());
     println!("  {:16} {}", "workspace", config.workspace.display());
     println!("  {:16} {}\n", "type", analysis_type.description());
@@ -99,7 +102,7 @@ async fn analyze_structure(workspace_path: &Path) -> Result<()> {
 
             // Count files by extension
             let entry_path = entry.path().to_path_buf();
-        if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
+            if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
                 *language_files.entry(ext.to_string()).or_insert(0) += 1;
             }
 
@@ -110,10 +113,26 @@ async fn analyze_structure(workspace_path: &Path) -> Result<()> {
         }
     }
 
-    println!("  {:<20} {}", "Directories:", style(&total_dirs.to_string()).cyan());
-    println!("  {:<20} {}", "Files:", style(&total_files.to_string()).cyan());
-    println!("  {:<20} {}", "Max depth:", style(&max_depth.to_string()).cyan());
-    println!("  {:<20} {}", "Total size:", style(&format_size(total_size)).cyan());
+    println!(
+        "  {:<20} {}",
+        "Directories:",
+        style(&total_dirs.to_string()).cyan()
+    );
+    println!(
+        "  {:<20} {}",
+        "Files:",
+        style(&total_files.to_string()).cyan()
+    );
+    println!(
+        "  {:<20} {}",
+        "Max depth:",
+        style(&max_depth.to_string()).cyan()
+    );
+    println!(
+        "  {:<20} {}",
+        "Total size:",
+        style(&format_size(total_size)).cyan()
+    );
     println!();
 
     // Show language distribution
@@ -195,7 +214,10 @@ async fn analyze_security(workspace_path: &Path) -> Result<()> {
         }
         println!();
     } else {
-        println!("  {}", style("✓ No obvious secrets found in codebase").green());
+        println!(
+            "  {}",
+            style("✓ No obvious secrets found in codebase").green()
+        );
         println!();
     }
 
@@ -366,12 +388,14 @@ async fn analyze_complexity(workspace_path: &Path) -> Result<()> {
             if source_extensions.contains(&ext) {
                 if let Ok(content) = tokio::fs::read_to_string(entry.path()).await {
                     let lines = content.lines().count();
-                    let functions = content.matches("fn ").count() +
-                                  content.matches("func ").count() +
-                                  content.matches("def ").count();
+                    let functions = content.matches("fn ").count()
+                        + content.matches("func ").count()
+                        + content.matches("def ").count();
                     let complexity = estimate_complexity(&content);
 
-                    let stats = complexity_stats.entry(ext_string).or_insert_with(|| (0, 0, 0, 0));
+                    let stats = complexity_stats
+                        .entry(ext_string)
+                        .or_insert_with(|| (0, 0, 0, 0));
                     stats.0 += 1; // file count
                     stats.1 += lines; // total lines
                     stats.2 += functions; // total functions
@@ -384,7 +408,11 @@ async fn analyze_complexity(workspace_path: &Path) -> Result<()> {
     if !complexity_stats.is_empty() {
         println!("  {}", style("Complexity by language:").bold());
         for (lang, (files, lines, functions, complexity)) in complexity_stats.iter() {
-            let avg_complexity = if *functions > 0 { *complexity / *functions } else { 0 };
+            let avg_complexity = if *functions > 0 {
+                *complexity / *functions
+            } else {
+                0
+            };
             println!(
                 "  • {}: {} files, {} lines, {} functions, avg complexity: {}",
                 lang, files, lines, functions, avg_complexity
@@ -395,21 +423,35 @@ async fn analyze_complexity(workspace_path: &Path) -> Result<()> {
         // Provide suggestions
         println!("  {}", style("Maintainability suggestions:").bold());
         for (lang, (_, lines, functions, _)) in complexity_stats.iter() {
-            let avg_lines_per_function = if *functions > 0 { *lines / *functions } else { 0 };
+            let avg_lines_per_function = if *functions > 0 {
+                *lines / *functions
+            } else {
+                0
+            };
             if avg_lines_per_function > 50 {
-                println!("  • {}: Consider refactoring large functions (avg {} lines)", lang, avg_lines_per_function);
+                println!(
+                    "  • {}: Consider refactoring large functions (avg {} lines)",
+                    lang, avg_lines_per_function
+                );
             }
         }
         println!();
     } else {
-        println!("  {}", style("No source code files found for complexity analysis").yellow());
+        println!(
+            "  {}",
+            style("No source code files found for complexity analysis").yellow()
+        );
         println!();
     }
 
     if !complexity_stats.is_empty() {
         println!("  {}", style("Complexity by language:").bold());
         for (lang, (files, lines, functions, complexity)) in complexity_stats.iter() {
-            let avg_complexity = if *functions > 0 { *complexity / *functions } else { 0 };
+            let avg_complexity = if *functions > 0 {
+                *complexity / *functions
+            } else {
+                0
+            };
             println!(
                 "  • {}: {} files, {} lines, {} functions, avg complexity: {}",
                 lang, files, lines, functions, avg_complexity
@@ -420,14 +462,24 @@ async fn analyze_complexity(workspace_path: &Path) -> Result<()> {
         // Provide suggestions
         println!("  {}", style("Maintainability suggestions:").bold());
         for (lang, (_, lines, functions, _)) in complexity_stats.iter() {
-            let avg_lines_per_function = if *functions > 0 { *lines / *functions } else { 0 };
+            let avg_lines_per_function = if *functions > 0 {
+                *lines / *functions
+            } else {
+                0
+            };
             if avg_lines_per_function > 50 {
-                println!("  • {}: Consider refactoring large functions (avg {} lines)", lang, avg_lines_per_function);
+                println!(
+                    "  • {}: Consider refactoring large functions (avg {} lines)",
+                    lang, avg_lines_per_function
+                );
             }
         }
         println!();
     } else {
-        println!("  {}", style("No source code files found for complexity analysis").yellow());
+        println!(
+            "  {}",
+            style("No source code files found for complexity analysis").yellow()
+        );
         println!();
     }
 
@@ -486,14 +538,26 @@ async fn scan_for_secrets(workspace_path: &Path) -> Result<Vec<String>> {
 
     // Compile regex patterns once for efficiency
     let secret_patterns = vec![
-        (regex::Regex::new(r#"(?i)(api_key|apikey|api-key).{0,20}["']?[A-Za-z0-9]{20,}["']?"#)
-            .context("Failed to compile API key regex")?, "Potential API key"),
-        (regex::Regex::new(r#"(?i)(password|passwd|pwd).{0,20}["']?[^"'\s]{8,}["']?"#)
-            .context("Failed to compile password regex")?, "Potential password"),
-        (regex::Regex::new(r#"(?i)sk-[A-Za-z0-9]{20,}"#)
-            .context("Failed to compile secret key regex")?, "Potential secret key"),
-        (regex::Regex::new(r#"(?i)aws_.{0,20}["']?[A-Za-z0-9/+]{20,}["']?"#)
-            .context("Failed to compile AWS credential regex")?, "Potential AWS credential"),
+        (
+            regex::Regex::new(r#"(?i)(api_key|apikey|api-key).{0,20}["']?[A-Za-z0-9]{20,}["']?"#)
+                .context("Failed to compile API key regex")?,
+            "Potential API key",
+        ),
+        (
+            regex::Regex::new(r#"(?i)(password|passwd|pwd).{0,20}["']?[^"'\s]{8,}["']?"#)
+                .context("Failed to compile password regex")?,
+            "Potential password",
+        ),
+        (
+            regex::Regex::new(r#"(?i)sk-[A-Za-z0-9]{20,}"#)
+                .context("Failed to compile secret key regex")?,
+            "Potential secret key",
+        ),
+        (
+            regex::Regex::new(r#"(?i)aws_.{0,20}["']?[A-Za-z0-9/+]{20,}["']?"#)
+                .context("Failed to compile AWS credential regex")?,
+            "Potential AWS credential",
+        ),
     ];
 
     for entry in WalkDir::new(workspace_path)
@@ -507,7 +571,23 @@ async fn scan_for_secrets(workspace_path: &Path) -> Result<Vec<String>> {
 
         // Skip common binary and large files
         if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-            if matches!(ext, "bin" | "png" | "jpg" | "jpeg" | "gif" | "ico" | "pdf" | "zip" | "tar" | "gz" | "exe" | "dll" | "so" | "dylib") {
+            if matches!(
+                ext,
+                "bin"
+                    | "png"
+                    | "jpg"
+                    | "jpeg"
+                    | "gif"
+                    | "ico"
+                    | "pdf"
+                    | "zip"
+                    | "tar"
+                    | "gz"
+                    | "exe"
+                    | "dll"
+                    | "so"
+                    | "dylib"
+            ) {
                 continue;
             }
         }
@@ -522,7 +602,10 @@ async fn scan_for_secrets(workspace_path: &Path) -> Result<Vec<String>> {
         if let Ok(content) = tokio::fs::read_to_string(entry.path()).await {
             for (pattern, description) in &secret_patterns {
                 if pattern.is_match(&content) {
-                    let relative_path = entry.path().strip_prefix(workspace_path).unwrap_or(entry.path());
+                    let relative_path = entry
+                        .path()
+                        .strip_prefix(workspace_path)
+                        .unwrap_or(entry.path());
                     findings.push(format!("{} in {}", description, relative_path.display()));
                     break;
                 }
@@ -537,7 +620,10 @@ async fn scan_for_secrets(workspace_path: &Path) -> Result<Vec<String>> {
     Ok(findings)
 }
 
-async fn find_large_files(workspace_path: &Path, min_size: u64) -> Result<Vec<(std::path::PathBuf, u64)>> {
+async fn find_large_files(
+    workspace_path: &Path,
+    min_size: u64,
+) -> Result<Vec<(std::path::PathBuf, u64)>> {
     let mut large_files = Vec::new();
 
     for entry in WalkDir::new(workspace_path)
@@ -572,7 +658,11 @@ async fn count_dependencies(path: &Path) -> Result<usize> {
         if let Some(start) = deps_section {
             let end = dev_deps_section.unwrap_or(content.len());
             let deps_text = &content[start..end.min(start + 1000)]; // Limit search
-            Ok(deps_text.lines().filter(|l| l.contains("=") && !l.trim().starts_with('#')).count().saturating_sub(1))
+            Ok(deps_text
+                .lines()
+                .filter(|l| l.contains("=") && !l.trim().starts_with('#'))
+                .count()
+                .saturating_sub(1))
         } else {
             Ok(0)
         }

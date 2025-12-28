@@ -1,13 +1,13 @@
-use crate::skills::loader::{SkillLoaderConfig, load_skills, discover_skill_metadata_lightweight};
+use crate::skills::loader::{SkillLoaderConfig, discover_skill_metadata_lightweight, load_skills};
 use crate::skills::model::SkillLoadOutcome;
 use crate::skills::system::install_system_skills;
 use crate::skills::types::Skill;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
 use std::sync::OnceLock;
+use std::sync::RwLock;
 use std::time::{Duration, SystemTime};
-use anyhow::Result;
 
 /// Cache entry with TTL tracking for skill outcomes
 #[derive(Clone)]
@@ -105,7 +105,7 @@ impl SkillsManager {
         let outcome = load_skills(&config);
 
         let mut cache = self.cache_by_cwd.write().unwrap();
-        
+
         // Enforce max cache size: remove oldest expired entries first, then LRU
         if cache.len() >= self.max_cache_size && !cache.contains_key(cwd) {
             // Remove oldest expired entries
@@ -284,7 +284,7 @@ mod tests {
     fn test_skills_manager_cache_with_ttl() {
         let temp_home = TempDir::new().unwrap();
         let manager = SkillsManager::new(temp_home.path().to_path_buf());
-        
+
         let cwd = temp_home.path();
 
         // First load
@@ -364,11 +364,14 @@ mod tests {
         let full_count = full.skills.len() as i32;
         let diff = (light_count - full_count).abs();
         let tolerance = (full_count / 10).max(5); // 10% tolerance or 5 items, whichever is larger
-        
+
         assert!(
             diff <= tolerance,
             "Lightweight discovery found {} skills, full discovery found {}. Difference {} exceeds tolerance {}",
-            light_count, full_count, diff, tolerance
+            light_count,
+            full_count,
+            diff,
+            tolerance
         );
     }
 
@@ -394,7 +397,7 @@ mod tests {
         // Note: This test is limited because we need actual SKILL.md files
         // For now, just verify the cache respects max size in behavior
         assert_eq!(manager.instruction_cache_size(), 0);
-        
+
         // Even after multiple operations, should be bounded
         manager.clear_instruction_cache();
         assert_eq!(manager.instruction_cache_size(), 0);

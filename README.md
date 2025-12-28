@@ -94,9 +94,50 @@ VT Code works with OpenAI, Anthropic, Google Gemini, xAI, DeepSeek, OpenRouter, 
 
 Set the corresponding environment variable for your provider (see [Installation Guide](./docs/installation/#supported-ai-providers) for all options).
 
-### Agent Client Protocol (ACP)
+### Agent Protocols
+
+VT Code supports multiple agent protocols for integration:
+
+#### Agent Client Protocol (ACP)
 
 VT Code can integrate with code editors like Zed. To configure ACP, refer to the [ACP docs](./docs/guides/zed-acp.md).
+
+#### Agent2Agent (A2A) Protocol
+
+VT Code implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), enabling communication and interoperability between AI agents. The A2A protocol supports:
+
+- **Agent Discovery**: Via Agent Cards at `/.well-known/agent-card.json`
+- **Task Lifecycle Management**: States like `submitted`, `working`, `completed`, `failed`
+- **Real-time Streaming**: Via Server-Sent Events (SSE)
+- **Rich Content Types**: Text, file, and structured data parts
+- **Push Notifications**: Webhook-based async updates
+- **JSON-RPC 2.0**: Over HTTP(S) for interoperability
+
+For more information about A2A protocol support, see [A2A Protocol Documentation](./docs/a2a-protocol.md).
+
+### CLI Commands for A2A
+
+```bash
+# Serve VTCode as an A2A agent (requires a2a-server feature)
+vtcode a2a serve --port 8080
+
+# Discover a remote agent
+vtcode a2a discover https://agent.example.com
+
+# Send a task to an agent
+vtcode a2a send-task https://agent.example.com "Help me refactor this code"
+vtcode a2a send-task https://agent.example.com "Help me refactor" --stream
+
+# List tasks
+vtcode a2a list-tasks https://agent.example.com
+vtcode a2a list-tasks https://agent.example.com --context-id my-conversation
+
+# Get task details
+vtcode a2a get-task https://agent.example.com task-123
+
+# Cancel a task
+vtcode a2a cancel-task https://agent.example.com task-123
+```
 
 ### Configuration
 

@@ -1,7 +1,10 @@
 //! A2A client for interacting with remote A2A agents.
 //! Provides helper methods for discovery, task operations, and streaming.
 
-use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
 use anyhow::Context;
 use futures::{Stream, StreamExt};
@@ -11,10 +14,10 @@ use serde_json::Value;
 use crate::a2a::agent_card::AgentCard;
 use crate::a2a::errors::{A2aError, A2aErrorCode, A2aResult};
 use crate::a2a::rpc::{
-    JsonRpcRequest, ListTasksParams, MessageSendParams, SendStreamingMessageResponse,
-    StreamingEvent, TaskIdParams, TaskPushNotificationConfig, TaskQueryParams,
-    METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM, METHOD_TASKS_CANCEL,
-    METHOD_TASKS_GET, METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET, METHOD_TASKS_PUSH_CONFIG_SET,
+    JsonRpcRequest, ListTasksParams, METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM,
+    METHOD_TASKS_CANCEL, METHOD_TASKS_GET, METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET,
+    METHOD_TASKS_PUSH_CONFIG_SET, MessageSendParams, SendStreamingMessageResponse, StreamingEvent,
+    TaskIdParams, TaskPushNotificationConfig, TaskQueryParams,
 };
 use crate::a2a::types::Task;
 
@@ -161,7 +164,10 @@ impl A2aClient {
 
     /// Get a task by ID
     pub async fn get_task(&self, task_id: String) -> A2aResult<Task> {
-        let params = serde_json::to_value(TaskQueryParams { id: task_id, history_length: None })?;
+        let params = serde_json::to_value(TaskQueryParams {
+            id: task_id,
+            history_length: None,
+        })?;
         let result_value = self.call_rpc(METHOD_TASKS_GET, Some(params)).await?;
         let task: Task = serde_json::from_value(result_value)
             .context("Failed to deserialize task")
@@ -183,9 +189,7 @@ impl A2aClient {
     /// Cancel a task
     pub async fn cancel_task(&self, task_id: String) -> A2aResult<Task> {
         let params = serde_json::to_value(TaskIdParams { id: task_id })?;
-        let result_value = self
-            .call_rpc(METHOD_TASKS_CANCEL, Some(params))
-            .await?;
+        let result_value = self.call_rpc(METHOD_TASKS_CANCEL, Some(params)).await?;
         let task: Task = serde_json::from_value(result_value)
             .context("Failed to deserialize task")
             .map_err(|e| A2aError::Internal(e.to_string()))?;
@@ -195,7 +199,10 @@ impl A2aClient {
     /// Set push notification config
     pub async fn set_push_config(&self, config: TaskPushNotificationConfig) -> A2aResult<bool> {
         let value = self
-            .call_rpc(METHOD_TASKS_PUSH_CONFIG_SET, Some(serde_json::to_value(config)?))
+            .call_rpc(
+                METHOD_TASKS_PUSH_CONFIG_SET,
+                Some(serde_json::to_value(config)?),
+            )
             .await?;
         // Server returns {"success": true}
         let success = value
@@ -206,7 +213,10 @@ impl A2aClient {
     }
 
     /// Get push notification config
-    pub async fn get_push_config(&self, task_id: String) -> A2aResult<Option<TaskPushNotificationConfig>> {
+    pub async fn get_push_config(
+        &self,
+        task_id: String,
+    ) -> A2aResult<Option<TaskPushNotificationConfig>> {
         let params = serde_json::to_value(TaskIdParams { id: task_id })?;
         let value = self
             .call_rpc(METHOD_TASKS_PUSH_CONFIG_GET, Some(params))

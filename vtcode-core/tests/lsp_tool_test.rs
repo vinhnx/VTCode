@@ -8,7 +8,9 @@ fn test_lsp_tool_schema() {
     let schema = tool.parameter_schema();
 
     if let Some(schema_obj) = schema {
-        let properties = schema_obj.get("properties").expect("Should have properties");
+        let properties = schema_obj
+            .get("properties")
+            .expect("Should have properties");
         assert!(properties.get("operation").is_some());
         assert!(properties.get("server_command").is_some());
         assert!(properties.get("file_path").is_some());

@@ -9,11 +9,11 @@ use std::io::IsTerminal;
 use std::io::{self, Read};
 use std::path::PathBuf;
 use vtcode::startup::StartupContext;
+use vtcode_core::cli::args::AgentClientProtocolTarget;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
 use vtcode_core::ui::tui::log::make_tui_log_layer;
 use vtcode_core::ui::tui::panic_hook;
-use vtcode_core::cli::args::AgentClientProtocolTarget;
 // FullTui import removed – not used in this binary.
 
 mod agent;
@@ -140,11 +140,16 @@ async fn run() -> Result<()> {
     if args.ide && args.command.is_none() {
         // Try to auto-detect and connect to available IDE
         if let Some(ide_target) = detect_available_ide()? {
-            eprintln!("vtcode: automatically connecting to {:?} IDE (--ide flag)", ide_target);
+            eprintln!(
+                "vtcode: automatically connecting to {:?} IDE (--ide flag)",
+                ide_target
+            );
             cli::handle_acp_command(core_cfg, cfg, ide_target).await?;
             return Ok(());
         } else {
-            eprintln!("vtcode: warning: --ide flag specified but no IDE detected, falling back to interactive mode");
+            eprintln!(
+                "vtcode: warning: --ide flag specified but no IDE detected, falling back to interactive mode"
+            );
         }
     }
 
@@ -233,7 +238,10 @@ async fn run() -> Result<()> {
                 "dependencies" => cli::analyze::AnalysisType::Dependencies,
                 "complexity" => cli::analyze::AnalysisType::Complexity,
                 _ => {
-                    eprintln!("Warning: Unknown analysis type '{}', using 'full'", analysis_type);
+                    eprintln!(
+                        "Warning: Unknown analysis type '{}', using 'full'",
+                        analysis_type
+                    );
                     cli::analyze::AnalysisType::Full
                 }
             };
@@ -336,26 +344,28 @@ async fn run() -> Result<()> {
 fn detect_available_ide() -> Result<Option<AgentClientProtocolTarget>> {
     use std::env;
     use std::process::Command;
-    
+
     let mut available_ides = Vec::new();
-    
+
     // Check for Zed (currently the only supported IDE)
     // Zed sets VIMRUNTIME or ZED_CLI when running with ACP
     if env::var("ZED_CLI").is_ok() || env::var("VIMRUNTIME").is_ok() {
         available_ides.push(AgentClientProtocolTarget::Zed);
     }
-    
+
     // In the future, we could check for other IDEs here:
     // - VS Code: Check for VSCODE_IPC_HOOK_CLI
     // - Others: Add detection logic as needed
-    
+
     match available_ides.len() {
         0 => Ok(None),
         1 => Ok(Some(available_ides[0])),
         _ => {
             // Multiple IDEs detected, be explicit and don't auto-connect
-            eprintln!("vtcode: multiple IDEs detected ({}), use 'vtcode acp <target>' instead of --ide", 
-                     available_ides.len());
+            eprintln!(
+                "vtcode: multiple IDEs detected ({}), use 'vtcode acp <target>' instead of --ide",
+                available_ides.len()
+            );
             Ok(None)
         }
     }

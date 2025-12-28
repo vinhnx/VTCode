@@ -24,12 +24,12 @@
 //! ```
 
 pub mod agent_card;
+pub mod cli;
+pub mod client;
 pub mod errors;
 pub mod rpc;
-pub mod client;
 pub mod task_manager;
 pub mod types;
-pub mod cli;
 
 pub mod webhook;
 
@@ -45,7 +45,5 @@ pub use rpc::{
     TaskPushNotificationConfig,
 };
 pub use task_manager::TaskManager;
-pub use types::{
-    Artifact, FileContent, Message, MessageRole, Part, Task, TaskState, TaskStatus,
-};
+pub use types::{Artifact, FileContent, Message, MessageRole, Part, Task, TaskState, TaskStatus};
 pub use webhook::{WebhookError, WebhookNotifier};

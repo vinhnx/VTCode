@@ -12,21 +12,25 @@ use anyhow::Context;
 /// Execute an A2A CLI command
 pub async fn execute_a2a_command(command: A2aCommands) -> anyhow::Result<()> {
     match command {
-        A2aCommands::Serve { host, port, base_url, enable_push } => {
-            serve_a2a_agent(host, port, base_url, enable_push).await
-        }
-        A2aCommands::Discover { agent_url } => {
-            discover_agent(agent_url).await
-        }
-        A2aCommands::SendTask { agent_url, message, stream, context_id } => {
-            send_task_to_agent(agent_url, message, stream, context_id).await
-        }
-        A2aCommands::ListTasks { agent_url, context_id, limit } => {
-            list_agent_tasks(agent_url, context_id, limit).await
-        }
-        A2aCommands::GetTask { agent_url, task_id } => {
-            get_agent_task(agent_url, task_id).await
-        }
+        A2aCommands::Serve {
+            host,
+            port,
+            base_url,
+            enable_push,
+        } => serve_a2a_agent(host, port, base_url, enable_push).await,
+        A2aCommands::Discover { agent_url } => discover_agent(agent_url).await,
+        A2aCommands::SendTask {
+            agent_url,
+            message,
+            stream,
+            context_id,
+        } => send_task_to_agent(agent_url, message, stream, context_id).await,
+        A2aCommands::ListTasks {
+            agent_url,
+            context_id,
+            limit,
+        } => list_agent_tasks(agent_url, context_id, limit).await,
+        A2aCommands::GetTask { agent_url, task_id } => get_agent_task(agent_url, task_id).await,
         A2aCommands::CancelTask { agent_url, task_id } => {
             cancel_agent_task(agent_url, task_id).await
         }
@@ -47,23 +51,23 @@ async fn serve_a2a_agent(
 
     println!("Starting VTCode A2A Agent Server...");
     println!("Feature: a2a-server enabled ✓");
-    
+
     let base_url = base_url.unwrap_or_else(|| format!("http://{}:{}", host, port));
     let agent_card = AgentCard::vtcode_default(&base_url);
     let task_manager = TaskManager::new();
-    
+
     let server_state = A2aServerState::new(task_manager, agent_card);
     let router = create_router(server_state);
-    
+
     let addr = format!("{}:{}", host, port).parse::<SocketAddr>()?;
     println!("Listening on http://{}", addr);
     println!("Agent Card: http://{}/.well-known/agent-card.json", addr);
     println!("JSON-RPC API: http://{}/a2a", addr);
     println!("Streaming API: http://{}/a2a/stream", addr);
-    
+
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, router).await?;
-    
+
     Ok(())
 }
 
@@ -82,23 +86,23 @@ async fn serve_a2a_agent(
 
 /// Discover and display information about a remote A2A agent
 async fn discover_agent(agent_url: String) -> anyhow::Result<()> {
-    use crate::a2a::{A2aClient};
+    use crate::a2a::A2aClient;
 
     println!("Discovering A2A agent at: {}", agent_url);
-    
+
     let client = A2aClient::new(&agent_url)?;
     let agent_card = client.agent_card().await?;
-    
+
     println!("\n═══════════════════════════════════════════════════════════════");
     println!("A2A Agent Discovery");
     println!("═══════════════════════════════════════════════════════════════\n");
-    
+
     println!("Name: {}", agent_card.name);
     println!("Description: {}", agent_card.description);
     println!("Version: {}", agent_card.version);
     println!("Protocol Version: {}", agent_card.protocol_version);
     println!("URL: {}", agent_card.url);
-    
+
     if let Some(provider) = &agent_card.provider {
         println!("\nProvider:");
         println!("  Organization: {}", provider.organization);
@@ -106,17 +110,20 @@ async fn discover_agent(agent_url: String) -> anyhow::Result<()> {
             println!("  URL: {}", url);
         }
     }
-    
+
     if let Some(capabilities) = &agent_card.capabilities {
         println!("\nCapabilities:");
         println!("  Streaming: {}", capabilities.streaming);
         println!("  Push Notifications: {}", capabilities.push_notifications);
-        println!("  State Transition History: {}", capabilities.state_transition_history);
+        println!(
+            "  State Transition History: {}",
+            capabilities.state_transition_history
+        );
         if !capabilities.extensions.is_empty() {
             println!("  Extensions: {:?}", capabilities.extensions);
         }
     }
-    
+
     if !agent_card.skills.is_empty() {
         println!("\nSkills:");
         for skill in &agent_card.skills {
@@ -129,10 +136,10 @@ async fn discover_agent(agent_url: String) -> anyhow::Result<()> {
             }
         }
     }
-    
+
     println!("\nInput Modes: {:?}", agent_card.default_input_modes);
     println!("Output Modes: {:?}", agent_card.default_output_modes);
-    
+
     Ok(())
 }
 
@@ -147,20 +154,20 @@ async fn send_task_to_agent(
     use futures::StreamExt;
 
     println!("Connecting to A2A agent: {}", agent_url);
-    
+
     let client = A2aClient::new(&agent_url)?;
     let msg = Message::user_text(message);
-    
+
     let mut params = MessageSendParams::new(msg);
     if let Some(ctx_id) = context_id {
         params = params.with_context_id(ctx_id);
     }
-    
+
     if stream {
         println!("Streaming task execution...\n");
         let stream = client.stream_message(params).await?;
         futures::pin_mut!(stream);
-        
+
         while let Some(event) = stream.next().await {
             match event {
                 Ok(event) => {
@@ -195,13 +202,13 @@ async fn send_task_to_agent(
         let task = client.send_message(params).await?;
         println!("Task created: {}", task.id);
         println!("Status: {:?}\n", task.status.state);
-        
+
         if let Some(msg) = &task.status.message {
             if let Some(text) = msg.parts.iter().find_map(|p| p.as_text()) {
                 println!("Response: {}", text);
             }
         }
-        
+
         if !task.artifacts.is_empty() {
             println!("\nArtifacts:");
             for artifact in &task.artifacts {
@@ -209,7 +216,7 @@ async fn send_task_to_agent(
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -223,29 +230,35 @@ async fn list_agent_tasks(
     use serde_json::Value;
 
     println!("Fetching tasks from: {}", agent_url);
-    
+
     let client = A2aClient::new(&agent_url)?;
     let mut params = ListTasksParams::default();
-    
+
     if let Some(ctx_id) = context_id {
         params.context_id = Some(ctx_id);
     }
     params.page_size = Some(limit);
-    
+
     let result_value: Value = client.list_tasks(Some(params)).await?;
-    
+
     // Parse the JSON result
-    let tasks_array = result_value.get("tasks")
+    let tasks_array = result_value
+        .get("tasks")
         .and_then(|v| v.as_array())
         .ok_or_else(|| anyhow::anyhow!("Invalid response format"))?;
-    
-    let total_size = result_value.get("totalSize")
+
+    let total_size = result_value
+        .get("totalSize")
         .and_then(|v| v.as_u64())
         .unwrap_or(tasks_array.len() as u64);
-    
-    println!("\nTasks ({} total, showing {}):", total_size, tasks_array.len());
+
+    println!(
+        "\nTasks ({} total, showing {}):",
+        total_size,
+        tasks_array.len()
+    );
     println!("═══════════════════════════════════════════════════════════════\n");
-    
+
     for task_value in tasks_array {
         if let Some(task_id) = task_value.get("id").and_then(|v| v.as_str()) {
             println!("Task: {}", task_id);
@@ -263,7 +276,7 @@ async fn list_agent_tasks(
         }
         println!();
     }
-    
+
     Ok(())
 }
 
@@ -272,19 +285,19 @@ async fn get_agent_task(agent_url: String, task_id: String) -> anyhow::Result<()
     use crate::a2a::A2aClient;
 
     println!("Fetching task {} from: {}", task_id, agent_url);
-    
+
     let client = A2aClient::new(&agent_url)?;
     let task = client.get_task(task_id.clone()).await?;
-    
+
     println!("\n═══════════════════════════════════════════════════════════════");
     println!("Task: {}", task.id);
     println!("═══════════════════════════════════════════════════════════════\n");
-    
+
     println!("Status: {:?}", task.status.state);
     if let Some(ctx_id) = &task.context_id {
         println!("Context: {}", ctx_id);
     }
-    
+
     if let Some(msg) = &task.status.message {
         println!("\nLatest Message:");
         println!("  Role: {:?}", msg.role);
@@ -296,7 +309,7 @@ async fn get_agent_task(agent_url: String, task_id: String) -> anyhow::Result<()
             }
         }
     }
-    
+
     if !task.artifacts.is_empty() {
         println!("\nArtifacts:");
         for artifact in &task.artifacts {
@@ -324,14 +337,14 @@ async fn get_agent_task(agent_url: String, task_id: String) -> anyhow::Result<()
             }
         }
     }
-    
+
     if !task.history.is_empty() {
         println!("\nHistory ({} messages):", task.history.len());
         for (i, msg) in task.history.iter().enumerate() {
             println!("  {}. {:?}: {} parts", i + 1, msg.role, msg.parts.len());
         }
     }
-    
+
     Ok(())
 }
 
@@ -340,12 +353,12 @@ async fn cancel_agent_task(agent_url: String, task_id: String) -> anyhow::Result
     use crate::a2a::A2aClient;
 
     println!("Canceling task {} at: {}", task_id, agent_url);
-    
+
     let client = A2aClient::new(&agent_url)?;
     client.cancel_task(task_id).await?;
-    
+
     println!("Task cancellation requested successfully.");
-    
+
     Ok(())
 }
 

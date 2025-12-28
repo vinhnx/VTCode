@@ -610,10 +610,13 @@ pub fn build_function_declarations_for_level(level: CapabilityLevel) -> Vec<Func
     declarations
         .into_iter()
         .filter(|fd| {
-            tool_capabilities.get(fd.name.as_str()).map(|required| level >= *required).unwrap_or(false)
+            tool_capabilities
+                .get(fd.name.as_str())
+                .map(|required| level >= *required)
+                .unwrap_or(false)
         })
         .collect()
-    }
+}
 fn apply_metadata_overrides(declarations: &mut [FunctionDeclaration]) {
     let registrations = builtin_tool_registrations();
     let mut metadata_by_name: HashMap<&str, _> = registrations

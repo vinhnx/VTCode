@@ -72,9 +72,6 @@ enabled = true
 # Leave empty to auto-select lightweight sibling of main model
 model = ""
 
-# Maximum tokens for small model responses (use smaller value for summaries/parsing)
-max_tokens = 1000
-
 # Temperature for small model (lower = more deterministic for parsing)
 temperature = 0.3
 

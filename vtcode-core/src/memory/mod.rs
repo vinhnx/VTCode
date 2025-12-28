@@ -109,9 +109,7 @@ impl MemoryMonitor {
             .output()
             .map_err(|e| format!("Failed to run ps command: {}", e))?;
 
-        let rss_str = String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .to_string();
+        let rss_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
         let kb: usize = rss_str
             .parse()
@@ -177,12 +175,15 @@ impl MemoryMonitor {
         let rss_bytes = Self::get_rss_bytes()?;
         let pressure = MemoryPressure::from_rss(rss_bytes);
 
-        let soft_limit = vtcode_config::constants::memory::SOFT_LIMIT_BYTES as f64 / (1024.0 * 1024.0);
-        let hard_limit = vtcode_config::constants::memory::HARD_LIMIT_BYTES as f64 / (1024.0 * 1024.0);
+        let soft_limit =
+            vtcode_config::constants::memory::SOFT_LIMIT_BYTES as f64 / (1024.0 * 1024.0);
+        let hard_limit =
+            vtcode_config::constants::memory::HARD_LIMIT_BYTES as f64 / (1024.0 * 1024.0);
         let current_rss_mb = rss_bytes as f64 / (1024.0 * 1024.0);
 
         // Use hard limit for percentage calculation (worst case)
-        let usage_percent = (rss_bytes as f64 / vtcode_config::constants::memory::HARD_LIMIT_BYTES as f64) * 100.0;
+        let usage_percent =
+            (rss_bytes as f64 / vtcode_config::constants::memory::HARD_LIMIT_BYTES as f64) * 100.0;
 
         let recent_checkpoints = if let Ok(state) = self.state.lock() {
             state.checkpoints.iter().cloned().collect()

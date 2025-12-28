@@ -24,15 +24,8 @@ ui_surface = "auto"
 # Maximum number of conversation turns before rotating context (affects memory usage)
 max_conversation_turns = 80
 
-# Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "medium"
-
-# Tool security configuration
 [tools]
 # Default policy when no specific policy is defined ("allow", "prompt", "deny")
-# "allow" - Execute without confirmation
-# "prompt" - Ask for confirmation
-# "deny" - Block the tool
 default_policy = "prompt"
 
 # Maximum number of tool loops allowed per turn (prevents infinite loops)

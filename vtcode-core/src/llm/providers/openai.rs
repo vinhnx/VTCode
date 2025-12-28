@@ -1073,11 +1073,6 @@ impl OpenAIProvider {
             .get("temperature")
             .and_then(|v| v.as_f64())
             .map(|v| v as f32);
-        let max_tokens = value
-            .get(MAX_COMPLETION_TOKENS_FIELD)
-            .or_else(|| value.get("max_tokens"))
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u32);
         let stream = value
             .get("stream")
             .and_then(|v| v.as_bool())
@@ -1107,7 +1102,6 @@ impl OpenAIProvider {
             system_prompt,
             tools,
             model,
-            max_tokens,
             temperature,
             stream,
             tool_choice,
@@ -1240,15 +1234,11 @@ impl OpenAIProvider {
         });
 
         let is_native_openai = self.base_url.contains("api.openai.com");
-        let max_tokens_field = if !is_native_openai {
+        let _max_tokens_field = if !is_native_openai {
             "max_tokens"
         } else {
             MAX_COMPLETION_TOKENS_FIELD
         };
-
-        if let Some(max_tokens) = request.max_tokens {
-            openai_request[max_tokens_field] = json!(max_tokens);
-        }
 
         if let Some(temperature) = request.temperature
             && Self::supports_temperature_parameter(&request.model)
@@ -1339,11 +1329,6 @@ impl OpenAIProvider {
 
         let mut sampling_parameters = json!({});
         let mut has_sampling = false;
-
-        if let Some(max_tokens) = request.max_tokens {
-            sampling_parameters["max_output_tokens"] = json!(max_tokens);
-            has_sampling = true;
-        }
 
         if let Some(temperature) = request.temperature {
             if Self::supports_temperature_parameter(&request.model) {
@@ -1706,11 +1691,7 @@ impl OpenAIProvider {
 
         // Send tokens to inference server
         let completion_tokens = self
-            .send_harmony_tokens_to_inference_server(
-                &prompt_tokens,
-                request.max_tokens,
-                request.temperature,
-            )
+            .send_harmony_tokens_to_inference_server(&prompt_tokens, request.temperature)
             .await?;
 
         // Parse completion tokens back into messages
@@ -1878,7 +1859,6 @@ impl OpenAIProvider {
     async fn send_harmony_tokens_to_inference_server(
         &self,
         tokens: &[u32],
-        max_tokens: Option<u32>,
         temperature: Option<f32>,
     ) -> Result<Vec<u32>, provider::LLMError> {
         // Get harmony inference server URL from environment variable
@@ -1915,7 +1895,6 @@ impl OpenAIProvider {
         // Prepare request body for vLLM-style inference server
         let request_body = json!({
             "prompt_token_ids": tokens,
-            "max_tokens": max_tokens.unwrap_or(1024),
             "temperature": temperature.unwrap_or(0.7),
             "stop_token_ids": stop_token_ids_vec,
             // Additional parameters that might be needed
@@ -2456,8 +2435,7 @@ mod tests {
     fn chat_completions_uses_max_completion_tokens_field() {
         let provider =
             OpenAIProvider::with_model(String::new(), models::openai::DEFAULT_MODEL.to_string());
-        let mut request = sample_request(models::openai::DEFAULT_MODEL);
-        request.max_tokens = Some(512);
+        let request = sample_request(models::openai::DEFAULT_MODEL);
 
         let payload = provider
             .convert_to_openai_format(&request)

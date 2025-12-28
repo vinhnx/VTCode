@@ -1058,8 +1058,6 @@ impl ToolRegistry {
         })
     }
 
-
-
     pub(super) fn search_tools_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let mcp_client = self.mcp_client.clone();
         let workspace_root = self.workspace_root_owned();
@@ -2201,7 +2199,8 @@ impl ToolRegistry {
 
             let mut made_progress = false;
             // Read any available output
-            if let Ok(Some(mut new_output)) = self.pty_manager().read_session_output(session_id, true)
+            if let Ok(Some(mut new_output)) =
+                self.pty_manager().read_session_output(session_id, true)
                 && !new_output.is_empty()
             {
                 if output.len().saturating_add(new_output.len()) > DEFAULT_PTY_OUTPUT_BYTE_FUSE {
@@ -2235,9 +2234,7 @@ impl ToolRegistry {
                 let next_backoff_ms =
                     (backoff.as_millis().saturating_mul(3).saturating_div(2)) as u64;
                 let next_backoff = Duration::from_millis(next_backoff_ms);
-                backoff = next_backoff
-                    .max(poll_interval)
-                    .min(max_backoff);
+                backoff = next_backoff.max(poll_interval).min(max_backoff);
                 if last_progress.elapsed() > Duration::from_secs(5) {
                     backoff = max_backoff;
                 }

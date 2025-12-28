@@ -60,10 +60,6 @@ pub(crate) async fn run_proactive_guards(
         decision_ledger.auto_prune();
     }
 
-    // Acquire pruning ledger lock for the duration of the guards check
-    let mut pruning_ledger = ctx.pruning_ledger.write().await;
-    pruning_ledger.auto_prune();
-
     // Context trim and compaction has been removed - no proactive guards needed
     // The function is kept for future extensibility but now does minimal work
 
@@ -122,4 +118,3 @@ pub(crate) async fn handle_turn_balancer(
 
     TurnHandlerOutcome::Continue
 }
-

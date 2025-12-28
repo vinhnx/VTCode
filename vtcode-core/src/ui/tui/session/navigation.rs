@@ -3,9 +3,9 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, List, ListItem},
 };
 
-use crate::config::constants::ui;
 use super::super::types::InlineMessageKind;
 use super::{Session, message::MessageLine};
+use crate::config::constants::ui;
 
 impl Session {
     pub(super) fn render_navigation(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -32,7 +32,7 @@ impl Session {
         }
 
         let has_items = !self.lines.is_empty();
-        
+
         // Build list items efficiently
         let items: Vec<ListItem> = if has_items {
             self.lines
@@ -48,22 +48,33 @@ impl Session {
             .block(block)
             .style(self.styles.default_style())
             .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
-        
+
         frame.render_stateful_widget(list, area, &mut self.navigation_state);
     }
 
-    fn navigation_list_item(
-        &self,
-        line: &MessageLine,
-        index: usize,
-    ) -> ListItem<'static> {
+    fn navigation_list_item(&self, line: &MessageLine, index: usize) -> ListItem<'static> {
         let (label, style) = match line.kind {
-            InlineMessageKind::User => (ui::NAVIGATION_LABEL_USER, Style::default().fg(Color::Blue)),
-            InlineMessageKind::Agent => (ui::NAVIGATION_LABEL_AGENT, Style::default().fg(Color::Green)),
-            InlineMessageKind::Tool => (ui::NAVIGATION_LABEL_TOOL, Style::default().fg(Color::Yellow)),
-            InlineMessageKind::Error => (ui::NAVIGATION_LABEL_ERROR, Style::default().fg(Color::Red)),
-            InlineMessageKind::Info => (ui::NAVIGATION_LABEL_INFO, Style::default().fg(Color::Cyan)),
-            InlineMessageKind::Policy => (ui::NAVIGATION_LABEL_POLICY, Style::default().fg(Color::Magenta)),
+            InlineMessageKind::User => {
+                (ui::NAVIGATION_LABEL_USER, Style::default().fg(Color::Blue))
+            }
+            InlineMessageKind::Agent => (
+                ui::NAVIGATION_LABEL_AGENT,
+                Style::default().fg(Color::Green),
+            ),
+            InlineMessageKind::Tool => (
+                ui::NAVIGATION_LABEL_TOOL,
+                Style::default().fg(Color::Yellow),
+            ),
+            InlineMessageKind::Error => {
+                (ui::NAVIGATION_LABEL_ERROR, Style::default().fg(Color::Red))
+            }
+            InlineMessageKind::Info => {
+                (ui::NAVIGATION_LABEL_INFO, Style::default().fg(Color::Cyan))
+            }
+            InlineMessageKind::Policy => (
+                ui::NAVIGATION_LABEL_POLICY,
+                Style::default().fg(Color::Magenta),
+            ),
             InlineMessageKind::Pty => (ui::NAVIGATION_LABEL_PTY, Style::default().fg(Color::Gray)),
         };
 

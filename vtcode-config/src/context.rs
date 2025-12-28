@@ -1,4 +1,3 @@
-use crate::constants::context as context_defaults;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
@@ -38,51 +37,36 @@ impl LedgerConfig {
     }
 }
 
-fn default_enabled() -> bool {
-    true
-}
-fn default_max_entries() -> usize {
-    12
-}
-fn default_include_in_prompt() -> bool {
-    true
-}
-fn default_preserve_in_compression() -> bool {
-    true
-}
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ContextFeaturesConfig {
-    #[serde(default)]
-    pub ledger: LedgerConfig,
+    /// Maximum tokens to keep in context (affects model cost and performance)
+    /// Higher values preserve more context but cost more and may hit token limits
+    /// This field is maintained for compatibility but no longer used for trimming
     #[serde(default = "default_max_context_tokens")]
     pub max_context_tokens: usize,
+
+    /// Percentage to trim context to when it gets too large
+    /// This field is maintained for compatibility but no longer used for trimming
     #[serde(default = "default_trim_to_percent")]
     pub trim_to_percent: u8,
+
+    /// Preserve recent turns during context management
+    /// This field is maintained for compatibility but no longer used for trimming
     #[serde(default = "default_preserve_recent_turns")]
     pub preserve_recent_turns: usize,
-    #[serde(default = "default_semantic_compression_enabled")]
-    pub semantic_compression: bool,
-    #[serde(default = "default_tool_aware_retention_enabled")]
-    pub tool_aware_retention: bool,
-    #[serde(default = "default_max_structural_depth")]
-    pub max_structural_depth: usize,
-    #[serde(default = "default_preserve_recent_tools")]
-    pub preserve_recent_tools: usize,
+
+    #[serde(default)]
+    pub ledger: LedgerConfig,
 }
 
 impl Default for ContextFeaturesConfig {
     fn default() -> Self {
         Self {
-            ledger: LedgerConfig::default(),
             max_context_tokens: default_max_context_tokens(),
             trim_to_percent: default_trim_to_percent(),
             preserve_recent_turns: default_preserve_recent_turns(),
-            semantic_compression: default_semantic_compression_enabled(),
-            tool_aware_retention: default_tool_aware_retention_enabled(),
-            max_structural_depth: default_max_structural_depth(),
-            preserve_recent_tools: default_preserve_recent_tools(),
+            ledger: LedgerConfig::default(),
         }
     }
 }
@@ -92,65 +76,31 @@ impl ContextFeaturesConfig {
         self.ledger
             .validate()
             .context("Invalid ledger configuration")?;
-
-        ensure!(
-            self.max_context_tokens > 0,
-            "Context features max_context_tokens must be greater than zero"
-        );
-        ensure!(
-            (1..=100).contains(&self.trim_to_percent),
-            "Context features trim_to_percent must be between 1 and 100"
-        );
-        ensure!(
-            self.preserve_recent_turns > 0,
-            "Context features preserve_recent_turns must be greater than zero"
-        );
-
-        ensure!(
-            (context_defaults::MIN_STRUCTURAL_DEPTH..=context_defaults::MAX_STRUCTURAL_DEPTH)
-                .contains(&self.max_structural_depth),
-            "Context features max_structural_depth must be between {} and {}",
-            context_defaults::MIN_STRUCTURAL_DEPTH,
-            context_defaults::MAX_STRUCTURAL_DEPTH,
-        );
-
-        ensure!(
-            (context_defaults::MIN_PRESERVE_RECENT_TOOLS
-                ..=context_defaults::MAX_PRESERVE_RECENT_TOOLS)
-                .contains(&self.preserve_recent_tools),
-            "Context features preserve_recent_tools must be between {} and {}",
-            context_defaults::MIN_PRESERVE_RECENT_TOOLS,
-            context_defaults::MAX_PRESERVE_RECENT_TOOLS,
-        );
-
         Ok(())
     }
 }
 
+fn default_enabled() -> bool {
+    true
+}
+fn default_max_entries() -> usize {
+    12
+}
+fn default_include_in_prompt() -> bool {
+    true
+}
 fn default_max_context_tokens() -> usize {
-    context_defaults::DEFAULT_MAX_TOKENS
+    90000
 }
 
 fn default_trim_to_percent() -> u8 {
-    context_defaults::DEFAULT_TRIM_TO_PERCENT
+    60
 }
 
 fn default_preserve_recent_turns() -> usize {
-    context_defaults::DEFAULT_PRESERVE_RECENT_TURNS
+    10
 }
 
-fn default_semantic_compression_enabled() -> bool {
-    context_defaults::DEFAULT_SEMANTIC_COMPRESSION_ENABLED
-}
-
-fn default_tool_aware_retention_enabled() -> bool {
-    context_defaults::DEFAULT_TOOL_AWARE_RETENTION_ENABLED
-}
-
-fn default_max_structural_depth() -> usize {
-    context_defaults::DEFAULT_MAX_STRUCTURAL_DEPTH
-}
-
-fn default_preserve_recent_tools() -> usize {
-    context_defaults::DEFAULT_PRESERVE_RECENT_TOOLS
+fn default_preserve_in_compression() -> bool {
+    true
 }
