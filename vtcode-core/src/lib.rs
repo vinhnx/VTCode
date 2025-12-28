@@ -244,6 +244,15 @@ pub use vtcode_markdown_store::{
 };
 
 #[cfg(test)]
+mod memory_tests;
+
+#[cfg(test)]
+mod memory_integration_tests;
+
+#[cfg(test)]
+mod config_verification_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

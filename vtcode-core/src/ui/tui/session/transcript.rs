@@ -38,6 +38,9 @@ pub struct TranscriptReflowCache {
     pub row_offsets: Vec<usize>, // Precomputed row offsets for faster access
     pub messages: Vec<CachedMessage>,
     pub width_specific_cache: HashMap<u16, Vec<Vec<Line<'static>>>>, // Cache reflowed content by width
+    /// Maximum number of width variations to cache (limits memory growth)
+    #[allow(dead_code)]
+    max_cached_widths: usize,
 }
 
 impl TranscriptReflowCache {
@@ -48,6 +51,7 @@ impl TranscriptReflowCache {
             row_offsets: Vec::new(),
             messages: Vec::new(),
             width_specific_cache: HashMap::new(),
+            max_cached_widths: 3, // Only cache last 3 widths to limit memory growth
         }
     }
 
@@ -179,6 +183,24 @@ impl TranscriptReflowCache {
     pub fn message_row_count(&self, index: usize) -> Option<usize> {
         self.messages.get(index).map(|m| m.lines.len())
     }
+
+    /// Enforces the maximum number of cached widths to prevent unbounded memory growth
+    fn enforce_width_cache_limit(&mut self) {
+        if self.width_specific_cache.len() > self.max_cached_widths {
+            // Remove the oldest entry (first inserted)
+            // Using .remove() directly since HashMap iteration order is undefined
+            // We'll remove the width with the smallest value to be deterministic
+            if let Some(&min_width) = self.width_specific_cache.keys().min() {
+                self.width_specific_cache.remove(&min_width);
+            }
+        }
+    }
+
+    /// Stores reflowed content for a width, enforcing cache limits
+    pub fn cache_width_content(&mut self, width: u16, content: Vec<Vec<Line<'static>>>) {
+        self.width_specific_cache.insert(width, content);
+        self.enforce_width_cache_limit();
+    }
 }
 
 impl Session {
@@ -279,6 +301,17 @@ impl Session {
 
         // Not in cache, fetch from transcript
         let visible_lines = self.collect_transcript_window(width, start_row, max_rows);
+
+        // Cache the reflowed content for this width in the transcript cache
+        // This supports future reflows and width-specific optimizations
+        if !visible_lines.is_empty() {
+            if let Some(mut cache) = self.transcript_cache.take() {
+                // Convert the visible lines back to grouped by message for width-specific cache
+                // This enables efficient reflow when width changes
+                cache.cache_width_content(width, vec![visible_lines.clone()]);
+                self.transcript_cache = Some(cache);
+            }
+        }
 
         // Cache for next render (wrapped in Arc for cheap sharing)
         let arc_lines = Arc::new(visible_lines);
