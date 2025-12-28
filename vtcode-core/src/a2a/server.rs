@@ -17,6 +17,7 @@ use crate::a2a::rpc::{
     METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET, METHOD_TASKS_PUSH_CONFIG_SET,
 };
 use crate::a2a::task_manager::TaskManager;
+use crate::a2a::WebhookNotifier;
 use crate::a2a::types::TaskState;
 use axum::{
     extract::State,
@@ -45,6 +46,8 @@ pub struct A2aServerState {
     pub agent_card: Arc<AgentCard>,
     /// Broadcast channel for streaming events
     pub event_tx: Arc<tokio::sync::broadcast::Sender<StreamingEvent>>,
+    /// Webhook notifier for push notifications
+    pub webhook_notifier: Arc<WebhookNotifier>,
 }
 
 impl A2aServerState {
@@ -55,6 +58,7 @@ impl A2aServerState {
             task_manager: Arc::new(task_manager),
             agent_card: Arc::new(agent_card),
             event_tx: Arc::new(event_tx),
+            webhook_notifier: Arc::new(WebhookNotifier::new()),
         }
     }
 
@@ -222,22 +226,44 @@ async fn handle_stream(
             .await;
 
         // Send status update event
-        let _ = state_clone.event_tx.send(StreamingEvent::TaskStatus {
+        let status_event = StreamingEvent::TaskStatus {
             task_id: task_id_clone.clone(),
             context_id: params.context_id.clone(),
             status: crate::a2a::types::TaskStatus::new(TaskState::Working),
             kind: "status-update".to_string(),
             r#final: false,
+        };
+        let _ = state_clone.event_tx.send(status_event.clone());
+
+        // Fire webhook if configured
+        let notifier = state_clone.webhook_notifier.clone();
+        let task_manager = state_clone.task_manager.clone();
+        let task_id_for_hook = task_id_clone.clone();
+        tokio::spawn(async move {
+            if let Some(cfg) = task_manager.get_webhook_config(&task_id_for_hook).await {
+                let _ = notifier.send_event(&cfg, status_event).await;
+            }
         });
 
         // Simulate generating a response message
         tokio::time::sleep(Duration::from_millis(200)).await;
         let response_msg = crate::a2a::types::Message::agent_text("Processing your request...");
-        let _ = state_clone.event_tx.send(StreamingEvent::Message {
+        let message_event = StreamingEvent::Message {
             message: response_msg,
             context_id: params.context_id.clone(),
             kind: "streaming-response".to_string(),
             r#final: false,
+        };
+        let _ = state_clone.event_tx.send(message_event.clone());
+
+        // Fire webhook if configured
+        let notifier = state_clone.webhook_notifier.clone();
+        let task_manager = state_clone.task_manager.clone();
+        let task_id_for_hook = task_id_clone.clone();
+        tokio::spawn(async move {
+            if let Some(cfg) = task_manager.get_webhook_config(&task_id_for_hook).await {
+                let _ = notifier.send_event(&cfg, message_event).await;
+            }
         });
 
         // Complete the task
@@ -248,12 +274,26 @@ async fn handle_stream(
             .await;
 
         // Send final status event
-        let _ = state_clone.event_tx.send(StreamingEvent::TaskStatus {
+        let final_status_event = StreamingEvent::TaskStatus {
             task_id: task_id_clone,
             context_id: params.context_id,
             status: crate::a2a::types::TaskStatus::new(TaskState::Completed),
             kind: "status-update".to_string(),
             r#final: true,
+        };
+        let _ = state_clone.event_tx.send(final_status_event.clone());
+
+        // Fire webhook if configured
+        let notifier = state_clone.webhook_notifier.clone();
+        let task_manager = state_clone.task_manager.clone();
+        let task_id_for_hook = final_status_event
+            .task_id()
+            .unwrap_or_default()
+            .to_string();
+        tokio::spawn(async move {
+            if let Some(cfg) = task_manager.get_webhook_config(&task_id_for_hook).await {
+                let _ = notifier.send_event(&cfg, final_status_event).await;
+            }
         });
     });
 

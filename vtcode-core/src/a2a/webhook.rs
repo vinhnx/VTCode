@@ -6,7 +6,7 @@
 use super::rpc::{SendStreamingMessageResponse, StreamingEvent, TaskPushNotificationConfig};
 use reqwest::Client;
 use std::time::Duration;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 /// Webhook notifier for delivering A2A events
 #[derive(Debug, Clone)]
