@@ -2,7 +2,7 @@
 
 use crate::memory::{MemoryMonitor, MemoryPressure, MemoryReport};
 use crate::utils::colors::style;
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 /// Handle the memory command - display memory usage and diagnostics
 pub async fn handle_memory_command() -> Result<MemoryReport> {

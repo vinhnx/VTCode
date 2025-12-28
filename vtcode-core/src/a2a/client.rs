@@ -13,7 +13,7 @@ use crate::a2a::errors::{A2aError, A2aErrorCode, A2aResult};
 use crate::a2a::rpc::{
     JsonRpcRequest, ListTasksParams, MessageSendParams, SendStreamingMessageResponse,
     StreamingEvent, TaskIdParams, TaskPushNotificationConfig, TaskQueryParams,
-    JSONRPC_VERSION, METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM, METHOD_TASKS_CANCEL,
+    METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM, METHOD_TASKS_CANCEL,
     METHOD_TASKS_GET, METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET, METHOD_TASKS_PUSH_CONFIG_SET,
 };
 use crate::a2a::types::Task;
