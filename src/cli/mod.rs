@@ -46,12 +46,34 @@ pub use skills::{
 pub use snapshots::{handle_cleanup_snapshots_command, handle_snapshots_command};
 pub use trajectory::handle_trajectory_command as handle_trajectory_logs_command;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Export the current workspace directory through the expected environment variable
 pub fn set_workspace_env(path: &Path) {
     // SAFETY: Setting a process-local environment variable is safe; the OS copies the value.
     unsafe {
         std::env::set_var("WORKSPACE_DIR", path);
+    }
+}
+
+/// Export additional directories through environment variables
+pub fn set_additional_dirs_env(dirs: &[PathBuf]) {
+    // Set the main additional directories as a colon-separated list
+    if !dirs.is_empty() {
+        let dirs_str = dirs.iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+            .join(":");
+        unsafe {
+            std::env::set_var("ADDITIONAL_DIRS", dirs_str);
+        }
+    }
+    
+    // Also set individual variables for backwards compatibility
+    for (idx, dir) in dirs.iter().enumerate() {
+        let var_name = format!("ADDITIONAL_DIR_{}", idx);
+        unsafe {
+            std::env::set_var(var_name, dir);
+        }
     }
 }

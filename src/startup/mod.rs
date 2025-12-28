@@ -36,6 +36,72 @@ fn validate_session_id_suffix(suffix: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validate additional directories and resolve to absolute paths
+fn validate_additional_directories(dirs: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    let mut validated_dirs = Vec::new();
+    
+    for dir in dirs {
+        if !dir.exists() {
+            bail!("Additional directory '{}' does not exist", dir.display());
+        }
+        if !dir.is_dir() {
+            bail!("Path '{}' is not a directory", dir.display());
+        }
+        
+        // Resolve to absolute path
+        let absolute_dir = dir.canonicalize()
+            .with_context(|| format!("Failed to resolve path '{}'", dir.display()))?;
+        
+        validated_dirs.push(absolute_dir);
+    }
+    
+    Ok(validated_dirs)
+}
+
+/// Apply permission mode override from CLI
+fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &str) -> Result<()> {
+    use vtcode_config::constants::tools;
+    
+    match mode.to_lowercase().as_str() {
+        "ask" => {
+            config.security.human_in_the_loop = true;
+            config.security.require_write_tool_for_claims = true;
+            config.automation.full_auto.enabled = false;
+        }
+        "suggest" => {
+            config.security.human_in_the_loop = true;
+            config.security.require_write_tool_for_claims = false;
+            config.automation.full_auto.enabled = false;
+        }
+        "auto-approved" => {
+            config.security.human_in_the_loop = false;
+            config.security.require_write_tool_for_claims = false;
+            // Enable full-auto for allowed tools only (read-only tools)
+            config.automation.full_auto.enabled = true;
+            config.automation.full_auto.allowed_tools = vec![
+                tools::READ_FILE.to_string(),
+                tools::LIST_FILES.to_string(),
+                tools::GREP_FILE.to_string(),
+            ];
+        }
+        "full-auto" => {
+            config.security.human_in_the_loop = false;
+            config.security.require_write_tool_for_claims = false;
+            config.automation.full_auto.enabled = true;
+            // Allow all tools in full auto mode by not restricting allowed_tools
+            config.automation.full_auto.allowed_tools = vec![]; // Empty means all allowed
+        }
+        _ => {
+            bail!(
+                "Invalid permission mode '{}'. Valid options: ask, suggest, auto-approved, full-auto",
+                mode
+            );
+        }
+    }
+    
+    Ok(())
+}
+
 use first_run::maybe_run_first_run_setup;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
@@ -52,6 +118,7 @@ use vtcode_core::{initialize_dot_folder, load_user_config, update_theme_preferen
 #[derive(Debug, Clone)]
 pub struct StartupContext {
     pub workspace: PathBuf,
+    pub additional_dirs: Vec<PathBuf>,
     pub config: VTCodeConfig,
     pub agent_config: CoreAgentConfig,
     pub skip_confirmations: bool,
@@ -87,6 +154,9 @@ impl StartupContext {
                 path.display()
             );
         }
+
+        // Validate and resolve additional directories
+        let additional_dirs = validate_additional_directories(&args.additional_dirs)?;
 
         let (config_path_override, inline_config_overrides) =
             parse_cli_config_entries(&args.config);
@@ -140,6 +210,11 @@ impl StartupContext {
 
         if full_auto_requested {
             validate_full_auto_configuration(&config, &workspace)?;
+        }
+
+        // Apply permission mode from CLI if specified
+        if let Some(ref permission_mode) = args.permission_mode {
+            apply_permission_mode_override(&mut config, permission_mode)?;
         }
 
         // Validate configuration against models database
@@ -289,9 +364,10 @@ impl StartupContext {
 
         Ok(StartupContext {
             workspace,
+            additional_dirs,
             config,
             agent_config,
-            skip_confirmations,
+            skip_confirmations: args.dangerously_skip_permissions || skip_confirmations,
             full_auto_requested,
             automation_prompt,
             session_resume,

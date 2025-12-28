@@ -387,6 +387,88 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "AGENT")]
     pub agent: Option<String>,
 
+    /// **Add additional working directories for the agent to access**
+    ///
+    /// Allows the agent to work with multiple directories. Each path is validated
+    /// to ensure it exists and is a directory. Files outside all specified directories
+    /// (including the main workspace) will be inaccessible.
+    ///
+    /// Example: vtcode --add-dir ../apps --add-dir ../libs chat
+    #[arg(long = "add-dir", global = true, value_name = "PATH", value_hint = ValueHint::DirPath)]
+    pub additional_dirs: Vec<PathBuf>,
+
+    /// **Tools that execute without prompting for permission**
+    ///
+    /// Specify tools that can run automatically without asking for user approval.
+    /// Use tool names like "Read", "Edit", "Bash", or patterns like "Bash(git:*)".
+    ///
+    /// Example: vtcode --allowed-tools "Read,Edit,Grep" --allowed-tools "Bash(git:*)"
+    #[arg(long = "allowed-tools", global = true, value_name = "TOOLS", action = ArgAction::Append)]
+    pub allowed_tools: Vec<String>,
+
+    /// **Tools that cannot be used by the agent**
+    ///
+    /// Explicitly remove tools from the agent's available toolkit. These tools
+    /// will not be shown in the agent's context and cannot be invoked.
+    /// Use tool names or patterns like with --allowed-tools.
+    ///
+    /// Example: vtcode --disallowed-tools "Bash(rm:*),Bash(sudo:*)"
+    #[arg(long = "disallowed-tools", global = true, value_name = "TOOLS", action = ArgAction::Append)]
+    pub disallowed_tools: Vec<String>,
+
+    /// **Skip all permission prompts (use with extreme caution)**
+    ///
+    /// Alias for --skip-confirmations with a more explicit warning.
+    /// This disables all safety checks and allows the agent to execute any
+    /// tool without confirmation. Only use in trusted environments.
+    ///
+    /// Warning: This significantly reduces security. Use --allowed-tools for
+    /// more granular control instead when possible.
+    #[arg(long = "dangerously-skip-permissions", global = true, alias = "skip-confirmations")]
+    pub dangerously_skip_permissions: bool,
+
+    /// **Explicitly connect to IDE on startup**
+    ///
+    /// Automatically connect to IDE if exactly one valid IDE is available.
+    /// This is more explicit than auto-detection and useful for scripting.
+    ///
+    /// Example: vtcode --ide chat
+    #[arg(long, global = true)]
+    pub ide: bool,
+
+    /// **Begin in a specified permission mode**
+    ///
+    /// Set the initial permission mode for tool execution. More explicit than
+    /// --security-level and provides immediate control over agent behavior.
+    ///
+    /// Options:
+    ///   • ask - Prompt for every tool execution (default)
+    ///   • suggest - Agent suggests tools but asks for approval
+    ///   • auto-approved - Allowed tools run automatically
+    ///   • full-auto - All tools run without prompts (requires --dangerously-skip-permissions)
+    ///
+    /// Example: vtcode --permission-mode suggest chat
+    #[arg(long, global = true, value_name = "MODE")]
+    pub permission_mode: Option<String>,
+
+    /// **Enable Chrome browser integration for web automation**
+    ///
+    /// Allows the agent to control Chrome browser for web testing, scraping,
+    /// and automation tasks. Requires Chrome to be installed.
+    ///
+    /// Example: vtcode --chrome chat
+    #[arg(long, global = true)]
+    pub chrome: bool,
+
+    /// **Disable Chrome browser integration**
+    ///
+    /// Explicitly disable Chrome browser integration even if it would normally
+    /// be available. Useful for security or when Chrome causes issues.
+    ///
+    /// Example: vtcode --no-chrome chat
+    #[arg(long = "no-chrome", global = true, conflicts_with = "chrome")]
+    pub no_chrome: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -1037,6 +1119,14 @@ impl Default for Cli {
             tick_rate: 250,       // Default tick rate: 250ms
             frame_rate: 60,       // Default frame rate: 60 FPS
             agent: None,          // No agent override by default
+            additional_dirs: Vec::new(),  // No additional directories by default
+            allowed_tools: Vec::new(),    // No tool restrictions by default
+            disallowed_tools: Vec::new(), // No tool restrictions by default
+            dangerously_skip_permissions: false, // Safety confirmations enabled by default
+            ide: false,                   // No auto IDE connection by default
+            permission_mode: None,        // Use config permission mode by default
+            chrome: false,                // Chrome integration disabled by default
+            no_chrome: false,             // Chrome integration not explicitly disabled
             command: Some(Commands::Chat),
         }
     }
