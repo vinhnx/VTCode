@@ -93,6 +93,10 @@ impl<'a> InlineEventContext<'a> {
             }
             InlineEvent::Exit => self.control_processor().exit()?,
             InlineEvent::Interrupt => self.handle_interrupt(),
+            InlineEvent::BackgroundOperation => {
+                // Ctrl+B pressed: handle background operation
+                self.input_processor().passive()
+            }
             InlineEvent::LaunchEditor => {
                 // Ctrl+E pressed: submit /edit command
                 self.input_processor().submit("/edit".to_string())

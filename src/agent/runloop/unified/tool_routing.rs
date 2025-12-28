@@ -292,6 +292,7 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             | InlineEvent::ScrollPageUp
             | InlineEvent::ScrollPageDown
             | InlineEvent::FileSelected(_)
+            | InlineEvent::BackgroundOperation
             | InlineEvent::LaunchEditor => {
                 ctrl_c_state.disarm_exit();
             }

@@ -385,6 +385,53 @@ pub(crate) async fn run_interaction_loop(
 
         let input = input_owned.as_str();
 
+        // Check for bash mode with '!' prefix
+        if input.starts_with('!') {
+            let bash_command = input.trim_start_matches('!').trim();
+            if !bash_command.is_empty() {
+                display_user_message(ctx.renderer, input)?;
+                ctx.conversation_history
+                    .push(uni::Message::user(input.to_string()));
+
+                // Execute bash command directly
+                let tool_call_id = format!("bash_{}", ctx.conversation_history.len());
+
+                // Find the bash tool in the registry
+                let args = serde_json::json!({"command": bash_command});
+                let bash_result = ctx.tool_registry.execute_tool_ref("bash", &args).await;
+
+                match bash_result {
+                    Ok(result) => {
+                        render_tool_output(
+                            ctx.renderer,
+                            Some("bash"),
+                            &result,
+                            ctx.vt_cfg.as_ref(),
+                        )
+                        .await?;
+
+                        let result_str = serde_json::to_string(&result).unwrap_or_default();
+                        ctx.conversation_history.push(uni::Message::tool_response(
+                            tool_call_id.clone(),
+                            result_str,
+                        ));
+                    }
+                    Err(err) => {
+                        ctx.renderer
+                            .line(MessageStyle::Error, &format!("Bash command failed: {}", err))?;
+                        ctx.conversation_history.push(uni::Message::tool_response(
+                            tool_call_id.clone(),
+                            format!("{{\"error\": \"{}\"}}", err),
+                        ));
+                    }
+                }
+
+                ctx.handle.clear_input();
+                ctx.handle.set_placeholder(ctx.default_placeholder.clone());
+                continue;
+            }
+        }
+
         // Check for explicit "run <command>" pattern
         if let Some((tool_name, tool_args)) =
             crate::agent::runloop::unified::shell::detect_explicit_run_command(input)

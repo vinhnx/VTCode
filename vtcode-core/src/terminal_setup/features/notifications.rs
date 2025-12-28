@@ -47,6 +47,16 @@ pub fn generate_notification_config(
             config_lines.push("# 1. Settings → Profiles → Advanced → Bell style".to_string());
             config_lines.push("# 2. Enable 'Show terminal bell alert' in appearance settings".to_string());
         }
+        TerminalType::Ghostty => {
+            config_lines.push("# Ghostty Notification Configuration".to_string());
+            config_lines.push("# Ghostty supports system notifications through:".to_string());
+            config_lines.push("# 1. Settings → Terminal → Bell".to_string());
+            config_lines.push("# 2. Enable 'Visual Bell' or 'Audible Bell' as preferred".to_string());
+            config_lines.push("# 3. Configure 'Bell Duration' for visual notifications".to_string());
+            config_lines.push("#".to_string());
+            config_lines.push("# Ghostty also supports shell integration notifications via:".to_string());
+            config_lines.push("# - Terminal bell escape sequences (\\a)".to_string());
+        }
         _ => {
             config_lines.push(format!("# {} Notification Configuration", format!("{:?}", terminal_type)).to_string());
             config_lines.push("# This terminal supports standard ANSI bell notifications.".to_string());
@@ -77,6 +87,12 @@ pub fn get_notification_instructions(terminal_type: TerminalType) -> Vec<String>
             "2. SELECT: Your profile".to_string(),
             "3. GO TO: Appearance section".to_string(),
             "4. ENABLE: 'Show terminal bell alert'".to_string(),
+        ],
+        TerminalType::Ghostty => vec![
+            "1. OPEN: Ghostty Settings".to_string(),
+            "2. GO TO: Terminal → Bell section".to_string(),
+            "3. ENABLE: 'Visual Bell' or 'Audible Bell' as preferred".to_string(),
+            "4. CONFIGURE: Set 'Bell Duration' for visual notifications".to_string(),
         ],
         _ => vec![
             format!("1. CHECK: Documentation for {}", format!("{:?}", terminal_type)).to_string(),

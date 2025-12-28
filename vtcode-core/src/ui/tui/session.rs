@@ -52,6 +52,7 @@ mod vim_handler;
 mod vim_mode;
 
 mod events;
+mod reverse_search;
 mod message_renderer;
 mod messages;
 mod palette;
@@ -167,6 +168,9 @@ pub struct Session {
 
     // --- Vim Mode ---
     pub(crate) vim_state: crate::ui::tui::session::vim_mode::VimState,
+
+    // --- Reverse Search ---
+    pub(crate) reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState,
 
     // --- PTY Session Management ---
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
@@ -297,6 +301,9 @@ impl Session {
 
             // --- Vim Mode ---
             vim_state: crate::ui::tui::session::vim_mode::VimState::new(),
+
+            // --- Reverse Search ---
+            reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState::new(),
 
             // --- PTY Session Management ---
             active_pty_sessions: None,

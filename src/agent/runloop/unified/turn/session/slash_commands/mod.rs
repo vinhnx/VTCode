@@ -135,15 +135,13 @@ pub async fn handle_outcome(
                 ctx.vt_cfg.as_mut().unwrap().agent.vim_mode_enabled = !vim_enabled;
 
                 if !vim_enabled {
-                    // Enable Vim mode - switch to normal mode
-                    ctx.session.vim_state.switch_to_normal();
+                    // Enable Vim mode
                     ctx.renderer.line(
                         vtcode_core::utils::ansi::MessageStyle::Info,
                         "Vim mode: Enabled (press 'i' to enter insert mode, 'Esc' to return to normal mode)",
                     )?;
                 } else {
-                    // Disable Vim mode - switch to insert mode
-                    ctx.session.vim_state.switch_to_insert();
+                    // Disable Vim mode
                     ctx.renderer.line(
                         vtcode_core::utils::ansi::MessageStyle::Info,
                         "Vim mode: Disabled",

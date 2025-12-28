@@ -1036,6 +1036,37 @@ fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>) -> R
                 &format!("  /{} – {}", cmd.name, cmd.description),
             )?;
         }
+
+        // Add information about interactive features
+        renderer.line(MessageStyle::Info, "")?;
+        renderer.line(MessageStyle::Info, "Interactive mode features:")?;
+        renderer.line(MessageStyle::Info, "  Ctrl+C – Cancel current input or generation")?;
+        renderer.line(MessageStyle::Info, "  Ctrl+D – Exit VTCode session")?;
+        renderer.line(MessageStyle::Info, "  Ctrl+L – Clear terminal screen")?;
+        renderer.line(MessageStyle::Info, "  Ctrl+R – Reverse search command history")?;
+        renderer.line(MessageStyle::Info, "  Ctrl+V – Paste image from clipboard")?;
+        renderer.line(MessageStyle::Info, "  Up/Down arrows – Navigate command history")?;
+        renderer.line(MessageStyle::Info, "  Esc+Esc – Rewind the code/conversation")?;
+        renderer.line(MessageStyle::Info, "  Shift+Tab – Toggle permission modes")?;
+        renderer.line(MessageStyle::Info, "")?;
+        renderer.line(MessageStyle::Info, "Multiline input:")?;
+        renderer.line(MessageStyle::Info, "  \\ + Enter – Quick escape (insert newline without submitting)")?;
+        renderer.line(MessageStyle::Info, "  Shift+Enter – Multiline input (if configured)")?;
+        renderer.line(MessageStyle::Info, "  Ctrl+J – Line feed character for multiline")?;
+        renderer.line(MessageStyle::Info, "")?;
+        renderer.line(MessageStyle::Info, "Bash mode:")?;
+        renderer.line(MessageStyle::Info, "  !command – Run bash commands directly (e.g., !ls -la)")?;
+        renderer.line(MessageStyle::Info, "")?;
+        renderer.line(MessageStyle::Info, "Vim mode (enable with /vim):")?;
+        renderer.line(MessageStyle::Info, "  i – Insert before cursor (INSERT mode)")?;
+        renderer.line(MessageStyle::Info, "  a – Insert after cursor (INSERT mode)")?;
+        renderer.line(MessageStyle::Info, "  o – Open line below (INSERT mode)")?;
+        renderer.line(MessageStyle::Info, "  Esc – Enter NORMAL mode")?;
+        renderer.line(MessageStyle::Info, "  h/j/k/l – Move left/down/up/right")?;
+        renderer.line(MessageStyle::Info, "  w/e/b – Move by words")?;
+        renderer.line(MessageStyle::Info, "  0/$ – Move to beginning/end of line")?;
+        renderer.line(MessageStyle::Info, "  dd/dw – Delete line/word")?;
+        renderer.line(MessageStyle::Info, "  cc/cw – Change line/word")?;
     }
     Ok(())
 }
