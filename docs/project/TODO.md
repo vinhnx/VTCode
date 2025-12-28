@@ -98,3 +98,11 @@ refine vtcode-core/src/tools/registry/declarations.rs
 --
 
 refine /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/executors.rs
+
+--
+
+Debug and resolve the issue of high memory consumption that occurs when starting the VTCode agent. Begin by describing the system environment, including operating system, hardware specifications, and VTCode version. Provide detailed steps to reproduce the problem, such as monitoring memory usage with tools like Task Manager, htop, or profiling software. Identify potential causes, including memory leaks, inefficient data structures, excessive resource loading during initialization, or conflicts with other processes. Then, outline step-by-step fixes, such as code optimizations, configuration adjustments, or dependency updates, with code snippets or commands where relevant. Finally, suggest long-term improvements to optimize performance, including the use of memory profiling tools (e.g., Valgrind or Python's memory_profiler), implementing lazy loading, caching strategies, or refactoring for better resource management, and provide metrics to measure success.
+
+--
+
+As a software debugging expert specializing in memory optimization, debug and resolve the issue of high memory consumption that occurs when running the VTCode agent in a typical development environment (e.g., Python-based or similar). Provide a structured response with the following sections: (1) Initial Diagnosis Steps, including tools like memory profilers (e.g., memory_profiler, Valgrind, or heap dumps) and log analysis to quantify the memory usage; (2) Potential Causes, such as memory leaks, inefficient data structures, large object retention, or recursive functions, with examples from common agent architectures; (3) Detailed Fix Steps, including code modifications, configuration changes, and testing procedures to verify reductions in memory usage; (4) Performance Optimization Suggestions, such as implementing garbage collection tuning, using generators for large data, or adopting caching strategies, with metrics to measure improvements. Include code snippets, reasoning for each recommendation, and potential trade-offs. Ensure the response is actionable and assumes access to the agent's source code.

@@ -189,8 +189,14 @@ async fn main() -> Result<()> {
                 "Answer: This is a placeholder response. In a full implementation, this would call the LLM with your question."
             );
         }
-        Commands::Analyze => {
-            handle_analyze_command(&config).await?;
+        Commands::Analyze { analysis_type } => {
+            use vtcode::cli::analyze::AnalysisType;
+            let analysis_type = AnalysisType::from_str(&analysis_type)
+                .unwrap_or_else(|| {
+                    eprintln!("Warning: Unknown analysis type '{}', using 'full'", analysis_type);
+                    AnalysisType::Full
+                });
+            handle_analyze_command(&config, analysis_type).await?;
         }
         Commands::CreateProject { name, features } => {
             handle_create_project_command(&config, &name, &features).await?;

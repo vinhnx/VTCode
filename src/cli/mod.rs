@@ -23,7 +23,7 @@ pub mod trajectory;
 
 // Re-export command handlers for backward compatibility
 pub use acp::handle_acp_command;
-pub use analyze::handle_analyze_command;
+pub use analyze::{handle_analyze_command, AnalysisType};
 pub use ask::{AskCommandOptions, handle_ask_command as handle_ask_single_command};
 pub use auto::handle_auto_task_command;
 pub use benchmark::{BenchmarkCommandOptions, handle_benchmark_command};

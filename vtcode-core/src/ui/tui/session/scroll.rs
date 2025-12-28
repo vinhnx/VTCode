@@ -66,6 +66,16 @@ impl ScrollManager {
         self.total_rows
     }
 
+    /// Returns last known total rows (used for render optimization)
+    /// Returns Some(total) if metrics are valid, None if dirty
+    pub fn last_known_total(&self) -> Option<usize> {
+        if self.metrics_dirty {
+            None
+        } else {
+            Some(self.total_rows)
+        }
+    }
+
     /// Updates total rows and max offset, returns if changed
     pub fn set_total_rows(&mut self, total: usize) -> bool {
         if self.total_rows != total {

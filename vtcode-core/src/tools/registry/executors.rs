@@ -2109,6 +2109,9 @@ impl ToolRegistry {
         setup: &PtyCommandSetup,
         retry_count: u32,
     ) -> Result<(Option<i32>, PtyEphemeralCapture, VTCodePtySession)> {
+        let _session_guard = self
+            .start_pty_session()
+            .context("Maximum PTY sessions reached; cannot start new session")?;
         let mut lifecycle = PtySessionLifecycle::start(self)?;
 
         // Increment active PTY sessions counter
@@ -2170,19 +2173,12 @@ impl ToolRegistry {
         let mut output = String::new();
         let start = Instant::now();
         let poll_interval = Duration::from_millis(50);
+        let max_backoff = Duration::from_millis(400);
+        let mut backoff = poll_interval;
+        let mut last_progress = start;
         let min_wait = Duration::from_millis(200);
 
         loop {
-            // Read any available output
-            if let Ok(Some(new_output)) = self.pty_manager().read_session_output(session_id, true)
-                && !new_output.is_empty()
-            {
-                if let Some(callback) = &self.progress_callback {
-                    callback("run_pty_cmd", &new_output);
-                }
-                output.push_str(&new_output);
-            }
-
             // Check if session has completed
             if let Ok(Some(code)) = self.pty_manager().is_session_completed(session_id) {
                 // Drain any remaining output
@@ -2203,13 +2199,55 @@ impl ToolRegistry {
                 };
             }
 
+            let mut made_progress = false;
+            // Read any available output
+            if let Ok(Some(mut new_output)) = self.pty_manager().read_session_output(session_id, true)
+                && !new_output.is_empty()
+            {
+                if output.len().saturating_add(new_output.len()) > DEFAULT_PTY_OUTPUT_BYTE_FUSE {
+                    let remaining = DEFAULT_PTY_OUTPUT_BYTE_FUSE.saturating_sub(output.len());
+                    if remaining > 0 {
+                        new_output.truncate(remaining);
+                        output.push_str(&new_output);
+                    }
+                    output.push_str("\n[Output truncated: byte fuse reached]");
+                    return PtyEphemeralCapture {
+                        output,
+                        exit_code: None,
+                        completed: false,
+                        duration: start.elapsed(),
+                    };
+                }
+
+                if let Some(callback) = &self.progress_callback {
+                    callback("run_pty_cmd", &new_output);
+                }
+                output.push_str(&new_output);
+                last_progress = Instant::now();
+                made_progress = true;
+            }
+
             let elapsed = start.elapsed();
+
+            if made_progress {
+                backoff = poll_interval;
+            } else {
+                let next_backoff_ms =
+                    (backoff.as_millis().saturating_mul(3).saturating_div(2)) as u64;
+                let next_backoff = Duration::from_millis(next_backoff_ms);
+                backoff = next_backoff
+                    .max(poll_interval)
+                    .min(max_backoff);
+                if last_progress.elapsed() > Duration::from_secs(5) {
+                    backoff = max_backoff;
+                }
+            }
 
             // Minimum wait before returning
             if !output.is_empty() && elapsed > min_wait {
                 // For fast commands (< 2s), wait for completion
                 if elapsed < Duration::from_secs(2) {
-                    sleep(poll_interval).await;
+                    sleep(backoff).await;
                     continue;
                 }
             }
@@ -2239,7 +2277,7 @@ impl ToolRegistry {
                 };
             }
 
-            sleep(poll_interval).await;
+            sleep(backoff).await;
         }
     }
 

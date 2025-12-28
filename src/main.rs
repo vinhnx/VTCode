@@ -207,8 +207,20 @@ async fn run() -> Result<()> {
             // Reuse chat path; verbose behavior is handled in the module if applicable
             cli::handle_chat_command(core_cfg, skip_confirmations, full_auto_requested).await?;
         }
-        Some(Commands::Analyze) => {
-            cli::handle_analyze_command(core_cfg).await?;
+        Some(Commands::Analyze { analysis_type }) => {
+            let analysis_type = match analysis_type.as_str() {
+                "full" => cli::analyze::AnalysisType::Full,
+                "structure" => cli::analyze::AnalysisType::Structure,
+                "security" => cli::analyze::AnalysisType::Security,
+                "performance" => cli::analyze::AnalysisType::Performance,
+                "dependencies" => cli::analyze::AnalysisType::Dependencies,
+                "complexity" => cli::analyze::AnalysisType::Complexity,
+                _ => {
+                    eprintln!("Warning: Unknown analysis type '{}', using 'full'", analysis_type);
+                    cli::analyze::AnalysisType::Full
+                }
+            };
+            cli::handle_analyze_command(core_cfg, analysis_type).await?;
         }
         Some(Commands::Trajectory { file, top }) => {
             cli::handle_trajectory_logs_command(core_cfg, file.clone(), *top).await?;

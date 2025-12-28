@@ -110,36 +110,12 @@ pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCom
 }
 
 pub async fn handle_analyze_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    // Prefer tool-driven analysis when available
-    if ctx
-        .tool_registry
-        .has_tool(tools_consts::AGENT_INFO)
-        .await
-    {
-        ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::AGENT_INFO);
-        match ctx
-            .tool_registry
-            .execute_tool_ref(tools_consts::AGENT_INFO, &serde_json::json!({"mode": "analyze"}))
-            .await
-        {
-            Ok(value) => {
-                ctx.renderer
-                    .line(MessageStyle::Info, "Agent analysis (tool):")?;
-                ctx.renderer
-                    .line(MessageStyle::Output, &serde_json::to_string_pretty(&value)?)?;
-                return Ok(SlashCommandControl::Continue);
-            }
-            Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to invoke agent_info tool: {}", err),
-                )?;
-            }
-        }
-    }
-
-    ctx.renderer.line(MessageStyle::Info, "Agent analysis:")?;
+    // For now, we'll show session metrics like before
+    // In the future, this could be enhanced to do actual workspace analysis
+    // similar to the CLI version
+    
+    ctx.renderer
+        .line(MessageStyle::Info, "Agent behavior analysis:")?;
     ctx.renderer.line(
         MessageStyle::Output,
         "  Analyzing current AI behavior patterns...",
@@ -181,7 +157,34 @@ pub async fn handle_analyze_agent(ctx: SlashCommandContext<'_>) -> Result<SlashC
         )?;
     }
 
-    // Token budget status is no longer tracked
+    // Show recent tool usage patterns
+    let recent_tool_calls: Vec<String> = ctx
+        .conversation_history
+        .iter()
+        .filter(|msg| msg.role == uni::MessageRole::Assistant)
+        .flat_map(|msg| {
+            msg.tool_calls
+                .as_ref()
+                .map(|calls| {
+                    calls
+                        .iter()
+                        .filter_map(|call| call.function.as_ref())
+                        .map(|f| f.name.clone())
+                })
+                .into_iter()
+                .flatten()
+        })
+        .take(10)
+        .collect();
+
+    if !recent_tool_calls.is_empty() {
+        ctx.renderer
+            .line(MessageStyle::Output, "  Recent tool usage:")?;
+        for tool_name in recent_tool_calls {
+            ctx.renderer
+                .line(MessageStyle::Output, &format!("    • {}", tool_name))?;
+        }
+    }
 
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
