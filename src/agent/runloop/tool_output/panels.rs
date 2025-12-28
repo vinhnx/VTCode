@@ -78,6 +78,7 @@ pub(crate) fn clamp_panel_text(text: &str, limit: usize) -> String {
     truncated
 }
 
+#[cfg(test)]
 pub(crate) fn wrap_text(text: &str, width: usize) -> Vec<String> {
     if width == 0 {
         return vec![text.to_string()];
