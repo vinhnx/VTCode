@@ -12,21 +12,24 @@ use crate::a2a::agent_card::AgentCard;
 use crate::a2a::errors::{A2aError, A2aErrorCode, A2aResult};
 use crate::a2a::rpc::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListTasksParams, MessageSendParams,
-    TaskIdParams, TaskQueryParams, JSONRPC_VERSION, METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM,
-    METHOD_TASKS_CANCEL, METHOD_TASKS_GET, METHOD_TASKS_LIST,
+    SendStreamingMessageResponse, StreamingEvent, TaskIdParams, TaskQueryParams, JSONRPC_VERSION,
+    METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM, METHOD_TASKS_CANCEL, METHOD_TASKS_GET,
+    METHOD_TASKS_LIST,
 };
 use crate::a2a::task_manager::TaskManager;
 use crate::a2a::types::TaskState;
 use axum::{
     extract::State,
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::{sse::{Event, Sse}, IntoResponse, Response},
     routing::post,
     Json, Router,
 };
 use serde_json::{json, Value};
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tower_http::cors::CorsLayer;
 
 // ============================================================================
@@ -40,14 +43,18 @@ pub struct A2aServerState {
     pub task_manager: Arc<TaskManager>,
     /// Agent card for discovery
     pub agent_card: Arc<AgentCard>,
+    /// Broadcast channel for streaming events
+    pub event_tx: Arc<tokio::sync::broadcast::Sender<StreamingEvent>>,
 }
 
 impl A2aServerState {
     /// Create a new server state
     pub fn new(task_manager: TaskManager, agent_card: AgentCard) -> Self {
+        let (event_tx, _) = tokio::sync::broadcast::channel(100);
         Self {
             task_manager: Arc::new(task_manager),
             agent_card: Arc::new(agent_card),
+            event_tx: Arc::new(event_tx),
         }
     }
 
@@ -123,9 +130,9 @@ async fn handle_rpc(
 
 /// Handle Server-Sent Events streaming
 async fn handle_stream(
-    State(_state): State<A2aServerState>,
+    State(state): State<A2aServerState>,
     Json(request): Json<JsonRpcRequest>,
-) -> Result<impl IntoResponse, A2aErrorResponse> {
+) -> Result<Sse<impl futures::Stream<Item = Result<Event, Infallible>>>, A2aErrorResponse> {
     // Validate request
     if request.jsonrpc != JSONRPC_VERSION {
         return Err(A2aErrorResponse::invalid_request(
@@ -137,20 +144,120 @@ async fn handle_stream(
     if request.method != METHOD_MESSAGE_STREAM {
         return Err(A2aErrorResponse::method_not_found(
             &request.method,
-            request.id,
+            request.id.clone(),
         ));
     }
 
-    // For now, return a simple response indicating streaming would be handled
-    // Full implementation requires tokio::sync::broadcast and proper SSE setup
-    let response = Json(JsonRpcResponse::success(
-        json!({
-            "message": "Streaming would be handled here",
-            "status": "not-fully-implemented"
-        }),
-        request.id,
-    ));
-    Ok(response)
+    // Parse params
+    let params: MessageSendParams = serde_json::from_value(request.params.unwrap_or_default())
+        .map_err(|_| {
+            A2aErrorResponse::invalid_request("Invalid message/stream params", request.id.clone())
+        })?;
+
+    // Create or get task
+    let task_id = if let Some(task_id) = params.task_id.clone() {
+        task_id
+    } else {
+        let task = state.task_manager.create_task(params.context_id.clone()).await;
+        task.id.clone()
+    };
+
+    // Add initial message
+    state
+        .task_manager
+        .add_message(&task_id, params.message.clone())
+        .await
+        .map_err(|e| A2aErrorResponse::from_error(e, request.id.clone()))?;
+
+    // Subscribe to broadcast channel
+    let mut rx = state.event_tx.subscribe();
+    let task_id_clone = task_id.clone();
+    let context_id = params.context_id.clone();
+
+    // Create stream from broadcast receiver using async_stream
+    let stream = async_stream::stream! {
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    // Filter events for this task/context
+                    let matches = match &event {
+                        StreamingEvent::Message { context_id: ctx, .. } => {
+                            context_id.as_ref() == ctx.as_ref()
+                        }
+                        StreamingEvent::TaskStatus { task_id: tid, .. } => tid == &task_id_clone,
+                        StreamingEvent::TaskArtifact { task_id: tid, .. } => tid == &task_id_clone,
+                    };
+
+                    if matches {
+                        let is_final = event.is_final();
+                        let json = serde_json::to_string(&SendStreamingMessageResponse { event })
+                            .unwrap_or_default();
+                        yield Ok::<_, Infallible>(Event::default().data(json));
+                        
+                        if is_final {
+                            break;
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    };
+
+    // Start background task to process and emit events
+    let state_clone = state.clone();
+    let task_id_clone = task_id.clone();
+    tokio::spawn(async move {
+        // Simulate agent processing
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Update task to working
+        let _ = state_clone
+            .task_manager
+            .update_status(&task_id_clone, TaskState::Working, None)
+            .await;
+
+        // Send status update event
+        let _ = state_clone.event_tx.send(StreamingEvent::TaskStatus {
+            task_id: task_id_clone.clone(),
+            context_id: params.context_id.clone(),
+            status: crate::a2a::types::TaskStatus::new(TaskState::Working),
+            kind: "status-update".to_string(),
+            r#final: false,
+        });
+
+        // Simulate generating a response message
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let response_msg = crate::a2a::types::Message::agent_text("Processing your request...");
+        let _ = state_clone.event_tx.send(StreamingEvent::Message {
+            message: response_msg,
+            context_id: params.context_id.clone(),
+            kind: "streaming-response".to_string(),
+            r#final: false,
+        });
+
+        // Complete the task
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let _ = state_clone
+            .task_manager
+            .update_status(&task_id_clone, TaskState::Completed, None)
+            .await;
+
+        // Send final status event
+        let _ = state_clone.event_tx.send(StreamingEvent::TaskStatus {
+            task_id: task_id_clone,
+            context_id: params.context_id,
+            status: crate::a2a::types::TaskStatus::new(TaskState::Completed),
+            kind: "status-update".to_string(),
+            r#final: true,
+        });
+    });
+
+    Ok(Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text("keep-alive"),
+    ))
 }
 
 // ============================================================================
@@ -349,5 +456,27 @@ mod tests {
         use serde_json::json;
         let err_response = A2aErrorResponse::invalid_request("Invalid JSON", json!(1));
         assert_eq!(err_response.status_code, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_server_state_with_broadcast() {
+        let state = A2aServerState::vtcode_default("http://localhost:8080");
+        
+        // Verify broadcast channel works
+        let mut rx = state.event_tx.subscribe();
+        
+        // Send a test event
+        let test_event = StreamingEvent::Message {
+            message: super::super::types::Message::agent_text("Test"),
+            context_id: Some("test".to_string()),
+            kind: "streaming-response".to_string(),
+            r#final: false,
+        };
+        
+        state.event_tx.send(test_event.clone()).expect("send event");
+        
+        // Receive the event
+        let received = rx.recv().await.expect("receive event");
+        assert!(!received.is_final());
     }
 }
