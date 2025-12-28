@@ -1,7 +1,7 @@
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{oneshot, RwLock};
-use anyhow::Result;
+use tokio::sync::{RwLock, oneshot};
 
 use crate::executor::{CommandExecutor, CommandInvocation, CommandOutput};
 
@@ -46,9 +46,9 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
 
     pub async fn run_command(&self, invocation: CommandInvocation) -> Result<String> {
         let task_id = self.generate_task_id().await;
-        
+
         let (cancel_tx, cancel_rx) = oneshot::channel();
-        
+
         let task = BackgroundTask {
             id: task_id.clone(),
             invocation: invocation.clone(),
@@ -56,20 +56,21 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
             result: None,
             cancel_tx: Some(cancel_tx),
         };
-        
+
         {
             let mut tasks = self.tasks.write().await;
             tasks.insert(task_id.clone(), task);
         }
-        
+
         // Update status to running
-        self.update_task_status(&task_id, BackgroundTaskStatus::Running).await;
-        
+        self.update_task_status(&task_id, BackgroundTaskStatus::Running)
+            .await;
+
         // Spawn the background task
         let executor = self.executor.clone();
         let tasks = self.tasks.clone();
         let id = task_id.clone();
-        
+
         tokio::spawn(async move {
             let result = tokio::select! {
                 command_result = execute_command(executor.as_ref(), &invocation) => {
@@ -80,7 +81,7 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
                     Err("Command was cancelled".into())
                 }
             };
-            
+
             let mut tasks = tasks.write().await;
             if let Some(task) = tasks.get_mut(&id) {
                 task.status = match result.is_ok() {
@@ -91,11 +92,14 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
                 task.cancel_tx = None; // Clear the cancel sender
             }
         });
-        
+
         Ok(task_id)
     }
 
-    async fn execute_command(executor: &E, invocation: &CommandInvocation) -> Result<CommandOutput> {
+    async fn execute_command(
+        executor: &E,
+        invocation: &CommandInvocation,
+    ) -> Result<CommandOutput> {
         executor.execute(invocation)
     }
 
@@ -115,7 +119,8 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
 
     pub async fn list_tasks(&self) -> Vec<BackgroundTaskHandle> {
         let tasks = self.tasks.read().await;
-        tasks.values()
+        tasks
+            .values()
             .map(|task| BackgroundTaskHandle {
                 id: task.id.clone(),
                 command: task.invocation.command.clone(),
@@ -152,6 +157,9 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
     }
 }
 
-async fn execute_command<E: CommandExecutor>(executor: &E, invocation: &CommandInvocation) -> Result<CommandOutput> {
+async fn execute_command<E: CommandExecutor>(
+    executor: &E,
+    invocation: &CommandInvocation,
+) -> Result<CommandOutput> {
     executor.execute(invocation)
 }

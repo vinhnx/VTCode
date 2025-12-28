@@ -52,11 +52,11 @@ mod vim_handler;
 mod vim_mode;
 
 mod events;
-mod reverse_search;
 mod message_renderer;
 mod messages;
 mod palette;
 mod reflow;
+mod reverse_search;
 mod spinner;
 mod state;
 pub mod terminal_capabilities;
@@ -306,7 +306,8 @@ impl Session {
             vim_state: crate::ui::tui::session::vim_mode::VimState::new(),
 
             // --- Reverse Search ---
-            reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState::new(),
+            reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState::new(
+            ),
 
             // --- PTY Session Management ---
             active_pty_sessions: None,
@@ -437,7 +438,6 @@ impl Session {
         self.scroll_manager.scroll_to_bottom();
         self.mark_dirty();
     }
-
 
     /// Expose default style for tests.
     #[allow(dead_code)]

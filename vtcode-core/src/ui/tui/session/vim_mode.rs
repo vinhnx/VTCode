@@ -66,10 +66,13 @@ impl VimState {
     pub fn handle_key_event_with_pending(&mut self, key: &KeyEvent) -> VimAction {
         // If we have a pending command, check if this key completes it
         if let Some(pending) = self.pending_command {
-            let result = self.handle_pending_command(pending, Some(match key.code {
-                KeyCode::Char(c) => c,
-                _ => return VimAction::None,
-            }));
+            let result = self.handle_pending_command(
+                pending,
+                Some(match key.code {
+                    KeyCode::Char(c) => c,
+                    _ => return VimAction::None,
+                }),
+            );
 
             // Clear the pending command after processing
             self.pending_command = None;
@@ -152,8 +155,8 @@ impl VimState {
             KeyCode::Char('F') => VimAction::PendingCommand('F'), // For F<char> - find previous char
             KeyCode::Char('t') => VimAction::PendingCommand('t'), // For t<char> - move before next char
             KeyCode::Char('T') => VimAction::PendingCommand('T'), // For T<char> - move after previous char
-            KeyCode::Char(';') => VimAction::RepeatFind,         // Repeat last f/F/t/T
-            KeyCode::Char(',') => VimAction::RepeatFindReverse,  // Repeat last f/F/t/T in opposite direction
+            KeyCode::Char(';') => VimAction::RepeatFind,          // Repeat last f/F/t/T
+            KeyCode::Char(',') => VimAction::RepeatFindReverse, // Repeat last f/F/t/T in opposite direction
             KeyCode::Char('p') => VimAction::Paste,             // Paste after cursor
 
             _ => VimAction::None,
@@ -179,34 +182,28 @@ impl VimState {
                     VimAction::None
                 }
             }
-            'd' => {
-                match next_char {
-                    Some('d') => VimAction::DeleteCurrentLine,
-                    Some('w') => VimAction::DeleteWord,
-                    Some('e') => VimAction::DeleteToEndOfWord,
-                    Some('b') => VimAction::DeleteToStartOfWord,
-                    Some('D') | Some('$') => VimAction::DeleteToEndOfLine,
-                    _ => VimAction::None,
-                }
-            }
-            'c' => {
-                match next_char {
-                    Some('c') => VimAction::ChangeCurrentLine,
-                    Some('w') => VimAction::ChangeWord,
-                    Some('e') => VimAction::ChangeToEndOfWord,
-                    Some('b') => VimAction::ChangeToStartOfWord,
-                    Some('C') | Some('$') => VimAction::ChangeToEndOfLine,
-                    _ => VimAction::None,
-                }
-            }
-            'y' => {
-                match next_char {
-                    Some('y') => VimAction::YankCurrentLine,
-                    Some('w') => VimAction::YankWord,
-                    Some('$') => VimAction::YankToEndOfLine,
-                    _ => VimAction::None,
-                }
-            }
+            'd' => match next_char {
+                Some('d') => VimAction::DeleteCurrentLine,
+                Some('w') => VimAction::DeleteWord,
+                Some('e') => VimAction::DeleteToEndOfWord,
+                Some('b') => VimAction::DeleteToStartOfWord,
+                Some('D') | Some('$') => VimAction::DeleteToEndOfLine,
+                _ => VimAction::None,
+            },
+            'c' => match next_char {
+                Some('c') => VimAction::ChangeCurrentLine,
+                Some('w') => VimAction::ChangeWord,
+                Some('e') => VimAction::ChangeToEndOfWord,
+                Some('b') => VimAction::ChangeToStartOfWord,
+                Some('C') | Some('$') => VimAction::ChangeToEndOfLine,
+                _ => VimAction::None,
+            },
+            'y' => match next_char {
+                Some('y') => VimAction::YankCurrentLine,
+                Some('w') => VimAction::YankWord,
+                Some('$') => VimAction::YankToEndOfLine,
+                _ => VimAction::None,
+            },
             'f' => {
                 // f<char> - move to next occurrence of char
                 if let Some(target_char) = next_char {
@@ -301,11 +298,11 @@ pub enum VimAction {
     YankToEndOfLine,
     RepeatFind,
     RepeatFindReverse,
-    FindNextChar(char),      // f<char> - find next occurrence
-    FindPrevChar(char),      // F<char> - find previous occurrence
-    FindTillNextChar(char),  // t<char> - move before next occurrence
-    FindTillPrevChar(char),  // T<char> - move after previous occurrence
-    Paste,                   // p - paste from clipboard
+    FindNextChar(char),     // f<char> - find next occurrence
+    FindPrevChar(char),     // F<char> - find previous occurrence
+    FindTillNextChar(char), // t<char> - move before next occurrence
+    FindTillPrevChar(char), // T<char> - move after previous occurrence
+    Paste,                  // p - paste from clipboard
 }
 
 #[cfg(test)]
@@ -321,16 +318,16 @@ mod tests {
     #[test]
     fn test_mode_switching() {
         let mut vim_state = VimState::new();
-        
+
         // Start in normal mode
         assert!(vim_state.is_normal());
         assert!(!vim_state.is_insert());
-        
+
         // Switch to insert
         vim_state.switch_to_insert();
         assert!(vim_state.is_insert());
         assert!(!vim_state.is_normal());
-        
+
         // Switch back to normal
         vim_state.switch_to_normal();
         assert!(vim_state.is_normal());
@@ -340,17 +337,17 @@ mod tests {
     #[test]
     fn test_normal_mode_navigation() {
         let mut vim_state = VimState::new();
-        
+
         // Test basic navigation
         let h_key = KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE);
         assert_eq!(vim_state.handle_key_event(&h_key), VimAction::MoveLeft);
-        
+
         let j_key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
         assert_eq!(vim_state.handle_key_event(&j_key), VimAction::MoveDown);
-        
+
         let k_key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
         assert_eq!(vim_state.handle_key_event(&k_key), VimAction::MoveUp);
-        
+
         let l_key = KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE);
         assert_eq!(vim_state.handle_key_event(&l_key), VimAction::MoveRight);
     }
@@ -358,15 +355,21 @@ mod tests {
     #[test]
     fn test_mode_switching_keys() {
         let mut vim_state = VimState::new();
-        
+
         // Test 'i' to insert mode
         let i_key = KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE);
-        assert_eq!(vim_state.handle_key_event(&i_key), VimAction::SwitchToInsert);
+        assert_eq!(
+            vim_state.handle_key_event(&i_key),
+            VimAction::SwitchToInsert
+        );
         assert!(vim_state.is_insert());
-        
+
         // Back to normal with Esc
         let esc_key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
-        assert_eq!(vim_state.handle_key_event(&esc_key), VimAction::SwitchToNormal);
+        assert_eq!(
+            vim_state.handle_key_event(&esc_key),
+            VimAction::SwitchToNormal
+        );
         assert!(vim_state.is_normal());
     }
 }

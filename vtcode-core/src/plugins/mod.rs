@@ -8,22 +8,22 @@
 //! - MCP servers (Model Context Protocol)
 //! - LSP servers (Language Server Protocol)
 
-pub mod manifest;
-pub mod runtime;
-pub mod loader;
 pub mod caching;
 pub mod components;
-pub mod manager;
 pub mod directory;
+pub mod loader;
+pub mod manager;
+pub mod manifest;
+pub mod runtime;
 pub mod validation;
 
-pub use manifest::*;
-pub use runtime::*;
-pub use loader::*;
 pub use caching::*;
 pub use components::*;
-pub use manager::*;
 pub use directory::*;
+pub use loader::*;
+pub use manager::*;
+pub use manifest::*;
+pub use runtime::*;
 pub use validation::*;
 
 /// Type alias for plugin identifiers

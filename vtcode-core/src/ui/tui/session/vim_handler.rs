@@ -1,6 +1,6 @@
 use ratatui::crossterm::event::KeyEvent;
 
-use super::{Session, InlineEvent};
+use super::{InlineEvent, Session};
 
 /// Find the next occurrence of a character after the current cursor position
 fn find_next_char(content: &str, cursor_pos: usize, target_char: char) -> Option<usize> {
@@ -129,12 +129,12 @@ pub(super) fn handle_vim_mode_key(session: &mut Session, key: &KeyEvent) -> Opti
     let vim_action = session.vim_state.handle_key_event_with_pending(key);
 
     match vim_action {
-        VimAction::SwitchToInsert |
-        VimAction::MoveToStartOfLineAndInsert |
-        VimAction::MoveRightAndInsert |
-        VimAction::MoveToEndOfLineAndInsert |
-        VimAction::OpenLineBelowAndInsert |
-        VimAction::OpenLineAboveAndInsert => {
+        VimAction::SwitchToInsert
+        | VimAction::MoveToStartOfLineAndInsert
+        | VimAction::MoveRightAndInsert
+        | VimAction::MoveToEndOfLineAndInsert
+        | VimAction::OpenLineBelowAndInsert
+        | VimAction::OpenLineAboveAndInsert => {
             // Switch to insert mode and handle the specific action
             session.vim_state.switch_to_insert();
             match vim_action {
@@ -358,7 +358,10 @@ pub(super) fn handle_vim_mode_key(session: &mut Session, key: &KeyEvent) -> Opti
         }
         VimAction::RepeatFind => {
             // Repeat the last f/F/t/T command in the same direction
-            if let (Some(last_char), Some(direction)) = (session.vim_state.last_find_char, &session.vim_state.last_find_direction) {
+            if let (Some(last_char), Some(direction)) = (
+                session.vim_state.last_find_char,
+                &session.vim_state.last_find_direction,
+            ) {
                 let content = session.input_manager.content();
                 let cursor_pos = session.input_manager.cursor();
 
@@ -399,7 +402,10 @@ pub(super) fn handle_vim_mode_key(session: &mut Session, key: &KeyEvent) -> Opti
         }
         VimAction::RepeatFindReverse => {
             // Repeat the last f/F/t/T command in the opposite direction
-            if let (Some(last_char), Some(direction)) = (session.vim_state.last_find_char, &session.vim_state.last_find_direction) {
+            if let (Some(last_char), Some(direction)) = (
+                session.vim_state.last_find_char,
+                &session.vim_state.last_find_direction,
+            ) {
                 let content = session.input_manager.content();
                 let cursor_pos = session.input_manager.cursor();
 

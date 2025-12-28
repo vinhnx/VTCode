@@ -919,7 +919,6 @@ mod tests {
     use vtcode_core::acp::PermissionGrant;
     use vtcode_core::acp::permission_cache::ToolPermissionCache;
     use vtcode_core::core::decision_tracker::DecisionTracker;
-    use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
     use vtcode_core::core::trajectory::TrajectoryLogger;
     use vtcode_core::tools::ApprovalRecorder;
     use vtcode_core::tools::registry::ToolRegistry;
@@ -1108,7 +1107,6 @@ mod tests {
             tool_result_cache: &result_cache,
             tool_permission_cache: &permission_cache_arc,
             decision_ledger: &decision_ledger,
-            pruning_ledger: &pruning_ledger,
             session_stats: &mut session_stats,
             mcp_panel_state: &mut mcp_panel,
             approval_recorder: &approval_recorder,
@@ -1193,7 +1191,6 @@ mod tests {
             tool_result_cache: &result_cache,
             tool_permission_cache: &permission_cache_arc,
             decision_ledger: &decision_ledger,
-            pruning_ledger: &pruning_ledger,
             session_stats: &mut session_stats,
             mcp_panel_state: &mut mcp_panel,
             approval_recorder: &approval_recorder,

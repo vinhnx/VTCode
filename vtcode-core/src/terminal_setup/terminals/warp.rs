@@ -17,7 +17,8 @@ Warp has built-in support for most features:
 ✓ Shell Integration: Built-in with command history and navigation
 ✓ Themes: Use Warp's built-in theme system
 
-"#.to_string();
+"#
+    .to_string();
 
     // Check if notifications feature is requested
     if features.contains(&crate::terminal_setup::detector::TerminalFeature::Notifications) {

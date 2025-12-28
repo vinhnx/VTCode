@@ -26,7 +26,7 @@ pub mod tool_discovery;
 pub mod tool_discovery_cache;
 
 pub use connection_pool::{
-    McpConnectionPool, PooledMcpManager, ConnectionPoolStats, PooledMcpStats, McpPoolError,
+    ConnectionPoolStats, McpConnectionPool, McpPoolError, PooledMcpManager, PooledMcpStats,
 };
 pub use errors::{
     ErrorCode, McpResult, configuration_error, initialization_timeout, provider_not_found,

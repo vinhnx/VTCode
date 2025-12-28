@@ -175,7 +175,6 @@ fn default_show_timeline_pane() -> bool {
     crate::constants::ui::INLINE_SHOW_TIMELINE_PANE
 }
 
-
 /// Kitty keyboard protocol configuration
 /// Reference: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

@@ -10,8 +10,8 @@ use anyhow::Result;
 use tokio::sync::RwLock;
 
 use super::{
-    PluginRuntime, PluginLoader, PluginCache, PluginComponentsHandler,
-    PluginResult, PluginId, PluginManifest
+    PluginCache, PluginComponentsHandler, PluginId, PluginLoader, PluginManifest, PluginResult,
+    PluginRuntime,
 };
 use crate::config::PluginRuntimeConfig;
 
@@ -47,7 +47,11 @@ impl PluginManager {
     }
 
     /// Install a plugin from a source
-    pub async fn install_plugin(&self, source: super::loader::PluginSource, name: Option<String>) -> PluginResult<()> {
+    pub async fn install_plugin(
+        &self,
+        source: super::loader::PluginSource,
+        name: Option<String>,
+    ) -> PluginResult<()> {
         // Install the plugin using the loader
         self.loader.install_plugin(source, name).await?;
         Ok(())
@@ -99,7 +103,8 @@ impl PluginManager {
         plugin_path: &std::path::Path,
         manifest: &PluginManifest,
     ) -> Result<super::components::PluginComponents> {
-        super::components::PluginComponentsHandler::process_all_components(plugin_path, manifest).await
+        super::components::PluginComponentsHandler::process_all_components(plugin_path, manifest)
+            .await
     }
 
     /// Check if a plugin is enabled
@@ -108,7 +113,11 @@ impl PluginManager {
     }
 
     /// Cache a plugin for security
-    pub async fn cache_plugin(&self, plugin_id: &str, source_path: &std::path::Path) -> PluginResult<std::path::PathBuf> {
+    pub async fn cache_plugin(
+        &self,
+        plugin_id: &str,
+        source_path: &std::path::Path,
+    ) -> PluginResult<std::path::PathBuf> {
         let mut cache = self.cache.write().await;
         cache.cache_plugin(plugin_id, source_path).await
     }

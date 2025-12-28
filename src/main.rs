@@ -161,8 +161,7 @@ async fn run() -> Result<()> {
             disallowed_tools: args.disallowed_tools.clone(),
             skip_confirmations: startup.skip_confirmations,
         };
-        cli::handle_ask_single_command(core_cfg.clone(), Some(prompt), options)
-            .await?;
+        cli::handle_ask_single_command(core_cfg.clone(), Some(prompt), options).await?;
         return Ok(());
     }
 
@@ -174,8 +173,7 @@ async fn run() -> Result<()> {
             disallowed_tools: args.disallowed_tools.clone(),
             skip_confirmations: startup.skip_confirmations,
         };
-        cli::handle_ask_single_command(core_cfg.clone(), Some(prompt), options)
-            .await?;
+        cli::handle_ask_single_command(core_cfg.clone(), Some(prompt), options).await?;
         return Ok(());
     }
 
@@ -186,7 +184,7 @@ async fn run() -> Result<()> {
 
     if let Some(resume_mode) = &startup.session_resume {
         cli::handle_resume_session_command(
-            &core_cfg,
+            core_cfg,
             None, // resume session ID - we're using custom_session_id instead
             startup.custom_session_id.clone(),
             skip_confirmations,
@@ -213,7 +211,8 @@ async fn run() -> Result<()> {
             vtcode_core::cli::models_commands::handle_models_command(&args, command).await?;
         }
         Some(Commands::Chat) => {
-            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested).await?;
+            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested)
+                .await?;
         }
         Some(Commands::Ask {
             prompt,
@@ -223,7 +222,7 @@ async fn run() -> Result<()> {
                 output_format: *output_format,
                 allowed_tools: args.allowed_tools.clone(),
                 disallowed_tools: args.disallowed_tools.clone(),
-                skip_confirmations: skip_confirmations,
+                skip_confirmations,
             };
             cli::handle_ask_single_command(core_cfg.clone(), prompt.clone(), options).await?;
         }
@@ -242,7 +241,8 @@ async fn run() -> Result<()> {
         }
         Some(Commands::ChatVerbose) => {
             // Reuse chat path; verbose behavior is handled in the module if applicable
-            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested).await?;
+            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested)
+                .await?;
         }
         Some(Commands::Analyze { analysis_type }) => {
             let analysis_type = match analysis_type.as_str() {
@@ -303,7 +303,8 @@ async fn run() -> Result<()> {
                 output: output.clone(),
                 max_tasks: *max_tasks,
             };
-            cli::handle_benchmark_command(core_cfg.clone(), cfg, options, full_auto_requested).await?;
+            cli::handle_benchmark_command(core_cfg.clone(), cfg, options, full_auto_requested)
+                .await?;
         }
         Some(Commands::Man { command, output }) => {
             cli::handle_man_command(command.clone(), output.clone()).await?;
@@ -325,7 +326,8 @@ async fn run() -> Result<()> {
                 }
                 SkillsSubcommand::Load { name, path } => {
                     if let Some(path_val) = path {
-                        cli::handle_skills_load(&skills_options, name, path_val.to_path_buf()).await?;
+                        cli::handle_skills_load(&skills_options, name, path_val.to_path_buf())
+                            .await?;
                     }
                 }
                 SkillsSubcommand::Info { name } => {
@@ -384,13 +386,14 @@ async fn run() -> Result<()> {
                     cli::handle_plugin_disable(name.clone()).await?;
                 }
                 PluginSubcommand::Validate { path } => {
-                    cli::handle_plugin_validate(&path).await?;
+                    cli::handle_plugin_validate(path).await?;
                 }
             }
         }
         _ => {
             // Default to chat
-            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested).await?;
+            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested)
+                .await?;
         }
     }
 
@@ -400,7 +403,6 @@ async fn run() -> Result<()> {
 /// Detect available IDE for automatic connection when --ide flag is used
 fn detect_available_ide() -> Result<Option<AgentClientProtocolTarget>> {
     use std::env;
-    use std::process::Command;
 
     let mut available_ides = Vec::new();
 

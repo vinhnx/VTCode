@@ -226,7 +226,10 @@ impl SkillAuthor {
             if frontmatter.name.len() > 64 {
                 reasons.push("max 64 characters");
             }
-            if frontmatter.name.contains("anthropic") || frontmatter.name.contains("claude") || frontmatter.name.contains("vtcode") {
+            if frontmatter.name.contains("anthropic")
+                || frontmatter.name.contains("claude")
+                || frontmatter.name.contains("vtcode")
+            {
                 reasons.push("reserved words not allowed");
             }
             report.errors.push(format!(

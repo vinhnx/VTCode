@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::plugins::{PluginResult, PluginError, PluginManifest, PluginDirectory};
+use crate::plugins::{PluginDirectory, PluginError, PluginManifest, PluginResult};
 
 /// Plugin validator
 pub struct PluginValidator;
@@ -18,14 +18,14 @@ impl PluginValidator {
         // Validate required fields
         if manifest.name.is_empty() {
             return Err(PluginError::ManifestValidationError(
-                "Plugin name is required".to_string()
+                "Plugin name is required".to_string(),
             ));
         }
 
         // Validate name format (kebab-case)
         if !Self::is_valid_plugin_name(&manifest.name) {
             return Err(PluginError::ManifestValidationError(
-                "Plugin name must be in kebab-case (lowercase with hyphens)".to_string()
+                "Plugin name must be in kebab-case (lowercase with hyphens)".to_string(),
             ));
         }
 
@@ -33,7 +33,7 @@ impl PluginValidator {
         if let Some(version) = &manifest.version {
             if !Self::is_valid_version(version) {
                 return Err(PluginError::ManifestValidationError(
-                    "Plugin version must follow semantic versioning (e.g., 1.0.0)".to_string()
+                    "Plugin version must follow semantic versioning (e.g., 1.0.0)".to_string(),
                 ));
             }
         }
@@ -42,7 +42,7 @@ impl PluginValidator {
         if let Some(author) = &manifest.author {
             if author.name.is_empty() {
                 return Err(PluginError::ManifestValidationError(
-                    "Plugin author name is required when author is specified".to_string()
+                    "Plugin author name is required when author is specified".to_string(),
                 ));
             }
         }
@@ -59,7 +59,8 @@ impl PluginValidator {
     /// Check if a plugin name is valid (kebab-case)
     fn is_valid_plugin_name(name: &str) -> bool {
         // Check if name contains only lowercase letters, numbers, and hyphens
-        name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        name.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
             && !name.starts_with('-')
             && !name.ends_with('-')
             && !name.is_empty()
@@ -90,9 +91,10 @@ impl PluginValidator {
                 crate::plugins::manifest::McpServerConfig::Inline(servers) => {
                     for (name, server) in servers {
                         if Self::is_dangerous_command(&server.command) {
-                            return Err(PluginError::LoadingError(
-                                format!("MCP server '{}' uses potentially dangerous command: {}", name, server.command)
-                            ));
+                            return Err(PluginError::LoadingError(format!(
+                                "MCP server '{}' uses potentially dangerous command: {}",
+                                name, server.command
+                            )));
                         }
                     }
                 }
@@ -108,8 +110,7 @@ impl PluginValidator {
     /// Check if a command is potentially dangerous
     fn is_dangerous_command(command: &str) -> bool {
         let dangerous_commands = [
-            "rm", "rmdir", "del", "format", "dd", "mkfs",
-            "shutdown", "reboot", "poweroff", "halt"
+            "rm", "rmdir", "del", "format", "dd", "mkfs", "shutdown", "reboot", "poweroff", "halt",
         ];
 
         dangerous_commands.iter().any(|&dc| command.contains(dc))
@@ -125,8 +126,14 @@ impl PluginDebugger {
         let mut output = String::new();
 
         output.push_str(&format!("Plugin: {}\n", manifest.name));
-        output.push_str(&format!("  Version: {}\n", manifest.version.as_deref().unwrap_or("not specified")));
-        output.push_str(&format!("  Description: {}\n", manifest.description.as_deref().unwrap_or("not specified")));
+        output.push_str(&format!(
+            "  Version: {}\n",
+            manifest.version.as_deref().unwrap_or("not specified")
+        ));
+        output.push_str(&format!(
+            "  Description: {}\n",
+            manifest.description.as_deref().unwrap_or("not specified")
+        ));
 
         if let Some(author) = &manifest.author {
             output.push_str(&format!("  Author: {}\n", author.name));
@@ -163,9 +170,30 @@ impl PluginDebugger {
         output.push_str(&format!("    Commands: {}\n", commands_count));
         output.push_str(&format!("    Agents: {}\n", agents_count));
         output.push_str(&format!("    Skills: {}\n", skills_count));
-        output.push_str(&format!("    Hooks: {}\n", if manifest.hooks.is_some() { "yes" } else { "no" }));
-        output.push_str(&format!("    MCP Servers: {}\n", if manifest.mcp_servers.is_some() { "yes" } else { "no" }));
-        output.push_str(&format!("    LSP Servers: {}\n", if manifest.lsp_servers.is_some() { "yes" } else { "no" }));
+        output.push_str(&format!(
+            "    Hooks: {}\n",
+            if manifest.hooks.is_some() {
+                "yes"
+            } else {
+                "no"
+            }
+        ));
+        output.push_str(&format!(
+            "    MCP Servers: {}\n",
+            if manifest.mcp_servers.is_some() {
+                "yes"
+            } else {
+                "no"
+            }
+        ));
+        output.push_str(&format!(
+            "    LSP Servers: {}\n",
+            if manifest.lsp_servers.is_some() {
+                "yes"
+            } else {
+                "no"
+            }
+        ));
 
         output
     }

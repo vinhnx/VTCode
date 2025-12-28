@@ -22,22 +22,27 @@ pub fn generate_notification_config(
             config_lines.push("# 3. Enable 'Silence bell' and Filter Alerts → 'Send escape sequence-generated alerts'".to_string());
             config_lines.push("# 4. Set your preferred notification delay".to_string());
             config_lines.push("#".to_string());
-            config_lines.push("# For shell integration notifications, add to your shell profile:".to_string());
+            config_lines.push(
+                "# For shell integration notifications, add to your shell profile:".to_string(),
+            );
             config_lines.push("# export ITERM2_SHELL_INTEGRATION_INSTALLED=1".to_string());
         }
         TerminalType::VSCode => {
             config_lines.push("# VS Code Terminal Notification Configuration".to_string());
-            config_lines.push("# VS Code terminal supports system notifications through:".to_string());
+            config_lines
+                .push("# VS Code terminal supports system notifications through:".to_string());
             config_lines.push("# 1. Settings → Terminal → Integrated → Bell Duration".to_string());
             config_lines.push("# 2. Enable 'Terminal > Integrated: Enable Bell'".to_string());
             config_lines.push("#".to_string());
             config_lines.push("# For shell integration with notifications, consider:".to_string());
-            config_lines.push("# - Using 'oh-my-zsh' or 'bash-it' with notification plugins".to_string());
+            config_lines
+                .push("# - Using 'oh-my-zsh' or 'bash-it' with notification plugins".to_string());
         }
         TerminalType::Hyper => {
             config_lines.push("# Hyper Terminal Notification Configuration".to_string());
             config_lines.push("# Hyper supports notifications via plugins:".to_string());
-            config_lines.push("# 1. Install hyper-statusline plugin for enhanced integration".to_string());
+            config_lines
+                .push("# 1. Install hyper-statusline plugin for enhanced integration".to_string());
             config_lines.push("# 2. Add to ~/.hyper.js plugins array:".to_string());
             config_lines.push("#    plugins: [\"hyper-statusline\", \"hyper-search\"]".to_string());
         }
@@ -45,22 +50,36 @@ pub fn generate_notification_config(
             config_lines.push("# Windows Terminal Notification Configuration".to_string());
             config_lines.push("# Windows Terminal supports notifications through:".to_string());
             config_lines.push("# 1. Settings → Profiles → Advanced → Bell style".to_string());
-            config_lines.push("# 2. Enable 'Show terminal bell alert' in appearance settings".to_string());
+            config_lines
+                .push("# 2. Enable 'Show terminal bell alert' in appearance settings".to_string());
         }
         TerminalType::Ghostty => {
             config_lines.push("# Ghostty Notification Configuration".to_string());
             config_lines.push("# Ghostty supports system notifications through:".to_string());
             config_lines.push("# 1. Settings → Terminal → Bell".to_string());
-            config_lines.push("# 2. Enable 'Visual Bell' or 'Audible Bell' as preferred".to_string());
-            config_lines.push("# 3. Configure 'Bell Duration' for visual notifications".to_string());
+            config_lines
+                .push("# 2. Enable 'Visual Bell' or 'Audible Bell' as preferred".to_string());
+            config_lines
+                .push("# 3. Configure 'Bell Duration' for visual notifications".to_string());
             config_lines.push("#".to_string());
-            config_lines.push("# Ghostty also supports shell integration notifications via:".to_string());
+            config_lines
+                .push("# Ghostty also supports shell integration notifications via:".to_string());
             config_lines.push("# - Terminal bell escape sequences (\\a)".to_string());
         }
         _ => {
-            config_lines.push(format!("# {} Notification Configuration", format!("{:?}", terminal_type)).to_string());
-            config_lines.push("# This terminal supports standard ANSI bell notifications.".to_string());
-            config_lines.push("# Check your terminal's documentation for specific notification settings.".to_string());
+            config_lines.push(
+                format!(
+                    "# {} Notification Configuration",
+                    format!("{:?}", terminal_type)
+                )
+                .to_string(),
+            );
+            config_lines
+                .push("# This terminal supports standard ANSI bell notifications.".to_string());
+            config_lines.push(
+                "# Check your terminal's documentation for specific notification settings."
+                    .to_string(),
+            );
         }
     }
 
@@ -95,7 +114,11 @@ pub fn get_notification_instructions(terminal_type: TerminalType) -> Vec<String>
             "4. CONFIGURE: Set 'Bell Duration' for visual notifications".to_string(),
         ],
         _ => vec![
-            format!("1. CHECK: Documentation for {}", format!("{:?}", terminal_type)).to_string(),
+            format!(
+                "1. CHECK: Documentation for {}",
+                format!("{:?}", terminal_type)
+            )
+            .to_string(),
             "2. CONFIGURE: Terminal bell/notifications in preferences".to_string(),
             "3. TEST: Use 'echo -e \"\\a\"' to test bell notification".to_string(),
         ],
@@ -112,7 +135,7 @@ mod tests {
             crate::terminal_setup::detector::TerminalFeature::Multiline,
             crate::terminal_setup::detector::TerminalFeature::CopyPaste,
         ];
-        
+
         let config = generate_notification_config(TerminalType::ITerm2, &features).unwrap();
         assert!(config.contains("iTerm2"));
         assert!(config.contains("Notification"));

@@ -511,15 +511,13 @@ pub(crate) async fn initialize_session(
         CustomPromptRegistry::default()
     });
 
-    let custom_slash_commands = vtcode_core::prompts::CustomSlashCommandRegistry::load(
-        vt_cfg.map(|cfg| &cfg.agent.custom_slash_commands),
-        &config.workspace,
-    )
-    .await
-    .unwrap_or_else(|err| {
-        warn!("failed to load custom slash commands: {err:#}");
-        vtcode_core::prompts::CustomSlashCommandRegistry::default()
-    });
+    let custom_slash_commands =
+        vtcode_core::prompts::CustomSlashCommandRegistry::load(None, &config.workspace)
+            .await
+            .unwrap_or_else(|err| {
+                warn!("failed to load custom slash commands: {err:#}");
+                vtcode_core::prompts::CustomSlashCommandRegistry::default()
+            });
 
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128))); // 128-entry cache
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new())); // Session-scoped

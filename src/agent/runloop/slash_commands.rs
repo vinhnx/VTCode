@@ -1,9 +1,12 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::Local;
 use serde_json::Value;
 use shell_words::split as shell_split;
+use std::collections::BTreeMap;
 use std::time::Duration;
-use vtcode_core::prompts::{CustomPrompt, CustomPromptRegistry, CustomSlashCommandRegistry, PromptInvocation};
+use vtcode_core::prompts::{
+    CustomPrompt, CustomPromptRegistry, CustomSlashCommandRegistry, PromptInvocation,
+};
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -127,10 +130,11 @@ pub async fn handle_slash_command(
     }
 
     // Check for custom slash commands
-    if let Some(custom_slash_commands) = custom_slash_commands {
-        if custom_slash_commands.enabled() && custom_slash_commands.get(&command_key).is_some() {
-            return handle_custom_slash_command(&command_key, args, renderer, custom_slash_commands);
-        }
+    if let Some(custom_slash_commands) = custom_slash_commands
+        && custom_slash_commands.enabled()
+        && custom_slash_commands.get(&command_key).is_some()
+    {
+        return handle_custom_slash_command(&command_key, args, renderer, custom_slash_commands);
     }
 
     match command_key.as_str() {
@@ -552,14 +556,11 @@ pub async fn handle_slash_command(
         }
         "rewind" => {
             // Parse arguments for rewind command
-            let tokens: Vec<&str> = args.trim().split_whitespace().collect();
+            let tokens: Vec<&str> = args.split_whitespace().collect();
 
             if tokens.is_empty() {
                 // Show available snapshots when no arguments provided
-                renderer.line(
-                    MessageStyle::Info,
-                    "Available rewind options:",
-                )?;
+                renderer.line(MessageStyle::Info, "Available rewind options:")?;
                 renderer.line(
                     MessageStyle::Info,
                     "  /rewind <turn_number> - Rewind to specific turn",
@@ -594,13 +595,18 @@ pub async fn handle_slash_command(
             // Determine the revert scope
             let scope = if let Some(scope_str) = scope_str {
                 match scope_str.to_ascii_lowercase().as_str() {
-                    "conversation" | "chat" => vtcode_core::core::agent::snapshots::RevertScope::Conversation,
+                    "conversation" | "chat" => {
+                        vtcode_core::core::agent::snapshots::RevertScope::Conversation
+                    }
                     "code" | "files" => vtcode_core::core::agent::snapshots::RevertScope::Code,
                     "both" | "full" => vtcode_core::core::agent::snapshots::RevertScope::Both,
                     _ => {
                         renderer.line(
                             MessageStyle::Error,
-                            &format!("Unknown revert scope '{}'. Use conversation, code, or both.", scope_str),
+                            &format!(
+                                "Unknown revert scope '{}'. Use conversation, code, or both.",
+                                scope_str
+                            ),
                         )?;
                         return Ok(SlashCommandOutcome::Handled);
                     }
@@ -613,10 +619,7 @@ pub async fn handle_slash_command(
             // Use turn number if provided, otherwise use a default behavior
             if let Some(turn) = turn_number {
                 // Return a command to handle the revert with specific turn and scope
-                Ok(SlashCommandOutcome::RewindToTurn {
-                    turn,
-                    scope,
-                })
+                Ok(SlashCommandOutcome::RewindToTurn { turn, scope })
             } else {
                 // If no turn number, show available snapshots
                 renderer.line(
@@ -863,7 +866,10 @@ fn handle_custom_slash_command(
         let expanded = expand_command_content_with_args(&command.content, &invocation);
         renderer.line(
             MessageStyle::Info,
-            &format!("Expanding custom slash command /{} (bash execution skipped)", command.name),
+            &format!(
+                "Expanding custom slash command /{} (bash execution skipped)",
+                command.name
+            ),
         )?;
         return Ok(SlashCommandOutcome::SubmitPrompt { prompt: expanded });
     }
@@ -1161,7 +1167,11 @@ fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
-fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>, custom_slash_commands: Option<&CustomSlashCommandRegistry>) -> Result<()> {
+fn render_help(
+    renderer: &mut AnsiRenderer,
+    specific_command: Option<&str>,
+    custom_slash_commands: Option<&CustomSlashCommandRegistry>,
+) -> Result<()> {
     if let Some(cmd_name) = specific_command {
         // Look for a specific command
         if let Some(cmd) = SLASH_COMMANDS.iter().find(|cmd| cmd.name == cmd_name) {
@@ -1183,7 +1193,10 @@ fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>, cust
                 } else {
                     renderer.line(
                         MessageStyle::Info,
-                        &format!("  Description: Custom slash command from {}", cmd.path.display()),
+                        &format!(
+                            "  Description: Custom slash command from {}",
+                            cmd.path.display()
+                        ),
                     )?;
                 }
             } else {
@@ -1215,51 +1228,87 @@ fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>, cust
         }
 
         // Add custom slash commands if available
-        if let Some(custom_slash_commands) = custom_slash_commands {
-            if !custom_slash_commands.is_empty() {
-                renderer.line(MessageStyle::Info, "")?;
-                renderer.line(MessageStyle::Info, "Custom slash commands:")?;
-                for cmd in custom_slash_commands.iter() {
-                    let description = cmd.description.as_deref().unwrap_or("Custom slash command");
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("  /{} – {}", cmd.name, description),
-                    )?;
-                }
+        if let Some(custom_slash_commands) = custom_slash_commands
+            && !custom_slash_commands.is_empty()
+        {
+            renderer.line(MessageStyle::Info, "")?;
+            renderer.line(MessageStyle::Info, "Custom slash commands:")?;
+            for cmd in custom_slash_commands.iter() {
+                let description = cmd.description.as_deref().unwrap_or("Custom slash command");
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("  /{} – {}", cmd.name, description),
+                )?;
             }
         }
 
         // Show information about where custom slash commands can be defined if no custom commands are loaded or if there are none
-        if custom_slash_commands.map_or(true, |cmds| cmds.is_empty()) {
+        if custom_slash_commands.is_none_or(|cmds| cmds.is_empty()) {
             renderer.line(MessageStyle::Info, "")?;
-            renderer.line(MessageStyle::Info, "Custom slash commands (project-specific or personal):")?;
+            renderer.line(
+                MessageStyle::Info,
+                "Custom slash commands (project-specific or personal):",
+            )?;
             renderer.line(MessageStyle::Info, "  Custom slash commands can be defined in .vtcode/commands/ (project) or ~/.vtcode/commands/ (personal)")?;
-            renderer.line(MessageStyle::Info, "  Example: Create .vtcode/commands/review.md to use /review command")?;
+            renderer.line(
+                MessageStyle::Info,
+                "  Example: Create .vtcode/commands/review.md to use /review command",
+            )?;
         }
 
         // Add information about interactive features
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Interactive mode features:")?;
-        renderer.line(MessageStyle::Info, "  Ctrl+C – Cancel current input or generation")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Ctrl+C – Cancel current input or generation",
+        )?;
         renderer.line(MessageStyle::Info, "  Ctrl+D – Exit VTCode session")?;
         renderer.line(MessageStyle::Info, "  Ctrl+L – Clear terminal screen")?;
-        renderer.line(MessageStyle::Info, "  Ctrl+R – Reverse search command history")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Ctrl+R – Reverse search command history",
+        )?;
         renderer.line(MessageStyle::Info, "  Ctrl+V – Paste image from clipboard")?;
-        renderer.line(MessageStyle::Info, "  Up/Down arrows – Navigate command history")?;
-        renderer.line(MessageStyle::Info, "  Esc+Esc – Rewind the code/conversation")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Up/Down arrows – Navigate command history",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Esc+Esc – Rewind the code/conversation",
+        )?;
         renderer.line(MessageStyle::Info, "  Shift+Tab – Toggle permission modes")?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Multiline input:")?;
-        renderer.line(MessageStyle::Info, "  \\ + Enter – Quick escape (insert newline without submitting)")?;
-        renderer.line(MessageStyle::Info, "  Shift+Enter – Multiline input (if configured)")?;
-        renderer.line(MessageStyle::Info, "  Ctrl+J – Line feed character for multiline")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  \\ + Enter – Quick escape (insert newline without submitting)",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Shift+Enter – Multiline input (if configured)",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Ctrl+J – Line feed character for multiline",
+        )?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Bash mode:")?;
-        renderer.line(MessageStyle::Info, "  !command – Run bash commands directly (e.g., !ls -la)")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  !command – Run bash commands directly (e.g., !ls -la)",
+        )?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Vim mode (enable with /vim):")?;
-        renderer.line(MessageStyle::Info, "  i – Insert before cursor (INSERT mode)")?;
-        renderer.line(MessageStyle::Info, "  a – Insert after cursor (INSERT mode)")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  i – Insert before cursor (INSERT mode)",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "  a – Insert after cursor (INSERT mode)",
+        )?;
         renderer.line(MessageStyle::Info, "  o – Open line below (INSERT mode)")?;
         renderer.line(MessageStyle::Info, "  Esc – Enter NORMAL mode")?;
         renderer.line(MessageStyle::Info, "  h/j/k/l – Move left/down/up/right")?;

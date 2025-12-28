@@ -36,9 +36,9 @@ pub mod mcp;
 pub mod models;
 pub mod output_styles;
 pub mod root;
-pub mod status_line;
 #[cfg(feature = "schema")]
 pub mod schema;
+pub mod status_line;
 pub mod telemetry;
 pub mod timeouts;
 pub mod types;
@@ -74,9 +74,9 @@ pub use mcp::{
 pub use models::{ModelId, OpenRouterMetadata};
 pub use output_styles::{OutputStyle, OutputStyleConfig, OutputStyleManager};
 pub use root::{PtyConfig, ToolOutputMode, UiConfig};
-pub use status_line::{StatusLineConfig, StatusLineMode};
 #[cfg(feature = "schema")]
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
+pub use status_line::{StatusLineConfig, StatusLineMode};
 pub use telemetry::TelemetryConfig;
 pub use timeouts::TimeoutsConfig;
 pub use types::{

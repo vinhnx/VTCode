@@ -746,21 +746,19 @@ impl SkillValidator {
                     Ok(schema_json) => {
                         // Validate that it's a proper JSON Schema by attempting to compile it
                         match jsonschema::validator_for(&schema_json) {
-                            Ok(_validator) => {
-                                CheckResult {
-                                    name: "schema_valid".to_string(),
-                                    status: CheckStatus::Passed,
-                                    message: "JSON schema is valid and compilable".to_string(),
-                                    details: None,
-                                    execution_time_ms: start_time.elapsed().as_millis() as u64,
-                                }
-                            }
+                            Ok(_validator) => CheckResult {
+                                name: "schema_valid".to_string(),
+                                status: CheckStatus::Passed,
+                                message: "JSON schema is valid and compilable".to_string(),
+                                details: None,
+                                execution_time_ms: start_time.elapsed().as_millis() as u64,
+                            },
                             Err(e) => CheckResult {
                                 name: "schema_valid".to_string(),
                                 status: CheckStatus::Failed,
                                 message: format!("Invalid JSON Schema: {}", e),
                                 details: Some(
-                                    serde_json::json!({"error": format!("Schema compilation failed: {}", e)})
+                                    serde_json::json!({"error": format!("Schema compilation failed: {}", e)}),
                                 ),
                                 execution_time_ms: start_time.elapsed().as_millis() as u64,
                             },
@@ -968,8 +966,6 @@ impl SkillValidator {
 
         results
     }
-
-
 }
 
 /// Batch validation result

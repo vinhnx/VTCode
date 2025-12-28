@@ -9,9 +9,9 @@ use std::time::Duration;
 use tokio::sync::{RwLock, Semaphore};
 use tracing::{error, info, warn};
 
-use super::{McpProvider, McpToolInfo, McpElicitationHandler};
-use crate::config::mcp::{McpProviderConfig, McpAllowListConfig};
-use mcp_types::{InitializeRequestParams, Implementation, ClientCapabilities};
+use super::{McpElicitationHandler, McpProvider, McpToolInfo};
+use crate::config::mcp::{McpAllowListConfig, McpProviderConfig};
+use mcp_types::{ClientCapabilities, Implementation, InitializeRequestParams};
 
 /// MCP connection pool for efficient provider management
 pub struct McpConnectionPool {
@@ -44,19 +44,20 @@ impl McpConnectionPool {
         allowlist_snapshot: &McpAllowListConfig,
     ) -> Result<Vec<(String, Arc<McpProvider>)>, McpPoolError> {
         use futures::future::join_all;
-        
+
         // Create initialization tasks for each provider
         let tasks: Vec<_> = provider_configs
             .into_iter()
             .map(|config| {
                 let elicitation_handler = elicitation_handler.clone();
                 let allowlist_snapshot = allowlist_snapshot.clone();
-                
+                let tool_timeout = tool_timeout.clone();
+
                 async move {
                     self.initialize_provider(
                         config,
                         elicitation_handler,
-                        tool_timeout,
+                        tool_timeout.unwrap_or(Duration::from_secs(30)),
                         allowlist_snapshot,
                     )
                     .await
@@ -66,11 +67,11 @@ impl McpConnectionPool {
 
         // Execute all tasks in parallel
         let results = join_all(tasks).await;
-        
+
         // Collect successful connections
         let mut successful_providers = Vec::new();
         let mut errors = Vec::new();
-        
+
         for result in results {
             match result {
                 Ok((name, provider)) => {
@@ -98,7 +99,8 @@ impl McpConnectionPool {
         allowlist_snapshot: McpAllowListConfig,
     ) -> Result<(String, Arc<McpProvider>), McpPoolError> {
         // Acquire semaphore permit to limit concurrent connections
-        let _permit = self.connection_semaphore
+        let _permit = self
+            .connection_semaphore
             .acquire()
             .await
             .map_err(|e| McpPoolError::SemaphoreError(e.to_string()))?;
@@ -108,7 +110,7 @@ impl McpConnectionPool {
         // Connect to provider with timeout
         let provider = tokio::time::timeout(
             self.connection_timeout,
-            McpProvider::connect(config.clone(), elicitation_handler)
+            McpProvider::connect(config.clone(), elicitation_handler),
         )
         .await
         .map_err(|_| McpPoolError::ConnectionTimeout(config.name.clone()))?
@@ -118,7 +120,7 @@ impl McpConnectionPool {
         let provider_startup_timeout = self.resolve_startup_timeout(&config);
         let initialize_params = build_pool_initialize_params(&provider);
         let tool_timeout_opt = Some(tool_timeout);
-        
+
         if let Err(err) = provider
             .initialize(
                 initialize_params,
@@ -135,12 +137,18 @@ impl McpConnectionPool {
         }
 
         // Refresh tools
-        if let Err(err) = provider.refresh_tools(&allowlist_snapshot, tool_timeout_opt).await {
-            warn!("Failed to fetch tools for provider '{}': {}", config.name, err);
+        if let Err(err) = provider
+            .refresh_tools(&allowlist_snapshot, tool_timeout_opt)
+            .await
+        {
+            warn!(
+                "Failed to fetch tools for provider '{}': {}",
+                config.name, err
+            );
         }
 
         info!("Successfully initialized MCP provider '{}'", config.name);
-        
+
         Ok((config.name.clone(), Arc::new(provider)))
     }
 
@@ -172,7 +180,7 @@ impl McpConnectionPool {
     pub async fn stats(&self) -> ConnectionPoolStats {
         let providers = self.providers.read().await;
         let semaphore = self.connection_semaphore.available_permits();
-        
+
         ConnectionPoolStats {
             active_connections: providers.len(),
             available_permits: semaphore,
@@ -183,7 +191,7 @@ impl McpConnectionPool {
     /// Shutdown all providers gracefully
     pub async fn shutdown_all(&self) {
         let mut providers = self.providers.write().await;
-        
+
         for (name, provider) in providers.drain() {
             if let Err(err) = provider.shutdown().await {
                 error!("Failed to shutdown MCP provider '{}': {}", name, err);
@@ -193,8 +201,7 @@ impl McpConnectionPool {
 
     /// Resolve startup timeout based on provider configuration
     fn resolve_startup_timeout(&self, config: &McpProviderConfig) -> Option<Duration> {
-        config.startup_timeout_ms
-            .map(Duration::from_millis)
+        config.startup_timeout_ms.map(Duration::from_millis)
     }
 }
 
@@ -221,8 +228,13 @@ impl PooledMcpManager {
         tool_cache_capacity: usize,
     ) -> Self {
         Self {
-            pool: Arc::new(McpConnectionPool::new(max_concurrent_connections, connection_timeout_seconds)),
-            tool_cache: Arc::new(super::tool_discovery_cache::ToolDiscoveryCache::new(tool_cache_capacity)),
+            pool: Arc::new(McpConnectionPool::new(
+                max_concurrent_connections,
+                connection_timeout_seconds,
+            )),
+            tool_cache: Arc::new(super::tool_discovery_cache::ToolDiscoveryCache::new(
+                tool_cache_capacity,
+            )),
         }
     }
 
@@ -235,7 +247,8 @@ impl PooledMcpManager {
         allowlist_snapshot: &McpAllowListConfig,
     ) -> Result<Vec<(String, Arc<McpProvider>)>, McpPoolError> {
         // Initialize providers in parallel
-        let providers = self.pool
+        let providers = self
+            .pool
             .initialize_providers_parallel(
                 provider_configs,
                 elicitation_handler,
@@ -253,7 +266,7 @@ impl PooledMcpManager {
         Ok(providers)
     }
 
-    /// Execute a tool with caching
+    /// Execute a tool on a specific provider
     pub async fn execute_tool(
         &self,
         provider_name: &str,
@@ -262,30 +275,24 @@ impl PooledMcpManager {
         allowlist: &crate::config::mcp::McpAllowListConfig,
         tool_timeout: Option<std::time::Duration>,
     ) -> Result<serde_json::Value, McpPoolError> {
-        let provider = self.pool.get_provider(provider_name).await
+        let provider = self
+            .pool
+            .get_provider(provider_name)
+            .await
             .ok_or_else(|| McpPoolError::ProviderNotFound(provider_name.to_string()))?;
 
-        // Check tool cache first for read-only tools
-        if self.is_read_only_tool(tool_name) {
-            let cache_key = format!("{}:{}", provider_name, tool_name);
-            if let Some(cached_result) = self.tool_cache.get_cached_result(&cache_key).await {
-                return Ok(cached_result);
-            }
-        }
+        // Convert arguments to proper format
+        let args_ref = &arguments;
 
         // Execute the tool with correct signature
         let result = provider
-            .call_tool(tool_name, &serde_json::to_value(&arguments).unwrap_or(serde_json::Value::Object(Default::default())), tool_timeout, allowlist)
+            .call_tool(tool_name, args_ref, tool_timeout, allowlist)
             .await
-            .map_err(|e| McpPoolError::ToolExecutionError(provider_name.to_string(), e.to_string()))?;
+            .map_err(|e| {
+                McpPoolError::ToolExecutionError(provider_name.to_string(), e.to_string())
+            })?;
 
-        // Cache the result for read-only tools
-        if self.is_read_only_tool(tool_name) {
-            let cache_key = format!("{}:{}", provider_name, tool_name);
-            let result_value = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
-            self.tool_cache.cache_result(cache_key, result_value).await;
-        }
-
+        // Convert result to JSON value
         Ok(serde_json::to_value(&result).unwrap_or(serde_json::Value::Null))
     }
 
@@ -293,17 +300,24 @@ impl PooledMcpManager {
     fn is_read_only_tool(&self, tool_name: &str) -> bool {
         // This is a simple heuristic - in practice, you might want to
         // check tool metadata or maintain a list of read-only tools
-        matches!(tool_name,
-            "read_file" | "list_directory" | "search_files" | "get_file_info" |
-            "read_environment" | "get_system_info" | "search_code" | "analyze_code"
+        matches!(
+            tool_name,
+            "read_file"
+                | "list_directory"
+                | "search_files"
+                | "get_file_info"
+                | "read_environment"
+                | "get_system_info"
+                | "search_code"
+                | "analyze_code"
         )
     }
 
     /// Get pool statistics
     pub async fn stats(&self) -> PooledMcpStats {
         let pool_stats = self.pool.stats().await;
-        let tool_cache_stats = self.tool_cache.stats().await;
-        
+        let tool_cache_stats = self.tool_cache.stats();
+
         PooledMcpStats {
             connection_pool: pool_stats,
             tool_cache: tool_cache_stats,
@@ -342,22 +356,22 @@ fn build_pool_initialize_params(provider: &McpProvider) -> InitializeRequestPara
 pub enum McpPoolError {
     #[error("Connection timeout for provider '{0}'")]
     ConnectionTimeout(String),
-    
+
     #[error("Connection error for provider '{0}': {1}")]
     ConnectionError(String, String),
-    
+
     #[error("Initialization timeout for provider '{0}'")]
     InitializationTimeout(String),
-    
+
     #[error("Initialization error for provider '{0}': {1}")]
     InitializationError(String, String),
-    
+
     #[error("Provider not found: {0}")]
     ProviderNotFound(String),
-    
+
     #[error("Tool execution error for provider '{0}': {1}")]
     ToolExecutionError(String, String),
-    
+
     #[error("Semaphore error: {0}")]
     SemaphoreError(String),
 }
@@ -370,7 +384,7 @@ mod tests {
     async fn test_connection_pool_creation() {
         let pool = McpConnectionPool::new(5, 30);
         let stats = pool.stats().await;
-        
+
         assert_eq!(stats.active_connections, 0);
         assert_eq!(stats.max_connections, 5);
         assert_eq!(stats.available_permits, 5);
@@ -379,19 +393,19 @@ mod tests {
     #[tokio::test]
     async fn test_connection_pool_semaphore_limits() {
         let pool = McpConnectionPool::new(3, 30);
-        
+
         // Acquire 3 permits
         let permit1 = pool.connection_semaphore.acquire().await.unwrap();
         let permit2 = pool.connection_semaphore.acquire().await.unwrap();
         let permit3 = pool.connection_semaphore.acquire().await.unwrap();
-        
+
         let stats = pool.stats().await;
         assert_eq!(stats.available_permits, 0);
-        
+
         // Try to acquire another (would block if not in test)
         drop(permit1);
         let _permit4 = pool.connection_semaphore.acquire().await.unwrap();
-        
+
         let stats = pool.stats().await;
         assert_eq!(stats.available_permits, 0);
     }
@@ -400,7 +414,7 @@ mod tests {
     async fn test_pooled_manager_creation() {
         let manager = PooledMcpManager::new(10, 30, 100);
         let stats = manager.stats().await;
-        
+
         assert_eq!(stats.connection_pool.max_connections, 10);
         assert_eq!(stats.connection_pool.active_connections, 0);
     }
@@ -408,12 +422,12 @@ mod tests {
     #[tokio::test]
     async fn test_read_only_tool_detection() {
         let manager = PooledMcpManager::new(5, 30, 50);
-        
+
         assert!(manager.is_read_only_tool("read_file"));
         assert!(manager.is_read_only_tool("search_files"));
         assert!(manager.is_read_only_tool("get_system_info"));
         assert!(manager.is_read_only_tool("get_file_info"));
-        
+
         assert!(!manager.is_read_only_tool("write_file"));
         assert!(!manager.is_read_only_tool("edit_file"));
         assert!(!manager.is_read_only_tool("execute_command"));
@@ -424,10 +438,10 @@ mod tests {
     fn test_connection_pool_error_display() {
         let error = McpPoolError::ConnectionTimeout("test_provider".to_string());
         assert!(error.to_string().contains("test_provider"));
-        
+
         let error = McpPoolError::InitializationError(
             "auth".to_string(),
-            "invalid credentials".to_string()
+            "invalid credentials".to_string(),
         );
         assert!(error.to_string().contains("auth"));
         assert!(error.to_string().contains("invalid credentials"));
@@ -457,7 +471,7 @@ mod tests {
     async fn test_pool_stats() {
         let pool = McpConnectionPool::new(7, 60);
         let stats = pool.stats().await;
-        
+
         assert_eq!(stats.max_connections, 7);
         assert_eq!(stats.available_permits, 7);
         assert_eq!(stats.active_connections, 0);

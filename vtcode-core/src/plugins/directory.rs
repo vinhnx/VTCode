@@ -3,13 +3,13 @@
 //! Provides utilities for creating and validating plugin directory structures
 //! according to VTCode's plugin system specification.
 
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use tokio::fs;
 
-use crate::plugins::{PluginResult, PluginError, PluginManifest};
+use crate::plugins::{PluginError, PluginManifest, PluginResult};
 
 /// Plugin template generator
 pub struct PluginTemplate;
@@ -21,20 +21,25 @@ impl PluginTemplate {
         manifest: &PluginManifest,
     ) -> PluginResult<()> {
         // Create the plugin directory
-        fs::create_dir_all(plugin_dir).await
-            .map_err(|e| PluginError::LoadingError(format!("Failed to create plugin directory: {}", e)))?;
+        fs::create_dir_all(plugin_dir).await.map_err(|e| {
+            PluginError::LoadingError(format!("Failed to create plugin directory: {}", e))
+        })?;
 
         // Create the .vtcode-plugin directory for the manifest
         let vtcode_plugin_dir = plugin_dir.join(".vtcode-plugin");
-        fs::create_dir_all(&vtcode_plugin_dir).await
-            .map_err(|e| PluginError::LoadingError(format!("Failed to create .vtcode-plugin directory: {}", e)))?;
+        fs::create_dir_all(&vtcode_plugin_dir).await.map_err(|e| {
+            PluginError::LoadingError(format!("Failed to create .vtcode-plugin directory: {}", e))
+        })?;
 
         // Write the plugin manifest
         let manifest_path = vtcode_plugin_dir.join("plugin.json");
-        let manifest_json = serde_json::to_string_pretty(manifest)
-            .map_err(|e| PluginError::JsonError(e))?;
-        fs::write(&manifest_path, &manifest_json).await
-            .map_err(|e| PluginError::LoadingError(format!("Failed to write plugin manifest: {}", e)))?;
+        let manifest_json =
+            serde_json::to_string_pretty(manifest).map_err(|e| PluginError::JsonError(e))?;
+        fs::write(&manifest_path, &manifest_json)
+            .await
+            .map_err(|e| {
+                PluginError::LoadingError(format!("Failed to write plugin manifest: {}", e))
+            })?;
 
         // Create standard directories if specified in manifest
         Self::create_standard_directories(plugin_dir, manifest).await?;
@@ -46,40 +51,50 @@ impl PluginTemplate {
     }
 
     /// Create standard plugin directories
-    async fn create_standard_directories(plugin_dir: &Path, manifest: &PluginManifest) -> PluginResult<()> {
+    async fn create_standard_directories(
+        plugin_dir: &Path,
+        manifest: &PluginManifest,
+    ) -> PluginResult<()> {
         // Create commands directory
         if manifest.commands.is_some() || Self::should_create_default_commands_dir(manifest) {
             let commands_dir = plugin_dir.join("commands");
-            fs::create_dir_all(&commands_dir).await
-                .map_err(|e| PluginError::LoadingError(format!("Failed to create commands directory: {}", e)))?;
+            fs::create_dir_all(&commands_dir).await.map_err(|e| {
+                PluginError::LoadingError(format!("Failed to create commands directory: {}", e))
+            })?;
         }
 
         // Create agents directory
         if manifest.agents.is_some() || Self::should_create_default_agents_dir(manifest) {
             let agents_dir = plugin_dir.join("agents");
-            fs::create_dir_all(&agents_dir).await
-                .map_err(|e| PluginError::LoadingError(format!("Failed to create agents directory: {}", e)))?;
+            fs::create_dir_all(&agents_dir).await.map_err(|e| {
+                PluginError::LoadingError(format!("Failed to create agents directory: {}", e))
+            })?;
         }
 
         // Create skills directory
         if manifest.skills.is_some() || Self::should_create_default_skills_dir(manifest) {
             let skills_dir = plugin_dir.join("skills");
-            fs::create_dir_all(&skills_dir).await
-                .map_err(|e| PluginError::LoadingError(format!("Failed to create skills directory: {}", e)))?;
+            fs::create_dir_all(&skills_dir).await.map_err(|e| {
+                PluginError::LoadingError(format!("Failed to create skills directory: {}", e))
+            })?;
         }
 
         // Create hooks directory
         if manifest.hooks.is_some() {
             let hooks_dir = plugin_dir.join("hooks");
-            fs::create_dir_all(&hooks_dir).await
-                .map_err(|e| PluginError::LoadingError(format!("Failed to create hooks directory: {}", e)))?;
+            fs::create_dir_all(&hooks_dir).await.map_err(|e| {
+                PluginError::LoadingError(format!("Failed to create hooks directory: {}", e))
+            })?;
         }
 
         Ok(())
     }
 
     /// Create example files for the plugin
-    async fn create_example_files(plugin_dir: &Path, manifest: &PluginManifest) -> PluginResult<()> {
+    async fn create_example_files(
+        plugin_dir: &Path,
+        manifest: &PluginManifest,
+    ) -> PluginResult<()> {
         // Create an example command if commands directory exists
         let commands_dir = plugin_dir.join("commands");
         if commands_dir.exists() {
@@ -109,8 +124,14 @@ This command demonstrates how to create a plugin command for VTCode.
 "#,
                     plugin_name = manifest.name
                 );
-                fs::write(&example_command, example_content).await
-                    .map_err(|e| PluginError::LoadingError(format!("Failed to create example command: {}", e)))?;
+                fs::write(&example_command, example_content)
+                    .await
+                    .map_err(|e| {
+                        PluginError::LoadingError(format!(
+                            "Failed to create example command: {}",
+                            e
+                        ))
+                    })?;
             }
         }
 
@@ -138,8 +159,11 @@ This agent can be used to demonstrate how agents work in VTCode plugins.
 "#,
                     plugin_name = manifest.name
                 );
-                fs::write(&example_agent, example_content).await
-                    .map_err(|e| PluginError::LoadingError(format!("Failed to create example agent: {}", e)))?;
+                fs::write(&example_agent, example_content)
+                    .await
+                    .map_err(|e| {
+                        PluginError::LoadingError(format!("Failed to create example agent: {}", e))
+                    })?;
             }
         }
 
@@ -147,8 +171,12 @@ This agent can be used to demonstrate how agents work in VTCode plugins.
         let skills_dir = plugin_dir.join("skills");
         if skills_dir.exists() {
             let example_skill_dir = skills_dir.join("example-skill");
-            fs::create_dir_all(&example_skill_dir).await
-                .map_err(|e| PluginError::LoadingError(format!("Failed to create example skill directory: {}", e)))?;
+            fs::create_dir_all(&example_skill_dir).await.map_err(|e| {
+                PluginError::LoadingError(format!(
+                    "Failed to create example skill directory: {}",
+                    e
+                ))
+            })?;
 
             let skill_md = example_skill_dir.join("SKILL.md");
             if !skill_md.exists() {
@@ -172,8 +200,9 @@ This skill demonstrates how to create a model-invoked capability in VTCode.
 "#,
                     plugin_name = manifest.name
                 );
-                fs::write(&skill_md, example_content).await
-                    .map_err(|e| PluginError::LoadingError(format!("Failed to create example skill: {}", e)))?;
+                fs::write(&skill_md, example_content).await.map_err(|e| {
+                    PluginError::LoadingError(format!("Failed to create example skill: {}", e))
+                })?;
             }
         }
 
@@ -197,8 +226,14 @@ This skill demonstrates how to create a model-invoked capability in VTCode.
     ]
   }
 }"#;
-                fs::write(&hooks_config, example_content).await
-                    .map_err(|e| PluginError::LoadingError(format!("Failed to create example hooks config: {}", e)))?;
+                fs::write(&hooks_config, example_content)
+                    .await
+                    .map_err(|e| {
+                        PluginError::LoadingError(format!(
+                            "Failed to create example hooks config: {}",
+                            e
+                        ))
+                    })?;
             }
         }
 
@@ -215,8 +250,9 @@ This skill demonstrates how to create a model-invoked capability in VTCode.
     }
   }
 }"#;
-                fs::write(&mcp_config, example_content).await
-                    .map_err(|e| PluginError::LoadingError(format!("Failed to create example MCP config: {}", e)))?;
+                fs::write(&mcp_config, example_content).await.map_err(|e| {
+                    PluginError::LoadingError(format!("Failed to create example MCP config: {}", e))
+                })?;
             }
         }
 
@@ -233,8 +269,9 @@ This skill demonstrates how to create a model-invoked capability in VTCode.
     }
   }
 }"#;
-                fs::write(&lsp_config, example_content).await
-                    .map_err(|e| PluginError::LoadingError(format!("Failed to create example LSP config: {}", e)))?;
+                fs::write(&lsp_config, example_content).await.map_err(|e| {
+                    PluginError::LoadingError(format!("Failed to create example LSP config: {}", e))
+                })?;
             }
         }
 
@@ -266,27 +303,29 @@ This skill demonstrates how to create a model-invoked capability in VTCode.
     pub async fn validate_plugin_structure(plugin_dir: &Path) -> PluginResult<()> {
         // Check if plugin directory exists
         if !plugin_dir.exists() {
-            return Err(PluginError::LoadingError(
-                format!("Plugin directory does not exist: {}", plugin_dir.display())
-            ));
+            return Err(PluginError::LoadingError(format!(
+                "Plugin directory does not exist: {}",
+                plugin_dir.display()
+            )));
         }
 
         // Check if manifest exists
         let manifest_path = plugin_dir.join(".vtcode-plugin/plugin.json");
         if !manifest_path.exists() {
-            return Err(PluginError::ManifestValidationError(
-                format!("Plugin manifest not found at: {}", manifest_path.display())
-            ));
+            return Err(PluginError::ManifestValidationError(format!(
+                "Plugin manifest not found at: {}",
+                manifest_path.display()
+            )));
         }
 
         // Validate manifest can be parsed
-        let manifest_content = fs::read_to_string(&manifest_path).await
+        let manifest_content = fs::read_to_string(&manifest_path)
+            .await
             .map_err(|e| PluginError::LoadingError(format!("Failed to read manifest: {}", e)))?;
 
-        let _manifest: PluginManifest = serde_json::from_str(&manifest_content)
-            .map_err(|e| PluginError::ManifestValidationError(
-                format!("Invalid manifest JSON: {}", e)
-            ))?;
+        let _manifest: PluginManifest = serde_json::from_str(&manifest_content).map_err(|e| {
+            PluginError::ManifestValidationError(format!("Invalid manifest JSON: {}", e))
+        })?;
 
         Ok(())
     }

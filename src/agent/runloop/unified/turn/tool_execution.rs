@@ -27,7 +27,7 @@ pub(crate) async fn execute_single_tool_call(
 }
 
 /// Execute a batch of tool calls with parallel execution for independent tools
-/// 
+///
 /// **Implementation Notes**:
 /// - Sequential execution maintains tool output ordering within dependencies
 /// - Tools can run in parallel when they don't reference each other's results
@@ -44,12 +44,12 @@ pub(crate) async fn execute_tool_pipeline(
     // Note: True parallel execution requires Arc<ToolRegistry> or refactoring to avoid
     // `&mut` borrow. Current implementation sequentially executes tool calls to maintain
     // compatibility with the registry's mutable interface.
-    // 
+    //
     // Future optimization paths:
     // 1. Move to Arc<ToolRegistry> and Interior mutability if registry becomes thread-safe
     // 2. Pre-validate all tool calls and split into independent batches
     // 3. Use rayon for CPU-bound tools, tokio::spawn for I/O-bound tools
-    
+
     let mut results = Vec::with_capacity(tool_calls.len());
 
     for (idx, tool_call) in tool_calls.iter().enumerate() {

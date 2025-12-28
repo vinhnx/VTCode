@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::llm::provider as uni;
 
 /// Validates that a textual tool call has required arguments before execution.
 /// Returns `None` if valid, or `Some(missing_params)` if validation fails.

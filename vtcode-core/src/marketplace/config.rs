@@ -1,10 +1,10 @@
 //! Marketplace configuration system for VTCode
-//! 
+//!
 //! This module handles the integration of marketplace settings with VTCode's configuration system.
 
 use std::path::PathBuf;
 
-use anyhow::{Result, Context, bail};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
@@ -46,25 +46,25 @@ impl Default for MarketplaceSettings {
 pub struct InstalledPlugin {
     /// Plugin ID
     pub id: String,
-    
+
     /// Name of the plugin
     pub name: String,
-    
+
     /// Version of the plugin
     pub version: String,
-    
+
     /// Source marketplace
     pub source: String,
-    
+
     /// Installation path
     pub install_path: PathBuf,
-    
+
     /// Whether the plugin is enabled
     pub enabled: bool,
-    
+
     /// Trust level of the plugin
     pub trust_level: crate::config::PluginTrustLevel,
-    
+
     /// Installation timestamp
     pub installed_at: String, // Using string for simplicity, could be a proper datetime type
 }
@@ -141,36 +141,46 @@ impl MarketplaceSettings {
             // Return default settings if file doesn't exist
             return Ok(Self::default());
         }
-        
-        let content = fs::read_to_string(config_path)
-            .await
-            .with_context(|| format!("Failed to read marketplace config file: {}", config_path.display()))?;
-        
-        let settings: MarketplaceSettings = toml::from_str(&content)
-            .with_context(|| format!("Failed to parse marketplace config file: {}", config_path.display()))?;
-        
+
+        let content = fs::read_to_string(config_path).await.with_context(|| {
+            format!(
+                "Failed to read marketplace config file: {}",
+                config_path.display()
+            )
+        })?;
+
+        let settings: MarketplaceSettings = toml::from_str(&content).with_context(|| {
+            format!(
+                "Failed to parse marketplace config file: {}",
+                config_path.display()
+            )
+        })?;
+
         Ok(settings)
     }
-    
+
     /// Save marketplace settings to a configuration file
     pub async fn save_to_file(&self, config_path: &PathBuf) -> Result<()> {
         // Create parent directory if it doesn't exist
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .with_context(|| format!("Failed to create config directory: {}", parent.display()))?;
+            fs::create_dir_all(parent).await.with_context(|| {
+                format!("Failed to create config directory: {}", parent.display())
+            })?;
         }
-        
-        let content = toml::to_string(&self)
-            .with_context(|| "Failed to serialize marketplace settings")?;
-        
-        fs::write(config_path, content)
-            .await
-            .with_context(|| format!("Failed to write marketplace config file: {}", config_path.display()))?;
-        
+
+        let content =
+            toml::to_string(&self).with_context(|| "Failed to serialize marketplace settings")?;
+
+        fs::write(config_path, content).await.with_context(|| {
+            format!(
+                "Failed to write marketplace config file: {}",
+                config_path.display()
+            )
+        })?;
+
         Ok(())
     }
-    
+
     /// Add a marketplace to the configuration
     pub fn add_marketplace(&mut self, marketplace: MarketplaceSource) {
         // Check if marketplace already exists
@@ -178,30 +188,42 @@ impl MarketplaceSettings {
             self.marketplaces.push(marketplace);
         }
     }
-    
+
     /// Remove a marketplace from the configuration
     pub fn remove_marketplace(&mut self, id: &str) -> bool {
         let initial_len = self.marketplaces.len();
         self.marketplaces.retain(|m| m.id() != id);
         self.marketplaces.len() != initial_len
     }
-    
+
     /// Check if a plugin source is allowed based on security settings
     pub fn is_source_allowed(&self, source_url: &str) -> bool {
         // If allowed sources list is empty, all sources are allowed (except blocked ones)
-        let allowed = self.security.allowed_sources.is_empty() || 
-                     self.security.allowed_sources.iter().any(|s| source_url.contains(s));
-        
+        let allowed = self.security.allowed_sources.is_empty()
+            || self
+                .security
+                .allowed_sources
+                .iter()
+                .any(|s| source_url.contains(s));
+
         // Check if source is blocked
-        let blocked = self.security.blocked_sources.iter().any(|s| source_url.contains(s));
-        
+        let blocked = self
+            .security
+            .blocked_sources
+            .iter()
+            .any(|s| source_url.contains(s));
+
         allowed && !blocked
     }
-    
+
     /// Add an installed plugin to the configuration
     pub fn add_installed_plugin(&mut self, plugin: InstalledPlugin) {
         // Check if plugin already exists and update it, or add as new
-        match self.installed_plugins.iter_mut().find(|p| p.id == plugin.id) {
+        match self
+            .installed_plugins
+            .iter_mut()
+            .find(|p| p.id == plugin.id)
+        {
             Some(existing) => {
                 // Update existing plugin info
                 existing.name = plugin.name;
@@ -217,22 +239,26 @@ impl MarketplaceSettings {
             }
         }
     }
-    
+
     /// Remove an installed plugin from the configuration
     pub fn remove_installed_plugin(&mut self, plugin_id: &str) -> bool {
         let initial_len = self.installed_plugins.len();
         self.installed_plugins.retain(|p| p.id != plugin_id);
         self.installed_plugins.len() != initial_len
     }
-    
+
     /// Get an installed plugin by ID
     pub fn get_installed_plugin(&self, plugin_id: &str) -> Option<&InstalledPlugin> {
         self.installed_plugins.iter().find(|p| p.id == plugin_id)
     }
-    
+
     /// Enable a plugin
     pub fn enable_plugin(&mut self, plugin_id: &str) -> Result<()> {
-        match self.installed_plugins.iter_mut().find(|p| p.id == plugin_id) {
+        match self
+            .installed_plugins
+            .iter_mut()
+            .find(|p| p.id == plugin_id)
+        {
             Some(plugin) => {
                 plugin.enabled = true;
                 Ok(())
@@ -240,10 +266,14 @@ impl MarketplaceSettings {
             None => bail!("Plugin '{}' not found in installed plugins", plugin_id),
         }
     }
-    
+
     /// Disable a plugin
     pub fn disable_plugin(&mut self, plugin_id: &str) -> Result<()> {
-        match self.installed_plugins.iter_mut().find(|p| p.id == plugin_id) {
+        match self
+            .installed_plugins
+            .iter_mut()
+            .find(|p| p.id == plugin_id)
+        {
             Some(plugin) => {
                 plugin.enabled = false;
                 Ok(())
@@ -269,38 +299,49 @@ mod tests {
         assert!(settings.installed_plugins.is_empty());
         assert!(settings.auto_update.marketplaces);
         assert_eq!(settings.auto_update.check_interval_hours, 24);
-        assert_eq!(settings.security.default_trust_level, crate::config::PluginTrustLevel::Sandbox);
+        assert_eq!(
+            settings.security.default_trust_level,
+            crate::config::PluginTrustLevel::Sandbox
+        );
     }
 
     #[tokio::test]
     async fn test_marketplace_settings_save_load() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_path = temp_dir.path().join("test_marketplace.toml");
-        
+
         let mut settings = MarketplaceSettings::default();
         settings.auto_update.marketplaces = false;
         settings.security.default_trust_level = crate::config::PluginTrustLevel::Trusted;
-        
+
         settings.save_to_file(&config_path).await.unwrap();
-        
-        let loaded_settings = MarketplaceSettings::load_from_file(&config_path).await.unwrap();
-        assert_eq!(settings.auto_update.marketplaces, loaded_settings.auto_update.marketplaces);
-        assert_eq!(settings.security.default_trust_level, loaded_settings.security.default_trust_level);
+
+        let loaded_settings = MarketplaceSettings::load_from_file(&config_path)
+            .await
+            .unwrap();
+        assert_eq!(
+            settings.auto_update.marketplaces,
+            loaded_settings.auto_update.marketplaces
+        );
+        assert_eq!(
+            settings.security.default_trust_level,
+            loaded_settings.security.default_trust_level
+        );
     }
 
     #[tokio::test]
     async fn test_add_remove_marketplace() {
         let mut settings = MarketplaceSettings::default();
-        
+
         let marketplace = crate::marketplace::MarketplaceSource::Git {
             id: "test".to_string(),
             url: "https://example.com/test".to_string(),
             refspec: None,
         };
-        
+
         settings.add_marketplace(marketplace.clone());
         assert_eq!(settings.marketplaces.len(), 1);
-        
+
         settings.remove_marketplace("test");
         assert_eq!(settings.marketplaces.len(), 0);
     }
@@ -308,7 +349,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_enable_disable() {
         let mut settings = MarketplaceSettings::default();
-        
+
         let plugin = InstalledPlugin {
             id: "test-plugin".to_string(),
             name: "Test Plugin".to_string(),
@@ -319,13 +360,23 @@ mod tests {
             trust_level: crate::config::PluginTrustLevel::Sandbox,
             installed_at: "2023-01-01".to_string(),
         };
-        
+
         settings.add_installed_plugin(plugin);
-        
+
         settings.enable_plugin("test-plugin").unwrap();
-        assert!(settings.get_installed_plugin("test-plugin").unwrap().enabled);
-        
+        assert!(
+            settings
+                .get_installed_plugin("test-plugin")
+                .unwrap()
+                .enabled
+        );
+
         settings.disable_plugin("test-plugin").unwrap();
-        assert!(!settings.get_installed_plugin("test-plugin").unwrap().enabled);
+        assert!(
+            !settings
+                .get_installed_plugin("test-plugin")
+                .unwrap()
+                .enabled
+        );
     }
 }

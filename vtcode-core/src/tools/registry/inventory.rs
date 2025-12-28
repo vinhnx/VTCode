@@ -226,7 +226,9 @@ impl ToolInventory {
             return None;
         };
 
-        self.tools.get(resolved_name).map(|entry| &entry.registration)
+        self.tools
+            .get(resolved_name)
+            .map(|entry| &entry.registration)
     }
 
     pub fn has_tool(&self, name: &str) -> bool {

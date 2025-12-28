@@ -51,7 +51,8 @@ pub fn generate_config(
                 config_sections.push("[bell]".to_string());
                 config_sections.push("animation = \"EaseOutExpo\"".to_string());
                 config_sections.push("duration = 0".to_string());
-                config_sections.push("command = [\"notify-send\", \"Alacritty\", \"Bell\"]".to_string());
+                config_sections
+                    .push("command = [\"notify-send\", \"Alacritty\", \"Bell\"]".to_string());
                 config_sections.push(String::new());
             }
         }
