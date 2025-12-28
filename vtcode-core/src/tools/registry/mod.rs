@@ -616,6 +616,11 @@ pub struct ToolRegistry {
     cached_available_tools: Arc<RwLock<Option<Vec<String>>>>,
     /// Callback for streaming tool output and progress
     progress_callback: Option<ToolProgressCallback>,
+    // Performance Observability
+    /// Total tool calls made in current session
+    pub(crate) tool_call_counter: Arc<std::sync::atomic::AtomicU64>,
+    /// Total PTY poll iterations (for monitoring CPU usage)
+    pub(crate) pty_poll_counter: Arc<std::sync::atomic::AtomicU64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -698,6 +703,8 @@ impl ToolRegistry {
             adaptive_tuning: AdaptiveTimeoutTuning::default(),
             mcp_circuit_breaker: Arc::new(circuit_breaker::McpCircuitBreaker::new()),
             initialized: false,
+            tool_call_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            pty_poll_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             shell_policy: Arc::new(RwLock::new(ShellPolicyChecker::new())),
             agent_type: Cow::Borrowed("unknown"),
             cached_available_tools: Arc::new(RwLock::new(None)),
@@ -1006,6 +1013,26 @@ impl ToolRegistry {
         } else {
             0
         }
+    }
+
+    /// Get total tool calls made in current session (for observability)
+    pub fn tool_call_count(&self) -> u64 {
+        self.tool_call_counter.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Get total PTY poll iterations (for CPU monitoring)
+    pub fn pty_poll_count(&self) -> u64 {
+        self.pty_poll_counter.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Increment tool call counter (should be called by tool executors)
+    pub(crate) fn increment_tool_calls(&self) {
+        self.tool_call_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Increment PTY poll counter (called by PTY polling loop)
+    pub(crate) fn increment_pty_polls(&self) {
+        self.pty_poll_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Snapshot harness context metadata

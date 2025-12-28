@@ -479,8 +479,23 @@ pub enum Commands {
     ///   • Dependency insights
     ///   • Symbol extraction
     ///
-    /// Usage: vtcode analyze
-    Analyze,
+    /// Analysis types:
+    ///   • full (default) - Comprehensive analysis including structure, dependencies, and metrics
+    ///   • structure - File structure and language distribution
+    ///   • security - Security vulnerability patterns and best practices
+    ///   • performance - Performance bottlenecks and optimization opportunities
+    ///   • dependencies - Dependency analysis and version management
+    ///   • complexity - Code complexity metrics and maintainability
+    ///
+    /// Examples:
+    ///   • Basic analysis - vtcode analyze
+    ///   • Security analysis - vtcode analyze security
+    ///   • Performance analysis - vtcode analyze performance
+    Analyze {
+        /// Type of analysis to perform
+        #[arg(value_name = "TYPE", default_value = "full")]
+        analysis_type: String,
+    },
 
     /// Pretty-print trajectory logs and show basic analytics
     ///

@@ -558,15 +558,41 @@ pub async fn handle_slash_command(
             Ok(SlashCommandOutcome::DebugAgent)
         }
         "analyze" => {
-            // Accept optional arguments for specifying analysis type
-            if args.split_whitespace().count() > 1 {
-                renderer.line(
-                    MessageStyle::Error,
-                    "Usage: /analyze [full|security|performance] - accepts at most one argument",
-                )?;
-                return Ok(SlashCommandOutcome::Handled);
+            // Parse and validate analysis type argument
+            let analysis_type = if args.trim().is_empty() {
+                "full"
+            } else {
+                let tokens: Vec<&str> = args.split_whitespace().collect();
+                if tokens.len() > 1 {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Usage: /analyze [full|security|performance|dependencies|complexity|structure]",
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+                tokens[0]
+            };
+
+            // Validate analysis type
+            match analysis_type {
+                "full" | "security" | "performance" | "dependencies" | "complexity" | "structure" => {
+                    // Store analysis type in session for the handler to use
+                    // For now, we just pass it through as a parameter
+                    Ok(SlashCommandOutcome::SubmitPrompt {
+                        prompt: format!("Run {} analysis on the workspace", analysis_type)
+                    })
+                }
+                _ => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!(
+                            "Unknown analysis type '{}'. Valid types: full, security, performance, dependencies, complexity, structure",
+                            analysis_type
+                        ),
+                    )?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
             }
-            Ok(SlashCommandOutcome::AnalyzeAgent)
         }
         "edit" => {
             let file = if args.trim().is_empty() {
