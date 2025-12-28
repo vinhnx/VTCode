@@ -26,6 +26,7 @@
 pub mod agent_card;
 pub mod errors;
 pub mod rpc;
+pub mod client;
 pub mod task_manager;
 pub mod types;
 
@@ -36,6 +37,7 @@ pub mod server;
 
 // Re-exports for convenience
 pub use agent_card::{AgentCapabilities, AgentCard, AgentProvider, AgentSkill};
+pub use client::A2aClient;
 pub use errors::{A2aError, A2aErrorCode, A2aResult};
 pub use rpc::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, SendStreamingMessageResponse, StreamingEvent,
