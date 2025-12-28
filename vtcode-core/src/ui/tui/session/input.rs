@@ -60,29 +60,13 @@ impl Session {
             status_line = Some(line);
         }
 
-        // Determine if we're in full auto trust mode and adjust styling accordingly
-        let is_full_auto_trust = self.is_full_auto_trust();
-        let border_style = if is_full_auto_trust {
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-        } else {
-            self.styles.accent_style()
-        };
-
-        // Determine the trust mode title for the border
-        let trust_title = if is_full_auto_trust {
-            "Full Auto Trust"
-        } else if self.is_tools_policy_trust() {
-            "Tools Policy Trust"
-        } else {
-            ""
-        };
+        let border_style = self.styles.accent_style();
 
         let block = Block::new()
             .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(terminal_capabilities::get_border_type())
             .style(self.styles.default_style())
-            .border_style(border_style)
-            .title(trust_title);
+            .border_style(border_style);
         let inner = block.inner(input_area);
         let input_render = self.build_input_render(inner.width, inner.height);
         let paragraph = Paragraph::new(input_render.text)

@@ -14,6 +14,7 @@ pub mod hooks;
 pub mod loader;
 pub mod mcp;
 pub mod models;
+pub mod output_styles;
 pub mod telemetry;
 pub mod types;
 pub mod validation;
