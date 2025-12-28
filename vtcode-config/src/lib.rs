@@ -39,6 +39,7 @@ pub mod root;
 #[cfg(feature = "schema")]
 pub mod schema;
 pub mod status_line;
+pub mod subagent;
 pub mod telemetry;
 pub mod timeouts;
 pub mod types;
@@ -77,6 +78,10 @@ pub use root::{PtyConfig, ToolOutputMode, UiConfig};
 #[cfg(feature = "schema")]
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
 pub use status_line::{StatusLineConfig, StatusLineMode};
+pub use subagent::{
+    SubagentConfig, SubagentModel, SubagentParseError, SubagentPermissionMode, SubagentSource,
+    SubagentsConfig,
+};
 pub use telemetry::TelemetryConfig;
 pub use timeouts::TimeoutsConfig;
 pub use types::{
