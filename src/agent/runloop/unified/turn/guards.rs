@@ -66,6 +66,21 @@ pub(crate) async fn run_proactive_guards(
     let mut pruning_ledger = ctx.pruning_ledger.write().await;
     pruning_ledger.auto_prune();
 
+    // Fix #5 Phase 4: Monitor memory pressure and apply cache eviction if needed
+    let memory_pressure = ctx.context_manager.check_memory_pressure();
+    if !matches!(memory_pressure, vtcode_core::memory::MemoryPressure::Normal) {
+        tracing::debug!("Memory pressure detected: {:?}", memory_pressure);
+        ctx.context_manager.record_memory_checkpoint(&format!("guard_check_{:?}", memory_pressure));
+        
+        // Log warning if critical
+        if matches!(memory_pressure, vtcode_core::memory::MemoryPressure::Critical) {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                "[MEMORY] Critical memory pressure - applying aggressive cleanup",
+            )?;
+        }
+    }
+
     // Proactive token budget check - trim BEFORE consuming tokens
     // We implement a "check-trim-verify" loop here to ensure safety
     use crate::agent::runloop::unified::context_manager::PreRequestAction;
