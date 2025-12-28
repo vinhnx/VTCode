@@ -72,6 +72,8 @@ pub struct NotificationConfig {
     pub use_terminal_bell: bool,
     /// Use rich notifications (desktop notifications if supported)
     pub use_rich_notifications: bool,
+    /// Enable/disable all terminal notifications (overrides other settings)
+    pub terminal_notifications_enabled: bool,
 }
 
 impl Default for NotificationConfig {
@@ -85,6 +87,7 @@ impl Default for NotificationConfig {
             request_notifications: true,
             use_terminal_bell: true,
             use_rich_notifications: true,
+            terminal_notifications_enabled: true,
         }
     }
 }
@@ -112,6 +115,11 @@ impl NotificationManager {
     /// Send a notification for an event
     pub async fn send_notification(&self, event: NotificationEvent) -> Result<()> {
         let config = self.config.read().await;
+
+        // Check if terminal notifications are enabled globally first
+        if !config.terminal_notifications_enabled {
+            return Ok(());
+        }
 
         match &event {
             NotificationEvent::CommandFailure { .. } => {
@@ -161,6 +169,11 @@ impl NotificationManager {
         event: &NotificationEvent,
         config: &NotificationConfig,
     ) -> Result<()> {
+        // Check if terminal notifications are enabled
+        if !config.terminal_notifications_enabled {
+            return Ok(());
+        }
+
         // Format the notification message based on the event type
         let message = self.format_notification_message(event);
 
@@ -387,5 +400,31 @@ mod tests {
         // This should not panic
         let result = manager.send_notification(event).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_terminal_notifications_toggle() {
+        // Test with notifications enabled (default)
+        let manager = NotificationManager::new();
+        let config = manager.get_config().await;
+        assert!(config.terminal_notifications_enabled);
+
+        // Test with notifications disabled
+        let mut config = NotificationConfig::default();
+        config.terminal_notifications_enabled = false;
+        let manager = NotificationManager::with_config(config);
+        let event = NotificationEvent::CommandFailure {
+            command: "test".to_string(),
+            error: "test error".to_string(),
+            exit_code: None,
+        };
+
+        // This should not send notification when disabled
+        let result = manager.send_notification(event).await;
+        assert!(result.is_ok()); // Should not error, but notification won't be sent
+
+        // Verify the setting worked by checking the config
+        let current_config = manager.get_config().await;
+        assert!(!current_config.terminal_notifications_enabled);
     }
 }
