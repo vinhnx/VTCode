@@ -36,6 +36,7 @@ use crate::project_doc::read_project_doc;
 use crate::prompts::context::PromptContext;
 use crate::prompts::guidelines::generate_tool_guidelines;
 use crate::prompts::system_prompt_cache::PROMPT_CACHE;
+use crate::prompts::output_styles::OutputStyleApplier;
 use crate::prompts::temporal::generate_temporal_context;
 use dirs::home_dir;
 use std::env;
@@ -158,7 +159,15 @@ impl Default for SystemPromptConfig {
 /// Generate system instruction
 pub async fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
     // OPTIMIZATION: default_system_prompt() is &'static str, use directly
-    Content::system_text(default_system_prompt())
+    let instruction = default_system_prompt().to_string();
+
+    // Apply output style if possible (using current directory as project root)
+    if let Ok(current_dir) = std::env::current_dir() {
+        let styled_instruction = apply_output_style(instruction, None, &current_dir).await;
+        Content::system_text(styled_instruction)
+    } else {
+        Content::system_text(instruction)
+    }
 }
 
 /// Read AGENTS.md file if present and extract agent guidelines
@@ -376,7 +385,10 @@ pub async fn generate_system_instruction_with_config(
             None, // No prompt_context for backward compatibility
         ))
     });
-    Content::system_text(instruction)
+
+    // Apply output style if configured
+    let styled_instruction = apply_output_style(instruction, vtcode_config, project_root).await;
+    Content::system_text(styled_instruction)
 }
 
 /// Generate system instruction with AGENTS.md guidelines incorporated
@@ -392,7 +404,28 @@ pub async fn generate_system_instruction_with_guidelines(
             None, // No prompt_context
         ))
     });
-    Content::system_text(instruction)
+    // Apply output style if configured
+    let styled_instruction = apply_output_style(instruction, None, project_root).await;
+    Content::system_text(styled_instruction)
+}
+
+/// Apply output style to a generated system instruction
+pub async fn apply_output_style(
+    instruction: String,
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+    project_root: &Path,
+) -> String {
+    if let Some(config) = vtcode_config {
+        let output_style_applier = OutputStyleApplier::new();
+        if let Err(e) = output_style_applier.load_styles_from_config(config, project_root).await {
+            tracing::warn!("Failed to load output styles: {}", e);
+            instruction // Return original if loading fails
+        } else {
+            output_style_applier.apply_style(&config.output_style.active_style, &instruction, config).await
+        }
+    } else {
+        instruction // Return original if no config
+    }
 }
 
 async fn read_instruction_hierarchy(

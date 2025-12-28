@@ -34,6 +34,7 @@ pub mod hooks;
 pub mod loader;
 pub mod mcp;
 pub mod models;
+pub mod output_styles;
 pub mod root;
 #[cfg(feature = "schema")]
 pub mod schema;
@@ -70,6 +71,7 @@ pub use mcp::{
     McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
 pub use models::{ModelId, OpenRouterMetadata};
+pub use output_styles::{OutputStyle, OutputStyleConfig, OutputStyleManager};
 pub use root::{PtyConfig, StatusLineConfig, StatusLineMode, ToolOutputMode, UiConfig};
 #[cfg(feature = "schema")]
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};

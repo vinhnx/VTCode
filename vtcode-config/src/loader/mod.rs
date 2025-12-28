@@ -11,6 +11,7 @@ use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
 use crate::hooks::HooksConfig;
 use crate::mcp::McpClientConfig;
+use crate::output_styles::OutputStyleConfig;
 use crate::root::{PtyConfig, UiConfig};
 use crate::telemetry::TelemetryConfig;
 use crate::timeouts::TimeoutsConfig;
@@ -187,6 +188,10 @@ pub struct VTCodeConfig {
     /// Skills system configuration (Agent Skills spec)
     #[serde(default)]
     pub skills: SkillsConfig,
+
+    /// Output style configuration
+    #[serde(default)]
+    pub output_style: OutputStyleConfig,
 }
 
 impl VTCodeConfig {
