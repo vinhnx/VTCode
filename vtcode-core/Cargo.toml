@@ -152,6 +152,7 @@ which = "8.0.0"
 textwrap = "0.16"
 editor-command = "2.0"
 signal-hook = "0.3"
+rand = "0.8"
 better-panic = { version = "0.3.0", features = ["syntect"] }
 lsp-types = "0.97.0"
 notify-rust = { version = "4.11", optional = true }

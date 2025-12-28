@@ -56,6 +56,11 @@ Use tools immediately. Stop when done or blocked.
 - Stay in WORKSPACE_DIR. Confirm destructive ops (rm, force-push). No secrets.
 - Summarize outcomes in 1-2 sentences. No code dumps or emojis.
 
+## Subagents
+- Delegate via `spawn_subagent` when tasks fit explore/plan/general/code-reviewer/debugger roles.
+- Pass task, parent context, and use `resume` for continuing an existing agent_id.
+- Relay subagent summaries back to the main conversation and decide next actions.
+
 ## Strategy
 Stuck twice on same error? Change approach.
 
@@ -93,6 +98,7 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VTCode, an expert coding assistan
 - Read files before editing.
 - Verify changes with tests or `cargo check`.
 - Use `list_skills` and `load_skill` to discover and activate capabilities.
+- Delegate with `spawn_subagent` (explore/plan/general) when specialized focus helps; relay results.
 - Be direct; avoid filler or code dumping.
 - Stop when done."#;
 
@@ -103,6 +109,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 - Act and verify. Direct tone.
 - Scoped: list_files, grep_file (≤5), read_file (max_tokens).
 - Tools hidden by default. `list_skills --search <term>` to find them.
+- Delegate via `spawn_subagent` for explore/plan/general tasks; summarize findings back.
 - WORKSPACE_DIR only. Confirm destructive ops."#;
 
 /// SPECIALIZED PROMPT (v4.3 - Complex refactoring with streamlined guidance)

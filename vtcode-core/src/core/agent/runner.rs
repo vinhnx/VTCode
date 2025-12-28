@@ -237,7 +237,7 @@ impl AgentRunner {
         }
     }
 
-    fn print_compact_response(agent: AgentType, text: &str, quiet: bool) {
+    fn print_compact_response(agent: &AgentType, text: &str, quiet: bool) {
         if quiet {
             return;
         }
@@ -1070,7 +1070,7 @@ impl AgentRunner {
                     event_recorder.agent_message_stream_complete();
                 }
                 // Ensure the agent reply is always visible even if the TUI misses streaming updates
-                Self::print_compact_response(self.agent_type, &aggregated_text, self.quiet);
+                Self::print_compact_response(&self.agent_type, &aggregated_text, self.quiet);
                 runner_println!(
                     self,
                     "{} {}",
@@ -1566,7 +1566,7 @@ impl AgentRunner {
                 if !resp_summary.content.trim().is_empty() && !resp_summary.agent_message_streamed {
                     event_recorder.agent_message(&resp_summary.content);
                     Self::print_compact_response(
-                        self.agent_type,
+                        &self.agent_type,
                         &resp_summary.content,
                         self.quiet,
                     );

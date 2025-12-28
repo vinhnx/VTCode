@@ -154,6 +154,7 @@ pub mod prompts;
 pub mod safety;
 pub mod security;
 pub mod skills;
+pub mod subagents;
 pub mod telemetry;
 pub mod terminal_setup;
 pub mod tool_policy;

@@ -170,6 +170,7 @@ VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and s
 -   **Code Intelligence**: Tree-sitter powered code navigation with go-to-definition, find-references, hover, and symbol search (Rust, Python, JavaScript/TypeScript, Go, Java, Swift, Bash)
 -   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
 -   **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling, aligned with the [open Agent Skills standard](http://agentskills.io/) ([docs](./docs/SKILLS_GUIDE.md))
+-   **Subagents**: Delegate tasks to specialized agents (explore/plan/general/code-reviewer/debugger) via `spawn_subagent`; see [docs/subagents/SUBAGENTS.md](./docs/subagents/SUBAGENTS.md)
 -   **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
 -   **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
 -   **Context Management**: Advanced token budget tracking and context curation
@@ -198,6 +199,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
     -   [Interactive mode](./docs/user-guide/interactive-mode.md)
     -   [Command line interface](./docs/user-guide/commands.md)
     -   [Custom prompts](./docs/user-guide/custom-prompts.md)
+  -   [Subagents](./docs/subagents/SUBAGENTS.md)
     -   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
 -   [**AI Provider Setup**](./docs/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
     -   [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
