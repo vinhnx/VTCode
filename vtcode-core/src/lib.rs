@@ -152,6 +152,7 @@ pub mod prompts;
 pub mod safety;
 pub mod security;
 pub mod marketplace;
+pub mod plugins;
 pub mod skills;
 pub mod telemetry;
 pub mod terminal_setup;

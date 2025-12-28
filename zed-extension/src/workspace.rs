@@ -157,10 +157,34 @@ impl ProjectStructure {
     }
 
     /// Add a file to a specific directory
-    pub fn add_file(&mut self, _path: PathBuf, filename: String) {
+    pub fn add_file(&mut self, path: PathBuf, filename: String) {
         self.total_files += 1;
-        // In a real implementation, this would traverse the tree and add the file
-        self.root.files.push(filename);
+        Self::_add_file_recursive(&mut self.root, &path, filename);
+    }
+
+    /// Recursively traverse the tree to find the target directory and add the file
+    fn _add_file_recursive(node: &mut DirectoryNode, target_path: &PathBuf, filename: String) {
+        // If we've reached the target directory, add the file
+        if node.path == *target_path {
+            node.add_file(filename);
+            return;
+        }
+
+        // If the target path doesn't start with this node's path, it's not a child
+        if !target_path.starts_with(&node.path) {
+            return;
+        }
+
+        // Search children for the target directory
+        for child in &mut node.children {
+            if target_path.starts_with(&child.path) {
+                Self::_add_file_recursive(child, target_path, filename);
+                return;
+            }
+        }
+
+        // If no child directory matches, add file to current node as fallback
+        node.add_file(filename);
     }
 
     /// Get the depth of the structure
