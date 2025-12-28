@@ -175,6 +175,9 @@ async fn run() -> Result<()> {
         Some(Commands::Mcp { command }) => {
             cli::handle_mcp_command(command.clone()).await?;
         }
+        Some(Commands::A2a { command }) => {
+            vtcode_core::cli::a2a::execute_a2a_command(command.clone()).await?;
+        }
         Some(Commands::Models { command }) => {
             vtcode_core::cli::models_commands::handle_models_command(&args, command).await?;
         }

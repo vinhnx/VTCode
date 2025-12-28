@@ -140,7 +140,7 @@ async fn handle_rpc(
 async fn handle_stream(
     State(state): State<A2aServerState>,
     Json(request): Json<JsonRpcRequest>,
-) -> Result<Sse<impl futures::Stream<Item = Result<Event, Infallible>>>, A2aErrorResponse> {
+) -> Result<Sse<Box<dyn futures::Stream<Item = Result<Event, Infallible>> + Send>>, A2aErrorResponse> {
     // Validate request
     if request.jsonrpc != JSONRPC_VERSION {
         return Err(A2aErrorResponse::invalid_request(
@@ -310,7 +310,7 @@ async fn handle_stream(
         });
     });
 
-    Ok(Sse::new(stream).keep_alive(
+    Ok(Sse::new(Box::pin(stream)).keep_alive(
         axum::response::sse::KeepAlive::new()
             .interval(Duration::from_secs(15))
             .text("keep-alive"),
