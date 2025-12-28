@@ -17,7 +17,6 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 // use vtcode_core::utils::transcript;
 
 // use super::super::workspace::{bootstrap_config_files, build_workspace_index};
-use crate::agent::runloop::context::ContextTrimConfig;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::ModelPickerState;
 // use crate::agent::runloop::slash_commands::McpCommandAction;
@@ -59,7 +58,6 @@ pub struct SlashCommandContext<'a> {
     pub context_manager: &'a mut ContextManager,
     pub session_stats: &'a mut SessionStats,
     pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
-    pub trim_config: &'a ContextTrimConfig,
     pub async_mcp_manager: Option<&'a Arc<AsyncMcpManager>>,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub linked_directories: &'a mut Vec<LinkedDirectory>,

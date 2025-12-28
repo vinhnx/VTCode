@@ -110,7 +110,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             tool_result_cache,
             tool_permission_cache,
             approval_recorder,
-            trim_config,
             loaded_skills,
             custom_prompts,
             safety_validator,
@@ -165,7 +164,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 tool_permission_cache: &tool_permission_cache,
                 loaded_skills: &loaded_skills,
                 custom_prompts: &custom_prompts,
-                trim_config: &trim_config,
                 default_placeholder: &mut default_placeholder,
                 follow_up_placeholder: &mut follow_up_placeholder,
             };
@@ -335,7 +333,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     recent_messages,
                     turn_number: progress_turn,
                     token_usage: None,
-                    max_context_tokens: Some(trim_config.max_tokens),
+                    max_context_tokens: None, // Context trim config removed
                     loaded_skills: Some(skill_names),
                 }) {
                     tracing::warn!("Failed to persist session progress: {}", err);

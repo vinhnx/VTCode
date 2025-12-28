@@ -20,7 +20,6 @@ use super::palettes::apply_prompt_style;
 use super::prompts::read_system_prompt;
 use super::state::CtrlCState;
 use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::context::{ContextTrimConfig, load_context_trim_config};
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 use crate::agent::runloop::unified::turn::utils::render_hook_messages;
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
@@ -56,7 +55,6 @@ pub(crate) struct SessionState {
     pub tools: Arc<RwLock<Vec<uni::ToolDefinition>>>,
     /// Cached tool definitions for efficient reuse across turns (HP-3 optimization)
     pub cached_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
-    pub trim_config: ContextTrimConfig,
     pub conversation_history: Vec<uni::Message>,
     pub decision_ledger: Arc<RwLock<DecisionTracker>>,
     pub pruning_ledger: Arc<RwLock<PruningDecisionLedger>>,
@@ -350,8 +348,6 @@ pub(crate) async fn initialize_session(
         Err(e) => warn!("Skill discovery failed: {}", e),
     }
 
-    let trim_config = load_context_trim_config(vt_cfg);
-
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let pruning_ledger = Arc::new(RwLock::new(PruningDecisionLedger::new()));
 
@@ -544,7 +540,6 @@ pub(crate) async fn initialize_session(
         tool_registry,
         tools,
         cached_tools,
-        trim_config,
         conversation_history,
         decision_ledger,
         pruning_ledger,
@@ -588,7 +583,7 @@ pub(crate) async fn initialize_session_ui(
 
     let context_manager = super::context_manager::ContextManager::new(
         session_state.base_system_prompt.clone(),
-        session_state.trim_config,
+        (),
         session_state.loaded_skills.clone(),
     );
 
