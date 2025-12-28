@@ -710,6 +710,24 @@ pub enum Commands {
         command: crate::mcp::cli::McpCommands,
     },
 
+    /// **Agent2Agent (A2A) Protocol** - enable VTCode as an A2A agent or connect to other agents
+    ///
+    /// Features:
+    ///   • Serve VTCode as an A2A agent (requires a2a-server feature)
+    ///   • Discover and query remote A2A agents
+    ///   • Send tasks to other A2A agents
+    ///   • Real-time streaming via Server-Sent Events
+    ///
+    /// Examples:
+    ///   vtcode a2a serve --port 8080
+    ///   vtcode a2a discover https://agent.example.com
+    ///   vtcode a2a send-task https://agent.example.com "Help me refactor this code"
+    #[command(name = "a2a")]
+    A2a {
+        #[command(subcommand)]
+        command: super::super::a2a::cli::A2aCommands,
+    },
+
     /// **Manage models and providers** - configure and switch between LLM providers\n\n**Features:**\n• Support for latest models (DeepSeek, etc.)\n• Provider configuration and testing\n• Model performance comparison\n• API key management\n\n**Examples:**\n  vtcode models list\n  vtcode models set-provider deepseek\n  vtcode models set-model deepseek-reasoner
     Models {
         #[command(subcommand)]

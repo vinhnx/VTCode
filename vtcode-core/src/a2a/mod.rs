@@ -29,6 +29,7 @@ pub mod rpc;
 pub mod client;
 pub mod task_manager;
 pub mod types;
+pub mod cli;
 
 pub mod webhook;
 
