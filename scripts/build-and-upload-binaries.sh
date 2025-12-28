@@ -61,20 +61,25 @@ check_dependencies() {
         exit 1
     fi
 
-    # Check if we're logged in to the expected account and it's active
-    if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
-        print_error "Not logged in to GitHub account: $expected_account"
-        print_info "Run: gh auth login --hostname github.com"
-        exit 1
-    fi
+    # If GITHUB_TOKEN is set, we're in CI or using token auth - skip detailed account checks
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        print_success "GitHub CLI authenticated with GITHUB_TOKEN"
+    else
+        # Check if we're logged in to the expected account and it's active
+        if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
+            print_error "Not logged in to GitHub account: $expected_account"
+            print_info "Run: gh auth login --hostname github.com"
+            exit 1
+        fi
 
-    if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
-        print_error "GitHub account '$expected_account' is not active"
-        print_info "Run: gh auth switch --hostname github.com --user $expected_account"
-        exit 1
-    fi
+        if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
+            print_error "GitHub account '$expected_account' is not active"
+            print_info "Run: gh auth switch --hostname github.com --user $expected_account"
+            exit 1
+        fi
 
-    print_success "GitHub CLI authenticated with correct account: $expected_account"
+        print_success "GitHub CLI authenticated with correct account: $expected_account"
+    fi
 
     # Check if cross is available and should be used
     if command -v cross &> /dev/null; then
