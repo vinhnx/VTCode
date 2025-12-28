@@ -24,7 +24,7 @@ use std::sync::Arc;
 use tracing::{debug, info};
 
 /// Level of detail returned in tool search results.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DetailLevel {
     /// Only tool name (minimal context)
     NameOnly,

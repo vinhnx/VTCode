@@ -151,14 +151,16 @@ impl ProjectStructure {
     }
 
     /// Add a directory to the structure
-    pub fn add_directory(&mut self, _path: PathBuf, _name: String) {
+    pub fn add_directory(&mut self, path: PathBuf, name: String) {
         self.total_directories += 1;
-        // In a real implementation, this would traverse the tree and add the directory
+        // Add the directory to the tree structure by traversing to the parent and adding the child
+        Self::_add_directory_recursive(&mut self.root, &path, name);
     }
 
     /// Add a file to a specific directory
     pub fn add_file(&mut self, path: PathBuf, filename: String) {
         self.total_files += 1;
+        // Add the file to the appropriate directory in the tree structure
         Self::_add_file_recursive(&mut self.root, &path, filename);
     }
 
@@ -185,6 +187,47 @@ impl ProjectStructure {
 
         // If no child directory matches, add file to current node as fallback
         node.add_file(filename);
+    }
+
+    /// Recursively traverse the tree to find the parent directory and add the new directory
+    fn _add_directory_recursive(node: &mut DirectoryNode, target_path: &PathBuf, name: String) {
+        // If this node is the parent of the target directory
+        if let Some(parent_path) = target_path.parent() {
+            if node.path == parent_path {
+                // Create the new directory node and add it as a child
+                let new_dir = DirectoryNode {
+                    name,
+                    path: target_path.clone(),
+                    children: Vec::new(),
+                    files: Vec::new(),
+                };
+                node.add_child(new_dir);
+                return;
+            }
+        }
+
+        // If the target path doesn't start with this node's path, it's not a child
+        if !target_path.starts_with(&node.path) {
+            return;
+        }
+
+        // Search children for the parent directory
+        for child in &mut node.children {
+            if target_path.starts_with(&child.path) {
+                Self::_add_directory_recursive(child, target_path, name);
+                return;
+            }
+        }
+
+        // If we can't find the parent, we need to create intermediate directories
+        // For now, add as a child to the current node as fallback
+        let new_dir = DirectoryNode {
+            name,
+            path: target_path.clone(),
+            children: Vec::new(),
+            files: Vec::new(),
+        };
+        node.add_child(new_dir);
     }
 
     /// Get the depth of the structure

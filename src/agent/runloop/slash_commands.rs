@@ -1229,6 +1229,14 @@ fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>, cust
             }
         }
 
+        // Show information about where custom slash commands can be defined if no custom commands are loaded or if there are none
+        if custom_slash_commands.map_or(true, |cmds| cmds.is_empty()) {
+            renderer.line(MessageStyle::Info, "")?;
+            renderer.line(MessageStyle::Info, "Custom slash commands (project-specific or personal):")?;
+            renderer.line(MessageStyle::Info, "  Custom slash commands can be defined in .vtcode/commands/ (project) or ~/.vtcode/commands/ (personal)")?;
+            renderer.line(MessageStyle::Info, "  Example: Create .vtcode/commands/review.md to use /review command")?;
+        }
+
         // Add information about interactive features
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Interactive mode features:")?;

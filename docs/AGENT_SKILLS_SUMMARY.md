@@ -2,25 +2,25 @@
 
 ## What Was Added
 
-Complete Anthropic Agent Skills integration for VTCode, following the Claude API quickstart guide and best practices.
+Complete Agent Skills integration for VT Code, following the VT Code API quickstart guide and best practices.
 
-### New Skills in `.claude/skills/`
+### New Skills in `.vtcode/skills/`
 
 1. **spreadsheet-generator** (v1.0.0)
 
     - Generate Excel spreadsheets with data, formulas, charts
-    - Integrates with Anthropic's `xlsx` Agent Skill
+    - Integrates with VT Code's `xlsx` Agent Skill
     - Use cases: financial dashboards, data analysis, inventory tracking
 
 2. **doc-generator** (v1.0.0)
 
     - Generate Word documents with formatting, tables, styles
-    - Integrates with Anthropic's `docx` Agent Skill
+    - Integrates with VT Code's `docx` Agent Skill
     - Use cases: proposals, meeting minutes, technical docs
 
 3. **pdf-report-generator** (v1.0.0)
     - Generate PDF documents with charts, styling, professional layouts
-    - Integrates with Anthropic's `pdf` Agent Skill
+    - Integrates with VT Code's `pdf` Agent Skill
     - Use cases: invoices, certificates, financial reports
 
 ### Documentation Files

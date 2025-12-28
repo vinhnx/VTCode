@@ -1031,14 +1031,11 @@ impl LifecycleHookEngine {
 
         let workspace_str = self.inner.workspace.to_string_lossy().into_owned();
         process.env("VT_PROJECT_DIR", &workspace_str);
-        process.env("CLAUDE_PROJECT_DIR", &workspace_str);
         process.env("VT_SESSION_ID", &self.inner.session_id);
-        process.env("CLAUDE_SESSION_ID", &self.inner.session_id);
         process.env("VT_HOOK_EVENT", event_name);
 
         if let Some(transcript_path) = self.current_transcript_path().await {
             process.env("VT_TRANSCRIPT_PATH", &transcript_path);
-            process.env("CLAUDE_TRANSCRIPT_PATH", &transcript_path);
         }
 
         let mut child = process

@@ -9,8 +9,9 @@ use std::time::Duration;
 use tokio::sync::{RwLock, Semaphore};
 use tracing::{error, info, warn};
 
-use super::provider::McpProvider;
-use super::types::{McpProviderConfig, McpToolInfo};
+use super::{McpProvider, McpToolInfo, McpElicitationHandler};
+use crate::config::mcp::{McpProviderConfig, McpAllowListConfig};
+use mcp_types::{InitializeRequestParams, Implementation, ClientCapabilities};
 
 /// MCP connection pool for efficient provider management
 pub struct McpConnectionPool {
@@ -38,10 +39,9 @@ impl McpConnectionPool {
     pub async fn initialize_providers_parallel(
         &self,
         provider_configs: Vec<McpProviderConfig>,
-        elicitation_handler: Option<Arc<dyn super::elicitation::ElicitationHandler>>,
-        initialize_params: super::types::InitializeParams,
-        tool_timeout: Duration,
-        allowlist_snapshot: &std::collections::HashSet<String>,
+        elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+        tool_timeout: Option<Duration>,
+        allowlist_snapshot: &McpAllowListConfig,
     ) -> Result<Vec<(String, Arc<McpProvider>)>, McpPoolError> {
         use futures::future::join_all;
         
@@ -50,14 +50,12 @@ impl McpConnectionPool {
             .into_iter()
             .map(|config| {
                 let elicitation_handler = elicitation_handler.clone();
-                let initialize_params = initialize_params.clone();
                 let allowlist_snapshot = allowlist_snapshot.clone();
                 
                 async move {
                     self.initialize_provider(
                         config,
                         elicitation_handler,
-                        initialize_params,
                         tool_timeout,
                         allowlist_snapshot,
                     )
@@ -95,10 +93,9 @@ impl McpConnectionPool {
     async fn initialize_provider(
         &self,
         config: McpProviderConfig,
-        elicitation_handler: Option<Arc<dyn super::elicitation::ElicitationHandler>>,
-        initialize_params: super::types::InitializeParams,
+        elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
         tool_timeout: Duration,
-        allowlist_snapshot: std::collections::HashSet<String>,
+        allowlist_snapshot: McpAllowListConfig,
     ) -> Result<(String, Arc<McpProvider>), McpPoolError> {
         // Acquire semaphore permit to limit concurrent connections
         let _permit = self.connection_semaphore
@@ -117,19 +114,28 @@ impl McpConnectionPool {
         .map_err(|_| McpPoolError::ConnectionTimeout(config.name.clone()))?
         .map_err(|e| McpPoolError::ConnectionError(config.name.clone(), e.to_string()))?;
 
-        // Initialize the provider
+        // Initialize the provider with proper parameters
         let provider_startup_timeout = self.resolve_startup_timeout(&config);
+        let initialize_params = build_pool_initialize_params(&provider);
+        let tool_timeout_opt = Some(tool_timeout);
         
-        tokio::time::timeout(
-            provider_startup_timeout,
-            provider.initialize(initialize_params, provider_startup_timeout, tool_timeout, &allowlist_snapshot)
-        )
-        .await
-        .map_err(|_| McpPoolError::InitializationTimeout(config.name.clone()))?
-        .map_err(|e| McpPoolError::InitializationError(config.name.clone(), e.to_string()))?;
+        if let Err(err) = provider
+            .initialize(
+                initialize_params,
+                provider_startup_timeout,
+                tool_timeout_opt,
+                &allowlist_snapshot,
+            )
+            .await
+        {
+            return Err(McpPoolError::InitializationError(
+                config.name.clone(),
+                err.to_string(),
+            ));
+        }
 
         // Refresh tools
-        if let Err(err) = provider.refresh_tools(&allowlist_snapshot, tool_timeout).await {
+        if let Err(err) = provider.refresh_tools(&allowlist_snapshot, tool_timeout_opt).await {
             warn!("Failed to fetch tools for provider '{}': {}", config.name, err);
         }
 
@@ -186,10 +192,9 @@ impl McpConnectionPool {
     }
 
     /// Resolve startup timeout based on provider configuration
-    fn resolve_startup_timeout(&self, config: &McpProviderConfig) -> Duration {
-        config.startup_timeout
-            .map(Duration::from_secs)
-            .unwrap_or(Duration::from_secs(30))
+    fn resolve_startup_timeout(&self, config: &McpProviderConfig) -> Option<Duration> {
+        config.startup_timeout_ms
+            .map(Duration::from_millis)
     }
 }
 
@@ -206,7 +211,7 @@ pub struct PooledMcpManager {
     /// Connection pool for providers
     pool: Arc<McpConnectionPool>,
     /// Tool discovery cache
-    tool_cache: Arc<super::tool_discovery::ToolDiscoveryCache>,
+    tool_cache: Arc<super::tool_discovery_cache::ToolDiscoveryCache>,
 }
 
 impl PooledMcpManager {
@@ -217,7 +222,7 @@ impl PooledMcpManager {
     ) -> Self {
         Self {
             pool: Arc::new(McpConnectionPool::new(max_concurrent_connections, connection_timeout_seconds)),
-            tool_cache: Arc::new(super::tool_discovery::ToolDiscoveryCache::new(tool_cache_capacity)),
+            tool_cache: Arc::new(super::tool_discovery_cache::ToolDiscoveryCache::new(tool_cache_capacity)),
         }
     }
 
@@ -225,17 +230,15 @@ impl PooledMcpManager {
     pub async fn initialize_providers(
         &self,
         provider_configs: Vec<McpProviderConfig>,
-        elicitation_handler: Option<Arc<dyn super::elicitation::ElicitationHandler>>,
-        initialize_params: super::types::InitializeParams,
-        tool_timeout: Duration,
-        allowlist_snapshot: &std::collections::HashSet<String>,
+        elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+        tool_timeout: Option<Duration>,
+        allowlist_snapshot: &McpAllowListConfig,
     ) -> Result<Vec<(String, Arc<McpProvider>)>, McpPoolError> {
         // Initialize providers in parallel
         let providers = self.pool
             .initialize_providers_parallel(
                 provider_configs,
                 elicitation_handler,
-                initialize_params,
                 tool_timeout,
                 allowlist_snapshot,
             )
@@ -256,28 +259,34 @@ impl PooledMcpManager {
         provider_name: &str,
         tool_name: &str,
         arguments: serde_json::Value,
+        allowlist: &crate::config::mcp::McpAllowListConfig,
+        tool_timeout: Option<std::time::Duration>,
     ) -> Result<serde_json::Value, McpPoolError> {
         let provider = self.pool.get_provider(provider_name).await
             .ok_or_else(|| McpPoolError::ProviderNotFound(provider_name.to_string()))?;
 
-        // Check tool cache first
-        let cache_key = format!("{}:{}", provider_name, tool_name);
-        if let Some(cached_result) = self.tool_cache.get_cached_result(&cache_key).await {
-            return Ok(cached_result);
+        // Check tool cache first for read-only tools
+        if self.is_read_only_tool(tool_name) {
+            let cache_key = format!("{}:{}", provider_name, tool_name);
+            if let Some(cached_result) = self.tool_cache.get_cached_result(&cache_key).await {
+                return Ok(cached_result);
+            }
         }
 
-        // Execute the tool
+        // Execute the tool with correct signature
         let result = provider
-            .call_tool(tool_name, arguments)
+            .call_tool(tool_name, &serde_json::to_value(&arguments).unwrap_or(serde_json::Value::Object(Default::default())), tool_timeout, allowlist)
             .await
             .map_err(|e| McpPoolError::ToolExecutionError(provider_name.to_string(), e.to_string()))?;
 
         // Cache the result for read-only tools
         if self.is_read_only_tool(tool_name) {
-            self.tool_cache.cache_result(cache_key, result.clone()).await;
+            let cache_key = format!("{}:{}", provider_name, tool_name);
+            let result_value = serde_json::to_value(&result).unwrap_or(serde_json::Value::Null);
+            self.tool_cache.cache_result(cache_key, result_value).await;
         }
 
-        Ok(result)
+        Ok(serde_json::to_value(&result).unwrap_or(serde_json::Value::Null))
     }
 
     /// Check if a tool is read-only (safe to cache)
@@ -311,7 +320,21 @@ impl PooledMcpManager {
 #[derive(Debug, Clone)]
 pub struct PooledMcpStats {
     pub connection_pool: ConnectionPoolStats,
-    pub tool_cache: super::tool_discovery::ToolCacheStats,
+    pub tool_cache: super::tool_discovery_cache::ToolCacheStats,
+}
+
+/// Build initialize params for an MCP provider
+fn build_pool_initialize_params(provider: &McpProvider) -> InitializeRequestParams {
+    InitializeRequestParams {
+        capabilities: ClientCapabilities {
+            ..Default::default()
+        },
+        client_info: Implementation {
+            name: "vtcode".to_owned(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+        protocol_version: provider.protocol_version.clone(),
+    }
 }
 
 /// MCP connection pool errors
@@ -354,6 +377,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_connection_pool_semaphore_limits() {
+        let pool = McpConnectionPool::new(3, 30);
+        
+        // Acquire 3 permits
+        let permit1 = pool.connection_semaphore.acquire().await.unwrap();
+        let permit2 = pool.connection_semaphore.acquire().await.unwrap();
+        let permit3 = pool.connection_semaphore.acquire().await.unwrap();
+        
+        let stats = pool.stats().await;
+        assert_eq!(stats.available_permits, 0);
+        
+        // Try to acquire another (would block if not in test)
+        drop(permit1);
+        let _permit4 = pool.connection_semaphore.acquire().await.unwrap();
+        
+        let stats = pool.stats().await;
+        assert_eq!(stats.available_permits, 0);
+    }
+
+    #[tokio::test]
     async fn test_pooled_manager_creation() {
         let manager = PooledMcpManager::new(10, 30, 100);
         let stats = manager.stats().await;
@@ -368,7 +411,55 @@ mod tests {
         
         assert!(manager.is_read_only_tool("read_file"));
         assert!(manager.is_read_only_tool("search_files"));
+        assert!(manager.is_read_only_tool("get_system_info"));
+        assert!(manager.is_read_only_tool("get_file_info"));
+        
         assert!(!manager.is_read_only_tool("write_file"));
         assert!(!manager.is_read_only_tool("edit_file"));
+        assert!(!manager.is_read_only_tool("execute_command"));
+        assert!(!manager.is_read_only_tool("delete_file"));
+    }
+
+    #[test]
+    fn test_connection_pool_error_display() {
+        let error = McpPoolError::ConnectionTimeout("test_provider".to_string());
+        assert!(error.to_string().contains("test_provider"));
+        
+        let error = McpPoolError::InitializationError(
+            "auth".to_string(),
+            "invalid credentials".to_string()
+        );
+        assert!(error.to_string().contains("auth"));
+        assert!(error.to_string().contains("invalid credentials"));
+    }
+
+    #[tokio::test]
+    async fn test_pool_provider_not_found() {
+        let pool = McpConnectionPool::new(5, 30);
+        let provider = pool.get_provider("nonexistent").await;
+        assert!(provider.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_pool_has_provider() {
+        let pool = McpConnectionPool::new(5, 30);
+        assert!(!pool.has_provider("test").await);
+    }
+
+    #[tokio::test]
+    async fn test_pool_get_all_providers_empty() {
+        let pool = McpConnectionPool::new(5, 30);
+        let providers = pool.get_all_providers().await;
+        assert_eq!(providers.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_pool_stats() {
+        let pool = McpConnectionPool::new(7, 60);
+        let stats = pool.stats().await;
+        
+        assert_eq!(stats.max_connections, 7);
+        assert_eq!(stats.available_permits, 7);
+        assert_eq!(stats.active_connections, 0);
     }
 }

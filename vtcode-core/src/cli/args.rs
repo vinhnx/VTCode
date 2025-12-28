@@ -254,7 +254,7 @@ pub struct Cli {
 
     /// **Print response without launching the interactive TUI**
     ///
-    /// Equivalent to `claude -p` style single prompt mode.
+    /// Equivalent to `vtcode -p` style single prompt mode.
     ///
     /// Behaviour:
     ///   • Provide a prompt inline: `vtcode -p "Explain this function"`
@@ -848,13 +848,13 @@ pub enum Commands {
         command: TokenCommands,
     },
 
-    /// **Manage Anthropic Agent Skills**
+    /// **Manage Agent Skills**
     ///
-    /// Skills extend Claude's functionality with specialized capabilities.
+    /// Skills extend VT Code's functionality with specialized capabilities.
     /// Discover, load, and manage skills from the local filesystem.
     ///
     /// Features:
-    ///   • Discover skills from ~/.vtcode/skills, .claude/skills, ./skills/
+    ///   • Discover skills from ~/.vtcode/skills, ./skills/
     ///   • Load skills for use in agent sessions
     ///   • Create skill templates for custom skills
     ///   • Validate SKILL.md manifest files
@@ -886,9 +886,9 @@ pub enum Commands {
     ///   • Update marketplace listings
     ///
     /// Examples:
-    ///   vtcode marketplace add anthropics/claude-code    # Add a marketplace
+    ///   vtcode marketplace add vinhnx/vtcode-plugins    # Add a marketplace
     ///   vtcode marketplace list                        # List configured marketplaces
-    ///   vtcode plugin install commit-commands @claude-code  # Install a plugin
+    ///   vtcode plugin install commit-commands @vtcode  # Install a plugin
     ///   vtcode plugin list                             # List installed plugins
     #[command(subcommand)]
     Marketplace(MarketplaceSubcommand),
@@ -898,7 +898,7 @@ pub enum Commands {
     /// Install, uninstall, and manage plugins that extend VTCode's functionality.
     ///
     /// Examples:
-    ///   vtcode plugin install commit-commands @claude-code  # Install a plugin
+    ///   vtcode plugin install commit-commands @vtcode  # Install a plugin
     ///   vtcode plugin list                             # List installed plugins
     ///   vtcode plugin uninstall commit-commands        # Uninstall a plugin
     #[command(subcommand)]
@@ -973,6 +973,13 @@ pub enum PluginSubcommand {
     Disable {
         /// Plugin name to disable
         name: String,
+    },
+
+    /// Validate a plugin manifest
+    #[command(name = "validate")]
+    Validate {
+        /// Path to plugin directory to validate
+        path: std::path::PathBuf,
     },
 }
 

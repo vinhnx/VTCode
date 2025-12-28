@@ -17,16 +17,17 @@ use crate::config::mcp::{
 };
 
 pub mod cli;
-// TODO: connection_pool module disabled - needs McpProvider and elicitation types
-// pub mod connection_pool;
+pub mod connection_pool;
 pub mod enhanced_config;
 pub mod errors;
 pub mod rmcp_transport;
 pub mod schema;
 pub mod tool_discovery;
-// TODO: tool_discovery_cache module has incompatible types - disabled for now
-// pub mod tool_discovery_cache;
+pub mod tool_discovery_cache;
 
+pub use connection_pool::{
+    McpConnectionPool, PooledMcpManager, ConnectionPoolStats, PooledMcpStats, McpPoolError,
+};
 pub use errors::{
     ErrorCode, McpResult, configuration_error, initialization_timeout, provider_not_found,
     provider_unavailable, schema_invalid, tool_invocation_failed, tool_not_found,

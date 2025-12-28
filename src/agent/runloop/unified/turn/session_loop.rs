@@ -111,6 +111,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             approval_recorder,
             loaded_skills,
             custom_prompts,
+            custom_slash_commands,
             safety_validator,
             ..
         } = session_state;
@@ -162,6 +163,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 tool_permission_cache: &tool_permission_cache,
                 loaded_skills: &loaded_skills,
                 custom_prompts: &custom_prompts,
+                custom_slash_commands: &custom_slash_commands,
                 default_placeholder: &mut default_placeholder,
                 follow_up_placeholder: &mut follow_up_placeholder,
                 checkpoint_manager: checkpoint_manager.as_ref(),

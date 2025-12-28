@@ -109,7 +109,7 @@ pub struct AgentConfig {
 
     /// Small/lightweight model configuration for efficient operations
     /// Used for tasks like large file reads, parsing, git history, conversation summarization
-    /// Typically 70-80% cheaper than main model; ~50% of Claude Code's calls use this tier
+    /// Typically 70-80% cheaper than main model; ~50% of VT Code's calls use this tier
     #[serde(default)]
     pub small_model: AgentSmallModelConfig,
 
@@ -135,6 +135,10 @@ pub struct AgentConfig {
     /// Custom prompt configuration for slash command shortcuts
     #[serde(default)]
     pub custom_prompts: AgentCustomPromptsConfig,
+
+    /// Configuration for custom slash commands
+    #[serde(default)]
+    pub custom_slash_commands: AgentCustomSlashCommandsConfig,
 
     /// Provider-specific API keys captured from interactive configuration flows
     #[serde(default)]
@@ -200,6 +204,7 @@ impl Default for AgentConfig {
             instruction_max_bytes: default_instruction_max_bytes(),
             instruction_files: Vec::new(),
             custom_prompts: AgentCustomPromptsConfig::default(),
+            custom_slash_commands: AgentCustomSlashCommandsConfig::default(),
             custom_api_keys: BTreeMap::new(),
             checkpointing: AgentCheckpointingConfig::default(),
             vibe_coding: AgentVibeCodingConfig::default(),
@@ -369,6 +374,40 @@ impl Default for AgentCustomPromptsConfig {
             max_file_size_kb: default_custom_prompts_max_file_size_kb(),
         }
     }
+}
+
+/// Configuration for custom slash commands
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct AgentCustomSlashCommandsConfig {
+    /// Master switch for custom slash command support
+    #[serde(default = "default_custom_slash_commands_enabled")]
+    pub enabled: bool,
+
+    /// Primary directory for slash command markdown files
+    #[serde(default = "default_custom_slash_commands_directory")]
+    pub directory: String,
+
+    /// Additional directories to search for slash commands
+    #[serde(default)]
+    pub extra_directories: Vec<String>,
+
+    /// Maximum file size (KB) to load for a single slash command
+    #[serde(default = "default_custom_slash_commands_max_file_size_kb")]
+    pub max_file_size_kb: usize,
+}
+
+#[inline]
+const fn default_custom_slash_commands_enabled() -> bool {
+    true
+}
+
+fn default_custom_slash_commands_directory() -> String {
+    crate::constants::prompts::DEFAULT_CUSTOM_SLASH_COMMANDS_DIR.into()
+}
+
+const fn default_custom_slash_commands_max_file_size_kb() -> usize {
+    64 // 64KB default, same as prompts
 }
 
 #[inline]
@@ -565,7 +604,7 @@ fn default_recommended_actions() -> Vec<String> {
 
 /// Small/lightweight model configuration for efficient operations
 ///
-/// Following Claude Code's pattern, use a smaller model (e.g., Haiku, GPT-4 Mini) for 50%+ of calls:
+/// Following VT Code's pattern, use a smaller model (e.g., Haiku, GPT-4 Mini) for 50%+ of calls:
 /// - Large file reads and parsing (>50KB)
 /// - Web page summarization and analysis
 /// - Git history and commit message processing
@@ -616,7 +655,7 @@ impl Default for AgentSmallModelConfig {
 
 #[inline]
 const fn default_small_model_enabled() -> bool {
-    true // Enable by default following Claude Code pattern
+    true // Enable by default following VT Code pattern
 }
 
 #[inline]

@@ -67,6 +67,7 @@ pub(crate) struct SessionState {
     pub search_metrics: Arc<RwLock<SearchMetrics>>,
 
     pub custom_prompts: CustomPromptRegistry,
+    pub custom_slash_commands: vtcode_core::prompts::CustomSlashCommandRegistry,
 
     /// Skills loaded in current session (name -> Skill mapping)
     pub loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
@@ -510,6 +511,16 @@ pub(crate) async fn initialize_session(
         CustomPromptRegistry::default()
     });
 
+    let custom_slash_commands = vtcode_core::prompts::CustomSlashCommandRegistry::load(
+        vt_cfg.map(|cfg| &cfg.agent.custom_slash_commands),
+        &config.workspace,
+    )
+    .await
+    .unwrap_or_else(|err| {
+        warn!("failed to load custom slash commands: {err:#}");
+        vtcode_core::prompts::CustomSlashCommandRegistry::default()
+    });
+
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128))); // 128-entry cache
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new())); // Session-scoped
     let search_metrics = Arc::new(RwLock::new(SearchMetrics::new())); // Track search performance
@@ -547,6 +558,7 @@ pub(crate) async fn initialize_session(
         tool_permission_cache,
         search_metrics,
         custom_prompts,
+        custom_slash_commands,
         loaded_skills: active_skills_map,
         approval_recorder,
         safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),

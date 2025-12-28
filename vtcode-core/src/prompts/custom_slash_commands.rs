@@ -1,11 +1,9 @@
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
-use shell_words::split as shell_split;
 use std::collections::{BTreeMap, BTreeSet};
-use std::env;
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use tracing::{error, warn};
+use tracing::warn;
 
 /// Configuration for custom slash commands
 #[derive(Debug, Clone, Default)]
@@ -37,8 +35,10 @@ pub struct CustomSlashCommandRegistry {
 
 impl CustomSlashCommandRegistry {
     pub async fn load(config: Option<&CustomSlashCommandConfig>, workspace: &Path) -> Result<Self> {
-        let settings = config.cloned().unwrap_or_else(|| CustomSlashCommandConfig::default());
-        
+        let settings = config
+            .cloned()
+            .unwrap_or_else(|| CustomSlashCommandConfig::default());
+
         if !settings.enabled {
             return Ok(Self {
                 enabled: false,
@@ -55,13 +55,13 @@ impl CustomSlashCommandRegistry {
         };
 
         let mut commands = BTreeMap::new();
-        
+
         // Load commands from all directories
         for directory in &directories {
             if !fs::try_exists(directory).await.unwrap_or(false) {
                 continue;
             }
-            
+
             if !directory.is_dir() {
                 warn!(
                     "custom slash command path `{}` is not a directory - skipping",
@@ -184,9 +184,9 @@ impl CustomSlashCommand {
             return Ok(None);
         }
 
-        let metadata = fs::metadata(path)
-            .await
-            .with_context(|| format!("failed to read metadata for {}", path.display()))?;
+        let metadata = fs::metadata(path).await.map_err(|e| {
+            anyhow::anyhow!("failed to read metadata for {}: {}", path.display(), e)
+        })?;
         if metadata.len() as usize > max_bytes {
             warn!(
                 "custom slash command `{}` exceeds max_file_size_kb ({:.1} KB) - skipping",
@@ -196,17 +196,22 @@ impl CustomSlashCommand {
             return Ok(None);
         }
 
-        let contents = fs::read_to_string(path)
-            .await
-            .with_context(|| format!("failed to read custom slash command from {}", path.display()))?;
+        let contents = fs::read_to_string(path).await.map_err(|e| {
+            anyhow::anyhow!(
+                "failed to read custom slash command from {}: {}",
+                path.display(),
+                e
+            )
+        })?;
 
         Self::from_contents(stem, path, &contents)
     }
 
     fn from_contents(name: &str, path: &Path, contents: &str) -> Result<Option<Self>> {
-        let (frontmatter, body) = split_frontmatter(contents)
-            .with_context(|| format!("failed to parse frontmatter in {}", path.display()))?;
-        
+        let (frontmatter, body) = split_frontmatter(contents).map_err(|e| {
+            anyhow::anyhow!("failed to parse frontmatter in {}: {}", path.display(), e)
+        })?;
+
         if body.trim().is_empty() {
             warn!(
                 "custom slash command `{}` has no content after frontmatter; skipping",
@@ -290,23 +295,100 @@ impl CustomSlashCommand {
 
     /// Run a bash command and return its output
     fn run_bash_command(&self, command: &str) -> Result<String> {
-        // For security, we'll use a safe execution approach
-        // In a real implementation, you'd want to validate the command more thoroughly
+        // Comprehensive command validation for security
         use std::process::Command;
+
+        self.validate_command(command)?;
 
         let output = Command::new("sh")
             .arg("-c")
             .arg(command)
             .output()
-            .with_context(|| format!("Failed to execute command: {}", command))?;
+            .map_err(|e| anyhow::anyhow!("Failed to execute command: {}: {}", command, e))?;
 
-        let stdout = String::from_utf8(output.stdout)?;
-        let stderr = String::from_utf8(output.stderr)?;
+        let stdout = String::from_utf8(output.stdout)
+            .map_err(|e| anyhow::anyhow!("Failed to parse stdout: {}", e))?;
+        let stderr = String::from_utf8(output.stderr)
+            .map_err(|e| anyhow::anyhow!("Failed to parse stderr: {}", e))?;
 
         // Combine stdout and stderr, trimming whitespace
         let result = format!("{}{}", stdout, stderr).trim().to_string();
 
         Ok(result)
+    }
+
+    /// Validate a command for security risks
+    fn validate_command(&self, command: &str) -> Result<()> {
+        use regex::Regex;
+
+        // Block absolutely forbidden commands that cannot be used in any context
+        let forbidden_commands = [
+            ("dd", "Low-level disk writing"),
+            ("mkfs", "Filesystem creation"),
+            ("fdisk", "Disk partitioning"),
+            ("parted", "Partition modification"),
+            ("mount", "Filesystem mounting"),
+            ("umount", "Filesystem unmounting"),
+            ("rm", "File deletion"),
+            ("mv", "File moving"),
+            ("cp", "File copying"),
+            ("chmod", "Permission modification"),
+            ("chown", "Ownership modification"),
+        ];
+
+        let cmd_trimmed = command.trim_start();
+        for (forbidden, reason) in &forbidden_commands {
+            // Check if command starts with the forbidden command followed by space or end
+            if cmd_trimmed.starts_with(forbidden) {
+                let len = forbidden.len();
+                if cmd_trimmed.len() == len
+                    || !cmd_trimmed[len..]
+                        .chars()
+                        .next()
+                        .unwrap_or(' ')
+                        .is_alphanumeric()
+                {
+                    return Err(anyhow::anyhow!(
+                        "Command execution forbidden for safety: {} ({})",
+                        forbidden,
+                        reason
+                    ));
+                }
+            }
+        }
+
+        // Block access to sensitive system directories
+        let sensitive_paths = [
+            "/etc/",
+            "/proc/",
+            "/sys/",
+            "/dev/",
+            "/boot/",
+            "/root/",
+            "/var/log/",
+        ];
+        for path in &sensitive_paths {
+            if command.contains(path) {
+                return Err(anyhow::anyhow!(
+                    "Command access to sensitive path forbidden: {}",
+                    path
+                ));
+            }
+        }
+
+        // Block path traversal attempts
+        if command.contains("..") {
+            return Err(anyhow::anyhow!("Path traversal sequences not allowed"));
+        }
+
+        // Block redirection to special files
+        if let Ok(redirect_re) = Regex::new(r"[><]\s*(?:/dev/|/proc/|/sys/)") {
+            if redirect_re.is_match(command) {
+                return Err(anyhow::anyhow!("Redirection to system files not allowed"));
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -318,7 +400,11 @@ struct CustomSlashCommandFrontmatter {
     argument_hint: Option<String>,
     #[serde(default, alias = "allowed-tools", alias = "allowed_tools")]
     allowed_tools: Option<Vec<String>>,
-    #[serde(default, alias = "disable-model-invocation", alias = "disable_model_invocation")]
+    #[serde(
+        default,
+        alias = "disable-model-invocation",
+        alias = "disable_model_invocation"
+    )]
     disable_model_invocation: bool,
     #[serde(default, alias = "model")]
     model: Option<String>,
@@ -367,7 +453,7 @@ fn resolve_directories(config: &CustomSlashCommandConfig, workspace: &Path) -> V
 
     // Add primary directory
     resolved.insert(resolve_directory(&config.directory, workspace));
-    
+
     // Add extra directories
     for extra in &config.extra_directories {
         resolved.insert(resolve_directory(extra, workspace));
@@ -433,7 +519,7 @@ mod tests {
         let registry = CustomSlashCommandRegistry::load(Some(&cfg), temp.path())
             .await
             .expect("load registry");
-        
+
         assert!(registry.enabled());
         assert!(!registry.is_empty());
         let command = registry.get("review").unwrap();
@@ -449,18 +535,20 @@ mod tests {
         fs::create_dir_all(&commands_dir).await.unwrap();
         fs::write(
             commands_dir.join("test.md"),
-            "---\ndescription: Test command\n---\nProcess $1 and $2 with $ARGUMENTS"
-        ).await.unwrap();
+            "---\ndescription: Test command\n---\nProcess $1 and $2 with $ARGUMENTS",
+        )
+        .await
+        .unwrap();
 
         let mut cfg = CustomSlashCommandConfig::default();
         cfg.directory = commands_dir.to_string_lossy().into_owned();
         let registry = CustomSlashCommandRegistry::load(Some(&cfg), temp.path())
             .await
             .expect("load registry");
-        
+
         let command = registry.get("test").unwrap();
         let expanded = command.expand_content("file1.txt file2.txt");
-        
+
         assert!(expanded.contains("Process file1.txt and file2.txt"));
         assert!(expanded.contains("file1.txt file2.txt"));
     }

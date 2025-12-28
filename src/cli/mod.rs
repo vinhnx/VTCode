@@ -100,63 +100,142 @@ pub async fn handle_marketplace_update(id: Option<String>) -> Result<()> {
 }
 
 pub async fn handle_plugin_install(name: String, marketplace: Option<String>) -> Result<()> {
-    println!("Installing plugin: {} from marketplace: {:?}", name, marketplace);
-    
-    // In a full implementation, this would:
-    // 1. Find the plugin in the specified marketplace (or search all if none specified)
-    // 2. Download the plugin
-    // 3. Verify the plugin integrity and trust level
-    // 4. Install the plugin to the appropriate location
-    // 5. Update the plugin configuration
-    
-    println!("Plugin install functionality would be implemented here");
+    use vtcode_core::plugins::{PluginManager, PluginLoader, PluginSource};
+    use vtcode_core::config::{PluginRuntimeConfig, PluginTrustLevel};
+
+    // Get the plugin directory from config
+    let plugins_dir = vtcode_core::config::defaults::get_data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("./.vtcode/plugins"));
+
+    // Create a basic plugin runtime config
+    let config = PluginRuntimeConfig::default();
+
+    // Create the plugin manager
+    let manager = PluginManager::new(config, plugins_dir)?;
+
+    // Determine the source based on marketplace
+    let source = if let Some(marketplace_id) = marketplace {
+        PluginSource::Marketplace(format!("{}/{}", marketplace_id, name))
+    } else {
+        // If no marketplace specified, assume it's a local path or Git URL
+        if name.starts_with("http") || name.starts_with("git@") {
+            PluginSource::Git(name)
+        } else if std::path::Path::new(&name).exists() {
+            PluginSource::Local(std::path::PathBuf::from(name))
+        } else {
+            // Assume it's a marketplace plugin without explicit marketplace
+            PluginSource::Marketplace(name)
+        }
+    };
+
+    // Install the plugin
+    manager.install_plugin(source, Some(name.clone())).await
+        .map_err(|e| anyhow::anyhow!("Failed to install plugin {}: {}", name, e))?;
+
+    println!("Successfully installed plugin: {}", name);
     Ok(())
 }
 
 pub async fn handle_plugin_list() -> Result<()> {
-    println!("Listing installed plugins...");
-    
-    // In a full implementation, this would:
-    // 1. Read the installed plugins from configuration
-    // 2. Show their status (enabled/disabled)
-    // 3. Show their source marketplace
-    
-    println!("Plugin list functionality would be implemented here");
+    use vtcode_core::plugins::PluginManager;
+    use vtcode_core::config::PluginRuntimeConfig;
+
+    // Get the plugin directory from config
+    let plugins_dir = vtcode_core::config::defaults::get_data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("./.vtcode/plugins"));
+
+    // Create a basic plugin runtime config
+    let config = PluginRuntimeConfig::default();
+
+    // Create the plugin manager
+    let manager = PluginManager::new(config, plugins_dir)?;
+
+    // List installed plugins
+    let installed_plugins = manager.list_installed_plugins().await
+        .map_err(|e| anyhow::anyhow!("Failed to list installed plugins: {}", e))?;
+
+    if installed_plugins.is_empty() {
+        println!("No plugins installed.");
+    } else {
+        println!("Installed plugins:");
+        for plugin in installed_plugins {
+            let is_enabled = manager.is_plugin_enabled(&plugin).await;
+            let status = if is_enabled { "enabled" } else { "disabled" };
+            println!("  - {} ({})", plugin, status);
+        }
+    }
     Ok(())
 }
 
 pub async fn handle_plugin_uninstall(name: String) -> Result<()> {
-    println!("Uninstalling plugin: {}", name);
-    
-    // In a full implementation, this would:
-    // 1. Remove the plugin files
-    // 2. Update the plugin configuration
-    // 3. Potentially clean up dependencies
-    
-    println!("Plugin uninstall functionality would be implemented here");
+    use vtcode_core::plugins::PluginManager;
+    use vtcode_core::config::PluginRuntimeConfig;
+
+    // Get the plugin directory from config
+    let plugins_dir = vtcode_core::config::defaults::get_data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("./.vtcode/plugins"));
+
+    // Create a basic plugin runtime config
+    let config = PluginRuntimeConfig::default();
+
+    // Create the plugin manager
+    let manager = PluginManager::new(config, plugins_dir)?;
+
+    // Uninstall the plugin
+    manager.uninstall_plugin(&name).await
+        .map_err(|e| anyhow::anyhow!("Failed to uninstall plugin {}: {}", name, e))?;
+
+    println!("Successfully uninstalled plugin: {}", name);
     Ok(())
 }
 
 pub async fn handle_plugin_enable(name: String) -> Result<()> {
-    println!("Enabling plugin: {}", name);
-    
-    // In a full implementation, this would:
-    // 1. Update the plugin's enabled status in configuration
-    // 2. Potentially reload the plugin if VTCode is running
-    
-    println!("Plugin enable functionality would be implemented here");
+    use vtcode_core::plugins::PluginManager;
+    use vtcode_core::config::PluginRuntimeConfig;
+
+    // Get the plugin directory from config
+    let plugins_dir = vtcode_core::config::defaults::get_data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("./.vtcode/plugins"));
+
+    // Create a basic plugin runtime config
+    let config = PluginRuntimeConfig::default();
+
+    // Create the plugin manager
+    let manager = PluginManager::new(config, plugins_dir)?;
+
+    // Enable the plugin
+    manager.enable_plugin(&name).await
+        .map_err(|e| anyhow::anyhow!("Failed to enable plugin {}: {}", name, e))?;
+
+    println!("Successfully enabled plugin: {}", name);
     Ok(())
 }
 
 pub async fn handle_plugin_disable(name: String) -> Result<()> {
-    println!("Disabling plugin: {}", name);
-    
-    // In a full implementation, this would:
-    // 1. Update the plugin's enabled status in configuration
-    // 2. Potentially unload the plugin if VTCode is running
-    
-    println!("Plugin disable functionality would be implemented here");
+    use vtcode_core::plugins::PluginManager;
+    use vtcode_core::config::PluginRuntimeConfig;
+
+    // Get the plugin directory from config
+    let plugins_dir = vtcode_core::config::defaults::get_data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("./.vtcode/plugins"));
+
+    // Create a basic plugin runtime config
+    let config = PluginRuntimeConfig::default();
+
+    // Create the plugin manager
+    let manager = PluginManager::new(config, plugins_dir)?;
+
+    // Disable the plugin
+    manager.disable_plugin(&name).await
+        .map_err(|e| anyhow::anyhow!("Failed to disable plugin {}: {}", name, e))?;
+
+    println!("Successfully disabled plugin: {}", name);
     Ok(())
+}
+
+// Plugin validation command
+pub async fn handle_plugin_validate(path: &std::path::Path) -> Result<()> {
+    vtcode_core::plugins::handle_plugin_validate(path).await
 }
 
 // For the other functions, we'll use proper implementations that match the expected signatures

@@ -273,9 +273,8 @@ mod tests {
     use tree_sitter::Language;
 
     fn create_test_language() -> Language {
-        // This would normally come from the language-specific modules
-        // For testing, we'll create a mock or use a simple language
-        unimplemented!("Test language setup required")
+        // Use Rust as the test language (always available)
+        tree_sitter_rust::language()
     }
 
     #[test]

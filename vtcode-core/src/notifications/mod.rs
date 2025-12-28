@@ -262,11 +262,30 @@ impl NotificationManager {
         notify_attention(true, Some(message));
     }
 
-    /// Send a rich notification (currently just logs it, but can be extended)
+    /// Send a rich notification (desktop notifications when available)
     async fn send_rich_notification(&self, message: &str) {
-        // In a real implementation, this could send desktop notifications
-        // using a crate like `notify-rust` or similar
-        tracing::info!("Rich notification: {}", message);
+        // Log the notification for terminal output
+        tracing::info!("Notification: {}", message);
+
+        // Attempt to send a desktop notification if the notify-rust feature is available
+        #[cfg(feature = "desktop-notifications")]
+        {
+            use std::time::Duration;
+            match notify_rust::Notification::new()
+                .summary("VT Code")
+                .body(message)
+                .icon("dialog-information")
+                .timeout(Duration::from_secs(5)) // 5 seconds
+                .show()
+            {
+                Ok(notification) => {
+                    tracing::debug!("Desktop notification sent: {:?}", notification);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to send desktop notification: {}", e);
+                }
+            }
+        }
     }
 
     /// Update the notification configuration

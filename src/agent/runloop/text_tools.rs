@@ -1302,10 +1302,10 @@ mod tests {
 
     #[test]
     fn test_detect_textual_tool_call_parses_python_style_arguments() {
-        let message = "call\nprint(default_api.read_file(path='CLAUDE.md'))";
+        let message = "call\nprint(default_api.read_file(path='AGENTS.md'))";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
         assert_eq!(name, "read_file");
-        assert_eq!(args, serde_json::json!({ "path": "CLAUDE.md" }));
+        assert_eq!(args, serde_json::json!({ "path": "AGENTS.md" }));
     }
 
     #[test]

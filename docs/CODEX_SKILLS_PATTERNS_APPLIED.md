@@ -2,7 +2,7 @@
 
 ## Overview
 
-Applied **OpenAI Codex's proven skills patterns** to VT Code, achieving better context efficiency and progressive disclosure while maintaining 100% Anthropic specification compliance.
+Applied **OpenAI Codex's proven skills patterns** to VT Code, achieving better context efficiency and progressive disclosure while maintaining 100% specification compliance.
 
 ## Key Patterns from Codex
 
@@ -444,7 +444,7 @@ Agent:
 Created comprehensive guides:
 
 1. [SKILL_AUTHORING_GUIDE.md](SKILL_AUTHORING_GUIDE.md) - Complete authoring guide
-2. [ANTHROPIC_SKILL_CREATOR_COMPLIANCE.md](ANTHROPIC_SKILL_CREATOR_COMPLIANCE.md) - Spec compliance
+2. [SKILL_CREATOR_COMPLIANCE.md](SKILL_CREATOR_COMPLIANCE.md) - Spec compliance
 3. [SKILL_AUTHORING_ENHANCED_REVIEW.md](SKILL_AUTHORING_ENHANCED_REVIEW.md) - Implementation review
 4. **This document** - Codex patterns application
 
@@ -457,7 +457,7 @@ Created comprehensive guides:
 1. **95% token savings** with lean rendering
 2. **Progressive disclosure** - Load only what's needed
 3. **Explicit usage rules** - Clear trigger/coordination/hygiene guidelines
-4. **100% Anthropic spec compliant** - No compromises
+4. **100% spec compliant** - No compromises
 
 **Pattern compatibility**:
 
@@ -468,7 +468,7 @@ Created comprehensive guides:
 
 **Result**: VT Code now has **best-in-class skills implementation** combining:
 
--   Anthropic's specification (completeness)
+-   Agent Skills specification (completeness)
 -   OpenAI Codex's patterns (efficiency)
 -   VT Code's native features (integration)
 

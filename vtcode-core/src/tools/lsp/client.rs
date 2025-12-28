@@ -344,9 +344,34 @@ impl LspClient {
 
 impl Drop for LspClient {
     fn drop(&mut self) {
-        // We can't do async drop easily, but we can perhaps signal the handles to stop
-        // actual cleanup relies on OS releasing process resources if the parent dies,
-        // though strictly we should kill the child.
-        // In a real implementation, we might want a background cleanup or use tokio's notify.
+        // We can't do async drop easily, but we can signal the handles to stop
+        // and attempt to kill the child process if it's still running.
+        // Actual cleanup relies on OS releasing process resources if the parent dies,
+        // but we try to clean up gracefully.
+
+        // Try to kill the child process if it exists
+        let mut child_guard = self.child.try_lock();
+        if let Ok(mut child_opt) = child_guard {
+            if let Some(mut child) = child_opt.take() {
+                // Try to kill the child process gracefully
+                let _ = child.start_kill();
+            }
+        }
+
+        // Try to abort the reader handle if it exists
+        let mut reader_guard = self.reader_handle.try_lock();
+        if let Ok(mut handle_opt) = reader_guard {
+            if let Some(handle) = handle_opt.take() {
+                handle.abort();
+            }
+        }
+
+        // Try to abort the stderr handle if it exists
+        let mut stderr_guard = self.stderr_handle.try_lock();
+        if let Ok(mut handle_opt) = stderr_guard {
+            if let Some(handle) = handle_opt.take() {
+                handle.abort();
+            }
+        }
     }
 }

@@ -215,6 +215,20 @@ impl ToolInventory {
         None
     }
 
+    /// Get a tool registration without updating usage metrics
+    pub fn get_registration(&self, name: &str) -> Option<&ToolRegistration> {
+        let name_lower = name.to_ascii_lowercase();
+        let resolved_name = if self.tools.contains_key(name) {
+            name
+        } else if let Some(aliased) = self.aliases.get(&name_lower) {
+            aliased
+        } else {
+            return None;
+        };
+
+        self.tools.get(resolved_name).map(|entry| &entry.registration)
+    }
+
     pub fn has_tool(&self, name: &str) -> bool {
         let name_lower = name.to_ascii_lowercase();
         self.tools.contains_key(name) || self.aliases.contains_key(&name_lower)

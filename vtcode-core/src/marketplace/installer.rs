@@ -42,8 +42,13 @@ impl PluginInstaller {
         self.download_plugin(manifest, &plugin_dir).await?;
 
         // Save the manifest to the plugin directory
-        let manifest_path = plugin_dir.join("vtcode_plugin.toml");
-        let manifest_content = toml::to_string(manifest)
+        let manifest_dir = plugin_dir.join(".vtcode-plugin");
+        fs::create_dir_all(&manifest_dir)
+            .await
+            .with_context(|| format!("Failed to create manifest directory: {}", manifest_dir.display()))?;
+            
+        let manifest_path = manifest_dir.join("plugin.json");
+        let manifest_content = serde_json::to_string_pretty(manifest)
             .with_context(|| "Failed to serialize plugin manifest")?;
 
         fs::write(&manifest_path, manifest_content)
@@ -234,11 +239,12 @@ impl PluginInstaller {
 
     /// Remove plugin from VTCode's core plugin system
     async fn remove_from_core_plugin_system(&self, plugin_id: &str) -> Result<()> {
-        // This would remove the plugin from VTCode's plugin runtime
+        // Remove the plugin from VTCode's plugin runtime
         if let Some(runtime) = &self.core_plugin_runtime {
-            // In a real implementation, we would have a method to unregister plugins
-            // For now, we'll just log that we're removing the plugin
-            println!("Removing plugin from core runtime: {}", plugin_id);
+            // Unload the plugin by ID
+            runtime.unload_plugin(plugin_id).await
+                .with_context(|| format!("Failed to unload plugin from runtime: {}", plugin_id))?;
+            println!("Successfully unloaded plugin from core runtime: {}", plugin_id);
         } else {
             println!("No core plugin runtime provided, skipping removal: {}", plugin_id);
         }

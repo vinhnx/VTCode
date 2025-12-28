@@ -74,7 +74,7 @@ if __name__ == "__main__":
 /// Example reference document template
 pub const EXAMPLE_REFERENCE: &str = r#"# {skill_title} API Reference
 
-This is an example reference document that Claude can read as needed.
+This is an example reference document that VT Code can read as needed.
 
 ## Overview
 
@@ -226,7 +226,7 @@ impl SkillAuthor {
             if frontmatter.name.len() > 64 {
                 reasons.push("max 64 characters");
             }
-            if frontmatter.name.contains("anthropic") || frontmatter.name.contains("claude") {
+            if frontmatter.name.contains("anthropic") || frontmatter.name.contains("claude") || frontmatter.name.contains("vtcode") {
                 reasons.push("reserved words not allowed");
             }
             report.errors.push(format!(
@@ -343,6 +343,7 @@ impl SkillAuthor {
             && !name.contains("--")
             && !name.contains("anthropic")
             && !name.contains("claude")
+            && !name.contains("vtcode")
     }
 
     fn title_case_skill_name(&self, name: &str) -> String {
@@ -619,8 +620,10 @@ mod tests {
         // Invalid: reserved words
         assert!(!author.is_valid_skill_name("anthropic-skill"));
         assert!(!author.is_valid_skill_name("claude-helper"));
+        assert!(!author.is_valid_skill_name("vtcode-plugin"));
         assert!(!author.is_valid_skill_name("anthropic"));
         assert!(!author.is_valid_skill_name("claude"));
+        assert!(!author.is_valid_skill_name("vtcode"));
 
         // Invalid: empty or too long
         assert!(!author.is_valid_skill_name(""));

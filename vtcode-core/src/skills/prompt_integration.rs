@@ -146,7 +146,7 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
     prompt
 }
 
-/// Generate skills prompt in XML format (Agent Skills spec recommendation for Claude models)
+/// Generate skills prompt in XML format (Agent Skills spec recommendation for LLM models)
 ///
 /// Wraps skills in `<available_skills>` tags for improved safety and isolation.
 /// This is the recommended format per the Agent Skills specification.

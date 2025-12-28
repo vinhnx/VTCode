@@ -37,89 +37,117 @@ fn generate_tool_schema_hash(tool_name: &str, schema: &Value) -> Result<String> 
 
 /// Records the current serialization format of all tools
 fn snapshot_current_tool_schemas() -> Result<BTreeMap<String, Value>> {
-    let mut schemas = BTreeMap::new();
+    use vtcode_core::tools::ToolRegistry;
+    use std::sync::Arc;
+    use tempfile::TempDir;
 
-    // In a real implementation, iterate through registered tools
-    // For now, create representative schemas
-    schemas.insert(
-        "read_file".to_string(),
-        json!({
-            "name": "read_file",
-            "description": "Read the contents of a file from the workspace",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to the file to read"
-                    },
-                    "max_bytes": {
-                        "type": "integer",
-                        "description": "Maximum bytes to read"
-                    }
-                },
-                "required": ["path"]
-            }
-        }),
-    );
+    let temp_dir = TempDir::new()
+        .context("Failed to create temporary directory for tool registry")?;
 
-    schemas.insert(
-        "write_file".to_string(),
-        json!({
-            "name": "write_file",
-            "description": "Write content to a file",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to the file"
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Content to write"
-                    },
-                    "mode": {
-                        "type": "string",
-                        "enum": ["overwrite", "append", "skip_if_exists"],
-                        "description": "Write mode"
-                    }
-                },
-                "required": ["path", "content"]
-            }
-        }),
-    );
+    // Create a tool registry instance to access registered tools
+    let runtime = tokio::runtime::Runtime::new()
+        .context("Failed to create tokio runtime for tool registry")?;
 
-    schemas.insert(
-        "grep_file".to_string(),
-        json!({
-            "name": "grep_file",
-            "description": "Search for patterns in files using ripgrep",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "Search pattern"
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "Path to search in"
-                    },
-                    "max_results": {
-                        "type": "integer",
-                        "description": "Maximum results to return"
-                    },
-                    "response_format": {
-                        "type": "string",
-                        "enum": ["concise", "detailed"],
-                        "description": "Output format"
-                    }
-                },
-                "required": ["pattern"]
+    let schemas = runtime.block_on(async {
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let mut schemas = BTreeMap::new();
+
+        // Iterate through registered tools in the registry
+        let tool_names = registry.available_tools().await;
+
+        for tool_name in tool_names {
+            if let Some(schema) = registry.get_tool_schema(&tool_name).await {
+                schemas.insert(tool_name, schema);
             }
-        }),
-    );
+        }
+
+        // If no tools were found in the registry, fall back to default schemas
+        if schemas.is_empty() {
+            // Add default schemas as fallback
+            schemas.insert(
+                "read_file".to_string(),
+                json!({
+                    "name": "read_file",
+                    "description": "Read the contents of a file from the workspace",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "Path to the file to read"
+                            },
+                            "max_bytes": {
+                                "type": "integer",
+                                "description": "Maximum bytes to read"
+                            }
+                        },
+                        "required": ["path"]
+                    }
+                }),
+            );
+
+            schemas.insert(
+                "write_file".to_string(),
+                json!({
+                    "name": "write_file",
+                    "description": "Write content to a file",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "Path to the file"
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "Content to write"
+                            },
+                            "mode": {
+                                "type": "string",
+                                "enum": ["overwrite", "append", "skip_if_exists"],
+                                "description": "Write mode"
+                            }
+                        },
+                        "required": ["path", "content"]
+                    }
+                }),
+            );
+
+            schemas.insert(
+                "grep_file".to_string(),
+                json!({
+                    "name": "grep_file",
+                    "description": "Search for patterns in files using ripgrep",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "pattern": {
+                                "type": "string",
+                                "description": "Search pattern"
+                            },
+                            "path": {
+                                "type": "string",
+                                "description": "Path to search in"
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum results to return"
+                            },
+                            "response_format": {
+                                "type": "string",
+                                "enum": ["concise", "detailed"],
+                                "description": "Output format"
+                            }
+                        },
+                        "required": ["pattern"]
+                    }
+                }),
+            );
+        }
+
+        Result::<_, anyhow::Error>::Ok(schemas)
+    })?;
 
     Ok(schemas)
 }

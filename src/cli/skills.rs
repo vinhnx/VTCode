@@ -66,8 +66,8 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
         println!("\nOr install skills in standard locations:");
         println!("  ~/.vtcode/skills/     (VT Code user skills)");
         println!("  .vtcode/skills/       (Project skills)");
-        println!("  ~/.claude/skills/     (Claude Code compatibility)");
-        println!("  ~/.codex/skills/      (OpenAI Codex CLI compatibility)");
+        println!("  ~/.claude/skills/     (Legacy compatibility)");
+        println!("  ~/.codex/skills/      (Codex compatibility)");
         return Ok(());
     }
 
@@ -388,9 +388,9 @@ pub async fn handle_skills_config(options: &SkillsCommandOptions) -> Result<()> 
     println!("  • .vtcode/skills/       (VT Code project skills)");
     println!("  • ~/.pi/skills/         (Pi framework user skills)");
     println!("  • .pi/skills/           (Pi framework project skills)");
-    println!("  • ~/.claude/skills/     (Claude Code user skills)");
-    println!("  • .claude/skills/       (Claude Code project skills)");
-    println!("  • ~/.codex/skills/      (Codex CLI user skills - lowest precedence)");
+    println!("  • ~/.claude/skills/     (Legacy compatibility)");
+    println!("  • .claude/skills/       (Legacy compatibility)");
+    println!("  • ~/.codex/skills/      (Codex compatibility - lowest precedence)");
 
     println!("\nSkill Directory Structure:");
     println!("  my-skill/");

@@ -1,6 +1,6 @@
 //! Skill container for multi-skill execution
 //!
-//! Implements Claude API container model for managing multiple skills
+//! Implements VT Code's container model for managing multiple skills
 //! in a single request with version support and container reuse.
 //!
 //! Up to 8 skills per container. Container IDs can be reused across
@@ -87,7 +87,7 @@ impl SkillSpec {
 
 /// Container for managing multiple skills in a request
 ///
-/// Implements Claude's container model for multi-skill execution.
+/// Implements VT Code's container model for multi-skill execution.
 /// - Maximum 8 skills per container
 /// - Container ID can be reused across multiple turns
 /// - Each skill can have independent version pinning
