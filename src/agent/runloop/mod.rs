@@ -1,4 +1,3 @@
-mod context;
 #[allow(dead_code)]
 mod context_usage;
 mod git;

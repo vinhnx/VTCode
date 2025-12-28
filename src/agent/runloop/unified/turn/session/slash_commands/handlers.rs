@@ -539,7 +539,7 @@ pub async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCom
             config: ctx.config,
             message_count: ctx.conversation_history.len(),
             stats: ctx.session_stats,
-            max_tokens: ctx.trim_config.max_tokens,
+            max_tokens: 16000, // Default context window size since context trim config removed
             available_tools: tool_count,
         },
     )

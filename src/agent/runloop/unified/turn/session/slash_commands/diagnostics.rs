@@ -164,7 +164,7 @@ pub async fn handle_show_status(ctx: &SlashCommandContext<'_>) -> Result<SlashCo
             stats: ctx.session_stats,
             token_budget: None,
             token_budget_enabled: false,
-            max_tokens: ctx.trim_config.max_tokens,
+            max_tokens: 16000, // Default context window size since context trim config removed
             available_tools: tool_count,
         },
     )

@@ -27,25 +27,7 @@ pub(crate) async fn execute_llm_request(
     parallel_cfg_opt: Option<ParallelToolConfig>,
 ) -> Result<(uni::LLMResponse, bool)> {
     let provider_client = ctx.provider_client.as_ref();
-    // Apply semantic pruning with decision tracking if configured
-    if ctx.context_manager.trim_config().semantic_compression {
-        let mut pruning_ledger_mut = ctx.pruning_ledger.write().await;
-        ctx.context_manager.prune_with_semantic_priority(
-            ctx.working_history,
-            Some(&mut *pruning_ledger_mut),
-            step_count,
-        );
-    }
-
-    // HP-9: Lazy context window enforcement - only when needed
-    if ctx
-        .context_manager
-        .should_enforce_context(ctx.working_history)
-    {
-        let _ = ctx
-            .context_manager
-            .enforce_context_window(ctx.working_history);
-    }
+    // Context trim and compaction has been removed - no pruning or enforcement needed
     // HP-1: Eliminate unnecessary clone - work directly on working_history
 
     let system_prompt = ctx

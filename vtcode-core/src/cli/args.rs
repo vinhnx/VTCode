@@ -418,13 +418,12 @@ pub struct Cli {
 
     /// **Skip all permission prompts (use with extreme caution)**
     ///
-    /// Alias for --skip-confirmations with a more explicit warning.
     /// This disables all safety checks and allows the agent to execute any
     /// tool without confirmation. Only use in trusted environments.
     ///
     /// Warning: This significantly reduces security. Use --allowed-tools for
     /// more granular control instead when possible.
-    #[arg(long = "dangerously-skip-permissions", global = true, alias = "skip-confirmations")]
+    #[arg(long = "dangerously-skip-permissions", global = true)]
     pub dangerously_skip_permissions: bool,
 
     /// **Explicitly connect to IDE on startup**

@@ -64,7 +64,6 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub loaded_skills:
         &'a Arc<tokio::sync::RwLock<std::collections::HashMap<String, vtcode_core::skills::Skill>>>,
     pub custom_prompts: &'a vtcode_core::prompts::CustomPromptRegistry,
-    pub trim_config: &'a crate::agent::runloop::context::ContextTrimConfig,
     pub default_placeholder: &'a mut Option<String>,
     pub follow_up_placeholder: &'a mut Option<String>,
 }
@@ -108,15 +107,7 @@ pub(crate) async fn run_interaction_loop(
             tracing::warn!("Failed to refresh status line: {}", error);
         }
 
-        // Update context efficiency metrics
-        if let Some(efficiency) = ctx.context_manager.last_efficiency() {
-            crate::agent::runloop::unified::status_line::update_context_efficiency(
-                state.input_status_state,
-                efficiency.context_utilization_percent,
-                efficiency.total_tokens,
-                efficiency.semantic_value_per_token,
-            );
-        }
+        // Context efficiency metrics tracking has been removed along with context trim functionality
 
         if ctx.ctrl_c_state.is_exit_requested() {
             return Ok(InteractionOutcome::Exit {
@@ -291,8 +282,6 @@ pub(crate) async fn run_interaction_loop(
                             context_manager: ctx.context_manager,
                             session_stats: ctx.session_stats,
                             tools: ctx.tools,
-
-                            trim_config: ctx.trim_config,
                             async_mcp_manager: ctx.async_mcp_manager.as_ref(),
                             mcp_panel_state: ctx.mcp_panel_state,
                             linked_directories: ctx.linked_directories,
