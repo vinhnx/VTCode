@@ -367,6 +367,37 @@ impl SimpleIndexer {
         Ok(())
     }
 
+    /// Discover all files in directory recursively without indexing them.
+    /// This is much faster than `index_directory` as it avoids hashing and persistence.
+    pub fn discover_files(&self, dir_path: &Path) -> Vec<String> {
+        let walker = WalkBuilder::new(dir_path)
+            .hidden(true)
+            .git_ignore(true)
+            .git_global(true)
+            .git_exclude(true)
+            .ignore(true)
+            .parents(true)
+            .build();
+
+        walker
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                if !e.file_type().is_some_and(|ft| ft.is_file()) {
+                    return false;
+                }
+                let path = e.path();
+                let should_skip = self
+                    .config
+                    .excluded_dirs
+                    .iter()
+                    .any(|excluded| path.starts_with(excluded));
+
+                !should_skip && self.filter.should_index_file(path, &self.config)
+            })
+            .map(|e| e.path().to_string_lossy().into_owned())
+            .collect()
+    }
+
     /// Internal helper for regex-based file content search.
     /// Used by both `search()` and `grep()` to avoid code duplication.
     fn search_files_internal(

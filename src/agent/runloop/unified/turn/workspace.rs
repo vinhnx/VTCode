@@ -10,12 +10,9 @@ use crate::agent::agents::apply_runtime_overrides;
 
 pub(crate) async fn load_workspace_files(workspace: PathBuf) -> Result<Vec<String>> {
     task::spawn_blocking(move || -> Result<Vec<String>> {
-        let mut indexer = SimpleIndexer::new(workspace.clone());
-        indexer.init()?;
-        indexer.index_directory(&workspace)?;
-
-        // Get all indexed files efficiently without regex overhead
-        let files = indexer.all_files();
+        let indexer = SimpleIndexer::new(workspace.clone());
+        // Use discover_files instead of index_directory for high-performance startup
+        let files = indexer.discover_files(&workspace);
 
         Ok(files)
     })
