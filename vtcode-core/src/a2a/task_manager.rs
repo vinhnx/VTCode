@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use super::errors::{A2aError, A2aResult};
-use super::rpc::{ListTasksParams, ListTasksResult};
+use super::rpc::{ListTasksParams, ListTasksResult, TaskPushNotificationConfig};
 use super::types::{Artifact, Message, Task, TaskState, TaskStatus};
 
 /// A2A Task Manager - handles task creation, updates, and queries
@@ -18,6 +18,8 @@ pub struct TaskManager {
     tasks: Arc<RwLock<HashMap<String, Task>>>,
     /// Context ID to task IDs mapping
     contexts: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    /// Webhook configurations per task
+    webhook_configs: Arc<RwLock<HashMap<String, TaskPushNotificationConfig>>>,
     /// Maximum tasks to retain (for memory management)
     max_tasks: usize,
 }
@@ -34,6 +36,7 @@ impl TaskManager {
         Self {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             contexts: Arc::new(RwLock::new(HashMap::new())),
+            webhook_configs: Arc::new(RwLock::new(HashMap::new())),
             max_tasks: 1000,
         }
     }
@@ -43,6 +46,7 @@ impl TaskManager {
         Self {
             tasks: Arc::new(RwLock::new(HashMap::with_capacity(max_tasks.min(100)))),
             contexts: Arc::new(RwLock::new(HashMap::new())),
+            webhook_configs: Arc::new(RwLock::new(HashMap::new())),
             max_tasks,
         }
     }
@@ -275,6 +279,42 @@ impl TaskManager {
     pub async fn clear(&self) {
         self.tasks.write().await.clear();
         self.contexts.write().await.clear();
+        self.webhook_configs.write().await.clear();
+    }
+
+    /// Set webhook configuration for a task
+    pub async fn set_webhook_config(
+        &self,
+        config: TaskPushNotificationConfig,
+    ) -> A2aResult<()> {
+        // Validate webhook URL (basic SSRF protection)
+        if !config.url.starts_with("https://") && !config.url.starts_with("http://localhost") {
+            return Err(A2aError::UnsupportedOperation(
+                "Webhook URL must use HTTPS or be localhost".to_string(),
+            ));
+        }
+
+        // Verify task exists
+        let _ = self.get_task_or_error(&config.task_id).await?;
+
+        let mut configs = self.webhook_configs.write().await;
+        configs.insert(config.task_id.clone(), config);
+        Ok(())
+    }
+
+    /// Get webhook configuration for a task
+    pub async fn get_webhook_config(
+        &self,
+        task_id: &str,
+    ) -> Option<TaskPushNotificationConfig> {
+        let configs = self.webhook_configs.read().await;
+        configs.get(task_id).cloned()
+    }
+
+    /// Remove webhook configuration for a task
+    pub async fn remove_webhook_config(&self, task_id: &str) {
+        let mut configs = self.webhook_configs.write().await;
+        configs.remove(task_id);
     }
 }
 
