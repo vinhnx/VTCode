@@ -337,6 +337,7 @@ pub enum InlineEvent {
     Cancel,
     Exit,
     Interrupt,
+    BackgroundOperation,
     ScrollLineUp,
     ScrollLineDown,
     ScrollPageUp,

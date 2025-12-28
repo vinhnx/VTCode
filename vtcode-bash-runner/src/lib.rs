@@ -4,6 +4,7 @@
 //! pure-Rust emulation, or dry-run logging) while reusing the higher-level
 //! helpers for workspace-safe filesystem manipulation.
 
+pub mod background;
 pub mod executor;
 pub mod policy;
 pub mod runner;
@@ -18,5 +19,6 @@ pub use executor::{
     CommandCategory, CommandExecutor, CommandInvocation, CommandOutput, CommandStatus,
     ProcessCommandExecutor, ShellKind,
 };
+pub use background::{BackgroundCommandManager, BackgroundTaskHandle, BackgroundTaskStatus};
 pub use policy::{AllowAllPolicy, CommandPolicy, WorkspaceGuardPolicy};
 pub use runner::BashRunner;

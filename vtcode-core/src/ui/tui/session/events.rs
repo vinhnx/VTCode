@@ -108,6 +108,32 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return crate::ui::tui::session::vim_handler::handle_vim_mode_key(session, &key);
     }
 
+    // Handle reverse search (Ctrl+R)
+    if has_control && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) {
+        if !session.reverse_search_state.active {
+            // Start reverse search
+            session.reverse_search_state.start_search(&session.input_manager, &session.input_manager.history());
+            session.mark_dirty();
+            return None;
+        }
+    }
+
+    // Handle reverse search if active
+    if session.reverse_search_state.active {
+        // Get history first to avoid borrow conflicts
+        let history = session.input_manager.history().to_vec();
+        let handled = crate::ui::tui::session::reverse_search::handle_reverse_search_key(
+            &key,
+            &mut session.reverse_search_state,
+            &mut session.input_manager,
+            &history,
+        );
+        if handled {
+            session.mark_dirty();
+            return None;
+        }
+    }
+
     match key.code {
         KeyCode::Char('c') | KeyCode::Char('C') if has_control => {
             session.mark_dirty();
@@ -120,6 +146,17 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('d') if has_control => {
             session.mark_dirty();
             Some(InlineEvent::Exit)
+        }
+        KeyCode::Char('b') if has_control => {
+            // Ctrl+B - Background current operation or move to background
+            session.mark_dirty();
+            Some(InlineEvent::BackgroundOperation)
+        }
+        KeyCode::Char('j') if has_control => {
+            // Ctrl+J is a line feed character, insert newline for multiline input
+            session.insert_char('\n');
+            session.mark_dirty();
+            return None;
         }
         // External editor launch disabled - use /edit command instead
         // KeyCode::Char('e') | KeyCode::Char('E') if has_control && !has_command => {
@@ -207,7 +244,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if has_shift && !has_control && !has_command {
+            // Check for multiline input options
+            if has_shift || has_control || has_alt || has_command {
+                // Insert newline for multiline input
                 session.insert_char('\n');
                 session.mark_dirty();
                 return None;
