@@ -98,17 +98,3 @@ refine vtcode-core/src/tools/registry/declarations.rs
 --
 
 refine /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/executors.rs
-
---
-
-remove
-
-DEBUG_AGENT: Low-level agent state inspection (diagnostic, read-only)
-(tools::DEBUG_AGENT, ToolPolicy::Allow),
-
---
-
-remove
-
-ANALYZE_AGENT: Analyzes agent behavior patterns (diagnostic, read-only)
-(tools::ANALYZE_AGENT, ToolPolicy::Allow),
