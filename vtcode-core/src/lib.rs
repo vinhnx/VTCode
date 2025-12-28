@@ -122,6 +122,7 @@
 //! including tool implementations, LLM integration, and utility functions.
 
 // Public modules
+pub mod a2a; // Agent2Agent Protocol support
 pub mod acp;
 pub mod audit;
 pub mod bash_runner;
