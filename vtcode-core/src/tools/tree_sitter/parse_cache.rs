@@ -260,7 +260,10 @@ impl CachedTreeSitterAnalyzer {
 
 impl Default for ParseCache {
     fn default() -> Self {
-        Self::new(100, 300, 1024 * 1024) // 100 entries, 5min TTL, 1MB max
+        // Reduced from 100 entries to 50 for memory efficiency
+        // TTL reduced from 300s to 120s for faster cleanup
+        // Max file size remains 1MB to avoid caching huge files
+        Self::new(50, 120, 1024 * 1024) // 50 entries, 2min TTL, 1MB max
     }
 }
 

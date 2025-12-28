@@ -9,8 +9,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-/// Default TTL for cache entries (5 minutes)
-pub const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(300);
+/// Default TTL for cache entries (2 minutes for memory-constrained environments)
+pub const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(120);
+
+/// Default maximum cache capacity (reduced from 10,000 to 1,000 for memory efficiency)
+pub const DEFAULT_MAX_CACHE_CAPACITY: usize = 1_000;
 
 /// Maximum number of items to return in context-limited operations
 pub const MAX_CONTEXT_ITEMS: usize = 5;

@@ -175,7 +175,9 @@ fn default_scrollback_lines() -> usize {
 }
 
 fn default_max_scrollback_bytes() -> usize {
-    50_000_000 // 50MB max to prevent memory explosion
+    // Reduced from 50MB to 25MB for memory-constrained development environments
+    // Can be overridden in vtcode.toml with: pty.max_scrollback_bytes = 52428800
+    25_000_000 // 25MB max to prevent memory explosion
 }
 
 fn default_large_output_threshold_kb() -> usize {
