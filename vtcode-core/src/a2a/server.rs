@@ -14,7 +14,7 @@ use crate::a2a::rpc::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListTasksParams, MessageSendParams,
     SendStreamingMessageResponse, StreamingEvent, TaskIdParams, TaskQueryParams, JSONRPC_VERSION,
     METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM, METHOD_TASKS_CANCEL, METHOD_TASKS_GET,
-    METHOD_TASKS_LIST,
+    METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET, METHOD_TASKS_PUSH_CONFIG_SET,
 };
 use crate::a2a::task_manager::TaskManager;
 use crate::a2a::types::TaskState;
@@ -113,6 +113,12 @@ async fn handle_rpc(
         METHOD_TASKS_LIST => handle_tasks_list(&state, request.params, request.id.clone()).await,
         METHOD_TASKS_CANCEL => {
             handle_tasks_cancel(&state, request.params, request.id.clone()).await
+                METHOD_TASKS_PUSH_CONFIG_SET => {
+                    handle_push_config_set(&state, request.params, request.id.clone()).await
+                }
+                METHOD_TASKS_PUSH_CONFIG_GET => {
+                    handle_push_config_get(&state, request.params, request.id.clone()).await
+                }
         }
         _ => {
             return Err(A2aErrorResponse::method_not_found(
@@ -193,7 +199,7 @@ async fn handle_stream(
                         let json = serde_json::to_string(&SendStreamingMessageResponse { event })
                             .unwrap_or_default();
                         yield Ok::<_, Infallible>(Event::default().data(json));
-                        
+
                         if is_final {
                             break;
                         }
@@ -295,6 +301,45 @@ async fn handle_message_send(
 
     // Return task as response
     Ok(serde_json::to_value(task)?)
+}
+
+/// Handle tasks/pushNotificationConfig/set RPC method
+async fn handle_push_config_set(
+    state: &A2aServerState,
+    params: Option<Value>,
+    _id: Value,
+) -> A2aResult<Value> {
+    let config: crate::a2a::rpc::TaskPushNotificationConfig =
+        serde_json::from_value(params.unwrap_or_default()).map_err(|_| {
+            A2aError::rpc(
+                A2aErrorCode::InvalidParams,
+                "Invalid pushNotificationConfig/set params",
+            )
+        })?;
+
+    state.task_manager.set_webhook_config(config).await?;
+
+    Ok(json!({ "success": true }))
+}
+
+/// Handle tasks/pushNotificationConfig/get RPC method
+async fn handle_push_config_get(
+    state: &A2aServerState,
+    params: Option<Value>,
+    _id: Value,
+) -> A2aResult<Value> {
+    let params: TaskIdParams = serde_json::from_value(params.unwrap_or_default()).map_err(
+        |_| {
+            A2aError::rpc(
+                A2aErrorCode::InvalidParams,
+                "Invalid pushNotificationConfig/get params",
+            )
+        },
+    )?;
+
+    let config = state.task_manager.get_webhook_config(&params.id).await;
+
+    Ok(serde_json::to_value(config)?)
 }
 
 /// Handle message/stream RPC method
@@ -461,10 +506,10 @@ mod tests {
     #[tokio::test]
     async fn test_server_state_with_broadcast() {
         let state = A2aServerState::vtcode_default("http://localhost:8080");
-        
+
         // Verify broadcast channel works
         let mut rx = state.event_tx.subscribe();
-        
+
         // Send a test event
         let test_event = StreamingEvent::Message {
             message: super::super::types::Message::agent_text("Test"),
@@ -472,9 +517,9 @@ mod tests {
             kind: "streaming-response".to_string(),
             r#final: false,
         };
-        
+
         state.event_tx.send(test_event.clone()).expect("send event");
-        
+
         // Receive the event
         let received = rx.recv().await.expect("receive event");
         assert!(!received.is_final());

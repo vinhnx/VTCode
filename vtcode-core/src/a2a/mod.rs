@@ -29,6 +29,8 @@ pub mod rpc;
 pub mod task_manager;
 pub mod types;
 
+pub mod webhook;
+
 #[cfg(feature = "a2a-server")]
 pub mod server;
 
@@ -43,3 +45,4 @@ pub use task_manager::TaskManager;
 pub use types::{
     Artifact, FileContent, Message, MessageRole, Part, Task, TaskState, TaskStatus,
 };
+pub use webhook::{WebhookError, WebhookNotifier};
