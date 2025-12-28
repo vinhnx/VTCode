@@ -174,6 +174,9 @@ pub struct Session {
 
     // --- PTY Session Management ---
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
+
+    // --- Clipboard for yank/paste operations ---
+    pub(crate) clipboard: String,
 }
 
 impl Session {
@@ -307,6 +310,9 @@ impl Session {
 
             // --- PTY Session Management ---
             active_pty_sessions: None,
+
+            // --- Clipboard for yank/paste operations ---
+            clipboard: String::new(),
         };
         session.ensure_prompt_style_color();
         session

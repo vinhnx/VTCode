@@ -13,6 +13,14 @@ pub struct VimState {
     pub mode: VimMode,
     pub last_command: Option<char>,
     pub pending_command: Option<char>, // For multi-key commands like dd, gg, etc.
+    pub last_find_char: Option<char>,  // For f/F/t/T repeat functionality
+    pub last_find_direction: Option<FindDirection>, // Direction of last f/F/t/T command
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FindDirection {
+    Forward,
+    Backward,
 }
 
 impl Default for VimState {
@@ -21,6 +29,8 @@ impl Default for VimState {
             mode: VimMode::Normal, // Start in normal mode to match Vim behavior
             last_command: None,
             pending_command: None,
+            last_find_char: None,
+            last_find_direction: None,
         }
     }
 }
@@ -134,7 +144,17 @@ impl VimState {
             KeyCode::Char('x') => VimAction::DeleteChar,
             KeyCode::Char('d') => VimAction::PendingCommand('d'), // For dd, dw, etc.
             KeyCode::Char('c') => VimAction::PendingCommand('c'), // For cc, cw, etc.
+            KeyCode::Char('y') => VimAction::PendingCommand('y'), // For yy, yw, etc.
             KeyCode::Char('.') => VimAction::RepeatLastCommand,
+
+            // Additional navigation
+            KeyCode::Char('f') => VimAction::PendingCommand('f'), // For f<char> - find next char
+            KeyCode::Char('F') => VimAction::PendingCommand('F'), // For F<char> - find previous char
+            KeyCode::Char('t') => VimAction::PendingCommand('t'), // For t<char> - move before next char
+            KeyCode::Char('T') => VimAction::PendingCommand('T'), // For T<char> - move after previous char
+            KeyCode::Char(';') => VimAction::RepeatFind,         // Repeat last f/F/t/T
+            KeyCode::Char(',') => VimAction::RepeatFindReverse,  // Repeat last f/F/t/T in opposite direction
+            KeyCode::Char('p') => VimAction::Paste,             // Paste after cursor
 
             _ => VimAction::None,
         }
@@ -179,6 +199,62 @@ impl VimState {
                     _ => VimAction::None,
                 }
             }
+            'y' => {
+                match next_char {
+                    Some('y') => VimAction::YankCurrentLine,
+                    Some('w') => VimAction::YankWord,
+                    Some('$') => VimAction::YankToEndOfLine,
+                    _ => VimAction::None,
+                }
+            }
+            'f' => {
+                // f<char> - move to next occurrence of char
+                if let Some(target_char) = next_char {
+                    // Store the character and direction for repeat functionality
+                    self.last_find_char = Some(target_char);
+                    self.last_find_direction = Some(FindDirection::Forward);
+                    self.last_command = Some('f'); // Store command type for repeat functionality
+                    VimAction::FindNextChar(target_char)
+                } else {
+                    VimAction::None
+                }
+            }
+            'F' => {
+                // F<char> - move to previous occurrence of char
+                if let Some(target_char) = next_char {
+                    // Store the character and direction for repeat functionality
+                    self.last_find_char = Some(target_char);
+                    self.last_find_direction = Some(FindDirection::Backward);
+                    self.last_command = Some('F'); // Store command type for repeat functionality
+                    VimAction::FindPrevChar(target_char)
+                } else {
+                    VimAction::None
+                }
+            }
+            't' => {
+                // t<char> - move to just before next occurrence of char
+                if let Some(target_char) = next_char {
+                    // Store the character and direction for repeat functionality
+                    self.last_find_char = Some(target_char);
+                    self.last_find_direction = Some(FindDirection::Forward);
+                    self.last_command = Some('t'); // Store command type for repeat functionality
+                    VimAction::FindTillNextChar(target_char)
+                } else {
+                    VimAction::None
+                }
+            }
+            'T' => {
+                // T<char> - move to just after previous occurrence of char
+                if let Some(target_char) = next_char {
+                    // Store the character and direction for repeat functionality
+                    self.last_find_char = Some(target_char);
+                    self.last_find_direction = Some(FindDirection::Backward);
+                    self.last_command = Some('T'); // Store command type for repeat functionality
+                    VimAction::FindTillPrevChar(target_char)
+                } else {
+                    VimAction::None
+                }
+            }
             _ => VimAction::None,
         }
     }
@@ -219,6 +295,17 @@ pub enum VimAction {
     ChangeToEndOfLine,
     RepeatLastCommand,
     PendingCommand(char), // For multi-key commands like 'dd', 'cw', etc.
+    // Additional Vim actions
+    YankCurrentLine,
+    YankWord,
+    YankToEndOfLine,
+    RepeatFind,
+    RepeatFindReverse,
+    FindNextChar(char),      // f<char> - find next occurrence
+    FindPrevChar(char),      // F<char> - find previous occurrence
+    FindTillNextChar(char),  // t<char> - move before next occurrence
+    FindTillPrevChar(char),  // T<char> - move after previous occurrence
+    Paste,                   // p - paste from clipboard
 }
 
 #[cfg(test)]

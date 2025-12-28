@@ -3,7 +3,7 @@ use chrono::Local;
 use serde_json::Value;
 use shell_words::split as shell_split;
 use std::time::Duration;
-use vtcode_core::prompts::{CustomPrompt, CustomPromptRegistry, PromptInvocation};
+use vtcode_core::prompts::{CustomPrompt, CustomPromptRegistry, CustomSlashCommandRegistry, PromptInvocation};
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -108,6 +108,7 @@ pub async fn handle_slash_command(
     input: &str,
     renderer: &mut AnsiRenderer,
     custom_prompts: &CustomPromptRegistry,
+    custom_slash_commands: Option<&CustomSlashCommandRegistry>,
 ) -> Result<SlashCommandOutcome> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -123,6 +124,13 @@ pub async fn handle_slash_command(
     }
     if let Some(prompt_name) = command_key.strip_prefix("prompts:") {
         return handle_custom_prompt(prompt_name, args, renderer, custom_prompts);
+    }
+
+    // Check for custom slash commands
+    if let Some(custom_slash_commands) = custom_slash_commands {
+        if custom_slash_commands.enabled() && custom_slash_commands.get(&command_key).is_some() {
+            return handle_custom_slash_command(&command_key, args, renderer, custom_slash_commands);
+        }
     }
 
     match command_key.as_str() {
@@ -712,7 +720,7 @@ pub async fn handle_slash_command(
             } else {
                 Some(args.trim())
             };
-            render_help(renderer, specific_cmd)?;
+            render_help(renderer, specific_cmd, custom_slash_commands)?;
             Ok(SlashCommandOutcome::Handled)
         }
         "vim" => {
@@ -806,6 +814,151 @@ fn handle_custom_prompt(
             Ok(SlashCommandOutcome::Handled)
         }
     }
+}
+
+fn handle_custom_slash_command(
+    name: &str,
+    args: &str,
+    renderer: &mut AnsiRenderer,
+    registry: &CustomSlashCommandRegistry,
+) -> Result<SlashCommandOutcome> {
+    if !registry.enabled() {
+        renderer.line(
+            MessageStyle::Error,
+            "Custom slash commands are disabled. Enable them in configuration.",
+        )?;
+        return Ok(SlashCommandOutcome::Handled);
+    }
+
+    let command = match registry.get(name) {
+        Some(command) => command,
+        None => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Unknown custom slash command `{}`.", name),
+            )?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+
+    // Parse arguments similar to how custom prompts work
+    let invocation = match parse_command_arguments(args) {
+        Ok(invocation) => invocation,
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to parse arguments: {}", err),
+            )?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+
+    // Check if the command has bash execution (contains !`command`)
+    if command.has_bash_execution {
+        renderer.line(
+            MessageStyle::Error,
+            &format!("Command `{}` contains bash execution which is not yet supported in this implementation.", name),
+        )?;
+        // For now, we'll just expand the content without executing bash commands
+        let expanded = expand_command_content_with_args(&command.content, &invocation);
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Expanding custom slash command /{} (bash execution skipped)", command.name),
+        )?;
+        return Ok(SlashCommandOutcome::SubmitPrompt { prompt: expanded });
+    }
+
+    let expanded = expand_command_content_with_args(&command.content, &invocation);
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Expanding custom slash command /{}", command.name),
+    )?;
+    Ok(SlashCommandOutcome::SubmitPrompt { prompt: expanded })
+}
+
+// Parse arguments for custom slash commands (similar to custom prompts)
+fn parse_command_arguments(raw: &str) -> Result<CommandInvocation> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(CommandInvocation::default());
+    }
+
+    let tokens = shell_split(trimmed)
+        .with_context(|| "failed to parse custom slash command arguments".to_owned())?;
+
+    let mut positional = Vec::new();
+    let mut named = BTreeMap::new();
+    for token in tokens {
+        if let Some((key, value)) = token.split_once('=') {
+            let key_trimmed = key.trim();
+            if key_trimmed.is_empty() {
+                positional.push(token);
+            } else {
+                named.insert(key_trimmed.to_owned(), value.to_owned());
+            }
+        } else {
+            positional.push(token);
+        }
+    }
+
+    let all_arguments = if positional.is_empty() {
+        None
+    } else {
+        Some(positional.join(" "))
+    };
+
+    Ok(CommandInvocation {
+        positional,
+        named,
+        all_arguments,
+    })
+}
+
+#[derive(Debug, Clone, Default)]
+struct CommandInvocation {
+    positional: Vec<String>,
+    named: BTreeMap<String, String>,
+    all_arguments: Option<String>,
+}
+
+impl CommandInvocation {
+    fn all_arguments(&self) -> Option<&str> {
+        self.all_arguments.as_deref()
+    }
+
+    fn positional(&self) -> &[String] {
+        &self.positional
+    }
+
+    fn named(&self) -> &BTreeMap<String, String> {
+        &self.named
+    }
+}
+
+fn expand_command_content_with_args(content: &str, invocation: &CommandInvocation) -> String {
+    let mut result = content.to_string();
+
+    // Replace $ARGUMENTS with all arguments
+    if let Some(all_args) = invocation.all_arguments() {
+        result = result.replace("$ARGUMENTS", all_args);
+    }
+
+    // Replace $1, $2, etc. with positional arguments
+    for (i, arg) in invocation.positional().iter().enumerate() {
+        let placeholder = format!("${}", i + 1);
+        result = result.replace(&placeholder, arg);
+    }
+
+    // Replace named placeholders like $FILE, $TASK, etc.
+    for (key, value) in invocation.named() {
+        let placeholder = format!("${}", key);
+        result = result.replace(&placeholder, value);
+    }
+
+    // Replace $$ with literal $
+    result = result.replace("$$", "$");
+
+    result
 }
 
 fn render_custom_prompt_list(
@@ -1008,7 +1161,7 @@ fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
-fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>) -> Result<()> {
+fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>, custom_slash_commands: Option<&CustomSlashCommandRegistry>) -> Result<()> {
     if let Some(cmd_name) = specific_command {
         // Look for a specific command
         if let Some(cmd) = SLASH_COMMANDS.iter().find(|cmd| cmd.name == cmd_name) {
@@ -1018,6 +1171,30 @@ fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>) -> R
                 &format!("  Description: {}", cmd.description),
             )?;
             // Additional usage examples could be added here in the future
+        } else if let Some(custom_slash_commands) = custom_slash_commands {
+            // Check if it's a custom slash command
+            if let Some(cmd) = custom_slash_commands.get(cmd_name) {
+                renderer.line(MessageStyle::Info, &format!("Help for /{}:", cmd.name))?;
+                if let Some(description) = &cmd.description {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("  Description: {}", description),
+                    )?;
+                } else {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("  Description: Custom slash command from {}", cmd.path.display()),
+                    )?;
+                }
+            } else {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!(
+                        "Unknown command '{}'. Use /help without arguments to see all commands.",
+                        cmd_name
+                    ),
+                )?;
+            }
         } else {
             renderer.line(
                 MessageStyle::Error,
@@ -1035,6 +1212,21 @@ fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>) -> R
                 MessageStyle::Info,
                 &format!("  /{} – {}", cmd.name, cmd.description),
             )?;
+        }
+
+        // Add custom slash commands if available
+        if let Some(custom_slash_commands) = custom_slash_commands {
+            if !custom_slash_commands.is_empty() {
+                renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Info, "Custom slash commands:")?;
+                for cmd in custom_slash_commands.iter() {
+                    let description = cmd.description.as_deref().unwrap_or("Custom slash command");
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("  /{} – {}", cmd.name, description),
+                    )?;
+                }
+            }
         }
 
         // Add information about interactive features
