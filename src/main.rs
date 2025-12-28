@@ -383,6 +383,9 @@ async fn run() -> Result<()> {
                 PluginSubcommand::Disable { name } => {
                     cli::handle_plugin_disable(name.clone()).await?;
                 }
+                PluginSubcommand::Validate { path } => {
+                    cli::handle_plugin_validate(&path).await?;
+                }
             }
         }
         _ => {

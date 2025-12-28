@@ -62,6 +62,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub loaded_skills:
         &'a Arc<tokio::sync::RwLock<std::collections::HashMap<String, vtcode_core::skills::Skill>>>,
     pub custom_prompts: &'a vtcode_core::prompts::CustomPromptRegistry,
+    pub custom_slash_commands: &'a vtcode_core::prompts::CustomSlashCommandRegistry,
     pub default_placeholder: &'a mut Option<String>,
     pub follow_up_placeholder: &'a mut Option<String>,
     pub checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
@@ -264,7 +265,7 @@ pub(crate) async fn run_interaction_loop(
             input if input.starts_with('/') => {
                 if let Some(command_input) = input.strip_prefix('/') {
                     let outcome =
-                        handle_slash_command(command_input, ctx.renderer, ctx.custom_prompts)
+                        handle_slash_command(command_input, ctx.renderer, ctx.custom_prompts, Some(ctx.custom_slash_commands))
                             .await?;
 
                     let command_result = slash_commands::handle_outcome(

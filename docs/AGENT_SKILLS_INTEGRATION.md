@@ -1,10 +1,10 @@
 # Using Agent Skills with VT Code Agent
 
-Complete guide on integrating and using Anthropic Agent Skills with the VT Code agent harness.
+Complete guide on integrating and using VT Code Agent Skills with the VT Code agent harness.
 
 ## Overview
 
-Agent Skills extend Claude's capabilities with specialized expertise for document generation, data analysis, and custom workflows. VT Code integrates Anthropic's Agent Skills through:
+Agent Skills extend VT Code's capabilities with specialized expertise for document generation, data analysis, and custom workflows. VT Code integrates Agent Skills through:
 
 1. **CLI Commands** - Discover, load, and manage skills
 2. **Skill Container** - Progressive disclosure and execution
@@ -22,7 +22,7 @@ Agent Skills extend Claude's capabilities with specialized expertise for documen
 vtcode skills list
 
 # Shows skills from:
-# - .claude/skills/          (project-local)
+# - .vtcode/skills/          (project-local)
 # - ./skills/                (workspace)
 # - ~/.vtcode/skills/        (user global)
 ```

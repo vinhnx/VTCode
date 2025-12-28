@@ -316,7 +316,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::SKILL.to_string(),
-            description: "Load a skill by name. Skills are subagents with instructions and scripts from .claude/skills/.".to_string(),
+            description: "Load a skill by name. Skills are subagents with instructions and scripts from .vtcode/skills/.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {

@@ -10,7 +10,7 @@
 use crate::skills::cli_bridge::CliToolConfig;
 use crate::skills::manifest::parse_skill_file;
 use anyhow::Result;
-// use jsonschema::JSONSchema; // Commented out for now - will implement basic validation
+use jsonschema::Validator;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -220,7 +220,9 @@ pub struct SecurityWarning {
 /// Skill validator
 pub struct SkillValidator {
     config: ValidationConfig,
-    // schema_cache: HashMap<PathBuf, JSONSchema>, // TODO: Enable when jsonschema is available
+    // Note: Validator from jsonschema crate doesn't implement Clone,
+    // so we can't cache compiled validators. Each validation will recompile.
+    // TODO: Consider using Arc<Validator> or implementing our own caching layer
 }
 
 impl SkillValidator {
@@ -239,10 +241,7 @@ impl Default for SkillValidator {
 impl SkillValidator {
     /// Create new validator with custom configuration
     pub fn with_config(config: ValidationConfig) -> Self {
-        Self {
-            config,
-            // schema_cache: HashMap::new(), // TODO: Enable when jsonschema is available
-        }
+        Self { config }
     }
 
     /// Validate a traditional skill from directory
@@ -744,15 +743,27 @@ impl SkillValidator {
         match std::fs::read_to_string(schema_path) {
             Ok(content) => {
                 match serde_json::from_str::<Value>(&content) {
-                    Ok(_schema_json) => {
-                        // Basic validation - just check if it's valid JSON
-                        // TODO: Implement proper JSON Schema validation when jsonschema crate is available
-                        CheckResult {
-                            name: "schema_valid".to_string(),
-                            status: CheckStatus::Passed,
-                            message: "JSON schema is valid JSON (validation disabled)".to_string(),
-                            details: None,
-                            execution_time_ms: start_time.elapsed().as_millis() as u64,
+                    Ok(schema_json) => {
+                        // Validate that it's a proper JSON Schema by attempting to compile it
+                        match jsonschema::validator_for(&schema_json) {
+                            Ok(_validator) => {
+                                CheckResult {
+                                    name: "schema_valid".to_string(),
+                                    status: CheckStatus::Passed,
+                                    message: "JSON schema is valid and compilable".to_string(),
+                                    details: None,
+                                    execution_time_ms: start_time.elapsed().as_millis() as u64,
+                                }
+                            }
+                            Err(e) => CheckResult {
+                                name: "schema_valid".to_string(),
+                                status: CheckStatus::Failed,
+                                message: format!("Invalid JSON Schema: {}", e),
+                                details: Some(
+                                    serde_json::json!({"error": format!("Schema compilation failed: {}", e)})
+                                ),
+                                execution_time_ms: start_time.elapsed().as_millis() as u64,
+                            },
                         }
                     }
                     Err(e) => CheckResult {
@@ -958,20 +969,7 @@ impl SkillValidator {
         results
     }
 
-    /// Get cached schema
-    #[allow(dead_code)]
-    fn get_cached_schema(&mut self, _schema_path: &Path) -> Option<&serde_json::Value> {
-        // TODO: Implement proper JSON Schema caching when jsonschema crate is available
-        None
-        // self.schema_cache.get(schema_path)
-    }
 
-    /// Cache schema
-    #[allow(dead_code)]
-    fn cache_schema(&mut self, _schema_path: PathBuf, _schema: serde_json::Value) {
-        // TODO: Implement proper JSON Schema caching when jsonschema crate is available
-        // self.schema_cache.insert(schema_path, schema);
-    }
 }
 
 /// Batch validation result

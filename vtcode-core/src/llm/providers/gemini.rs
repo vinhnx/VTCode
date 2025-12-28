@@ -1929,7 +1929,31 @@ mod caching_tests {
             ..Default::default()
         };
         let res = provider.convert_to_gemini_request(&request);
-        assert!(res.is_ok());
-        // In a real implementation we would check for side effects (cache creation calls), but here we verify it doesn't break.
+        assert!(res.is_ok(), "Request conversion should succeed");
+
+        // Verify the request conversion produces correct structure with explicit TTL
+        let gemini_req = res.expect("request conversion");
+        assert_eq!(
+            gemini_req.model, "gemini-1.5-pro",
+            "Model should match request"
+        );
+        assert!(
+            !gemini_req.contents.is_empty(),
+            "Contents should not be empty"
+        );
+        // Verify system instruction is set with TTL
+        assert!(
+            !gemini_req.system_instruction.is_empty(),
+            "System instruction should be set"
+        );
+        // Verify TTL is included in system instruction when explicitly configured
+        if let Some(ttl_seconds) = config.providers.gemini.explicit_ttl_seconds {
+            let system_str =
+                serde_json::to_string(&gemini_req.system_instruction).unwrap_or_default();
+            assert!(
+                system_str.contains(&ttl_seconds.to_string()) || gemini_req.cache_control.is_some(),
+                "Cache control or TTL should be configured when explicit_ttl_seconds is set"
+            );
+        }
     }
 }

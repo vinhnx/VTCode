@@ -802,6 +802,29 @@ impl ToolRegistry {
         tools
     }
 
+    /// Get the schema for a specific tool
+    pub async fn get_tool_schema(&self, tool_name: &str) -> Option<Value> {
+        // First check if it's a regular tool
+        if let Some(registration) = self.inventory.get_registration(tool_name) {
+            if let Some(schema) = registration.parameter_schema() {
+                return Some(schema.clone());
+            }
+        }
+
+        // Check if it's an MCP tool
+        if let Some(client) = &self.mcp_client {
+            if self.mcp_circuit_breaker.allow_request() {
+                if let Ok(tools) = client.list_mcp_tools().await {
+                    if let Some(mcp_tool) = tools.into_iter().find(|t| t.name == tool_name) {
+                        return Some(mcp_tool.input_schema);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     fn mcp_policy_keys(&self) -> Vec<String> {
         // Pre-calculate capacity
         let capacity: usize = self.mcp_tool_index.values().map(|tools| tools.len()).sum();

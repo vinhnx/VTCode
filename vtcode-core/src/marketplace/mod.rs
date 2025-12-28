@@ -1,6 +1,6 @@
 //! Plugin marketplace system for VTCode
 //!
-//! This module implements a marketplace system similar to Claude Code's plugin marketplace,
+//! This module implements a marketplace system for VT Code,
 //! allowing users to discover and install plugins from various sources.
 
 use std::collections::HashMap;

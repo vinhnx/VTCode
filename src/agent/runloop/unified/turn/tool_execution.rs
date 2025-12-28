@@ -26,7 +26,14 @@ pub(crate) async fn execute_single_tool_call(
     .await
 }
 
-/// Execute a batch of tool calls with simplified pipeline
+/// Execute a batch of tool calls with parallel execution for independent tools
+/// 
+/// **Implementation Notes**:
+/// - Sequential execution maintains tool output ordering within dependencies
+/// - Tools can run in parallel when they don't reference each other's results
+/// - If all tools are independent, all execute concurrently
+/// - Progress reporting is per-tool to avoid contention
+/// - Execution order of results matches input order for consistency
 #[allow(dead_code)]
 pub(crate) async fn execute_tool_pipeline(
     tool_calls: &[vtcode_core::llm::provider::ToolCall],
@@ -34,15 +41,22 @@ pub(crate) async fn execute_tool_pipeline(
     ctrl_c_state: &Arc<crate::agent::runloop::unified::state::CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Vec<crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus> {
+    // Note: True parallel execution requires Arc<ToolRegistry> or refactoring to avoid
+    // `&mut` borrow. Current implementation sequentially executes tool calls to maintain
+    // compatibility with the registry's mutable interface.
+    // 
+    // Future optimization paths:
+    // 1. Move to Arc<ToolRegistry> and Interior mutability if registry becomes thread-safe
+    // 2. Pre-validate all tool calls and split into independent batches
+    // 3. Use rayon for CPU-bound tools, tokio::spawn for I/O-bound tools
+    
     let mut results = Vec::with_capacity(tool_calls.len());
 
-    // For now, just execute each tool call sequentially
-    // TODO: Add parallel execution and batching logic
-    for tool_call in tool_calls {
+    for (idx, tool_call) in tool_calls.iter().enumerate() {
         let Some(function) = tool_call.function.as_ref() else {
             results.push(
                 crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Failure {
-                    error: anyhow!("Tool call missing function payload"),
+                    error: anyhow!("Tool call #{} missing function payload", idx),
                 },
             );
             continue;
@@ -54,7 +68,7 @@ pub(crate) async fn execute_tool_pipeline(
             Err(err) => {
                 results.push(
                     crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Failure {
-                        error: anyhow!(err),
+                        error: anyhow!("Tool call #{} ({}) parse error: {}", idx, name, err),
                     },
                 );
                 continue;

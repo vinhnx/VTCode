@@ -159,6 +159,15 @@ impl PluginRuntime {
         plugins.values().cloned().collect()
     }
 
+    pub async fn unload_plugin(&self, plugin_id: &str) -> Result<()> {
+        let mut plugins = self.plugins.write().await;
+        if plugins.remove(plugin_id).is_some() {
+            Ok(())
+        } else {
+            bail!("plugin {} not found in runtime", plugin_id)
+        }
+    }
+
     fn validate_trust(&self, manifest: &PluginManifest) -> Result<()> {
         if self
             .config

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
+use tracing::error;
 
 use super::McpToolInfo;
 use super::tool_discovery::DetailLevel;
@@ -97,9 +98,17 @@ struct ToolDiscoveryCacheKey {
 #[derive(Clone)]
 struct CachedToolDiscoveryEntry {
     // OPTIMIZATION: Use Arc to avoid cloning large vectors on cache hits
-    results: Arc<Vec<super::tool_discovery::ToolDiscoveryResult>>,
+    results: Arc<Vec<ToolDiscoveryResult>>,
     timestamp: Instant,
     provider_tool_count: usize,
+}
+
+/// Cached tool discovery result (matches actual API)
+#[derive(Debug, Clone)]
+pub struct ToolDiscoveryResult {
+    pub tool: McpToolInfo,
+    pub relevance_score: f64,
+    pub detail_level: DetailLevel,
 }
 
 /// Multi-level caching system for tool discovery
@@ -166,7 +175,7 @@ impl ToolDiscoveryCache {
         provider_name: &str,
         keyword: &str,
         detail_level: DetailLevel,
-    ) -> Option<Vec<super::tool_discovery::ToolDiscoveryResult>> {
+    ) -> Option<Vec<ToolDiscoveryResult>> {
         // OPTIMIZATION: Use to_owned() for explicit String allocation
         let key = ToolDiscoveryCacheKey {
             provider_name: provider_name.to_owned(),
@@ -202,7 +211,7 @@ impl ToolDiscoveryCache {
         provider_name: &str,
         keyword: &str,
         detail_level: DetailLevel,
-        results: Vec<super::tool_discovery::ToolDiscoveryResult>,
+        results: Vec<ToolDiscoveryResult>,
     ) {
         // OPTIMIZATION: Use to_owned() for explicit String allocation
         let key = ToolDiscoveryCacheKey {
@@ -238,7 +247,7 @@ impl ToolDiscoveryCache {
     }
 
     /// Get all cached tools for a provider (with refresh checking)
-    pub async fn get_all_tools(
+    pub fn get_all_tools(
         &self,
         provider_name: &str,
         refresh_if_stale: bool,
@@ -246,7 +255,7 @@ impl ToolDiscoveryCache {
         let last_refresh = match self.last_refresh.read() {
             Ok(lr) => lr,
             Err(e) => {
-                tracing::error!("Last refresh lock poisoned: {}", e);
+                error!("Last refresh lock poisoned: {}", e);
                 return None;
             }
         };
@@ -264,7 +273,7 @@ impl ToolDiscoveryCache {
         match self.all_tools_cache.read() {
             Ok(all_tools_cache) => all_tools_cache.get(provider_name).cloned(),
             Err(e) => {
-                tracing::error!("All tools cache lock poisoned: {}", e);
+                error!("All tools cache lock poisoned: {}", e);
                 None
             }
         }
@@ -312,7 +321,7 @@ impl ToolDiscoveryCache {
     }
 
     /// Cache a single tool result (for read-only tools)
-    pub fn cache_tool_result(&self, cache_key: String, result: serde_json::Value) {
+    pub fn cache_tool_result(&self, _cache_key: String, _result: serde_json::Value) {
         // This would be implemented for caching individual tool execution results
         // For now, we'll just store it in a simple cache
         // In a full implementation, this would use a separate cache with different TTL
@@ -381,25 +390,22 @@ impl CachedToolDiscovery {
     }
 
     /// Search for tools with multi-level caching
-    pub async fn search_tools(
+    pub fn search_tools(
         &self,
         provider_name: &str,
         keyword: &str,
         detail_level: DetailLevel,
-        tool_fetcher: impl FnOnce() -> futures::future::BoxFuture<'static, Result<Vec<McpToolInfo>, String>>,
-    ) -> Result<Vec<super::tool_discovery::ToolDiscoveryResult>, String> {
+        all_tools: Vec<McpToolInfo>,
+    ) -> Vec<ToolDiscoveryResult> {
         // Check bloom filter first (fast negative lookup)
         if !self.cache.might_have_tool(keyword) && !keyword.is_empty() {
-            return Ok(Vec::new());
+            return Vec::new();
         }
 
         // Check detailed cache
         if let Some(cached) = self.cache.get_cached_discovery(provider_name, keyword, detail_level) {
-            return Ok(cached);
+            return cached;
         }
-
-        // Fetch tools from provider
-        let all_tools = tool_fetcher().await?;
 
         // Perform the search
         let results = self.perform_search(&all_tools, keyword, detail_level);
@@ -407,27 +413,24 @@ impl CachedToolDiscovery {
         // Cache the results
         self.cache.cache_discovery(provider_name, keyword, detail_level, results.clone());
 
-        Ok(results)
+        results
     }
 
     /// Get all tools for a provider with caching
-    pub async fn get_all_tools(
+    pub fn get_all_tools_cached(
         &self,
         provider_name: &str,
-        tool_fetcher: impl FnOnce() -> futures::future::BoxFuture<'static, Result<Vec<McpToolInfo>, String>>,
-    ) -> Result<Vec<McpToolInfo>, String> {
+        all_tools: Vec<McpToolInfo>,
+    ) -> Vec<McpToolInfo> {
         // Check cache first
-        if let Some(cached) = self.cache.get_all_tools(provider_name, true).await {
-            return Ok(cached);
+        if let Some(cached) = self.cache.get_all_tools(provider_name, true) {
+            return cached;
         }
 
-        // Fetch from provider
-        let tools = tool_fetcher().await?;
-
         // Cache the results
-        self.cache.cache_all_tools(provider_name, tools.clone());
+        self.cache.cache_all_tools(provider_name, all_tools.clone());
 
-        Ok(tools)
+        all_tools
     }
 
     /// Perform the actual search on tool list
@@ -436,7 +439,7 @@ impl CachedToolDiscovery {
         tools: &[McpToolInfo],
         keyword: &str,
         detail_level: DetailLevel,
-    ) -> Vec<super::tool_discovery::ToolDiscoveryResult> {
+    ) -> Vec<ToolDiscoveryResult> {
         let keyword_lower = keyword.to_lowercase();
         let mut results = Vec::new();
 
@@ -444,7 +447,7 @@ impl CachedToolDiscovery {
             let relevance_score = self.calculate_relevance(tool, &keyword_lower);
 
             if relevance_score > 0.0 {
-                let result = super::tool_discovery::ToolDiscoveryResult {
+                let result = ToolDiscoveryResult {
                     tool: tool.clone(),
                     relevance_score,
                     detail_level,
@@ -464,7 +467,7 @@ impl CachedToolDiscovery {
         let name_lower = tool.name.to_lowercase();
         let description_lower = tool.description.to_lowercase();
 
-        let mut score = 0.0;
+        let mut score: f64 = 0.0;
 
         // Name exact match
         if name_lower == keyword {
@@ -484,13 +487,12 @@ impl CachedToolDiscovery {
             score += 0.3;
         }
 
-        // Parameter names contain keyword
-        // OPTIMIZATION: Avoid double conversion - check if schema debug contains keyword
-        if let Some(input_schema) = &tool.input_schema {
-            let schema_str = format!("{:?}", input_schema);
-            if schema_str.to_lowercase().contains(keyword) {
-                score += 0.2;
-            }
+        // Input schema contains keyword
+        let schema_str = serde_json::to_string(&tool.input_schema)
+            .unwrap_or_default()
+            .to_lowercase();
+        if schema_str.contains(keyword) {
+            score += 0.2;
         }
 
         score.min(1.0)
@@ -525,36 +527,37 @@ mod tests {
         let key1 = ToolDiscoveryCacheKey {
             provider_name: "test".to_string(),
             keyword: "search".to_string(),
-            detail_level: DetailLevel::High,
+            detail_level: DetailLevel::Full,
         };
 
         let key2 = ToolDiscoveryCacheKey {
             provider_name: "test".to_string(),
             keyword: "search".to_string(),
-            detail_level: DetailLevel::High,
+            detail_level: DetailLevel::Full,
         };
 
         assert_eq!(key1, key2);
     }
 
-    #[tokio::test]
-    async fn test_tool_discovery_cache() {
+    #[test]
+    fn test_tool_discovery_cache() {
         let cache = ToolDiscoveryCache::new(10);
 
         let provider_name = "test_provider";
         let keyword = "search";
-        let detail_level = DetailLevel::High;
+        let detail_level = DetailLevel::Full;
 
         // Cache miss
         assert!(cache.get_cached_discovery(provider_name, keyword, detail_level).is_none());
 
         // Cache some results
         let results = vec![
-            super::tool_discovery::ToolDiscoveryResult {
+            ToolDiscoveryResult {
                 tool: McpToolInfo {
                     name: "search_files".to_string(),
                     description: "Search for files".to_string(),
-                    input_schema: None,
+                    provider: "test".to_string(),
+                    input_schema: serde_json::json!({}),
                 },
                 relevance_score: 0.9,
                 detail_level,

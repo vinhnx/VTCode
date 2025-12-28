@@ -106,7 +106,7 @@ Every skill must have a `SKILL.md` file with:
 **Optional fields**:
 
 -   `license`: License terms
--   `allowed-tools`: Pre-approved tools (for Claude Code)
+-   `allowed-tools`: Pre-approved tools (for VT Code compatibility)
 -   `metadata`: Custom key-value pairs
 
 **Markdown Body**:

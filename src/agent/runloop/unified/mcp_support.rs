@@ -199,7 +199,7 @@ pub(crate) async fn display_mcp_providers(
         renderer.line(MessageStyle::Info, "No providers defined in vtcode.toml.")?;
         renderer.line(
             MessageStyle::Info,
-            "Run `vtcode mcp add` to connect Claude Code to external tools.",
+            "Run `vtcode mcp add` to connect VT Code to external tools.",
         )?;
         return Ok(());
     }

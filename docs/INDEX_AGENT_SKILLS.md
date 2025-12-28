@@ -441,10 +441,10 @@ VTCode/
 
 ## Related Documentation
 
--   `.claude/CLAUDE.md` - Claude Code configuration
+-   `.claude/CLAUDE.md` - VT Code configuration (compatible)
 -   `README.md` - Project overview
 -   `CONTRIBUTING.md` - Contribution guidelines
--   `.claude/skills/README.md` - Skills directory guide
+-   `.claude/skills/README.md` - Skills directory guide (compatible)
 
 ---
 

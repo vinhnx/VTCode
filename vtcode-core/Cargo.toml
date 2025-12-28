@@ -154,6 +154,7 @@ editor-command = "2.0"
 signal-hook = "0.3"
 better-panic = { version = "0.3.0", features = ["syntect"] }
 lsp-types = "0.97.0"
+notify-rust = { version = "4.11", optional = true }
 
 # A2A (Agent2Agent) Protocol HTTP server support
 axum = { version = "0.8", features = ["json", "macros"], optional = true }
@@ -183,6 +184,7 @@ default = []
 swift = ["dep:tree-sitter-swift"]
 schema = ["dep:schemars"]
 a2a-server = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]
+desktop-notifications = ["dep:notify-rust"]
 
 [dependencies.tree-sitter-swift]
 version = "0.7.1"
