@@ -61,7 +61,9 @@ impl OutputStyleManager {
 
             if path.extension().and_then(|s| s.to_str()) == Some("md") {
                 if let Ok(output_style) = Self::load_from_file(&path) {
-                    manager.styles.insert(output_style.config.name.clone(), output_style);
+                    manager
+                        .styles
+                        .insert(output_style.config.name.clone(), output_style);
                 }
             }
         }
@@ -77,7 +79,11 @@ impl OutputStyleManager {
     fn parse_output_style(content: &str) -> Result<OutputStyle, Box<dyn std::error::Error>> {
         // Look for frontmatter (between --- and ---)
         if let Some(frontmatter_end) = content.find("\n---\n") {
-            let frontmatter_start = if content.starts_with("---\n") { 0 } else { content.find("---\n").unwrap_or(0) };
+            let frontmatter_start = if content.starts_with("---\n") {
+                0
+            } else {
+                content.find("---\n").unwrap_or(0)
+            };
             let frontmatter = &content[frontmatter_start..frontmatter_end + 4];
 
             // Parse the frontmatter
@@ -116,7 +122,16 @@ impl OutputStyleManager {
     pub fn list_styles(&self) -> Vec<(&String, &str)> {
         self.styles
             .iter()
-            .map(|(name, style)| (name, style.config.description.as_deref().unwrap_or("No description")))
+            .map(|(name, style)| {
+                (
+                    name,
+                    style
+                        .config
+                        .description
+                        .as_deref()
+                        .unwrap_or("No description"),
+                )
+            })
             .collect()
     }
 
@@ -155,7 +170,10 @@ This is a test output style."#;
 
         let style = OutputStyleManager::parse_output_style(content).unwrap();
         assert_eq!(style.config.name, "Test Style");
-        assert_eq!(style.config.description, Some("A test output style".to_string()));
+        assert_eq!(
+            style.config.description,
+            Some("A test output style".to_string())
+        );
         assert_eq!(style.config.keep_coding_instructions, false);
         assert!(style.content.contains("This is a test output style"));
     }
@@ -173,8 +191,10 @@ This is a test output style."#;
     fn test_load_from_directory() {
         let temp_dir = TempDir::new().unwrap();
         let style_file = temp_dir.path().join("test_style.md");
-        
-        fs::write(&style_file, r#"---
+
+        fs::write(
+            &style_file,
+            r#"---
 name: Test Style
 description: A test output style
 keep-coding-instructions: true
@@ -182,7 +202,9 @@ keep-coding-instructions: true
 
 # Test Output Style
 
-This is a test output style."#).unwrap();
+This is a test output style."#,
+        )
+        .unwrap();
 
         let manager = OutputStyleManager::load_from_directory(temp_dir.path()).unwrap();
         assert!(manager.get_style("Test Style").is_some());

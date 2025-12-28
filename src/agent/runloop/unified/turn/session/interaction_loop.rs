@@ -93,7 +93,11 @@ pub(crate) async fn run_interaction_loop(
 
     loop {
         // Refresh status line
-        let vim_mode_enabled = ctx.vt_cfg.as_ref().map(|cfg| cfg.agent.vim_mode_enabled).unwrap_or(false);
+        let vim_mode_enabled = ctx
+            .vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.agent.vim_mode_enabled)
+            .unwrap_or(false);
         let vim_mode_normal = false; // No vim state in interaction loop
 
         if let Err(error) =
@@ -264,9 +268,13 @@ pub(crate) async fn run_interaction_loop(
             }
             input if input.starts_with('/') => {
                 if let Some(command_input) = input.strip_prefix('/') {
-                    let outcome =
-                        handle_slash_command(command_input, ctx.renderer, ctx.custom_prompts, Some(ctx.custom_slash_commands))
-                            .await?;
+                    let outcome = handle_slash_command(
+                        command_input,
+                        ctx.renderer,
+                        ctx.custom_prompts,
+                        Some(ctx.custom_slash_commands),
+                    )
+                    .await?;
 
                     let command_result = slash_commands::handle_outcome(
                         outcome,
@@ -418,8 +426,10 @@ pub(crate) async fn run_interaction_loop(
                         ));
                     }
                     Err(err) => {
-                        ctx.renderer
-                            .line(MessageStyle::Error, &format!("Bash command failed: {}", err))?;
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Bash command failed: {}", err),
+                        )?;
                         ctx.conversation_history.push(uni::Message::tool_response(
                             tool_call_id.clone(),
                             format!("{{\"error\": \"{}\"}}", err),

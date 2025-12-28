@@ -140,7 +140,7 @@ struct CacheConfig {
 impl ToolDiscoveryCache {
     pub fn new(capacity: usize) -> Self {
         let config = CacheConfig {
-            max_age: Duration::from_secs(300), // 5 minutes
+            max_age: Duration::from_secs(300),                  // 5 minutes
             provider_refresh_interval: Duration::from_secs(60), // 1 minute
             expected_tool_count: 1000,
             false_positive_rate: 0.01, // 1% false positive rate
@@ -345,15 +345,21 @@ impl ToolDiscoveryCache {
 
     /// Get cache statistics
     pub fn stats(&self) -> ToolCacheStats {
-        let (detailed_entries, detailed_capacity) = self.detailed_cache.read()
+        let (detailed_entries, detailed_capacity) = self
+            .detailed_cache
+            .read()
             .map(|cache| (cache.len(), cache.cap().get()))
             .unwrap_or((0, 0));
 
-        let all_tools_entries = self.all_tools_cache.read()
+        let all_tools_entries = self
+            .all_tools_cache
+            .read()
             .map(|cache| cache.len())
             .unwrap_or(0);
 
-        let (bf_size, bf_hashes) = self.bloom_filter.read()
+        let (bf_size, bf_hashes) = self
+            .bloom_filter
+            .read()
             .map(|bf| (bf.size, bf.num_hashes))
             .unwrap_or((0, 0));
 
@@ -403,7 +409,10 @@ impl CachedToolDiscovery {
         }
 
         // Check detailed cache
-        if let Some(cached) = self.cache.get_cached_discovery(provider_name, keyword, detail_level) {
+        if let Some(cached) = self
+            .cache
+            .get_cached_discovery(provider_name, keyword, detail_level)
+        {
             return cached;
         }
 
@@ -411,7 +420,8 @@ impl CachedToolDiscovery {
         let results = self.perform_search(&all_tools, keyword, detail_level);
 
         // Cache the results
-        self.cache.cache_discovery(provider_name, keyword, detail_level, results.clone());
+        self.cache
+            .cache_discovery(provider_name, keyword, detail_level, results.clone());
 
         results
     }
@@ -457,7 +467,11 @@ impl CachedToolDiscovery {
         }
 
         // Sort by relevance score
-        results.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.relevance_score
+                .partial_cmp(&a.relevance_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         results
     }
@@ -548,21 +562,23 @@ mod tests {
         let detail_level = DetailLevel::Full;
 
         // Cache miss
-        assert!(cache.get_cached_discovery(provider_name, keyword, detail_level).is_none());
+        assert!(
+            cache
+                .get_cached_discovery(provider_name, keyword, detail_level)
+                .is_none()
+        );
 
         // Cache some results
-        let results = vec![
-            ToolDiscoveryResult {
-                tool: McpToolInfo {
-                    name: "search_files".to_string(),
-                    description: "Search for files".to_string(),
-                    provider: "test".to_string(),
-                    input_schema: serde_json::json!({}),
-                },
-                relevance_score: 0.9,
-                detail_level,
-            }
-        ];
+        let results = vec![ToolDiscoveryResult {
+            tool: McpToolInfo {
+                name: "search_files".to_string(),
+                description: "Search for files".to_string(),
+                provider: "test".to_string(),
+                input_schema: serde_json::json!({}),
+            },
+            relevance_score: 0.9,
+            detail_level,
+        }];
 
         cache.cache_discovery(provider_name, keyword, detail_level, results.clone());
 

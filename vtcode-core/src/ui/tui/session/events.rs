@@ -112,7 +112,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     if has_control && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) {
         if !session.reverse_search_state.active {
             // Start reverse search
-            session.reverse_search_state.start_search(&session.input_manager, &session.input_manager.history());
+            session
+                .reverse_search_state
+                .start_search(&session.input_manager, &session.input_manager.history());
             session.mark_dirty();
             return None;
         }

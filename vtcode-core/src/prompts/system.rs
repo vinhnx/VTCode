@@ -35,8 +35,8 @@ use crate::instructions::{InstructionBundle, InstructionScope, read_instruction_
 use crate::project_doc::read_project_doc;
 use crate::prompts::context::PromptContext;
 use crate::prompts::guidelines::generate_tool_guidelines;
-use crate::prompts::system_prompt_cache::PROMPT_CACHE;
 use crate::prompts::output_styles::OutputStyleApplier;
+use crate::prompts::system_prompt_cache::PROMPT_CACHE;
 use crate::prompts::temporal::generate_temporal_context;
 use dirs::home_dir;
 use std::env;
@@ -417,11 +417,16 @@ pub async fn apply_output_style(
 ) -> String {
     if let Some(config) = vtcode_config {
         let output_style_applier = OutputStyleApplier::new();
-        if let Err(e) = output_style_applier.load_styles_from_config(config, project_root).await {
+        if let Err(e) = output_style_applier
+            .load_styles_from_config(config, project_root)
+            .await
+        {
             tracing::warn!("Failed to load output styles: {}", e);
             instruction // Return original if loading fails
         } else {
-            output_style_applier.apply_style(&config.output_style.active_style, &instruction, config).await
+            output_style_applier
+                .apply_style(&config.output_style.active_style, &instruction, config)
+                .await
         }
     } else {
         instruction // Return original if no config

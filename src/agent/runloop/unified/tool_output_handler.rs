@@ -236,7 +236,6 @@ mod tests {
     use tokio::sync::RwLock;
     use vtcode_core::acp::ToolPermissionCache;
     use vtcode_core::config::loader::VTCodeConfig;
-    use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
     use vtcode_core::core::trajectory::TrajectoryLogger;
     use vtcode_core::tools::ApprovalRecorder;
     use vtcode_core::tools::registry::ToolRegistry;

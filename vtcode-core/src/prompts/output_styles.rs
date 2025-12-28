@@ -1,7 +1,7 @@
-use vtcode_config::{VTCodeConfig, OutputStyleManager, OutputStyle};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use vtcode_config::{OutputStyle, OutputStyleManager, VTCodeConfig};
 
 pub struct OutputStyleApplier {
     manager: Arc<RwLock<OutputStyleManager>>,
@@ -14,21 +14,30 @@ impl OutputStyleApplier {
         }
     }
 
-    pub async fn load_styles_from_config(&self, config: &VTCodeConfig, workspace: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn load_styles_from_config(
+        &self,
+        config: &VTCodeConfig,
+        workspace: &Path,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let output_styles_dir = workspace.join(".vtcode").join("output-styles");
         let manager = OutputStyleManager::load_from_directory(&output_styles_dir)?;
-        
+
         {
             let mut guard = self.manager.write().await;
             *guard = manager;
         }
-        
+
         Ok(())
     }
 
-    pub async fn apply_style(&self, style_name: &str, base_prompt: &str, config: &VTCodeConfig) -> String {
+    pub async fn apply_style(
+        &self,
+        style_name: &str,
+        base_prompt: &str,
+        config: &VTCodeConfig,
+    ) -> String {
         let guard = self.manager.read().await;
-        
+
         if let Some(style) = guard.get_style(style_name) {
             if style.config.keep_coding_instructions {
                 // Combine base prompt with style content
@@ -54,7 +63,11 @@ impl OutputStyleApplier {
 
     pub async fn get_available_styles(&self) -> Vec<String> {
         let guard = self.manager.read().await;
-        guard.list_styles().into_iter().map(|(name, _)| name.clone()).collect()
+        guard
+            .list_styles()
+            .into_iter()
+            .map(|(name, _)| name.clone())
+            .collect()
     }
 }
 

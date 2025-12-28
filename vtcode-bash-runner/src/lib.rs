@@ -9,6 +9,7 @@ pub mod executor;
 pub mod policy;
 pub mod runner;
 
+pub use background::{BackgroundCommandManager, BackgroundTaskHandle, BackgroundTaskStatus};
 #[cfg(feature = "dry-run")]
 pub use executor::DryRunCommandExecutor;
 #[cfg(feature = "exec-events")]
@@ -19,6 +20,5 @@ pub use executor::{
     CommandCategory, CommandExecutor, CommandInvocation, CommandOutput, CommandStatus,
     ProcessCommandExecutor, ShellKind,
 };
-pub use background::{BackgroundCommandManager, BackgroundTaskHandle, BackgroundTaskStatus};
 pub use policy::{AllowAllPolicy, CommandPolicy, WorkspaceGuardPolicy};
 pub use runner::BashRunner;

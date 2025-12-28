@@ -7,21 +7,21 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{Result, Context, bail};
-use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
-use tokio::fs;
 use crate::tools::plugins::PluginRuntime;
+use anyhow::{Context, Result, bail};
+use serde::{Deserialize, Serialize};
+use tokio::fs;
+use tokio::sync::RwLock;
 
-pub mod registry;
-pub mod manifest;
-pub mod installer;
 pub mod config;
+pub mod installer;
+pub mod manifest;
+pub mod registry;
 pub mod testing;
 
-pub use registry::{MarketplaceRegistry, MarketplaceSource};
-pub use manifest::{MarketplaceManifest, PluginManifest};
 pub use installer::PluginInstaller;
+pub use manifest::{MarketplaceManifest, PluginManifest};
+pub use registry::{MarketplaceRegistry, MarketplaceSource};
 
 /// Type alias for marketplace identifiers
 pub type MarketplaceId = String;
@@ -55,13 +55,11 @@ impl Default for MarketplaceConfig {
             enabled: true,
             auto_update: true,
             default_trust: crate::config::PluginTrustLevel::Sandbox,
-            default_marketplaces: vec![
-                MarketplaceSource::Git {
-                    id: "vtcode-official".to_string(),
-                    url: "https://github.com/vinhnx/vtcode-marketplace".to_string(),
-                    refspec: None,
-                }
-            ],
+            default_marketplaces: vec![MarketplaceSource::Git {
+                id: "vtcode-official".to_string(),
+                url: "https://github.com/vinhnx/vtcode-marketplace".to_string(),
+                refspec: None,
+            }],
         }
     }
 }

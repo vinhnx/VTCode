@@ -237,7 +237,12 @@ pub(crate) async fn update_input_status_if_changed(
 }
 
 #[allow(dead_code)]
-fn build_model_status_right(model: &str, reasoning: &str, vim_mode_enabled: bool, vim_mode_normal: bool) -> Option<String> {
+fn build_model_status_right(
+    model: &str,
+    reasoning: &str,
+    vim_mode_enabled: bool,
+    vim_mode_normal: bool,
+) -> Option<String> {
     let mut parts = Vec::new();
 
     if vim_mode_enabled {

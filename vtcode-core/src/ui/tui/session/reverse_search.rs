@@ -6,9 +6,9 @@ use super::input_manager::InputManager;
 pub struct ReverseSearchState {
     pub active: bool,
     pub search_term: String,
-    pub search_position: usize,  // Position in history where search started
+    pub search_position: usize, // Position in history where search started
     pub original_content: String, // Content before search started
-    pub original_cursor: usize,   // Cursor position before search started
+    pub original_cursor: usize, // Cursor position before search started
     pub matches: Vec<(usize, String)>, // (index, matching command)
     pub current_match_index: usize, // Current position in matches
 }
@@ -62,14 +62,17 @@ impl ReverseSearchState {
 
     pub fn update_search(&mut self, history: &[String]) {
         self.matches.clear();
-        
+
         // Search backwards through history for commands containing the search term
         for (i, command) in history.iter().enumerate().rev() {
-            if command.to_lowercase().contains(&self.search_term.to_lowercase()) {
+            if command
+                .to_lowercase()
+                .contains(&self.search_term.to_lowercase())
+            {
                 self.matches.push((history.len() - 1 - i, command.clone()));
             }
         }
-        
+
         self.current_match_index = 0;
     }
 

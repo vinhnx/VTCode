@@ -3,13 +3,13 @@
 //! Implements the caching mechanism for plugins to ensure security and verification
 //! as described in the VT Code plugin reference.
 
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use tokio::fs;
 
-use super::{PluginResult, PluginError};
+use super::{PluginError, PluginResult};
 
 /// Plugin cache manager
 pub struct PluginCache {
@@ -29,32 +29,40 @@ impl PluginCache {
     }
 
     /// Cache a plugin from its source path
-    pub async fn cache_plugin(&mut self, plugin_id: &str, source_path: &Path) -> PluginResult<PathBuf> {
+    pub async fn cache_plugin(
+        &mut self,
+        plugin_id: &str,
+        source_path: &Path,
+    ) -> PluginResult<PathBuf> {
         // Validate source path exists
         if !source_path.exists() {
-            return Err(PluginError::LoadingError(
-                format!("Source path does not exist: {}", source_path.display())
-            ));
+            return Err(PluginError::LoadingError(format!(
+                "Source path does not exist: {}",
+                source_path.display()
+            )));
         }
 
         // Create cache directory if it doesn't exist
-        fs::create_dir_all(&self.cache_dir).await
-            .map_err(|e| PluginError::LoadingError(format!("Failed to create cache directory: {}", e)))?;
+        fs::create_dir_all(&self.cache_dir).await.map_err(|e| {
+            PluginError::LoadingError(format!("Failed to create cache directory: {}", e))
+        })?;
 
         // Create plugin-specific cache directory
         let cache_path = self.cache_dir.join(plugin_id);
 
         // Remove existing cache if it exists
         if cache_path.exists() {
-            fs::remove_dir_all(&cache_path).await
-                .map_err(|e| PluginError::LoadingError(format!("Failed to remove existing cache: {}", e)))?;
+            fs::remove_dir_all(&cache_path).await.map_err(|e| {
+                PluginError::LoadingError(format!("Failed to remove existing cache: {}", e))
+            })?;
         }
 
         // Copy plugin to cache directory
         self.copy_plugin_to_cache(source_path, &cache_path).await?;
 
         // Store in cache mapping
-        self.cached_plugins.insert(plugin_id.to_string(), cache_path.clone());
+        self.cached_plugins
+            .insert(plugin_id.to_string(), cache_path.clone());
 
         Ok(cache_path)
     }
@@ -62,15 +70,17 @@ impl PluginCache {
     /// Copy plugin files to cache directory
     async fn copy_plugin_to_cache(&self, source: &Path, destination: &Path) -> PluginResult<()> {
         Box::pin(async {
-            fs::create_dir_all(destination).await
-                .map_err(|e| PluginError::LoadingError(format!("Failed to create destination directory: {}", e)))?;
+            fs::create_dir_all(destination).await.map_err(|e| {
+                PluginError::LoadingError(format!("Failed to create destination directory: {}", e))
+            })?;
 
-            let mut entries = fs::read_dir(source).await
-                .map_err(|e| PluginError::LoadingError(format!("Failed to read source directory: {}", e)))?;
+            let mut entries = fs::read_dir(source).await.map_err(|e| {
+                PluginError::LoadingError(format!("Failed to read source directory: {}", e))
+            })?;
 
-            while let Some(entry) = entries.next_entry().await
-                .map_err(|e| PluginError::LoadingError(format!("Failed to read directory entry: {}", e)))?
-            {
+            while let Some(entry) = entries.next_entry().await.map_err(|e| {
+                PluginError::LoadingError(format!("Failed to read directory entry: {}", e))
+            })? {
                 let src_path = entry.path();
                 let dst_path = destination.join(entry.file_name());
 
@@ -81,13 +91,15 @@ impl PluginCache {
                     }
                 } else {
                     // Copy file to cache
-                    fs::copy(&src_path, &dst_path).await
-                        .map_err(|e| PluginError::LoadingError(format!("Failed to copy file: {}", e)))?;
+                    fs::copy(&src_path, &dst_path).await.map_err(|e| {
+                        PluginError::LoadingError(format!("Failed to copy file: {}", e))
+                    })?;
                 }
             }
 
             Ok(())
-        }).await
+        })
+        .await
     }
 
     /// Check if a subdirectory is valid for caching (not traversing outside plugin root)
@@ -112,8 +124,9 @@ impl PluginCache {
     pub async fn remove_cached_plugin(&mut self, plugin_id: &str) -> PluginResult<()> {
         if let Some(cache_path) = self.cached_plugins.get(plugin_id) {
             if cache_path.exists() {
-                fs::remove_dir_all(cache_path).await
-                    .map_err(|e| PluginError::LoadingError(format!("Failed to remove cached plugin: {}", e)))?;
+                fs::remove_dir_all(cache_path).await.map_err(|e| {
+                    PluginError::LoadingError(format!("Failed to remove cached plugin: {}", e))
+                })?;
             }
             self.cached_plugins.remove(plugin_id);
         }
@@ -123,7 +136,8 @@ impl PluginCache {
     /// Clear entire cache
     pub async fn clear_cache(&mut self) -> PluginResult<()> {
         if self.cache_dir.exists() {
-            fs::remove_dir_all(&self.cache_dir).await
+            fs::remove_dir_all(&self.cache_dir)
+                .await
                 .map_err(|e| PluginError::LoadingError(format!("Failed to clear cache: {}", e)))?;
         }
 
@@ -137,7 +151,7 @@ impl PluginCache {
         // This is a more thorough check - we scan all files in the plugin directory
         if !plugin_path.exists() {
             return Err(PluginError::LoadingError(
-                "Plugin path does not exist".to_string()
+                "Plugin path does not exist".to_string(),
             ));
         }
 
@@ -145,7 +159,7 @@ impl PluginCache {
         let plugin_str = plugin_path.to_string_lossy();
         if plugin_str.contains("../") || plugin_str.contains("..\\") {
             return Err(PluginError::LoadingError(
-                "Plugin path contains path traversal attempts".to_string()
+                "Plugin path contains path traversal attempts".to_string(),
             ));
         }
 
@@ -161,9 +175,10 @@ impl PluginCache {
 
                             // Check for path traversal in the file/directory names
                             if entry_str.contains("../") || entry_str.contains("..\\") {
-                                return Err(PluginError::LoadingError(
-                                    format!("Plugin contains path traversal in file: {}", entry_path.display())
-                                ));
+                                return Err(PluginError::LoadingError(format!(
+                                    "Plugin contains path traversal in file: {}",
+                                    entry_path.display()
+                                )));
                             }
 
                             if entry_path.is_dir() {

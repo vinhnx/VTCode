@@ -9,8 +9,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::RwLock;
 
+use super::{PluginError, PluginId, PluginManifest, PluginResult};
 use crate::config::PluginRuntimeConfig;
-use super::{PluginId, PluginResult, PluginError, PluginManifest};
 
 /// Plugin state tracking
 #[derive(Debug, Clone, PartialEq)]
@@ -100,18 +100,19 @@ impl PluginRuntime {
         let manifest_path = plugin_path.join(".vtcode-plugin/plugin.json");
 
         if !manifest_path.exists() {
-            return Err(PluginError::ManifestValidationError(
-                format!("Plugin manifest not found at: {}", manifest_path.display())
-            ));
+            return Err(PluginError::ManifestValidationError(format!(
+                "Plugin manifest not found at: {}",
+                manifest_path.display()
+            )));
         }
 
-        let manifest_content = tokio::fs::read_to_string(&manifest_path).await
+        let manifest_content = tokio::fs::read_to_string(&manifest_path)
+            .await
             .map_err(|e| PluginError::LoadingError(format!("Failed to read manifest: {}", e)))?;
 
-        let manifest: PluginManifest = serde_json::from_str(&manifest_content)
-            .map_err(|e| PluginError::ManifestValidationError(
-                format!("Invalid manifest JSON: {}", e)
-            ))?;
+        let manifest: PluginManifest = serde_json::from_str(&manifest_content).map_err(|e| {
+            PluginError::ManifestValidationError(format!("Invalid manifest JSON: {}", e))
+        })?;
 
         Ok(manifest)
     }
@@ -120,14 +121,14 @@ impl PluginRuntime {
     fn validate_manifest(&self, manifest: &PluginManifest) -> PluginResult<()> {
         if manifest.name.is_empty() {
             return Err(PluginError::ManifestValidationError(
-                "Plugin name is required".to_string()
+                "Plugin name is required".to_string(),
             ));
         }
 
         // Validate name format (kebab-case)
         if !self.is_valid_plugin_name(&manifest.name) {
             return Err(PluginError::ManifestValidationError(
-                "Plugin name must be in kebab-case (lowercase with hyphens)".to_string()
+                "Plugin name must be in kebab-case (lowercase with hyphens)".to_string(),
             ));
         }
 
@@ -137,7 +138,8 @@ impl PluginRuntime {
     /// Check if plugin name is valid (kebab-case)
     fn is_valid_plugin_name(&self, name: &str) -> bool {
         // Check if name contains only lowercase letters, numbers, and hyphens
-        name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        name.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
             && !name.starts_with('-')
             && !name.ends_with('-')
             && !name.is_empty()
@@ -155,7 +157,8 @@ impl PluginRuntime {
     /// Get a plugin handle
     pub async fn get_plugin(&self, plugin_id: &str) -> PluginResult<PluginHandle> {
         let plugins = self.plugins.read().await;
-        plugins.get(plugin_id)
+        plugins
+            .get(plugin_id)
             .cloned()
             .ok_or_else(|| PluginError::NotFound(plugin_id.to_string()))
     }

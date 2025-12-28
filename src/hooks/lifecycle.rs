@@ -906,7 +906,10 @@ impl LifecycleHookEngine {
             }
 
             for command in &group.commands {
-                match self.execute_command("TaskCompletion", command, &payload).await {
+                match self
+                    .execute_command("TaskCompletion", command, &payload)
+                    .await
+                {
                     Ok(result) => interpret_task_completion(command, &result, &mut messages),
                     Err(err) => messages.push(HookMessage::error(format!(
                         "TaskCompletion hook `{}` failed: {err}",
