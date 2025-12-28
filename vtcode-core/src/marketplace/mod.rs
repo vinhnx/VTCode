@@ -11,7 +11,7 @@ use anyhow::{Result, Context, bail};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tokio::fs;
-use vtcode_core::tools::plugins::PluginRuntime;
+use crate::tools::plugins::PluginRuntime;
 
 pub mod registry;
 pub mod manifest;

@@ -11,23 +11,34 @@ use tokio::fs;
 use crate::marketplace::{MarketplaceConfig, MarketplaceSource};
 
 /// Configuration for marketplace settings that integrates with VTCode's config system
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MarketplaceSettings {
     /// List of configured marketplaces
     #[serde(default)]
     pub marketplaces: Vec<MarketplaceSource>,
-    
+
     /// List of installed plugins with their settings
     #[serde(default)]
     pub installed_plugins: Vec<InstalledPlugin>,
-    
+
     /// Auto-update settings
     #[serde(default)]
     pub auto_update: AutoUpdateSettings,
-    
+
     /// Security and trust settings
     #[serde(default)]
     pub security: SecuritySettings,
+}
+
+impl Default for MarketplaceSettings {
+    fn default() -> Self {
+        Self {
+            marketplaces: Vec::new(),
+            installed_plugins: Vec::new(),
+            auto_update: AutoUpdateSettings::default(),
+            security: SecuritySettings::default(),
+        }
+    }
 }
 
 /// Information about an installed plugin
@@ -59,36 +70,36 @@ pub struct InstalledPlugin {
 }
 
 /// Auto-update settings for marketplaces and plugins
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AutoUpdateSettings {
     /// Whether to auto-update marketplaces
     #[serde(default = "default_true")]
     pub marketplaces: bool,
-    
+
     /// Whether to auto-update plugins
     #[serde(default = "default_true")]
     pub plugins: bool,
-    
+
     /// Check for updates interval in hours
     #[serde(default = "default_update_interval")]
     pub check_interval_hours: u32,
 }
 
 /// Security and trust settings
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SecuritySettings {
     /// Default trust level for new plugins
     #[serde(default)]
     pub default_trust_level: crate::config::PluginTrustLevel,
-    
+
     /// Whether to require confirmation for untrusted plugins
     #[serde(default = "default_true")]
     pub require_confirmation: bool,
-    
+
     /// List of allowed plugin sources (whitelist)
     #[serde(default)]
     pub allowed_sources: Vec<String>,
-    
+
     /// List of blocked plugin sources (blacklist)
     #[serde(default)]
     pub blocked_sources: Vec<String>,

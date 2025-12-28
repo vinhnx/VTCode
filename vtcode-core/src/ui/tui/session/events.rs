@@ -185,6 +185,17 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            // Check for backslash + Enter quick escape (insert newline without submitting)
+            if session.input_manager.content().ends_with('\\') {
+                // Remove the backslash and insert a newline
+                let mut content = session.input_manager.content().to_string();
+                content.pop(); // Remove the backslash
+                content.push('\n');
+                session.input_manager.set_content(content);
+                session.mark_dirty();
+                return None;
+            }
+
             if has_shift && !has_control && !has_command {
                 session.insert_char('\n');
                 session.mark_dirty();

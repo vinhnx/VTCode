@@ -12,7 +12,9 @@ use vtcode_core::{
             FinishReason, LLMRequest, LLMResponse, LLMStreamEvent, Message, ToolChoice, Usage,
         },
     },
+    tools::{ToolRegistry, ToolPermissionPolicy},
 };
+use crate::cli::AskCommandOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AskRequestMode {
@@ -103,6 +105,25 @@ async fn handle_ask_command_impl(
         eprintln!("  {:16} {}", "provider", &config.provider);
         eprintln!("  {:16} {}\n", "model", &config.model);
     }
+
+    // Check if we should run with tools or without tools
+    let has_tool_permissions = !options.allowed_tools.is_empty() || options.skip_confirmations;
+
+    if has_tool_permissions {
+        // Run with tools using AgentRunner
+        run_ask_with_tools(config, prompt, options).await
+    } else {
+        // Run without tools using simple LLM request
+        run_ask_without_tools(config, prompt, options).await
+    }
+}
+
+async fn run_ask_without_tools(
+    config: &CoreAgentConfig,
+    prompt: &str,
+    options: AskCommandOptions,
+) -> Result<()> {
+    let wants_json = options.wants_json();
 
     let provider = match create_provider_for_model(
         &config.model,
@@ -217,6 +238,85 @@ async fn handle_ask_command_impl(
                 print_final_response(false, Some(response));
             }
         }
+    }
+
+    Ok(())
+}
+
+async fn run_ask_with_tools(
+    config: &CoreAgentConfig,
+    prompt: &str,
+    options: AskCommandOptions,
+) -> Result<()> {
+    use vtcode_core::core::agent::runner::{AgentRunner, Task, ContextItem};
+    use vtcode_core::config::VTCodeConfig;
+    use vtcode_core::config::loader::ConfigManager;
+
+    // Load the full configuration for the agent runner
+    let full_config = ConfigManager::load_from_workspace(&config.workspace)?
+        .config()
+        .clone();
+
+    // Create the agent runner
+    let mut runner = AgentRunner::new(
+        config.clone(),
+        full_config,
+        config.workspace.clone(),
+    ).await?;
+
+    // Apply tool permissions based on CLI options
+    if options.skip_confirmations {
+        // If skipping confirmations, apply allowed tools but filter out disallowed ones
+        let mut effective_allowed_tools = options.allowed_tools.clone();
+        if !options.disallowed_tools.is_empty() {
+            effective_allowed_tools.retain(|tool| !options.disallowed_tools.contains(tool));
+        }
+        runner.enable_full_auto(&effective_allowed_tools).await?;
+    } else if !options.allowed_tools.is_empty() {
+        // If specific allowed tools are provided, filter out disallowed ones
+        let mut effective_allowed_tools = options.allowed_tools.clone();
+        if !options.disallowed_tools.is_empty() {
+            effective_allowed_tools.retain(|tool| !options.disallowed_tools.contains(tool));
+        }
+        runner.enable_full_auto(&effective_allowed_tools).await?;
+    }
+    // Note: If only disallowed tools are specified without allowed tools,
+    // the default behavior (with confirmations) will apply, which is appropriate
+
+    // Create a single task for the prompt
+    let task_id = format!("ask-{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs());
+    let task = Task {
+        id: task_id,
+        title: "CLI Ask Task".to_string(),
+        description: prompt.to_string(),
+        instructions: None,
+    };
+
+    // Execute the task
+    let result = runner.execute_task(&task, &[]).await?;
+
+    // Output the result based on format preference
+    if options.wants_json() {
+        // Emit structured JSON response
+        let mut payload = Map::new();
+        payload.insert("provider".to_string(), json!(config.provider));
+        payload.insert("model".to_string(), json!(config.model));
+        payload.insert("content".to_string(), json!(result.summary));
+        payload.insert("finish_reason".to_string(), json!("stop"));
+        payload.insert("turns_executed".to_string(), json!(result.turns_executed));
+        payload.insert("outcome".to_string(), json!(result.outcome.code()));
+        payload.insert("modified_files".to_string(), json!(result.modified_files));
+        payload.insert("executed_commands".to_string(), json!(result.executed_commands));
+
+        let serialized = serde_json::to_string_pretty(&Value::Object(payload))
+            .context("failed to serialize ask response as JSON")?;
+        println!("{serialized}");
+    } else {
+        // Print the summary response
+        println!("{}", result.summary);
     }
 
     Ok(())

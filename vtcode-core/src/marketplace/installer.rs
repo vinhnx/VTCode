@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Result, Context, bail};
 use tokio::fs;
-use vtcode_core::tools::plugins::{PluginRuntime, PluginManifest as CorePluginManifest};
+use crate::tools::plugins::PluginRuntime;
 
 use super::PluginManifest;
 
@@ -174,7 +174,7 @@ impl PluginInstaller {
     }
 
     /// Validate the plugin manifest before installation
-    fn validate_manifest(&self, manifest: &PluginManifest) -> Result<()> {
+    pub fn validate_manifest(&self, manifest: &PluginManifest) -> Result<()> {
         // Validate required fields
         if manifest.id.is_empty() {
             bail!("Plugin manifest must have a non-empty ID");

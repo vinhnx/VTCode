@@ -53,7 +53,10 @@ tool_output_max_lines = 50
 
 # Status line configuration
 [ui.status_line]
-mode = "auto"
+mode = "command"
+command = "./.vtcode/statusline.sh"
+refresh_interval_ms = 1000
+command_timeout_ms = 200
 
 # PTY (Pseudo Terminal) configuration
 [pty]

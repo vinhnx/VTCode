@@ -40,3 +40,67 @@ pub fn render_skills_section(skills: &[SkillMetadata]) -> Option<String> {
 
     Some(lines.join("\n"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_render_skills_section_empty() {
+        let skills: Vec<SkillMetadata> = vec![];
+        let result = render_skills_section(&skills);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_render_skills_section_single() {
+        let skill = SkillMetadata {
+            name: "test-skill".to_string(),
+            description: "A test skill".to_string(),
+            short_description: None,
+            path: PathBuf::from("/path/to/skill"),
+            scope: crate::skills::model::SkillScope::User,
+            manifest: None,
+        };
+        let skills = vec![skill];
+        let result = render_skills_section(&skills);
+
+        assert!(result.is_some());
+        let output = result.unwrap();
+        assert!(output.contains("## Skills"));
+        assert!(output.contains("### Available skills"));
+        assert!(output.contains("- test-skill: A test skill (file: /path/to/skill)"));
+        assert!(output.contains("### How to use skills"));
+    }
+
+    #[test]
+    fn test_render_skills_section_multiple() {
+        let skill1 = SkillMetadata {
+            name: "skill-one".to_string(),
+            description: "First skill".to_string(),
+            short_description: None,
+            path: PathBuf::from("/path/to/skill1"),
+            scope: crate::skills::model::SkillScope::User,
+            manifest: None,
+        };
+        let skill2 = SkillMetadata {
+            name: "skill-two".to_string(),
+            description: "Second skill".to_string(),
+            short_description: None,
+            path: PathBuf::from("\\path\\to\\skill2"), // Test path separator replacement
+            scope: crate::skills::model::SkillScope::Repo,
+            manifest: None,
+        };
+        let skills = vec![skill1, skill2];
+        let result = render_skills_section(&skills);
+
+        assert!(result.is_some());
+        let output = result.unwrap();
+        assert!(output.contains("## Skills"));
+        assert!(output.contains("### Available skills"));
+        assert!(output.contains("- skill-one: First skill (file: /path/to/skill1)"));
+        assert!(output.contains("- skill-two: Second skill (file: /path/to/skill2)")); // Path separator replaced
+        assert!(output.contains("### How to use skills"));
+    }
+}
