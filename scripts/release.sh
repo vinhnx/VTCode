@@ -1085,36 +1085,7 @@ main() {
         fi
 
         if [[ "$skip_release_check" != 'true' ]]; then
-            # Wait for GitHub release to be created by GitHub Actions
-            print_info "Waiting for GitHub release v$released_version to be created by GitHub Actions..."
-            local retry_count=0
-            local max_retries=90  # Increased to 3 minutes (90 attempts × 2 seconds) to accommodate GitHub Actions
-            while ! gh release view "v$released_version" >/dev/null 2>&1; do
-                retry_count=$((retry_count + 1))
-                if [[ $retry_count -gt $max_retries ]]; then
-                    print_warning "GitHub release v$released_version not found after $max_retries attempts"
-                    print_warning "GitHub Actions may still be running or the release may need to be created manually"
-                    print_info "You can skip this check in the future with --skip-release flag"
-                    if [[ "$in_ci" == false ]]; then
-                        read -p "Continue anyway? (y/N): " -n 1 -r
-                        echo
-                        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                            exit 1
-                        fi
-                    fi
-                    break
-                fi
-                if [[ $retry_count -eq 1 ]]; then
-                    print_info "Release not found yet, will keep checking... (GitHub Actions may take a few minutes)"
-                fi
-                # Show progress every 10 attempts
-                if [[ $((retry_count % 10)) -eq 0 ]]; then
-                    print_info "Still waiting... (attempt $retry_count/$max_retries) - GitHub Actions may still be building"
-                fi
-                sleep 2
-            done
-
-            print_success "GitHub release v$released_version confirmed created"
+            print_info "GitHub release verification skipped - GitHub Actions will handle release creation"
         fi
     fi
 

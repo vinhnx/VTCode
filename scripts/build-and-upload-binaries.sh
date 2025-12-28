@@ -314,15 +314,16 @@ calculate_checksums() {
     echo "$x86_64_macos_sha256" > "$dist_dir/vtcode-v$version-x86_64-apple-darwin.sha256"
     echo "$aarch64_macos_sha256" > "$dist_dir/vtcode-v$version-aarch64-apple-darwin.sha256"
 
-    # Linux checksums (only if on Linux)
-    if [[ "$OSTYPE" != "darwin"* ]] && [[ -f "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" ]]; then
+    # Linux checksums (if binaries exist regardless of platform)
+    if [[ -f "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" ]]; then
         local x86_64_linux_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
-        local aarch64_linux_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
-
         echo "$x86_64_linux_sha256" > "$dist_dir/vtcode-v$version-x86_64-unknown-linux-gnu.sha256"
-        echo "$aarch64_linux_sha256" > "$dist_dir/vtcode-v$version-aarch64-unknown-linux-gnu.sha256"
-
         print_info "x86_64 Linux SHA256: $x86_64_linux_sha256"
+    fi
+
+    if [[ -f "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" ]]; then
+        local aarch64_linux_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+        echo "$aarch64_linux_sha256" > "$dist_dir/vtcode-v$version-aarch64-unknown-linux-gnu.sha256"
         print_info "aarch64 Linux SHA256: $aarch64_linux_sha256"
     fi
 
@@ -361,10 +362,12 @@ upload_binaries() {
     files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.tar.gz")
     files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.sha256")
 
-    # Linux files (only if on Linux)
-    if [[ "$OSTYPE" != "darwin"* ]]; then
+    # Linux files (if they exist regardless of platform)
+    if [[ -f "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" ]]; then
         files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz")
         files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.sha256")
+    fi
+    if [[ -f "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" ]]; then
         files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz")
         files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.sha256")
     fi
@@ -430,21 +433,37 @@ update_homebrew_formula() {
     # Update version
     sed -i.bak "s|version \"[0-9.]*\"|version \"$version\"|g" "$formula_path"
 
-    # Update x86_64 SHA256
-    sed -i.bak "s|sha256 \"[a-f0-9]*\"|sha256 \"$x86_64_sha256\"|g" "$formula_path"
+    # Update x86_64 SHA256 (this is handled by the Python script below)
 
-    # Update aarch64 SHA256 (find the line with aarch64 and update the next SHA256 line)
-    # Using a more portable approach with Python for cross-platform compatibility
+    # Read Linux checksums if they exist
+    local x86_64_linux_sha256=""
+    local aarch64_linux_sha256=""
+    if [ -f "dist/vtcode-v$version-x86_64-unknown-linux-gnu.sha256" ]; then
+        x86_64_linux_sha256=$(cat "dist/vtcode-v$version-x86_64-unknown-linux-gnu.sha256")
+    fi
+    if [ -f "dist/vtcode-v$version-aarch64-unknown-linux-gnu.sha256" ]; then
+        aarch64_linux_sha256=$(cat "dist/vtcode-v$version-aarch64-unknown-linux-gnu.sha256")
+    fi
+
+    # Update all SHA256 values using Python for cross-platform compatibility
     python3 -c "
 import re
 with open('$formula_path', 'r') as f:
     content = f.read()
 
-# Replace x86_64 SHA256 (first occurrence after x86_64 url)
-content = re.sub(r'(x86_64-apple-darwin.*?sha256\s+\")([a-f0-9]+)(\")', r'\g<1>${x86_64_sha256}\g<3>', content, 1, re.DOTALL)
+# Replace x86_64 macOS SHA256 (first occurrence after x86_64 url)
+content = re.sub(r'(x86_64-apple-darwin.*?sha256\s+\\\")([a-f0-9]+)(\\\")', r'\g<1>${x86_64_sha256}\g<3>', content, 1, re.DOTALL)
 
-# Replace aarch64 SHA256 (first occurrence after aarch64 url)
-content = re.sub(r'(aarch64-apple-darwin.*?sha256\s+\")([a-f0-9]+)(\")', r'\g<1>${aarch64_sha256}\g<3>', content, 1, re.DOTALL)
+# Replace aarch64 macOS SHA256 (first occurrence after aarch64 url)
+content = re.sub(r'(aarch64-apple-darwin.*?sha256\s+\\\")([a-f0-9]+)(\\\")', r'\g<1>${aarch64_sha256}\g<3>', content, 1, re.DOTALL)
+
+# Replace x86_64 Linux SHA256 (first occurrence with placeholder)
+if '${x86_64_linux_sha256}' != '':
+    content = re.sub(r'(sha256\\s+\\\")placeholder_x86_64_linux(\\\")', r'\g<1>${x86_64_linux_sha256}\g<3>', content, 1)
+
+# Replace aarch64 Linux SHA256 (first occurrence with placeholder)
+if '${aarch64_linux_sha256}' != '':
+    content = re.sub(r'(sha256\\s+\\\")placeholder_aarch64_linux(\\\")', r'\g<1>${aarch64_linux_sha256}\g<3>', content, 1)
 
 with open('$formula_path', 'w') as f:
     f.write(content)
