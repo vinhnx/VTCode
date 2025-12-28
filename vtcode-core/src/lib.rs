@@ -145,6 +145,7 @@ pub mod mcp;
 pub mod memory; // Memory monitoring and pressure detection
 pub mod metrics;
 pub mod models;
+pub mod notifications;
 pub mod orchestrator;
 pub mod project_doc;
 pub mod prompts;
@@ -202,6 +203,11 @@ pub use mcp::{
     validate_mcp_config,
 };
 pub use memory::{MemoryCheckpoint, MemoryMonitor, MemoryPressure, MemoryReport};
+pub use notifications::{
+    NotificationConfig, NotificationEvent, NotificationManager, get_global_notification_manager,
+    init_global_notification_manager, notify_command_failure, notify_error,
+    notify_human_in_the_loop, notify_tool_failure, send_global_notification,
+};
 pub use orchestrator::{
     DistributedOrchestrator, ExecutionTarget, ExecutorRegistry, LocalExecutor, ScheduledWork,
     WorkExecutor,

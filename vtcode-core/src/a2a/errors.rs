@@ -228,10 +228,7 @@ mod tests {
     #[test]
     fn test_error_code_display() {
         assert_eq!(A2aErrorCode::TaskNotFound.to_string(), "Task not found");
-        assert_eq!(
-            A2aErrorCode::MethodNotFound.to_string(),
-            "Method not found"
-        );
+        assert_eq!(A2aErrorCode::MethodNotFound.to_string(), "Method not found");
     }
 
     #[test]

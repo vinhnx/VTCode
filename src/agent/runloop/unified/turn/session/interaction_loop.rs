@@ -50,8 +50,6 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub decision_ledger:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
-    pub pruning_ledger:
-        &'a Arc<tokio::sync::RwLock<vtcode_core::core::pruning_decisions::PruningDecisionLedger>>,
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
     pub session_stats: &'a mut SessionStats,
     pub mcp_panel_state: &'a mut crate::agent::runloop::mcp_events::McpPanelState,
@@ -278,7 +276,6 @@ pub(crate) async fn run_interaction_loop(
                             tool_registry: ctx.tool_registry,
                             conversation_history: ctx.conversation_history,
                             decision_ledger: ctx.decision_ledger,
-                            pruning_ledger: ctx.pruning_ledger,
                             context_manager: ctx.context_manager,
                             session_stats: ctx.session_stats,
                             tools: ctx.tools,

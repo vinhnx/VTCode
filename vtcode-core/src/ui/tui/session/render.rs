@@ -221,9 +221,10 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         session.total_transcript_rows(content_width) + effective_padding
     } else {
         // Reuse last known total if content unchanged
-        session.scroll_manager.last_known_total().unwrap_or_else(|| {
-            session.total_transcript_rows(content_width) + effective_padding
-        })
+        session
+            .scroll_manager
+            .last_known_total()
+            .unwrap_or_else(|| session.total_transcript_rows(content_width) + effective_padding)
     };
     let (top_offset, _clamped_total_rows) =
         session.prepare_transcript_scroll(total_rows, viewport_rows);

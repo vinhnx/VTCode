@@ -16,7 +16,6 @@ use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolResultCache;
@@ -60,7 +59,6 @@ pub struct TurnLoopContext<'a> {
     pub tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
     pub approval_recorder: &'a Arc<ApprovalRecorder>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
-    pub pruning_ledger: &'a Arc<RwLock<PruningDecisionLedger>>,
     pub tool_registry: &'a mut ToolRegistry,
     pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
     /// Cached tool definitions for efficient reuse (HP-3 optimization)

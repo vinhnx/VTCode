@@ -23,7 +23,7 @@ pub(crate) async fn execute_llm_request(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
     active_model: &str,
-    max_tokens_opt: Option<u32>,
+    _max_tokens_opt: Option<u32>,
     parallel_cfg_opt: Option<ParallelToolConfig>,
 ) -> Result<(uni::LLMResponse, bool)> {
     let provider_client = ctx.provider_client.as_ref();
@@ -64,7 +64,6 @@ pub(crate) async fn execute_llm_request(
         system_prompt: Some(system_prompt),
         tools: current_tools,
         model: active_model.to_string(),
-        max_tokens: max_tokens_opt.or(Some(2000)),
         temperature: Some(0.7),
         stream: use_streaming,
         tool_choice,

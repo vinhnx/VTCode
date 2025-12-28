@@ -58,7 +58,6 @@ pub enum SlashCommandOutcome {
     ManageWorkspaceDirectories {
         command: WorkspaceDirectoryCommand,
     },
-    ShowPruningReport,
     LaunchEditor {
         file: Option<String>,
     },
@@ -226,7 +225,6 @@ pub async fn handle_slash_command(
             Ok(SlashCommandOutcome::ClearConversation)
         }
         "status" => Ok(SlashCommandOutcome::ShowStatus),
-        "pruning-report" | "pruning_report" => Ok(SlashCommandOutcome::ShowPruningReport),
         "doctor" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /doctor")?;
@@ -575,11 +573,12 @@ pub async fn handle_slash_command(
 
             // Validate analysis type
             match analysis_type {
-                "full" | "security" | "performance" | "dependencies" | "complexity" | "structure" => {
+                "full" | "security" | "performance" | "dependencies" | "complexity"
+                | "structure" => {
                     // Store analysis type in session for the handler to use
                     // For now, we just pass it through as a parameter
                     Ok(SlashCommandOutcome::SubmitPrompt {
-                        prompt: format!("Run {} analysis on the workspace", analysis_type)
+                        prompt: format!("Run {} analysis on the workspace", analysis_type),
                     })
                 }
                 _ => {

@@ -31,25 +31,7 @@ pub(crate) async fn handle_tool_execution_result(
             command_success,
             has_more,
         } => {
-            // Add successful tool result to history (token-aware aggregation)
-            // Determine per-call token budget (from args) or fall back to config
-            let mut call_max_tokens = None;
-            if let Some(mt) = args_val.get("max_tokens").and_then(|v| v.as_u64()) {
-                call_max_tokens = Some(mt as usize);
-            } else if let Some(ml) = args_val.get("max_lines").and_then(|v| v.as_u64()) {
-                // Map legacy max_lines to tokens
-                let est = (ml as usize)
-                    .saturating_mul(vtcode_core::core::token_constants::TOKENS_PER_LINE);
-                tracing::warn!(
-                    "`max_lines` is deprecated at tool call; mapping {} lines -> ~{} tokens for backward compatibility",
-                    ml,
-                    est
-                );
-                call_max_tokens = Some(est);
-            }
-
-            // Token budget logic removed - use output directly
-            let applied_max_tokens = call_max_tokens;
+            // Add successful tool result to history
 
             let content_for_model = match output {
                 Value::String(s) => s.clone(),

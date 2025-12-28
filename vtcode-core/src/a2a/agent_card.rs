@@ -99,10 +99,7 @@ impl AgentCard {
             state_transition_history: true,
             extensions: Vec::new(),
         });
-        card.default_input_modes = vec![
-            "text/plain".to_string(),
-            "application/json".to_string(),
-        ];
+        card.default_input_modes = vec!["text/plain".to_string(), "application/json".to_string()];
         card.default_output_modes = vec![
             "text/plain".to_string(),
             "application/json".to_string(),

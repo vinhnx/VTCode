@@ -73,7 +73,6 @@ use tracing::{debug, trace, warn};
 // Match agent runner throttle ceiling
 const LOOP_THROTTLE_MAX_MS: u64 = 500;
 
-
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
 use crate::ui::search::fuzzy_match;
 use std::collections::VecDeque;
@@ -82,8 +81,6 @@ use std::time::SystemTime;
 
 /// Callback for tool progress and output streaming
 pub type ToolProgressCallback = Arc<dyn Fn(&str, &str) + Send + Sync>;
-
-
 
 #[cfg(test)]
 use super::traits::Tool;
@@ -98,10 +95,7 @@ pub struct HarnessContextSnapshot {
 }
 
 impl HarnessContextSnapshot {
-    pub fn new(
-        session_id: String,
-        task_id: Option<String>,
-    ) -> Self {
+    pub fn new(session_id: String, task_id: Option<String>) -> Self {
         Self {
             session_id,
             task_id,
@@ -643,12 +637,7 @@ impl ToolRegistry {
         workspace_root: PathBuf,
         policy_manager: ToolPolicyManager,
     ) -> Self {
-        Self::build_with_policy(
-            workspace_root,
-            PtyConfig::default(),
-            Some(policy_manager),
-        )
-        .await
+        Self::build_with_policy(workspace_root, PtyConfig::default(), Some(policy_manager)).await
     }
 
     pub async fn new_with_custom_policy_and_config(
@@ -656,18 +645,10 @@ impl ToolRegistry {
         pty_config: PtyConfig,
         policy_manager: ToolPolicyManager,
     ) -> Self {
-        Self::build_with_policy(
-            workspace_root,
-            pty_config,
-            Some(policy_manager),
-        )
-        .await
+        Self::build_with_policy(workspace_root, pty_config, Some(policy_manager)).await
     }
 
-    async fn build(
-        workspace_root: PathBuf,
-        pty_config: PtyConfig,
-    ) -> Self {
+    async fn build(workspace_root: PathBuf, pty_config: PtyConfig) -> Self {
         Self::build_with_policy(workspace_root, pty_config, None).await
     }
 
@@ -975,8 +956,6 @@ impl ToolRegistry {
         self.pty_sessions.terminate_all();
     }
 
-
-
     /// Update harness session identifier used for structured tool telemetry
     pub fn set_harness_session(&mut self, session_id: impl Into<String>) {
         self.harness_context.set_session_id(session_id);
@@ -1017,22 +996,26 @@ impl ToolRegistry {
 
     /// Get total tool calls made in current session (for observability)
     pub fn tool_call_count(&self) -> u64 {
-        self.tool_call_counter.load(std::sync::atomic::Ordering::Relaxed)
+        self.tool_call_counter
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Get total PTY poll iterations (for CPU monitoring)
     pub fn pty_poll_count(&self) -> u64 {
-        self.pty_poll_counter.load(std::sync::atomic::Ordering::Relaxed)
+        self.pty_poll_counter
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Increment tool call counter (should be called by tool executors)
     pub(crate) fn increment_tool_calls(&self) {
-        self.tool_call_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.tool_call_counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Increment PTY poll counter (called by PTY polling loop)
     pub(crate) fn increment_pty_polls(&self) {
-        self.pty_poll_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.pty_poll_counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Snapshot harness context metadata
@@ -1631,8 +1614,6 @@ impl ToolRegistry {
         // Capture harness context snapshot for structured telemetry and history
         let context_snapshot = self.harness_context_snapshot();
         let context_payload = context_snapshot.to_json();
-
-
 
         // Validate arguments against schema if available
         if let Some(registration) = self.inventory.registration_for(&tool_name)
@@ -2542,8 +2523,6 @@ impl ToolRegistry {
     }
 }
 
-
-
 impl ToolRegistry {
     /// Prompt for permission before starting long-running tool executions to avoid spinner conflicts
     pub async fn preflight_tool_permission(&mut self, name: &str) -> Result<bool> {
@@ -2762,7 +2741,6 @@ mod tests {
         assert!(response["success"].as_bool().unwrap_or(false));
         Ok(())
     }
-
 
     #[tokio::test]
     async fn execution_history_records_harness_context() -> Result<()> {

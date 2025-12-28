@@ -52,8 +52,6 @@ pub struct SlashCommandContext<'a> {
     pub tool_registry: &'a mut ToolRegistry,
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
-    pub pruning_ledger:
-        &'a Arc<RwLock<vtcode_core::core::pruning_decisions::PruningDecisionLedger>>,
     #[allow(dead_code)]
     pub context_manager: &'a mut ContextManager,
     pub session_stats: &'a mut SessionStats,
@@ -119,7 +117,6 @@ pub async fn handle_outcome(
         }
         SlashCommandOutcome::NewSession => handlers::handle_new_session(ctx).await,
         SlashCommandOutcome::OpenDocs => handlers::handle_open_docs(ctx).await,
-        SlashCommandOutcome::ShowPruningReport => handlers::handle_show_pruning_report(ctx).await,
         SlashCommandOutcome::LaunchEditor { file } => {
             handlers::handle_launch_editor(ctx, file).await
         }

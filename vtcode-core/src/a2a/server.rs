@@ -8,25 +8,28 @@
 
 #![cfg(feature = "a2a-server")]
 
+use crate::a2a::WebhookNotifier;
 use crate::a2a::agent_card::AgentCard;
 use crate::a2a::errors::{A2aError, A2aErrorCode, A2aResult};
 use crate::a2a::rpc::{
-    JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListTasksParams, MessageSendParams,
-    SendStreamingMessageResponse, StreamingEvent, TaskIdParams, TaskQueryParams, JSONRPC_VERSION,
+    JSONRPC_VERSION, JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListTasksParams,
     METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM, METHOD_TASKS_CANCEL, METHOD_TASKS_GET,
     METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET, METHOD_TASKS_PUSH_CONFIG_SET,
+    MessageSendParams, SendStreamingMessageResponse, StreamingEvent, TaskIdParams, TaskQueryParams,
 };
 use crate::a2a::task_manager::TaskManager;
-use crate::a2a::WebhookNotifier;
 use crate::a2a::types::TaskState;
 use axum::{
+    Json, Router,
     extract::State,
     http::StatusCode,
-    response::{sse::{Event, Sse}, IntoResponse, Response},
+    response::{
+        IntoResponse, Response,
+        sse::{Event, Sse},
+    },
     routing::post,
-    Json, Router,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -64,10 +67,7 @@ impl A2aServerState {
 
     /// Create a server state with default settings for VTCode
     pub fn vtcode_default(base_url: impl Into<String>) -> Self {
-        Self::new(
-            TaskManager::new(),
-            AgentCard::vtcode_default(base_url),
-        )
+        Self::new(TaskManager::new(), AgentCard::vtcode_default(base_url))
     }
 }
 
@@ -78,7 +78,10 @@ impl A2aServerState {
 /// Create the A2A HTTP router
 pub fn create_router(state: A2aServerState) -> Router {
     Router::new()
-        .route("/.well-known/agent-card.json", axum::routing::get(get_agent_card))
+        .route(
+            "/.well-known/agent-card.json",
+            axum::routing::get(get_agent_card),
+        )
         .route("/a2a", post(handle_rpc))
         .route("/a2a/stream", post(handle_stream))
         .with_state(state)
@@ -109,13 +112,17 @@ async fn handle_rpc(
 
     // Dispatch to method handler
     let result = match request.method.as_str() {
-        METHOD_MESSAGE_SEND => handle_message_send(&state, request.params, request.id.clone()).await,
+        METHOD_MESSAGE_SEND => {
+            handle_message_send(&state, request.params, request.id.clone()).await
+        }
         METHOD_MESSAGE_STREAM => {
             handle_message_stream(&state, request.params, request.id.clone()).await
         }
         METHOD_TASKS_GET => handle_tasks_get(&state, request.params, request.id.clone()).await,
         METHOD_TASKS_LIST => handle_tasks_list(&state, request.params, request.id.clone()).await,
-        METHOD_TASKS_CANCEL => handle_tasks_cancel(&state, request.params, request.id.clone()).await,
+        METHOD_TASKS_CANCEL => {
+            handle_tasks_cancel(&state, request.params, request.id.clone()).await
+        }
         METHOD_TASKS_PUSH_CONFIG_SET => {
             handle_push_config_set(&state, request.params, request.id.clone()).await
         }
@@ -126,7 +133,7 @@ async fn handle_rpc(
             return Err(A2aErrorResponse::method_not_found(
                 &request.method,
                 request.id,
-            ))
+            ));
         }
     };
 
@@ -140,7 +147,8 @@ async fn handle_rpc(
 async fn handle_stream(
     State(state): State<A2aServerState>,
     Json(request): Json<JsonRpcRequest>,
-) -> Result<Sse<Box<dyn futures::Stream<Item = Result<Event, Infallible>> + Send>>, A2aErrorResponse> {
+) -> Result<Sse<Box<dyn futures::Stream<Item = Result<Event, Infallible>> + Send>>, A2aErrorResponse>
+{
     // Validate request
     if request.jsonrpc != JSONRPC_VERSION {
         return Err(A2aErrorResponse::invalid_request(
@@ -166,7 +174,10 @@ async fn handle_stream(
     let task_id = if let Some(task_id) = params.task_id.clone() {
         task_id
     } else {
-        let task = state.task_manager.create_task(params.context_id.clone()).await;
+        let task = state
+            .task_manager
+            .create_task(params.context_id.clone())
+            .await;
         task.id.clone()
     };
 
@@ -299,10 +310,7 @@ async fn handle_stream(
         // Fire webhook if configured
         let notifier = state_clone.webhook_notifier.clone();
         let task_manager = state_clone.task_manager.clone();
-        let task_id_for_hook = final_status_event
-            .task_id()
-            .unwrap_or_default()
-            .to_string();
+        let task_id_for_hook = final_status_event.task_id().unwrap_or_default().to_string();
         tokio::spawn(async move {
             if let Some(cfg) = task_manager.get_webhook_config(&task_id_for_hook).await {
                 let _ = notifier.send_event(&cfg, final_status_event).await;
@@ -379,14 +387,13 @@ async fn handle_push_config_get(
     params: Option<Value>,
     _id: Value,
 ) -> A2aResult<Value> {
-    let params: TaskIdParams = serde_json::from_value(params.unwrap_or_default()).map_err(
-        |_| {
+    let params: TaskIdParams =
+        serde_json::from_value(params.unwrap_or_default()).map_err(|_| {
             A2aError::rpc(
                 A2aErrorCode::InvalidParams,
                 "Invalid pushNotificationConfig/get params",
             )
-        },
-    )?;
+        })?;
 
     let config = state.task_manager.get_webhook_config(&params.id).await;
 
@@ -423,8 +430,8 @@ async fn handle_tasks_list(
     params: Option<Value>,
     _id: Value,
 ) -> A2aResult<Value> {
-    let params: ListTasksParams = serde_json::from_value(params.unwrap_or_default())
-        .unwrap_or_default();
+    let params: ListTasksParams =
+        serde_json::from_value(params.unwrap_or_default()).unwrap_or_default();
 
     let result = state.task_manager.list_tasks(params).await;
 
@@ -541,10 +548,7 @@ mod tests {
         use serde_json::json;
         let err = A2aError::TaskNotCancelable("Cannot cancel completed task".to_string());
         let err_response = A2aErrorResponse::from_error(err, json!(1));
-        assert_eq!(
-            err_response.status_code,
-            StatusCode::UNPROCESSABLE_ENTITY
-        );
+        assert_eq!(err_response.status_code, StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[test]

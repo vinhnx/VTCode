@@ -30,7 +30,6 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 use vtcode_core::mcp::{McpClient, McpToolInfo};
@@ -57,7 +56,6 @@ pub(crate) struct SessionState {
     pub cached_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
     pub conversation_history: Vec<uni::Message>,
     pub decision_ledger: Arc<RwLock<DecisionTracker>>,
-    pub pruning_ledger: Arc<RwLock<PruningDecisionLedger>>,
     pub trajectory: TrajectoryLogger,
     pub base_system_prompt: String,
     pub full_auto_allowlist: Option<Vec<String>>,
@@ -180,8 +178,7 @@ pub(crate) async fn initialize_session(
 
     let mut full_auto_allowlist: Option<Vec<String>> = None;
 
-    let base_declarations =
-        build_function_declarations_with_mode(tool_documentation_mode);
+    let base_declarations = build_function_declarations_with_mode(tool_documentation_mode);
     let mut tool_definitions: Vec<uni::ToolDefinition> = base_declarations
         .into_iter()
         .map(|decl| {
@@ -349,7 +346,6 @@ pub(crate) async fn initialize_session(
     }
 
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
-    let pruning_ledger = Arc::new(RwLock::new(PruningDecisionLedger::new()));
 
     let conversation_history = build_conversation_history_from_resume(resume).await;
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
@@ -542,7 +538,6 @@ pub(crate) async fn initialize_session(
         cached_tools,
         conversation_history,
         decision_ledger,
-        pruning_ledger,
         trajectory,
         base_system_prompt,
         full_auto_allowlist,

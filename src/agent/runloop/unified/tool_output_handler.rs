@@ -218,7 +218,6 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
         tool_result_cache: ctx.tool_result_cache,
         tool_permission_cache: ctx.tool_permission_cache,
         decision_ledger: ctx.decision_ledger,
-        pruning_ledger: ctx.pruning_ledger,
         session_stats: ctx.session_stats,
         mcp_panel_state: ctx.mcp_panel_state,
         approval_recorder: ctx.approval_recorder,
@@ -369,7 +368,6 @@ mod tests {
         }
 
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
-        let pruning_ledger = Arc::new(RwLock::new(PruningDecisionLedger::new()));
         let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
         let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
@@ -384,7 +382,6 @@ mod tests {
             tool_result_cache: &cache,
             tool_permission_cache: &permission_cache_arc,
             decision_ledger: &decision_ledger,
-            pruning_ledger: &pruning_ledger,
             session_stats: &mut session_stats,
             mcp_panel_state: &mut mcp_panel,
             approval_recorder: &approval_recorder,
@@ -447,7 +444,6 @@ mod tests {
 
         let cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
-        let pruning_ledger = Arc::new(RwLock::new(PruningDecisionLedger::new()));
         let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
         let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
         let approval_recorder = ApprovalRecorder::new(workspace.clone());
@@ -462,7 +458,6 @@ mod tests {
             tool_result_cache: &cache,
             tool_permission_cache: &permission_cache_arc,
             decision_ledger: &decision_ledger,
-            pruning_ledger: &pruning_ledger,
             session_stats: &mut session_stats,
             mcp_panel_state: &mut mcp_panel,
             approval_recorder: &approval_recorder,

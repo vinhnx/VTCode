@@ -9,9 +9,9 @@ pub async fn handle_memory_command() -> Result<MemoryReport> {
     let monitor = MemoryMonitor::new();
 
     // Generate the report
-    let report = monitor.get_report().map_err(|e| {
-        anyhow::anyhow!("Failed to generate memory report: {}", e)
-    })?;
+    let report = monitor
+        .get_report()
+        .map_err(|e| anyhow::anyhow!("Failed to generate memory report: {}", e))?;
 
     println!("{}", style("Memory Usage Report").cyan().bold());
     display_memory_report(&report);
@@ -79,7 +79,11 @@ fn display_memory_report(report: &MemoryReport) {
             println!(
                 "  [{}] {} MB - {}",
                 i + 1,
-                style(format!("{:.1}", checkpoint.rss_bytes as f64 / (1024.0 * 1024.0))).cyan(),
+                style(format!(
+                    "{:.1}",
+                    checkpoint.rss_bytes as f64 / (1024.0 * 1024.0)
+                ))
+                .cyan(),
                 style(&checkpoint.label).dim()
             );
         }
@@ -87,15 +91,17 @@ fn display_memory_report(report: &MemoryReport) {
             println!(
                 "  ... and {} more checkpoint{}",
                 report.recent_checkpoints.len() - 5,
-                if report.recent_checkpoints.len() - 5 == 1 { "" } else { "s" }
+                if report.recent_checkpoints.len() - 5 == 1 {
+                    ""
+                } else {
+                    "s"
+                }
             );
         }
     }
 
     println!("\n{} Tip:", style("[INFO]").dim());
-    println!(
-        "  Run 'cargo build --release' for optimized memory usage"
-    );
+    println!("  Run 'cargo build --release' for optimized memory usage");
 }
 
 #[cfg(test)]

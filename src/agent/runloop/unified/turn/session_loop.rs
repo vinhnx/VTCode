@@ -103,7 +103,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             cached_tools,
             mut conversation_history,
             decision_ledger,
-            pruning_ledger,
             trajectory: traj,
             async_mcp_manager,
             mut mcp_panel_state,
@@ -153,7 +152,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 tools: &tools,
                 conversation_history: &mut conversation_history,
                 decision_ledger: &decision_ledger,
-                pruning_ledger: &pruning_ledger,
                 context_manager: &mut context_manager,
                 session_stats: &mut session_stats,
                 mcp_panel_state: &mut mcp_panel_state,
@@ -243,7 +241,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 tool_result_cache: &tool_result_cache,
                 approval_recorder: &approval_recorder,
                 decision_ledger: &decision_ledger,
-                pruning_ledger: &pruning_ledger,
                 tool_registry: &mut tool_registry,
                 tools: &tools,
                 cached_tools: &cached_tools,
@@ -365,7 +362,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             linked_directories,
             async_mcp_manager.as_deref(),
             &handle,
-            Some(&pruning_ledger),
         )
         .await
         {

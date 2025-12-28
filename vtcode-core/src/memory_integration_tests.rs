@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod memory_integration {
-    use crate::cache::{UnifiedCache, EvictionPolicy, CacheKey, DEFAULT_CACHE_TTL};
+    use crate::cache::{CacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
     use std::collections::VecDeque;
 
     /// Helper to measure current RSS in kilobytes (Unix/macOS only)
@@ -87,11 +87,8 @@ mod memory_integration {
         const CACHE_SIZE: usize = 50; // Post-optimization parse cache size
         const ENTRY_SIZE: usize = 100_000; // ~100KB per parsed tree
 
-        let mut cache: UnifiedCache<MemKey, Vec<u8>> = UnifiedCache::new(
-            CACHE_SIZE,
-            DEFAULT_CACHE_TTL,
-            EvictionPolicy::Lru,
-        );
+        let mut cache: UnifiedCache<MemKey, Vec<u8>> =
+            UnifiedCache::new(CACHE_SIZE, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         // Simulate parsing 200 different files
         for i in 0..200 {
@@ -177,11 +174,7 @@ mod memory_integration {
         let initial_size = cache.len();
         let initial_memory = cache.stats().total_memory_bytes as f64 / 1_000_000.0;
 
-        println!(
-            "Initial: {} entries, {:.1}MB",
-            initial_size,
-            initial_memory
-        );
+        println!("Initial: {} entries, {:.1}MB", initial_size, initial_memory);
 
         // Wait for expiration
         std::thread::sleep(Duration::from_millis(150));
@@ -192,11 +185,7 @@ mod memory_integration {
         let final_size = cache.len();
         let final_memory = cache.stats().total_memory_bytes as f64 / 1_000_000.0;
 
-        println!(
-            "After TTL: {} entries, {:.1}MB",
-            final_size,
-            final_memory
-        );
+        println!("After TTL: {} entries, {:.1}MB", final_size, final_memory);
 
         // Should have cleaned up significantly
         assert!(
@@ -251,17 +240,17 @@ mod memory_integration {
         );
 
         // After initial fill (first 10 cycles), memory should stay relatively stable
-        let stable_period_readings: Vec<f64> = memory_readings[20..]
-            .iter()
-            .map(|&v| v as f64)
-            .collect();
+        let stable_period_readings: Vec<f64> =
+            memory_readings[20..].iter().map(|&v| v as f64).collect();
 
         if stable_period_readings.len() > 2 {
-            let stable_avg: f64 = stable_period_readings.iter().sum::<f64>() / stable_period_readings.len() as f64;
+            let stable_avg: f64 =
+                stable_period_readings.iter().sum::<f64>() / stable_period_readings.len() as f64;
             let stable_variance = stable_period_readings
                 .iter()
                 .map(|&v| (v - stable_avg).abs())
-                .sum::<f64>() / stable_period_readings.len() as f64;
+                .sum::<f64>()
+                / stable_period_readings.len() as f64;
 
             println!(
                 "Stable period: avg={:.0}B, variance={:.0}B",

@@ -46,14 +46,10 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
     let temperature = value
         .get("temperature")
         .and_then(|t| t.as_f64().map(|f| f as f32));
-    let max_tokens = value
-        .get("max_tokens")
-        .and_then(|t| t.as_u64().map(|u| u as u32));
 
     Some(LLMRequest {
         messages: parsed_messages,
         model: model.to_string(),
-        max_tokens,
         temperature,
         ..Default::default()
     })

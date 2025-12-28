@@ -1641,7 +1641,6 @@ impl AgentRunner {
                 }
 
                 if let Some(tool_calls) = effective_tool_calls.filter(|tc| !tc.is_empty()) {
-
                     let can_parallelize = tool_calls.len() > 1
                         && tool_calls.iter().all(|call| {
                             if let Some(func) = &call.function {

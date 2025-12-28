@@ -270,7 +270,8 @@ fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome
             // Check for SKILL.md but only extract stub metadata
             // Extract skill name from parent directory name as fallback
             if file_name == "SKILL.md" {
-                if let Some(skill_dir_name) = path.parent()
+                if let Some(skill_dir_name) = path
+                    .parent()
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                 {

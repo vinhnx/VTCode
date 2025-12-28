@@ -1114,18 +1114,18 @@ impl Default for Cli {
             fork_session: None,
             session_id: None,
             debug: false,
-            enable_skills: false, // Skills disabled by default
-            tick_rate: 250,       // Default tick rate: 250ms
-            frame_rate: 60,       // Default frame rate: 60 FPS
-            agent: None,          // No agent override by default
-            additional_dirs: Vec::new(),  // No additional directories by default
-            allowed_tools: Vec::new(),    // No tool restrictions by default
-            disallowed_tools: Vec::new(), // No tool restrictions by default
+            enable_skills: false,                // Skills disabled by default
+            tick_rate: 250,                      // Default tick rate: 250ms
+            frame_rate: 60,                      // Default frame rate: 60 FPS
+            agent: None,                         // No agent override by default
+            additional_dirs: Vec::new(),         // No additional directories by default
+            allowed_tools: Vec::new(),           // No tool restrictions by default
+            disallowed_tools: Vec::new(),        // No tool restrictions by default
             dangerously_skip_permissions: false, // Safety confirmations enabled by default
-            ide: false,                   // No auto IDE connection by default
-            permission_mode: None,        // Use config permission mode by default
-            chrome: false,                // Chrome integration disabled by default
-            no_chrome: false,             // Chrome integration not explicitly disabled
+            ide: false,                          // No auto IDE connection by default
+            permission_mode: None,               // Use config permission mode by default
+            chrome: false,                       // Chrome integration disabled by default
+            no_chrome: false,                    // Chrome integration not explicitly disabled
             command: Some(Commands::Chat),
         }
     }

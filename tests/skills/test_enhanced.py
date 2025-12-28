@@ -922,11 +922,7 @@ TEST_CASES = [
                     "name": "pdf_report_basic",
                     "skill": "pdf-report-optimized",
                     "query": "create sales report",
-                    "expected_max_tokens": 300,
-                    "expected_min_tokens": 150,
                     "success_criteria": [
-                        "token_count <= expected_max_tokens",
-                        "token_count >= expected_min_tokens",
                         "efficiency_ratio < 0.4"
                     ]
                 }

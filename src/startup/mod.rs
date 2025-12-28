@@ -39,7 +39,7 @@ fn validate_session_id_suffix(suffix: &str) -> Result<()> {
 /// Validate additional directories and resolve to absolute paths
 fn validate_additional_directories(dirs: &[PathBuf]) -> Result<Vec<PathBuf>> {
     let mut validated_dirs = Vec::new();
-    
+
     for dir in dirs {
         if !dir.exists() {
             bail!("Additional directory '{}' does not exist", dir.display());
@@ -47,21 +47,22 @@ fn validate_additional_directories(dirs: &[PathBuf]) -> Result<Vec<PathBuf>> {
         if !dir.is_dir() {
             bail!("Path '{}' is not a directory", dir.display());
         }
-        
+
         // Resolve to absolute path
-        let absolute_dir = dir.canonicalize()
+        let absolute_dir = dir
+            .canonicalize()
             .with_context(|| format!("Failed to resolve path '{}'", dir.display()))?;
-        
+
         validated_dirs.push(absolute_dir);
     }
-    
+
     Ok(validated_dirs)
 }
 
 /// Apply permission mode override from CLI
 fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &str) -> Result<()> {
     use vtcode_config::constants::tools;
-    
+
     match mode.to_lowercase().as_str() {
         "ask" => {
             config.security.human_in_the_loop = true;
@@ -98,7 +99,7 @@ fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &str) -> Resu
             );
         }
     }
-    
+
     Ok(())
 }
 

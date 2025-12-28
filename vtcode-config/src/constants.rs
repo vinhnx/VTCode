@@ -477,7 +477,6 @@ pub mod models {
 
         /// Interleaved thinking configuration for Anthropic models
         pub const INTERLEAVED_THINKING_BETA: &str = "interleaved-thinking-2025-05-14";
-        pub const INTERLEAVED_THINKING_BUDGET_TOKENS: u32 = 12000;
         pub const INTERLEAVED_THINKING_TYPE_ENABLED: &str = "enabled";
     }
 
@@ -587,13 +586,13 @@ pub mod prompt_cache {
     pub const DEFAULT_MIN_QUALITY_THRESHOLD: f64 = 0.7;
 
     pub const OPENAI_MIN_PREFIX_TOKENS: u32 = 1_024;
+    pub const GEMINI_MIN_PREFIX_TOKENS: u32 = 1_024;
     pub const OPENAI_IDLE_EXPIRATION_SECONDS: u64 = 60 * 60; // 1 hour max reuse window
 
     pub const ANTHROPIC_DEFAULT_TTL_SECONDS: u64 = 5 * 60; // 5 minutes
     pub const ANTHROPIC_EXTENDED_TTL_SECONDS: u64 = 60 * 60; // 1 hour option
     pub const ANTHROPIC_MAX_BREAKPOINTS: u8 = 4;
 
-    pub const GEMINI_MIN_PREFIX_TOKENS: u32 = 1_024;
     pub const GEMINI_EXPLICIT_DEFAULT_TTL_SECONDS: u64 = 60 * 60; // 1 hour default for explicit caches
 
     pub const OPENROUTER_CACHE_DISCOUNT_ENABLED: bool = true;
@@ -693,15 +692,10 @@ pub mod defaults {
     pub const DEFAULT_FULL_AUTO_MAX_TURNS: usize = 30;
     pub const DEFAULT_MAX_TOOL_LOOPS: usize = 100;
     pub const DEFAULT_MAX_REPEATED_TOOL_CALLS: usize = 3;
-    pub const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 4_096;
     pub const DEFAULT_PTY_STDOUT_TAIL_LINES: usize = 20;
     pub const DEFAULT_PTY_SCROLLBACK_LINES: usize = 400;
     pub const DEFAULT_TOOL_OUTPUT_MODE: &str = ui::TOOL_OUTPUT_MODE_COMPACT;
 
-    /// Default maximum tokens for PTY command output truncation.
-    /// Prevents context overflow for verbose commands like `cargo clippy`.
-    /// Set to 8000 tokens (~32KB) - enough for error analysis while staying
-    /// well within model context limits.
     pub const DEFAULT_PTY_OUTPUT_MAX_TOKENS: usize = 8_000;
 
     /// Byte fuse for PTY output - secondary safeguard after token truncation.
@@ -1450,135 +1444,18 @@ pub mod llm_generation {
     /// 0.7 provides balanced creativity and consistency
     pub const DEFAULT_TEMPERATURE: f32 = 0.7;
 
-    /// Default maximum tokens for main LLM generation responses
-    pub const DEFAULT_MAX_TOKENS: u32 = 2_000;
-
     /// Default temperature for prompt refinement (0.0-1.0)
     /// Lower than main temperature for more deterministic refinement
     pub const DEFAULT_REFINE_TEMPERATURE: f32 = 0.3;
-
-    /// Default maximum tokens for prompt refinement
-    /// Prompts are shorter, so 800 tokens is typically sufficient
-    pub const DEFAULT_REFINE_MAX_TOKENS: u32 = 800;
-
-    /// Maximum tokens recommended for models with 256k context window
-    /// Leaves room for input context and token overhead
-    pub const MAX_TOKENS_256K_CONTEXT: u32 = 32_768;
-
-    /// Maximum tokens recommended for models with 128k context window
-    pub const MAX_TOKENS_128K_CONTEXT: u32 = 16_384;
 }
 
 /// Context window management defaults
+/// Context window management defaults (simplified - no token counting)
 pub mod context {
-    /// Approximate character count per token when estimating context size
-    pub const CHAR_PER_TOKEN_APPROX: usize = 3;
-
-    /// Default maximum context window (in approximate tokens)
-    pub const DEFAULT_MAX_TOKENS: usize = 90_000;
-
-    /// Trim target as a percentage of the maximum token budget
-    pub const DEFAULT_TRIM_TO_PERCENT: u8 = 80;
-
-    /// Minimum allowed trim percentage (prevents overly aggressive retention)
-    pub const MIN_TRIM_RATIO_PERCENT: u8 = 60;
-
-    /// Maximum allowed trim percentage (prevents minimal trimming)
-    pub const MAX_TRIM_RATIO_PERCENT: u8 = 90;
-
-    /// Default number of recent turns to preserve verbatim
-    pub const DEFAULT_PRESERVE_RECENT_TURNS: usize = 12;
-
-    /// Minimum number of recent turns that must remain after trimming
-    pub const MIN_PRESERVE_RECENT_TURNS: usize = 6;
-
-    /// Maximum number of recent turns to keep when aggressively reducing context
-    pub const AGGRESSIVE_PRESERVE_RECENT_TURNS: usize = 8;
-
-    /// Enable semantic-aware compression heuristics by default
-    pub const DEFAULT_SEMANTIC_COMPRESSION_ENABLED: bool = false;
-
-    /// Enable tool-aware retention heuristics by default
-    pub const DEFAULT_TOOL_AWARE_RETENTION_ENABLED: bool = false;
-
-    /// Default maximum structural depth to preserve during semantic pruning
-    pub const DEFAULT_MAX_STRUCTURAL_DEPTH: usize = 3;
-
-    /// Default number of recent tool results to preserve when tool-aware retention is enabled
-    pub const DEFAULT_PRESERVE_RECENT_TOOLS: usize = 5;
-
-    /// Minimum structural depth allowed for semantic pruning
-    pub const MIN_STRUCTURAL_DEPTH: usize = 1;
-
-    /// Maximum structural depth allowed for semantic pruning to prevent runaway retention
-    pub const MAX_STRUCTURAL_DEPTH: usize = 12;
-
-    /// Minimum number of tool outputs to preserve when tool-aware retention is enabled
-    pub const MIN_PRESERVE_RECENT_TOOLS: usize = 1;
-
-    /// Maximum number of tool outputs to preserve when tool-aware retention is enabled
-    pub const MAX_PRESERVE_RECENT_TOOLS: usize = 24;
-
-    /// Maximum number of retry attempts when the provider signals context overflow
-    pub const CONTEXT_ERROR_RETRY_LIMIT: usize = 2;
-
-    /// Default semantic score for cached values (0-255 scale, typically)
-    pub const DEFAULT_SEMANTIC_CACHE_SCORE: u8 = 128;
-
-    /// Default semantic score for non-system messages
-    pub const DEFAULT_SEMANTIC_SCORE: u32 = 500;
-
-    /// Default token count estimate for message parts with multiple components
-    pub const DEFAULT_TOKENS_FOR_PARTS: usize = 256;
-
-    /// Approximate number of characters per token used for token estimation
-    pub const CHAR_PER_TOKEN_APPROXIMATION: usize = 4;
-
-    /// Default semantic score for system messages
-    pub const SYSTEM_MESSAGE_SEMANTIC_SCORE: u32 = 950;
-
-    /// Default semantic score for user messages
-    pub const USER_MESSAGE_SEMANTIC_SCORE: u32 = 850;
-
-    /// Scaling factor for semantic scores (typically scales from 0-255 to 0-1000 range)
-    pub const SEMANTIC_SCORE_SCALING_FACTOR: u32 = 4;
-
-    /// Conversion factor for percentage calculations (100.0)
-    pub const PERCENTAGE_CONVERSION_FACTOR: f64 = 100.0;
-
-    /// Decimal precision for context utilization percentage display
-    pub const CONTEXT_UTILIZATION_PRECISION: usize = 1;
-
-    /// Decimal precision for semantic value per token display
-    pub const SEMANTIC_VALUE_PRECISION: usize = 2;
-
-    /// Minimum token count to prevent division by zero
-    pub const MIN_TOKEN_COUNT: usize = 1;
-
-    /// Default token budget (tokens) for a single tool result when preparing model input
-    /// This is the semantic limit used for token-based truncation of tool outputs.
-    pub const DEFAULT_MODEL_INPUT_TOKEN_BUDGET: usize = 25_000;
-
-    /// Default byte fuse (bytes) applied as a secondary safeguard after token truncation
-    /// Protects against pathological payload sizes that tokenization may not catch.
-    pub const DEFAULT_MODEL_INPUT_BYTE_FUSE: usize = 10 * 1024; // 10 KiB
-
-    /// Approximate tokens per line for estimating token budgets
-    pub const TOKENS_PER_LINE: usize = 10;
-
-    /// Approximate tokens per character for estimating token budgets
-    pub const TOKENS_PER_CHARACTER: usize = 1;
-
-    /// Characters that indicate code content (brackets, braces, etc.)
-    pub const CODE_INDICATOR_CHARS: &str = "{}()[]<>;:=";
-
-    /// Detection threshold for code vs non-code content
-    pub const CODE_DETECTION_THRESHOLD: usize = 10;
-
-    /// Head ratio percentage for code files
+    /// Head ratio percentage for code files (legacy, kept for compatibility)
     pub const CODE_HEAD_RATIO_PERCENT: usize = 60;
 
-    /// Head ratio percentage for log files
+    /// Head ratio percentage for log files (legacy, kept for compatibility)
     pub const LOG_HEAD_RATIO_PERCENT: usize = 20;
 }
 

@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod memory_profiling {
-    use crate::cache::{UnifiedCache, EvictionPolicy, DEFAULT_CACHE_TTL, CacheKey};
+    use crate::cache::{CacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
     use std::collections::HashMap;
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -21,11 +21,8 @@ mod memory_profiling {
     #[test]
     fn test_cache_capacity_enforcement() {
         let max_entries = 100;
-        let mut cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(
-            max_entries,
-            DEFAULT_CACHE_TTL,
-            EvictionPolicy::Lru,
-        );
+        let mut cache: UnifiedCache<MemTestKey, String> =
+            UnifiedCache::new(max_entries, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         // Insert more entries than capacity
         for i in 0..150 {
@@ -53,11 +50,8 @@ mod memory_profiling {
     fn test_cache_expiration_cleanup() {
         use std::time::Duration;
 
-        let mut cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(
-            100,
-            Duration::from_millis(50),
-            EvictionPolicy::Lru,
-        );
+        let mut cache: UnifiedCache<MemTestKey, String> =
+            UnifiedCache::new(100, Duration::from_millis(50), EvictionPolicy::Lru);
 
         let key = MemTestKey("test".into());
         cache.insert(key.clone(), "value".into(), 100);
@@ -75,7 +69,8 @@ mod memory_profiling {
     /// Verify cache hit rate tracking
     #[test]
     fn test_cache_hit_rate_metrics() {
-        let mut cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let mut cache: UnifiedCache<MemTestKey, String> =
+            UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
         let key1 = MemTestKey("key1".into());
         let key2 = MemTestKey("key2".into());
 
@@ -98,7 +93,8 @@ mod memory_profiling {
     /// Verify memory tracking accuracy
     #[test]
     fn test_cache_memory_tracking() {
-        let mut cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(100, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let mut cache: UnifiedCache<MemTestKey, String> =
+            UnifiedCache::new(100, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         let test_size_bytes = 1024;
         let key1 = MemTestKey("key1".into());
@@ -116,7 +112,8 @@ mod memory_profiling {
     /// Verify LRU eviction policy works correctly
     #[test]
     fn test_lru_eviction_policy() {
-        let mut cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(2, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let mut cache: UnifiedCache<MemTestKey, String> =
+            UnifiedCache::new(2, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         let key1 = MemTestKey("key1".into());
         let key2 = MemTestKey("key2".into());
@@ -144,7 +141,8 @@ mod memory_profiling {
     #[test]
     #[ignore]
     fn bench_cache_operations() {
-        let mut cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(1_000, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let mut cache: UnifiedCache<MemTestKey, String> =
+            UnifiedCache::new(1_000, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
         let start = std::time::Instant::now();
 
         // Insert 10,000 entries

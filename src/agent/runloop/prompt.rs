@@ -91,7 +91,6 @@ pub(crate) async fn refine_user_prompt_if_enabled(
     let req = uni::LLMRequest {
         messages: vec![uni::Message::user(raw.to_string())],
         model: refiner_model,
-        max_tokens: Some(vtc.agent.refine_max_tokens),
         temperature: Some(vtc.agent.refine_temperature),
         tool_choice: Some(uni::ToolChoice::none()),
         reasoning_effort,

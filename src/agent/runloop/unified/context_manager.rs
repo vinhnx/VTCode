@@ -3,7 +3,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use anyhow::{Result, bail};
-use vtcode_core::constants::context as context_constants;
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
@@ -29,26 +28,6 @@ impl ContextManager {
             incremental_prompt_builder: IncrementalSystemPrompt::new(),
             loaded_skills,
         }
-    }
-
-    /// Estimate the total tokens that would be used for the current conversation state
-    /// Includes history + estimated overhead for the next model response
-    #[allow(dead_code)]
-    pub(crate) fn estimate_request_tokens(&self, history: &[uni::Message]) -> usize {
-        let history_tokens: usize = history
-            .iter()
-            .map(|msg| match &msg.content {
-                uni::MessageContent::Text(text) => (text.len()
-                    / context_constants::CHAR_PER_TOKEN_APPROXIMATION)
-                    .max(context_constants::MIN_TOKEN_COUNT),
-                uni::MessageContent::Parts(_) => context_constants::DEFAULT_TOKENS_FOR_PARTS,
-            })
-            .sum();
-
-        // Add estimated overhead for model response (typ. ~2000 tokens avg)
-        const MODEL_RESPONSE_OVERHEAD: usize = 2000;
-
-        history_tokens + MODEL_RESPONSE_OVERHEAD
     }
 
     /// Pre-request check that returns recommended action before making an LLM request.
@@ -109,7 +88,6 @@ impl ContextManager {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum PreRequestAction {
     /// Normal operation, proceed with request
     Proceed,
@@ -120,12 +98,8 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn pre_request_check_returns_proceed_when_budget_disabled() {
-        let manager = ContextManager::new(
-            "sys".into(),
-            (),
-            Arc::new(RwLock::new(HashMap::new())),
-        );
+    async fn pre_request_check_returns_proceed() {
+        let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())));
 
         let history = vec![uni::Message::user("hello".to_string())];
         assert_eq!(
@@ -134,29 +108,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn pre_request_check_returns_proceed_when_budget_disabled_with_large_history() {
-        let manager = ContextManager::new(
-            "sys".into(),
-            (),
-            Arc::new(RwLock::new(HashMap::new())),
-        );
-
-        // Create history that's ~80% of max tokens
-        let history = vec![uni::Message::user("x".repeat(30000))];
-        let action = manager.pre_request_check(&history);
-
-        // With token budgeting disabled, should return Proceed even with large history
-        assert_eq!(action, super::PreRequestAction::Proceed);
-    }
-
     #[tokio::test]
     async fn build_system_prompt_with_empty_base_prompt_fails() {
-        let mut manager = ContextManager::new(
-            "".to_string(),
-            (),
-            Arc::new(RwLock::new(HashMap::new())),
-        );
+        let mut manager =
+            ContextManager::new("".to_string(), (), Arc::new(RwLock::new(HashMap::new())));
 
         let result = manager.build_system_prompt(&[], 0, false).await;
         assert!(result.is_err());

@@ -229,7 +229,11 @@ impl TaskManager {
             None
         };
 
-        result = result.into_iter().skip(start_idx).take(page_size as usize).collect();
+        result = result
+            .into_iter()
+            .skip(start_idx)
+            .take(page_size as usize)
+            .collect();
 
         // Optionally trim artifacts
         if params.include_artifacts != Some(true) {
@@ -283,10 +287,7 @@ impl TaskManager {
     }
 
     /// Set webhook configuration for a task
-    pub async fn set_webhook_config(
-        &self,
-        config: TaskPushNotificationConfig,
-    ) -> A2aResult<()> {
+    pub async fn set_webhook_config(&self, config: TaskPushNotificationConfig) -> A2aResult<()> {
         // Validate webhook URL (basic SSRF protection)
         if !config.url.starts_with("https://") && !config.url.starts_with("http://localhost") {
             return Err(A2aError::UnsupportedOperation(
@@ -303,10 +304,7 @@ impl TaskManager {
     }
 
     /// Get webhook configuration for a task
-    pub async fn get_webhook_config(
-        &self,
-        task_id: &str,
-    ) -> Option<TaskPushNotificationConfig> {
+    pub async fn get_webhook_config(&self, task_id: &str) -> Option<TaskPushNotificationConfig> {
         let configs = self.webhook_configs.read().await;
         configs.get(task_id).cloned()
     }

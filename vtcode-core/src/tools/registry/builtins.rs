@@ -157,7 +157,6 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             false,
             ToolRegistry::web_fetch_executor,
         ),
-
         // ============================================================
         // SPECIAL TOOLS (3 exposed + 2 deprecated)
         // ============================================================

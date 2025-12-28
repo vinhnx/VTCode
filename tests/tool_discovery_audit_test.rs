@@ -216,10 +216,7 @@ fn audit_tool_categories() {
         ),
         ("Code Execution", vec!["execute_code"]),
         ("Planning & Meta", vec!["update_plan", "search_tools"]),
-        (
-            "Diagnostic & Introspection",
-            vec!["agent_info"],
-        ),
+        ("Diagnostic & Introspection", vec!["agent_info"]),
         ("Network", vec!["web_fetch"]),
     ]);
 

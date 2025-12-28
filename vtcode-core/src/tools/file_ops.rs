@@ -1991,23 +1991,28 @@ impl FileOpsTool {
         &self,
         file_path: &Path,
         input: &Input,
-        applied_max_tokens: Option<usize>,
+        _applied_max_tokens: Option<usize>,
     ) -> Result<(String, bool, Option<usize>)> {
         let content = tokio::fs::read_to_string(file_path).await?;
         let lines: Vec<&str> = content.lines().collect();
         let total_lines = lines.len();
 
-        // Use custom chunk sizes or token budget if provided; otherwise use defaults
+        // Use custom chunk sizes or max lines if provided; otherwise use defaults
         let start_chunk = if let Some(chunk_lines) = input.chunk_lines {
             chunk_lines / 2
+        } else if let Some(max_lines) = input.max_lines {
+            max_lines / 2
         } else {
             crate::config::constants::chunking::CHUNK_START_LINES
         };
         let end_chunk = if let Some(chunk_lines) = input.chunk_lines {
             chunk_lines / 2
+        } else if let Some(max_lines) = input.max_lines {
+            max_lines / 2
         } else {
             crate::config::constants::chunking::CHUNK_END_LINES
         };
+
         if total_lines <= start_chunk + end_chunk {
             // File is small enough, return all content
             self.log_chunking_operation(file_path, false, Some(total_lines))
@@ -2015,90 +2020,23 @@ impl FileOpsTool {
             return Ok((content, false, Some(total_lines)));
         }
 
-        // Token-aware head+tail chunking. First determine token budget to use.
-        let tokens_budget = if let Some(mt) = applied_max_tokens {
-            mt
-        } else if let Some(mt) = input.max_tokens {
-            mt
-        } else if let Some(ml) = input.max_lines {
-            // Map legacy max_lines to an approximate token count
-            ml.saturating_mul(crate::config::constants::context::TOKENS_PER_LINE)
-        } else if let Some(chunk_lines) = input.chunk_lines {
-            // Convert chunk_lines to tokens (approx)
-            chunk_lines.saturating_mul(crate::config::constants::context::TOKENS_PER_LINE)
-        } else {
-            // Default to reading CHUNK_START_LINES + CHUNK_END_LINES lines; convert to tokens
-            (crate::config::constants::chunking::CHUNK_START_LINES
-                + crate::config::constants::chunking::CHUNK_END_LINES)
-                .saturating_mul(crate::config::constants::context::TOKENS_PER_LINE)
-        };
+        // Simple head+tail chunking based on line counts
+        let head_lines: Vec<&str> = lines.iter().take(start_chunk).copied().collect();
+        let tail_lines: Vec<&str> = lines.iter().rev().take(end_chunk).rev().copied().collect();
 
-        // Determine if content is code (bracket density heuristic)
-        let char_count = content.len();
-        let bracket_count: usize = content
-            .chars()
-            .filter(|c| crate::config::constants::context::CODE_INDICATOR_CHARS.contains(*c))
-            .count();
-        let is_code = bracket_count
-            > (char_count / crate::config::constants::context::CODE_DETECTION_THRESHOLD);
-        let head_ratio = if is_code {
-            crate::config::constants::context::CODE_HEAD_RATIO_PERCENT
-        } else {
-            crate::config::constants::context::LOG_HEAD_RATIO_PERCENT
-        };
-
-        let head_tokens = (tokens_budget * head_ratio) / 100;
-        let tail_tokens = tokens_budget.saturating_sub(head_tokens);
-
-        // Collect head lines until head_tokens reached
-        let mut head_lines = Vec::new();
-        let mut acc_tokens = 0usize;
-        for line in &lines {
-            if acc_tokens >= head_tokens {
-                break;
-            }
-            let line_tokens = (line.len() as f64
-                / crate::config::constants::context::TOKENS_PER_CHARACTER as f64)
-                .ceil() as usize;
-            if acc_tokens + line_tokens <= head_tokens || head_lines.is_empty() {
-                head_lines.push(*line);
-                acc_tokens += line_tokens;
-            } else {
-                break;
-            }
-        }
-
-        // Collect tail lines until tail_tokens reached
-        let mut tail_lines = Vec::new();
-        let mut acc_tail = 0usize;
-        for line in lines.iter().rev() {
-            if acc_tail >= tail_tokens {
-                break;
-            }
-            let line_tokens = (line.len() as f64
-                / crate::config::constants::context::TOKENS_PER_CHARACTER as f64)
-                .ceil() as usize;
-            if acc_tail + line_tokens <= tail_tokens || tail_lines.is_empty() {
-                tail_lines.push(*line);
-                acc_tail += line_tokens;
-            } else {
-                break;
-            }
-        }
-        tail_lines.reverse();
-
+        // Build chunked content
         let mut chunked_content = String::new();
-        // Add head lines
         for (i, line) in head_lines.iter().enumerate() {
             if i > 0 {
                 chunked_content.push('\n');
             }
             chunked_content.push_str(line);
         }
-        // Determine truncated lines count and insert truncation marker
+
         let head_line_count = head_lines.len();
         let tail_line_count = tail_lines.len();
         let truncated_line_count = total_lines.saturating_sub(head_line_count + tail_line_count);
+
         if truncated_line_count > 0 {
             let _ = write!(
                 chunked_content,
@@ -2108,6 +2046,7 @@ impl FileOpsTool {
         } else {
             chunked_content.push_str("\n\n");
         }
+
         // Add tail lines
         for (i, line) in tail_lines.iter().enumerate() {
             if i > 0 {
@@ -2118,7 +2057,6 @@ impl FileOpsTool {
 
         self.log_chunking_operation(file_path, true, Some(total_lines))
             .await?;
-
         Ok((chunked_content, true, Some(total_lines)))
     }
 
@@ -2128,26 +2066,14 @@ impl FileOpsTool {
         file_path: &Path,
         input: &Input,
     ) -> Result<(String, Value, bool)> {
-        // First, check if we should use chunked reading or honor a per-call token budget
+        // First, check if we should use chunked reading or honor a per-call line limit
         if input.chunk_lines.is_some() || input.max_lines.is_some() || input.max_tokens.is_some() {
-            // Determine applied token budget (if provided) or map deprecated max_lines to tokens
-            let mut applied_max_tokens: Option<usize> = None;
-            if let Some(mt) = input.max_tokens {
-                applied_max_tokens = Some(mt);
-            } else if let Some(ml) = input.max_lines {
-                // Map legacy max_lines to an approximate token count
-                let est = ml.saturating_mul(crate::config::constants::context::TOKENS_PER_LINE);
-                tracing::warn!(
-                    "`max_lines` is deprecated; mapping {} lines -> ~{} tokens for backward compatibility",
-                    ml,
-                    est
-                );
-                applied_max_tokens = Some(est);
+            if input.max_tokens.is_some() {
+                tracing::warn!("`max_tokens` parameter is deprecated; ignoring token limits");
             }
 
-            let (content, is_truncated, total_lines) = self
-                .read_file_chunked(file_path, input, applied_max_tokens)
-                .await?;
+            let (content, is_truncated, total_lines) =
+                self.read_file_chunked(file_path, input, None).await?;
 
             // Create metadata object
             let metadata = if let Ok(file_metadata) = tokio::fs::metadata(file_path).await {
@@ -2155,7 +2081,6 @@ impl FileOpsTool {
                     "size_bytes": file_metadata.len(),
                     "size_lines": total_lines,
                     "is_truncated": is_truncated,
-                    "applied_max_tokens": applied_max_tokens,
                     "type": "file",
                     "content_kind": "text",
                     "encoding": "utf8",
@@ -2165,7 +2090,6 @@ impl FileOpsTool {
                     "size_bytes": 0,
                     "size_lines": total_lines,
                     "is_truncated": is_truncated,
-                    "applied_max_tokens": applied_max_tokens,
                     "type": "file",
                     "content_kind": "text",
                     "encoding": "utf8",

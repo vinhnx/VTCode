@@ -36,7 +36,6 @@
 pub mod agent;
 
 pub mod context_optimizer;
-pub mod context_pruner;
 pub mod decision_tracker;
 pub mod error_recovery;
 pub mod execution_context;
@@ -44,16 +43,9 @@ pub mod interfaces;
 pub mod loop_detector;
 pub mod orchestrator_retry;
 pub mod prompt_caching;
-pub mod pruning_decisions;
 pub mod timeout_detector;
 pub mod trajectory;
 
 // Re-export main types
 pub use context_optimizer::ContextOptimizer;
-pub use context_pruner::{
-    ContextEfficiency, ContextPruner, MessageMetrics, MessageType, RetentionDecision, SemanticScore,
-};
 pub use execution_context::ExecutionContext;
-pub use pruning_decisions::{
-    PruningDecision, PruningDecisionLedger, PruningReport, RetentionChoice,
-};

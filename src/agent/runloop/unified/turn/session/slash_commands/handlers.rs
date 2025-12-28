@@ -46,7 +46,10 @@ pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCom
             .mark_tool_preapproved(tools_consts::AGENT_INFO);
         match ctx
             .tool_registry
-            .execute_tool_ref(tools_consts::AGENT_INFO, &serde_json::json!({"mode": "debug"}))
+            .execute_tool_ref(
+                tools_consts::AGENT_INFO,
+                &serde_json::json!({"mode": "debug"}),
+            )
             .await
         {
             Ok(value) => {
@@ -113,7 +116,7 @@ pub async fn handle_analyze_agent(ctx: SlashCommandContext<'_>) -> Result<SlashC
     // For now, we'll show session metrics like before
     // In the future, this could be enhanced to do actual workspace analysis
     // similar to the CLI version
-    
+
     ctx.renderer
         .line(MessageStyle::Info, "Agent behavior analysis:")?;
     ctx.renderer.line(
@@ -539,7 +542,6 @@ pub async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCom
             config: ctx.config,
             message_count: ctx.conversation_history.len(),
             stats: ctx.session_stats,
-            max_tokens: 16000, // Default context window size since context trim config removed
             available_tools: tool_count,
         },
     )
@@ -684,57 +686,6 @@ pub async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<SlashComma
                 .line(MessageStyle::Info, &format!("Please visit: {}", DOCS_URL))?;
         }
     }
-    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-    Ok(SlashCommandControl::Continue)
-}
-
-pub async fn handle_show_pruning_report(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
-    ctx.renderer.line(MessageStyle::Info, "Pruning Report:")?;
-    let ledger = ctx.pruning_ledger.read().await;
-    let report = ledger.generate_report();
-
-    // Display summary statistics
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!(
-            "  Total messages evaluated: {}",
-            report.statistics.total_messages_evaluated
-        ),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!("  Messages kept: {}", report.statistics.messages_kept),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!("  Messages removed: {}", report.statistics.messages_removed),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!(
-            "  Retention ratio: {:.1}%",
-            report.message_retention_ratio * 100.0
-        ),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!("  Semantic efficiency: {:.2}", report.semantic_efficiency),
-    )?;
-
-    // Display brief ledger summary
-    let brief = ledger.render_ledger_brief(10);
-    if !brief.is_empty() {
-        ctx.renderer.line(MessageStyle::Output, "")?;
-        ctx.renderer
-            .line(MessageStyle::Output, "Recent pruning decisions:")?;
-        for line in brief.lines().take(10) {
-            ctx.renderer
-                .line(MessageStyle::Output, &format!("  {}", line))?;
-        }
-    }
-
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }
