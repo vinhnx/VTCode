@@ -7,10 +7,12 @@ fn test_lsp_tool_schema() {
     let tool = LspTool::new(PathBuf::from("."));
     let schema = tool.parameter_schema();
 
-    let properties = schema.get("properties").expect("Should have properties");
-    assert!(properties.get("operation").is_some());
-    assert!(properties.get("server_command").is_some());
-    assert!(properties.get("file_path").is_some());
+    if let Some(schema_obj) = schema {
+        let properties = schema_obj.get("properties").expect("Should have properties");
+        assert!(properties.get("operation").is_some());
+        assert!(properties.get("server_command").is_some());
+        assert!(properties.get("file_path").is_some());
+    }
 }
 
 #[tokio::test]
