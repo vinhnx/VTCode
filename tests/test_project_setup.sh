@@ -48,7 +48,7 @@ fi
 cat > "$HOME/.vtcode/projects/test-project/.project" << EOF
 {
   "name": "test-project",
-  "description": "Test project for VTCode",
+  "description": "Test project for VT Code",
   "created_at": $(date +%s),
   "updated_at": $(date +%s),
   "root_path": "/tmp/test-project",

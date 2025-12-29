@@ -154,6 +154,12 @@ where
             format!(" {rendered}")
         };
 
+        // Filter out redundant system warnings that clutter the UI
+        let combined_message = format!("{}{}", message, extras);
+        if should_filter_log_message(&combined_message) {
+            return;
+        }
+
         let timestamp = format_rfc3339_seconds(SystemTime::now()).to_string();
         let line = format!(
             "{} {:<5} {} {}{}",
@@ -174,6 +180,25 @@ where
             message: message_with_extras,
         });
     }
+}
+
+/// Check if a log message should be filtered out because it's redundant or unhelpful
+fn should_filter_log_message(message: &str) -> bool {
+    let lower_message = message.to_lowercase();
+
+    // Filter out MallocStackLogging related messages
+    let malloc_filters = [
+        "mallocstacklogging",
+        "malscollogging",
+        "no such file or directory",
+        "can't turn off malloc stack logging",
+        "could not tag msl-related memory",
+        "those pages will be included in process footprint",
+        "process is not in a debuggable environment",
+        "unsetting mallocstackloggingdirectory environment variable",
+    ];
+
+    malloc_filters.iter().any(|&filter| lower_message.contains(&filter.to_lowercase()))
 }
 
 pub fn make_tui_log_layer() -> TuiLogLayer {

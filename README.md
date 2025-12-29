@@ -118,7 +118,7 @@ For more information about A2A protocol support, see [A2A Protocol Documentation
 ### CLI Commands for A2A
 
 ```bash
-# Serve VTCode as an A2A agent (requires a2a-server feature)
+# Serve VT Code as an A2A agent (requires a2a-server feature)
 vtcode a2a serve --port 8080
 
 # Discover a remote agent

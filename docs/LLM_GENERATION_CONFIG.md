@@ -1,6 +1,6 @@
 # LLM Generation Configuration
 
-This document describes the configurable LLM generation parameters in VTCode.
+This document describes the configurable LLM generation parameters in VT Code.
 
 ## Overview
 

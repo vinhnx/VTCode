@@ -3,15 +3,11 @@
 //! This module implements a marketplace system for VT Code,
 //! allowing users to discover and install plugins from various sources.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::PathBuf;
 
 use crate::tools::plugins::PluginRuntime;
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use tokio::fs;
-use tokio::sync::RwLock;
 
 pub mod config;
 pub mod installer;

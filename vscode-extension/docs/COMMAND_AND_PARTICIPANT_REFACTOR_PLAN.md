@@ -99,7 +99,7 @@ export class CommandRegistry {
                         `[error] Command "${command.id}" failed: ${message}`
                     );
                     void vscode.window.showErrorMessage(
-                        `VTCode: "${command.id}" failed: ${message}`
+                        `VT Code: "${command.id}" failed: ${message}`
                     );
                 }
             }
@@ -179,7 +179,7 @@ export class AskAgentCommand implements ICommand {
                 error instanceof Error ? error.message : String(error);
             output.appendLine(`[error] vtcode.askAgent failed: ${message}`);
             void vscode.window.showErrorMessage(
-                `Failed to ask VTCode: ${message}`
+                `Failed to ask VT Code: ${message}`
             );
         }
     }
@@ -217,7 +217,7 @@ export class AskSelectionCommand implements ICommand {
         const selection = editor.selection;
         if (selection.isEmpty) {
             void vscode.window.showWarningMessage(
-                "Highlight text first, then run “Ask About Selection with VTCode.”"
+                "Highlight text first, then run “Ask About Selection with VT Code.”"
             );
             return;
         }

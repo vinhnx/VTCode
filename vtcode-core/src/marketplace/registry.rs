@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
 use base64;
@@ -209,7 +208,7 @@ impl MarketplaceRegistry {
             .ok_or_else(|| anyhow::anyhow!("GitHub API response missing content field"))?;
 
         // Decode the base64 content
-        let content_bytes = base64::decode(content_encoded).with_context(|| {
+        let content_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, content_encoded).with_context(|| {
             format!(
                 "Failed to decode base64 content from GitHub: {}/{}",
                 owner, repo

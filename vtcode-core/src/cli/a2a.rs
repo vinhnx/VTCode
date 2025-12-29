@@ -7,7 +7,6 @@
 //! - Managing A2A agent connections
 
 use crate::a2a::cli::A2aCommands;
-use anyhow::Context;
 
 /// Execute an A2A CLI command
 pub async fn execute_a2a_command(command: A2aCommands) -> anyhow::Result<()> {

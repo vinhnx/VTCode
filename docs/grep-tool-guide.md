@@ -2,15 +2,15 @@
 
 ## Overview
 
-The `grep_file` tool is VTCode's primary code search mechanism, powered by **ripgrep** for fast, efficient pattern matching across codebases. It replaces the previous AST-grep tool and provides comprehensive regex-based and literal string searching with support for file filtering, context lines, and language-specific searches.
+The `grep_file` tool is VT Code's primary code search mechanism, powered by **ripgrep** for fast, efficient pattern matching across codebases. It replaces the previous AST-grep tool and provides comprehensive regex-based and literal string searching with support for file filtering, context lines, and language-specific searches.
 
 ## Architecture
 
-- **Backend**: ripgrep (rg) with fallback to perg for environments where ripgrep is unavailable
-- **Search Type**: Regex-based (default) or literal string matching
-- **File Filtering**: Glob patterns, file type matching, size limits
-- **Performance**: Respects `.gitignore` and `.ignore` files by default for faster searches
-- **Context**: Optional surrounding lines for understanding matched code
+-   **Backend**: ripgrep (rg) with fallback to perg for environments where ripgrep is unavailable
+-   **Search Type**: Regex-based (default) or literal string matching
+-   **File Filtering**: Glob patterns, file type matching, size limits
+-   **Performance**: Respects `.gitignore` and `.ignore` files by default for faster searches
+-   **Context**: Optional surrounding lines for understanding matched code
 
 ## Basic Usage
 
@@ -18,8 +18,8 @@ The `grep_file` tool is VTCode's primary code search mechanism, powered by **rip
 
 ```json
 {
-  "pattern": "TODO",
-  "path": "src"
+    "pattern": "TODO",
+    "path": "src"
 }
 ```
 
@@ -27,9 +27,9 @@ The `grep_file` tool is VTCode's primary code search mechanism, powered by **rip
 
 ```json
 {
-  "pattern": "^(pub )?fn \\w+\\(",
-  "glob": "**/*.rs",
-  "context_lines": 3
+    "pattern": "^(pub )?fn \\w+\\(",
+    "glob": "**/*.rs",
+    "context_lines": 3
 }
 ```
 
@@ -37,9 +37,9 @@ The `grep_file` tool is VTCode's primary code search mechanism, powered by **rip
 
 ```json
 {
-  "pattern": "^import\\s.*from",
-  "glob": "**/*.ts",
-  "case_sensitive": false
+    "pattern": "^import\\s.*from",
+    "glob": "**/*.ts",
+    "case_sensitive": false
 }
 ```
 
@@ -47,164 +47,177 @@ The `grep_file` tool is VTCode's primary code search mechanism, powered by **rip
 
 ### Core Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `pattern` | string | *(required)* | Regex pattern or literal string to search for |
-| `path` | string | "." | Directory to search (relative path) |
-| `max_results` | integer | 100 | Maximum results to return (1-1000) |
+| Parameter     | Type    | Default      | Description                                   |
+| ------------- | ------- | ------------ | --------------------------------------------- |
+| `pattern`     | string  | _(required)_ | Regex pattern or literal string to search for |
+| `path`        | string  | "."          | Directory to search (relative path)           |
+| `max_results` | integer | 100          | Maximum results to return (1-1000)            |
 
 ### Pattern Matching
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `literal` | boolean | false | Treat pattern as literal string (disable regex) |
-| `case_sensitive` | boolean | false | Force case-sensitive matching. Default uses smart-case |
-| `word_boundaries` | boolean | false | Match only at word boundaries (`\b` in regex) |
-| `invert_match` | boolean | false | Return lines that DON'T match the pattern |
-| `only_matching` | boolean | false | Show only matched parts, not full lines |
+| Parameter         | Type    | Default | Description                                            |
+| ----------------- | ------- | ------- | ------------------------------------------------------ |
+| `literal`         | boolean | false   | Treat pattern as literal string (disable regex)        |
+| `case_sensitive`  | boolean | false   | Force case-sensitive matching. Default uses smart-case |
+| `word_boundaries` | boolean | false   | Match only at word boundaries (`\b` in regex)          |
+| `invert_match`    | boolean | false   | Return lines that DON'T match the pattern              |
+| `only_matching`   | boolean | false   | Show only matched parts, not full lines                |
 
 ### File Filtering
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `glob_pattern` | string | null | Glob pattern to filter files (e.g., `**/*.rs`, `src/**/*.ts`) |
-| `type_pattern` | string | null | Filter by file type (rust, python, typescript, javascript, java, go, etc.) |
-| `max_file_size` | integer | null | Skip files larger than this (in bytes) |
-| `respect_ignore_files` | boolean | true | Respect `.gitignore` and `.ignore` files |
-| `search_hidden` | boolean | false | Search inside hidden directories (starting with `.`) |
-| `include_hidden` | boolean | false | Include hidden files in results |
-| `search_binary` | boolean | false | Search binary files (usually false) |
+| Parameter              | Type    | Default | Description                                                                |
+| ---------------------- | ------- | ------- | -------------------------------------------------------------------------- |
+| `glob_pattern`         | string  | null    | Glob pattern to filter files (e.g., `**/*.rs`, `src/**/*.ts`)              |
+| `type_pattern`         | string  | null    | Filter by file type (rust, python, typescript, javascript, java, go, etc.) |
+| `max_file_size`        | integer | null    | Skip files larger than this (in bytes)                                     |
+| `respect_ignore_files` | boolean | true    | Respect `.gitignore` and `.ignore` files                                   |
+| `search_hidden`        | boolean | false   | Search inside hidden directories (starting with `.`)                       |
+| `include_hidden`       | boolean | false   | Include hidden files in results                                            |
+| `search_binary`        | boolean | false   | Search binary files (usually false)                                        |
 
 ### Output Formatting
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `context_lines` | integer | 0 | Lines of context before/after matches (0-20) |
-| `line_number` | boolean | true | Include line numbers in output |
-| `column` | boolean | false | Include column numbers for exact match position |
-| `trim` | boolean | false | Trim leading/trailing whitespace |
-| `response_format` | string | "concise" | Output format (concise or detailed) |
+| Parameter         | Type    | Default   | Description                                     |
+| ----------------- | ------- | --------- | ----------------------------------------------- |
+| `context_lines`   | integer | 0         | Lines of context before/after matches (0-20)    |
+| `line_number`     | boolean | true      | Include line numbers in output                  |
+| `column`          | boolean | false     | Include column numbers for exact match position |
+| `trim`            | boolean | false     | Trim leading/trailing whitespace                |
+| `response_format` | string  | "concise" | Output format (concise or detailed)             |
 
 ## Common Patterns
 
 ### Finding Functions
 
 **Rust functions:**
+
 ```json
 {
-  "pattern": "^(pub )?async fn \\w+|^(pub )?fn \\w+",
-  "glob": "**/*.rs"
+    "pattern": "^(pub )?async fn \\w+|^(pub )?fn \\w+",
+    "glob": "**/*.rs"
 }
 ```
 
 **TypeScript/JavaScript functions:**
+
 ```json
 {
-  "pattern": "^(export )?function \\w+|^const \\w+ = (async )?\\(",
-  "glob": "**/*.ts"
+    "pattern": "^(export )?function \\w+|^const \\w+ = (async )?\\(",
+    "glob": "**/*.ts"
 }
 ```
 
 **Python functions:**
+
 ```json
 {
-  "pattern": "^def \\w+\\(",
-  "type_pattern": "python"
+    "pattern": "^def \\w+\\(",
+    "type_pattern": "python"
 }
 ```
 
 ### Finding Error Handling
 
 **Rust panics and unwraps:**
+
 ```json
 {
-  "pattern": "panic!|unwrap\\(|expect\\(",
-  "type_pattern": "rust",
-  "context_lines": 2
+    "pattern": "panic!|unwrap\\(|expect\\(",
+    "type_pattern": "rust",
+    "context_lines": 2
 }
 ```
 
 **Try-catch blocks:**
+
 ```json
 {
-  "pattern": "try\\s*{|catch\\s*\\(|throw ",
-  "glob": "**/*.ts"
+    "pattern": "try\\s*{|catch\\s*\\(|throw ",
+    "glob": "**/*.ts"
 }
 ```
 
 ### Finding Imports and Exports
 
 **TypeScript imports:**
+
 ```json
 {
-  "pattern": "^import\\s+.*from\\s+['\"]",
-  "glob": "**/*.ts"
+    "pattern": "^import\\s+.*from\\s+['\"]",
+    "glob": "**/*.ts"
 }
 ```
 
 **Python imports:**
+
 ```json
 {
-  "pattern": "^import |^from .* import ",
-  "type_pattern": "python"
+    "pattern": "^import |^from .* import ",
+    "type_pattern": "python"
 }
 ```
 
 ### Finding TODOs and FIXMEs
 
 **All comment markers:**
+
 ```json
 {
-  "pattern": "(TODO|FIXME|HACK|BUG|XXX)[:\\s]",
-  "context_lines": 1
+    "pattern": "(TODO|FIXME|HACK|BUG|XXX)[:\\s]",
+    "context_lines": 1
 }
 ```
 
 **Language-specific TODOs:**
+
 ```json
 {
-  "pattern": "// TODO|# TODO",
-  "type_pattern": "rust",
-  "context_lines": 1
+    "pattern": "// TODO|# TODO",
+    "type_pattern": "rust",
+    "context_lines": 1
 }
 ```
 
 ### Finding API Calls
 
 **HTTP verbs:**
+
 ```json
 {
-  "pattern": "\\.(get|post|put|delete|patch)\\(",
-  "glob": "src/**/*.ts",
-  "context_lines": 2
+    "pattern": "\\.(get|post|put|delete|patch)\\(",
+    "glob": "src/**/*.ts",
+    "context_lines": 2
 }
 ```
 
 **Database queries:**
+
 ```json
 {
-  "pattern": "SELECT|INSERT|UPDATE|DELETE",
-  "glob": "**/*.sql",
-  "case_sensitive": false
+    "pattern": "SELECT|INSERT|UPDATE|DELETE",
+    "glob": "**/*.sql",
+    "case_sensitive": false
 }
 ```
 
 ### Finding Config References
 
 **Environment variables:**
+
 ```json
 {
-  "pattern": "process\\.env\\.|os\\.getenv\\(|getenv\\(",
-  "glob": "**/*.js"
+    "pattern": "process\\.env\\.|os\\.getenv\\(|getenv\\(",
+    "glob": "**/*.js"
 }
 ```
 
 **Config objects:**
+
 ```json
 {
-  "pattern": "config\\.",
-  "case_sensitive": false,
-  "context_lines": 1
+    "pattern": "config\\.",
+    "case_sensitive": false,
+    "context_lines": 1
 }
 ```
 
@@ -212,58 +225,64 @@ The `grep_file` tool is VTCode's primary code search mechanism, powered by **rip
 
 By default, grep_file uses **smart-case matching**:
 
-- **Lowercase pattern** → Case-insensitive search
-  - `pattern: "todo"` matches "TODO", "Todo", "todo"
-  
-- **Uppercase characters in pattern** → Case-sensitive search
-  - `pattern: "TODO"` matches "TODO" only
-  - `pattern: "myVar"` matches "myVar" only
+-   **Lowercase pattern** → Case-insensitive search
+
+    -   `pattern: "todo"` matches "TODO", "Todo", "todo"
+
+-   **Uppercase characters in pattern** → Case-sensitive search
+    -   `pattern: "TODO"` matches "TODO" only
+    -   `pattern: "myVar"` matches "myVar" only
 
 Force case sensitivity with `case_sensitive: true`:
+
 ```json
 {
-  "pattern": "ERROR",
-  "case_sensitive": true  // Forces case-sensitive match
+    "pattern": "ERROR",
+    "case_sensitive": true // Forces case-sensitive match
 }
 ```
 
 ## Performance Tips
 
 1. **Use specific globs** instead of searching all files:
-   ```json
-   {
-     "pattern": "fn deploy",
-     "glob": "src/**/*.rs"  // Much faster than searching entire directory
-   }
-   ```
+
+    ```json
+    {
+        "pattern": "fn deploy",
+        "glob": "src/**/*.rs" // Much faster than searching entire directory
+    }
+    ```
 
 2. **Use type_pattern** for language filtering:
-   ```json
-   {
-     "pattern": "class MyClass",
-     "type_pattern": "python"  // Faster than glob: "**/*.py"
-   }
-   ```
+
+    ```json
+    {
+        "pattern": "class MyClass",
+        "type_pattern": "python" // Faster than glob: "**/*.py"
+    }
+    ```
 
 3. **Respect ignore files** by default (leave `respect_ignore_files: true`)
-   - Skips node_modules, .git, build artifacts automatically
-   - Set `false` only when you need to search ignored directories
+
+    - Skips node_modules, .git, build artifacts automatically
+    - Set `false` only when you need to search ignored directories
 
 4. **Limit context lines** in large searches:
-   ```json
-   {
-     "pattern": ".*",
-     "context_lines": 0  // No context for massive matches
-   }
-   ```
+
+    ```json
+    {
+        "pattern": ".*",
+        "context_lines": 0 // No context for massive matches
+    }
+    ```
 
 5. **Use literal matching** when searching exact strings:
-   ```json
-   {
-     "pattern": "const.ERROR_MSG",
-     "literal": true  // Faster than regex for exact strings
-   }
-   ```
+    ```json
+    {
+        "pattern": "const.ERROR_MSG",
+        "literal": true // Faster than regex for exact strings
+    }
+    ```
 
 ## Advanced Examples
 
@@ -271,10 +290,10 @@ Force case sensitivity with `case_sensitive: true`:
 
 ```json
 {
-  "pattern": "^import.*from.*old-module",
-  "glob": "src/**/*.ts",
-  "context_lines": 0,
-  "files_with_matches": true
+    "pattern": "^import.*from.*old-module",
+    "glob": "src/**/*.ts",
+    "context_lines": 0,
+    "files_with_matches": true
 }
 ```
 
@@ -284,9 +303,9 @@ Returns: List of all files importing the old module.
 
 ```json
 {
-  "pattern": "^export.*const|^export.*function",
-  "glob": "src/**/*.ts",
-  "max_results": 500
+    "pattern": "^export.*const|^export.*function",
+    "glob": "src/**/*.ts",
+    "max_results": 500
 }
 ```
 
@@ -294,9 +313,9 @@ Returns: List of all files importing the old module.
 
 ```json
 {
-  "pattern": "eval\\(|exec\\(|innerHTML|dangerouslySetInnerHTML",
-  "glob": "**/*.ts",
-  "context_lines": 2
+    "pattern": "eval\\(|exec\\(|innerHTML|dangerouslySetInnerHTML",
+    "glob": "**/*.ts",
+    "context_lines": 2
 }
 ```
 
@@ -304,29 +323,30 @@ Returns: List of all files importing the old module.
 
 ```json
 {
-  "pattern": "hardcoded.*password|api.*key.*=|token.*=",
-  "case_sensitive": false,
-  "context_lines": 1
+    "pattern": "hardcoded.*password|api.*key.*=|token.*=",
+    "case_sensitive": false,
+    "context_lines": 1
 }
 ```
 
 ## Comparison with ast-grep
 
-| Feature | grep_file (ripgrep) | ast-grep |
-|---------|-------------------|----------|
-| **Speed** | Very fast | Fast |
-| **Pattern Type** | Regex + literal | AST queries |
-| **File Filtering** | Glob, type, size | Limited |
-| **Language Support** | All languages | Limited |
-| **Installation** | Usually pre-installed | Requires binary |
-| **Learning Curve** | Regex knowledge | Domain language |
-| **Use Cases** | General code search, patterns | AST-specific queries |
+| Feature              | grep_file (ripgrep)           | ast-grep             |
+| -------------------- | ----------------------------- | -------------------- |
+| **Speed**            | Very fast                     | Fast                 |
+| **Pattern Type**     | Regex + literal               | AST queries          |
+| **File Filtering**   | Glob, type, size              | Limited              |
+| **Language Support** | All languages                 | Limited              |
+| **Installation**     | Usually pre-installed         | Requires binary      |
+| **Learning Curve**   | Regex knowledge               | Domain language      |
+| **Use Cases**        | General code search, patterns | AST-specific queries |
 
 **Migration:** Replace AST grep queries with regex patterns targeting:
-- Function signatures: `^(pub )?fn name`
-- Class definitions: `^class Name`
-- Imports: `^import|^from`
-- Comments: `#|//|/*`
+
+-   Function signatures: `^(pub )?fn name`
+-   Class definitions: `^class Name`
+-   Imports: `^import|^from`
+-   Comments: `#|//|/*`
 
 ## Troubleshooting
 
@@ -354,18 +374,18 @@ Returns: List of all files importing the old module.
 
 ```json
 {
-  "success": true,
-  "query": "TODO",
-  "matches": [
-    {
-      "type": "match",
-      "data": {
-        "path": {"text": "src/main.rs"},
-        "line_number": 42,
-        "lines": {"text": "// TODO: refactor this function\n"}
-      }
-    }
-  ]
+    "success": true,
+    "query": "TODO",
+    "matches": [
+        {
+            "type": "match",
+            "data": {
+                "path": { "text": "src/main.rs" },
+                "line_number": 42,
+                "lines": { "text": "// TODO: refactor this function\n" }
+            }
+        }
+    ]
 }
 ```
 
@@ -390,5 +410,5 @@ todos = [m['data']['lines']['text'] for m in results['matches']]
 
 ## See Also
 
-- [AGENTS.md](../AGENTS.md) for system prompt integration
-- [Tool Registry](vtcode_docs_map.md) for tool execution
+-   [AGENTS.md](../AGENTS.md) for system prompt integration
+-   [Tool Registry](vtcode_docs_map.md) for tool execution

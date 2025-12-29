@@ -16,7 +16,7 @@ impl OutputStyleApplier {
 
     pub async fn load_styles_from_config(
         &self,
-        config: &VTCodeConfig,
+        _config: &VTCodeConfig,
         workspace: &Path,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let output_styles_dir = workspace.join(".vtcode").join("output-styles");

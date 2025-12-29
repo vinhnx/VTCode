@@ -1,6 +1,6 @@
 # XDG Base Directory Specification Implementation
 
-This document describes VTCode's implementation of the XDG Base Directory Specification, following the [Ratatui recipe pattern](https://ratatui.rs/recipes/apps/config-directories/).
+This document describes VT Code's implementation of the XDG Base Directory Specification, following the [Ratatui recipe pattern](https://ratatui.rs/recipes/apps/config-directories/).
 
 ## Overview
 

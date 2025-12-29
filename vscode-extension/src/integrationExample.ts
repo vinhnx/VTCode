@@ -141,7 +141,7 @@ const packageJsonContributions = {
             activitybar: [
                 {
                     id: "vtcode-sidebar",
-                    title: "VTCode",
+                    title: "VT Code",
                     icon: "$(comment-discussion)",
                 },
             ],
@@ -149,7 +149,7 @@ const packageJsonContributions = {
             secondary: [
                 {
                     id: "vtcode-sidebar",
-                    title: "VTCode",
+                    title: "VT Code",
                     icon: "$(comment-discussion)",
                 },
             ],
@@ -167,21 +167,21 @@ const packageJsonContributions = {
         commands: [
             {
                 command: "vtcode.chat.clear",
-                title: "VTCode: Clear Chat",
+                title: "VT Code: Clear Chat",
                 icon: "$(clear-all)",
             },
             {
                 command: "vtcode.chat.export",
-                title: "VTCode: Export Chat Transcript",
+                title: "VT Code: Export Chat Transcript",
                 icon: "$(export)",
             },
             {
                 command: "vtcode.mcp.listTools",
-                title: "VTCode: List MCP Tools",
+                title: "VT Code: List MCP Tools",
             },
             {
                 command: "vtcode.mcp.reloadProviders",
-                title: "VTCode: Reload MCP Providers",
+                title: "VT Code: Reload MCP Providers",
             },
         ],
         menus: {

@@ -1,8 +1,8 @@
-# ANSI Escape Sequences in VTCode
+# ANSI Escape Sequences in VT Code
 
 ## Overview
 
-VT Code extensively uses ANSI escape sequences for terminal control, PTY output processing, and TUI rendering. This document maps the ANSI reference to VTCode's implementation.
+VT Code extensively uses ANSI escape sequences for terminal control, PTY output processing, and TUI rendering. This document maps the ANSI reference to VT Code's implementation.
 
 ## Key Modules
 
@@ -56,7 +56,7 @@ pub enum MessageStyle
 
 **Used in**: Tool policy prompts, status messages
 
-## ANSI Sequences Used in VTCode
+## ANSI Sequences Used in VT Code
 
 ### Colors (Most Common)
 

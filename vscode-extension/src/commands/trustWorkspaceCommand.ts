@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { BaseCommand, type CommandContext } from "../types/command";
 
 /**
- * Command to trust the workspace for VTCode
+ * Command to trust the workspace for VT Code
  */
 export class TrustWorkspaceCommand extends BaseCommand {
     public readonly id = "vtcode.trustWorkspace";
@@ -30,7 +30,7 @@ export class TrustWorkspaceCommand extends BaseCommand {
         }
 
         const selection = await vscode.window.showInformationMessage(
-            "Workspace trust is still required for VTCode. Open the trust management settings?",
+            "Workspace trust is still required for VT Code. Open the trust management settings?",
             "Manage Workspace Trust"
         );
         if (selection === "Manage Workspace Trust") {

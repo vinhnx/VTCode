@@ -1,5 +1,5 @@
 id = "vtcode"
-name = "VTCode"
+name = "VT Code"
 version = "0.45.5"
 schema_version = 1
 authors = ["Vinh Nguyen <vinh@example.com>"]

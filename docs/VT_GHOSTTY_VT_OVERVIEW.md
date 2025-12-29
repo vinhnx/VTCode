@@ -1,4 +1,4 @@
-# Ghostty VT Overview (for VTCode)
+# Ghostty VT Overview (for VT Code)
 
 ## Why this exists
 

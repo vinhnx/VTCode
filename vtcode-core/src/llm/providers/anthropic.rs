@@ -1,6 +1,6 @@
 #![allow(clippy::result_large_err)]
 use crate::config::TimeoutsConfig;
-use crate::config::constants::{defaults, env_vars, models, urls};
+use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings, PromptCachingConfig};
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;

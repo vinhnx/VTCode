@@ -3,7 +3,7 @@
 This guide documents the ready-to-use adapters packaged inside the
 `vtcode-commons` crate. Each implementation is designed to help
 consumers of the extracted crates adopt the shared traits without
-depending on VTCode's binary or storage defaults.
+depending on VT Code's binary or storage defaults.
 
 ## Workspace Paths
 

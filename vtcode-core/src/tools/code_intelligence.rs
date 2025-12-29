@@ -142,7 +142,7 @@ impl CodeIntelligenceTool {
         if input.operation == CodeIntelligenceOperation::StatusCheck {
             // Check if LSP tool is available and initialized
             let lsp_available = {
-                let tool = self.lsp_tool.lock().await;
+                let _tool = self.lsp_tool.lock().await;
                 // Try to get LSP status - if it has been initialized, it's available
                 // For now, we'll just check if the tool exists and return basic status
                 true // LSP tool is available if we can access it
@@ -226,13 +226,6 @@ impl CodeIntelligenceTool {
 
             if let Ok(json_args) = serde_json::to_value(lsp_input) {
                 let tool = self.lsp_tool.lock().await;
-                // We need to expose 'execute' or similar from LspTool, or use the trait.
-                // LspTool implements Tool trait.
-                // But wait, Tool trait execute takes Value -> Result<Value>.
-
-                // We'll try to execute it.
-                // We need to use `Tool::execute` but we have the concrete type.
-                // Let's assume we can call the trait method if we import it.
                 use crate::tools::traits::Tool;
 
                 if let Ok(result) = tool.execute(json_args).await {
@@ -270,14 +263,6 @@ impl CodeIntelligenceTool {
                         "status": "LSP status check already handled"
                     }))),
                     error: None,
-                }));
-            }
-            _ => {
-                return Ok(json!(CodeIntelligenceOutput {
-                    success: false,
-                    operation: input.operation.to_string(),
-                    result: None,
-                    error: Some("Unsupported operation".to_string()),
                 }));
             }
         };

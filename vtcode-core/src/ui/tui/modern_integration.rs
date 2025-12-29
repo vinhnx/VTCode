@@ -133,10 +133,12 @@ pub async fn run_modern_tui(
                                 session.mark_dirty();
                             }
                             Event::FocusGained => {
-                                // Handle focus gained
+                                // Handle focus gained - update notification system to prevent notifications
+                                crate::notifications::set_global_terminal_focused(true);
                             }
                             Event::FocusLost => {
-                                // Handle focus lost
+                                // Handle focus lost - allow notifications to be sent
+                                crate::notifications::set_global_terminal_focused(false);
                             }
                             Event::Init => {
                                 // Initial setup after TUI is entered with performance tracking

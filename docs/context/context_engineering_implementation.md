@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document summarizes the implementation of context engineering principles from Anthropic's guide into VTCode. All changes follow the "attention budget" philosophy to prevent context rot and maintain agent coherence.
+This document summarizes the implementation of context engineering principles from Anthropic's guide into VT Code. All changes follow the "attention budget" philosophy to prevent context rot and maintain agent coherence.
 
 ## Completed Improvements
 

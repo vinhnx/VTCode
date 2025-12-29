@@ -2,11 +2,11 @@
 
 Standard escape codes are prefixed with `Escape`:
 
-- Ctrl-Key: `^[`
-- Octal: `\033`
-- Unicode: `\u001b`
-- Hexadecimal: `\x1B`
-- Decimal: `27`
+-   Ctrl-Key: `^[`
+-   Octal: `\033`
+-   Unicode: `\u001b`
+-   Hexadecimal: `\x1B`
+-   Decimal: `27`
 
 Followed by the command, sometimes delimited by opening square bracket (`[`), known as a Control Sequence Introducer (CSI), optionally followed by arguments and the command itself.
 
@@ -20,26 +20,26 @@ For example:
 
 ## Sequences
 
-- `ESC` - sequence starting with `ESC` (`\x1B`)
-- `CSI` - Control Sequence Introducer: sequence starting with `ESC [` or CSI (`\x9B`)
-- `DCS` - Device Control String: sequence starting with `ESC P` or DCS (`\x90`)
-- `OSC` - Operating System Command: sequence starting with `ESC ]` or OSC (`\x9D`)
+-   `ESC` - sequence starting with `ESC` (`\x1B`)
+-   `CSI` - Control Sequence Introducer: sequence starting with `ESC [` or CSI (`\x9B`)
+-   `DCS` - Device Control String: sequence starting with `ESC P` or DCS (`\x90`)
+-   `OSC` - Operating System Command: sequence starting with `ESC ]` or OSC (`\x9D`)
 
 Any whitespaces between sequences and arguments should be ignored. They are present for improved readability.
 
 ## General ASCII Codes
 
-| Name  | decimal | octal | hex  | C-escape | Ctrl-Key | Description                    |
-| ----- | ------- | ----- | ---- | -------- | -------- | ------------------------------ |
-| `BEL` | 7       | 007   | 0x07 | `\a`     | `^G`     | Terminal bell                  |
-| `BS`  | 8       | 010   | 0x08 | `\b`     | `^H`     | Backspace                      |
-| `HT`  | 9       | 011   | 0x09 | `\t`     | `^I`     | Horizontal TAB                 |
-| `LF`  | 10      | 012   | 0x0A | `\n`     | `^J`     | Linefeed (newline)             |
-| `VT`  | 11      | 013   | 0x0B | `\v`     | `^K`     | Vertical TAB                   |
-| `FF`  | 12      | 014   | 0x0C | `\f`     | `^L`     | Formfeed (also: New page `NP`) |
-| `CR`  | 13      | 015   | 0x0D | `\r`     | `^M`     | Carriage return                |
-| `ESC` | 27      | 033   | 0x1B | `\e`[*](#escape) | `^[` | Escape character           |
-| `DEL` | 127     | 177   | 0x7F | `<none>` | `<none>` | Delete character               |
+| Name  | decimal | octal | hex  | C-escape          | Ctrl-Key | Description                    |
+| ----- | ------- | ----- | ---- | ----------------- | -------- | ------------------------------ |
+| `BEL` | 7       | 007   | 0x07 | `\a`              | `^G`     | Terminal bell                  |
+| `BS`  | 8       | 010   | 0x08 | `\b`              | `^H`     | Backspace                      |
+| `HT`  | 9       | 011   | 0x09 | `\t`              | `^I`     | Horizontal TAB                 |
+| `LF`  | 10      | 012   | 0x0A | `\n`              | `^J`     | Linefeed (newline)             |
+| `VT`  | 11      | 013   | 0x0B | `\v`              | `^K`     | Vertical TAB                   |
+| `FF`  | 12      | 014   | 0x0C | `\f`              | `^L`     | Formfeed (also: New page `NP`) |
+| `CR`  | 13      | 015   | 0x0D | `\r`              | `^M`     | Carriage return                |
+| `ESC` | 27      | 033   | 0x1B | `\e`[\*](#escape) | `^[`     | Escape character               |
+| `DEL` | 127     | 177   | 0x7F | `<none>`          | `<none>` | Delete character               |
 
 <div id="escape"></div>
 
@@ -49,39 +49,39 @@ Any whitespaces between sequences and arguments should be ignored. They are pres
 
 ## Cursor Controls
 
-| ESC Code Sequence                                  | Description                                              |
-| :------------------------------------------------- | :------------------------------------------------------- |
-| `ESC[H`                                            | moves cursor to home position (0, 0)                     |
-| `ESC[{line};{column}H` <br> `ESC[{line};{column}f` | moves cursor to line #, column #                         |
-| `ESC[#A`                                           | moves cursor up # lines                                  |
-| `ESC[#B`                                           | moves cursor down # lines                                |
-| `ESC[#C`                                           | moves cursor right # columns                             |
-| `ESC[#D`                                           | moves cursor left # columns                              |
-| `ESC[#E`                                           | moves cursor to beginning of next line, # lines down     |
-| `ESC[#F`                                           | moves cursor to beginning of previous line, # lines up   |
-| `ESC[#G`                                           | moves cursor to column #                                 |
-| `ESC[6n`                                           | request cursor position (reports as `ESC[#;#R`)          |
-| `ESC M`                                            | moves cursor one line up, scrolling if needed            |
-| `ESC 7`                                            | save cursor position (DEC)                               |
-| `ESC 8`                                            | restores the cursor to the last saved position (DEC)     |
-| `ESC[s`                                            | save cursor position (SCO)                               |
-| `ESC[u`                                            | restores the cursor to the last saved position (SCO)     |
+| ESC Code Sequence                                  | Description                                            |
+| :------------------------------------------------- | :----------------------------------------------------- |
+| `ESC[H`                                            | moves cursor to home position (0, 0)                   |
+| `ESC[{line};{column}H` <br> `ESC[{line};{column}f` | moves cursor to line #, column #                       |
+| `ESC[#A`                                           | moves cursor up # lines                                |
+| `ESC[#B`                                           | moves cursor down # lines                              |
+| `ESC[#C`                                           | moves cursor right # columns                           |
+| `ESC[#D`                                           | moves cursor left # columns                            |
+| `ESC[#E`                                           | moves cursor to beginning of next line, # lines down   |
+| `ESC[#F`                                           | moves cursor to beginning of previous line, # lines up |
+| `ESC[#G`                                           | moves cursor to column #                               |
+| `ESC[6n`                                           | request cursor position (reports as `ESC[#;#R`)        |
+| `ESC M`                                            | moves cursor one line up, scrolling if needed          |
+| `ESC 7`                                            | save cursor position (DEC)                             |
+| `ESC 8`                                            | restores the cursor to the last saved position (DEC)   |
+| `ESC[s`                                            | save cursor position (SCO)                             |
+| `ESC[u`                                            | restores the cursor to the last saved position (SCO)   |
 
 > **Note:** Some sequences, like saving and restoring cursors, are private sequences and are not standardized. While some terminal emulators (i.e. xterm and derived) support both SCO and DEC sequences, they are likely to have different functionality. It is therefore recommended to use DEC sequences.
 
 ## Erase Functions
 
-| ESC Code Sequence | Description                               |
-| :---------------- | :---------------------------------------- |
-| `ESC[J`           | erase in display (same as `ESC[0J`)       |
-| `ESC[0J`          | erase from cursor until end of screen     |
-| `ESC[1J`          | erase from cursor to beginning of screen  |
-| `ESC[2J`          | erase entire screen                       |
-| `ESC[3J`          | erase saved lines                         |
-| `ESC[K`           | erase in line (same as `ESC[0K`)          |
-| `ESC[0K`          | erase from cursor to end of line          |
-| `ESC[1K`          | erase start of line to the cursor         |
-| `ESC[2K`          | erase the entire line                     |
+| ESC Code Sequence | Description                              |
+| :---------------- | :--------------------------------------- |
+| `ESC[J`           | erase in display (same as `ESC[0J`)      |
+| `ESC[0J`          | erase from cursor until end of screen    |
+| `ESC[1J`          | erase from cursor to beginning of screen |
+| `ESC[2J`          | erase entire screen                      |
+| `ESC[3J`          | erase saved lines                        |
+| `ESC[K`           | erase in line (same as `ESC[0K`)         |
+| `ESC[0K`          | erase from cursor to end of line         |
+| `ESC[1K`          | erase start of line to the cursor        |
+| `ESC[2K`          | erase the entire line                    |
 
 > Note: Erasing the line won't move the cursor, meaning that the cursor will stay at the last position it was at before the line was erased. You can use `\r` after erasing the line, to return the cursor to the start of the current line.
 
@@ -150,18 +150,18 @@ The following escape codes tells the terminal to use the given color ID:
 
 | ESC Code Sequence | Description           |
 | :---------------- | :-------------------- |
-| `ESC[38;5;{ID}m` | Set foreground color. |
-| `ESC[48;5;{ID}m` | Set background color. |
+| `ESC[38;5;{ID}m`  | Set foreground color. |
+| `ESC[48;5;{ID}m`  | Set background color. |
 
 Where `{ID}` should be replaced with the color index from 0 to 255 of the following color table:
 
 ![256 Color table](https://user-images.githubusercontent.com/995050/47952855-ecb12480-df75-11e8-89d4-ac26c50e80b9.png)
 
-- `0-7`: standard colors (as in `ESC [ 30–37 m`)
-- `8–15`:  high intensity colors (as in `ESC [ 90–97 m`)
-- `16-231`:  6 × 6 × 6 cube (216 colors): `16 + 36 × r + 6 × g + b` (`0 ≤ r, g, b ≤ 5`)
-  > Some emulators interpret these steps as linear increments (`256 / 24`) on all three channels while others may explicitly define these values.
-- `232-255`:  grayscale from dark to light in 24 steps.
+-   `0-7`: standard colors (as in `ESC [ 30–37 m`)
+-   `8–15`: high intensity colors (as in `ESC [ 90–97 m`)
+-   `16-231`: 6 × 6 × 6 cube (216 colors): `16 + 36 × r + 6 × g + b` (`0 ≤ r, g, b ≤ 5`)
+    > Some emulators interpret these steps as linear increments (`256 / 24`) on all three channels while others may explicitly define these values.
+-   `232-255`: grayscale from dark to light in 24 steps.
 
 #### RGB Colors
 
@@ -227,9 +227,9 @@ Redefines a keyboard key to a specified string.
 
 The parameters for this escape sequence are defined as follows:
 
-- `code` is one or more of the values listed in the following table. These values represent keyboard keys and key combinations. When using these values in a command, you must type the semicolons shown in this table in addition to the semicolons required by the escape sequence. The codes in parentheses are not available on some keyboards. `ANSI.SYS` will not interpret the codes in parentheses for those keyboards unless you specify the `/X` switch in the `DEVICE` command for `ANSI.SYS`.
+-   `code` is one or more of the values listed in the following table. These values represent keyboard keys and key combinations. When using these values in a command, you must type the semicolons shown in this table in addition to the semicolons required by the escape sequence. The codes in parentheses are not available on some keyboards. `ANSI.SYS` will not interpret the codes in parentheses for those keyboards unless you specify the `/X` switch in the `DEVICE` command for `ANSI.SYS`.
 
-- `string` is either the ASCII code for a single character or a string contained in quotation marks. For example, both 65 and "A" can be used to represent an uppercase A.
+-   `string` is either the ASCII code for a single character or a string contained in quotation marks. For example, both 65 and "A" can be used to represent an uppercase A.
 
 > **IMPORTANT:** Some of the values in the following table are not valid for all computers. Check your computer's documentation for values that are different.
 
@@ -329,11 +329,11 @@ The parameters for this escape sequence are defined as follows:
 | \+ (keypad)              | 43       | 43         | (0;150)   | (0;55)    |
 | 5 (keypad)               | (0;76)   | 53         | (0;143)   | \--       |
 
-## VTCode-Specific Applications
+## VT Code-Specific Applications
 
 ### PTY Output Processing
 
-When processing PTY output in VTCode, we need to handle ANSI escape sequences properly:
+When processing PTY output in VT Code, we need to handle ANSI escape sequences properly:
 
 1. **Strip for Display**: Remove escape sequences when showing output to users
 2. **Preserve for Raw Output**: Keep sequences intact when writing to files or logs
@@ -342,12 +342,13 @@ When processing PTY output in VTCode, we need to handle ANSI escape sequences pr
 ### TUI Rendering
 
 The TUI uses ANSI sequences for:
-- Cursor positioning during updates
-- Color-coded output (errors in red, success in green)
-- Progress indicators and spinners
-- Status bar formatting
 
-### Common Patterns in VTCode
+-   Cursor positioning during updates
+-   Color-coded output (errors in red, success in green)
+-   Progress indicators and spinners
+-   Status bar formatting
+
+### Common Patterns in VT Code
 
 ```rust
 // Strip ANSI codes from PTY output
@@ -361,11 +362,11 @@ const ANSI_ESCAPE_REGEX: &str = r"\x1b\[[0-9;]*[a-zA-Z]";
 
 ## Resources
 
-- [Wikipedia: ANSI escape code](https://en.wikipedia.org/wiki/ANSI_escape_code)
-- [Build your own Command Line with ANSI escape codes](http://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html)
-- [ascii-table: ANSI Escape sequences](http://ascii-table.com/ansi-escape-sequences.php)
-- [bluesock: ansi codes](https://bluesock.org/~willkg/dev/ansi.html)
-- [bash-hackers: Terminal Codes (ANSI/VT100) introduction](http://wiki.bash-hackers.org/scripting/terminalcodes)
-- [XTerm Control Sequences](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
-- [VT100 – Various terminal manuals](https://vt100.net/)
-- [xterm.js – Supported Terminal Sequences](https://xtermjs.org/docs/api/vtfeatures/)
+-   [Wikipedia: ANSI escape code](https://en.wikipedia.org/wiki/ANSI_escape_code)
+-   [Build your own Command Line with ANSI escape codes](http://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html)
+-   [ascii-table: ANSI Escape sequences](http://ascii-table.com/ansi-escape-sequences.php)
+-   [bluesock: ansi codes](https://bluesock.org/~willkg/dev/ansi.html)
+-   [bash-hackers: Terminal Codes (ANSI/VT100) introduction](http://wiki.bash-hackers.org/scripting/terminalcodes)
+-   [XTerm Control Sequences](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
+-   [VT100 – Various terminal manuals](https://vt100.net/)
+-   [xterm.js – Supported Terminal Sequences](https://xtermjs.org/docs/api/vtfeatures/)

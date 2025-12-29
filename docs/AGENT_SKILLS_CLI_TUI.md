@@ -1,6 +1,6 @@
 # Using Agent Skills in the CLI TUI
 
-Complete guide on using Anthropic Agent Skills within VTCode's Terminal User Interface (TUI) chat environment.
+Complete guide on using Anthropic Agent Skills within VT Code's Terminal User Interface (TUI) chat environment.
 
 ## Quick Start
 

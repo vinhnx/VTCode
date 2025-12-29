@@ -33,7 +33,7 @@ The following features are planned for future releases:
 ### Commands in Command Palette
 
 -   **Ask the Agent**: Send arbitrary questions to VT Code agent
--   **Analyze Workspace**: Run VTCode's workspace analysis
+-   **Analyze Workspace**: Run VT Code's workspace analysis
 -   **Launch Chat**: Open an interactive chat session
 -   **Edit Configuration**: Quick access to vtcode.toml
 -   **View Status**: Show VT Code CLI installation status
@@ -48,7 +48,7 @@ The following features are planned for future releases:
 ### Editor Features
 
 -   **Completions**: Code completions from VT Code agent
--   **Diagnostics**: Integration with VTCode's diagnostic tools
+-   **Diagnostics**: Integration with VT Code's diagnostic tools
 -   **Code Lens**: Display actionable information inline
 -   **Quick Fixes**: VT Code agent-powered code fixes
 
@@ -107,20 +107,20 @@ allowed_tools = ["read_file", "edit_file", "analyze_code"]
 ### Example 1: Analyze Current File
 
 1. Open a file in your workspace
-2. Run "VTCode: Ask About Selection" (right-click on code)
+2. Run "VT Code: Ask About Selection" (right-click on code)
 3. Extension passes the selected code to VT Code agent
 4. Response appears in output channel
 
 ### Example 2: Configure Workspace
 
-1. Run "VTCode: Open Configuration"
+1. Run "VT Code: Open Configuration"
 2. Edit `vtcode.toml` with syntax highlighting
 3. Save file - configuration is automatically picked up
 4. Future agent calls use updated configuration
 
 ### Example 3: Ask General Questions
 
-1. Run "VTCode: Ask the Agent"
+1. Run "VT Code: Ask the Agent"
 2. Type your question
 3. Agent processes with workspace context
 4. Response streams to output channel

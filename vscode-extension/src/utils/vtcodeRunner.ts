@@ -106,7 +106,7 @@ export async function runVtcodeCommand(
     }
 
     const output =
-        options.output || vscode.window.createOutputChannel("VTCode");
+        options.output || vscode.window.createOutputChannel("VT Code");
 
     if (options.cancellationToken?.isCancellationRequested) {
         throw new vscode.CancellationError();
@@ -187,7 +187,7 @@ export async function runVtcodeCommand(
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: options.title ?? "Running VTCode…",
+            title: options.title ?? "Running VT Code…",
         },
         runCommand
     );

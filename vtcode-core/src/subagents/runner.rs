@@ -274,9 +274,7 @@ impl SubagentRunner {
                         .context("Failed to parse model alias"),
                 }
             }
-            SubagentModel::ModelId(id) => {
-                id.parse::<ModelId>().context("Failed to parse model ID")
-            }
+            SubagentModel::ModelId(id) => id.parse::<ModelId>().context("Failed to parse model ID"),
         }
     }
 
@@ -323,7 +321,9 @@ impl SubagentRunner {
     ) -> Result<(String, u32, TokenUsage)> {
         let client = self.create_client(config)?;
         let system_prompt = self.build_system_prompt(config, params);
-        let timeout = params.timeout.unwrap_or_else(|| self.registry.default_timeout());
+        let timeout = params
+            .timeout
+            .unwrap_or_else(|| self.registry.default_timeout());
 
         // Create filtered tool registry if tools are restricted
         let tools = self.create_filtered_tools(config).await?;

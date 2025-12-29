@@ -2,7 +2,7 @@
 
 ## Current Status (November 2025)
 
-The asynchronous MCP server, circuit breaker layer, and related helper crates have been removed from VTCode. Field feedback showed the additional infrastructure increased startup time and memory pressure without materially improving reliability for the current set of providers. The core runtime now ships with a lean MCP client that focuses purely on outbound provider connections.
+The asynchronous MCP server, circuit breaker layer, and related helper crates have been removed from VT Code. Field feedback showed the additional infrastructure increased startup time and memory pressure without materially improving reliability for the current set of providers. The core runtime now ships with a lean MCP client that focuses purely on outbound provider connections.
 
 -   **No embedded MCP server** – VT Code no longer exposes its own MCP endpoints. Tooling that previously relied on the in-process server should interact with the standard tool registry instead.
 -   **Circuit breaker removed** – provider calls run directly after validation. Failures are surfaced immediately to the caller, which simplifies debugging and avoids unexpected retries.
@@ -57,7 +57,7 @@ Added comprehensive configuration validation:
 
 ### 5. Simplified MCP Server Implementation
 
-Created a simplified MCP server that can expose VTCode's tools to other MCP clients:
+Created a simplified MCP server that can expose VT Code's tools to other MCP clients:
 
 -   Clean API for registering tools
 -   Asynchronous execution model
@@ -179,4 +179,4 @@ Planned future improvements include:
 
 ## Conclusion
 
-These MCP implementation improvements significantly enhance VTCode's reliability, performance, and usability when working with MCP providers. The enhancements maintain backward compatibility while providing a solid foundation for future development.
+These MCP implementation improvements significantly enhance VT Code's reliability, performance, and usability when working with MCP providers. The enhancements maintain backward compatibility while providing a solid foundation for future development.

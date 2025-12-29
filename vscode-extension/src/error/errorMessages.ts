@@ -132,7 +132,7 @@ const ERROR_MESSAGES: Record<string, ErrorMessage> = {
     // System errors
     INTERNAL_ERROR: {
         title: "Internal error occurred",
-        description: "An unexpected error occurred in VTCode.",
+        description: "An unexpected error occurred in VT Code.",
         suggestion:
             "Check the output logs for details. Try restarting VS Code if the problem persists.",
         retryable: true,

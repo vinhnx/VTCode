@@ -73,7 +73,7 @@ After installation, the VT Code extension should work automatically if:
 To create a configuration file:
 
 1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
-2. Run "VTCode: Open Configuration"
+2. Run "VT Code: Open Configuration"
 3. Configure your AI providers and settings
 
 ## Features Available

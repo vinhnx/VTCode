@@ -261,11 +261,17 @@ pub async fn handle_ask_single_command(
 }
 
 pub async fn handle_chat_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _skip_confirmations: bool,
-    _full_auto_requested: bool,
+    core_cfg: vtcode_core::config::types::AgentConfig,
+    skip_confirmations: bool,
+    full_auto_requested: bool,
 ) -> Result<()> {
-    Err(anyhow::anyhow!("Chat command not implemented in this stub"))
+    crate::agent::agents::run_single_agent_loop(
+        &core_cfg,
+        skip_confirmations,
+        full_auto_requested,
+        None,
+    )
+    .await
 }
 
 pub async fn handle_exec_command(
@@ -278,12 +284,27 @@ pub async fn handle_exec_command(
 }
 
 pub async fn handle_analyze_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _analysis_type: analyze::AnalysisType,
+    core_cfg: vtcode_core::config::types::AgentConfig,
+    analysis_type: analyze::AnalysisType,
 ) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Analyze command not implemented in this stub"
-    ))
+    // Convert AnalysisType to string for the actual handler
+    let depth = match analysis_type {
+        analyze::AnalysisType::Full |
+        analyze::AnalysisType::Structure |
+        analyze::AnalysisType::Complexity => "deep",
+        analyze::AnalysisType::Security |
+        analyze::AnalysisType::Performance |
+        analyze::AnalysisType::Dependencies => "standard",
+    };
+
+    // Use "text" as default format
+    let format = "text";
+
+    vtcode_core::commands::analyze::handle_analyze_command(
+        core_cfg,
+        depth.to_string(),
+        format.to_string(),
+    ).await
 }
 
 pub async fn handle_trajectory_logs_command(

@@ -81,10 +81,6 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Show model, provider, workspace, and tool status",
         },
         SlashCommandInfo {
-            name: "context",
-            description: "Display context usage breakdown with grouped skills and agents",
-        },
-        SlashCommandInfo {
             name: "doctor",
             description: "Run installation and configuration diagnostics",
         },

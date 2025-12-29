@@ -6,6 +6,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Types of important events that trigger notifications
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,6 +96,8 @@ impl Default for NotificationConfig {
 /// Notification manager that handles sending notifications
 pub struct NotificationManager {
     config: Arc<RwLock<NotificationConfig>>,
+    /// Track if the terminal is currently focused/active
+    terminal_focused: Arc<AtomicBool>,
 }
 
 impl NotificationManager {
@@ -102,6 +105,7 @@ impl NotificationManager {
     pub fn new() -> Self {
         Self {
             config: Arc::new(RwLock::new(NotificationConfig::default())),
+            terminal_focused: Arc::new(AtomicBool::new(false)), // Start as not focused
         }
     }
 
@@ -109,6 +113,7 @@ impl NotificationManager {
     pub fn with_config(config: NotificationConfig) -> Self {
         Self {
             config: Arc::new(RwLock::new(config)),
+            terminal_focused: Arc::new(AtomicBool::new(false)), // Start as not focused
         }
     }
 
@@ -118,6 +123,14 @@ impl NotificationManager {
 
         // Check if terminal notifications are enabled globally first
         if !config.terminal_notifications_enabled {
+            return Ok(());
+        }
+
+        // Check if the terminal is currently focused/active
+        // Only send notifications when the terminal is NOT active (user is not using it)
+        let is_terminal_active = self.terminal_focused.load(Ordering::Relaxed);
+        if is_terminal_active {
+            // Terminal is active, don't send notification to avoid interrupting the user
             return Ok(());
         }
 
@@ -299,6 +312,16 @@ impl NotificationManager {
         let config = self.config.read().await;
         config.clone()
     }
+
+    /// Update the terminal focus state - true if terminal is focused/active, false otherwise
+    pub fn set_terminal_focused(&self, focused: bool) {
+        self.terminal_focused.store(focused, Ordering::Relaxed);
+    }
+
+    /// Get the current terminal focus state
+    pub fn is_terminal_focused(&self) -> bool {
+        self.terminal_focused.load(Ordering::Relaxed)
+    }
 }
 
 impl Default for NotificationManager {
@@ -331,6 +354,22 @@ pub async fn send_global_notification(event: NotificationEvent) -> Result<(), an
         // If global manager isn't initialized, create a temporary one for this notification
         let manager = NotificationManager::new();
         manager.send_notification(event).await
+    }
+}
+
+/// Set the terminal focus state using the global notification manager
+pub fn set_global_terminal_focused(focused: bool) {
+    if let Some(manager) = get_global_notification_manager() {
+        manager.set_terminal_focused(focused);
+    }
+}
+
+/// Check if the terminal is focused using the global notification manager
+pub fn is_global_terminal_focused() -> bool {
+    if let Some(manager) = get_global_notification_manager() {
+        manager.is_terminal_focused()
+    } else {
+        false // Default to not focused if manager isn't initialized
     }
 }
 

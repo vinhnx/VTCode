@@ -312,7 +312,7 @@ zed-extension/
 
 ### Q: Is this extension official?
 
-**A**: It's the official Zed extension for VTCode, maintained as part of the VT Code project.
+**A**: It's the official Zed extension for VT Code, maintained as part of the VT Code project.
 
 ---
 

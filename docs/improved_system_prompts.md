@@ -13,7 +13,7 @@ Based on Anthropic's context engineering guidance, these improved prompts follow
 ### Current Default Prompt (~200 tokens)
 
 ```
-You are a coding agent in VTCode, a terminal-based assistant. Be precise, safe, and effective.
+You are a coding agent in VT Code, a terminal-based assistant. Be precise, safe, and effective.
 
 ## Core Principles
 Work within `WORKSPACE_DIR`. Use targeted exploration (search, inspect) before making changes. Keep context minimal—load only what's needed for the current step.
@@ -50,7 +50,7 @@ Multi-turn coherence guidance is brief
 ### Improved Default Prompt (~280 tokens)
 
 ```
-You are a coding agent for VTCode, a terminal-based assistant.
+You are a coding agent for VT Code, a terminal-based assistant.
 You specialize in understanding codebases, making precise modifications, and solving technical problems.
 
 **Core Responsibilities:**
@@ -291,6 +291,6 @@ These improved prompts follow the "Just Right" calibration:
 -   **Structured**: Organized sections for easy reference
 -   **Actionable**: Concrete guidance on tool selection and context management
 
-The improvements maintain VTCode's strengths (conciseness, token efficiency) while adding structure that helps the model make better decisions across multi-turn interactions.
+The improvements maintain VT Code's strengths (conciseness, token efficiency) while adding structure that helps the model make better decisions across multi-turn interactions.
 
 **Recommended Next Step:** Implement Phase 1 (update system prompts) and measure impact on token usage and task success rate.

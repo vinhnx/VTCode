@@ -1,21 +1,21 @@
 # `vtcode-bash-runner`
 
 `vtcode-bash-runner` exposes the safe shell helpers that originally lived in
-VTCode's TUI runtime as a reusable crate. It focuses on ergonomic filesystem
+VT Code's TUI runtime as a reusable crate. It focuses on ergonomic filesystem
 and search operations (`cd`, `ls`, `mkdir`, `rm`, `cp`, `mv`, `grep`) and wraps
 them with workspace-aware safety checks so downstream projects can script
 workspaces without accidentally escaping the configured root.
 
 ## Core Concepts
 
-- **`BashRunner`** – high-level helper with path resolution, workspace
-  validation, and command builders that emit platform-specific shell syntax.
-- **`CommandExecutor`** – pluggable backend responsible for executing the
-  resolved shell command. The default `ProcessCommandExecutor` relies on
-  `std::process`, but consumers can swap in remote or in-memory adapters.
-- **`CommandPolicy`** – guard interface that validates invocations before
-  execution. The crate includes a permissive `AllowAllPolicy` and a
-  workspace-aware `WorkspaceGuardPolicy`.
+-   **`BashRunner`** – high-level helper with path resolution, workspace
+    validation, and command builders that emit platform-specific shell syntax.
+-   **`CommandExecutor`** – pluggable backend responsible for executing the
+    resolved shell command. The default `ProcessCommandExecutor` relies on
+    `std::process`, but consumers can swap in remote or in-memory adapters.
+-   **`CommandPolicy`** – guard interface that validates invocations before
+    execution. The crate includes a permissive `AllowAllPolicy` and a
+    workspace-aware `WorkspaceGuardPolicy`.
 
 These building blocks live under `vtcode-bash-runner::runner`,
 `vtcode-bash-runner::executor`, and `vtcode-bash-runner::policy`
@@ -42,20 +42,20 @@ their environment.F:vtcode-bash-runner/src/executor.rs†L1-L470
 The crate exposes a handful of optional features to tailor the dependency
 surface and runtime behaviour:
 
-- `std-process` *(default)* – enables the `ProcessCommandExecutor` for
-  Unix-like shells.
-- `powershell-process` *(default)* – enables PowerShell execution support on
-  Windows targets.
-- `pure-rust` – activates the `PureRustCommandExecutor`, which handles `ls`,
-  `mkdir`, `rm`, `cp`, and `mv` via the standard library without spawning
-  external processes.
-- `dry-run` – enables the `DryRunCommandExecutor` for log-only validation and
-  activates the `dry_run` example.
-- `serde-errors` – derives `Serialize`/`Deserialize` for `CommandInvocation`,
-  `CommandStatus`, and `CommandOutput` so invocations can be persisted or
-  logged as structured payloads.
-- `exec-events` – provides the `EventfulExecutor` wrapper that converts command
-  invocations into `vtcode-exec-events` telemetry.
+-   `std-process` _(default)_ – enables the `ProcessCommandExecutor` for
+    Unix-like shells.
+-   `powershell-process` _(default)_ – enables PowerShell execution support on
+    Windows targets.
+-   `pure-rust` – activates the `PureRustCommandExecutor`, which handles `ls`,
+    `mkdir`, `rm`, `cp`, and `mv` via the standard library without spawning
+    external processes.
+-   `dry-run` – enables the `DryRunCommandExecutor` for log-only validation and
+    activates the `dry_run` example.
+-   `serde-errors` – derives `Serialize`/`Deserialize` for `CommandInvocation`,
+    `CommandStatus`, and `CommandOutput` so invocations can be persisted or
+    logged as structured payloads.
+-   `exec-events` – provides the `EventfulExecutor` wrapper that converts command
+    invocations into `vtcode-exec-events` telemetry.
 
 Mix and match these features to keep builds lean or to instrument shell
 commands for downstream dashboards.
@@ -104,9 +104,9 @@ dashboards or persisted alongside other execution telemetry.F:vtcode-bash-runner
 
 ## Next Steps
 
-- Expand the command surface with additional helpers (`stat`, `find`, `run`)
-  before publishing a 1.0 release.
-- Provide remote/RPC executor adapters for distributed runners.
-- Backfill integration docs illustrating how VTCode's TUI wires
-  `WorkspaceGuardPolicy` with the shared `WorkspacePaths` trait for
-  application-level security.
+-   Expand the command surface with additional helpers (`stat`, `find`, `run`)
+    before publishing a 1.0 release.
+-   Provide remote/RPC executor adapters for distributed runners.
+-   Backfill integration docs illustrating how VT Code's TUI wires
+    `WorkspaceGuardPolicy` with the shared `WorkspacePaths` trait for
+    application-level security.

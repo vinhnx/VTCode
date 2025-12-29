@@ -2,18 +2,18 @@
 
 ## Executive Summary
 
-This document tracks VTCode's implementation progress against the Codex issue review recommendations. Current status: **3/4 areas fully or substantially implemented**, with 1 area requiring safety enhancements.
+This document tracks VT Code's implementation progress against the Codex issue review recommendations. Current status: **3/4 areas fully or substantially implemented**, with 1 area requiring safety enhancements.
 
 ### Quick Status
 
--     **Timeout Escalation**: Fully implemented with adaptive ceilings
--     **Constrained Sampling**: Test infrastructure complete, runtime integration pending
--     **Serialization Stability**: Comprehensive test suite implemented
--    **apply_patch Safety**: Warning exists, telemetry and prompts needed
+-       **Timeout Escalation**: Fully implemented with adaptive ceilings
+-       **Constrained Sampling**: Test infrastructure complete, runtime integration pending
+-       **Serialization Stability**: Comprehensive test suite implemented
+-   **apply_patch Safety**: Warning exists, telemetry and prompts needed
 
 ---
 
-## 1. apply_patch Tool Reliability  PARTIAL
+## 1. apply_patch Tool Reliability PARTIAL
 
 ### Codex Issue
 
@@ -22,14 +22,14 @@ This document tracks VTCode's implementation progress against the Codex issue re
 
 ### Current Implementation Status
 
-####   Completed
+#### Completed
 
 -   **Warning message exists**: Found in `vtcode-core/src/tools/registry/executors.rs:368`
     ```rust
     "apply_patch will delete and recreate files; ensure backups or incremental edits"
     ```
 
-####   Missing
+#### Missing
 
 1. **Telemetry tracking for tool fallbacks**
 
@@ -54,7 +54,7 @@ This document tracks VTCode's implementation progress against the Codex issue re
 
 ---
 
-## 2. Timeout Escalation   IMPLEMENTED
+## 2. Timeout Escalation IMPLEMENTED
 
 ### Codex Issue
 
@@ -63,7 +63,7 @@ This document tracks VTCode's implementation progress against the Codex issue re
 
 ### Current Implementation Status
 
-####   Completed
+#### Completed
 
 1. **Adaptive timeout ceilings** - Fully implemented
 
@@ -90,7 +90,7 @@ This document tracks VTCode's implementation progress against the Codex issue re
     - `create_timeout_error()` now requires `ToolTimeoutCategory` and timeout value
     - Provides descriptive error messages with ceiling information
 
-####  Needs Documentation
+#### Needs Documentation
 
 -   Configuration options exist but tuning recommendations not documented
 
@@ -101,7 +101,7 @@ This document tracks VTCode's implementation progress against the Codex issue re
 
 ---
 
-## 3. Constrained Sampling Regression   IMPLEMENTED
+## 3. Constrained Sampling Regression IMPLEMENTED
 
 ### Codex Issue
 
@@ -110,7 +110,7 @@ This document tracks VTCode's implementation progress against the Codex issue re
 
 ### Current Implementation Status
 
-####   Completed
+#### Completed
 
 1. **Language consistency tests** - Fully implemented
     - Created `tests/language_consistency_test.rs` with 13 passing tests
@@ -120,7 +120,7 @@ This document tracks VTCode's implementation progress against the Codex issue re
     - Validation helpers: `validate_json_language_consistency()`, `validate_markdown_language_consistency()`
     - Integration helpers: `validate_conversation_language_consistency()`, `validate_tool_response_language()`
 
-####  Partial Implementation
+#### Partial Implementation
 
 1. **Provider health checks** - Framework ready, integration pending
 
@@ -142,7 +142,7 @@ This document tracks VTCode's implementation progress against the Codex issue re
 
 ---
 
-## 4. Responses API Encoding Difference   IMPLEMENTED
+## 4. Responses API Encoding Difference IMPLEMENTED
 
 ### Codex Issue
 
@@ -151,7 +151,7 @@ This document tracks VTCode's implementation progress against the Codex issue re
 
 ### Current Implementation Status
 
-####   Completed
+#### Completed
 
 1. **Centralized tool description rendering**
 
@@ -167,7 +167,7 @@ This document tracks VTCode's implementation progress against the Codex issue re
     - Helper functions: `validate_whitespace_consistency()`, `validate_encoding_invariants()`, `validate_schema_stability()`
     - CI integration test (ignored by default): `ci_validate_no_schema_drift()`
 
-####  Needs Documentation
+#### Needs Documentation
 
 1. **Encoding invariant documentation**
     - Test framework exists but guidelines not documented
@@ -186,16 +186,16 @@ This document tracks VTCode's implementation progress against the Codex issue re
 
 ## Implementation Priority Matrix
 
-| Area                          | Status      | Priority | Effort | Impact |
-| ----------------------------- | ----------- | -------- | ------ | ------ |
-| Timeout Governance            |   Complete | N/A      | N/A    | High   |
-| Language Consistency Tests    |   Complete | N/A      | N/A    | Medium |
-| Serialization Stability Tests |   Complete | N/A      | N/A    | Medium |
-| Telemetry for apply_patch     |   Missing  | High     | Medium | High   |
-| Provider Health Checks        |  Partial  | Medium   | Medium | Medium |
-| Language Guardrail Config     |  Partial  | Medium   | Low    | Low    |
-| CLI Documentation             |   Missing  | Medium   | Low    | Low    |
-| Encoding Invariant Docs       |   Missing  | Low      | Low    | Low    |
+| Area                          | Status   | Priority | Effort | Impact |
+| ----------------------------- | -------- | -------- | ------ | ------ |
+| Timeout Governance            | Complete | N/A      | N/A    | High   |
+| Language Consistency Tests    | Complete | N/A      | N/A    | Medium |
+| Serialization Stability Tests | Complete | N/A      | N/A    | Medium |
+| Telemetry for apply_patch     | Missing  | High     | Medium | High   |
+| Provider Health Checks        | Partial  | Medium   | Medium | Medium |
+| Language Guardrail Config     | Partial  | Medium   | Low    | Low    |
+| CLI Documentation             | Missing  | Medium   | Low    | Low    |
+| Encoding Invariant Docs       | Missing  | Low      | Low    | Low    |
 
 ---
 

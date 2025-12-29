@@ -1,6 +1,6 @@
 #!/bin/bash
-# VTCode notification hook
-# Sends desktop notifications when VTCode needs input
+# VT Code notification hook
+# Sends desktop notifications when VT Code needs input
 
 # Read the JSON payload from stdin
 payload=$(cat)
@@ -17,24 +17,24 @@ fi
 # Create notification based on the event type
 case "$event_type" in
     "UserPromptSubmit")
-        title="VTCode Awaiting Input"
-        message="VTCode is processing your prompt..."
+        title="VT Code Awaiting Input"
+        message="VT Code is processing your prompt..."
         ;;
     "PreToolUse")
-        title="VTCode Tool Execution"
-        message="VTCode is about to execute a tool..."
+        title="VT Code Tool Execution"
+        message="VT Code is about to execute a tool..."
         ;;
     "SessionStart")
-        title="VTCode Session Started"
-        message="New VTCode session started (ID: $session_id)"
+        title="VT Code Session Started"
+        message="New VT Code session started (ID: $session_id)"
         ;;
     "SessionEnd")
-        title="VTCode Session Ended"
-        message="VTCode session completed (ID: $session_id)"
+        title="VT Code Session Ended"
+        message="VT Code session completed (ID: $session_id)"
         ;;
     *)
-        title="VTCode Notification"
-        message="VTCode event: $event_type (Session: $session_id)"
+        title="VT Code Notification"
+        message="VT Code event: $event_type (Session: $session_id)"
         ;;
 esac
 

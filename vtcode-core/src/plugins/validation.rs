@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::plugins::{PluginDirectory, PluginError, PluginManifest, PluginResult};
+use crate::plugins::{PluginError, PluginManifest, PluginResult};
 
 /// Plugin validator
 pub struct PluginValidator;

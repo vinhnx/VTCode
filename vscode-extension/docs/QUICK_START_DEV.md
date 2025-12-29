@@ -41,7 +41,7 @@ Key paths:
 -   `src/vtcodeConfig.ts`
     -   `vtcode.toml` summary & helpers (MCP, tool policy, HITL).
 -   `src/languageFeatures.ts`
-    -   Language features for VTCode-related files.
+    -   Language features for VT Code-related files.
 -   `vscode-extension/docs/ARCHITECTURE.md`
     -   High-level architecture (read this next).
 -   `docs/vscode-extension-improve-docs/*`
@@ -78,10 +78,10 @@ Then in VS Code:
 
 Verification checklist:
 
--   `VTCode` status bar item appears.
+-   `VT Code` status bar item appears.
 -   `VT Code Quick Actions` and `VT Code Workspace Status` views show in the Explorer / View container.
--   `VTCode: Ask the Agent` command is available.
--   `VTCode: Open Chat` opens the VT Code chat view.
+-   `VT Code: Ask the Agent` command is available.
+-   `VT Code: Open Chat` opens the VT Code chat view.
 
 If CLI is missing/untrusted, extension will:
 
@@ -204,10 +204,10 @@ Before opening a PR:
     -   `npm test`
 -   Manual checks:
     -   Verify commands:
-        -   `VTCode: Ask the Agent`
-        -   `VTCode: Ask About Selection`
-        -   `VTCode: Launch Agent Terminal`
-        -   `VTCode: Analyze Workspace`
+        -   `VT Code: Ask the Agent`
+        -   `VT Code: Ask About Selection`
+        -   `VT Code: Launch Agent Terminal`
+        -   `VT Code: Analyze Workspace`
     -   Verify:
         -   Workspace trust prompts behave as documented.
         -   CLI missing / misconfigured flows are clear.

@@ -66,7 +66,7 @@ describe("AskCommand", () => {
             expect(vtcodeRunner.runVtcodeCommand).toHaveBeenCalledWith(
                 ["ask", mockQuestion],
                 {
-                    title: "Asking VTCode…",
+                    title: "Asking VT Code…",
                     output: mockContext.output,
                 }
             );
@@ -121,7 +121,7 @@ describe("AskCommand", () => {
             // Assert
             expect(vtcodeRunner.runVtcodeCommand).toHaveBeenCalled();
             expect(mockShowErrorMessage).toHaveBeenCalledWith(
-                "Failed to ask with VTCode: Command failed"
+                "Failed to ask with VT Code: Command failed"
             );
             expect(mockShowInformationMessage).not.toHaveBeenCalled();
         });

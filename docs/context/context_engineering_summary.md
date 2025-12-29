@@ -74,7 +74,7 @@ You MUST FOLLOW THESE STEPS:
 -   Fails on unexpected inputs
 -   Difficult to maintain
 
-#### Just Right (VTCode's Approach)
+#### Just Right (VT Code's Approach)
 
 ```
 You are VT Code, a coding agent.

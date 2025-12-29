@@ -139,7 +139,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private async handleUserMessage(text: string): Promise<void> {
         if (!(await this.ensureWorkspaceTrusted())) {
             this.addSystemMessage(
-                "Trust this workspace to send prompts to VTCode."
+                "Trust this workspace to send prompts to VT Code."
             );
             return;
         }

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains comprehensive documentation on ANSI escape sequences and their usage in VTCode.
+This directory contains comprehensive documentation on ANSI escape sequences and their usage in VT Code.
 
 ## Documents
 
@@ -44,7 +44,7 @@ Detailed guide on how VT Code uses ANSI sequences:
 Quick lookup for common sequences:
 
 -   Most-used ANSI codes
--   VTCode-specific patterns
+-   VT Code-specific patterns
 -   Regex patterns for matching
 -   Common mistakes and solutions
 -   Debugging tips

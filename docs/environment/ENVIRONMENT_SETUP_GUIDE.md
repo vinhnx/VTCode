@@ -9,7 +9,7 @@ This guide explains how VT Code manages environment variables when executing com
 If you just installed VT Code and want your custom tools (cargo, npm, python, etc.) to work:
 
 1. **Ensure PATH is set**: Run `echo $PATH` in your shell to verify your environment is configured
-2. **Rebuild VTCode**: Use `cargo build --release` to get the latest version with PATH inheritance
+2. **Rebuild VT Code**: Use `cargo build --release` to get the latest version with PATH inheritance
 3. **Test availability**: Run `which cargo` to verify your tools are in PATH
 4. **Use the agent**: Custom tools should now be accessible
 
@@ -68,7 +68,7 @@ The following variables are inherited from the parent environment:
 -   `NODE_*` variables - Node.js environment
 -   Custom user-defined variables
 
-**VTCode-Added Variables**:
+**VT Code-Added Variables**:
 
 -   `WORKSPACE_DIR` - Path to the workspace root
 -   `VT_SANDBOX_*` - Sandbox-related variables (if configured)
@@ -222,7 +222,7 @@ edit_file = "allow"              # Allow file edits
 
 **Solutions**:
 
-1. **Rebuild VTCode** - Ensure you have the latest version with the PATH fix:
+1. **Rebuild VT Code** - Ensure you have the latest version with the PATH fix:
 
     ```bash
     cargo build --release
@@ -316,7 +316,7 @@ PATH includes $GOPATH/bin
 
 1. **Keep PATH minimal** - Only include necessary directories
 2. **Use version managers** - rbenv, nvm, pyenv, rustup provide clean PATH management
-3. **Test in shell first** - Verify commands work before debugging in VTCode
+3. **Test in shell first** - Verify commands work before debugging in VT Code
 4. **Check allow-lists** - Ensure custom commands are in vtcode.toml if needed
 5. **Use absolute paths** - For debugging: `/full/path/to/command --version`
 6. **Enable tool policies** - Use `allow`, `prompt`, or `deny` appropriately

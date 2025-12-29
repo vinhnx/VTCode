@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully integrated the refined [Ratatui terminal & event handler recipe](https://ratatui.rs/recipes/apps/terminal-and-event-handler/) into VTCode, including support for launching external applications (editors, git clients) while maintaining proper terminal state.
+Successfully integrated the refined [Ratatui terminal & event handler recipe](https://ratatui.rs/recipes/apps/terminal-and-event-handler/) into VT Code, including support for launching external applications (editors, git clients) while maintaining proper terminal state.
 
 ## Components Implemented
 

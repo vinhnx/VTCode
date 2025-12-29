@@ -376,7 +376,9 @@ impl SubagentRegistry {
             }
 
             // Check for "proactively" or "use" hints in agent description
-            if agent_desc_lower.contains("proactively") || agent_desc_lower.contains("use immediately") {
+            if agent_desc_lower.contains("proactively")
+                || agent_desc_lower.contains("use immediately")
+            {
                 score += 5;
             }
 
@@ -472,12 +474,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_registry_loads_builtins() {
-        let registry = SubagentRegistry::new(
-            PathBuf::from("/tmp/test"),
-            SubagentsConfig::default(),
-        )
-        .await
-        .unwrap();
+        let registry =
+            SubagentRegistry::new(PathBuf::from("/tmp/test"), SubagentsConfig::default())
+                .await
+                .unwrap();
 
         assert!(registry.get("explore").is_some());
         assert!(registry.get("plan").is_some());
@@ -488,12 +488,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_cli_agents_override_user() {
-        let mut registry = SubagentRegistry::new(
-            PathBuf::from("/tmp/test"),
-            SubagentsConfig::default(),
-        )
-        .await
-        .unwrap();
+        let mut registry =
+            SubagentRegistry::new(PathBuf::from("/tmp/test"), SubagentsConfig::default())
+                .await
+                .unwrap();
 
         let cli_json = serde_json::json!({
             "explore": {
@@ -511,12 +509,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_best_match() {
-        let registry = SubagentRegistry::new(
-            PathBuf::from("/tmp/test"),
-            SubagentsConfig::default(),
-        )
-        .await
-        .unwrap();
+        let registry =
+            SubagentRegistry::new(PathBuf::from("/tmp/test"), SubagentsConfig::default())
+                .await
+                .unwrap();
 
         let match1 = registry.find_best_match("use the code-reviewer to check my changes");
         assert!(match1.is_some());

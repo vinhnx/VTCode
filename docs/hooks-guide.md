@@ -49,7 +49,7 @@ hooks = [
 
 ### PreToolUse
 
--   Runs after VTCode creates tool parameters and before processing the tool call
+-   Runs after VT Code creates tool parameters and before processing the tool call
 -   Can block, allow, or modify tool execution
 -   Common matchers: `Write`, `Edit`, `Bash`, `Read`, etc.
 
@@ -61,17 +61,17 @@ hooks = [
 
 ### UserPromptSubmit
 
--   Runs when the user submits a prompt, before VTCode processes it
+-   Runs when the user submits a prompt, before VT Code processes it
 -   Can validate prompts, add context, or block certain types of prompts
 
 ### SessionStart
 
--   Runs when VTCode starts a new session
+-   Runs when VT Code starts a new session
 -   Useful for loading development context, installing dependencies, or setting up environment variables
 
 ### SessionEnd
 
--   Runs when a VTCode session ends
+-   Runs when a VT Code session ends
 -   Useful for cleanup tasks, logging session statistics, or saving session state
 
 ## Hook Matching
@@ -132,14 +132,14 @@ Hooks can return structured JSON in stdout for advanced control:
         "hookEventName": "PreToolUse",
         "permissionDecision": "allow",
         "permissionDecisionReason": "My reason here",
-        "additionalContext": "Additional information for VTCode"
+        "additionalContext": "Additional information for VT Code"
     }
 }
 ```
 
 ## Security Considerations
 
-**USE AT YOUR OWN RISK**: VTCode hooks execute arbitrary shell commands on your system automatically. Always:
+**USE AT YOUR OWN RISK**: VT Code hooks execute arbitrary shell commands on your system automatically. Always:
 
 -   Validate and sanitize inputs
 -   Quote shell variables properly: `"$VAR"` not `$VAR`

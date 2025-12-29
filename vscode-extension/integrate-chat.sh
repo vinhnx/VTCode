@@ -28,7 +28,7 @@ cat << 'EOF'
       "activitybar": [
         {
           "id": "vtcode-sidebar",
-          "title": "VTCode",
+          "title": "VT Code",
           "icon": "media/vtcode-icon.svg"
         }
       ]
@@ -36,7 +36,7 @@ cat << 'EOF'
       "secondary": [
         {
           "id": "vtcode-sidebar",
-          "title": "VTCode",
+          "title": "VT Code",
           "icon": "media/vtcode-icon.svg"
         }
       ]
@@ -63,12 +63,12 @@ cat << 'EOF'
     "commands": [
       {
         "command": "vtcode.chat.clear",
-        "title": "VTCode: Clear Chat Transcript",
+        "title": "VT Code: Clear Chat Transcript",
         "icon": "$(clear-all)"
       },
       {
         "command": "vtcode.chat.export",
-        "title": "VTCode: Export Chat Transcript",
+        "title": "VT Code: Export Chat Transcript",
         "icon": "$(export)"
       }
     ],

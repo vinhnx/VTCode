@@ -7,7 +7,7 @@ Review of vtcode MCP implementation against official `rmcp` (Rust SDK) best prac
 
 ## Executive Summary
 
-VTCode's MCP client implementation is well-structured and follows most MCP specification requirements. This document identifies alignment gaps and optimization opportunities to match official Rust SDK patterns.
+VT Code's MCP client implementation is well-structured and follows most MCP specification requirements. This document identifies alignment gaps and optimization opportunities to match official Rust SDK patterns.
 
 **Current Status:**
 

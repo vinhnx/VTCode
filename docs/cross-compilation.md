@@ -1,4 +1,4 @@
-# Cross-Compilation Configuration for VTCode
+# Cross-Compilation Configuration for VT Code
 
 This document explains the cross-compilation setup for the VT Code project using the `cross` tool.
 

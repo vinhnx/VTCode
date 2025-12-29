@@ -57,7 +57,7 @@ describe("AnalyzeCommand", () => {
             expect(vtcodeRunner.runVtcodeCommand).toHaveBeenCalledWith(
                 ["analyze"],
                 {
-                    title: "Analyzing workspace with VTCode…",
+                    title: "Analyzing workspace with VT Code…",
                     output: mockContext.output,
                 }
             );
@@ -80,7 +80,7 @@ describe("AnalyzeCommand", () => {
             // Assert
             expect(vtcodeRunner.runVtcodeCommand).toHaveBeenCalled();
             expect(mockShowErrorMessage).toHaveBeenCalledWith(
-                "Failed to analyze the workspace with VTCode: Analysis failed"
+                "Failed to analyze the workspace with VT Code: Analysis failed"
             );
             expect(mockShowInformationMessage).not.toHaveBeenCalled();
         });
@@ -105,7 +105,7 @@ describe("AnalyzeCommand", () => {
             expect(command.id).toBe("vtcode.runAnalyze");
             expect(command.title).toBe("Analyze Workspace");
             expect(command.description).toBe(
-                "Analyze the current workspace with VTCode"
+                "Analyze the current workspace with VT Code"
             );
             expect(command.icon).toBe("search");
         });

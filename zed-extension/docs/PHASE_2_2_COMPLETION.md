@@ -233,7 +233,7 @@ This implementation enables:
 -   Workspace structure analysis
 -   File and selection context
 -   Open buffers tracking
--   Rich context passing to VTCode
+-   Rich context passing to VT Code
 
 ## Build Verification
 

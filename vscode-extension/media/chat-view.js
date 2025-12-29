@@ -175,7 +175,7 @@
 			sendBtn.style.display = 'inline-block';
 			cancelBtn.style.display = 'none';
 			input.disabled = false;
-			input.placeholder = 'Ask VTCode...';
+			input.placeholder = 'Ask VT Code...';
 		}
 	};
 

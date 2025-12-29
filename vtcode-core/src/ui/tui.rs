@@ -60,6 +60,15 @@ pub fn spawn_session_with_prompts(
     custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
     active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
 ) -> Result<InlineSession> {
+    use std::io::IsTerminal;
+
+    // Check stdin is a terminal BEFORE spawning the task
+    if !std::io::stdin().is_terminal() {
+        return Err(anyhow::anyhow!(
+            "cannot run interactive TUI: stdin is not a terminal (must be run in an interactive terminal)"
+        ));
+    }
+
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
@@ -83,6 +92,13 @@ pub fn spawn_session_with_prompts(
         )
         .await
         {
+            let error_msg = error.to_string();
+            if error_msg.contains("stdin is not a terminal") {
+                eprintln!("Error: Interactive TUI requires a proper terminal.");
+                eprintln!("Use 'vtcode ask \"your prompt\"' for non-interactive input.");
+            } else {
+                eprintln!("Error: TUI startup failed: {:#}", error);
+            }
             tracing::error!(%error, "inline session terminated unexpectedly");
         }
     });

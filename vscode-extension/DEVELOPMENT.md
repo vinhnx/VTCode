@@ -121,7 +121,7 @@ When using the "Run Extension" launch configuration:
 1. Set breakpoints in your TypeScript files in the original VSCode window
 2. Interact with the extension in the "Extension Development Host" window
 3. Debug output will appear in the Debug Console of the original window
-4. Extension logs can be viewed in the Output panel (select "VTCode" from the dropdown)
+4. Extension logs can be viewed in the Output panel (select "VT Code" from the dropdown)
 
 ## Commands Available
 
@@ -206,7 +206,7 @@ To show a dedicated VT Code icon in the status bar (similar to other extensions 
 2. The current implementation uses the "$(hubot)" icon in the text, which displays a robot icon:
 
     ```typescript
-    statusBarItem.text = `$(hubot) VTCode${suffix}`;
+    statusBarItem.text = `$(hubot) VT Code${suffix}`;
     ```
 
     The `$(hubot)` part is a VSCode codicon that displays a robot icon, appropriate for an AI agent extension. You can use other VSCode codicons like:
@@ -221,7 +221,7 @@ To show a dedicated VT Code icon in the status bar (similar to other extensions 
 3. To change to a different icon, modify the text assignment in the `updateStatusBarItem` function:
 
     ```typescript
-    statusBarItem.text = `$(hubot) VTCode`; // Using a robot icon
+    statusBarItem.text = `$(hubot) VT Code`; // Using a robot icon
     ```
 
 4. For the VT Code chat functionality specifically, you might consider using the `$(terminal)` icon since it launches a terminal with the VT Code chat interface.
@@ -238,7 +238,7 @@ To show a dedicated VT Code icon in the status bar (similar to other extensions 
         - And many others - you can browse all available codicons at https://microsoft.github.io/vscode-codicons/dist/codicon.html
     - To change the icon, modify the status bar text in the `updateStatusBarItem` function in `extension.ts`:
         ```typescript
-        statusBarItem.text = `$(hubot) VTCode${suffix}`; // Using a robot icon
+        statusBarItem.text = `$(hubot) VT Code${suffix}`; // Using a robot icon
         ```
     - The media folder and custom icon files are still useful for other extension elements like the extension icon in the VSCode marketplace:
         ```json

@@ -106,7 +106,7 @@ if __name__ == "__main__":
 - Appendices"
 ```
 
-## Integration with VTCode
+## Integration with VT Code
 
 Use Agent Skills in VT Code to generate documents programmatically:
 
