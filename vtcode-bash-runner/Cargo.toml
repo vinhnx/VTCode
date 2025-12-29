@@ -23,6 +23,7 @@ exec-events = ["dep:vtcode-exec-events"]
 anyhow = "1.0"
 path-clean = "1.0"
 shell-escape = "0.1"
+tokio = { version = "1.0", features = ["sync", "macros", "rt"] }
 vtcode-commons = { path = "../vtcode-commons", version = "0.55.0" }
 serde = { version = "1.0", features = ["derive"], optional = true }
 vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.55.0", optional = true }

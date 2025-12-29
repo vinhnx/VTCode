@@ -78,7 +78,7 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
                 }
                 _ = cancel_rx => {
                     // Task was cancelled
-                    Err("Command was cancelled".into())
+                    Err(anyhow::anyhow!("Command was cancelled"))
                 }
             };
 
@@ -94,13 +94,6 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
         });
 
         Ok(task_id)
-    }
-
-    async fn execute_command(
-        executor: &E,
-        invocation: &CommandInvocation,
-    ) -> Result<CommandOutput> {
-        executor.execute(invocation)
     }
 
     pub async fn get_task(&self, task_id: &str) -> Option<BackgroundTaskHandle> {
