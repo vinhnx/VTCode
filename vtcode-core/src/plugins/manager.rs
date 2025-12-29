@@ -10,7 +10,7 @@ use anyhow::Result;
 use tokio::sync::RwLock;
 
 use super::{
-    PluginCache, PluginComponentsHandler, PluginId, PluginLoader, PluginManifest, PluginResult,
+    PluginCache, PluginLoader, PluginManifest, PluginResult,
     PluginRuntime,
 };
 use crate::config::PluginRuntimeConfig;
@@ -23,8 +23,6 @@ pub struct PluginManager {
     loader: Arc<PluginLoader>,
     /// Plugin cache for security and verification
     cache: Arc<RwLock<PluginCache>>,
-    /// Base directory for plugins
-    plugins_dir: PathBuf,
 }
 
 impl PluginManager {
@@ -42,7 +40,6 @@ impl PluginManager {
             runtime,
             loader,
             cache,
-            plugins_dir: base_dir,
         })
     }
 

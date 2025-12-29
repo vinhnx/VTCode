@@ -884,6 +884,7 @@ impl LifecycleHookEngine {
         Ok(outcome)
     }
 
+    #[allow(dead_code)]
     pub async fn run_task_completion(
         &self,
         task_name: &str,
@@ -999,6 +1000,7 @@ impl LifecycleHookEngine {
         }))
     }
 
+    #[allow(dead_code)]
     async fn build_task_completion_payload(
         &self,
         task_name: &str,
@@ -1784,6 +1786,7 @@ fn interpret_post_tool(
     }
 }
 
+#[allow(dead_code)]
 fn interpret_task_completion(
     command: &HookCommandConfig,
     result: &HookCommandResult,

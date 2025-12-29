@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use vtcode_config::{OutputStyle, OutputStyleManager, VTCodeConfig};
+use vtcode_config::{OutputStyleManager, VTCodeConfig};
 
 pub struct OutputStyleApplier {
     manager: Arc<RwLock<OutputStyleManager>>,

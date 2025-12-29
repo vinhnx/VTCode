@@ -6,7 +6,7 @@
 //! 3. User-level: `~/.vtcode/agents/`
 //! 4. Built-in: shipped with binary (lowest)
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -15,8 +15,8 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use vtcode_config::subagent::{
-    SubagentConfig, SubagentModel, SubagentParseError, SubagentSource, SubagentsConfig,
-    discover_subagents_in_dir, load_subagent_from_file,
+    SubagentConfig, SubagentSource, SubagentsConfig,
+    discover_subagents_in_dir,
 };
 
 /// Built-in subagent definitions

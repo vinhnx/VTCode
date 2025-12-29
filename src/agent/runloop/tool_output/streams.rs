@@ -759,7 +759,6 @@ mod ansi_stripping_tests {
 /// we use balanced allocation (50/50) since logic can be distributed throughout.
 ///
 /// Why token-based is better than line-based:
-
 fn describe_code_fence_header(language: Option<&str>) -> String {
     let Some(lang) = language
         .map(|value| value.trim())

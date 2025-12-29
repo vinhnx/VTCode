@@ -249,7 +249,7 @@ pub async fn handle_acp_command(
 pub async fn handle_ask_single_command(
     core_cfg: vtcode_core::config::types::AgentConfig,
     prompt: Option<String>,
-    options: AskCommandOptions,
+    _options: AskCommandOptions,
 ) -> Result<()> {
     // Import the actual implementation from the ask module
     let prompt_vec = if let Some(p) = prompt {

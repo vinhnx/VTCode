@@ -115,6 +115,7 @@ pub struct Session {
 
     // --- UI State ---
     slash_palette: SlashPalette,
+    #[allow(dead_code)]
     navigation_state: ListState,
     input_enabled: bool,
     cursor_visible: bool,
@@ -690,8 +691,8 @@ impl Session {
         let input_index = segments.len().saturating_sub(1);
         let input_area = segments[input_index];
 
-        let available_width = main_area.width;
-        let horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
+        let _available_width = main_area.width;
+        let _horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
 
         let transcript_area = main_area;
         let navigation_area = Rect::new(main_area.x, main_area.y, 0, 0); // No navigation area since timeline pane is removed

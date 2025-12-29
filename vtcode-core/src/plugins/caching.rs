@@ -6,7 +6,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
 use tokio::fs;
 
 use super::{PluginError, PluginResult};

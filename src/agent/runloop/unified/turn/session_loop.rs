@@ -194,7 +194,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     break;
                 }
                 InteractionOutcome::Resume { resume_session } => {
-                    resume_state = Some(resume_session);
+                    resume_state = Some(*resume_session);
                     session_end_reason = SessionEndReason::Completed; // Will be ignored by loop restart logic but sets state
                     break; // Restart loop
                 }

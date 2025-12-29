@@ -10,7 +10,6 @@ use crate::marketplace::{
     MarketplaceConfig, MarketplaceSource, MarketplaceSystem, PluginManifest,
     config::{InstalledPlugin, MarketplaceSettings},
 };
-use crate::tools::plugins::PluginRuntime;
 
 /// Test the marketplace system with sample configurations
 pub async fn test_marketplace_system() -> Result<()> {

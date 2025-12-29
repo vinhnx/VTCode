@@ -4,7 +4,6 @@
 //! with support for commands, agents, skills, hooks, MCP, and LSP servers.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
