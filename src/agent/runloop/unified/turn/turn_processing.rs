@@ -11,6 +11,7 @@ use crate::agent::runloop::unified::turn::guards::{
     handle_turn_balancer, validate_required_tool_args,
 };
 use crate::agent::runloop::unified::ui_interaction::stream_and_render_response;
+use crate::agent::runloop::unified::turn::tool_outcomes::HandleTextResponseParams;
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use vtcode_core::core::trajectory::TrajectoryLogger;
@@ -183,38 +184,42 @@ pub(crate) async fn execute_llm_request(
 // are now imported from crate::agent::runloop::unified::reasoning
 
 /// Result of processing a single turn
+pub(crate) struct HandleTurnProcessingResultParams<'a> {
+    pub ctx: &'a mut TurnProcessingContext<'a>,
+    pub processing_result: TurnProcessingResult,
+    pub response_streamed: bool,
+    pub step_count: usize,
+    pub repeated_tool_attempts: &'a mut HashMap<String, usize>,
+    pub turn_modified_files: &'a mut BTreeSet<PathBuf>,
+    pub traj: &'a TrajectoryLogger,
+    pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
+}
+
 /// Dispatch the appropriate response handler based on the processing result.
 pub(crate) async fn handle_turn_processing_result(
-    ctx: &mut TurnProcessingContext<'_>,
-    processing_result: TurnProcessingResult,
-    response_streamed: bool,
-    step_count: usize,
-    repeated_tool_attempts: &mut HashMap<String, usize>,
-    turn_modified_files: &mut BTreeSet<PathBuf>,
-    traj: &TrajectoryLogger,
-    session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
+    params: HandleTurnProcessingResultParams<'_>,
 ) -> Result<TurnHandlerOutcome> {
-    match processing_result {
+    match params.processing_result {
         TurnProcessingResult::ToolCalls {
             tool_calls,
             assistant_text,
             reasoning,
         } => {
             crate::agent::runloop::unified::turn::tool_outcomes::handle_assistant_response(
-                ctx,
+                params.ctx,
                 assistant_text,
                 reasoning,
-                response_streamed,
+                params.response_streamed,
             )?;
 
             for tool_call in &tool_calls {
                 if let Some(outcome) =
                     crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_call(
-                        ctx,
+                        params.ctx,
                         tool_call,
-                        repeated_tool_attempts,
-                        turn_modified_files,
-                        traj,
+                        params.repeated_tool_attempts,
+                        params.turn_modified_files,
+                        params.traj,
                     )
                     .await?
                 {
@@ -225,15 +230,17 @@ pub(crate) async fn handle_turn_processing_result(
         }
         TurnProcessingResult::TextResponse { text, reasoning } => {
             return crate::agent::runloop::unified::turn::tool_outcomes::handle_text_response(
-                ctx,
-                text,
-                reasoning,
-                response_streamed,
-                step_count,
-                repeated_tool_attempts,
-                turn_modified_files,
-                traj,
-                session_end_reason,
+                HandleTextResponseParams {
+                    ctx: params.ctx,
+                    text,
+                    reasoning,
+                    response_streamed: params.response_streamed,
+                    step_count: params.step_count,
+                    repeated_tool_attempts: params.repeated_tool_attempts,
+                    turn_modified_files: params.turn_modified_files,
+                    traj: params.traj,
+                    session_end_reason: params.session_end_reason,
+                },
             )
             .await;
         }
@@ -241,7 +248,7 @@ pub(crate) async fn handle_turn_processing_result(
             return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed));
         }
         TurnProcessingResult::Cancelled => {
-            *session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
+            *params.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
             return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled));
         }
         TurnProcessingResult::Aborted => {
@@ -249,7 +256,7 @@ pub(crate) async fn handle_turn_processing_result(
         }
     };
 
-    Ok(handle_turn_balancer(ctx, step_count, repeated_tool_attempts).await)
+    Ok(handle_turn_balancer(params.ctx, params.step_count, params.repeated_tool_attempts).await)
 }
 
 /// Process an LLM response and return a `TurnProcessingResult` describing whether

@@ -95,6 +95,7 @@ pub enum AgentCommandAction {
     Create,
     Edit(String),
     Delete(String),
+    #[allow(dead_code)]
     Help,
 }
 

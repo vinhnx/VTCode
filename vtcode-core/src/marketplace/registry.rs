@@ -46,6 +46,7 @@ impl MarketplaceSource {
 /// Registry for managing marketplaces
 pub struct MarketplaceRegistry {
     /// Base directory for marketplace data
+    #[allow(dead_code)]
     base_dir: PathBuf,
 
     /// Registered marketplaces
@@ -241,7 +242,6 @@ impl MarketplaceRegistry {
         url: &str,
         refspec: Option<&str>,
     ) -> Result<MarketplaceManifest> {
-        use std::path::Path;
         use tempfile::TempDir;
         use tokio::fs;
         use tokio::process::Command;

@@ -134,6 +134,7 @@ pub struct SubagentRunner {
     /// Parent tool registry (for filtering)
     parent_tools: Arc<ToolRegistry>,
     /// Workspace root
+    #[allow(dead_code)]
     workspace_root: PathBuf,
 }
 
@@ -342,10 +343,6 @@ impl SubagentRunner {
         );
 
         // Execute the agent loop
-        let mut turn_count = 0u32;
-        let mut tokens = TokenUsage::default();
-        let mut final_output = String::new();
-
         // For now, we do a simplified single-turn execution
         // A full implementation would use the agent runloop
         let response = tokio::time::timeout(timeout, async {
@@ -357,9 +354,9 @@ impl SubagentRunner {
         .await
         .context("Subagent execution timed out")??;
 
-        final_output = response.0;
-        turn_count = response.1;
-        tokens = response.2;
+        let final_output = response.0;
+        let turn_count = response.1;
+        let tokens = response.2;
 
         Ok((final_output, turn_count, tokens))
     }

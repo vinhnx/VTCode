@@ -94,7 +94,7 @@ pub async fn run_turn_loop(
     };
     use crate::agent::runloop::unified::turn::guards::run_proactive_guards;
     use crate::agent::runloop::unified::turn::turn_processing::{
-        execute_llm_request, handle_turn_processing_result, process_llm_response,
+        execute_llm_request, handle_turn_processing_result, process_llm_response, HandleTurnProcessingResultParams,
     };
     use vtcode_core::llm::provider as uni;
 
@@ -178,14 +178,16 @@ pub async fn run_turn_loop(
 
         // Handle the turn processing result (dispatch tool calls or finish turn)
         match handle_turn_processing_result(
-            &mut turn_processing_ctx,
-            processing_result,
-            response_streamed,
-            step_count,
-            &mut repeated_tool_attempts,
-            &mut turn_modified_files,
-            traj,
-            session_end_reason,
+            HandleTurnProcessingResultParams {
+                ctx: &mut turn_processing_ctx,
+                processing_result,
+                response_streamed,
+                step_count,
+                repeated_tool_attempts: &mut repeated_tool_attempts,
+                turn_modified_files: &mut turn_modified_files,
+                traj,
+                session_end_reason,
+            }
         )
         .await?
         {

@@ -32,6 +32,7 @@ impl ContextManager {
 
     /// Pre-request check that returns recommended action before making an LLM request.
     /// Token budgeting is disabled, always returns Proceed.
+    #[allow(dead_code)]
     pub(crate) fn pre_request_check(&self, _history: &[uni::Message]) -> PreRequestAction {
         PreRequestAction::Proceed
     }
@@ -88,6 +89,7 @@ impl ContextManager {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum PreRequestAction {
     /// Normal operation, proceed with request
     Proceed,

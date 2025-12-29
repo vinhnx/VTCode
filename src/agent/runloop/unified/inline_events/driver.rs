@@ -5,7 +5,6 @@ use tokio::sync::Notify;
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::ui::tui::{InlineHandle, InlineSession};
 use vtcode_core::utils::ansi::AnsiRenderer;

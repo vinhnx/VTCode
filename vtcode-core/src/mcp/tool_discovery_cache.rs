@@ -100,7 +100,6 @@ struct CachedToolDiscoveryEntry {
     // OPTIMIZATION: Use Arc to avoid cloning large vectors on cache hits
     results: Arc<Vec<ToolDiscoveryResult>>,
     timestamp: Instant,
-    provider_tool_count: usize,
 }
 
 /// Cached tool discovery result (matches actual API)
@@ -224,7 +223,6 @@ impl ToolDiscoveryCache {
             // OPTIMIZATION: Wrap in Arc once, share across cache hits
             results: Arc::new(results.clone()),
             timestamp: Instant::now(),
-            provider_tool_count: results.len(),
         };
 
         if let Ok(mut detailed_cache) = self.detailed_cache.write() {

@@ -103,8 +103,6 @@ pub fn handle_modified_files_common(
     Ok(())
 }
 
-/// Common logic for recording token usage
-
 /// Common logic for determining if a tool causes write effects
 pub fn check_write_effect_common(name: &str) -> bool {
     matches!(

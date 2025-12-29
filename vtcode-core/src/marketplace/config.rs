@@ -8,7 +8,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::marketplace::{MarketplaceConfig, MarketplaceSource};
+use crate::marketplace::MarketplaceSource;
 
 /// Configuration for marketplace settings that integrates with VT Code's config system
 #[derive(Debug, Clone, Deserialize, Serialize)]

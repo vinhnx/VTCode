@@ -82,7 +82,7 @@ pub(crate) struct InteractionState<'a> {
 pub(crate) enum InteractionOutcome {
     Continue { input: String },
     Exit { reason: SessionEndReason },
-    Resume { resume_session: ResumeSession },
+    Resume { resume_session: Box<ResumeSession> },
 }
 
 pub(crate) async fn run_interaction_loop(
@@ -194,7 +194,7 @@ pub(crate) async fn run_interaction_loop(
                                 &format!("Restarting with session: {}", session_id),
                             )?;
                             return Ok(InteractionOutcome::Resume {
-                                resume_session: resume,
+                                resume_session: Box::new(resume),
                             });
                         }
                         Ok(None) => {
@@ -549,6 +549,8 @@ pub(crate) async fn run_interaction_loop(
     }
 }
 
+
+#[allow(clippy::too_many_arguments)]
 async fn handle_mcp_updates(
     mcp_manager: &AsyncMcpManager,
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,

@@ -49,6 +49,7 @@ pub(crate) fn update_context_efficiency(
     state.semantic_value_per_token = Some(semantic_per_token);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn update_input_status_if_changed(
     handle: &InlineHandle,
     workspace: &Path,

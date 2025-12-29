@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::Result;
 use tokio::sync::RwLock;
 
 use super::{PluginError, PluginId, PluginManifest, PluginResult};
@@ -43,24 +42,15 @@ pub struct PluginHandle {
 /// Plugin runtime that manages plugin lifecycle
 #[derive(Debug, Clone)]
 pub struct PluginRuntime {
-    /// Configuration for the plugin system
-    config: PluginRuntimeConfig,
-    /// Base directory for plugins
-    base_dir: PathBuf,
     /// Currently loaded plugins
     plugins: Arc<RwLock<HashMap<PluginId, PluginHandle>>>,
-    /// Plugin cache
-    cache: Arc<RwLock<HashMap<PluginId, PathBuf>>>,
 }
 
 impl PluginRuntime {
     /// Create a new plugin runtime
-    pub fn new(config: PluginRuntimeConfig, base_dir: PathBuf) -> Self {
+    pub fn new(_config: PluginRuntimeConfig, _base_dir: PathBuf) -> Self {
         Self {
-            config,
-            base_dir,
             plugins: Arc::new(RwLock::new(HashMap::new())),
-            cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 

@@ -3,7 +3,7 @@
 use anstyle::Color as AnsiColorEnum;
 use ratatui::{
     prelude::*,
-    widgets::{Block, Clear, List, ListItem, Paragraph, RatatuiLogo, Wrap},
+    widgets::{Block, Clear, List, ListItem, Paragraph, Wrap},
 };
 use unicode_width::UnicodeWidthStr;
 

@@ -98,6 +98,7 @@ fn is_word_char(ch: char) -> bool {
 }
 
 /// Check if a character is considered part of a WORD (vim-style WORD - whitespace delimited)
+#[allow(dead_code)]
 fn is_big_word_char(ch: char) -> bool {
     !ch.is_whitespace()
 }

@@ -52,10 +52,12 @@ impl VimState {
         matches!(self.mode, VimMode::Normal)
     }
 
+    #[allow(dead_code)]
     pub fn is_insert(&self) -> bool {
         matches!(self.mode, VimMode::Insert)
     }
 
+    #[allow(dead_code)]
     pub fn handle_key_event(&mut self, key: &KeyEvent) -> VimAction {
         match self.mode {
             VimMode::Normal => self.handle_normal_mode(key),

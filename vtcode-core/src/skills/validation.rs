@@ -10,11 +10,10 @@
 use crate::skills::cli_bridge::CliToolConfig;
 use crate::skills::manifest::parse_skill_file;
 use anyhow::Result;
-use jsonschema::Validator;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Instant;
 use tracing::info;
 
