@@ -243,16 +243,6 @@ impl ConfigPalette {
             description: Some("Control verbosity of tool output".to_string()),
         });
 
-        // Show Timeline Pane
-        items.push(ConfigItem {
-            key: "ui.show_timeline_pane".to_string(),
-            label: "Show Timeline Pane".to_string(),
-            kind: ConfigItemKind::Bool {
-                value: config.ui.show_timeline_pane,
-            },
-            description: Some("Display the navigation/timeline pane on the left".to_string()),
-        });
-
         // Allow Tool ANSI
         items.push(ConfigItem {
             key: "ui.allow_tool_ansi".to_string(),
@@ -456,10 +446,6 @@ impl ConfigPalette {
                         ToolOutputMode::Compact => ToolOutputMode::Full,
                         ToolOutputMode::Full => ToolOutputMode::Compact,
                     };
-                    changed = true;
-                }
-                "ui.show_timeline_pane" => {
-                    self.config.ui.show_timeline_pane = !self.config.ui.show_timeline_pane;
                     changed = true;
                 }
                 "ui.allow_tool_ansi" => {
@@ -673,22 +659,22 @@ mod tests {
     fn test_toggle_bool() {
         let mut palette = setup_palette();
 
-        // Find a boolean item index (e.g., ui.show_timeline_pane)
+        // Find a boolean item index (e.g., ui.allow_tool_ansi)
         let index = palette
             .items
             .iter()
-            .position(|i| i.key == "ui.show_timeline_pane");
-        assert!(index.is_some(), "Should have ui.show_timeline_pane item");
+            .position(|i| i.key == "ui.allow_tool_ansi");
+        assert!(index.is_some(), "Should have ui.allow_tool_ansi item");
         let index = index.unwrap();
 
         palette.list_state.select(Some(index));
 
-        let initial_value = palette.config.ui.show_timeline_pane;
+        let initial_value = palette.config.ui.allow_tool_ansi;
 
         palette.toggle_selected();
 
         assert_ne!(
-            palette.config.ui.show_timeline_pane, initial_value,
+            palette.config.ui.allow_tool_ansi, initial_value,
             "Value should create toggled"
         );
         assert!(palette.modified, "Modified flag should be true");
@@ -696,7 +682,7 @@ mod tests {
         // Toggle back
         palette.toggle_selected();
         assert_eq!(
-            palette.config.ui.show_timeline_pane, initial_value,
+            palette.config.ui.allow_tool_ansi, initial_value,
             "Value should default back"
         );
     }

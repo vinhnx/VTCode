@@ -3,7 +3,7 @@
 //!
 //! These helpers allow downstream consumers to construct a `ToolRegistry`
 //! using their own path, telemetry, and error-reporting implementations
-//! without relying on VTCode's built-in `.vtcode` directory layout.
+//! without relying on VT Code's built-in `.vtcode` directory layout.
 
 use std::path::{Path, PathBuf};
 

@@ -38,8 +38,7 @@ async fn test_visual_user_agent_exchange() {
         InlineTheme::default(),
         Some("Ask me anything...".to_string()),
         Default::default(),
-        12,   // inline_rows
-        true, // show_timeline_pane
+        12, // inline_rows
         None,
         None,
     );
@@ -88,8 +87,7 @@ async fn test_visual_code_rendering() {
         InlineTheme::default(),
         Some("Enter code to analyze...".to_string()),
         Default::default(),
-        15,   // inline_rows
-        true, // show_timeline_pane
+        15, // inline_rows
         None,
         None,
     );
@@ -134,8 +132,7 @@ async fn test_visual_tool_output() {
         InlineTheme::default(),
         Some("Enter command...".to_string()),
         Default::default(),
-        10,    // inline_rows
-        false, // show_timeline_pane
+        10, // inline_rows
         None,
         None,
     );
@@ -196,8 +193,7 @@ async fn test_visual_error_handling() {
         InlineTheme::default(),
         Some("Enter command (errors possible)...".to_string()),
         Default::default(),
-        12,   // inline_rows
-        true, // show_timeline_pane
+        12, // inline_rows
         None,
         None,
     );

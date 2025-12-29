@@ -23,7 +23,7 @@ pub enum ConfigFormat {
     JavaScript,
 }
 
-/// Markers for identifying VTCode-managed configuration sections
+/// Markers for identifying VT Code-managed configuration sections
 pub const VTCODE_BEGIN_MARKER: &str = "# BEGIN VTCODE CONFIGURATION";
 pub const VTCODE_END_MARKER: &str = "# END VTCODE CONFIGURATION";
 
@@ -130,7 +130,7 @@ impl ConfigWriter {
         };
 
         let header = format!(
-            "{} BEGIN VTCODE CONFIGURATION\n{} VTCode-managed section - auto-generated\n{} Do not edit manually",
+            "{} BEGIN VTCODE CONFIGURATION\n{} VT Code-managed section - auto-generated\n{} Do not edit manually",
             comment_prefix, comment_prefix, comment_prefix
         );
 
@@ -178,7 +178,7 @@ mod tests {
 user_setting = 1
 
 # BEGIN VTCODE CONFIGURATION
-# VTCode-managed section - auto-generated
+# VT Code-managed section - auto-generated
 vtcode_setting = 2
 # END VTCODE CONFIGURATION
 

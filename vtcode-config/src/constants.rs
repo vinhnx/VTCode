@@ -1,6 +1,6 @@
 /// Application metadata constants shared across crates
 pub mod app {
-    pub const DISPLAY_NAME: &str = "VTCode";
+    pub const DISPLAY_NAME: &str = "VT Code";
 }
 
 /// Prompt path constants to avoid hardcoding throughout the codebase
@@ -708,7 +708,6 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
-    pub const INLINE_SHOW_TIMELINE_PANE: bool = true;
     pub const SLASH_SUGGESTION_LIMIT: usize = 50; // All commands are scrollable
     pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
     pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;

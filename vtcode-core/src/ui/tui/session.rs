@@ -146,7 +146,6 @@ pub struct Session {
     queue_overlay_version: u64,
     pub(crate) modal: Option<ModalState>,
     wizard_modal: Option<WizardModalState>,
-    pub(crate) show_timeline_pane: bool,
     line_revision_counter: u64,
     /// Track the first line that needs reflow/update to avoid O(N) scans
     first_dirty_line: Option<usize>,
@@ -211,20 +210,14 @@ impl Session {
     }
 
     #[allow(dead_code)]
-    pub fn new(
-        theme: InlineTheme,
-        placeholder: Option<String>,
-        view_rows: u16,
-        show_timeline_pane: bool,
-    ) -> Self {
-        Self::new_with_logs(theme, placeholder, view_rows, show_timeline_pane, true)
+    pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
+        Self::new_with_logs(theme, placeholder, view_rows, true)
     }
 
     pub fn new_with_logs(
         theme: InlineTheme,
         placeholder: Option<String>,
         view_rows: u16,
-        show_timeline_pane: bool,
         show_logs: bool,
     ) -> Self {
         let resolved_rows = view_rows.max(2);
@@ -282,7 +275,6 @@ impl Session {
             queue_overlay_version: 0,
             modal: None,
             wizard_modal: None,
-            show_timeline_pane,
             header_rows: initial_header_rows,
             line_revision_counter: 0,
             first_dirty_line: None,
@@ -627,8 +619,6 @@ impl Session {
     }
 
     pub fn apply_config(&mut self, config: &crate::config::loader::VTCodeConfig) {
-        self.show_timeline_pane = config.ui.show_timeline_pane;
-
         // Apply theme changes in real-time
         if crate::ui::theme::set_active_theme(&config.agent.theme).is_ok() {
             let active_styles = crate::ui::theme::active_styles();
@@ -703,47 +693,20 @@ impl Session {
         let available_width = main_area.width;
         let horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
 
-        let (transcript_area, navigation_area) = if self.show_timeline_pane {
-            if available_width >= horizontal_minimum {
-                let nav_percent = u32::from(ui::INLINE_NAVIGATION_PERCENT);
-                let mut nav_width = ((available_width as u32 * nav_percent) / 100) as u16;
-                nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
-                let max_allowed = available_width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
-                nav_width = nav_width.min(max_allowed);
-
-                let constraints = [
-                    Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH),
-                    Constraint::Length(nav_width),
-                ];
-                let main_chunks = Layout::horizontal(constraints).split(main_area);
-                (main_chunks[0], main_chunks[1])
-            } else {
-                let nav_percent = ui::INLINE_STACKED_NAVIGATION_PERCENT.min(99);
-                let transcript_percent = (100u16).saturating_sub(nav_percent).max(1u16);
-                let constraints = [
-                    Constraint::Percentage(transcript_percent),
-                    Constraint::Percentage(nav_percent.max(1u16)),
-                ];
-                let main_chunks = Layout::vertical(constraints).split(main_area);
-                (main_chunks[0], main_chunks[1])
-            }
-        } else {
-            (main_area, Rect::new(main_area.x, main_area.y, 0, 0))
-        };
+        let transcript_area = main_area;
+        let navigation_area = Rect::new(main_area.x, main_area.y, 0, 0); // No navigation area since timeline pane is removed
 
         // Use SessionWidget for buffer-based rendering (header, transcript, overlays)
         SessionWidget::new(self)
             .header_lines(header_lines.clone())
             .header_area(header_area)
             .transcript_area(transcript_area)
-            .navigation_area(navigation_area)
+            .navigation_area(navigation_area) // Pass empty navigation area
             .render(viewport, frame.buffer_mut());
 
         // Handle frame-based rendering for components that need it
         // Note: header, transcript, and overlays are handled by SessionWidget
-        if self.show_timeline_pane {
-            self.render_navigation(frame, navigation_area);
-        }
+        // Timeline pane has been removed, so no navigation rendering
         self.render_input(frame, input_area);
         render::render_modal(self, frame, viewport);
         slash::render_slash_palette(self, frame, viewport);

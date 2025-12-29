@@ -1,4 +1,4 @@
-//! Analysis command implementations for VTCode
+//! Analysis command implementations for VT Code
 
 use serde::{Deserialize, Serialize};
 

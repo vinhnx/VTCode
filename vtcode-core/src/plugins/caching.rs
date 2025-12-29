@@ -1,4 +1,4 @@
-//! Plugin caching system for VTCode
+//! Plugin caching system for VT Code
 //!
 //! Implements the caching mechanism for plugins to ensure security and verification
 //! as described in the VT Code plugin reference.

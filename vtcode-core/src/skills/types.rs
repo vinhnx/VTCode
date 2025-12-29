@@ -18,7 +18,7 @@ pub enum SkillVariety {
     AgentSkill,
     /// Low-level CLI tool bridge
     SystemUtility,
-    /// Native VTCode functionality
+    /// Native VT Code functionality
     BuiltIn,
 }
 
@@ -67,7 +67,7 @@ pub struct SkillManifest {
     #[serde(rename = "requires-container")]
     #[serde(alias = "requires_container")]
     pub requires_container: Option<bool>,
-    /// Indicates the skill should not be run inside a container (force VTCode-native path)
+    /// Indicates the skill should not be run inside a container (force VT Code-native path)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "disallow-container")]
     #[serde(alias = "disallow_container")]
@@ -534,7 +534,7 @@ mod tests {
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
-            compatibility: Some("Designed for VTCode".to_string()),
+            compatibility: Some("Designed for VT Code".to_string()),
             ..Default::default()
         };
         assert!(m.validate().is_ok());

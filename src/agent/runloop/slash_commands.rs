@@ -68,6 +68,9 @@ pub enum SlashCommandOutcome {
     ManageSkills {
         action: crate::agent::runloop::SkillCommandAction,
     },
+    ManageAgents {
+        action: AgentCommandAction,
+    },
     SubmitPrompt {
         prompt: String,
     },
@@ -83,6 +86,15 @@ pub enum SlashCommandOutcome {
 pub enum LspCommandAction {
     Status,
     Detect,
+    Help,
+}
+
+#[derive(Clone, Debug)]
+pub enum AgentCommandAction {
+    List,
+    Create,
+    Edit(String),
+    Delete(String),
     Help,
 }
 
@@ -710,6 +722,93 @@ pub async fn handle_slash_command(
                 }
                 Err(e) => {
                     renderer.line(MessageStyle::Error, &format!("Skills command error: {}", e))?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
+            }
+        }
+        "agents" => {
+            if args.is_empty() {
+                return Ok(SlashCommandOutcome::ManageAgents {
+                    action: AgentCommandAction::List,
+                });
+            }
+
+            let tokens = match shell_split(args) {
+                Ok(tokens) => tokens,
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to parse arguments: {}", err),
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            };
+
+            if tokens.is_empty() {
+                return Ok(SlashCommandOutcome::ManageAgents {
+                    action: AgentCommandAction::List,
+                });
+            }
+
+            let subcommand = tokens[0].to_ascii_lowercase();
+            match subcommand.as_str() {
+                "list" | "ls" => Ok(SlashCommandOutcome::ManageAgents {
+                    action: AgentCommandAction::List,
+                }),
+                "create" | "new" => Ok(SlashCommandOutcome::ManageAgents {
+                    action: AgentCommandAction::Create,
+                }),
+                "edit" => {
+                    if tokens.len() < 2 {
+                        renderer.line(MessageStyle::Error, "Usage: /agents edit <agent-name>")?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                    Ok(SlashCommandOutcome::ManageAgents {
+                        action: AgentCommandAction::Edit(tokens[1].clone()),
+                    })
+                }
+                "delete" | "remove" | "rm" => {
+                    if tokens.len() < 2 {
+                        renderer.line(MessageStyle::Error, "Usage: /agents delete <agent-name>")?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                    Ok(SlashCommandOutcome::ManageAgents {
+                        action: AgentCommandAction::Delete(tokens[1].clone()),
+                    })
+                }
+                "help" | "--help" => {
+                    renderer.line(MessageStyle::Info, "Subagent Management")?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Usage: /agents [list|create|edit|delete] [options]",
+                    )?;
+                    renderer.line(MessageStyle::Info, "")?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "  /agents              List all available subagents",
+                    )?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "  /agents create       Create a new subagent interactively",
+                    )?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "  /agents edit NAME    Edit an existing subagent",
+                    )?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "  /agents delete NAME  Delete a subagent",
+                    )?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
+                _ => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!(
+                            "Unknown subcommand '/agents {}'. Try /agents help.",
+                            subcommand
+                        ),
+                    )?;
                     Ok(SlashCommandOutcome::Handled)
                 }
             }

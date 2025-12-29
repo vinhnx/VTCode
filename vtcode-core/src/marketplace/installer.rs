@@ -71,16 +71,16 @@ impl PluginInstaller {
                 )
             })?;
 
-        // Integrate with VTCode's existing plugin system
+        // Integrate with VT Code's existing plugin system
         self.integrate_with_core_plugin_system(&manifest_path)
             .await?;
 
         Ok(())
     }
 
-    /// Integrate the installed plugin with VTCode's core plugin system
+    /// Integrate the installed plugin with VT Code's core plugin system
     async fn integrate_with_core_plugin_system(&self, manifest_path: &PathBuf) -> Result<()> {
-        // This would load the plugin into VTCode's plugin runtime
+        // This would load the plugin into VT Code's plugin runtime
         if let Some(runtime) = &self.core_plugin_runtime {
             // Load the plugin manifest and register it with the core runtime
             let handle = runtime.register_manifest(manifest_path).await?;
@@ -322,7 +322,7 @@ impl PluginInstaller {
             bail!("Plugin '{}' is not installed", plugin_id);
         }
 
-        // Remove from VTCode's plugin system before filesystem removal
+        // Remove from VT Code's plugin system before filesystem removal
         self.remove_from_core_plugin_system(plugin_id).await?;
 
         fs::remove_dir_all(&plugin_dir).await.with_context(|| {
@@ -335,9 +335,9 @@ impl PluginInstaller {
         Ok(())
     }
 
-    /// Remove plugin from VTCode's core plugin system
+    /// Remove plugin from VT Code's core plugin system
     async fn remove_from_core_plugin_system(&self, plugin_id: &str) -> Result<()> {
-        // Remove the plugin from VTCode's plugin runtime
+        // Remove the plugin from VT Code's plugin runtime
         if let Some(runtime) = &self.core_plugin_runtime {
             // Unload the plugin by ID
             runtime

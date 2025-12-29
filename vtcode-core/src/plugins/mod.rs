@@ -1,4 +1,4 @@
-//! Plugin system for VTCode
+//! Plugin system for VT Code
 //!
 //! This module provides a comprehensive plugin system that supports:
 //! - Commands (slash commands)

@@ -152,7 +152,7 @@ pub(crate) async fn finalize_model_selection(
     if !selection.known_model {
         renderer.line(
             MessageStyle::Info,
-            "The selected model is not part of VTCode's curated list; capabilities may vary.",
+            "The selected model is not part of VT Code's curated list; capabilities may vary.",
         )?;
     }
 

@@ -10,7 +10,7 @@
 //! - **Dynamic Discovery**: Auto-discover skills and CLI tools from filesystem
 //! - **Context Management**: Memory-efficient loading with LRU eviction
 //! - **Anthropic Compatibility**: Full support for Anthropic's skill specification
-//! - **Tool Integration**: Seamless integration with VTCode's tool registry
+//! - **Tool Integration**: Seamless integration with VT Code's tool registry
 //!
 //! ## Architecture
 //!

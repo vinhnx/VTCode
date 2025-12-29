@@ -1,7 +1,7 @@
 //! # LLM Integration Layer
 //!
 //! This module provides a unified, modular interface for integrating multiple LLM providers
-//! with VTCode, supporting Gemini, OpenAI, Anthropic, xAI, and DeepSeek.
+//! with VT Code, supporting Gemini, OpenAI, Anthropic, xAI, and DeepSeek.
 //!
 //! ## Architecture Overview
 //!

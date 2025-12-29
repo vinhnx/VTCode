@@ -56,7 +56,7 @@ fn create_project_structure(project_path: &Path, features: &[String]) -> Result<
     let readme_content = format!(
         r#"# Project
 
-This is a new project created with VTCode.
+This is a new project created with VT Code.
 
 ## Features
 

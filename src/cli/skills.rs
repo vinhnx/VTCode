@@ -1,7 +1,7 @@
 //! CLI command handlers for agent skills management
 //!
 //! Provides `/skills` command palette for discovering, loading, and managing
-//! Anthropic Agent Skills within VTCode.
+//! Anthropic Agent Skills within VT Code.
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -266,13 +266,13 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
             println!("\n--- Compatibility ---");
             match analysis.requirement {
                 vtcode_core::skills::container_validation::ContainerSkillsRequirement::Required => {
-                    println!(" Requires Anthropic container skills - NOT COMPATIBLE with VTCode");
+                    println!(" Requires Anthropic container skills - NOT COMPATIBLE with VT Code");
                 }
                 vtcode_core::skills::container_validation::ContainerSkillsRequirement::RequiredWithFallback => {
-                    println!("  Uses container skills but provides VTCode-compatible alternatives");
+                    println!("  Uses container skills but provides VT Code-compatible alternatives");
                 }
                 vtcode_core::skills::container_validation::ContainerSkillsRequirement::NotRequired => {
-                    println!(" Fully compatible with VTCode");
+                    println!(" Fully compatible with VT Code");
                 }
                 vtcode_core::skills::container_validation::ContainerSkillsRequirement::Unknown => {
                     println!(" Compatibility unknown - proceed with caution");

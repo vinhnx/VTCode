@@ -208,12 +208,14 @@ impl MarketplaceRegistry {
             .ok_or_else(|| anyhow::anyhow!("GitHub API response missing content field"))?;
 
         // Decode the base64 content
-        let content_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, content_encoded).with_context(|| {
-            format!(
-                "Failed to decode base64 content from GitHub: {}/{}",
-                owner, repo
-            )
-        })?;
+        let content_bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, content_encoded)
+                .with_context(|| {
+                    format!(
+                        "Failed to decode base64 content from GitHub: {}/{}",
+                        owner, repo
+                    )
+                })?;
 
         let content = String::from_utf8(content_bytes).with_context(|| {
             format!(

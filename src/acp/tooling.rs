@@ -42,7 +42,7 @@ pub const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 /// - Code execution: Potential security risk in editor integration
 /// - Patch application: Complex state management not suitable for ACP
 /// - Write operations: Reserved for local-only agent to prevent unintended edits
-/// - Skill management: VTCode-specific feature, not relevant to Zed integration
+/// - Skill management: VT Code-specific feature, not relevant to Zed integration
 /// - Diagnostic tools (debug_agent, analyze_agent): Internal agent state, not for editor
 /// - Web fetch: Network access restricted in editor context
 /// - Search tools: Integrated into Zed's own search functionality

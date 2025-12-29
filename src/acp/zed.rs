@@ -108,7 +108,7 @@ fn text_chunk(text: impl Into<String>) -> acp::ContentChunk {
 fn agent_implementation_info() -> acp::Implementation {
     acp::Implementation {
         name: "vtcode".to_string(),
-        title: Some("VTCode".to_string()),
+        title: Some("VT Code".to_string()),
         version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }

@@ -81,16 +81,16 @@ impl AgentCard {
         }
     }
 
-    /// Create a default VTCode agent card
+    /// Create a default VT Code agent card
     pub fn vtcode_default(url: impl Into<String>) -> Self {
         let mut card = Self::new(
             "vtcode-agent",
-            "VTCode AI coding agent - a terminal-based coding assistant supporting multiple LLM providers",
+            "VT Code AI coding agent - a terminal-based coding assistant supporting multiple LLM providers",
             env!("CARGO_PKG_VERSION"),
         );
         card.url = url.into();
         card.provider = Some(AgentProvider {
-            organization: "VTCode".to_string(),
+            organization: "VT Code".to_string(),
             url: Some("https://github.com/vinhnx/vtcode".to_string()),
         });
         card.capabilities = Some(AgentCapabilities {

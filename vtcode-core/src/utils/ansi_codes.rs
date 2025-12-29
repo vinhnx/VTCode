@@ -163,7 +163,7 @@ fn send_kitty_notification(message: Option<&str>) {
     // Kitty remote control: OSC 777;notify=title;body=message BEL
     let body = sanitize_notification_text(message.unwrap_or("Human approval required"));
     // Keep the title short and ASCII-safe
-    let title = "VTCode";
+    let title = "VT Code";
     let payload = format!("{}777;notify={};body={}", OSC, title, body);
     print!("{}{}", payload, BEL);
     let _ = std::io::stdout().flush();

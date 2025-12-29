@@ -408,7 +408,7 @@ impl WebFetchTool {
         headers.insert(ACCEPT, HeaderValue::from_static("text/markdown, */*"));
         headers.insert(
             USER_AGENT,
-            HeaderValue::from_static("VTCode/1.0 (compatible; web-fetch tool)"),
+            HeaderValue::from_static("VT Code/1.0 (compatible; web-fetch tool)"),
         );
         headers
     }
@@ -452,7 +452,7 @@ impl Tool for WebFetchTool {
         //   "Fetch this URL and return a concise natural language summary."
         //
         // This ensures:
-        // - Simple "fetch https://..." style calls are handled natively by VTCode.
+        // - Simple "fetch https://..." style calls are handled natively by VT Code.
         // - We do not force upstream agents or MCP tools to construct a full prompt.
         // - MCP tools like `get_current_time` remain unaffected (they are separate).
         if let Some(obj) = args.as_object_mut() {

@@ -1,7 +1,7 @@
 //! A2A Protocol CLI commands
 //!
 //! Provides command-line interface for:
-//! - Serving VTCode as an A2A agent
+//! - Serving VT Code as an A2A agent
 //! - Discovering remote A2A agents
 //! - Sending tasks to other agents
 //! - Managing A2A agent connections
@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 /// A2A Protocol commands
 #[derive(Debug, Subcommand, Clone)]
 pub enum A2aCommands {
-    /// Serve VTCode as an A2A agent (requires a2a-server feature)
+    /// Serve VT Code as an A2A agent (requires a2a-server feature)
     ///
     /// Starts an HTTP server exposing A2A endpoints:
     /// - /.well-known/agent-card.json - Agent discovery

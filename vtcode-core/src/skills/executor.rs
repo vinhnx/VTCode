@@ -1,7 +1,7 @@
 //! Skill execution as Tool trait implementation
 //!
-//! Bridges Agent Skills to VTCode's tool system by implementing the Tool trait
-//! for skills, enabling them to execute with full access to VTCode's permissions,
+//! Bridges Agent Skills to VT Code's tool system by implementing the Tool trait
+//! for skills, enabling them to execute with full access to VT Code's permissions,
 //! caching, and audit systems.
 //!
 //! ## LLM Sub-Calls (Phase 5)

@@ -420,7 +420,7 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
-            compatibility: Some("Designed for VTCode".to_string()),
+            compatibility: Some("Designed for VT Code".to_string()),
             variety: crate::skills::types::SkillVariety::AgentSkill,
             metadata: Some(metadata),
         };
@@ -450,7 +450,7 @@ mod tests {
         assert!(xml_prompt.contains("<location>/tmp/test-xml-skill</location>"));
 
         // Should include optional fields
-        assert!(xml_prompt.contains("<compatibility>Designed for VTCode</compatibility>"));
+        assert!(xml_prompt.contains("<compatibility>Designed for VT Code</compatibility>"));
         assert!(xml_prompt.contains("<allowed-tools>Read Write Bash</allowed-tools>"));
     }
 

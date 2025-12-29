@@ -1,4 +1,4 @@
-//! Agent2Agent (A2A) Protocol support for VTCode
+//! Agent2Agent (A2A) Protocol support for VT Code
 //!
 //! This module implements the [A2A Protocol](https://a2a-protocol.org), an open standard
 //! enabling communication and interoperability between AI agents.
@@ -16,7 +16,7 @@
 //! use vtcode_core::a2a::{AgentCard, TaskManager, Message, Part};
 //!
 //! // Create an agent card
-//! let card = AgentCard::new("vtcode-agent", "VTCode AI Agent", "1.0.0");
+//! let card = AgentCard::new("vtcode-agent", "VT Code AI Agent", "1.0.0");
 //!
 //! // Create a task manager
 //! let manager = TaskManager::new();

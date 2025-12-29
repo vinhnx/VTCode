@@ -138,22 +138,15 @@ impl Widget for &mut SessionWidget<'_> {
             .lines(header_lines)
             .render(header_area, buf);
 
-        // Render transcript with optional splits for timeline/logs
+        // Render transcript with optional logs
         let has_logs = self.session.show_logs && self.session.has_logs();
 
-        if self.session.show_timeline_pane && has_logs {
-            // Both timeline and logs visible - split horizontally
-            let timeline_chunks =
-                Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
-                    .split(transcript_area);
-            TranscriptWidget::new(self.session).render(timeline_chunks[0], buf);
-            self.render_logs(timeline_chunks[1], buf);
-        } else if has_logs {
-            // Only logs visible (no timeline) - split vertically
-            let split = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
+        if has_logs {
+            // Logs visible - split vertically
+            let chunks = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
                 .split(transcript_area);
-            TranscriptWidget::new(self.session).render(split[0], buf);
-            self.render_logs(split[1], buf);
+            TranscriptWidget::new(self.session).render(chunks[0], buf);
+            self.render_logs(chunks[1], buf);
         } else {
             // Logs hidden or empty - full transcript area
             TranscriptWidget::new(self.session).render(transcript_area, buf);

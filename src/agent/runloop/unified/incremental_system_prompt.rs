@@ -158,7 +158,7 @@ impl IncrementalSystemPrompt {
 
         // Skill System Guide (Architectural context for the agent)
         let _ = writeln!(prompt, "\n# HOW TO USE SKILLS
-VTCode uses a tiered skill system to optimize context window usage.
+VT Code uses a tiered skill system to optimize context window usage.
 1. **Discovery**: Use `list_skills` (with optional `query` or `variety`) to find capabilities.
 2. **Activation**: Use `load_skill(name=\"...\")` to activate a skill. This:
    - Registers associated tools into your available toolset.

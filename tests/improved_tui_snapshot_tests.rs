@@ -125,7 +125,6 @@ async fn test_tui_session_creation() {
         Some("Enter your query here...".to_string()),
         Default::default(), // UiSurfacePreference
         10,                 // inline_rows
-        true,               // show_timeline_pane
         None,               // event_callback
         None,               // active_pty_sessions
     );

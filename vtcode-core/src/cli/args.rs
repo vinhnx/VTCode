@@ -791,10 +791,10 @@ pub enum Commands {
         command: crate::mcp::cli::McpCommands,
     },
 
-    /// **Agent2Agent (A2A) Protocol** - enable VTCode as an A2A agent or connect to other agents
+    /// **Agent2Agent (A2A) Protocol** - enable VT Code as an A2A agent or connect to other agents
     ///
     /// Features:
-    ///   • Serve VTCode as an A2A agent (requires a2a-server feature)
+    ///   • Serve VT Code as an A2A agent (requires a2a-server feature)
     ///   • Discover and query remote A2A agents
     ///   • Send tasks to other A2A agents
     ///   • Real-time streaming via Server-Sent Events
@@ -877,7 +877,7 @@ pub enum Commands {
     /// **Manage plugin marketplaces and plugins**
     ///
     /// Plugin marketplaces allow you to discover and install plugins
-    /// that extend VTCode's functionality with new commands, tools, and capabilities.
+    /// that extend VT Code's functionality with new commands, tools, and capabilities.
     ///
     /// Features:
     ///   • Add/remove marketplace sources (GitHub, Git, local, remote)
@@ -895,7 +895,7 @@ pub enum Commands {
 
     /// **Manage plugins installed from marketplaces**
     ///
-    /// Install, uninstall, and manage plugins that extend VTCode's functionality.
+    /// Install, uninstall, and manage plugins that extend VT Code's functionality.
     ///
     /// Examples:
     ///   vtcode plugin install commit-commands @vtcode  # Install a plugin

@@ -471,7 +471,7 @@ Bright Colors:
 Black: #666666, Red: #f14c4c, Green: #23d18b, Yellow: #f5f543
 Blue: #3b8eea, Magenta: #d670d6, Cyan: #29b8db, White: #ffffff
 
-Alternative: Download VTCode.itermcolors file and import
+Alternative: Download VT Code.itermcolors file and import
 "#
         .to_string(),
 

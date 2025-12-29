@@ -1,6 +1,6 @@
-//! VTCode plugin manifest implementation
+//! VT Code plugin manifest implementation
 //!
-//! This module implements the VTCode plugin manifest format
+//! This module implements the VT Code plugin manifest format
 //! with support for commands, agents, skills, hooks, MCP, and LSP servers.
 
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ pub struct PluginAuthor {
     pub url: Option<String>,
 }
 
-/// VTCode plugin manifest
+/// VT Code plugin manifest
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PluginManifest {
     /// Required: Unique identifier (kebab-case, no spaces)

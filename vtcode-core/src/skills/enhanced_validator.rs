@@ -392,7 +392,7 @@ mod tests {
             version: Some("1.0.0".to_string()),
             author: Some("Test Author".to_string()),
             allowed_tools: Some("Read Write Bash".to_string()),
-            compatibility: Some("Designed for VTCode".to_string()),
+            compatibility: Some("Designed for VT Code".to_string()),
             ..Default::default()
         };
 

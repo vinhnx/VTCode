@@ -1,4 +1,4 @@
-//! Plugin runtime system for VTCode
+//! Plugin runtime system for VT Code
 //!
 //! Manages the lifecycle of plugins including loading, unloading, and execution.
 
