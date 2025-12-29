@@ -338,7 +338,7 @@ type <command>
 command -v <command>
 ```
 
-If a command is in PATH but not in VTCode's allow-list, it will be blocked by policy enforcement.
+If a command is in PATH but not in VT Code's allow-list, it will be blocked by policy enforcement.
 
 ## Troubleshooting
 

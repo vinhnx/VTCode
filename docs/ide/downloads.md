@@ -4,7 +4,7 @@ Welcome to the VT Code downloads center! VT Code is available across multiple pl
 
 ## Available for Your IDE
 
-Choose your favorite code editor to download VTCode:
+Choose your favorite code editor to download VT Code:
 
 ### [Visual Studio Code](./ide-downloads.md#visual-studio-code)
 
@@ -24,7 +24,7 @@ VT Code is available for Windsurf through the Open VSX Registry. Install directl
 
 VT Code is available for Cursor through the Open VSX Registry. Install directly from the extensions marketplace, via VSIX file, or using the CLI.
 
-## What is VTCode?
+## What is VT Code?
 
 VT Code is a Rust-based AI coding assistant that provides:
 

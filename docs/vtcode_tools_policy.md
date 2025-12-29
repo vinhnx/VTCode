@@ -33,7 +33,7 @@ fn policy_path(root: &PathBuf) -> PathBuf {
 ## 3. Construct a `ToolPolicyManager` with your path
 
 The `ToolPolicyManager::new_with_config_path` helper from `vtcode-core`
-initializes the policy store without touching VTCode's default directories:
+initializes the policy store without touching VT Code's default directories:
 
 ```rust
 use vtcode_tools::policies::ToolPolicyManager;

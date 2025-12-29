@@ -1,6 +1,6 @@
 # Example: Using doc-generator in VT Code TUI
 
-Complete step-by-step example of creating a Word document using the `doc-generator` skill in VTCode's interactive chat.
+Complete step-by-step example of creating a Word document using the `doc-generator` skill in VT Code's interactive chat.
 
 ---
 

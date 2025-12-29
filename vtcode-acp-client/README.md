@@ -296,7 +296,7 @@ cargo run --example acp_distributed_workflow
 -   [ ] OpenTelemetry integration
 -   [ ] Metrics collection
 
-## Integration with VTCode
+## Integration with VT Code
 
 The ACP client is exposed to the main agent through three MCP tools:
 

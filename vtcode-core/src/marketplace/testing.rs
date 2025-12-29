@@ -5,7 +5,6 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use tokio;
 
 use crate::marketplace::{
     MarketplaceConfig, MarketplaceSource, MarketplaceSystem, PluginManifest,

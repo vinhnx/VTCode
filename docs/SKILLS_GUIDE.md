@@ -7,7 +7,7 @@ Agent Skills are a simple, open format for giving agents new capabilities and ex
 -   **Discover** skills from your filesystem or Anthropic's marketplace
 -   **Load** skills into your agent sessions
 -   **Create** custom skills tailored to your workflow
--   **Execute** skills with full access to VTCode's tools
+-   **Execute** skills with full access to VT Code's tools
 
 Skills are modular instruction sets that guide Claude on how to complete specific tasks—whether that's processing documents, analyzing code, or automating workflows.
 
@@ -477,7 +477,7 @@ All existing skills have been migrated from `.claude/skills` to `.vtcode/skills`
 1. **Scanning**: VT Code scans all configured locations recursively
 2. **Precedence Resolution**: When name collisions occur, higher precedence skills win
 3. **Loading**: Skills are loaded on-demand with progressive disclosure
-4. **Execution**: Skills execute with full access to VTCode's tool ecosystem
+4. **Execution**: Skills execute with full access to VT Code's tool ecosystem
 
 ---
 
@@ -814,7 +814,7 @@ vtcode skills info <name>  # Preview
 -   **VT Code Skills Implementation**: `SKILLS_IMPLEMENTATION_SUMMARY.md`
 -   **Integration Plan**: `SKILLS_INTEGRATION_PLAN.md`
 -   **Location System**: `vtcode-core/src/skills/locations.rs` - Implementation details
--   **Precedence System**: Follows pi-mono pattern with VTCode-specific enhancements
+-   **Precedence System**: Follows pi-mono pattern with VT Code-specific enhancements
 
 ---
 
@@ -843,6 +843,6 @@ If you've created a useful skill, consider sharing it:
 1. Ensure SKILL.md follows the specification
 2. Test with `vtcode skills validate`
 3. Document in your project's `README.md`
-4. Consider contributing to VTCode's skill library
+4. Consider contributing to VT Code's skill library
 
 See `CONTRIBUTING.md` for guidelines.

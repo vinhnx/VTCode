@@ -1,6 +1,6 @@
 #!/bin/bash
-# VTCode hook to automatically format code files after editing
-# Receives JSON payload from VTCode containing tool information
+# VT Code hook to automatically format code files after editing
+# Receives JSON payload from VT Code containing tool information
 
 # Read the JSON payload from stdin
 payload=$(cat)

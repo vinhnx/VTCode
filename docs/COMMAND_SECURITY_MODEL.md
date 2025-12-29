@@ -509,7 +509,7 @@ deny_glob = [
 
 ## Testing & Validation
 
-Test command permissions using VTCode's built-in validation:
+Test command permissions using VT Code's built-in validation:
 
 ```bash
 # Build and test

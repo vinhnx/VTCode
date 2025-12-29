@@ -206,7 +206,7 @@ export class ErrorPresentationHandler {
 export const ERROR_MESSAGES = {
     NO_WORKSPACE: {
         title: "No Workspace Open",
-        message: "Please open a workspace or folder to use VTCode.",
+        message: "Please open a workspace or folder to use VT Code.",
         severity: "warning" as const,
     },
     BACKEND_UNAVAILABLE: {
@@ -224,7 +224,7 @@ export const ERROR_MESSAGES = {
     WORKSPACE_UNTRUSTED: {
         title: "Workspace Not Trusted",
         message: "VT Code requires a trusted workspace to function safely.",
-        suggestion: "Trust this workspace in VS Code settings to use VTCode.",
+        suggestion: "Trust this workspace in VS Code settings to use VT Code.",
         severity: "warning" as const,
     },
 };

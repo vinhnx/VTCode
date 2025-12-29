@@ -100,33 +100,33 @@ Understanding these patterns requires reading multiple files across the codebase
 
 -   **ACP** (Agent Client Protocol): `vtcode-acp-client/` - Zed IDE integration
 -   **MCP** (Model Context Protocol): `vtcode-core/src/mcp/` - Extensible tooling via `rmcp`
-    - **Location**: `vtcode-core/src/mcp/` (9 modules)
-    - **Key Components**:
-        - `McpClient`: Main high-level client managing multiple providers
-        - `McpProvider`: Individual provider connection and lifecycle
-        - `McpToolExecutor`: Trait interface for tool registry integration
-        - `rmcp_transport.rs`: Supports stdio, HTTP, and child-process transports
-    - **Configuration**: 
-        - Project: `.mcp.json` (checked into source control)
-        - User: `~/.claude.json` (cross-project personal utilities)
-        - Runtime: `vtcode.toml` with `[mcp]` section
-    - **Features**:
-        - Tool discovery and execution with allowlist enforcement
-        - Resource and prompt management from MCP providers
-        - Security validation (argument size, path traversal, schema)
-        - OAuth 2.0 authentication support
-        - Event notifications (logging, progress, resource updates)
-        - Elicitation handling for user interaction
-        - Per-provider concurrency control with semaphores
-        - Timeout management (startup and per-tool)
-    - **Transports**:
-        - **Stdio**: Local tool execution (development, CLI tools)
-        - **HTTP**: Remote server integration (requires `experimental_use_rmcp_client = true`)
-        - **Child Process**: Managed stdio with lifecycle control
-    - **Documentation**: 
-        - Integration guide: `docs/MCP_INTEGRATION_GUIDE.md` (current implementation)
-        - Improvement designs: `docs/MCP_IMPROVEMENTS.md` (planned enhancements)
-        - Implementation roadmap: `docs/MCP_ROADMAP.md` (detailed next steps)
+    -   **Location**: `vtcode-core/src/mcp/` (9 modules)
+    -   **Key Components**:
+        -   `McpClient`: Main high-level client managing multiple providers
+        -   `McpProvider`: Individual provider connection and lifecycle
+        -   `McpToolExecutor`: Trait interface for tool registry integration
+        -   `rmcp_transport.rs`: Supports stdio, HTTP, and child-process transports
+    -   **Configuration**:
+        -   Project: `.mcp.json` (checked into source control)
+        -   User: `~/.claude.json` (cross-project personal utilities)
+        -   Runtime: `vtcode.toml` with `[mcp]` section
+    -   **Features**:
+        -   Tool discovery and execution with allowlist enforcement
+        -   Resource and prompt management from MCP providers
+        -   Security validation (argument size, path traversal, schema)
+        -   OAuth 2.0 authentication support
+        -   Event notifications (logging, progress, resource updates)
+        -   Elicitation handling for user interaction
+        -   Per-provider concurrency control with semaphores
+        -   Timeout management (startup and per-tool)
+    -   **Transports**:
+        -   **Stdio**: Local tool execution (development, CLI tools)
+        -   **HTTP**: Remote server integration (requires `experimental_use_rmcp_client = true`)
+        -   **Child Process**: Managed stdio with lifecycle control
+    -   **Documentation**:
+        -   Integration guide: `docs/MCP_INTEGRATION_GUIDE.md` (current implementation)
+        -   Improvement designs: `docs/MCP_IMPROVEMENTS.md` (planned enhancements)
+        -   Implementation roadmap: `docs/MCP_ROADMAP.md` (detailed next steps)
 
 ### Subagent System
 

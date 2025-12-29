@@ -24,7 +24,7 @@ export class AskSelectionCommand extends BaseCommand {
         const selection = editor.selection;
         if (selection.isEmpty) {
             void vscode.window.showWarningMessage(
-                "Highlight text first, then run 'Ask About Selection with VTCode'."
+                "Highlight text first, then run 'Ask About Selection with VT Code'."
             );
             return;
         }
@@ -83,7 +83,7 @@ export class AskSelectionCommand extends BaseCommand {
     private handleCommandError(context: string, error: unknown): void {
         const message = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(
-            `Failed to ${context} with VTCode: ${message}`
+            `Failed to ${context} with VT Code: ${message}`
         );
     }
 }

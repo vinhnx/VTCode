@@ -200,7 +200,11 @@ pub struct SubagentConfig {
 
 impl SubagentConfig {
     /// Parse a subagent from markdown content with YAML frontmatter
-    pub fn from_markdown(content: &str, source: SubagentSource, file_path: Option<PathBuf>) -> Result<Self, SubagentParseError> {
+    pub fn from_markdown(
+        content: &str,
+        source: SubagentSource,
+        file_path: Option<PathBuf>,
+    ) -> Result<Self, SubagentParseError> {
         // Extract YAML frontmatter between --- delimiters
         let content = content.trim();
         if !content.starts_with("---") {
@@ -414,13 +418,19 @@ fn default_timeout_seconds() -> u64 {
 }
 
 /// Load subagent from a markdown file
-pub fn load_subagent_from_file(path: &Path, source: SubagentSource) -> Result<SubagentConfig, SubagentParseError> {
+pub fn load_subagent_from_file(
+    path: &Path,
+    source: SubagentSource,
+) -> Result<SubagentConfig, SubagentParseError> {
     let content = std::fs::read_to_string(path)?;
     SubagentConfig::from_markdown(&content, source, Some(path.to_path_buf()))
 }
 
 /// Discover all subagent files in a directory
-pub fn discover_subagents_in_dir(dir: &Path, source: SubagentSource) -> Vec<Result<SubagentConfig, SubagentParseError>> {
+pub fn discover_subagents_in_dir(
+    dir: &Path,
+    source: SubagentSource,
+) -> Vec<Result<SubagentConfig, SubagentParseError>> {
     let mut results = Vec::new();
 
     if !dir.exists() || !dir.is_dir() {

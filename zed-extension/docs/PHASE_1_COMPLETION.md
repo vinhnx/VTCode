@@ -18,7 +18,7 @@
 ### 1.2 Command Palette Integration
 
 -   5 core commands implemented:
-    -   `ask_agent()` - Send arbitrary queries to VTCode
+    -   `ask_agent()` - Send arbitrary queries to VT Code
     -   `ask_about_selection()` - Analyze code with language context
     -   `analyze_workspace()` - Run workspace-wide analysis
     -   `launch_chat()` - Start interactive chat session

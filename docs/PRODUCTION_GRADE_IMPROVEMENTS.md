@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the comprehensive production-grade implementation of VTCode's tool improvement system. It provides sophisticated algorithms, observability, error handling, and extensible middleware architecture for intelligent tool selection and optimization.
+This document describes the comprehensive production-grade implementation of VT Code's tool improvement system. It provides sophisticated algorithms, observability, error handling, and extensible middleware architecture for intelligent tool selection and optimization.
 
 ## Architecture Components
 
@@ -16,10 +16,10 @@ Implements string similarity for identifying related tools and arguments:
 pub fn jaro_winkler_similarity(s1: &str, s2: &str) -> f32
 ```
 
-- **Range**: 0.0 (completely different) to 1.0 (identical)
-- **Preference**: Gives higher scores to strings with matching prefixes
-- **Use Case**: Comparing tool names, argument patterns, descriptions
-- **Example**: `"grep_file"` vs `"grep_directory"` = 0.87
+-   **Range**: 0.0 (completely different) to 1.0 (identical)
+-   **Preference**: Gives higher scores to strings with matching prefixes
+-   **Use Case**: Comparing tool names, argument patterns, descriptions
+-   **Example**: `"grep_file"` vs `"grep_directory"` = 0.87
 
 #### Time-Decay Effectiveness Scoring
 
@@ -34,10 +34,10 @@ pub struct TimeDecayedScore {
 }
 ```
 
-- **Formula**: `score * exp(-lambda * age_hours)`
-- **Default Lambda**: 0.1 (5% decay per 24 hours)
-- **Configuration**: Via `TimeDecayConfig`
-- **Practical**: Recent successful tool use weighted heavily
+-   **Formula**: `score * exp(-lambda * age_hours)`
+-   **Default Lambda**: 0.1 (5% decay per 24 hours)
+-   **Configuration**: Via `TimeDecayConfig`
+-   **Practical**: Recent successful tool use weighted heavily
 
 #### Pattern Detection State Machine
 
@@ -46,7 +46,7 @@ Detects execution patterns to predict user intent:
 ```rust
 pub enum PatternState {
     Single,           // One execution
-    Duplicate,        // Two identical executions  
+    Duplicate,        // Two identical executions
     Loop,             // Three+ identical (user stuck?)
     NearLoop,         // Similar arguments (fuzzy match)
     RefinementChain,  // Improving quality over iterations
@@ -56,10 +56,11 @@ pub enum PatternState {
 ```
 
 **Detection Logic**:
-- Tracks tool names, argument hashes, result quality
-- Identifies refinement chains (3+ iterations with improving scores)
-- Detects degradation patterns (declining effectiveness)
-- Finds convergence when multiple tools achieve similar results
+
+-   Tracks tool names, argument hashes, result quality
+-   Identifies refinement chains (3+ iterations with improving scores)
+-   Detects degradation patterns (declining effectiveness)
+-   Finds convergence when multiple tools achieve similar results
 
 #### ML-Ready Scoring Components
 
@@ -78,10 +79,11 @@ pub struct MLScoreComponents {
 ```
 
 **Weighted Scoring** (before time decay):
-- Success rate: 40%
-- Result quality: 30%
-- Execution speed: 15%
-- Frequency: 15%
+
+-   Success rate: 40%
+-   Result quality: 30%
+-   Execution speed: 15%
+-   Frequency: 15%
 
 ### 2. Configuration Management (`improvements_config.rs`)
 
@@ -111,12 +113,13 @@ config.to_file("config.toml")?;
 #### Default Values
 
 All sections have sensible defaults:
-- **Similarity**: min_threshold=0.6, high_threshold=0.8
-- **Time Decay**: decay_constant=0.1, half_life=24h
-- **Patterns**: min_sequence=3, window=300s, confidence=0.75
-- **Cache**: 10,000 entries, TTL=1h
-- **Context**: 100K tokens max, 85% truncation threshold
-- **Fallback**: 3 attempts, exponential backoff (100ms → 5s)
+
+-   **Similarity**: min_threshold=0.6, high_threshold=0.8
+-   **Time Decay**: decay_constant=0.1, half_life=24h
+-   **Patterns**: min_sequence=3, window=300s, confidence=0.75
+-   **Cache**: 10,000 entries, TTL=1h
+-   **Context**: 100K tokens max, 85% truncation threshold
+-   **Fallback**: 3 attempts, exponential backoff (100ms → 5s)
 
 ### 3. Observability and Error Handling (`improvements_errors.rs`)
 
@@ -140,12 +143,12 @@ pub enum ErrorSeverity {
 
 #### Error Kinds
 
-- **Scoring**: ScoringFailed, InvalidMetadata
-- **Selection**: SelectionFailed, NoViableCandidate, ContextMissing
-- **Fallback**: ChainExecutionFailed, AllFallbacksFailed, TimeoutExceeded
-- **Cache**: CacheOperationFailed, CacheCorrupted, SerializationFailed
-- **Context**: PatternDetectionFailed, ContextTruncated
-- **Config**: ConfigurationInvalid, ConfigurationMissing
+-   **Scoring**: ScoringFailed, InvalidMetadata
+-   **Selection**: SelectionFailed, NoViableCandidate, ContextMissing
+-   **Fallback**: ChainExecutionFailed, AllFallbacksFailed, TimeoutExceeded
+-   **Cache**: CacheOperationFailed, CacheCorrupted, SerializationFailed
+-   **Context**: PatternDetectionFailed, ContextTruncated
+-   **Config**: ConfigurationInvalid, ConfigurationMissing
 
 #### Observable Events
 
@@ -154,25 +157,25 @@ pub enum EventType {
     // Scoring
     ResultScored,
     ScoreDegraded,
-    
+
     // Selection
     ToolSelected,
     SelectionAlternative,
-    
+
     // Fallback
     FallbackAttempt,
     FallbackSuccess,
     ChainAborted,
-    
+
     // Cache
     CacheHit,
     CacheMiss,
     CacheEvicted,
-    
+
     // Context
     PatternDetected,
     RedundancyDetected,
-    
+
     // Error
     ErrorOccurred,
     ErrorRecovered,
@@ -192,9 +195,10 @@ pub trait ObservabilitySink: Send + Sync {
 ```
 
 Available sinks:
-- **NoOpSink**: No-op (for disabling observability)
-- **LoggingSink**: Logs via `tracing` crate
-- Custom: Implement `ObservabilitySink` for integrations
+
+-   **NoOpSink**: No-op (for disabling observability)
+-   **LoggingSink**: Logs via `tracing` crate
+-   Custom: Implement `ObservabilitySink` for integrations
 
 ### 4. Middleware Pattern (`middleware.rs`)
 
@@ -298,47 +302,52 @@ cargo test --lib tools::improvements_integration_tests
 ### Test Categories
 
 1. **Configuration** (3 tests)
-   - Loading, validation, serialization
+
+    - Loading, validation, serialization
 
 2. **Similarity Metrics** (2 tests)
-   - Exact/partial matches, prefix boosting
+
+    - Exact/partial matches, prefix boosting
 
 3. **Pattern Detection** (5 tests)
-   - Loops, refinement, degradation, convergence, near-loops
+
+    - Loops, refinement, degradation, convergence, near-loops
 
 4. **Middleware** (6 tests)
-   - Logging, caching, validation, retry, chaining
+
+    - Logging, caching, validation, retry, chaining
 
 5. **Edge Cases** (3 tests)
-   - Empty history, single entry, empty strings
+
+    - Empty history, single entry, empty strings
 
 6. **Real-World Scenarios** (2 tests)
-   - Similar tool sequences, observability events
+    - Similar tool sequences, observability events
 
 ## Performance Characteristics
 
 ### Algorithms
 
-| Algorithm | Time Complexity | Space | Notes |
-|-----------|-----------------|-------|-------|
-| Jaro-Winkler | O(n*m) | O(n+m) | n=len(s1), m=len(s2) |
-| Time Decay | O(1) | O(1) | Exponential calculation |
-| Pattern Detection | O(k*log k) | O(k) | k=history window size |
-| ML Scoring | O(1) | O(1) | Fixed 7-feature vector |
+| Algorithm         | Time Complexity | Space  | Notes                   |
+| ----------------- | --------------- | ------ | ----------------------- |
+| Jaro-Winkler      | O(n\*m)         | O(n+m) | n=len(s1), m=len(s2)    |
+| Time Decay        | O(1)            | O(1)   | Exponential calculation |
+| Pattern Detection | O(k\*log k)     | O(k)   | k=history window size   |
+| ML Scoring        | O(1)            | O(1)   | Fixed 7-feature vector  |
 
 ### Caching
 
-- **Hit Rate**: ~70-85% for repeated tools (typical)
-- **Memory**: ~100 bytes per cached entry
-- **Max Entries**: 10,000 (configurable)
-- **TTL**: 1 hour (configurable)
+-   **Hit Rate**: ~70-85% for repeated tools (typical)
+-   **Memory**: ~100 bytes per cached entry
+-   **Max Entries**: 10,000 (configurable)
+-   **TTL**: 1 hour (configurable)
 
 ### Middleware
 
-- **Logging**: ~1-2ms overhead per execution
-- **Caching**: Negligible (hash lookup)
-- **Retry**: Depends on backoff (100ms → 5s)
-- **Validation**: ~0.5ms per request
+-   **Logging**: ~1-2ms overhead per execution
+-   **Caching**: Negligible (hash lookup)
+-   **Retry**: Depends on backoff (100ms → 5s)
+-   **Validation**: ~0.5ms per request
 
 ## Configuration Best Practices
 
@@ -381,27 +390,27 @@ enable_compaction = true
 
 ### Level 1: Validation
 
-- Request validation in middleware
-- Schema validation on results
-- Configuration validation on startup
+-   Request validation in middleware
+-   Schema validation on results
+-   Configuration validation on startup
 
 ### Level 2: Retry
 
-- Exponential backoff (100ms → 5s)
-- Maximum 3 attempts by default
-- Configurable per fallback chain
+-   Exponential backoff (100ms → 5s)
+-   Maximum 3 attempts by default
+-   Configurable per fallback chain
 
 ### Level 3: Fallback
 
-- Alternative tools in chain
-- Degraded mode operation
-- Graceful degradation with warnings
+-   Alternative tools in chain
+-   Degraded mode operation
+-   Graceful degradation with warnings
 
 ### Level 4: Observability
 
-- Error severity levels (Warning/Error/Critical)
-- Structured error context
-- Event logging for debugging
+-   Error severity levels (Warning/Error/Critical)
+-   Structured error context
+-   Event logging for debugging
 
 ## Future Enhancements
 
@@ -414,7 +423,7 @@ enable_compaction = true
 
 ## References
 
-- **Jaro-Winkler**: https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance
-- **Time Decay**: https://en.wikipedia.org/wiki/Exponential_decay
-- **Pattern Detection**: Sequence analysis, HMM concepts
-- **Middleware Pattern**: Express.js, Actix-web patterns
+-   **Jaro-Winkler**: https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance
+-   **Time Decay**: https://en.wikipedia.org/wiki/Exponential_decay
+-   **Pattern Detection**: Sequence analysis, HMM concepts
+-   **Middleware Pattern**: Express.js, Actix-web patterns

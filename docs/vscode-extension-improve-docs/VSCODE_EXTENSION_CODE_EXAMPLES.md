@@ -307,7 +307,7 @@ export class AskCommand implements ICommand {
     readonly title = "Ask the Agent";
     readonly description = "Send a question to the VT Code agent";
     readonly icon = "comment-discussion";
-    readonly category = "VTCode";
+    readonly category = "VT Code";
     readonly keybinding = "ctrl+shift+i";
 
     async execute(context: CommandContext): Promise<void> {
@@ -333,7 +333,7 @@ export class AskCommand implements ICommand {
             await this.executeVtcodeCommand(
                 context,
                 ["ask", promptWithContext],
-                "Asking VTCode…"
+                "Asking VT Code…"
             );
 
             void vscode.window.showInformationMessage(
@@ -395,7 +395,7 @@ export class AskSelectionCommand implements ICommand {
     readonly title = "Ask About Selection";
     readonly description = "Ask VT Code about the selected code";
     readonly icon = "comment";
-    readonly category = "VTCode";
+    readonly category = "VT Code";
 
     async execute(context: CommandContext): Promise<void> {
         const editor = vscode.window.activeTextEditor;
@@ -491,7 +491,7 @@ export class CommandRegistry {
 
     const commandContext: CommandContext = {
       extension: context,
-      output: vscode.window.createOutputChannel("VTCode"),
+      output: vscode.window.createOutputChannel("VT Code"),
       backend: new VtcodeBackend(...),
       workspace: vscode.workspace.workspaceFolders?.[0],
     }
@@ -1174,7 +1174,7 @@ export interface ErrorContext {
 // Example: Integrating new systems in extension.ts
 
 async function activate(context: vscode.ExtensionContext) {
-    const outputChannel = vscode.window.createOutputChannel("VTCode");
+    const outputChannel = vscode.window.createOutputChannel("VT Code");
 
     // Initialize new systems
     const conversationManager = new ConversationManager(

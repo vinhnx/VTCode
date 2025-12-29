@@ -88,10 +88,10 @@ VT Code provides several quick actions directly in the chat input for faster wor
 Use the `/code-ide` slash command to trigger IDE-specific actions from within a VT Code chat session or the integrated terminal. When the VS Code extension is installed:
 
 -   Run `/code-ide` in the VT Code terminal session to synchronize with the sidebar views and refresh context-aware data.
--   Use the **VTCode: Send /code-ide Slash Command** command palette entry or the Quick Actions panel to dispatch the slash command directly to the active VT Code terminal.
+-   Use the **VT Code: Send /code-ide Slash Command** command palette entry or the Quick Actions panel to dispatch the slash command directly to the active VT Code terminal.
 -   The command will emit IDE events back to the extension host, keeping the Agent Loop timeline, status indicators, and MCP configuration summaries in sync.
 
-Configure the behaviour under **Settings › Extensions › VTCode**:
+Configure the behaviour under **Settings › Extensions › VT Code**:
 
 -   `vtcode.terminal.autoRunChat` — Automatically run `vtcode chat` when the managed terminal opens.
 -   `vtcode.terminal.allowMultipleInstances` — Opt-in to creating new terminal sessions instead of reusing the shared VT Code terminal.

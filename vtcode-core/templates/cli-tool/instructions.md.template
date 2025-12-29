@@ -2,12 +2,12 @@
 
 ## Purpose
 
-This skill integrates the `{{tool_command}}` CLI tool into VTCode, providing {{tool_description}}.
+This skill integrates the `{{tool_command}}` CLI tool into VT Code, providing {{tool_description}}.
 
 ## When to Use
 
 Use this skill when you need to:
-- Execute `{{tool_command}}` commands through VTCode
+- Execute `{{tool_command}}` commands through VT Code
 - {{description}}
 
 ## How to Use
@@ -45,7 +45,7 @@ All standard `{{tool_command}}` arguments are supported and passed through to th
 
 ### Skill-Specific Options
 - `--input FILE`: Specify input file
-- `--output FILE`: Specify output file  
+- `--output FILE`: Specify output file
 - `--json`: Enable JSON mode{{#if supports_json}} (supported by this tool){{/if}}
 - `--verbose`: Enable verbose output
 

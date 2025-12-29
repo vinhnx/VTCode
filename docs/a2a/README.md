@@ -1,6 +1,6 @@
 # Agent2Agent (A2A) Protocol Support
 
-VTCode implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), an open standard enabling communication and interoperability between AI agents.
+VT Code implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), an open standard enabling communication and interoperability between AI agents.
 
 ## Overview
 
@@ -14,7 +14,7 @@ The A2A Protocol enables:
 
 ## Architecture
 
-VTCode's A2A support is organized into the `vtcode-core::a2a` module with the following components:
+VT Code's A2A support is organized into the `vtcode-core::a2a` module with the following components:
 
 ### Core Types (`types.rs`)
 
@@ -283,5 +283,5 @@ cargo test --package vtcode-core --features a2a-server
 ## References
 
 -   [A2A Protocol Specification](https://a2a-protocol.org)
--   [VTCode Architecture](../ARCHITECTURE.md)
+-   [VT Code Architecture](../ARCHITECTURE.md)
 -   [Contributing Guide](../../docs/CONTRIBUTING.md)

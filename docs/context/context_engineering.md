@@ -1,4 +1,4 @@
-# Context Engineering in VTCode
+# Context Engineering in VT Code
 
 ## Overview
 

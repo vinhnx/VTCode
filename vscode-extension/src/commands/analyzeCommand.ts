@@ -3,12 +3,12 @@ import { BaseCommand, type CommandContext } from "../types/command";
 import { runVtcodeCommand } from "../utils/vtcodeRunner";
 
 /**
- * Command to analyze the workspace with VTCode
+ * Command to analyze the workspace with VT Code
  */
 export class AnalyzeCommand extends BaseCommand {
     public readonly id = "vtcode.runAnalyze";
     public readonly title = "Analyze Workspace";
-    public readonly description = "Analyze the workspace with VTCode";
+    public readonly description = "Analyze the workspace with VT Code";
     public readonly icon = "pulse";
 
     async execute(context: CommandContext): Promise<void> {
@@ -18,7 +18,7 @@ export class AnalyzeCommand extends BaseCommand {
 
         try {
             await runVtcodeCommand(["analyze"], {
-                title: "Analyzing workspace with VTCode…",
+                title: "Analyzing workspace with VT Code…",
                 output: context.output,
             });
             void vscode.window.showInformationMessage(
@@ -32,7 +32,7 @@ export class AnalyzeCommand extends BaseCommand {
     private handleCommandError(context: string, error: unknown): void {
         const message = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(
-            `Failed to ${context} with VTCode: ${message}`
+            `Failed to ${context} with VT Code: ${message}`
         );
     }
 }

@@ -75,7 +75,7 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 
 **Directory:** `.claude/skills/`
 
-Contains VTCode's project-specific skills:
+Contains VT Code's project-specific skills:
 
 -   `spreadsheet-generator/` - Excel/xlsx skill
 -   `doc-generator/` - Word/docx skill
@@ -409,7 +409,7 @@ container={
 ## File Structure
 
 ```
-VTCode/
+VT Code/
  .claude/skills/                          # Project skills
     README.md                            # Skills overview
     spreadsheet-generator/

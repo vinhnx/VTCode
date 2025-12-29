@@ -1,17 +1,19 @@
 # Permission System Integration Guide
 
-This guide shows how to integrate the complete permission system (resolver + audit logger + cache) into VTCode's command execution pipeline.
+This guide shows how to integrate the complete permission system (resolver + audit logger + cache) into VT Code's command execution pipeline.
 
 ## Current State
 
-  **All 3 modules are implemented and compiled**:
-- `CommandResolver` - Resolves commands to paths
-- `PermissionCache` - Caches decisions with TTL
-- `PermissionAuditLog` - Records all decisions to JSON
+**All 3 modules are implemented and compiled**:
 
-  **CommandPolicyEvaluator enhanced** with:
-- Integrated resolver and cache
-- New async method: `evaluate_with_resolution()`
+-   `CommandResolver` - Resolves commands to paths
+-   `PermissionCache` - Caches decisions with TTL
+-   `PermissionAuditLog` - Records all decisions to JSON
+
+    **CommandPolicyEvaluator enhanced** with:
+
+-   Integrated resolver and cache
+-   New async method: `evaluate_with_resolution()`
 
 ---
 
@@ -33,7 +35,7 @@ pub async fn execute(&self, args: &str) -> Result<CommandOutput> {
     if !self.policy.allows_text(args) {
         return Err("Command denied".into());
     }
-    
+
     // Execute command
 }
 ```
@@ -48,19 +50,19 @@ pub struct Command {
 
 pub async fn execute(&self, args: &str) -> Result<CommandOutput> {
     // Use enhanced evaluation with resolution
-    let (allowed, resolved_path, reason, decision) = 
+    let (allowed, resolved_path, reason, decision) =
         self.policy.evaluate_with_resolution(args).await;
-    
+
     // Log the decision
     if let Some(log) = &self.audit_log {
         let mut log_guard = log.lock().await;
         log_guard.log_command_decision(args, decision, &reason, resolved_path)?;
     }
-    
+
     if !allowed {
         return Err(anyhow!("Command denied: {}", reason));
     }
-    
+
     // Execute command
 }
 ```
@@ -80,18 +82,18 @@ pub struct PtyManager {
 }
 
 pub async fn execute_command(&self, cmd: &str) -> Result<PtyCommandResult> {
-    let (allowed, resolved_path, reason, decision) = 
+    let (allowed, resolved_path, reason, decision) =
         self.policy.evaluate_with_resolution(cmd).await;
-    
+
     if let Some(log) = &self.audit_log {
         let mut log_guard = log.lock().await;
         log_guard.log_command_decision(cmd, decision, &reason, resolved_path)?;
     }
-    
+
     if !allowed {
         return Err(anyhow!("PTY command denied: {}", reason));
     }
-    
+
     // Execute via PTY
 }
 ```
@@ -111,18 +113,18 @@ pub struct SandboxExecutor {
 }
 
 pub async fn execute(&self, cmd: &str) -> Result<SandboxResult> {
-    let (allowed, resolved_path, reason, decision) = 
+    let (allowed, resolved_path, reason, decision) =
         self.policy.evaluate_with_resolution(cmd).await;
-    
+
     if let Some(log) = &self.audit_log {
         let mut log_guard = log.lock().await;
         log_guard.log_command_decision(cmd, decision, &reason, resolved_path)?;
     }
-    
+
     if !allowed {
         return Err(anyhow!("Sandbox command denied: {}", reason));
     }
-    
+
     // Execute in sandbox
 }
 ```
@@ -140,18 +142,18 @@ use vtcode_core::PermissionAuditLog;
 
 pub async fn create_agent_session(config: &VTCodeConfig) -> Result<AgentSession> {
     // ... existing session creation code ...
-    
+
     // Initialize audit log
     let audit_dir = config.workspace_root.join(".vtcode/audit");
     let audit_log = Arc::new(Mutex::new(
         PermissionAuditLog::new(audit_dir)
             .context("Failed to initialize audit log")?
     ));
-    
+
     // Pass to command executor
     let mut cmd_executor = CommandExecutor::new(config)?;
     cmd_executor.set_audit_log(audit_log);
-    
+
     // ... rest of session creation ...
 }
 ```
@@ -238,26 +240,26 @@ async fn execute_shell_command(
     audit_log: &Arc<Mutex<PermissionAuditLog>>,
 ) -> Result<String> {
     // Evaluate with resolution
-    let (allowed, resolved_path, reason, decision) = 
+    let (allowed, resolved_path, reason, decision) =
         policy.evaluate_with_resolution(cmd).await;
-    
+
     // Log decision
     {
         let mut log = audit_log.lock().await;
         log.log_command_decision(cmd, decision, &reason, resolved_path)?;
     }
-    
+
     // Check result
     if !allowed {
         return Err(anyhow!("Command {} not allowed: {}", cmd, reason));
     }
-    
+
     // Execute
     let output = std::process::Command::new("sh")
         .arg("-c")
         .arg(cmd)
         .output()?;
-    
+
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 ```
@@ -270,19 +272,19 @@ async fn execute_with_detailed_logging(
     policy: &CommandPolicyEvaluator,
     audit_log: &Arc<Mutex<PermissionAuditLog>>,
 ) -> Result<()> {
-    let (allowed, resolved_path, reason, decision) = 
+    let (allowed, resolved_path, reason, decision) =
         policy.evaluate_with_resolution(cmd).await;
-    
+
     // Log to audit trail
     let mut log = audit_log.lock().await;
     log.log_command_decision(cmd, decision, &reason, resolved_path.clone())?;
-    
+
     // User feedback
     eprintln!("[Permission] Command: {}", cmd);
     if let Some(path) = &resolved_path {
         eprintln!("[Resolution] Resolved to: {}", path.display());
     }
-    eprintln!("[Decision] {}: {}", 
+    eprintln!("[Decision] {}: {}",
         match decision {
             PermissionDecision::Allowed => "ALLOWED",
             PermissionDecision::Denied => "DENIED",
@@ -291,7 +293,7 @@ async fn execute_with_detailed_logging(
         },
         reason
     );
-    
+
     if !allowed {
         Err(anyhow!("Command execution denied"))
     } else {
@@ -318,20 +320,20 @@ async fn execute_with_metrics(
     metrics: &mut CommandMetrics,
 ) -> Result<()> {
     metrics.total_evaluations += 1;
-    
-    let (allowed, resolved_path, reason, decision) = 
+
+    let (allowed, resolved_path, reason, decision) =
         policy.evaluate_with_resolution(cmd).await;
-    
+
     match decision {
         PermissionDecision::Cached => metrics.cache_hits += 1,
         PermissionDecision::Allowed => metrics.allowed += 1,
         PermissionDecision::Denied => metrics.denied += 1,
         _ => {}
     }
-    
+
     let mut log = audit_log.lock().await;
     log.log_command_decision(cmd, decision, &reason, resolved_path)?;
-    
+
     if !allowed {
         Err(anyhow!("Command denied"))
     } else {
@@ -359,18 +361,18 @@ mod tests {
         let audit_log = Arc::new(Mutex::new(
             PermissionAuditLog::new(dir.path().to_path_buf())?
         ));
-        
+
         let mut config = CommandsConfig::default();
         config.allow_glob = vec!["cargo *".to_string()];
         let policy = CommandPolicyEvaluator::from_config(&config);
-        
+
         // Execute
         execute_shell_command("cargo fmt", &policy, &audit_log).await?;
-        
+
         // Verify
         let log = audit_log.lock().await;
         assert_eq!(log.event_count(), 1);
-        
+
         Ok(())
     }
 
@@ -380,18 +382,18 @@ mod tests {
         let audit_log = Arc::new(Mutex::new(
             PermissionAuditLog::new(dir.path().to_path_buf())?
         ));
-        
+
         let config = CommandsConfig::default(); // Empty allow list
         let policy = CommandPolicyEvaluator::from_config(&config);
-        
+
         let result = execute_shell_command("rm -rf /", &policy, &audit_log).await;
-        
+
         // Should be denied
         assert!(result.is_err());
-        
+
         let log = audit_log.lock().await;
         assert_eq!(log.event_count(), 1);
-        
+
         Ok(())
     }
 }
@@ -404,12 +406,14 @@ mod tests {
 After implementing the integration, verify:
 
 ### 1. Compilation
+
 ```bash
 cargo check -p vtcode-core
 cargo build -p vtcode-core
 ```
 
 ### 2. Tests
+
 ```bash
 cargo test -p vtcode-core command_resolver
 cargo test -p vtcode-core permission_log
@@ -418,6 +422,7 @@ cargo test -p vtcode-core command_policy
 ```
 
 ### 3. Manual Testing
+
 ```bash
 # Run a command and check the audit log
 ./run.sh
@@ -430,6 +435,7 @@ cat ~/.vtcode/audit/permissions-$(date +%Y-%m-%d).log | tail -1 | jq .
 ```
 
 ### 4. Audit Log Inspection
+
 ```bash
 # Pretty-print today's audit log
 jq . ~/.vtcode/audit/permissions-$(date +%Y-%m-%d).log | less
@@ -476,44 +482,49 @@ Async writing with `BufWriter`:
 ## Troubleshooting
 
 ### Audit Log Not Created
-- Check permissions on `~/.vtcode/` directory
-- Ensure `audit_enabled = true` in config
-- Check for errors in tracing output: `RUST_LOG=debug`
+
+-   Check permissions on `~/.vtcode/` directory
+-   Ensure `audit_enabled = true` in config
+-   Check for errors in tracing output: `RUST_LOG=debug`
 
 ### Cache Not Working
-- Verify `cache_enabled = true` in config
-- Check cache TTL isn't set to 0
-- Use `resolver_mut()` and `cache_mut()` to inspect cache state
+
+-   Verify `cache_enabled = true` in config
+-   Check cache TTL isn't set to 0
+-   Use `resolver_mut()` and `cache_mut()` to inspect cache state
 
 ### Commands Not Being Resolved
-- Check that command exists in system PATH: `which <command>`
-- Review `CommandResolution` returned by resolver
-- Check tracing logs for resolution attempts
+
+-   Check that command exists in system PATH: `which <command>`
+-   Review `CommandResolution` returned by resolver
+-   Check tracing logs for resolution attempts
 
 ### High Audit Log Size
-- Consider archiving old logs: `~/.vtcode/audit/permissions-*.log`
-- Adjust what gets logged via config flags
-- Implement log rotation mechanism
+
+-   Consider archiving old logs: `~/.vtcode/audit/permissions-*.log`
+-   Adjust what gets logged via config flags
+-   Implement log rotation mechanism
 
 ---
 
 ## Next Steps
 
-1.   Review this guide
-2. ⏳ Pick integration location (command.rs, pty.rs, or sandbox.rs)
-3. ⏳ Add `audit_log` field to the executor struct
-4. ⏳ Initialize in session creation
-5. ⏳ Update config loading
-6. ⏳ Wire resolve evaluation into execution path
-7. ⏳ Test with sample commands
-8. ⏳ Verify audit logs are created
-9. ⏳ Add metrics/monitoring
+1.  Review this guide
+2.  ⏳ Pick integration location (command.rs, pty.rs, or sandbox.rs)
+3.  ⏳ Add `audit_log` field to the executor struct
+4.  ⏳ Initialize in session creation
+5.  ⏳ Update config loading
+6.  ⏳ Wire resolve evaluation into execution path
+7.  ⏳ Test with sample commands
+8.  ⏳ Verify audit logs are created
+9.  ⏳ Add metrics/monitoring
 
 ---
 
 ## Summary
 
 The permission system is **ready to integrate**. All three modules are:
+
 -   Fully implemented
 -   Well-tested
 -   Production-quality code

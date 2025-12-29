@@ -3,10 +3,11 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+
 # [Version 0.54.3] - 2025-12-28
 
-
 ### Features
+
     - feat(subagents): add subagent system for delegating tasks to specialized agents
         - Built-in subagents: explore (haiku, read-only), plan (sonnet, research), general (sonnet, full), code-reviewer, debugger
         - `spawn_subagent` tool with resume, thoroughness, parent_context params
@@ -28,8 +29,8 @@ All notable changes to vtcode will be documented in this file.
     - feat: Refactor tool permission handling for TUI-only mode and update default LLM provider configuration.
     - feat: Add GitHub account switching and cleanup functionality in release script
 
-
 ### Refactors
+
     - refactor(a2a): clean up unused imports and improve webhook handling
     - refactor: Enhance analysis command to support multiple analysis types and improve error handling
     - refactor: Update tool policies to prompt-based for MCP time functions and improve session handling with cancellation support
@@ -39,22 +40,23 @@ All notable changes to vtcode will be documented in this file.
     - refactor: Remove token budget management and related token estimation/truncation components, and add associated documentation and verification scripts.
     - refactor: improve error message for missing MCP tools with installation instructions
 
-
 ### Documentation
+
     - docs: update changelog for v0.54.2 [skip ci]
     - docs: update changelog for v0.55.0 [skip ci]
     - docs(a2a): add comprehensive documentation for A2A Protocol implementation
     - docs(a2a): add Phase 3 implementation status tracker
 
-
 ### Chores
+
     - chore: update npm package.json to v0.54.2 [skip ci]
     - chore: release v0.54.2
     - chore: update npm package.json to v0.54.1 [skip ci]
+
 # [Version 0.54.2] - 2025-12-28
 
-
 ### Features
+
     - feat(a2a): complete CLI integration and documentation\n\n- Add full A2A CLI with serve, discover, send-task, list-tasks, get-task, cancel-task commands\n- Create comprehensive CLI handlers for all A2A operations\n- Fix streaming event handling with proper pinning\n- Update server.rs Box<dyn Stream> return type for axum compatibility\n- Add completion summary document\n- All checks pass: cargo check --package vtcode-core\n\nImplements: A2A Protocol Phase 4 - CLI integration and user-facing features
     - feat(a2a): add A2A client with streaming support\n\n- New A2aClient for discovery, task ops, push config, and streaming\n- SSE client parses streaming events without extra deps\n- Simple incremental request IDs and HTTPS agent card fetch\n- Tests added for SSE parsing helpers\n\nTests: cargo test --package vtcode-core --lib a2a (39/39)
     - feat(a2a): trigger webhooks on streaming events\n\n- Add webhook_notifier to server state and wire into streaming pipeline\n- Fire webhooks for status updates and messages when broadcasted\n- Fix SSRF-safe config retrieval and avoid Option to_string() error\n- Clean up unused tracing import in webhook module\n- Tests: all A2A suites pass (37/37)
@@ -84,8 +86,8 @@ All notable changes to vtcode will be documented in this file.
     - feat: Implement timed double Ctrl+C for agent exit, deferring shutdown, and update the default model.
     - feat: Add `--skip-release` option and enhance GitHub release verification logic with CI environment detection.
 
-
 ### Refactors
+
     - refactor(a2a): clean up unused imports and improve webhook handling
     - refactor: Enhance analysis command to support multiple analysis types and improve error handling
     - refactor: Update tool policies to prompt-based for MCP time functions and improve session handling with cancellation support
@@ -98,23 +100,24 @@ All notable changes to vtcode will be documented in this file.
     - refactor: consistently use `adaptive_trim` with `pruning_ledger` across all proactive token budget guards.
     - refactor: Restructure agent turn execution with new guard, context, and tool outcome modules, removing old loop detection, and updating LSP tools.
 
-
 ### Documentation
+
     - docs: update changelog for v0.55.0 [skip ci]
     - docs(a2a): add comprehensive documentation for A2A Protocol implementation
     - docs(a2a): add Phase 3 implementation status tracker
     - docs: update changelog for v0.54.1 [skip ci]
     - docs: Streamline TODO by removing verbose system skill enumeration and adding a focused task.
 
-
 ### Chores
+
     - chore: update npm package.json to v0.54.1 [skip ci]
     - chore: release v0.54.1
     - chore: update npm package.json to v0.54.0 [skip ci]
+
 # [Version 0.55.0] - 2025-12-28
 
-
 ### Features
+
     - feat(a2a): complete CLI integration and documentation\n\n- Add full A2A CLI with serve, discover, send-task, list-tasks, get-task, cancel-task commands\n- Create comprehensive CLI handlers for all A2A operations\n- Fix streaming event handling with proper pinning\n- Update server.rs Box<dyn Stream> return type for axum compatibility\n- Add completion summary document\n- All checks pass: cargo check --package vtcode-core\n\nImplements: A2A Protocol Phase 4 - CLI integration and user-facing features
     - feat(a2a): add A2A client with streaming support\n\n- New A2aClient for discovery, task ops, push config, and streaming\n- SSE client parses streaming events without extra deps\n- Simple incremental request IDs and HTTPS agent card fetch\n- Tests added for SSE parsing helpers\n\nTests: cargo test --package vtcode-core --lib a2a (39/39)
     - feat(a2a): trigger webhooks on streaming events\n\n- Add webhook_notifier to server state and wire into streaming pipeline\n- Fire webhooks for status updates and messages when broadcasted\n- Fix SSRF-safe config retrieval and avoid Option to_string() error\n- Clean up unused tracing import in webhook module\n- Tests: all A2A suites pass (37/37)
@@ -144,8 +147,8 @@ All notable changes to vtcode will be documented in this file.
     - feat: Implement timed double Ctrl+C for agent exit, deferring shutdown, and update the default model.
     - feat: Add `--skip-release` option and enhance GitHub release verification logic with CI environment detection.
 
-
 ### Refactors
+
     - refactor(a2a): clean up unused imports and improve webhook handling
     - refactor: Enhance analysis command to support multiple analysis types and improve error handling
     - refactor: Update tool policies to prompt-based for MCP time functions and improve session handling with cancellation support
@@ -158,22 +161,23 @@ All notable changes to vtcode will be documented in this file.
     - refactor: consistently use `adaptive_trim` with `pruning_ledger` across all proactive token budget guards.
     - refactor: Restructure agent turn execution with new guard, context, and tool outcome modules, removing old loop detection, and updating LSP tools.
 
-
 ### Documentation
+
     - docs(a2a): add comprehensive documentation for A2A Protocol implementation
     - docs(a2a): add Phase 3 implementation status tracker
     - docs: update changelog for v0.54.1 [skip ci]
     - docs: Streamline TODO by removing verbose system skill enumeration and adding a focused task.
 
-
 ### Chores
+
     - chore: update npm package.json to v0.54.1 [skip ci]
     - chore: release v0.54.1
     - chore: update npm package.json to v0.54.0 [skip ci]
+
 # [Version 0.54.1] - 2025-12-27
 
-
 ### Features
+
     - feat: Introduce `EnhancedSkillLoader` and `EnhancedSkill` for unified skill and tool management, and refactor skill discovery results across the agent and CLI.
     - feat: add support for loading skill `references/` and `assets/` directories and introduce `ResourceType::Asset`
     - feat: Reimplement skill management with a new skill model and dedicated modules.
@@ -193,44 +197,46 @@ All notable changes to vtcode will be documented in this file.
     - feat: Add `--skip-release` option and enhance GitHub release verification logic with CI environment detection.
     - feat: Implement LSP client and manager with agent slash commands, and add LLM provider caching tests.
 
-
 ### Refactors
+
     - refactor: Introduce a dedicated interaction loop for centralized user input and turn flow, updating session and context management.
     - refactor: consistently use `adaptive_trim` with `pruning_ledger` across all proactive token budget guards.
     - refactor: Restructure agent turn execution with new guard, context, and tool outcome modules, removing old loop detection, and updating LSP tools.
 
-
 ### Documentation
+
     - docs: Streamline TODO by removing verbose system skill enumeration and adding a focused task.
     - docs: update changelog for v0.54.0 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.54.0 [skip ci]
     - chore: release v0.54.0
     - chore: update npm package.json to v0.53.2 [skip ci]
+
 # [Version 0.54.0] - 2025-12-27
 
-
 ### Features
+
     - feat: Implement LSP client and manager with agent slash commands, and add LLM provider caching tests.
     - feat: Update default agent configuration to HuggingFace and refine tool schemas and prompt generation logic.
     - feat: Introduce dynamic system prompt enhancements including temporal context and working directory awareness, along with refined tool usage guidelines for improved agent performance.
     - feat: Enhance textual tool call parsing, pre-validate arguments, and refine tool failure detection to improve agent robustness.
 
-
 ### Documentation
+
     - docs: update changelog for v0.53.2 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.53.2 [skip ci]
     - chore: release v0.53.2
     - chore: update npm package.json to v0.53.1 [skip ci]
+
 # [Version 0.53.2] - 2025-12-26
 
-
 ### Features
+
     - feat: Update default agent configuration to HuggingFace and refine tool schemas and prompt generation logic.
     - feat: Introduce dynamic system prompt enhancements including temporal context and working directory awareness, along with refined tool usage guidelines for improved agent performance.
     - feat: Enhance textual tool call parsing, pre-validate arguments, and refine tool failure detection to improve agent robustness.
@@ -240,26 +246,27 @@ All notable changes to vtcode will be documented in this file.
     - feat: enhance documentation and prompts for clarity, consistency, and performance improvements
     - feat: optimize ANSI syntax highlighting in diff renderer for improved performance
 
-
 ### Refactors
+
     - refactor: update reasoning labels for clarity in justification and session headers
     - refactor: streamline toolset by merging agent diagnostics and removing deprecated tools
     - refactor: simplify error handling in dotenv loading
 
-
 ### Documentation
+
     - docs: update changelog for v0.53.1 [skip ci]
 
-
 ### Chores
+
     - chore: update npm package.json to v0.53.1 [skip ci]
     - chore: release v0.53.1
     - chore: remove completed tasks from TODO.md and improve memory usage for large conversations
     - chore: update npm package.json to v0.53.0 [skip ci]
+
 # [Version 0.53.1] - 2025-12-26
 
-
 ### Features
+
     - feat: Enhance session resume/fork logic and improve conversation history display during session startup.
     - feat: add session resumption functionality and update related actions
     - feat: implement session forking with custom session ID support
@@ -283,20 +290,20 @@ All notable changes to vtcode will be documented in this file.
     - feat: Implement terminal setup wizard with support for multiple terminals and features, and update LLM provider models.
     - feat: add code intelligence tool with LSP-like navigation features
 
-
 ### Bug Fixes
+
     - fix: Disable JSON object output and Responses API for GLM models and refine streaming completion event content handling.
     - fix: disable npm publishing in release.sh
     - fix: remove npm installation due to GitHub Actions costs
 
-
 ### Refactors
+
     - refactor: update reasoning labels for clarity in justification and session headers
     - refactor: streamline toolset by merging agent diagnostics and removing deprecated tools
     - refactor: simplify error handling in dotenv loading
 
-
 ### Documentation
+
     - docs: update changelog for v0.53.0 [skip ci]
     - docs: Update README with new sections for Keyboard Shortcuts and macOS Alt Shortcut Troubleshooting; refine TODO list entries for clarity and consistency.
     - docs: Add a comprehensive list of new features, bug fixes, and performance improvements to the project TODO list.
@@ -304,8 +311,8 @@ All notable changes to vtcode will be documented in this file.
     - docs: update changelog for v0.52.9 [skip ci]
     - docs: update installation instructions and scripts for npm package
 
-
 ### Chores
+
     - chore: remove completed tasks from TODO.md and improve memory usage for large conversations
     - chore: update npm package.json to v0.53.0 [skip ci]
     - chore: release v0.53.0
@@ -5324,7 +5331,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Refactors
 
-    - refactor: Rename extension from "VT Code Companion" to "VTCode" and update CHANGELOG
+    - refactor: Rename extension from "VT Code Companion" to "VT Code" and update CHANGELOG
     - refactor: use unsafe blocks for environment variable manipulation in tests
     - refactor: remove unused tools and simplify tool policies
 
@@ -5369,7 +5376,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Refactors
 
-    - refactor: Rename extension from "VT Code Companion" to "VTCode" and update CHANGELOG
+    - refactor: Rename extension from "VT Code Companion" to "VT Code" and update CHANGELOG
     - refactor: use unsafe blocks for environment variable manipulation in tests
     - refactor: remove unused tools and simplify tool policies
 

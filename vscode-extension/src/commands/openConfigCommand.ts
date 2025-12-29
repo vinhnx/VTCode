@@ -33,7 +33,7 @@ export class OpenConfigCommand extends BaseCommand {
     private handleCommandError(context: string, error: unknown): void {
         const message = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(
-            `Failed to ${context} with VTCode: ${message}`
+            `Failed to ${context} with VT Code: ${message}`
         );
     }
 }

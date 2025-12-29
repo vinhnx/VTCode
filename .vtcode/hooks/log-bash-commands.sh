@@ -1,6 +1,6 @@
 #!/bin/bash
-# VTCode hook to log bash commands that are executed
-# Receives JSON payload from VTCode containing tool information
+# VT Code hook to log bash commands that are executed
+# Receives JSON payload from VT Code containing tool information
 
 # Read the JSON payload from stdin
 payload=$(cat)
@@ -18,5 +18,5 @@ fi
 # Log the command to a file
 echo "$(date): $command - $description" >> ~/.vtcode/bash-command-log.txt
 
-# Also output to stdout for VTCode to potentially capture
+# Also output to stdout for VT Code to potentially capture
 echo "Logged command: $command"

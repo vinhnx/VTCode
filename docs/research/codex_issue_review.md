@@ -2,7 +2,7 @@
 
 ## Overview
 
-Recent internal investigations into GPT-5-Codex deployments uncovered several operational issues. Understanding these findings helps us proactively harden VTCode's architecture and developer tooling.
+Recent internal investigations into GPT-5-Codex deployments uncovered several operational issues. Understanding these findings helps us proactively harden VT Code's architecture and developer tooling.
 
 ## apply_patch Tool Reliability
 

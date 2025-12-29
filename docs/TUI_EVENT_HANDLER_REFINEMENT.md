@@ -1,8 +1,8 @@
-# Ratatui Terminal & Event Handler Refinement for VTCode
+# Ratatui Terminal & Event Handler Refinement for VT Code
 
 ## Overview
 
-This document describes the implementation of a refined **Terminal UI event handler** pattern based on the [Ratatui recipe](https://ratatui.rs/recipes/apps/terminal-and-event-handler/) and adapted for VTCode's architecture.
+This document describes the implementation of a refined **Terminal UI event handler** pattern based on the [Ratatui recipe](https://ratatui.rs/recipes/apps/terminal-and-event-handler/) and adapted for VT Code's architecture.
 
 The new `tui::Tui` struct provides:
 
@@ -228,7 +228,7 @@ async fn main() -> Result<()> {
 }
 ```
 
-## Integration with VTCode
+## Integration with VT Code
 
 ### 1. Replace interactive_list.rs
 

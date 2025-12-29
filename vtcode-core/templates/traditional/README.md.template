@@ -29,11 +29,11 @@ To modify this skill:
 1. Edit the `SKILL.md` file to update instructions
 2. Modify scripts in the `scripts/` directory
 3. Update templates in the `templates/` directory
-4. Test the skill using VTCode's validation tools
+4. Test the skill using VT Code's validation tools
 
 ## Testing
 
-Validate the skill using VTCode's built-in validation:
+Validate the skill using VT Code's built-in validation:
 ```bash
 vtcode validate-skill {{skill_name}}
 ```

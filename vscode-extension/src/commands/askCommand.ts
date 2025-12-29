@@ -31,7 +31,7 @@ export class AskCommand extends BaseCommand {
             const promptWithContext = question; // Simplified for now
 
             await runVtcodeCommand(["ask", promptWithContext], {
-                title: "Asking VTCode…",
+                title: "Asking VT Code…",
                 output: context.output,
             });
             void vscode.window.showInformationMessage(
@@ -45,7 +45,7 @@ export class AskCommand extends BaseCommand {
     private handleCommandError(context: string, error: unknown): void {
         const message = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(
-            `Failed to ${context} with VTCode: ${message}`
+            `Failed to ${context} with VT Code: ${message}`
         );
     }
 }

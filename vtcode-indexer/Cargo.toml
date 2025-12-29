@@ -3,7 +3,7 @@ name = "vtcode-indexer"
 version = "0.54.3"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
-description = "Workspace-friendly code indexer extracted from VTCode"
+description = "Workspace-friendly code indexer extracted from VT Code"
 license = "MIT"
 readme = "../README.md"
 homepage = "https://github.com/vinhnx/vtcode"
@@ -21,8 +21,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 anyhow = "1.0"
 regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
-ignore = "0.4"  # Respect .gitignore, .ignore, etc.
+ignore = "0.4"                                     # Respect .gitignore, .ignore, etc.
 
 [dev-dependencies]
 tempfile = "3.24"
-

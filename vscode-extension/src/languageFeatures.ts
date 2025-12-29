@@ -134,7 +134,7 @@ const SECTION_KEYS: Record<string, Record<string, KeyMetadata>> = {
         enabled: {
             detail: "Enable custom prompts",
             documentation:
-                "Activates the /prompts:<name> feature inside VTCode.",
+                "Activates the /prompts:<name> feature inside VT Code.",
             insertText: "enabled = ${1|true,false|}",
         },
         directory: {
@@ -152,7 +152,7 @@ const SECTION_KEYS: Record<string, Record<string, KeyMetadata>> = {
         max_file_size_kb: {
             detail: "Prompt file size limit",
             documentation:
-                "Prevents large prompt files from being loaded into VTCode.",
+                "Prevents large prompt files from being loaded into VT Code.",
             insertText: "max_file_size_kb = ${1:64}",
         },
     },

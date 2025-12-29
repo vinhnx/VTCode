@@ -97,7 +97,7 @@ cargo build --release
 3. Search for "vtcode"
 4. Click "Install"
 
-### Step 3: Configure VTCode
+### Step 3: Configure VT Code
 
 Create `vtcode.toml` in your workspace root:
 
@@ -343,4 +343,4 @@ This extension is licensed under the MIT License. See [LICENSE](LICENSE) file fo
 
 ---
 
-**Ready to get started?** Follow the installation steps above, then check out [QUICK_START.md](QUICK_START.md) for your first 5 minutes with VTCode!
+**Ready to get started?** Follow the installation steps above, then check out [QUICK_START.md](QUICK_START.md) for your first 5 minutes with VT Code!

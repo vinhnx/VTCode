@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains how the three permission system modules (CommandResolver, PermissionAuditLog, PermissionCache) work together within VTCode's security architecture.
+This document explains how the three permission system modules (CommandResolver, PermissionAuditLog, PermissionCache) work together within VT Code's security architecture.
 
 ## Architecture
 
@@ -28,7 +28,8 @@ CommandPolicyEvaluator.evaluate_with_resolution()
 ## Module Responsibilities
 
 ### CommandResolver
-**Purpose**: Maps command names to filesystem paths  
+
+**Purpose**: Maps command names to filesystem paths
 **Location**: `vtcode-core/src/tools/command_resolver.rs`
 
 ```rust
@@ -41,12 +42,14 @@ let resolution = resolver.resolve("cargo");
 ```
 
 **When Used**:
-- In `CommandPolicyEvaluator.evaluate_with_resolution()`
-- To provide security context about which binary is actually being executed
-- To catch potential PATH hijacking attempts
+
+-   In `CommandPolicyEvaluator.evaluate_with_resolution()`
+-   To provide security context about which binary is actually being executed
+-   To catch potential PATH hijacking attempts
 
 ### PermissionAuditLog
-**Purpose**: Records all permission decisions in structured JSON logs  
+
+**Purpose**: Records all permission decisions in structured JSON logs
 **Location**: `vtcode-core/src/audit/permission_log.rs`
 
 ```rust
@@ -72,12 +75,14 @@ audit_log.log_command_decision(
 ```
 
 **When Used**:
-- After policy evaluation is complete
-- To provide audit trail of security decisions
-- For compliance and security investigation
+
+-   After policy evaluation is complete
+-   To provide audit trail of security decisions
+-   For compliance and security investigation
 
 ### PermissionCache
-**Purpose**: Caches permission decisions with TTL to reduce redundant evaluations  
+
+**Purpose**: Caches permission decisions with TTL to reduce redundant evaluations
 **Location**: `vtcode-core/src/tools/command_cache.rs`
 
 ```rust
@@ -94,9 +99,10 @@ if let Some(allowed) = cache.get("cargo fmt") {
 ```
 
 **When Used**:
-- First check in `evaluate_with_resolution()`
-- To avoid redundant policy evaluations
-- Improves performance for repeated commands
+
+-   First check in `evaluate_with_resolution()`
+-   To avoid redundant policy evaluations
+-   Improves performance for repeated commands
 
 ## Integration Points
 
@@ -135,7 +141,7 @@ impl CommandPolicyEvaluator {
 let evaluator = CommandPolicyEvaluator::from_config(&config);
 
 // Evaluate with all enhancements
-let (allowed, resolved_path, reason, decision) = 
+let (allowed, resolved_path, reason, decision) =
     evaluator.evaluate_with_resolution("cargo fmt").await;
 
 if !allowed {
@@ -175,7 +181,7 @@ cache_ttl_seconds = 300
 
 ```rust
 let evaluator = CommandPolicyEvaluator::from_config(&config);
-let (allowed, path, reason, decision) = 
+let (allowed, path, reason, decision) =
     evaluator.evaluate_with_resolution("cargo fmt").await;
 
 match decision {
@@ -199,7 +205,7 @@ match decision {
 ### Example 2: Checking Resolved Path
 
 ```rust
-let (allowed, path, reason, _) = 
+let (allowed, path, reason, _) =
     evaluator.evaluate_with_resolution("node index.js").await;
 
 if let Some(binary_path) = path {
@@ -221,7 +227,7 @@ let log_file = "~/.vtcode/audit/permissions-2025-11-09.log";
 for line in BufRead::lines(File::open(log_file)?) {
     if let Ok(event_json) = line {
         let event: PermissionEvent = serde_json::from_str(&event_json)?;
-        
+
         // Analyze
         match event.decision {
             PermissionDecision::Denied => {
@@ -236,51 +242,59 @@ for line in BufRead::lines(File::open(log_file)?) {
 ## Configuration Settings
 
 ### resolve_commands
-- **Type**: boolean
-- **Default**: true
-- **Effect**: When enabled, CommandResolver maps each command to its filesystem path
-- **Security Impact**: Helps detect PATH hijacking and spoofed binaries
+
+-   **Type**: boolean
+-   **Default**: true
+-   **Effect**: When enabled, CommandResolver maps each command to its filesystem path
+-   **Security Impact**: Helps detect PATH hijacking and spoofed binaries
 
 ### audit_enabled
-- **Type**: boolean
-- **Default**: true
-- **Effect**: When enabled, all permission decisions are logged to JSON audit log
-- **Performance Impact**: Minimal (async, buffered writes)
+
+-   **Type**: boolean
+-   **Default**: true
+-   **Effect**: When enabled, all permission decisions are logged to JSON audit log
+-   **Performance Impact**: Minimal (async, buffered writes)
 
 ### audit_directory
-- **Type**: string
-- **Default**: "~/.vtcode/audit"
-- **Effect**: Directory where audit logs are stored (one file per day)
-- **Notes**: Directory is created automatically if it doesn't exist
+
+-   **Type**: string
+-   **Default**: "~/.vtcode/audit"
+-   **Effect**: Directory where audit logs are stored (one file per day)
+-   **Notes**: Directory is created automatically if it doesn't exist
 
 ### log_allowed_commands
-- **Type**: boolean
-- **Default**: true
-- **Effect**: When enabled, allowed commands are logged to audit
-- **Note**: Disable to reduce log verbosity for frequently allowed commands
+
+-   **Type**: boolean
+-   **Default**: true
+-   **Effect**: When enabled, allowed commands are logged to audit
+-   **Note**: Disable to reduce log verbosity for frequently allowed commands
 
 ### log_denied_commands
-- **Type**: boolean
-- **Default**: true
-- **Effect**: When enabled, denied commands are logged to audit
-- **Security Note**: Should generally be left enabled for security investigation
+
+-   **Type**: boolean
+-   **Default**: true
+-   **Effect**: When enabled, denied commands are logged to audit
+-   **Security Note**: Should generally be left enabled for security investigation
 
 ### cache_enabled
-- **Type**: boolean
-- **Default**: true
-- **Effect**: When enabled, permission decisions are cached with TTL
-- **Performance Impact**: Significant improvement for repeated commands
+
+-   **Type**: boolean
+-   **Default**: true
+-   **Effect**: When enabled, permission decisions are cached with TTL
+-   **Performance Impact**: Significant improvement for repeated commands
 
 ### cache_ttl_seconds
-- **Type**: integer
-- **Default**: 300 (5 minutes)
-- **Range**: 1 - 3600 (1 second to 1 hour)
-- **Effect**: How long permission decisions are cached
-- **Note**: Lower values provide more frequent policy re-evaluation; higher values improve performance
+
+-   **Type**: integer
+-   **Default**: 300 (5 minutes)
+-   **Range**: 1 - 3600 (1 second to 1 hour)
+-   **Effect**: How long permission decisions are cached
+-   **Note**: Lower values provide more frequent policy re-evaluation; higher values improve performance
 
 ## Performance Metrics
 
 ### Before Integration
+
 ```
 Command execution flow:
   User input → Policy check → Allow/Deny → Execute
@@ -288,29 +302,33 @@ Command execution flow:
 ```
 
 ### After Integration
+
 ```
 Command execution flow (with caching):
   First execution:  User input → Cache miss → Resolve → Policy check → Cache store → Execute
   Second execution: User input → Cache hit → Execute (policy check skipped)
-  
+
   Improvement for repeated commands: ~95% faster (policy evaluation eliminated)
 ```
 
 ### Benchmark Results
-- **Command resolution**: ~1-2ms per command (cached: <0.1ms)
-- **Policy evaluation**: ~0.5-1ms (unchanged)
-- **Audit logging**: ~1-2ms async (non-blocking)
-- **Cache lookup**: <0.1ms
+
+-   **Command resolution**: ~1-2ms per command (cached: <0.1ms)
+-   **Policy evaluation**: ~0.5-1ms (unchanged)
+-   **Audit logging**: ~1-2ms async (non-blocking)
+-   **Cache lookup**: <0.1ms
 
 ## Security Implications
 
 ### Strengths
+
 1. **Visibility**: Each command execution is logged with its resolved path
 2. **Detection**: Can identify PATH hijacking attempts
 3. **Audit Trail**: Complete record of what was executed and why
 4. **Caching**: Reduces attack surface by minimizing policy evaluations
 
 ### Considerations
+
 1. **Log Size**: Audit logs grow ~100 bytes per command (~100KB per 1000 commands)
 2. **Cache Invalidation**: Cached decisions are not re-evaluated for 5 minutes
 3. **Concurrency**: All modules use Arc<Mutex<T>> for thread-safe concurrent access
@@ -318,6 +336,7 @@ Command execution flow (with caching):
 ## Troubleshooting
 
 ### Cache not working
+
 ```rust
 // Check cache stats
 let cache = evaluator.cache_mut().lock().await;
@@ -329,6 +348,7 @@ cache.clear();
 ```
 
 ### Audit log not found
+
 ```bash
 # Check permission directory
 ls -la ~/.vtcode/audit/
@@ -338,6 +358,7 @@ ls -la ~/.vtcode/audit/permissions-$(date +%Y-%m-%d).log
 ```
 
 ### Command not resolving
+
 ```rust
 // Debug resolution
 let mut resolver = CommandResolver::new();
@@ -349,6 +370,7 @@ println!("Search paths: {:?}", resolution.search_paths);
 ## Testing
 
 ### Unit Tests
+
 All three modules include comprehensive unit tests:
 
 ```bash
@@ -358,6 +380,7 @@ cargo test -p vtcode-core command_cache
 ```
 
 ### Integration Test Example
+
 ```rust
 #[tokio::test]
 async fn test_full_permission_flow() {
@@ -365,11 +388,11 @@ async fn test_full_permission_flow() {
         allow_glob: vec!["cargo *".to_string()],
         ..Default::default()
     };
-    
+
     let evaluator = CommandPolicyEvaluator::from_config(&config);
-    let (allowed, path, reason, decision) = 
+    let (allowed, path, reason, decision) =
         evaluator.evaluate_with_resolution("cargo fmt").await;
-    
+
     assert!(allowed);
     assert_eq!(decision, PermissionDecision::Allowed);
     assert!(path.is_some());

@@ -1,6 +1,6 @@
 # MiniMax-M2 Usage Examples
 
-This document provides practical examples of using MiniMax-M2 with VTCode.
+This document provides practical examples of using MiniMax-M2 with VT Code.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ default_model = "MiniMax-M2"
 ## Example 2: Simple Query
 
 ```bash
-# Start VTCode
+# Start VT Code
 vtcode
 
 # Or use the ask command directly
@@ -56,7 +56,7 @@ vtcode ask "Design a scalable microservices architecture for an e-commerce platf
 
 ## Example 5: Tool Calling
 
-MiniMax-M2 supports function calling. VTCode's built-in tools work seamlessly:
+MiniMax-M2 supports function calling. VT Code's built-in tools work seamlessly:
 
 ```bash
 vtcode ask "Read the README.md file and create a summary in summary.txt"

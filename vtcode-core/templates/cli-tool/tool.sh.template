@@ -1,5 +1,5 @@
 #!/bin/bash
-# {{tool_name}} - CLI tool wrapper for VTCode
+# {{tool_name}} - CLI tool wrapper for VT Code
 # {{tool_description}}
 
 set -e
@@ -82,7 +82,7 @@ if [[ -n "$INPUT_FILE" ]]; then
     if [[ ! -f "$INPUT_FILE" ]]; then
         error_exit "Input file not found: $INPUT_FILE"
     fi
-    
+
     if [[ "$JSON_MODE" == "true" ]] && [[ "$SUPPORTS_JSON" == "true" ]]; then
         # Parse JSON input and convert to command arguments
         if command -v jq >/dev/null 2>&1; then
@@ -144,7 +144,7 @@ if [[ "$JSON_MODE" == "true" ]] && [[ "$SUPPORTS_JSON" == "true" ]]; then
 EOF
         )
     fi
-    
+
     echo "$JSON_RESULT"
 else
     # Regular text output

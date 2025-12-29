@@ -9,7 +9,7 @@ use std::time::Duration;
 use tokio::sync::{RwLock, Semaphore};
 use tracing::{error, info, warn};
 
-use super::{McpElicitationHandler, McpProvider, McpToolInfo};
+use super::{McpElicitationHandler, McpProvider};
 use crate::config::mcp::{McpAllowListConfig, McpProviderConfig};
 use mcp_types::{ClientCapabilities, Implementation, InitializeRequestParams};
 

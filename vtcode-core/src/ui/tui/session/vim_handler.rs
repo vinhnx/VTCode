@@ -98,7 +98,7 @@ fn is_word_char(ch: char) -> bool {
 }
 
 /// Check if a character is considered part of a WORD (vim-style WORD - whitespace delimited)
-fn is_WORD_char(ch: char) -> bool {
+fn is_big_word_char(ch: char) -> bool {
     !ch.is_whitespace()
 }
 
@@ -124,7 +124,7 @@ fn byte_to_char_index(content: &str, byte_idx: usize) -> usize {
 
 /// Handle Vim mode keybindings for the session
 pub(super) fn handle_vim_mode_key(session: &mut Session, key: &KeyEvent) -> Option<InlineEvent> {
-    use crate::ui::tui::session::vim_mode::{VimAction, VimMode};
+    use crate::ui::tui::session::vim_mode::VimAction;
 
     let vim_action = session.vim_state.handle_key_event_with_pending(key);
 

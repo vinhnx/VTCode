@@ -8,7 +8,6 @@
 //! - MCP servers (Model Context Protocol)
 //! - LSP servers (Language Server Protocol)
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use anyhow::Result;

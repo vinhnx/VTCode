@@ -331,7 +331,7 @@ vtcode doctor
 
 **Phase 1 Foundation Complete**
 
-VTCode's MCP implementation now has:
+VT Code's MCP implementation now has:
 
 -   Modern RMCP v0.9.0 dependency
 -   Clean transport wrapper matching SDK patterns

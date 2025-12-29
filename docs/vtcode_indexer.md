@@ -4,17 +4,17 @@ without external services.
 
 ## Core concepts
 
-- **`SimpleIndexer`** walks a workspace, caches metadata, and offers helpers for
-  search, file lookup, and content retrieval.
-- **`SimpleIndexerConfig`** lets callers toggle hidden directory handling,
-  specify custom index directories, and refine include/exclude lists without
-  hardcoding VTCode's `.vtcode` layout.
-- **`IndexStorage`** is a trait abstraction for persisting `FileIndex` entries.
-  The crate ships with a Markdown implementation and accepts custom backends
-  through `SimpleIndexer::with_storage`.
-- **`TraversalFilter`** centralizes directory descent and file-level inclusion
-  decisions, giving downstream users a single place to implement glob rules or
-  binary detection before indexing.
+-   **`SimpleIndexer`** walks a workspace, caches metadata, and offers helpers for
+    search, file lookup, and content retrieval.
+-   **`SimpleIndexerConfig`** lets callers toggle hidden directory handling,
+    specify custom index directories, and refine include/exclude lists without
+    hardcoding VT Code's `.vtcode` layout.
+-   **`IndexStorage`** is a trait abstraction for persisting `FileIndex` entries.
+    The crate ships with a Markdown implementation and accepts custom backends
+    through `SimpleIndexer::with_storage`.
+-   **`TraversalFilter`** centralizes directory descent and file-level inclusion
+    decisions, giving downstream users a single place to implement glob rules or
+    binary detection before indexing.
 
 ## Customizing persistence
 
@@ -107,7 +107,7 @@ paths printed to stdout.
 
 ## Next steps
 
-- Publish release notes and crate-level documentation updates before the first
-  crates.io release.
-- Gather feedback from early adopters to validate trait ergonomics and identify
-  additional feature flags worth exposing.
+-   Publish release notes and crate-level documentation updates before the first
+    crates.io release.
+-   Gather feedback from early adopters to validate trait ergonomics and identify
+    additional feature flags worth exposing.

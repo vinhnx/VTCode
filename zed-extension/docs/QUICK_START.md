@@ -55,7 +55,7 @@ cd vtcode/zed-extension
 # 3. Select the zed-extension directory
 ```
 
-## 3. Configure VTCode
+## 3. Configure VT Code
 
 Create a `vtcode.toml` in your workspace root:
 
@@ -101,20 +101,20 @@ export OPENAI_API_KEY="your-api-key"
 **Ask a Question:**
 
 1. Open command palette
-2. Type "VTCode: Ask the Agent"
+2. Type "VT Code: Ask the Agent"
 3. Enter your question
 4. Response appears in the output
 
 **Analyze Your Code:**
 
 1. Highlight code in editor
-2. Right-click → "Ask with VTCode"
+2. Right-click → "Ask with VT Code"
 3. Follow prompts in output
 
 **Edit Configuration:**
 
 1. Open command palette
-2. Type "VTCode: Open Configuration"
+2. Type "VT Code: Open Configuration"
 3. Edit `vtcode.toml` with syntax highlighting
 4. Save and your changes apply immediately
 

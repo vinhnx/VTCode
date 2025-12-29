@@ -671,11 +671,8 @@ pub async fn handle_slash_command(
             match analysis_type {
                 "full" | "security" | "performance" | "dependencies" | "complexity"
                 | "structure" => {
-                    // Store analysis type in session for the handler to use
-                    // For now, we just pass it through as a parameter
-                    Ok(SlashCommandOutcome::SubmitPrompt {
-                        prompt: format!("Run {} analysis on the workspace", analysis_type),
-                    })
+                    // Use the AnalyzeAgent outcome to trigger the proper handler
+                    Ok(SlashCommandOutcome::AnalyzeAgent)
                 }
                 _ => {
                     renderer.line(

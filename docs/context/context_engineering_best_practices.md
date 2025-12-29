@@ -1,6 +1,6 @@
-# Context Engineering Best Practices for VTCode
+# Context Engineering Best Practices for VT Code
 
-Based on Anthropic's Context Engineering guide, this document analyzes VTCode's implementation and provides best practices for optimal context management.
+Based on Anthropic's Context Engineering guide, this document analyzes VT Code's implementation and provides best practices for optimal context management.
 
 ## Understanding Context Engineering vs Prompt Engineering
 
@@ -68,7 +68,7 @@ Characteristics:
 -   **Guidelines**: Principles that help the model decide
 -   **Flexibility**: Room for model to adapt to situations
 
-VTCode's current prompts follow this approach well:
+VT Code's current prompts follow this approach well:
 
 ```
 ## Core Principles

@@ -37,17 +37,33 @@ describe("Command Integration Tests", () => {
             const analyzeCommand = new AnalyzeCommand();
             const openConfigCommand = new OpenConfigCommand();
 
-            registry.registerAll([askCommand, analyzeCommand, openConfigCommand]);
+            registry.registerAll([
+                askCommand,
+                analyzeCommand,
+                openConfigCommand,
+            ]);
 
             // Mock command execution
-            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(undefined);
-            (vtcodeRunner.ensureCliAvailableForCommand as jest.Mock).mockResolvedValue(true);
-            jest.spyOn(vscode.window, "showInputBox").mockResolvedValue("Test question");
-            jest.spyOn(vscode.window, "showInformationMessage").mockResolvedValue(undefined as any);
+            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(
+                undefined
+            );
+            (
+                vtcodeRunner.ensureCliAvailableForCommand as jest.Mock
+            ).mockResolvedValue(true);
+            jest.spyOn(vscode.window, "showInputBox").mockResolvedValue(
+                "Test question"
+            );
+            jest.spyOn(
+                vscode.window,
+                "showInformationMessage"
+            ).mockResolvedValue(undefined as any);
 
             // Act & Assert
             // Execute ask command
-            const askResult = await registry.executeCommand("vtcode.askAgent", mockContext);
+            const askResult = await registry.executeCommand(
+                "vtcode.askAgent",
+                mockContext
+            );
             expect(askResult).toBeUndefined();
             expect(vtcodeRunner.runVtcodeCommand).toHaveBeenCalledWith(
                 ["ask", "Test question"],
@@ -55,7 +71,10 @@ describe("Command Integration Tests", () => {
             );
 
             // Execute analyze command
-            const analyzeResult = await registry.executeCommand("vtcode.runAnalyze", mockContext);
+            const analyzeResult = await registry.executeCommand(
+                "vtcode.runAnalyze",
+                mockContext
+            );
             expect(analyzeResult).toBeUndefined();
             expect(vtcodeRunner.runVtcodeCommand).toHaveBeenCalledWith(
                 ["analyze"],
@@ -63,7 +82,10 @@ describe("Command Integration Tests", () => {
             );
 
             // Execute open config command
-            const openConfigResult = await registry.executeCommand("vtcode.openConfig", mockContext);
+            const openConfigResult = await registry.executeCommand(
+                "vtcode.openConfig",
+                mockContext
+            );
             expect(openConfigResult).toBeUndefined();
         });
 
@@ -73,17 +95,26 @@ describe("Command Integration Tests", () => {
             registry.register(askCommand);
 
             const mockError = new Error("Command execution failed");
-            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockRejectedValue(mockError);
-            jest.spyOn(vscode.window, "showInputBox").mockResolvedValue("Test question");
-            jest.spyOn(vscode.window, "showErrorMessage").mockResolvedValue(undefined as any);
+            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockRejectedValue(
+                mockError
+            );
+            jest.spyOn(vscode.window, "showInputBox").mockResolvedValue(
+                "Test question"
+            );
+            jest.spyOn(vscode.window, "showErrorMessage").mockResolvedValue(
+                undefined as any
+            );
 
             // Act
-            const result = await registry.executeCommand("vtcode.askAgent", mockContext);
+            const result = await registry.executeCommand(
+                "vtcode.askAgent",
+                mockContext
+            );
 
             // Assert
             expect(result).toBeUndefined();
             expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-                "Failed to ask with VTCode: Command execution failed"
+                "Failed to ask with VT Code: Command execution failed"
             );
         });
 
@@ -93,7 +124,10 @@ describe("Command Integration Tests", () => {
             registry.register(askCommand);
 
             // Act
-            const result = await registry.executeCommand("vtcode.nonExistentCommand", mockContext);
+            const result = await registry.executeCommand(
+                "vtcode.nonExistentCommand",
+                mockContext
+            );
 
             // Assert
             expect(result).toBeUndefined();
@@ -107,10 +141,15 @@ describe("Command Integration Tests", () => {
             const analyzeCommand = new AnalyzeCommand();
             registry.register(analyzeCommand);
 
-            (vtcodeRunner.ensureCliAvailableForCommand as jest.Mock).mockResolvedValue(false);
+            (
+                vtcodeRunner.ensureCliAvailableForCommand as jest.Mock
+            ).mockResolvedValue(false);
 
             // Act
-            const result = await registry.executeCommand("vtcode.runAnalyze", mockContext);
+            const result = await registry.executeCommand(
+                "vtcode.runAnalyze",
+                mockContext
+            );
 
             // Assert
             expect(result).toBe(false);
@@ -182,9 +221,16 @@ describe("Command Integration Tests", () => {
                 } as vscode.WorkspaceFolder,
             };
 
-            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(undefined);
-            jest.spyOn(vscode.window, "showInputBox").mockResolvedValue("Test question");
-            jest.spyOn(vscode.window, "showInformationMessage").mockResolvedValue(undefined as any);
+            (vtcodeRunner.runVtcodeCommand as jest.Mock).mockResolvedValue(
+                undefined
+            );
+            jest.spyOn(vscode.window, "showInputBox").mockResolvedValue(
+                "Test question"
+            );
+            jest.spyOn(
+                vscode.window,
+                "showInformationMessage"
+            ).mockResolvedValue(undefined as any);
 
             // Act
             await registry.executeCommand("vtcode.askAgent", customContext);

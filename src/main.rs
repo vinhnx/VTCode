@@ -35,6 +35,26 @@ async fn main() -> std::process::ExitCode {
 }
 
 async fn run() -> Result<()> {
+    // Suppress macOS malloc warnings that appear as stderr output
+    #[cfg(target_os = "macos")]
+    {
+        // Set environment variables to explicitly disable malloc debugging
+        // This is safe to do at startup as we're not in a multi-threaded context yet
+        unsafe {
+            std::env::set_var("MallocStackLogging", "0");
+            std::env::set_var("MallocStackLoggingDirectory", "");
+            std::env::set_var("MallocScribble", "0");
+            std::env::set_var("MallocGuardEdges", "0");
+            std::env::set_var("MallocCheckHeapStart", "0");
+            std::env::set_var("MallocCheckHeapEach", "0");
+            std::env::set_var("MallocCheckHeapAbort", "0");
+            std::env::set_var("MallocCheckHeapSleep", "0");
+            std::env::set_var("MallocErrorAbort", "0");
+            std::env::set_var("MallocCorruptionAbort", "0");
+            std::env::set_var("MallocStackLoggingNoCompact", "0");
+        }
+    }
+
     panic_hook::init_panic_hook();
 
     // Build the CLI command with dynamic augmentations

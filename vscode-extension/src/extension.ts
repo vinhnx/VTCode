@@ -170,7 +170,7 @@ const MAX_VISIBLE_EDITOR_CONTEXTS = 3;
 
 export function activate(context: vscode.ExtensionContext) {
     activationContext = context;
-    outputChannel = vscode.window.createOutputChannel("VTCode");
+    outputChannel = vscode.window.createOutputChannel("VT Code");
     context.subscriptions.push(outputChannel);
 
     // Initialize command registry with modular commands
@@ -370,7 +370,7 @@ export function activate(context: vscode.ExtensionContext) {
             // Optionally show workspace trust management
             if (!vscode.workspace.isTrusted) {
                 const selection = await vscode.window.showInformationMessage(
-                    "Trust is required for VTCode. Would you like to manage workspace trust settings?",
+                    "Trust is required for VT Code. Would you like to manage workspace trust settings?",
                     "Manage Trust Settings",
                     "Learn More"
                 );
@@ -977,7 +977,7 @@ function createQuickActions(
     if (!trusted) {
         actions.push(
             {
-                label: "Trust this workspace for VTCode",
+                label: "Trust this workspace for VT Code",
                 description:
                     "Grant workspace trust to enable VT Code automation and CLI access.",
                 command: "vtcode.trustWorkspace",
@@ -1052,7 +1052,7 @@ function createQuickActions(
                 icon: "terminal",
             },
             {
-                label: "Analyze workspace with VTCode",
+                label: "Analyze workspace with VT Code",
                 description:
                     "Run vtcode analyze and stream the report to the VT Code output channel.",
                 command: "vtcode.runAnalyze",
@@ -1187,7 +1187,7 @@ function createWorkspaceInsights(
             ? undefined
             : {
                   command: "vtcode.trustWorkspace",
-                  title: "Trust Workspace for VTCode",
+                  title: "Trust Workspace for VT Code",
               },
         tooltip: trusted
             ? "Workspace trust allows VT Code to spawn CLI processes."
@@ -1369,7 +1369,7 @@ function createWorkspaceInsights(
         insights.push({
             label: "No vtcode.toml detected",
             description:
-                "Use VTCode: Open Configuration to create a workspace configuration.",
+                "Use VT Code: Open Configuration to create a workspace configuration.",
             icon: "file",
             command: {
                 command: "vtcode.openConfig",
@@ -1603,7 +1603,7 @@ function setStatusBarChecking(commandPath: string) {
         return;
     }
 
-    statusBarItem.text = "$(sync~spin) VTCode";
+    statusBarItem.text = "$(sync~spin) VT Code";
     statusBarItem.tooltip = `Checking availability of "${commandPath}"`;
     statusBarItem.command = undefined;
     statusBarItem.backgroundColor = undefined;
@@ -1641,7 +1641,7 @@ function updateStatusBarItem(commandPath: string, available: boolean) {
                 ? " $(person)"
                 : " $(run-all)"
             : "";
-        statusBarItem.text = `$(chevron-right) VTCode${suffix}`; // Using chevron-right icon as requested
+        statusBarItem.text = `$(chevron-right) VT Code${suffix}`; // Using chevron-right icon as requested
 
         statusBarItem.tooltip = createStatusBarTooltip(commandPath, true, true);
         statusBarItem.command = "vtcode.openQuickActions";
@@ -2110,7 +2110,7 @@ async function runVtcodeCommand(
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: options.title ?? "Running VTCode…",
+            title: options.title ?? "Running VT Code…",
         },
         runCommand
     );
@@ -2154,7 +2154,7 @@ async function provideVtcodeTasks(): Promise<vscode.Task[]> {
     const definition: VtcodeTaskDefinition = {
         type: "vtcode",
         command: "update-plan",
-        label: "Update plan with VTCode",
+        label: "Update plan with VT Code",
     };
 
     return [createUpdatePlanTask(folder, definition)];
@@ -2195,7 +2195,7 @@ function createUpdatePlanTask(
         label: definition.label,
     };
 
-    const label = definition.label ?? "Update plan with VTCode";
+    const label = definition.label ?? "Update plan with VT Code";
     const prompt = buildUpdatePlanPrompt(resolvedDefinition);
     const args = [...getConfigArguments(), "exec", prompt];
 
@@ -2212,7 +2212,7 @@ function createUpdatePlanTask(
         resolvedDefinition,
         folder,
         label,
-        "VTCode",
+        "VT Code",
         execution
     );
     task.detail =
@@ -2437,7 +2437,7 @@ function registerVtcodeAiIntegrations(context: vscode.ExtensionContext): void {
                 const collected: string[] = [];
                 try {
                     await runVtcodeCommand(["ask", promptWithContext], {
-                        title: "Asking VTCode…",
+                        title: "Asking VT Code…",
                         revealOutput: false,
                         showProgress: false,
                         cancellationToken: token,
@@ -3159,13 +3159,13 @@ function getWorkspaceRoot(): string | undefined {
 function handleCommandError(contextLabel: string, error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     void vscode.window.showErrorMessage(
-        `Failed to ${contextLabel} with VTCode: ${message}`
+        `Failed to ${contextLabel} with VT Code: ${message}`
     );
 }
 
 function getOutputChannel(): vscode.OutputChannel {
     if (!outputChannel) {
-        outputChannel = vscode.window.createOutputChannel("VTCode");
+        outputChannel = vscode.window.createOutputChannel("VT Code");
     }
 
     return outputChannel;

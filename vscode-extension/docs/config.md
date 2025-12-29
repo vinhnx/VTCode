@@ -255,7 +255,7 @@ custom_tool_example = "deny"
 
 ### automation
 
-Control automation behavior in VTCode:
+Control automation behavior in VT Code:
 
 ```toml
 [automation]
@@ -420,10 +420,10 @@ default_participants = ["@workspace", "@code", "@terminal", "@git"]
 
 VT Code VS Code extension provides several commands to help manage configuration:
 
--   `VTCode: Open Configuration` - Opens the workspace `vtcode.toml` file if it exists
--   `VTCode: Toggle Human-in-the-Loop` - Quickly toggle the human_in_the_loop setting
--   `VTCode: Configure MCP Providers` - Helper command to manage MCP provider settings
--   `VTCode: Open Tools Policy Configuration` - Opens the tools policy section of the config
+-   `VT Code: Open Configuration` - Opens the workspace `vtcode.toml` file if it exists
+-   `VT Code: Toggle Human-in-the-Loop` - Quickly toggle the human_in_the_loop setting
+-   `VT Code: Configure MCP Providers` - Helper command to manage MCP provider settings
+-   `VT Code: Open Tools Policy Configuration` - Opens the tools policy section of the config
 
 ### Command System Integration
 
@@ -472,7 +472,7 @@ OLLAMA_HOST=http://localhost:11434  # For Ollama
 
 ### auth.settings
 
-Authentication settings for VTCode:
+Authentication settings for VT Code:
 
 ```toml
 [auth]
@@ -493,7 +493,7 @@ timeout = 30  # seconds
 VT Code validates the configuration file on load. You can check for configuration errors by:
 
 1. Looking at the VT Code output channel in VS Code
-2. Using the `VTCode: Open Configuration` command which will highlight any parsing errors
+2. Using the `VT Code: Open Configuration` command which will highlight any parsing errors
 3. Running `vtcode check-config` from the command line if you have the CLI installed
 
 Common configuration errors include:

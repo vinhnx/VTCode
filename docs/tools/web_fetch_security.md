@@ -75,7 +75,7 @@ Create `~/.vtcode/web_fetch_blocklist.json`:
 
 **Benefits:**
 
--   Reload configuration without restarting VTCode
+-   Reload configuration without restarting VT Code
 -   Maintain organization-specific blocklists
 -   Separate from main configuration file
 

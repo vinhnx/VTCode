@@ -62,7 +62,7 @@ Example builds successfully
 
 ```
 
-         Main Agent (VTCode)
+         Main Agent (VT Code)
 
    MCP Tools (acp_call, acp_discover)
 
@@ -169,11 +169,11 @@ cargo clippy && cargo fmt --check
 
 ## Integration with VT Code Ecosystem
 
--       Zed editor integration
--       VS Code extension support
--       CLI headless mode compatible
--       TUI slash command support
--       MCP tool ecosystem integrated
+-         Zed editor integration
+-         VS Code extension support
+-         CLI headless mode compatible
+-         TUI slash command support
+-         MCP tool ecosystem integrated
 
 ## Commit Details
 

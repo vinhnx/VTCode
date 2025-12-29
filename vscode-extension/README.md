@@ -1,6 +1,6 @@
-# VTCode
+# VT Code
 
-**VTCode** is an AI coding assistant available for your favorite IDEs. This repository contains the Visual Studio Code extension, providing deep integration with [VT Code](https://github.com/vinhnx/vtcode), a Rust-based terminal coding agent with semantic code intelligence.
+**VT Code** is an AI coding assistant available for your favorite IDEs. This repository contains the Visual Studio Code extension, providing deep integration with [VT Code](https://github.com/vinhnx/vtcode), a Rust-based terminal coding agent with semantic code intelligence.
 
 ## Download VT Code Extension for your IDE
 
@@ -48,14 +48,14 @@ npm install -g vtcode-ai
 
 The extension contributes the following commands:
 
--   `VTCode: Open Quick Actions` - Access the quick actions panel
--   `VTCode: Ask the Agent` - Send a question to the VT Code agent
--   `VTCode: Ask About Selection` - Ask about highlighted code
--   `VTCode: Launch Agent Terminal` - Open an integrated terminal session running `vtcode chat`
--   `VTCode: Analyze Workspace` - Run `vtcode analyze` on your workspace
--   `VTCode: Open Configuration` - Edit your `vtcode.toml` configuration file
--   `VTCode: Open Documentation` - Access VT Code documentation
--   `VTCode: Toggle Human-in-the-Loop` - Control human approval for sensitive operations
+-   `VT Code: Open Quick Actions` - Access the quick actions panel
+-   `VT Code: Ask the Agent` - Send a question to the VT Code agent
+-   `VT Code: Ask About Selection` - Ask about highlighted code
+-   `VT Code: Launch Agent Terminal` - Open an integrated terminal session running `vtcode chat`
+-   `VT Code: Analyze Workspace` - Run `vtcode analyze` on your workspace
+-   `VT Code: Open Configuration` - Edit your `vtcode.toml` configuration file
+-   `VT Code: Open Documentation` - Access VT Code documentation
+-   `VT Code: Toggle Human-in-the-Loop` - Control human approval for sensitive operations
 -   And more...
 
 ## Configuration

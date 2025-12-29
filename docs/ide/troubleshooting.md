@@ -71,7 +71,7 @@ This guide covers common issues and solutions when using VT Code with your IDE.
 1. Verify your `vtcode.toml` file is in the root of your workspace
 2. Check the syntax of your configuration file
 3. Restart your IDE after making configuration changes
-4. Use the "VTCode: Open Configuration" command to edit your config directly
+4. Use the "VT Code: Open Configuration" command to edit your config directly
 
 ## VS Code-Compatible Editors
 

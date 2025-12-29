@@ -24,7 +24,7 @@
 ### CLI Binary (`src/`)
 
 -   **Runloop**: `agent/runloop/unified/turn.rs` manages conversation phases, model selection, tool invocation, and UI orchestration per turn. F:src/agent/runloop/unified/turn.rs†L1-L200
--   **ACP Integration**: `acp/zed.rs` bridges Zed’s Agent Client Protocol with VTCode’s tool registry and permission flows. F:src/acp/zed.rs†L1-L200
+-   **ACP Integration**: `acp/zed.rs` bridges Zed’s Agent Client Protocol with VT Code’s tool registry and permission flows. F:src/acp/zed.rs†L1-L200
 
 ## Codebase Health Snapshot
 

@@ -4,7 +4,7 @@ The `/edit` command uses the [`editor-command`](https://docs.rs/editor-command/l
 
 ## Overview
 
-The `editor-command` crate handles editor detection and invocation across all major platforms (macOS, Linux, Windows) and integrates seamlessly with VTCode's TUI environment.
+The `editor-command` crate handles editor detection and invocation across all major platforms (macOS, Linux, Windows) and integrates seamlessly with VT Code's TUI environment.
 
 ## Configuration
 

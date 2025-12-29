@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-File protection hook for VTCode.
+File protection hook for VT Code.
 Blocks edits to sensitive files based on file path.
 Exits with code 2 to block the tool if sensitive file is detected.
 """
@@ -26,10 +26,10 @@ def is_sensitive_file(file_path):
         'token',
         'key'
     ]
-    
+
     # Convert to lowercase for case-insensitive matching
     lower_path = file_path.lower()
-    
+
     # Check for exact matches or paths containing sensitive patterns
     for pattern in sensitive_patterns:
         if pattern in lower_path:
@@ -49,20 +49,20 @@ def is_sensitive_file(file_path):
                     return True
             else:
                 return True
-    
+
     return False
 
 # Main execution
 try:
     input_data = json.load(sys.stdin)
     file_path = input_data.get('tool_input', {}).get('file_path', '')
-    
+
     if is_sensitive_file(file_path):
         print(f"Blocked modification of sensitive file: {file_path}", file=sys.stderr)
         sys.exit(2)  # Exit with code 2 to block the tool
     else:
         print(f"File {file_path} is not sensitive, allowing operation")
-        
+
 except Exception as e:
     print(f"Error in file protection hook: {e}", file=sys.stderr)
     # Don't block on error, just continue

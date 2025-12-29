@@ -1,11 +1,13 @@
 # File Browser: Enhanced Sorting
 
 ## Overview
+
 Improved file browser sorting to ensure folders always appear at the top, with alphabetical ordering (case-insensitive) within each group.
 
 ## Sorting Rules
 
 ### Priority Order
+
 1. **Directories first** - All folders appear before any files
 2. **Alphabetical within type** - Case-insensitive alphabetical sorting
 3. **Maintained during filtering** - Sorting persists even after search/filter
@@ -13,12 +15,12 @@ Improved file browser sorting to ensure folders always appear at the top, with a
 ### Visual Example
 
 ```
- File Browser 
- ↑↓ Navigate · Tab/Enter ...   
-                                
+ File Browser
+ ↑↓ Navigate · Tab/Enter ...
+
   lib/                           ← Directories
   src/                              (alphabetical)
-  tests/                       
+  tests/
    Apple.txt                      ← Files
    banana.txt                        (alphabetical,
    zebra.txt                          case-insensitive)
@@ -66,6 +68,7 @@ scored_files.sort_unstable_by(|a, b| {
 The sorting uses `.to_lowercase()` to ensure case-insensitive alphabetical order:
 
 **Before (case-sensitive):**
+
 ```
 Apple.txt
 README.md
@@ -74,6 +77,7 @@ zebra.txt
 ```
 
 **After (case-insensitive):**
+
 ```
 Apple.txt
 banana.txt
@@ -84,6 +88,7 @@ zebra.txt
 ## Behavior Examples
 
 ### Example 1: Mixed Files and Folders
+
 ```
 Input (random order):
 - zebra.txt
@@ -103,6 +108,7 @@ Output (sorted):
 ```
 
 ### Example 2: After Filtering
+
 ```
 Search query: "src"
 
@@ -123,12 +129,13 @@ Output (filtered):
 **Note:** Directories still appear first, even though files might have higher match scores!
 
 ### Example 3: Fuzzy Matching with Sorting
+
 ```
 Search query: "st"
 
 Results:
 - src/tests/     ← Directory (fuzzy: s-t)
-- tests/         ← Directory (exact: st)  
+- tests/         ← Directory (exact: st)
 - state.rs       ← File (exact: st)
 - src/test.rs    ← File (fuzzy: s-t)
 ```
@@ -136,6 +143,7 @@ Results:
 ## Testing
 
 ### Test 1: Directory Priority
+
 ```rust
 #[test]
 fn test_sorting_directories_first_alphabetical() {
@@ -143,7 +151,7 @@ fn test_sorting_directories_first_alphabetical() {
     palette.all_files = vec![
         zebra.txt,  src/,  Apple.txt,  tests/,  banana.txt,  lib/
     ];
-    
+
     // After sorting
     assert_eq!(items[0], "lib/");      // Dir
     assert_eq!(items[1], "src/");      // Dir
@@ -155,57 +163,61 @@ fn test_sorting_directories_first_alphabetical() {
 ```
 
 ### Test 2: Filtering Maintains Priority
+
 ```rust
 #[test]
 fn test_filtering_maintains_directory_priority() {
     palette.set_filter("src");
-    
+
     // Find positions
     let first_dir_idx = find_first_directory();
     let first_file_idx = find_first_file();
-    
+
     // Directories still come first
     assert!(first_dir_idx < first_file_idx);
 }
 ```
 
-**Test Results:**   16/16 file_palette tests passing
+**Test Results:** 16/16 file_palette tests passing
 
 ## User Benefits
 
-  **Consistent organization** - Folders always on top
-  **Intuitive** - Matches file manager conventions (Finder, Explorer)
-  **Case-insensitive** - "README.md" and "readme.md" sort together
-  **Persistent** - Sorting maintained during search
-  **Predictable** - Easy to find directories vs files
+**Consistent organization** - Folders always on top
+**Intuitive** - Matches file manager conventions (Finder, Explorer)
+**Case-insensitive** - "README.md" and "readme.md" sort together
+**Persistent** - Sorting maintained during search
+**Predictable** - Easy to find directories vs files
 
 ## Comparison to Other Tools
 
-| Tool | Folders First? | Case-Insensitive? | During Search? |
-|------|---------------|-------------------|----------------|
-| **VTCode** |   Yes |   Yes |   Yes |
-| macOS Finder |   Yes |   Yes |   Yes |
-| Windows Explorer |   Yes |   Yes |   Yes |
-| VSCode |   Yes |   Yes |   No |
-| Sublime Text |   No |   Yes |   No |
+| Tool             | Folders First? | Case-Insensitive? | During Search? |
+| ---------------- | -------------- | ----------------- | -------------- |
+| **VT Code**      | Yes            | Yes               | Yes            |
+| macOS Finder     | Yes            | Yes               | Yes            |
+| Windows Explorer | Yes            | Yes               | Yes            |
+| VSCode           | Yes            | Yes               | No             |
+| Sublime Text     | No             | Yes               | No             |
 
 ## Files Modified
 
 1. **vtcode-core/src/ui/tui/session/file_palette.rs**
-   - Updated `load_files()` sorting to use case-insensitive comparison
-   - Updated `apply_filter()` to prioritize directories in filtered results
-   - Added 2 new sorting tests
+
+    - Updated `load_files()` sorting to use case-insensitive comparison
+    - Updated `apply_filter()` to prioritize directories in filtered results
+    - Added 2 new sorting tests
 
 2. Created: **docs/features/FILE_BROWSER_SORTING.md**
 
 ## Technical Notes
 
 ### Performance
-- **Time Complexity:** O(n log n) for sorting
-- **Space Complexity:** O(1) (in-place sort)
-- **Impact:** Negligible - sorting happens once per filter change
+
+-   **Time Complexity:** O(n log n) for sorting
+-   **Space Complexity:** O(1) (in-place sort)
+-   **Impact:** Negligible - sorting happens once per filter change
 
 ### Edge Cases Handled
+
 -   Empty file lists
 -   Only directories
 -   Only files
@@ -216,11 +228,12 @@ fn test_filtering_maintains_directory_priority() {
 ## Future Enhancements
 
 Potential improvements:
-- [ ] Natural number sorting (e.g., "file2" before "file10")
-- [ ] Sort by last modified date (optional)
-- [ ] Sort by file size (optional)
-- [ ] Custom sort order via config
-- [ ] Pin favorite directories to top
+
+-   [ ] Natural number sorting (e.g., "file2" before "file10")
+-   [ ] Sort by last modified date (optional)
+-   [ ] Sort by file size (optional)
+-   [ ] Custom sort order via config
+-   [ ] Pin favorite directories to top
 
 ## Conclusion
 

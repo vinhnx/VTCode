@@ -2,7 +2,7 @@
 
 ## Documentation Index
 
-This directory contains comprehensive documentation about VTCode's async architecture and the async migration that was completed in December 2024.
+This directory contains comprehensive documentation about VT Code's async architecture and the async migration that was completed in December 2024.
 
 ## Quick Links
 

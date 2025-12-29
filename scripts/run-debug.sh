@@ -73,4 +73,5 @@ if [[ -n "$WORKSPACE" ]]; then
 fi
 
 # Run with advanced features enabled by default
-cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug chat
+# Note: Interactive chat is launched via the TUI without a subcommand
+cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug

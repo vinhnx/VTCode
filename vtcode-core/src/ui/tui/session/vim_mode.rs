@@ -1,6 +1,6 @@
 /// Vim mode implementation for VTCode
 /// Supports a subset of Vim keybindings as described in the Claude Code guidelines
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VimMode {

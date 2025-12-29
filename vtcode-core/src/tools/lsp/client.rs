@@ -350,7 +350,7 @@ impl Drop for LspClient {
         // but we try to clean up gracefully.
 
         // Try to kill the child process if it exists
-        let mut child_guard = self.child.try_lock();
+        let child_guard = self.child.try_lock();
         if let Ok(mut child_opt) = child_guard {
             if let Some(mut child) = child_opt.take() {
                 // Try to kill the child process gracefully
@@ -359,7 +359,7 @@ impl Drop for LspClient {
         }
 
         // Try to abort the reader handle if it exists
-        let mut reader_guard = self.reader_handle.try_lock();
+        let reader_guard = self.reader_handle.try_lock();
         if let Ok(mut handle_opt) = reader_guard {
             if let Some(handle) = handle_opt.take() {
                 handle.abort();
@@ -367,7 +367,7 @@ impl Drop for LspClient {
         }
 
         // Try to abort the stderr handle if it exists
-        let mut stderr_guard = self.stderr_handle.try_lock();
+        let stderr_guard = self.stderr_handle.try_lock();
         if let Ok(mut handle_opt) = stderr_guard {
             if let Some(handle) = handle_opt.take() {
                 handle.abort();

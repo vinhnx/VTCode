@@ -1,6 +1,6 @@
 # `vtcode-exec-events`
 
-The `vtcode-exec-events` crate packages the execution telemetry schema that powers VTCode's
+The `vtcode-exec-events` crate packages the execution telemetry schema that powers VT Code's
 automation timeline. Downstream applications can depend on this crate to deserialize
 thread progress, command execution lifecycle updates, and tool activity without pulling in
 the rest of `vtcode-core`.
@@ -105,7 +105,7 @@ structured payloads into `tracing` subscribers with automatic schema-version tag
 Enabling the `exec-events` feature in `vtcode-bash-runner` exposes an
 `EventfulExecutor` wrapper that converts each shell invocation into
 `ThreadEvent` updates. This lets downstream adopters reuse the same telemetry
-vocabulary when commands run outside VTCode's core runtime—for example, when
+vocabulary when commands run outside VT Code's core runtime—for example, when
 shell actions are executed via the standalone runner in CI or automation
 pipelines. Wrap any executor and provide an emitter to mirror command activity:
 
@@ -121,7 +121,7 @@ runner.ls(None, false)?;
 
 Each invocation emits `item.started` and `item.completed` events with aggregated
 output and exit codes, so telemetry consumers receive the same stream whether
-commands originate from VTCode's agent loop or the extracted runner crate.F:vtcode-bash-runner/src/executor.rs†L358-L470
+commands originate from VT Code's agent loop or the extracted runner crate.F:vtcode-bash-runner/src/executor.rs†L358-L470
 
 ## Examples
 
@@ -135,7 +135,7 @@ cargo run -p vtcode-exec-events --example event_timeline
 
 The source (`vtcode-exec-events/examples/event_timeline.rs`) demonstrates how to
 construct timeline events, serialize them with `serde_json`, and post-process the
-sequence to build command summaries outside of VTCode's runtime.
+sequence to build command summaries outside of VT Code's runtime.
 
 ## Next steps
 

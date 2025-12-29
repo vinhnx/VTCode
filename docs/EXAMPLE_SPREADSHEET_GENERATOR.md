@@ -1,6 +1,6 @@
 # Example: Using spreadsheet-generator in VT Code TUI
 
-Complete step-by-step example of creating an Excel spreadsheet using the `spreadsheet-generator` skill in VTCode's interactive chat.
+Complete step-by-step example of creating an Excel spreadsheet using the `spreadsheet-generator` skill in VT Code's interactive chat.
 
 ---
 

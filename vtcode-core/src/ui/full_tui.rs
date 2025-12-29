@@ -193,9 +193,13 @@ impl FullTui {
                                         let _ = _event_tx.send(Event::Resize(x, y));
                                     }
                                     CrosstermEvent::FocusLost => {
+                                        // Update notification system to allow notifications when terminal is not active
+                                        crate::notifications::set_global_terminal_focused(false);
                                         let _ = _event_tx.send(Event::FocusLost);
                                     }
                                     CrosstermEvent::FocusGained => {
+                                        // Update notification system to prevent notifications when terminal is active
+                                        crate::notifications::set_global_terminal_focused(true);
                                         let _ = _event_tx.send(Event::FocusGained);
                                     }
                                     CrosstermEvent::Paste(s) => {

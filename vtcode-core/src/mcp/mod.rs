@@ -967,7 +967,7 @@ impl McpToolExecutor for McpClient {
 }
 
 /// Wrapper around an individual MCP provider connection.
-struct McpProvider {
+pub struct McpProvider {
     name: String,
     protocol_version: String,
     client: Arc<RmcpClient>,

@@ -2,7 +2,7 @@
 name = "vtcode-bash-runner"
 version = "0.54.3"
 edition = "2024"
-description = "Cross-platform shell execution helpers extracted from VTCode"
+description = "Cross-platform shell execution helpers extracted from VT Code"
 license = "MIT"
 readme = "../README.md"
 repository = "https://github.com/vinhnx/vtcode"

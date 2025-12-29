@@ -11,14 +11,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::config::types::AgentConfig;
 use crate::subagents::{
     SpawnParams, SubagentRegistry, SubagentResult, SubagentRunner, Thoroughness,
 };
 use crate::tool_policy::ToolPolicy;
+use crate::tools::ToolRegistry;
 use crate::tools::result::ToolResult as SplitToolResult;
 use crate::tools::traits::Tool;
-use crate::tools::ToolRegistry;
-use crate::config::types::AgentConfig;
 
 /// Tool arguments for spawn_subagent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,7 +163,11 @@ impl Tool for SpawnSubagentTool {
             ### Output\n\n{}",
             subagent_result.subagent_name,
             subagent_result.agent_id,
-            if subagent_result.success { "✓ Success" } else { "✗ Failed" },
+            if subagent_result.success {
+                "✓ Success"
+            } else {
+                "✗ Failed"
+            },
             subagent_result.duration_ms,
             subagent_result.turn_count,
             subagent_result.output
@@ -228,7 +232,11 @@ fn truncate_for_llm(text: &str, max_chars: usize) -> String {
         text.to_string()
     } else {
         let truncated = &text[..max_chars];
-        format!("{}...\n[truncated, {} more chars]", truncated, text.len() - max_chars)
+        format!(
+            "{}...\n[truncated, {} more chars]",
+            truncated,
+            text.len() - max_chars
+        )
     }
 }
 
@@ -238,12 +246,30 @@ mod tests {
 
     #[test]
     fn test_parse_thoroughness() {
-        assert_eq!(SpawnSubagentTool::parse_thoroughness("quick"), Thoroughness::Quick);
-        assert_eq!(SpawnSubagentTool::parse_thoroughness("fast"), Thoroughness::Quick);
-        assert_eq!(SpawnSubagentTool::parse_thoroughness("medium"), Thoroughness::Medium);
-        assert_eq!(SpawnSubagentTool::parse_thoroughness("very_thorough"), Thoroughness::VeryThorough);
-        assert_eq!(SpawnSubagentTool::parse_thoroughness("comprehensive"), Thoroughness::VeryThorough);
-        assert_eq!(SpawnSubagentTool::parse_thoroughness("unknown"), Thoroughness::Medium);
+        assert_eq!(
+            SpawnSubagentTool::parse_thoroughness("quick"),
+            Thoroughness::Quick
+        );
+        assert_eq!(
+            SpawnSubagentTool::parse_thoroughness("fast"),
+            Thoroughness::Quick
+        );
+        assert_eq!(
+            SpawnSubagentTool::parse_thoroughness("medium"),
+            Thoroughness::Medium
+        );
+        assert_eq!(
+            SpawnSubagentTool::parse_thoroughness("very_thorough"),
+            Thoroughness::VeryThorough
+        );
+        assert_eq!(
+            SpawnSubagentTool::parse_thoroughness("comprehensive"),
+            Thoroughness::VeryThorough
+        );
+        assert_eq!(
+            SpawnSubagentTool::parse_thoroughness("unknown"),
+            Thoroughness::Medium
+        );
     }
 
     #[test]

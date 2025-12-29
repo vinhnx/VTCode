@@ -198,7 +198,7 @@ mode: false
 -   `allowed-tools` (optional): explicit allowlist for the skill (e.g., `Read`, `Write`, `Bash(python {baseDir}/scripts/*:*)`). Keep minimal; do not expose unused tools.
 -   `disable-model-invocation` (optional): gate direct model calls when the skill is active; prefer tools/scripts.
 -   `when-to-use` (optional, <=512 chars): guidance appended to description in some stacks; rely on a descriptive `description` first since this field is not guaranteed in upstream docs.
--   `requires-container` / `disallow-container` (optional, mutually exclusive): declare container requirements so VT Code can filter or prefer VTCode-native flows without string heuristics.
+-   `requires-container` / `disallow-container` (optional, mutually exclusive): declare container requirements so VT Code can filter or prefer VT Code-native flows without string heuristics.
 -   `license` (optional): short license string for the skill.
 -   `model` (optional): override model; default inherits session.
 -   `mode` (optional): mark skills that change operating mode (highlighted separately in some UIs).
