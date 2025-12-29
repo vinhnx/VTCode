@@ -29,7 +29,7 @@ Warp has built-in support for most features:
         info.push_str("  - No additional configuration needed\n");
     }
 
-    info.push_str("\nNo additional configuration needed for VTCode!\n");
+    info.push_str("\nNo additional configuration needed for VT Code!\n");
 
     Ok(info)
 }

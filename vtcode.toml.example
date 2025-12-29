@@ -610,8 +610,6 @@ allow_tool_ansi = true
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
 
-# Show timeline navigation panel (displays plan when available, timeline otherwise)
-show_timeline_pane = true
 
 # Status line configuration
 [ui.status_line]

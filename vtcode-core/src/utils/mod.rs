@@ -1,6 +1,6 @@
 //! # Utility Functions and Helpers
 //!
-//! This module provides various utility functions and helpers used throughout VTCode,
+//! This module provides various utility functions and helpers used throughout VT Code,
 //! including configuration management, safety utilities, and common operations.
 //!
 //! ## Modules Overview

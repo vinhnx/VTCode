@@ -1,8 +1,8 @@
-//! Provider configuration traits decoupled from VTCode's dot-config storage.
+//! Provider configuration traits decoupled from VT Code's dot-config storage.
 //!
 //! Consumers can implement [`ProviderConfig`] for their own types and use the
 //! conversion helpers to build `vtcode_core` provider factories without
-//! depending on VTCode's internal configuration structs.
+//! depending on VT Code's internal configuration structs.
 
 use std::borrow::Cow;
 
@@ -345,7 +345,7 @@ mod tests {
     }
 }
 
-/// [`ProviderConfig`] implementation for VTCode's dot-config provider entries.
+/// [`ProviderConfig`] implementation for VT Code's dot-config provider entries.
 impl ProviderConfig for vtcode_core::utils::dot_config::ProviderConfig {
     fn api_key(&self) -> Option<Cow<'_, str>> {
         self.api_key.as_deref().map(Cow::Borrowed)

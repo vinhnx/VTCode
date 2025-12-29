@@ -1,4 +1,4 @@
-//! Markdown-backed storage utilities extracted from VTCode.
+//! Markdown-backed storage utilities extracted from VT Code.
 //!
 //! This crate provides lightweight persistence helpers that serialize
 //! structured data into Markdown files with embedded JSON and YAML blocks.

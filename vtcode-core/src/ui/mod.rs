@@ -39,7 +39,7 @@ mod tests {
     #[test]
     fn test_render_markdown() {
         let markdown_text = r#"
-# Welcome to VTCode
+# Welcome to VT Code
 
 This is a **bold** statement and this is *italic*.
 

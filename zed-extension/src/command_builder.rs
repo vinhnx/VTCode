@@ -1,6 +1,6 @@
 //! Command Builder - Fluent API for constructing VT Code commands
 //!
-//! This module provides a builder pattern for constructing complex VTCode
+//! This module provides a builder pattern for constructing complex VT Code
 //! commands with a clean, chainable API for better code readability.
 
 use crate::executor::{execute_command, execute_command_with_timeout, CommandResult};

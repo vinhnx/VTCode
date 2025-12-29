@@ -383,12 +383,12 @@ async fn run_get(get_args: GetArgs) -> Result<()> {
 
 async fn run_login(login_args: LoginArgs) -> Result<()> {
     let _ = login_args;
-    bail!("MCP OAuth login is not yet supported in VTCode.")
+    bail!("MCP OAuth login is not yet supported in VT Code.")
 }
 
 async fn run_logout(logout_args: LogoutArgs) -> Result<()> {
     let _ = logout_args;
-    bail!("MCP OAuth logout is not yet supported in VTCode.")
+    bail!("MCP OAuth logout is not yet supported in VT Code.")
 }
 
 fn build_stdio_transport(args: AddMcpStdioArgs) -> Result<McpTransportConfig> {

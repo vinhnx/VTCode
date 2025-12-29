@@ -608,10 +608,6 @@ pub(crate) async fn initialize_session_ui(
         .as_ref()
         .map(|cfg| cfg.ui.inline_viewport_rows)
         .unwrap_or(ui::DEFAULT_INLINE_VIEWPORT_ROWS);
-    let show_timeline_pane = vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.ui.show_timeline_pane)
-        .unwrap_or(ui::INLINE_SHOW_TIMELINE_PANE);
 
     // Set environment variable to indicate TUI mode is active
     unsafe {
@@ -636,7 +632,6 @@ pub(crate) async fn initialize_session_ui(
         default_placeholder.clone(),
         config.ui_surface,
         inline_rows,
-        show_timeline_pane,
         Some(interrupt_callback),
         Some(session_state.custom_prompts.clone()),
         None,

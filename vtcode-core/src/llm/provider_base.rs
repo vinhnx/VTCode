@@ -308,7 +308,7 @@ impl RequestProcessor {
 
         builder = builder
             .header("Content-Type", "application/json")
-            .header("User-Agent", "VTCode/1.0");
+            .header("User-Agent", "VT Code/1.0");
 
         if let Some(body_value) = body {
             builder = builder.json(&body_value);

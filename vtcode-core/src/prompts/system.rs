@@ -91,7 +91,7 @@ pub fn default_lightweight_prompt() -> &'static str {
 /// MINIMAL PROMPT (v5.0 - Pi-inspired, <1K tokens)
 /// Based on pi-coding-agent philosophy: modern models need minimal guidance
 /// Reference: https://mariozechner.at/posts/2025-11-30-pi-coding-agent/
-const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VTCode, an expert coding assistant.
+const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, an expert coding assistant.
 
 - Stay in WORKSPACE_DIR.
 - Use JSON named params for tools.
@@ -195,7 +195,7 @@ pub async fn read_agent_guidelines(project_root: &Path) -> Option<String> {
 ///
 /// ## Skills Integration Note
 ///
-/// VTCode implements a **Tiered Disclosure** model for skills:
+/// VT Code implements a **Tiered Disclosure** model for skills:
 /// 1. **Discovery Profile**: Names and descriptions are available via `list_skills` and summarized in the system prompt.
 /// 2. **Active Instructions**: Full `SKILL.md` content is loaded via `load_skill` and then persists in the incremental system prompt.
 /// 3. **Deep Resources**: Level 3 assets (scripts, technical refs) are lazy-loaded via `load_skill_resource`.
@@ -551,8 +551,8 @@ mod tests {
         // Minimal prompt should be much shorter than default
         assert!(result.len() < 3000, "Minimal mode should produce <3K chars");
         assert!(
-            result.contains("VTCode") || result.contains("VT Code"),
-            "Should contain VTCode identifier"
+            result.contains("VT Code") || result.contains("VT Code"),
+            "Should contain VT Code identifier"
         );
     }
 

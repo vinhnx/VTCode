@@ -1,7 +1,7 @@
 //! Container Skills Validation
 //!
 //! Detects and validates skills that require Anthropic's container skills feature,
-//! which is not supported in VTCode. Provides early warnings and filtering
+//! which is not supported in VT Code. Provides early warnings and filtering
 //! to prevent false positives where skills load but cannot execute properly.
 
 use crate::skills::types::Skill;
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// Container skills requirement detection
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ContainerSkillsRequirement {
-    /// Skill requires container skills (not supported in VTCode)
+    /// Skill requires container skills (not supported in VT Code)
     Required,
     /// Skill provides fallback alternatives
     RequiredWithFallback,
@@ -85,7 +85,7 @@ impl ContainerSkillsValidator {
                 patterns_found: vec!["requires-container".to_string()],
                 recommendations: vec![
                     "This skill declares Anthropic container skills are required; VT Code cannot execute them directly.".to_string(),
-                    "Use a VTCode-native alternative or provide a fallback implementation.".to_string(),
+                    "Use a VT Code-native alternative or provide a fallback implementation.".to_string(),
                 ],
                 should_filter: true,
             };
@@ -94,10 +94,10 @@ impl ContainerSkillsValidator {
         if let Some(true) = skill.manifest.disallow_container {
             return ContainerValidationResult {
                 requirement: ContainerSkillsRequirement::NotRequired,
-                analysis: "Manifest sets disallow-container=true (VTCode-native only)".to_string(),
+                analysis: "Manifest sets disallow-container=true (VT Code-native only)".to_string(),
                 patterns_found: vec!["disallow-container".to_string()],
                 recommendations: vec![
-                    "Use VTCode-native execution paths (code_execution/bash) instead of Anthropic container skills.".to_string(),
+                    "Use VT Code-native execution paths (code_execution/bash) instead of Anthropic container skills.".to_string(),
                 ],
                 should_filter: false,
             };
@@ -159,7 +159,7 @@ impl ContainerSkillsValidator {
             (
                 ContainerSkillsRequirement::RequiredWithFallback,
                 format!(
-                    "Skill '{}' uses container skills but provides VTCode-compatible alternatives.",
+                    "Skill '{}' uses container skills but provides VT Code-compatible alternatives.",
                     skill.name()
                 ),
                 false,
@@ -168,7 +168,7 @@ impl ContainerSkillsValidator {
             (
                 ContainerSkillsRequirement::Required,
                 format!(
-                    "Skill '{}' requires Anthropic container skills which are not supported in VTCode.",
+                    "Skill '{}' requires Anthropic container skills which are not supported in VT Code.",
                     skill.name()
                 ),
                 true, // Filter out - no fallback available
@@ -186,9 +186,9 @@ impl ContainerSkillsValidator {
 
         // Generate recommendations with enhanced user guidance
         if requirement == ContainerSkillsRequirement::Required {
-            recommendations.push("This skill requires Anthropic's container skills feature which is not available in VTCode.".to_string());
+            recommendations.push("This skill requires Anthropic's container skills feature which is not available in VT Code.".to_string());
             recommendations.push("".to_string());
-            recommendations.push("Consider these VTCode-compatible alternatives:".to_string());
+            recommendations.push("Consider these VT Code-compatible alternatives:".to_string());
 
             // Provide specific alternatives based on skill type
             if skill.name().contains("pdf") || skill.name().contains("report") {
@@ -224,17 +224,18 @@ impl ContainerSkillsValidator {
                 recommendations
                     .push("  1. Use execute_code with appropriate Python libraries".to_string());
                 recommendations.push(
-                    "  2. Search for VTCode-compatible skills in the documentation".to_string(),
+                    "  2. Search for VT Code-compatible skills in the documentation".to_string(),
                 );
             }
 
             recommendations.push("".to_string());
-            recommendations
-                .push("Learn more about VTCode's code execution in the documentation.".to_string());
+            recommendations.push(
+                "Learn more about VT Code's code execution in the documentation.".to_string(),
+            );
             recommendations.push("Official Anthropic container skills documentation: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview".to_string());
         } else if requirement == ContainerSkillsRequirement::RequiredWithFallback {
             recommendations.push(
-                "This skill uses container skills but provides VTCode-compatible alternatives."
+                "This skill uses container skills but provides VT Code-compatible alternatives."
                     .to_string(),
             );
             recommendations
@@ -379,9 +380,9 @@ impl ContainerValidationReport {
             description,
             reason,
             recommendations: vec![
-                "This skill requires Anthropic container skills which are not supported in VTCode."
+                "This skill requires Anthropic container skills which are not supported in VT Code."
                     .to_string(),
-                "Consider using alternative approaches with VTCode's code execution tools."
+                "Consider using alternative approaches with VT Code's code execution tools."
                     .to_string(),
             ],
         });
@@ -394,9 +395,9 @@ impl ContainerValidationReport {
             self.summary.total_incompatible,
             self.summary.total_with_fallbacks,
         ) {
-            (0, 0) => "All skills are fully compatible with VTCode.".to_string(),
+            (0, 0) => "All skills are fully compatible with VT Code.".to_string(),
             (0, _) => format!(
-                "{} skills have container skills dependencies but provide VTCode-compatible fallbacks.",
+                "{} skills have container skills dependencies but provide VT Code-compatible fallbacks.",
                 self.summary.total_with_fallbacks
             ),
             (_, 0) => format!(

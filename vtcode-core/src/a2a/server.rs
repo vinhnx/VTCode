@@ -1,6 +1,6 @@
 //! A2A HTTP Server using axum
 //!
-//! Provides HTTP endpoints for the A2A Protocol, enabling VTCode to operate as an A2A agent.
+//! Provides HTTP endpoints for the A2A Protocol, enabling VT Code to operate as an A2A agent.
 //! The server exposes:
 //! - Agent discovery via `/.well-known/agent-card.json`
 //! - RPC endpoints at `/a2a` for message sending and task management
@@ -65,7 +65,7 @@ impl A2aServerState {
         }
     }
 
-    /// Create a server state with default settings for VTCode
+    /// Create a server state with default settings for VT Code
     pub fn vtcode_default(base_url: impl Into<String>) -> Self {
         Self::new(TaskManager::new(), AgentCard::vtcode_default(base_url))
     }

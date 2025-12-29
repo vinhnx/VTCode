@@ -125,6 +125,9 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ManageSkills { action } => {
             handlers::handle_manage_skills(ctx, action).await
         }
+        SlashCommandOutcome::ManageAgents { action } => {
+            handlers::handle_manage_agents(ctx, action).await
+        }
         SlashCommandOutcome::ToggleVimMode => {
             // Toggle Vim mode in the session
             if ctx.vt_cfg.is_some() {

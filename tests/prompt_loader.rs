@@ -215,7 +215,7 @@ Always respond with helpful, accurate information about the codebase.
         .expect("Failed to load system prompt using constant path");
 
     assert_eq!(loaded_content, system_prompt);
-    assert!(loaded_content.contains("VTCode"));
+    assert!(loaded_content.contains("VT Code"));
     assert!(loaded_content.contains("Available Tools"));
 
     // Restore original directory

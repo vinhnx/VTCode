@@ -1,4 +1,4 @@
-//! Prototype crate that exposes VTCode's tool registry and built-in tools.
+//! Prototype crate that exposes VT Code's tool registry and built-in tools.
 //!
 //! The goal is to surface the current API surface to external consumers
 //! while we iterate on decoupling policies, configuration, and optional
@@ -10,7 +10,7 @@
 //!
 //! See `docs/vtcode_tools_policy.md` for guidance on supplying a custom
 //! `ToolPolicyManager` when the `policies` feature is enabled, allowing
-//! consumers to store policy configuration outside of VTCode's defaults.
+//! consumers to store policy configuration outside of VT Code's defaults.
 
 pub use vtcode_commons::{
     ErrorFormatter, ErrorReporter, NoopErrorReporter, NoopTelemetry, PathResolver, TelemetrySink,

@@ -29,7 +29,7 @@ use tracing::warn;
 ///
 /// Consumers that want to reuse the agent loop can either construct this bundle
 /// directly with [`AgentComponentBuilder`] or provide their own specialized
-/// implementation when embedding VTCode.
+/// implementation when embedding VT Code.
 pub struct AgentComponentSet {
     pub client: AnyClient,
     pub tool_registry: Arc<ToolRegistry>,

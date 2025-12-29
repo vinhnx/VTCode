@@ -1,4 +1,4 @@
-//! Plugin manager for VTCode
+//! Plugin manager for VT Code
 //!
 //! Coordinates all plugin system components and provides a unified interface
 //! for plugin management.

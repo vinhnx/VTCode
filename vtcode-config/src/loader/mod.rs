@@ -105,7 +105,7 @@ pub struct ProviderConfig {
     pub anthropic: AnthropicConfig,
 }
 
-/// Main configuration structure for VTCode
+/// Main configuration structure for VT Code
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct VTCodeConfig {

@@ -51,7 +51,6 @@ auto_apply_detected_patches = false
 [ui]
 tool_output_mode = "full"
 inline_viewport_rows = 16
-show_timeline_pane = false
 
 # PTY configuration
 [pty]

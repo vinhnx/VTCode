@@ -1,7 +1,7 @@
-//! Plugin template and directory structure utilities for VTCode
+//! Plugin template and directory structure utilities for VT Code
 //!
 //! Provides utilities for creating and validating plugin directory structures
-//! according to VTCode's plugin system specification.
+//! according to VT Code's plugin system specification.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -120,7 +120,7 @@ This is an example command for the {plugin_name} plugin.
 
 ## Description
 
-This command demonstrates how to create a plugin command for VTCode.
+This command demonstrates how to create a plugin command for VT Code.
 "#,
                     plugin_name = manifest.name
                 );
@@ -155,7 +155,7 @@ This is an example agent for the {plugin_name} plugin.
 - Demonstrate agent functionality
 
 ## Context and examples
-This agent can be used to demonstrate how agents work in VTCode plugins.
+This agent can be used to demonstrate how agents work in VT Code plugins.
 "#,
                     plugin_name = manifest.name
                 );
@@ -196,7 +196,7 @@ This is an example skill for the {plugin_name} plugin.
 
 ## Purpose
 
-This skill demonstrates how to create a model-invoked capability in VTCode.
+This skill demonstrates how to create a model-invoked capability in VT Code.
 "#,
                     plugin_name = manifest.name
                 );

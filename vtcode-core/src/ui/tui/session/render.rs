@@ -101,34 +101,7 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     // Render components
     let header_lines = session.header_lines();
     session.render_header(frame, header_area, &header_lines);
-    if session.show_timeline_pane {
-        let timeline_chunks =
-            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)])
-                .split(transcript_area);
-        render_transcript(session, frame, timeline_chunks[0]);
-        if session.show_logs {
-            render_log_view(session, frame, timeline_chunks[1]);
-        } else {
-            let block = Block::bordered()
-                .title("Logs hidden")
-                .border_type(terminal_capabilities::get_border_type())
-                .style(default_style(session))
-                .border_style(border_style(session));
-            let inner = block.inner(timeline_chunks[1]);
-            frame.render_widget(block, timeline_chunks[1]);
-
-            if inner.width >= 15 && inner.height >= 2 {
-                let logo_area = Rect::from((
-                    Position::new(
-                        inner.x + (inner.width.saturating_sub(15)) / 2,
-                        inner.y + (inner.height.saturating_sub(2)) / 2,
-                    ),
-                    Size::new(15, 2),
-                ));
-                frame.render_widget(RatatuiLogo::tiny(), logo_area);
-            }
-        }
-    } else if session.show_logs {
+    if session.show_logs {
         let split = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
             .split(transcript_area);
         render_transcript(session, frame, split[0]);

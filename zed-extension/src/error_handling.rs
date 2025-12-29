@@ -113,7 +113,7 @@ impl ExtensionError {
             "VT Code CLI not found in PATH".to_string(),
         );
         err.suggestions = vec![
-            "Install VTCode: cargo install vtcode".to_string(),
+            "Install VT Code: cargo install vtcode".to_string(),
             "Check PATH: echo $PATH".to_string(),
             "Verify installation: which vtcode".to_string(),
         ];
@@ -323,7 +323,7 @@ impl RecoveryStrategy {
             "VT Code CLI available in PATH".to_string(),
         )
         .add_step("Install Rust: https://rustup.rs/".to_string())
-        .add_step("Install VTCode: cargo install vtcode".to_string())
+        .add_step("Install VT Code: cargo install vtcode".to_string())
         .add_step("Verify: vtcode --version".to_string())
     }
 
@@ -519,7 +519,7 @@ mod tests {
     #[test]
     fn test_cli_not_found_recovery() {
         let recovery = RecoveryStrategy::cli_not_found_recovery();
-        assert!(recovery.name.contains("VTCode"));
+        assert!(recovery.name.contains("VT Code"));
         assert_eq!(recovery.steps.len(), 3);
     }
 

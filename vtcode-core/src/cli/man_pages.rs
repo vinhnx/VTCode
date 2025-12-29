@@ -1,6 +1,6 @@
 //! Man page generation for VT Code CLI using roff-rs
 //!
-//! This module provides functionality to generate Unix man pages for VTCode
+//! This module provides functionality to generate Unix man pages for VT Code
 //! commands and subcommands using the roff-rs library.
 
 use anyhow::{Context, Result, bail};
@@ -22,7 +22,7 @@ impl ManPageGenerator {
     pub fn generate_main_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
-            .control("TH", ["VTCODE", "1", &current_date, "VTCode", "User Commands"])
+            .control("TH", ["VTCODE", "1", &current_date, "VT Code", "User Commands"])
             .control("SH", ["NAME"])
             .text([roman("vtcode - Advanced coding agent with Decision Ledger")])
             .control("SH", ["SYNOPSIS"])
@@ -237,7 +237,7 @@ impl ManPageGenerator {
     fn generate_chat_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
-            .control("TH", ["VTCODE-CHAT", "1", &current_date, "VTCode", "User Commands"])
+            .control("TH", ["VTCODE-CHAT", "1", &current_date, "VT Code", "User Commands"])
             .control("SH", ["NAME"])
             .text([roman("vtcode-chat - Interactive AI coding assistant")])
             .control("SH", ["SYNOPSIS"])
@@ -272,7 +272,7 @@ impl ManPageGenerator {
     fn generate_ask_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
-            .control("TH", ["VTCODE-ASK", "1", &current_date, "VTCode", "User Commands"])
+            .control("TH", ["VTCODE-ASK", "1", &current_date, "VT Code", "User Commands"])
             .control("SH", ["NAME"])
             .text([roman("vtcode-ask - Single prompt mode without tools")])
             .control("SH", ["SYNOPSIS"])
@@ -313,7 +313,7 @@ impl ManPageGenerator {
                     "VTCODE-ANALYZE",
                     "1",
                     &current_date,
-                    "VTCode",
+                    "VT Code",
                     "User Commands",
                 ],
             )
@@ -376,7 +376,7 @@ impl ManPageGenerator {
                     "VTCODE-PERFORMANCE",
                     "1",
                     &current_date,
-                    "VTCode",
+                    "VT Code",
                     "User Commands",
                 ],
             )
@@ -434,7 +434,7 @@ impl ManPageGenerator {
                     "VTCODE-BENCHMARK",
                     "1",
                     &current_date,
-                    "VTCode",
+                    "VT Code",
                     "User Commands",
                 ],
             )
@@ -495,7 +495,7 @@ impl ManPageGenerator {
                     "VTCODE-CREATE-PROJECT",
                     "1",
                     &current_date,
-                    "VTCode",
+                    "VT Code",
                     "User Commands",
                 ],
             )
@@ -545,7 +545,13 @@ impl ManPageGenerator {
         let page = Roff::new()
             .control(
                 "TH",
-                ["VTCODE-INIT", "1", &current_date, "VTCode", "User Commands"],
+                [
+                    "VTCODE-INIT",
+                    "1",
+                    &current_date,
+                    "VT Code",
+                    "User Commands",
+                ],
             )
             .control("SH", ["NAME"])
             .text([roman(
@@ -561,7 +567,7 @@ impl ManPageGenerator {
             ])
             .control("SH", ["DESCRIPTION"])
             .text([
-                roman("Initialize a project with enhanced dot-folder structure for VTCode."),
+                roman("Initialize a project with enhanced dot-folder structure for VT Code."),
                 roman(" Creates project directory structure, config files, cache directories,"),
                 roman(" embeddings storage, and tree-sitter parser setup."),
             ])
@@ -592,7 +598,7 @@ impl ManPageGenerator {
     fn generate_man_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
-            .control("TH", ["VTCODE-MAN", "1", &current_date, "VTCode", "User Commands"])
+            .control("TH", ["VTCODE-MAN", "1", &current_date, "VT Code", "User Commands"])
             .control("SH", ["NAME"])
             .text([roman("vtcode-man - Generate or display man pages for VT Code commands")])
             .control("SH", ["SYNOPSIS"])

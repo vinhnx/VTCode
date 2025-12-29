@@ -1,6 +1,6 @@
 //! CLI Tool Bridge for External Tool Integration
 //!
-//! Bridges external CLI tools to VTCode's skill system, enabling integration
+//! Bridges external CLI tools to VT Code's skill system, enabling integration
 //! of any command-line tool with proper documentation into the agent harness.
 //!
 //! ## Features

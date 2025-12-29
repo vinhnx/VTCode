@@ -27,8 +27,6 @@ pub struct UiConfig {
     pub allow_tool_ansi: bool,
     #[serde(default = "default_inline_viewport_rows")]
     pub inline_viewport_rows: u16,
-    #[serde(default = "default_show_timeline_pane")]
-    pub show_timeline_pane: bool,
     #[serde(default)]
     pub status_line: StatusLineConfig,
     #[serde(default)]
@@ -44,7 +42,6 @@ impl Default for UiConfig {
             tool_output_spool_dir: None,
             allow_tool_ansi: default_allow_tool_ansi(),
             inline_viewport_rows: default_inline_viewport_rows(),
-            show_timeline_pane: default_show_timeline_pane(),
             status_line: StatusLineConfig::default(),
             keyboard_protocol: KeyboardProtocolConfig::default(),
         }
@@ -169,10 +166,6 @@ fn default_allow_tool_ansi() -> bool {
 
 fn default_inline_viewport_rows() -> u16 {
     crate::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS
-}
-
-fn default_show_timeline_pane() -> bool {
-    crate::constants::ui::INLINE_SHOW_TIMELINE_PANE
 }
 
 /// Kitty keyboard protocol configuration

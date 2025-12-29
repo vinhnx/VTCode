@@ -1,8 +1,8 @@
-//! Prototype crate that re-exports VTCode's LLM integration layer while
+//! Prototype crate that re-exports VT Code's LLM integration layer while
 //! introducing decoupled configuration traits for downstream consumers.
 //!
 //! The goal is to let external applications supply their own configuration
-//! sources without depending on VTCode's dot-config structures. Consumers can
+//! sources without depending on VT Code's dot-config structures. Consumers can
 //! implement [`config::ProviderConfig`] for their own types and then convert
 //! them into the factory configuration used internally by `vtcode-core`.
 //!

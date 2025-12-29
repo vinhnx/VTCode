@@ -100,6 +100,33 @@ impl ToolInventory {
         let name = registration.name().to_owned();
         let aliases = registration.metadata().aliases().to_vec();
 
+        // Validate aliases don't conflict with existing tool names BEFORE registration
+        for alias in &aliases {
+            if self.tools.contains_key(alias) {
+                return Err(anyhow::anyhow!(
+                    "Cannot register alias '{}' for tool '{}': alias conflicts with existing tool name",
+                    alias,
+                    name
+                ));
+            }
+            // Also check if it conflicts with an existing alias
+            let alias_lower = alias.to_ascii_lowercase();
+            if self.aliases.contains_key(&alias_lower) {
+                let existing_target = self.aliases.get(&alias_lower).unwrap();
+                // Only warn if the alias is being registered for a DIFFERENT tool
+                if existing_target != &name {
+                    return Err(anyhow::anyhow!(
+                        "Cannot register alias '{}' for tool '{}': alias already exists for tool '{}'",
+                        alias,
+                        name,
+                        existing_target
+                    ));
+                }
+                // If it's the same tool being re-registered, just skip it silently
+                continue;
+            }
+        }
+
         // Use entry API to check and insert in one operation
         use std::collections::hash_map::Entry;
         match self.tools.entry(name.clone()) {
@@ -130,28 +157,6 @@ impl ToolInventory {
 
         // Clean up old cache entries if needed
         self.cleanup_cache_if_needed();
-
-        // Validate aliases don't conflict with existing tool names (case-insensitive)
-        for alias in &aliases {
-            if self.tools.contains_key(alias) {
-                return Err(anyhow::anyhow!(
-                    "Cannot register alias '{}' for tool '{}': alias conflicts with existing tool name",
-                    alias,
-                    name
-                ));
-            }
-            // Also check if it conflicts with an existing alias
-            let alias_lower = alias.to_ascii_lowercase();
-            if self.aliases.contains_key(&alias_lower) {
-                let existing_target = self.aliases.get(&alias_lower).unwrap();
-                return Err(anyhow::anyhow!(
-                    "Cannot register alias '{}' for tool '{}': alias already exists for tool '{}'",
-                    alias,
-                    name,
-                    existing_target
-                ));
-            }
-        }
 
         Ok(())
     }

@@ -106,7 +106,7 @@ impl WebhookNotifier {
             .client
             .post(url)
             .header("Content-Type", "application/json")
-            .header("User-Agent", "VTCode-A2A/1.0");
+            .header("User-Agent", "VT Code-A2A/1.0");
 
         if let Some(auth_header) = auth {
             request = request.header("Authorization", auth_header);

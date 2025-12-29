@@ -1,6 +1,6 @@
-//! Marketplace configuration system for VTCode
+//! Marketplace configuration system for VT Code
 //!
-//! This module handles the integration of marketplace settings with VTCode's configuration system.
+//! This module handles the integration of marketplace settings with VT Code's configuration system.
 
 use std::path::PathBuf;
 
@@ -10,7 +10,7 @@ use tokio::fs;
 
 use crate::marketplace::{MarketplaceConfig, MarketplaceSource};
 
-/// Configuration for marketplace settings that integrates with VTCode's config system
+/// Configuration for marketplace settings that integrates with VT Code's config system
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MarketplaceSettings {
     /// List of configured marketplaces
@@ -283,7 +283,7 @@ impl MarketplaceSettings {
     }
 }
 
-/// Helper function to get the marketplace config path based on VTCode's config directory structure
+/// Helper function to get the marketplace config path based on VT Code's config directory structure
 pub fn get_marketplace_config_path(base_config_dir: &PathBuf) -> PathBuf {
     base_config_dir.join("marketplace.toml")
 }

@@ -1,7 +1,7 @@
 use vtcode_core::ui::styled::*;
 
 fn main() {
-    println!("Testing anstyle integration in VTCode:");
+    println!("Testing anstyle integration in VT Code:");
 
     // Test basic styles
     error("This is an error message");

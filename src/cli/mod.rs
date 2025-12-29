@@ -289,12 +289,12 @@ pub async fn handle_analyze_command(
 ) -> Result<()> {
     // Convert AnalysisType to string for the actual handler
     let depth = match analysis_type {
-        analyze::AnalysisType::Full |
-        analyze::AnalysisType::Structure |
-        analyze::AnalysisType::Complexity => "deep",
-        analyze::AnalysisType::Security |
-        analyze::AnalysisType::Performance |
-        analyze::AnalysisType::Dependencies => "standard",
+        analyze::AnalysisType::Full
+        | analyze::AnalysisType::Structure
+        | analyze::AnalysisType::Complexity => "deep",
+        analyze::AnalysisType::Security
+        | analyze::AnalysisType::Performance
+        | analyze::AnalysisType::Dependencies => "standard",
     };
 
     // Use "text" as default format
@@ -304,7 +304,8 @@ pub async fn handle_analyze_command(
         core_cfg,
         depth.to_string(),
         format.to_string(),
-    ).await
+    )
+    .await
 }
 
 pub async fn handle_trajectory_logs_command(

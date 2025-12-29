@@ -115,7 +115,7 @@
 //! }
 //! ```
 //!
-//! Modular tool system for VTCode
+//! Modular tool system for VT Code
 //!
 //! This module provides a composable architecture for agent tools, breaking down
 //! the monolithic implementation into focused, reusable components.

@@ -1,7 +1,7 @@
-/// RMCP transport layer wrappers for VTCode
+/// RMCP transport layer wrappers for VT Code
 ///
 /// This module provides wrappers around rmcp's transport types to integrate
-/// with VTCode's configuration and error handling.
+/// with VT Code's configuration and error handling.
 use anyhow::{Context, Result};
 use reqwest::header::HeaderMap;
 use rmcp::transport::StreamableHttpClientTransport;

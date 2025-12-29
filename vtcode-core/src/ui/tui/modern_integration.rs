@@ -15,7 +15,6 @@ pub struct ModernTuiConfig {
     pub placeholder: Option<String>,
     pub surface_preference: UiSurfacePreference,
     pub inline_rows: u16,
-    pub show_timeline_pane: bool,
     pub show_logs: bool,
     pub log_theme: Option<String>,
     pub event_callback: Option<InlineEventCallback>,
@@ -41,7 +40,6 @@ pub async fn run_modern_tui(
         config.theme,
         config.placeholder,
         config.inline_rows,
-        config.show_timeline_pane,
         config.show_logs,
     );
     session.set_log_receiver(log_rx);

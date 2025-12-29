@@ -24,7 +24,7 @@ mod cli;
 
 use cli::*;
 
-/// Main CLI structure for VTCode
+/// Main CLI structure for VT Code
 #[derive(Parser, Debug)]
 #[command(name = "vtcode", version, about = "minimal coding agent")]
 pub struct Cli {

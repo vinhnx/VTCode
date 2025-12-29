@@ -198,7 +198,9 @@ fn should_filter_log_message(message: &str) -> bool {
         "unsetting mallocstackloggingdirectory environment variable",
     ];
 
-    malloc_filters.iter().any(|&filter| lower_message.contains(&filter.to_lowercase()))
+    malloc_filters
+        .iter()
+        .any(|&filter| lower_message.contains(&filter.to_lowercase()))
 }
 
 pub fn make_tui_log_layer() -> TuiLogLayer {

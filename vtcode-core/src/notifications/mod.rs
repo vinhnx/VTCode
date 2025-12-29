@@ -5,8 +5,8 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::RwLock;
 
 /// Types of important events that trigger notifications
 #[derive(Debug, Clone, Serialize, Deserialize)]

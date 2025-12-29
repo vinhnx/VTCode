@@ -41,8 +41,7 @@ async fn test_real_ui_scenario_with_commands() {
         InlineTheme::default(),
         Some("Type your message here...".to_string()),
         Default::default(),
-        12,   // inline_rows
-        true, // show_timeline_pane
+        12, // inline_rows
         None,
         None,
     );

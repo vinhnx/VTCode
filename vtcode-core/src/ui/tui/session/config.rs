@@ -27,9 +27,6 @@ pub struct SessionConfig {
 /// UI appearance configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppearanceConfig {
-    /// Show timeline pane by default
-    pub show_timeline_pane: bool,
-
     /// Color theme to use
     pub theme: String,
 
@@ -52,7 +49,6 @@ pub struct AppearanceConfig {
 impl Default for AppearanceConfig {
     fn default() -> Self {
         Self {
-            show_timeline_pane: true,
             theme: "default".to_owned(),
             min_content_width: 40,
             min_navigation_width: 20,
@@ -217,10 +213,6 @@ impl SessionConfig {
         // This is a simplified version - in a real implementation, we'd have more sophisticated
         // parsing and validation for different configuration types
         match key {
-            "appearance.show_timeline_pane" => {
-                self.appearance.show_timeline_pane = value.parse()
-                    .map_err(|_| format!("Cannot parse '{}' as boolean", value))?;
-            }
             "behavior.max_input_lines" => {
                 self.behavior.max_input_lines = value.parse()
                     .map_err(|_| format!("Cannot parse '{}' as number", value))?;
@@ -237,8 +229,6 @@ impl SessionConfig {
     /// Gets a configuration value by key
     pub fn get_value(&self, key: &str) -> Option<String> {
         match key {
-            "appearance.show_timeline_pane" =>
-                Some(self.appearance.show_timeline_pane.to_string()),
             "behavior.max_input_lines" =>
                 Some(self.behavior.max_input_lines.to_string()),
             "performance.lru_cache_size" =>
@@ -278,7 +268,6 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = SessionConfig::new();
-        assert!(config.appearance.show_timeline_pane);
         assert_eq!(config.behavior.history_size, 100);
     }
 
@@ -286,7 +275,7 @@ mod tests {
     fn test_config_serialization() {
         let config = SessionConfig::new();
         let serialized = toml::to_string_pretty(&config).unwrap();
-        assert!(serialized.contains("show_timeline_pane"));
+        assert!(serialized.contains("theme"));
     }
 
     #[test]
@@ -326,11 +315,9 @@ mod tests {
         let mut config = SessionConfig::new();
 
         // Test setting custom values
-        config.appearance.show_timeline_pane = false;
         config.behavior.max_input_lines = 20;
         config.performance.lru_cache_size = 256;
 
-        assert_eq!(config.appearance.show_timeline_pane, false);
         assert_eq!(config.behavior.max_input_lines, 20);
         assert_eq!(config.performance.lru_cache_size, 256);
     }

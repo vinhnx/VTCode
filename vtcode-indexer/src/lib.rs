@@ -1,4 +1,4 @@
-//! Workspace-friendly file indexer extracted from VTCode.
+//! Workspace-friendly file indexer extracted from VT Code.
 //!
 //! `vtcode-indexer` offers a lightweight alternative to heavyweight
 //! search/indexing stacks. It recursively walks a workspace, computes
@@ -127,7 +127,7 @@ pub struct SimpleIndexerConfig {
 }
 
 impl SimpleIndexerConfig {
-    /// Builds a configuration using VTCode's legacy layout as defaults.
+    /// Builds a configuration using VT Code's legacy layout as defaults.
     pub fn new(workspace_root: PathBuf) -> Self {
         let index_dir = workspace_root.join(".vtcode").join("index");
         let vtcode_dir = workspace_root.join(".vtcode");

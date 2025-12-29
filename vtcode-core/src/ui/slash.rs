@@ -75,6 +75,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "skills",
             description: "Manage skills and plugins (usage: /skills list|load|unload|use)",
         },
+        SlashCommandInfo {
+            name: "agents",
+            description: "Create, edit, and manage subagents (usage: /agents [--create|--edit|--delete])",
+        },
         // Status and diagnostics
         SlashCommandInfo {
             name: "status",

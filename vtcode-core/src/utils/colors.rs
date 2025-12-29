@@ -1,4 +1,4 @@
-//! Color utilities for the VTCode
+//! Color utilities for the VT Code
 //!
 //! This module provides color manipulation capabilities using anstyle,
 //! which offers low-level ANSI styling with RGB and 256-color support.
