@@ -3,6 +3,38 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.55.1] - 2025-12-29
+
+
+### Features
+    - feat: add tokio dependency and improve error handling in background task execution
+    - feat(subagents): document subagent system and built-in agents; update README and changelog
+    - feat(statusline): add custom status line scripts and JSON input handling
+    - feat: add reverse search and background operation handling in TUI
+    - feat(output-styles): implement output styles feature with customizable behavior and response formats
+    - feat(hooks): add lifecycle hooks for file protection, command logging, code formatting, markdown formatting, and notifications
+    - feat(marketplace): add marketplace and plugin management commands
+    - feat(notifications): add toggle for terminal notifications in config
+    - feat(cli): add support for multiple workspaces and enhanced security controls
+    - feat(release): enhance GitHub account handling for CI environments
+
+
+### Refactors
+    - refactor: improve Linux checksum handling and release verification in scripts
+
+
+### Documentation
+    - docs: update changelog for v0.55.0 [skip ci]
+    - docs: update changelog for v0.54.4 [skip ci]
+    - docs: update changelog for v0.54.3 [skip ci]
+
+
+### Chores
+    - chore: release v0.55.0
+    - chore: release v0.54.4
+    - chore: update npm package.json to v0.54.3 [skip ci]
+    - chore: release v0.54.3
+    - chore: update npm package.json to v0.54.2 [skip ci]
 # [Version 0.55.0] - 2025-12-29
 
 
