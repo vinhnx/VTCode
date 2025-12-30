@@ -15,8 +15,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use vtcode_config::subagent::{
-    SubagentConfig, SubagentSource, SubagentsConfig,
-    discover_subagents_in_dir,
+    SubagentConfig, SubagentSource, SubagentsConfig, discover_subagents_in_dir,
 };
 
 /// Built-in subagent definitions

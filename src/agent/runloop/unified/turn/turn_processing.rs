@@ -10,8 +10,8 @@ use crate::agent::runloop::unified::turn::context::{
 use crate::agent::runloop::unified::turn::guards::{
     handle_turn_balancer, validate_required_tool_args,
 };
-use crate::agent::runloop::unified::ui_interaction::stream_and_render_response;
 use crate::agent::runloop::unified::turn::tool_outcomes::HandleTextResponseParams;
+use crate::agent::runloop::unified::ui_interaction::stream_and_render_response;
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use vtcode_core::core::trajectory::TrajectoryLogger;

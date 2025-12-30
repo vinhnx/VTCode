@@ -1,7 +1,4 @@
-use ratatui::{
-    prelude::*,
-    widgets::Clear,
-};
+use ratatui::{prelude::*, widgets::Clear};
 
 use super::Session;
 
