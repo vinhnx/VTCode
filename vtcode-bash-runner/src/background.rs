@@ -124,20 +124,19 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
 
     pub async fn cancel_task(&self, task_id: &str) -> Result<()> {
         let mut tasks = self.tasks.write().await;
-        if let Some(task) = tasks.get_mut(task_id) {
-            if let Some(cancel_tx) = task.cancel_tx.take() {
-                if cancel_tx.send(()).is_ok() {
-                    task.status = BackgroundTaskStatus::Failed;
-                    return Ok(());
-                }
-            }
+        if let Some(task) = tasks.get_mut(task_id)
+            && let Some(cancel_tx) = task.cancel_tx.take()
+            && cancel_tx.send(()).is_ok()
+        {
+            task.status = BackgroundTaskStatus::Failed;
+            return Ok(());
         }
-        anyhow::bail!("Task not found or already completed: {}", task_id);
+        anyhow::bail!("Task not found or already completed: {task_id}");
     }
 
     async fn generate_task_id(&self) -> String {
         let mut next_id = self.next_id.write().await;
-        let id = format!("bg-{}", *next_id);
+        let id = format!("bg-{next_id}");
         *next_id += 1;
         id
     }

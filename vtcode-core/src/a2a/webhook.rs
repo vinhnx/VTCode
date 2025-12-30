@@ -155,7 +155,7 @@ impl std::error::Error for WebhookError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::a2a::types::{Message, TaskState, TaskStatus};
+    use crate::a2a::types::{TaskState, TaskStatus};
 
     #[test]
     fn test_webhook_notifier_creation() {

@@ -164,6 +164,7 @@ pub mod traits;
 pub mod tree_sitter;
 pub mod types;
 pub mod web_fetch;
+pub mod validation;
 
 // Production-grade improvements modules
 pub mod async_middleware;

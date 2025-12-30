@@ -230,7 +230,7 @@ mod tests {
 
     fn create_test_session() -> Session {
         let theme = InlineTheme::default();
-        Session::new(theme, None, 24, true)
+        Session::new(theme, None, 24)
     }
 
     fn create_test_palette() -> SlashPalette {

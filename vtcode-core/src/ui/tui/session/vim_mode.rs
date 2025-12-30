@@ -310,6 +310,7 @@ pub enum VimAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::crossterm::event::KeyModifiers;
 
     #[test]
     fn test_initial_mode() {

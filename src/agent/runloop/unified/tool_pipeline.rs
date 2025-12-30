@@ -132,19 +132,25 @@ impl ToolPipelineOutcome {
                 modified_files,
                 command_success,
                 has_more,
-            } => ToolPipelineOutcome {
-                status: ToolExecutionStatus::Success {
-                    output: output.clone(),
-                    stdout: stdout.clone(),
-                    modified_files: modified_files.clone(),
+            } => {
+                // Clone for top-level fields, move originals into nested status
+                // This avoids double-cloning the same data
+                let stdout_copy = stdout.clone();
+                let modified_files_copy = modified_files.clone();
+                ToolPipelineOutcome {
+                    status: ToolExecutionStatus::Success {
+                        output,
+                        stdout,
+                        modified_files,
+                        command_success,
+                        has_more,
+                    },
+                    stdout: stdout_copy,
+                    modified_files: modified_files_copy,
                     command_success,
                     has_more,
-                },
-                stdout,
-                modified_files,
-                command_success,
-                has_more,
-            },
+                }
+            }
             other => ToolPipelineOutcome {
                 status: other,
                 stdout: None,
@@ -962,7 +968,6 @@ mod tests {
                 None,
                 vtcode_core::config::types::UiSurfacePreference::default(),
                 10,
-                false,
                 None,
                 None,
             )
@@ -1091,7 +1096,6 @@ mod tests {
 
         let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
         let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
-        let pruning_ledger = Arc::new(tokio::sync::RwLock::new(PruningDecisionLedger::new()));
         let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
         let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
         let approval_recorder = test_ctx.approval_recorder;
@@ -1165,7 +1169,6 @@ mod tests {
             None,
             vtcode_core::config::types::UiSurfacePreference::default(),
             10,
-            false,
             None,
             None,
         )
@@ -1175,7 +1178,6 @@ mod tests {
 
         let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
         let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
-        let pruning_ledger = Arc::new(tokio::sync::RwLock::new(PruningDecisionLedger::new()));
         let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
         let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
         let approval_recorder = ApprovalRecorder::new(workspace.clone());

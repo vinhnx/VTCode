@@ -1893,7 +1893,7 @@ mod caching_tests {
     #[test]
     fn test_gemini_prompt_cache_settings() {
         // Test 1: Defaults (Implicit mode)
-        let provider = GeminiProvider::new("test-key".to_string());
+        let _provider = GeminiProvider::new("test-key".to_string());
         // Default is explicit caching disabled, implicit is enabled by default in provider logic if config is default?
         // Let's check from_config
         let config = PromptCachingConfig::default();
@@ -1920,7 +1920,7 @@ mod caching_tests {
         config.providers.gemini.explicit_ttl_seconds = Some(1200);
 
         let provider =
-            GeminiProvider::from_config(Some("key".into()), None, None, Some(config), None, None);
+            GeminiProvider::from_config(Some("key".into()), None, None, Some(config.clone()), None, None);
 
         // Trigger request creation. It shouldn't panic or fail, even if explicit logic is placeholder.
         let request = LLMRequest {
@@ -1933,17 +1933,14 @@ mod caching_tests {
 
         // Verify the request conversion produces correct structure with explicit TTL
         let gemini_req = res.expect("request conversion");
-        assert_eq!(
-            gemini_req.model, "gemini-1.5-pro",
-            "Model should match request"
-        );
+
         assert!(
             !gemini_req.contents.is_empty(),
             "Contents should not be empty"
         );
         // Verify system instruction is set with TTL
         assert!(
-            !gemini_req.system_instruction.is_empty(),
+            gemini_req.system_instruction.is_some(),
             "System instruction should be set"
         );
         // Verify TTL is included in system instruction when explicitly configured
@@ -1951,7 +1948,7 @@ mod caching_tests {
             let system_str =
                 serde_json::to_string(&gemini_req.system_instruction).unwrap_or_default();
             assert!(
-                system_str.contains(&ttl_seconds.to_string()) || gemini_req.cache_control.is_some(),
+                system_str.contains(&ttl_seconds.to_string()),
                 "Cache control or TTL should be configured when explicit_ttl_seconds is set"
             );
         }

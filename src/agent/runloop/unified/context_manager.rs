@@ -9,12 +9,22 @@ use crate::agent::runloop::unified::incremental_system_prompt::{
     IncrementalSystemPrompt, SystemPromptConfig, SystemPromptContext,
 };
 
+/// Statistics tracked incrementally to avoid re-scanning history
+#[derive(Default, Clone)]
+struct ContextStats {
+    tool_usage_count: usize,
+    error_count: usize,
+    last_history_len: usize,
+}
+
 /// Simplified ContextManager without context trim and compaction functionality
 pub(crate) struct ContextManager {
     base_system_prompt: String,
     incremental_prompt_builder: IncrementalSystemPrompt,
     /// Loaded skills for prompt injection
     loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
+    /// Incrementally tracked statistics
+    cached_stats: ContextStats,
 }
 
 impl ContextManager {
@@ -27,6 +37,7 @@ impl ContextManager {
             base_system_prompt: base_system_prompt.clone(),
             incremental_prompt_builder: IncrementalSystemPrompt::new(),
             loaded_skills,
+            cached_stats: ContextStats::default(),
         }
     }
 
@@ -35,6 +46,28 @@ impl ContextManager {
     #[allow(dead_code)]
     pub(crate) fn pre_request_check(&self, _history: &[uni::Message]) -> PreRequestAction {
         PreRequestAction::Proceed
+    }
+
+    fn update_stats(&mut self, history: &[uni::Message]) {
+        let new_len = history.len();
+        if new_len < self.cached_stats.last_history_len {
+            // History was truncated or reset, full rescan
+            self.cached_stats = ContextStats::default();
+        } else if new_len == self.cached_stats.last_history_len {
+            return;
+        }
+
+        // Only scan new messages
+        for msg in &history[self.cached_stats.last_history_len..] {
+            if msg.tool_calls.is_some() || msg.tool_call_id.is_some() {
+                self.cached_stats.tool_usage_count += 1;
+            }
+            if msg.content.as_text().contains("error")
+               || msg.content.as_text().contains("failed") {
+                self.cached_stats.error_count += 1;
+            }
+        }
+        self.cached_stats.last_history_len = new_len;
     }
 
     pub(crate) async fn build_system_prompt(
@@ -46,6 +79,10 @@ impl ContextManager {
         if self.base_system_prompt.trim().is_empty() {
             bail!("Base system prompt is empty; cannot build prompt");
         }
+        
+        // Update statistics incrementally
+        self.update_stats(attempt_history);
+
         // Create configuration and context hashes for cache invalidation
         let config = SystemPromptConfig {
             base_prompt: self.base_system_prompt.clone(),
@@ -56,17 +93,8 @@ impl ContextManager {
 
         let context = SystemPromptContext {
             conversation_length: attempt_history.len(),
-            tool_usage_count: attempt_history
-                .iter()
-                .filter(|msg| msg.tool_calls.is_some() || msg.tool_call_id.is_some())
-                .count(),
-            error_count: attempt_history
-                .iter()
-                .filter(|msg| {
-                    msg.content.as_text().contains("error")
-                        || msg.content.as_text().contains("failed")
-                })
-                .count(),
+            tool_usage_count: self.cached_stats.tool_usage_count,
+            error_count: self.cached_stats.error_count,
             token_usage_ratio: 0.0,
             full_auto,
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),

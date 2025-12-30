@@ -291,7 +291,6 @@ async fn test_visual_header_variations() {
             Some("Working...".to_string()),
             Default::default(),
             8,
-            false,
             None,
             None,
         );
