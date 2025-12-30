@@ -590,6 +590,7 @@ pub(crate) async fn initialize_session_ui(
         session_state.base_system_prompt.clone(),
         (),
         session_state.loaded_skills.clone(),
+        vt_cfg.map(|cfg| cfg.agent.clone()),
     );
 
     let active_styles = theme::active_styles();

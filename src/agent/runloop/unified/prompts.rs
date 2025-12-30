@@ -8,6 +8,7 @@ pub(crate) async fn read_system_prompt(workspace: &Path, session_addendum: Optio
     // Tool information will be added when tools are initialized
     let mut prompt_context = PromptContext {
         workspace: Some(workspace.to_path_buf()),
+        skip_standard_instructions: true,
         ..Default::default()
     };
 

@@ -327,37 +327,46 @@ pub async fn compose_system_instruction_text(
         instruction.push_str("\n**IMPORTANT**: Respect these configuration policies. Commands not in the allow list will require user confirmation. Always inform users when actions require confirmation due to security policies.\n");
     }
 
-    if let Some(bundle) = instruction_bundle {
-        let home_ref = home_path.as_deref();
-        instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
-        instruction.push_str(
-            "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
-        );
-
-        for (index, segment) in bundle.segments.iter().enumerate() {
-            let scope = match segment.source.scope {
-                InstructionScope::Global => "global",
-                InstructionScope::Workspace => "workspace",
-                InstructionScope::Custom => "custom",
-            };
-            let display_path =
-                format_instruction_path(&segment.source.path, project_root, home_ref);
-
-            let _ = write!(
-                instruction,
-                "### {}. {} ({})\n\n",
-                index + 1,
-                display_path,
-                scope
-            );
-            instruction.push_str(segment.contents.trim());
-            instruction.push('\n');
+    if !prompt_context.map(|ctx| ctx.skip_standard_instructions).unwrap_or(false) {
+        if let Some(cfg) = vtcode_config {
+             if let Some(user_inst) = &cfg.agent.user_instructions {
+                instruction.push_str("\n\n## USER INSTRUCTIONS\n");
+                instruction.push_str(user_inst);
+            }
         }
 
-        if bundle.truncated {
+        if let Some(bundle) = instruction_bundle {
+            let home_ref = home_path.as_deref();
+            instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
             instruction.push_str(
-                "\n_Note: instruction content was truncated due to size limits. Review the source files for full details._",
+                "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
             );
+ 
+            for (index, segment) in bundle.segments.iter().enumerate() {
+                let scope = match segment.source.scope {
+                    InstructionScope::Global => "global",
+                    InstructionScope::Workspace => "workspace",
+                    InstructionScope::Custom => "custom",
+                };
+                let display_path =
+                    format_instruction_path(&segment.source.path, project_root, home_ref);
+ 
+                let _ = write!(
+                    instruction,
+                    "### {}. {} ({})\n\n",
+                    index + 1,
+                    display_path,
+                    scope
+                );
+                instruction.push_str(segment.contents.trim());
+                instruction.push('\n');
+            }
+ 
+            if bundle.truncated {
+                instruction.push_str(
+                    "\n_Note: instruction content was truncated due to size limits. Review the source files for full details._",
+                );
+            }
         }
     }
 

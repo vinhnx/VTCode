@@ -4,6 +4,9 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::instructions::{InstructionBundle, read_instruction_bundle};
+use crate::skills::model::SkillMetadata;
+use crate::skills::render::render_skills_section;
+use vtcode_config::core::AgentConfig;
 
 pub const PROJECT_DOC_SEPARATOR: &str = "\n\n--- project-doc ---\n\n";
 
@@ -83,6 +86,62 @@ pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<Pro
         max_bytes,
     })
     .await
+}
+
+pub async fn get_user_instructions(
+    config: &AgentConfig,
+    cwd: &Path,
+    skills: Option<&[SkillMetadata]>,
+) -> Option<String> {
+    let bundle = read_project_doc(cwd, config.project_doc_max_bytes)
+        .await
+        .ok()
+        .flatten();
+
+    let mut section = String::new();
+
+    if let Some(user_inst) = &config.user_instructions {
+        section.push_str("## USER INSTRUCTIONS\n");
+        section.push_str(user_inst);
+        section.push_str("\n\n");
+    }
+
+    if let Some(bundle) = bundle {
+        section.push_str("## PROJECT DOCUMENTATION\n");
+        section.push_str("Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n");
+        
+        for (i, segment) in bundle.sources.iter().enumerate() {
+            let display_path = segment.to_string_lossy();
+            let _ = std::fmt::Write::write_fmt(&mut section, format_args!("### {}. {}\n", i + 1, display_path));
+            // We need the actual content here, but ProjectDocBundle already has it concatenated.
+            // For a single comprehensive block, we can just use the bundle.contents if we don't need per-file headers,
+            // or we could refactor to keep them separate.
+        }
+        section.push_str(&bundle.contents);
+        section.push_str("\n\n");
+    }
+
+    if let Some(skills_text) = skills.and_then(render_skills_section) {
+        section.push_str(&skills_text);
+    }
+
+    if section.is_empty() {
+        None
+    } else {
+        Some(section)
+    }
+}
+
+pub fn merge_project_docs_with_skills(
+    project_doc: Option<String>,
+    skills_section: Option<String>,
+) -> Option<String> {
+    match (project_doc, skills_section) {
+        (Some(doc), Some(skills)) => Some(format!("{}\n\n{}", doc, skills)),
+        (Some(doc), None) => Some(doc),
+        (None, Some(skills)) => Some(skills),
+        (None, None) => None,
+    }
 }
 
 fn convert_bundle(bundle: InstructionBundle) -> ProjectDocBundle {

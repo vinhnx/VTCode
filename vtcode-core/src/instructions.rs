@@ -9,6 +9,7 @@ use serde::Serialize;
 use tracing::warn;
 
 const AGENTS_FILENAME: &str = "AGENTS.md";
+const AGENTS_OVERRIDE_FILENAME: &str = "AGENTS.override.md";
 const GLOBAL_CONFIG_DIRECTORY: &str = ".config/vtcode";
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -106,14 +107,24 @@ pub async fn discover_instruction_sources(
 
     let mut workspace_paths = Vec::new();
     loop {
+        let override_candidate = cursor.join(AGENTS_OVERRIDE_FILENAME);
         let agents_candidate = cursor.join(AGENTS_FILENAME);
-        if instruction_exists(&agents_candidate).await?
-            && seen_paths.insert(agents_candidate.clone())
-        {
-            workspace_paths.push(InstructionSource {
-                path: agents_candidate,
-                scope: InstructionScope::Workspace,
-            });
+
+        let chosen = if instruction_exists(&override_candidate).await? {
+            Some(override_candidate)
+        } else if instruction_exists(&agents_candidate).await? {
+            Some(agents_candidate)
+        } else {
+            None
+        };
+
+        if let Some(path) = chosen {
+            if seen_paths.insert(path.clone()) {
+                workspace_paths.push(InstructionSource {
+                    path,
+                    scope: InstructionScope::Workspace,
+                });
+            }
         }
 
         if cursor == root {
@@ -435,6 +446,30 @@ mod tests {
         assert_eq!(sources.len(), 1);
         assert!(matches!(sources[0].scope, InstructionScope::Custom));
         assert_eq!(sources[0].path, personal);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn prefers_override_over_base() -> Result<()> {
+        let workspace = tempdir()?;
+        let project_root = workspace.path();
+
+        let base_rule = project_root.join(AGENTS_FILENAME);
+        std::fs::write(&base_rule, "base content")?;
+
+        let override_rule = project_root.join(AGENTS_OVERRIDE_FILENAME);
+        std::fs::write(&override_rule, "override content")?;
+
+        let sources = discover_instruction_sources(project_root, project_root, None, &[]).await?;
+        assert_eq!(sources.len(), 1);
+        let override_rule_canon = std::fs::canonicalize(&override_rule)?;
+        assert_eq!(sources[0].path, override_rule_canon);
+
+        let bundle = read_instruction_bundle(project_root, project_root, None, &[], 1024)
+            .await?
+            .expect("expected bundle");
+        assert_eq!(bundle.combined_text(), "override content");
 
         Ok(())
     }
