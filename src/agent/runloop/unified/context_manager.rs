@@ -25,6 +25,8 @@ pub(crate) struct ContextManager {
     loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
     /// Incrementally tracked statistics
     cached_stats: ContextStats,
+    /// Agent configuration
+    agent_config: Option<vtcode_config::core::AgentConfig>,
 }
 
 impl ContextManager {
@@ -32,12 +34,14 @@ impl ContextManager {
         base_system_prompt: String,
         _trim_config: (), // Removed trim config parameter
         loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
+        agent_config: Option<vtcode_config::core::AgentConfig>,
     ) -> Self {
         Self {
             base_system_prompt: base_system_prompt.clone(),
             incremental_prompt_builder: IncrementalSystemPrompt::new(),
             loaded_skills,
             cached_stats: ContextStats::default(),
+            agent_config,
         }
     }
 
@@ -109,6 +113,7 @@ impl ContextManager {
                 context.hash(),
                 retry_attempts,
                 &context,
+                self.agent_config.as_ref(),
             )
             .await;
 
@@ -129,7 +134,7 @@ mod tests {
 
     #[tokio::test]
     async fn pre_request_check_returns_proceed() {
-        let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())));
+        let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
 
         let history = vec![uni::Message::user("hello".to_string())];
         assert_eq!(
@@ -141,7 +146,7 @@ mod tests {
     #[tokio::test]
     async fn build_system_prompt_with_empty_base_prompt_fails() {
         let mut manager =
-            ContextManager::new("".to_string(), (), Arc::new(RwLock::new(HashMap::new())));
+            ContextManager::new("".to_string(), (), Arc::new(RwLock::new(HashMap::new())), None);
 
         let result = manager.build_system_prompt(&[], 0, false).await;
         assert!(result.is_err());

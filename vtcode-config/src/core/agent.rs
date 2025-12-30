@@ -171,6 +171,10 @@ pub struct AgentConfig {
     #[serde(default = "default_include_working_directory")]
     pub include_working_directory: bool,
 
+    /// Custom instructions provided by the user via configuration
+    #[serde(default)]
+    pub user_instructions: Option<String>,
+
     /// Enable Vim mode for enhanced text editing (default: false)
     #[serde(default = "default_vim_mode_enabled")]
     pub vim_mode_enabled: bool,
@@ -212,6 +216,7 @@ impl Default for AgentConfig {
             include_temporal_context: default_include_temporal_context(),
             temporal_context_use_utc: false, // Default to local time
             include_working_directory: default_include_working_directory(),
+            user_instructions: None,
             vim_mode_enabled: default_vim_mode_enabled(),
         }
     }

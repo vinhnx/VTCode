@@ -37,7 +37,6 @@ impl IncrementalSystemPrompt {
         }
     }
 
-    /// Get the current system prompt, rebuilding only if necessary
     pub async fn get_system_prompt(
         &self,
         base_system_prompt: &str,
@@ -45,9 +44,10 @@ impl IncrementalSystemPrompt {
         context_hash: u64,
         retry_attempts: usize,
         context: &SystemPromptContext,
+        agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
         let read_guard = self.cached_prompt.read().await;
-
+ 
         // Check if we can use the cached version
         if read_guard.config_hash == config_hash
             && read_guard.context_hash == context_hash
@@ -56,10 +56,10 @@ impl IncrementalSystemPrompt {
         {
             return read_guard.content.clone();
         }
-
+ 
         // Drop read lock before acquiring write lock
         drop(read_guard);
-
+ 
         // Rebuild the prompt
         self.rebuild_prompt(
             base_system_prompt,
@@ -67,11 +67,12 @@ impl IncrementalSystemPrompt {
             context_hash,
             retry_attempts,
             context,
+            agent_config,
         )
         .await
     }
 
-    /// Force rebuild of the system prompt
+    /// Rebuild the prompt
     pub async fn rebuild_prompt(
         &self,
         base_system_prompt: &str,
@@ -79,9 +80,10 @@ impl IncrementalSystemPrompt {
         context_hash: u64,
         retry_attempts: usize,
         context: &SystemPromptContext,
+        agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
         let mut write_guard = self.cached_prompt.write().await;
-
+ 
         // Double-check after acquiring write lock
         if write_guard.config_hash == config_hash
             && write_guard.context_hash == context_hash
@@ -90,30 +92,35 @@ impl IncrementalSystemPrompt {
         {
             return write_guard.content.clone();
         }
-
+ 
         // Build the new prompt
-        let new_content = self.build_prompt_content(base_system_prompt, retry_attempts, context);
-
+        let new_content = self.build_prompt_content(base_system_prompt, retry_attempts, context, agent_config).await;
+ 
         // Update cache
         write_guard.content = new_content.clone();
         write_guard.config_hash = config_hash;
         write_guard.context_hash = context_hash;
         write_guard.retry_attempts = retry_attempts;
-
+ 
         new_content
     }
-
+ 
     /// Actually build the prompt content (this is where the logic goes)
-    fn build_prompt_content(
+    async fn build_prompt_content(
         &self,
         base_system_prompt: &str,
         retry_attempts: usize,
         context: &SystemPromptContext,
+        agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
         use std::fmt::Write;
-
-        let mut prompt = String::with_capacity(base_system_prompt.len() + 512);
+        use vtcode_core::project_doc::get_user_instructions;
+        use vtcode_core::skills::types::SkillMetadata;
+ 
+        let mut prompt = String::with_capacity(base_system_prompt.len() + 1024);
         prompt.push_str(base_system_prompt);
+
+        // ...
 
         // Concise retry/error context
         if retry_attempts > 0 {
@@ -156,76 +163,34 @@ impl IncrementalSystemPrompt {
             }
         }
 
-        // Skill System Guide (Architectural context for the agent)
-        let _ = writeln!(prompt, "\n# HOW TO USE SKILLS
-VT Code uses a tiered skill system to optimize context window usage.
-1. **Discovery**: Use `list_skills` (with optional `query` or `variety`) to find capabilities.
-2. **Activation**: Use `load_skill(name=\"...\")` to activate a skill. This:
-   - Registers associated tools into your available toolset.
-   - Provides detailed `Instructions` (SKILL.md) for specialized workflows.
-3. **Execution**: Avoid manual low-level commands if an `AgentSkill` exists for the task.
-4. **Resources**: If a skill references additional files (scripts/ or references/), use `load_skill_resource` to read them on-demand.");
-
-        // Skills Section
-        let agent_skills: Vec<_> = context
-            .discovered_skills
-            .iter()
-            .filter(|s| {
-                matches!(
-                    s.variety,
-                    vtcode_core::skills::types::SkillVariety::AgentSkill
-                )
-            })
-            .collect();
-
-        if !agent_skills.is_empty() {
-            let _ = writeln!(prompt, "\n# AVAILABLE SKILLS");
-            for skill in agent_skills {
-                let status = if !skill.instructions.is_empty() {
-                    " [ACTIVE]"
-                } else {
-                    ""
-                };
-                let _ = writeln!(prompt, "## {}{}", skill.name(), status);
-                let _ = writeln!(prompt, "{}", skill.description());
-                if skill.instructions.is_empty() {
-                    let _ = writeln!(
-                        prompt,
-                        "Use `load_skill(\"{}\")` to see full instructions.",
-                        skill.name()
-                    );
-                }
+        // Unified Instructions (Project Docs, User Inst, Skills)
+        if let Some(cfg) = agent_config {
+            let skill_metadata: Vec<SkillMetadata> = context
+                .discovered_skills
+                .iter()
+                .map(|s| SkillMetadata {
+                    name: s.manifest.name.clone(),
+                    description: s.manifest.description.clone(),
+                    short_description: s.manifest.when_to_use.clone(),
+                    path: s.path.clone(),
+                    scope: s.scope,
+                    manifest: Some(s.manifest.clone()),
+                })
+                .collect();
+            let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            if let Some(unified) =
+                get_user_instructions(cfg, &cwd, Some(&skill_metadata[..])).await
+            {
+                let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{}", unified);
             }
         }
-
-        let system_utils: Vec<_> = context
-            .discovered_skills
-            .iter()
-            .filter(|s| {
-                matches!(
-                    s.variety,
-                    vtcode_core::skills::types::SkillVariety::SystemUtility
-                )
-            })
-            .collect();
-
-        if !system_utils.is_empty() {
-            let count = system_utils.len();
-            // Get a few examples to show the agent what kind of tools are available
-            let examples: Vec<_> = system_utils.iter().take(5).map(|s| s.name()).collect();
-            let examples_str = if examples.len() < count {
-                format!("{}, ...", examples.join(", "))
-            } else {
-                examples.join(", ")
-            };
-
-            let _ = writeln!(
-                prompt,
-                "\n# SYSTEM UTILITIES\n- {} tools available ({}) via `list_skills` and `load_skill`.",
-                count, examples_str
-            );
+ else {
+            // Fallback if config is missing (basic skills rendering)
+            if !context.discovered_skills.is_empty() {
+                let _ = writeln!(prompt, "\n# SKILLS\nUse `list_skills` to see available capabilities.");
+            }
         }
-
+ 
         prompt
     }
 
@@ -327,16 +292,16 @@ mod tests {
 
         // First call - should build from scratch
         let prompt1 = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context)
+            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
             .await;
         assert_eq!(prompt1, base_prompt);
-
+ 
         // Second call with same parameters - should use cache
         let prompt2 = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context)
+            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
             .await;
         assert_eq!(prompt2, base_prompt);
-
+ 
         // Verify cache stats
         let (is_cached, size) = prompt_builder.cache_stats().await;
         assert!(is_cached);
@@ -357,15 +322,15 @@ mod tests {
         };
         // Build initial prompt
         let _ = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context)
+            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
             .await;
-
+ 
         // Rebuild with different retry attempts
         let prompt = prompt_builder
-            .rebuild_prompt(base_prompt, 1, 1, 1, &context)
+            .rebuild_prompt(base_prompt, 1, 1, 1, &context, None)
             .await;
-
-        assert!(prompt.contains("attempt #1"));
+ 
+        assert!(prompt.contains("Retry #1"));
     }
 
     #[tokio::test]
