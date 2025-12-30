@@ -1,6 +1,5 @@
 use std::collections::HashSet;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+
 use std::time::SystemTime;
 
 use anyhow::{Result, ensure};
@@ -40,21 +39,29 @@ impl ZeroTrustContext {
     }
 }
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use ring::hmac;
+
 /// Integrity tag that can be recomputed to detect tampering.
-#[derive(Debug, Clone)]
-pub struct IntegrityTag(u64);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntegrityTag(String);
 
 impl IntegrityTag {
     pub fn new(payload: &Value, salt: &str) -> Self {
-        let mut hasher = DefaultHasher::new();
-        payload.to_string().hash(&mut hasher);
-        salt.hash(&mut hasher);
-        IntegrityTag(hasher.finish())
+        let key = hmac::Key::new(hmac::HMAC_SHA256, salt.as_bytes());
+        let signature = hmac::sign(&key, payload.to_string().as_bytes());
+        IntegrityTag(STANDARD.encode(signature.as_ref()))
     }
 
     pub fn verify(&self, payload: &Value, salt: &str) -> bool {
-        let expected = IntegrityTag::new(payload, salt);
-        expected.0 == self.0
+        let key = hmac::Key::new(hmac::HMAC_SHA256, salt.as_bytes());
+        let expected_signature_bytes = match STANDARD.decode(&self.0) {
+            Ok(bytes) => bytes,
+            Err(_) => return false,
+        };
+        
+        hmac::verify(&key, payload.to_string().as_bytes(), &expected_signature_bytes).is_ok()
     }
 }
 

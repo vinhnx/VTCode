@@ -363,7 +363,7 @@ async fn cancel_agent_task(agent_url: String, task_id: String) -> anyhow::Result
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Intentionally empty or specialized imports if needed later
 
     #[tokio::test]
     async fn test_discover_agent_display() {

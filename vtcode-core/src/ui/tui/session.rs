@@ -767,7 +767,6 @@ mod tests {
     use super::*;
     use crate::ui::tui::style::ratatui_style_from_inline;
     use crate::ui::tui::{InlineSegment, InlineTextStyle, InlineTheme};
-    use chrono::Utc;
     use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{
         Terminal,
@@ -801,7 +800,7 @@ mod tests {
     }
 
     fn session_with_input(input: &str, cursor: usize) -> Session {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.set_input(input.to_string());
         session.set_cursor(cursor);
         session
@@ -871,7 +870,7 @@ mod tests {
 
     #[test]
     fn arrow_keys_navigate_input_history() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         session.set_input("first message".to_string());
         let submit_first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -906,7 +905,7 @@ mod tests {
 
     #[test]
     fn shift_enter_inserts_newline() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         session.input_manager.set_content("queued".to_string());
 
@@ -921,7 +920,7 @@ mod tests {
 
     #[test]
     fn paste_preserves_all_newlines() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         let pasted = (0..15)
             .map(|i| format!("line {}", i))
             .collect::<Vec<_>>()
@@ -935,7 +934,7 @@ mod tests {
 
     #[test]
     fn selecting_prompt_via_palette_updates_input_with_slash_command() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         let mut palette = PromptPalette::new();
         palette.append_entries(vec![prompt_palette::PromptEntry {
@@ -960,7 +959,7 @@ mod tests {
 
     #[test]
     fn control_enter_queues_submission() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         session.set_input("queued".to_string());
 
@@ -970,7 +969,7 @@ mod tests {
 
     #[test]
     fn command_enter_queues_submission() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         session.set_input("queued".to_string());
 
@@ -980,7 +979,7 @@ mod tests {
 
     #[test]
     fn consecutive_duplicate_submissions_not_stored_twice() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         session.set_input("repeat".to_string());
         let first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1078,7 +1077,7 @@ mod tests {
 
     #[test]
     fn control_e_does_not_launch_editor() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL);
         let result = session.process_key(event);
@@ -1141,7 +1140,7 @@ mod tests {
 
     #[test]
     fn streaming_new_lines_preserves_scrolled_view() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -1163,7 +1162,7 @@ mod tests {
 
     #[test]
     fn streaming_segments_render_incrementally() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         session.push_line(InlineMessageKind::Agent, vec![make_segment("")]);
 
@@ -1178,7 +1177,7 @@ mod tests {
 
     #[test]
     fn page_up_reveals_prior_lines_until_buffer_start() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -1222,7 +1221,7 @@ mod tests {
 
     #[test]
     fn resizing_viewport_clamps_scroll_offset() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -1246,7 +1245,7 @@ mod tests {
 
     #[test]
     fn scroll_end_displays_full_final_paragraph() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         let total = LINE_COUNT * 5;
 
         for index in 1..=total {
@@ -1289,7 +1288,7 @@ mod tests {
 
     #[test]
     fn user_messages_render_with_dividers() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(InlineMessageKind::User, vec![make_segment("Hi")]);
 
         let width = 10;
@@ -1319,7 +1318,7 @@ mod tests {
 
     #[test]
     fn header_lines_include_provider_model_and_metadata() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.header_context.provider = format!("{}xAI", ui::HEADER_PROVIDER_PREFIX);
         session.header_context.model = format!("{}grok-4-fast", ui::HEADER_MODEL_PREFIX);
         session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
@@ -1359,7 +1358,7 @@ mod tests {
 
     #[test]
     fn header_highlights_collapse_to_single_line() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.header_context.highlights = vec![
             InlineHeaderHighlight {
                 title: "Keyboard Shortcuts".to_string(),
@@ -1397,7 +1396,7 @@ mod tests {
 
     #[test]
     fn header_highlight_summary_truncates_long_entries() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         let limit = ui::HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS;
         let long_entry = "A".repeat(limit + 5);
         session.header_context.highlights = vec![InlineHeaderHighlight {
@@ -1431,7 +1430,7 @@ mod tests {
 
     #[test]
     fn header_highlight_summary_hides_truncated_command_segments() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.header_context.highlights = vec![InlineHeaderHighlight {
             title: String::new(),
             lines: vec![
@@ -1463,7 +1462,7 @@ mod tests {
 
     #[test]
     fn header_height_expands_when_wrapping_required() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.header_context.provider = format!(
             "{}Example Provider With Extended Label",
             ui::HEADER_PROVIDER_PREFIX
@@ -1507,7 +1506,7 @@ mod tests {
 
     #[test]
     fn agent_messages_include_left_padding() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
 
         let lines = session.reflow_transcript_lines(VIEW_WIDTH);
@@ -1535,7 +1534,7 @@ mod tests {
 
     #[test]
     fn wrap_line_splits_double_width_graphemes() {
-        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         let style = session.default_style();
         let line = Line::from(vec![Span::styled(
             "你好世界".to_string(),
@@ -1550,7 +1549,7 @@ mod tests {
 
     #[test]
     fn wrap_line_keeps_explicit_blank_rows() {
-        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         let style = session.default_style();
         let line = Line::from(vec![Span::styled(
             "top\n\nbottom".to_string(),
@@ -1568,7 +1567,7 @@ mod tests {
 
     #[test]
     fn wrap_line_preserves_characters_wider_than_viewport() {
-        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         let style = session.default_style();
         let line = Line::from(vec![Span::styled(
             "hi".to_string(),
@@ -1583,7 +1582,7 @@ mod tests {
 
     #[test]
     fn wrap_line_discards_carriage_return_before_newline() {
-        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         let style = session.default_style();
         let line = Line::from(vec![Span::styled(
             "foo\r\nbar".to_string(),
@@ -1598,7 +1597,7 @@ mod tests {
 
     #[test]
     fn tool_code_fence_markers_are_skipped() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.append_inline(
             InlineMessageKind::Tool,
             InlineSegment {
@@ -1627,7 +1626,7 @@ mod tests {
 
     #[test]
     fn pty_block_omits_placeholder_when_empty() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(InlineMessageKind::Pty, Vec::new());
 
         let lines = session.reflow_pty_lines(0, 80);
@@ -1636,7 +1635,7 @@ mod tests {
 
     #[test]
     fn pty_block_hides_until_output_available() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(InlineMessageKind::Pty, Vec::new());
 
         assert!(session.reflow_pty_lines(0, 80).is_empty());
@@ -1655,7 +1654,7 @@ mod tests {
 
     #[test]
     fn pty_block_skips_status_only_sequence() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(InlineMessageKind::Pty, Vec::new());
         session.push_line(InlineMessageKind::Pty, Vec::new());
 
@@ -1665,7 +1664,7 @@ mod tests {
 
     #[test]
     fn transcript_shows_content_when_viewport_smaller_than_padding() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         for index in 0..10 {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -1686,7 +1685,7 @@ mod tests {
 
     #[test]
     fn pty_scroll_preserves_order() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
         for index in 0..200 {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -1735,7 +1734,7 @@ mod tests {
         let mut theme = InlineTheme::default();
         theme.primary = Some(accent);
 
-        let mut session = Session::new(theme, None, VIEW_ROWS, true);
+        let mut session = Session::new(theme, None, VIEW_ROWS);
         session.labels.agent = Some("Agent".to_string());
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
 
@@ -1774,7 +1773,7 @@ mod tests {
 
     #[test]
     fn timeline_hidden_keeps_navigation_unselected() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, false);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
 
         let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
@@ -1788,7 +1787,7 @@ mod tests {
 
     #[test]
     fn queued_inputs_overlay_bottom_rows() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(
             InlineMessageKind::Agent,
             vec![make_segment("Latest response from agent")],
@@ -1831,7 +1830,7 @@ mod tests {
 
     #[test]
     fn timeline_visible_selects_latest_item() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(InlineMessageKind::Agent, vec![make_segment("First")]);
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Second")]);
 
@@ -1847,7 +1846,7 @@ mod tests {
     #[test]
     fn tool_detail_renders_with_border_and_body_style() {
         let theme = themed_inline_colors();
-        let mut session = Session::new(theme, None, VIEW_ROWS, true);
+        let mut session = Session::new(theme, None, VIEW_ROWS);
         let detail_style = InlineTextStyle::default().italic();
         session.push_line(
             InlineMessageKind::Tool,

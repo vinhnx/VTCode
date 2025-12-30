@@ -6,7 +6,6 @@
 #[cfg(test)]
 mod memory_profiling {
     use crate::cache::{CacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
-    use std::collections::HashMap;
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     struct MemTestKey(String);

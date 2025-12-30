@@ -350,7 +350,6 @@ mod tests {
             None,
             vtcode_core::config::types::UiSurfacePreference::default(),
             10,
-            false,
             None,
             None,
         )
@@ -433,7 +432,6 @@ mod tests {
             None,
             vtcode_core::config::types::UiSurfacePreference::default(),
             10,
-            false,
             None,
             None,
         )

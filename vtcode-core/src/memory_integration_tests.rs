@@ -10,7 +10,7 @@ mod memory_integration {
 
     /// Helper to measure current RSS in kilobytes (Unix/macOS only)
     #[cfg(unix)]
-    fn get_rss_kb() -> u64 {
+    fn _get_rss_kb() -> u64 {
         use std::fs;
         if let Ok(status) = fs::read_to_string("/proc/self/status") {
             for line in status.lines() {
@@ -25,7 +25,7 @@ mod memory_integration {
     }
 
     #[cfg(not(unix))]
-    fn get_rss_kb() -> u64 {
+    fn _get_rss_kb() -> u64 {
         0 // Placeholder for non-Unix systems
     }
 
@@ -43,7 +43,7 @@ mod memory_integration {
     #[test]
     fn test_pty_scrollback_bounded_growth() {
         const MAX_BUFFER_SIZE: usize = 25 * 1024 * 1024; // 25MB limit (post-optimization)
-        const LINE_SIZE: usize = 1024; // 1KB per line
+        const _LINE_SIZE: usize = 1024; // 1KB per line
         const NUM_LINES: usize = 50_000; // 50k lines = 50MB if unbounded
 
         let mut scrollback: VecDeque<String> = VecDeque::new();
@@ -272,7 +272,7 @@ mod memory_integration {
     fn test_transcript_width_cache_bounded() {
         const MAX_WIDTH_CACHES: usize = 3;
         const NUM_MESSAGES: usize = 1000;
-        const MESSAGE_SIZE: usize = 1000; // bytes per reflowed message
+        const _MESSAGE_SIZE: usize = 1000; // bytes per reflowed message
 
         // Simulate what TranscriptReflowCache does
         let mut width_caches: std::collections::HashMap<u16, Vec<Vec<String>>> =

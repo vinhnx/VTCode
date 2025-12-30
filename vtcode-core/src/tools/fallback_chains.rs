@@ -251,6 +251,12 @@ impl FallbackChainExecutor {
                     EnhancedToolResult::new(value, metadata.clone(), chain.primary.tool.clone());
 
                 if metadata.confidence >= chain.primary.min_confidence {
+                    tracing::info!(
+                        chain = %chain.name,
+                        tool = %chain.primary.tool,
+                        confidence = metadata.confidence,
+                        "Primary tool succeeded"
+                    );
                     results.push(result);
                     stop_reason = ChainStopReason::PrimarySuccess;
                     return FallbackChainResult {
@@ -263,6 +269,13 @@ impl FallbackChainExecutor {
                     };
                 }
 
+                tracing::warn!(
+                    chain = %chain.name,
+                    tool = %chain.primary.tool,
+                    confidence = metadata.confidence,
+                    min_confidence = chain.primary.min_confidence,
+                    "Primary tool returned low-confidence result, trying fallbacks"
+                );
                 results.push(result);
 
                 // Check abort conditions
@@ -279,6 +292,11 @@ impl FallbackChainExecutor {
                 }
             }
             None => {
+                tracing::warn!(
+                    chain = %chain.name,
+                    tool = %chain.primary.tool,
+                    "Primary tool failed"
+                );
                 // Primary failed
                 if should_abort_chain(&chain.abort_conditions, attempts, &results, start) {
                     stop_reason = ChainStopReason::AbortCondition;
@@ -322,6 +340,12 @@ impl FallbackChainExecutor {
                         EnhancedToolResult::new(value, metadata.clone(), fallback.tool.clone());
 
                     if metadata.confidence >= fallback.min_confidence {
+                        tracing::info!(
+                            chain = %chain.name,
+                            tool = %fallback.tool,
+                            confidence = metadata.confidence,
+                            "Fallback tool succeeded"
+                        );
                         results.push(result);
                         stop_reason = ChainStopReason::FallbackSuccess;
 
@@ -329,6 +353,13 @@ impl FallbackChainExecutor {
                             break;
                         }
                     } else {
+                        tracing::debug!(
+                            chain = %chain.name,
+                            tool = %fallback.tool,
+                            confidence = metadata.confidence,
+                            min_confidence = fallback.min_confidence,
+                            "Fallback tool returned low-confidence result"
+                        );
                         results.push(result);
                     }
 
@@ -339,6 +370,11 @@ impl FallbackChainExecutor {
                     }
                 }
                 None => {
+                    tracing::debug!(
+                        chain = %chain.name,
+                        tool = %fallback.tool,
+                        "Fallback tool failed"
+                    );
                     // Tool failed, continue to next fallback
                     if should_abort_chain(&chain.abort_conditions, attempts, &results, start) {
                         stop_reason = ChainStopReason::AbortCondition;

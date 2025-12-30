@@ -695,7 +695,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_dynamic_guidelines_tool_preferences() {
-        let mut config = VTCodeConfig::default();
+        let config = VTCodeConfig::default();
 
         let mut ctx = PromptContext::default();
         ctx.add_tool("run_pty_cmd".to_string());

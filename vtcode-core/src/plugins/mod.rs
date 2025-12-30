@@ -37,7 +37,7 @@ pub type PluginResult<T> = Result<T, PluginError>;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Intentionally empty test module for compilation check
 
     #[test]
     fn test_plugin_system_compilation() {

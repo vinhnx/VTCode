@@ -41,14 +41,14 @@ use std::time::Instant;
 
 /// Configuration for the limiter.
 #[derive(Debug, Clone, Copy)]
-struct Config {
+pub struct RateLimiterConfig {
     /// Allowed calls per second.
-    per_sec: u32,
+    pub per_sec: u32,
     /// Maximum burst capacity.
-    burst: u32,
+    pub burst: u32,
 }
 
-impl Default for Config {
+impl Default for RateLimiterConfig {
     fn default() -> Self {
         // Environment variables are optional; fall back to sensible defaults.
         let per_sec = std::env::var("VTTOOL_RATE_LIMIT")
@@ -59,13 +59,13 @@ impl Default for Config {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(5);
-        Config { per_sec, burst }
+        RateLimiterConfig { per_sec, burst }
     }
 }
 
 /// Simple token‑bucket implementation.
 pub struct RateLimiterInner {
-    config: Config,
+    config: RateLimiterConfig,
     /// Current number of available tokens.
     tokens: u32,
     /// When the bucket was last refilled.
@@ -74,7 +74,10 @@ pub struct RateLimiterInner {
 
 impl RateLimiterInner {
     fn new() -> Self {
-        let config = Config::default();
+        Self::new_with_config(RateLimiterConfig::default())
+    }
+
+    pub fn new_with_config(config: RateLimiterConfig) -> Self {
         Self {
             config,
             tokens: config.burst,
@@ -83,24 +86,31 @@ impl RateLimiterInner {
     }
 
     /// Refill tokens based on elapsed time.
+    /// Uses fractional refill based on milliseconds for smoother rate limiting.
     fn refill(&mut self) {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_refill);
-        if elapsed.is_zero() {
+        
+        // Calculate refill based on milliseconds for finer granularity
+        let millis = elapsed.as_millis() as u64;
+        
+        // Minimum refill interval of 50ms to avoid excessive overhead
+        if millis < 50 {
             return;
         }
-        // Compute how many whole seconds have passed.
-        let secs = elapsed.as_secs() as u32;
-        if secs == 0 {
-            return;
+        
+        // Fractional refill: per_sec tokens per 1000ms
+        // Using integer math: tokens = (per_sec * millis) / 1000
+        let added = ((self.config.per_sec as u64).saturating_mul(millis) / 1000) as u32;
+        
+        if added > 0 {
+            self.tokens = (self.tokens + added).min(self.config.burst);
+            self.last_refill = now;
         }
-        let added = secs.saturating_mul(self.config.per_sec);
-        self.tokens = (self.tokens + added).min(self.config.burst);
-        self.last_refill = now;
     }
 
     /// Attempt to acquire a single token.
-    fn try_acquire(&mut self) -> Result<()> {
+    pub fn try_acquire(&mut self) -> Result<()> {
         self.refill();
         if self.tokens == 0 {
             Err(anyhow!("tool rate limit exceeded"))
@@ -110,6 +120,9 @@ impl RateLimiterInner {
         }
     }
 }
+
+/// Public alias for benchmark compatibility
+pub type RateLimiter = PerToolRateLimiter;
 
 /// Global rate limiter instance used by all tools.
 ///
@@ -128,7 +141,7 @@ pub struct PerToolRateLimiter {
     /// Per-tool token buckets. Key is tool name.
     buckets: HashMap<String, RateLimiterInner>,
     /// Default config for new tool buckets.
-    default_config: Config,
+    default_config: RateLimiterConfig,
 }
 
 impl Default for PerToolRateLimiter {
@@ -142,7 +155,14 @@ impl PerToolRateLimiter {
     pub fn new() -> Self {
         Self {
             buckets: HashMap::new(),
-            default_config: Config::default(),
+            default_config: RateLimiterConfig::default(),
+        }
+    }
+
+    pub fn new_with_config(config: RateLimiterConfig) -> Self {
+        Self {
+            buckets: HashMap::new(),
+            default_config: config,
         }
     }
 
@@ -152,12 +172,13 @@ impl PerToolRateLimiter {
         let bucket = self
             .buckets
             .entry(tool_name.to_owned())
-            .or_insert_with(|| RateLimiterInner {
-                config: self.default_config,
-                tokens: self.default_config.burst,
-                last_refill: Instant::now(),
-            });
+            .or_insert_with(|| RateLimiterInner::new_with_config(self.default_config));
         bucket.try_acquire()
+    }
+
+    /// Alias for try_acquire_for (used by benchmarks)
+    pub fn acquire(&mut self, tool_name: &str) -> Result<()> {
+        self.try_acquire_for(tool_name)
     }
 
     /// Check if a tool is currently rate limited without consuming a token.

@@ -397,8 +397,8 @@ mod tests {
 
         // Acquire 3 permits
         let permit1 = pool.connection_semaphore.acquire().await.unwrap();
-        let permit2 = pool.connection_semaphore.acquire().await.unwrap();
-        let permit3 = pool.connection_semaphore.acquire().await.unwrap();
+        let _permit2 = pool.connection_semaphore.acquire().await.unwrap();
+        let _permit3 = pool.connection_semaphore.acquire().await.unwrap();
 
         let stats = pool.stats().await;
         assert_eq!(stats.available_permits, 0);

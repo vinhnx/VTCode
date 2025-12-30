@@ -37,7 +37,6 @@ fn generate_tool_schema_hash(tool_name: &str, schema: &Value) -> Result<String> 
 
 /// Records the current serialization format of all tools
 fn snapshot_current_tool_schemas() -> Result<BTreeMap<String, Value>> {
-    use std::sync::Arc;
     use tempfile::TempDir;
     use vtcode_core::tools::ToolRegistry;
 

@@ -12,41 +12,93 @@ use vtcode_core::config::constants::tools as tool_names;
 ///
 /// This prevents executing tools with empty args that will just fail,
 /// allowing the Model to continue naturally instead of hitting loop detection.
-pub(crate) fn validate_required_tool_args(
+/// Validates that a textual tool call has required arguments and passes security checks.
+/// Returns `None` if valid, or `Some(failures)` if validation fails.
+pub(crate) fn validate_tool_args_security(
     name: &str,
     args: &serde_json::Value,
-) -> Option<Vec<&'static str>> {
+) -> Option<Vec<String>> {
+    use vtcode_core::tools::validation::{paths, commands};
+
+    let mut failures = Vec::new();
+
+    // 1. Check required arguments
+    // -------------------------
     let required: &[&str] = match name {
         n if n == tool_names::READ_FILE => &["path"],
         n if n == tool_names::WRITE_FILE => &["path", "content"],
         n if n == tool_names::EDIT_FILE => &["path", "old_string", "new_string"],
         n if n == tool_names::LIST_FILES => &["path"],
-        n if n == tool_names::GREP_FILE => &["pattern", "path"], // Require path for grep to avoid searching whole project root by default
-        n if n == tool_names::CODE_INTELLIGENCE => &["operation"], // Operation is always required
+        n if n == tool_names::GREP_FILE => &["pattern", "path"],
+        n if n == tool_names::CODE_INTELLIGENCE => &["operation"],
         n if n == tool_names::RUN_PTY_CMD => &["command"],
         n if n == tool_names::APPLY_PATCH => &["patch"],
         _ => &[],
     };
 
-    if required.is_empty() {
-        return None;
+    if !required.is_empty() {
+        let missing: Vec<&str> = required
+            .iter()
+            .filter(|key| {
+                args.get(*key)
+                    .map(|v| v.is_null() || (v.is_string() && v.as_str().unwrap_or("").is_empty()))
+                    .unwrap_or(true)
+            })
+            .copied()
+            .collect();
+        
+        for m in missing {
+            failures.push(format!("Missing required argument: {}", m));
+        }
     }
 
-    let missing: Vec<&'static str> = required
-        .iter()
-        .filter(|key| {
-            args.get(*key)
-                .map(|v| v.is_null() || (v.is_string() && v.as_str().unwrap_or("").is_empty()))
-                .unwrap_or(true)
-        })
-        .copied()
-        .collect();
-
-    if missing.is_empty() {
+    if !failures.is_empty() {
+         return Some(failures);
+    }
+    
+    // 2. Perform security checks
+    // --------------------------
+    
+    // Path safety checks
+    if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
+        if let Err(e) = paths::validate_path_safety(path) {
+            failures.push(format!("Path security check failed: {}", e));
+        }
+    }
+    
+    // Command safety checks
+    // Check both 'command' argument and specific tool usage
+    if name == tool_names::RUN_PTY_CMD {
+        if let Some(cmd) = args.get("command").and_then(|v| v.as_str()) {
+            if let Err(e) = commands::validate_command_safety(cmd) {
+                failures.push(format!("Command security check failed: {}", e));
+            }
+        }
+    }
+    
+    if failures.is_empty() {
         None
     } else {
-        Some(missing)
+        Some(failures)
     }
+}
+
+// Deprecated: use validate_tool_args_security instead
+#[allow(dead_code)]
+pub(crate) fn validate_required_tool_args(
+    name: &str,
+    args: &serde_json::Value,
+) -> Option<Vec<&'static str>> {
+    // This function is kept for backward compatibility if needed, 
+    // but the logic is now superset in validate_tool_args_security.
+    // We map the new result back to the old signature roughly.
+    let result = validate_tool_args_security(name, args);
+    result.map(|_failures| {
+        // Convert dynamic strings to static error messages for compatibility
+        // THIS IS A LOSS OF DETAIL but necessary to match signature.
+        // Consumers should migrate to validate_tool_args_security.
+        vec!["Validation failed (use validate_tool_args_security for details)"]
+    })
 }
 
 pub(crate) async fn run_proactive_guards(

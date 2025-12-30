@@ -145,7 +145,6 @@ mod tests {
             None,
             UiSurfacePreference::default(),
             10,
-            false,
             None,
             None,
         )

@@ -1128,11 +1128,5 @@ fn estimate_and_log_task_complexity(query: &str) -> TaskComplexity {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use chrono::Utc;
-    use std::path::PathBuf;
-    use vtcode_core::llm::provider::{Message, MessageRole};
-    use vtcode_core::utils::session_archive::{
-        SessionArchiveMetadata, SessionMessage, SessionProgress, SessionSnapshot,
-    };
+    // Intentionally empty test module
 }
