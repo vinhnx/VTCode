@@ -8,6 +8,7 @@ pub use vtcode_core::mcp::cli::handle_mcp_command;
 
 pub mod analyze;
 
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct AskCommandOptions {
     pub output_format: Option<vtcode_core::cli::args::AskOutputFormat>,
@@ -16,12 +17,14 @@ pub struct AskCommandOptions {
     pub skip_confirmations: bool,
 }
 
+#[allow(dead_code)]
 pub struct ExecCommandOptions {
     pub json: bool,
     pub events_path: Option<PathBuf>,
     pub last_message_file: Option<PathBuf>,
 }
 
+#[allow(dead_code)]
 pub struct BenchmarkCommandOptions {
     pub task_file: Option<PathBuf>,
     pub inline_task: Option<String>,
@@ -29,6 +32,7 @@ pub struct BenchmarkCommandOptions {
     pub max_tasks: Option<usize>,
 }
 
+#[allow(dead_code)]
 pub struct SkillsCommandOptions {
     pub workspace: PathBuf,
 }

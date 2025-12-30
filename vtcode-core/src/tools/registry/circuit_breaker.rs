@@ -29,6 +29,17 @@ impl From<u8> for CircuitState {
     }
 }
 
+use std::path::PathBuf;
+use std::fs;
+
+/// Persistable state of the circuit breaker
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PersistedState {
+    state: u8,
+    consecutive_failures: u32,
+    last_failure_epoch_secs: Option<u64>,
+}
+
 /// Circuit breaker for MCP client failures
 pub struct McpCircuitBreaker {
     /// Current circuit state (0=Closed, 1=Open, 2=HalfOpen)
@@ -41,6 +52,8 @@ pub struct McpCircuitBreaker {
     last_failure_time: parking_lot::Mutex<Option<SystemTime>>,
     /// Configuration
     config: CircuitBreakerConfig,
+    /// Optional path for persisting state
+    persistence_path: Option<PathBuf>,
 }
 
 /// Circuit breaker configuration
@@ -82,6 +95,56 @@ impl McpCircuitBreaker {
             half_open_successes: AtomicU32::new(0),
             last_failure_time: parking_lot::Mutex::new(None),
             config,
+            persistence_path: None,
+        }
+    }
+
+    /// Create a new persistence-enabled circuit breaker
+    pub fn with_persistence(path: PathBuf) -> Self {
+        let breaker = Self {
+            state: AtomicU8::new(CircuitState::Closed as u8),
+            consecutive_failures: AtomicU32::new(0),
+            half_open_successes: AtomicU32::new(0),
+            last_failure_time: parking_lot::Mutex::new(None),
+            config: CircuitBreakerConfig::default(),
+            persistence_path: Some(path.clone()),
+        };
+
+        // Try to load state
+        if let Ok(data) = fs::read_to_string(&path) {
+            if let Ok(state) = serde_json::from_str::<PersistedState>(&data) {
+                breaker.state.store(state.state, Ordering::Release);
+                breaker.consecutive_failures.store(state.consecutive_failures, Ordering::Relaxed);
+                
+                if let Some(epoch) = state.last_failure_epoch_secs {
+                     // Only restore if plausible (roughly sanity check vs now)
+                     let now = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+                     // If it's in the past and within reasonable bounds (e.g. not older than a year and not in future)
+                     if epoch <= now {
+                         *breaker.last_failure_time.lock() = Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(epoch));
+                     }
+                }
+            }
+        }
+        breaker
+    }
+
+    /// Persist current state to disk if path is configured
+    fn persist(&self) {
+        if let Some(path) = &self.persistence_path {
+            let last_failure = *self.last_failure_time.lock();
+            let epoch = last_failure.map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs());
+            
+            let state = PersistedState {
+                state: self.state.load(Ordering::Acquire),
+                consecutive_failures: self.consecutive_failures.load(Ordering::Acquire),
+                last_failure_epoch_secs: epoch,
+            };
+
+            if let Ok(data) = serde_json::to_string(&state) {
+                 // Best effort write
+                 let _ = fs::write(path, data);
+            }
         }
     }
 
@@ -120,6 +183,7 @@ impl McpCircuitBreaker {
                     self.state
                         .store(CircuitState::HalfOpen as u8, Ordering::Release);
                     self.half_open_successes.store(0, Ordering::Relaxed);
+                    self.persist();
                     true
                 } else {
                     false
@@ -140,6 +204,8 @@ impl McpCircuitBreaker {
             CircuitState::Closed => {
                 // Reset failure counter on success
                 self.consecutive_failures.store(0, Ordering::Relaxed);
+                // Optimization: Maybe don't persist on every success to avoid IO thrashing
+                // Only if failures > 0
             }
             CircuitState::HalfOpen => {
                 let successes = self.half_open_successes.fetch_add(1, Ordering::AcqRel) + 1;
@@ -150,6 +216,7 @@ impl McpCircuitBreaker {
                     self.consecutive_failures.store(0, Ordering::Relaxed);
                     self.half_open_successes.store(0, Ordering::Relaxed);
                     *self.last_failure_time.lock() = None;
+                    self.persist();
                 }
             }
             CircuitState::Open => {
@@ -157,6 +224,7 @@ impl McpCircuitBreaker {
                 self.state
                     .store(CircuitState::HalfOpen as u8, Ordering::Release);
                 self.half_open_successes.store(1, Ordering::Relaxed);
+                self.persist();
             }
         }
     }
@@ -187,6 +255,8 @@ impl McpCircuitBreaker {
                 self.consecutive_failures.fetch_add(1, Ordering::Relaxed);
             }
         }
+        // Always persist on failure update
+        self.persist();
     }
 
     /// Calculate timeout duration with exponential backoff
@@ -223,6 +293,7 @@ impl McpCircuitBreaker {
         self.consecutive_failures.store(0, Ordering::Relaxed);
         self.half_open_successes.store(0, Ordering::Relaxed);
         *self.last_failure_time.lock() = None;
+        self.persist();
     }
 }
 
