@@ -9,10 +9,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::RwLock;
 
-use super::{
-    PluginCache, PluginLoader, PluginManifest, PluginResult,
-    PluginRuntime,
-};
+use super::{PluginCache, PluginLoader, PluginManifest, PluginResult, PluginRuntime};
 use crate::config::PluginRuntimeConfig;
 
 /// Main plugin manager that coordinates all plugin system components

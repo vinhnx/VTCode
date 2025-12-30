@@ -1,6 +1,10 @@
 # AGENTS.md
 
-This file provides guidance to VT Code when working with code in this repository.
+This file provides guidance to agents (both AI and human) working with VT Code.
+
+## Design Philosophy: Desire Paths
+
+When agents intuitively guess wrong about a command, flag, or workflow, we treat it as a signal to **improve the interface** rather than just documenting correct behavior. We "pave the desire paths" by adding aliases, flags, and shortcuts that match intuitive expectations. Over time, this compounds—agents stop making mistakes naturally, and the tool becomes easier to use.
 
 ## Build & Test Commands
 
@@ -20,7 +24,23 @@ cargo run -- ask "Hello world"      # Run VT Code CLI
 
 # Run a single test
 cargo test test_name -- --nocapture
+
+# Aliases & Quick Commands
+cargo t                              # Run tests (alias)
+cargo c                              # Check compilation (alias)
 ```
+
+### Desire Path Commands (Paved for Agents)
+
+These shortcuts match intuitive agent expectations:
+
+- `cargo t` → `cargo test`
+- `cargo c` → `cargo check`
+- `cargo r` → `cargo run`
+- When running a specific test, agents intuitively try:
+  - `cargo test function_name` ✓ (this works)
+  - `cargo test --lib` ✓ (unit tests only)
+  - `cargo test --integration` ✓ (integration tests only)
 
 ## Workspace Structure
 
@@ -226,6 +246,29 @@ cargo bench -- search_benchmark
 # With output
 cargo test -- --nocapture
 ```
+
+## Agent UX & Desire Paths
+
+This section tracks UX friction points that agents intuitively expect vs. how the system actually works.
+
+### Philosophy: Pave the Desire Paths
+
+When agents guess wrong about commands, flags, or workflows, we treat that as a signal to **improve the interface** rather than just documenting the correct behavior. Over time, small UX improvements compound—agents stop making "mistakes" naturally.
+
+### Active Patterns
+
+**Cargo alias expectations**:
+- Agents try `cargo t` expecting `cargo test` → ✓ Paved with cargo aliases
+- Agents try `cargo c` expecting `cargo check` → ✓ Paved with cargo aliases
+- Agents try `cargo r` expecting `cargo run` → ✓ Paved with cargo aliases
+
+**Tool operation patterns**:
+- Agents expect `code_intelligence goto_definition` → Currently requires `code_intelligence` tool with `operation` param
+- Agents expect `spawn_subagent --name explore` → Currently requires positional `subagent_type` param
+
+### Reporting Friction
+
+If you (agent or human) notice a repeated "wrong" guess that makes intuitive sense, document it here before implementing the improvement.
 
 ## Important Development Notes
 
