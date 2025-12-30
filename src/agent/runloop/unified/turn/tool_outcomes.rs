@@ -308,7 +308,6 @@ pub(crate) async fn handle_tool_call(
     Ok(None)
 }
 
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_tool_execution_result(
     ctx: &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_>,
@@ -607,9 +606,8 @@ pub(crate) struct RunTurnHandleToolSuccessParams<'a> {
     pub working_history: &'a mut Vec<uni::Message>,
     pub call_id: &'a str,
     pub dec_id: &'a str,
-    pub decision_ledger: &'a Arc<
-        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
-    >,
+    pub decision_ledger:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub last_tool_stdout: &'a mut Option<String>,
     pub any_write_effect: &'a mut bool,
     pub turn_modified_files: &'a mut std::collections::BTreeSet<std::path::PathBuf>,
@@ -695,9 +693,13 @@ pub(crate) async fn run_turn_handle_tool_success(
 
     if !params.modified_files.is_empty() {
         if confirm_changes_with_git_diff(&params.modified_files, params.skip_confirmations).await? {
-            params.renderer.line(MessageStyle::Info, "Changes applied successfully.")?;
+            params
+                .renderer
+                .line(MessageStyle::Info, "Changes applied successfully.")?;
             for f in &params.modified_files {
-                params.turn_modified_files.insert(std::path::PathBuf::from(f));
+                params
+                    .turn_modified_files
+                    .insert(std::path::PathBuf::from(f));
             }
             // Invalidate cache for modified files
             for file_path in &params.modified_files {
@@ -705,7 +707,9 @@ pub(crate) async fn run_turn_handle_tool_success(
                 cache.invalidate_for_path(file_path);
             }
         } else {
-            params.renderer.line(MessageStyle::Info, "Changes discarded.")?;
+            params
+                .renderer
+                .line(MessageStyle::Info, "Changes discarded.")?;
         }
     }
 
@@ -734,11 +738,13 @@ pub(crate) async fn run_turn_handle_tool_success(
 
     let content = serde_json::to_string(&params.output).unwrap_or_else(|_| "{}".to_string());
 
-    params.working_history.push(uni::Message::tool_response_with_origin(
-        params.call_id.to_string(),
-        content,
-        params.name.to_string(),
-    ));
+    params
+        .working_history
+        .push(uni::Message::tool_response_with_origin(
+            params.call_id.to_string(),
+            content,
+            params.name.to_string(),
+        ));
 
     let mut hook_block_reason: Option<String> = None;
 
@@ -777,7 +783,9 @@ pub(crate) async fn run_turn_handle_tool_success(
 
     if let Some(reason) = hook_block_reason {
         let blocked_message = format!("Tool execution blocked by lifecycle hooks: {}", reason);
-        params.working_history.push(uni::Message::system(blocked_message));
+        params
+            .working_history
+            .push(uni::Message::system(blocked_message));
         {
             let mut ledger = params.decision_ledger.write().await;
             ledger.record_outcome(
@@ -949,9 +957,8 @@ pub(crate) struct RunTurnHandleToolTimeoutParams<'a> {
     pub working_history: &'a mut Vec<uni::Message>,
     pub call_id: &'a str,
     pub dec_id: &'a str,
-    pub decision_ledger: &'a Arc<
-        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
-    >,
+    pub decision_ledger:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
 }
 
 #[allow(dead_code)]
@@ -968,17 +975,24 @@ pub(crate) async fn run_turn_handle_tool_timeout(
         MessageStyle::Error,
         &format!("Tool {} timed out after 5 minutes.", params.name),
     )?;
-    params.traj.log_tool_call(params.working_history.len(), params.name, &serde_json::json!({}), false);
+    params.traj.log_tool_call(
+        params.working_history.len(),
+        params.name,
+        &serde_json::json!({}),
+        false,
+    );
 
     let error_message = params.error.to_string();
     let err_json = serde_json::json!({ "error": error_message });
     let timeout_content = serde_json::to_string(&err_json).unwrap_or_else(|_| "{}".to_string());
 
-    params.working_history.push(uni::Message::tool_response_with_origin(
-        params.call_id.to_string(),
-        timeout_content,
-        params.name.to_string(),
-    ));
+    params
+        .working_history
+        .push(uni::Message::tool_response_with_origin(
+            params.call_id.to_string(),
+            timeout_content,
+            params.name.to_string(),
+        ));
 
     {
         let mut ledger = params.decision_ledger.write().await;
@@ -1061,12 +1075,17 @@ pub(crate) async fn handle_text_response(
 
     if !params.response_streamed {
         if !params.text.trim().is_empty() {
-            params.ctx.renderer.line(MessageStyle::Response, &params.text)?;
+            params
+                .ctx
+                .renderer
+                .line(MessageStyle::Response, &params.text)?;
         }
         if let Some(reasoning_text) = params.reasoning.as_ref()
             && !reasoning_text.trim().is_empty()
         {
-            params.ctx.renderer
+            params
+                .ctx
+                .renderer
                 .line(MessageStyle::Info, &format!(" {}", reasoning_text))?;
         }
     }
@@ -1110,7 +1129,9 @@ pub(crate) async fn handle_text_response(
                     MessageStyle::Error,
                     &format!("Safety validation failed: {}", err),
                 )?;
-                params.ctx.working_history
+                params
+                    .ctx
+                    .working_history
                     .push(uni::Message::tool_response_with_origin(
                     tool_call.id.clone(),
                     serde_json::to_string(
@@ -1119,7 +1140,12 @@ pub(crate) async fn handle_text_response(
                     .unwrap(),
                     call_tool_name.clone(),
                 ));
-                return Ok(handle_turn_balancer(params.ctx, params.step_count, params.repeated_tool_attempts).await);
+                return Ok(handle_turn_balancer(
+                    params.ctx,
+                    params.step_count,
+                    params.repeated_tool_attempts,
+                )
+                .await);
             }
         }
 
@@ -1138,7 +1164,9 @@ pub(crate) async fn handle_text_response(
             Some(params.ctx.approval_recorder.as_ref()),
             Some(params.ctx.decision_ledger),
             Some(params.ctx.tool_permission_cache),
-            params.ctx.vt_cfg
+            params
+                .ctx
+                .vt_cfg
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
         )
@@ -1202,7 +1230,9 @@ pub(crate) async fn handle_text_response(
                 )
                 .to_json_value();
 
-                params.ctx.working_history
+                params
+                    .ctx
+                    .working_history
                     .push(uni::Message::tool_response_with_origin(
                         tool_call.id.clone(),
                         serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
@@ -1220,7 +1250,9 @@ pub(crate) async fn handle_text_response(
                 let err_json = serde_json::json!({
                     "error": format!("Failed to evaluate policy for detected tool '{}': {}", call_tool_name, err)
                 });
-                params.ctx.working_history
+                params
+                    .ctx
+                    .working_history
                     .push(uni::Message::tool_response_with_origin(
                         tool_call.id.clone(),
                         err_json.to_string(),
@@ -1228,7 +1260,10 @@ pub(crate) async fn handle_text_response(
                     ));
             }
         }
-        Ok(handle_turn_balancer(params.ctx, params.step_count, params.repeated_tool_attempts).await)
+        Ok(
+            handle_turn_balancer(params.ctx, params.step_count, params.repeated_tool_attempts)
+                .await,
+        )
     } else {
         let msg = uni::Message::assistant(params.text.clone());
         let msg_with_reasoning = if let Some(reasoning_text) = params.reasoning {

@@ -549,7 +549,6 @@ pub(crate) async fn run_interaction_loop(
     }
 }
 
-
 #[allow(clippy::too_many_arguments)]
 async fn handle_mcp_updates(
     mcp_manager: &AsyncMcpManager,
