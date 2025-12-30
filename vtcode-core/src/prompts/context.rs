@@ -20,6 +20,9 @@ pub struct PromptContext {
     pub capability_level: Option<CapabilityLevel>,
     /// Current working directory (different from workspace root)
     pub current_directory: Option<PathBuf>,
+    /// Skip standard instruction blocks (project docs, user instructions)
+    /// Used when these will be provided elsewhere (e.g. unified block in runloop)
+    pub skip_standard_instructions: bool,
 }
 
 /// User preferences for prompt customization
