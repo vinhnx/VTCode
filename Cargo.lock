@@ -1206,6 +1206,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a2785755761f3ddc1492979ce1e48d2c00d09311c39e4466429188f3dd6501"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5896,6 +5906,7 @@ dependencies = [
  "clap",
  "colorchoice",
  "crossterm",
+ "ctor",
  "dialoguer",
  "dirs",
  "dotenvy",
@@ -5930,6 +5941,7 @@ dependencies = [
  "vtcode-acp-client",
  "vtcode-config",
  "vtcode-core",
+ "vtcode-process-hardening",
  "walkdir",
  "webbrowser",
  "windows-sys 0.61.2",
@@ -6172,6 +6184,14 @@ dependencies = [
  "serde_yaml",
  "serial_test",
  "tempfile",
+]
+
+[[package]]
+name = "vtcode-process-hardening"
+version = "0.55.1"
+dependencies = [
+ "libc",
+ "pretty_assertions",
 ]
 
 [[package]]

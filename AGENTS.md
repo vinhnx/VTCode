@@ -44,7 +44,7 @@ These shortcuts match intuitive agent expectations:
 
 ## Workspace Structure
 
-VT Code uses a **10-member workspace** architecture:
+VT Code uses a **11-member workspace** architecture:
 
 ```
 vtcode/                          # Binary entrypoint (src/main.rs)
@@ -57,7 +57,8 @@ vtcode/                          # Binary entrypoint (src/main.rs)
 ├── vtcode-markdown-store/       # Document storage
 ├── vtcode-indexer/              # Code indexing
 ├── vtcode-exec-events/          # Event definitions
-└── vtcode-acp-client/           # Agent Client Protocol bridge
+├── vtcode-acp-client/           # Agent Client Protocol bridge
+└── vtcode-process-hardening/    # Process hardening & security measures
 ```
 
 **Key separation**:
@@ -156,6 +157,21 @@ Understanding these patterns requires reading multiple files across the codebase
 -   **Tool**: `spawn_subagent` with params: `prompt`, `subagent_type`, `resume`, `thoroughness`, `parent_context`
 -   **Custom Agents**: Define in `.vtcode/agents/` (project) or `~/.vtcode/agents/` (user) as Markdown with YAML frontmatter
 -   **Documentation**: `docs/subagents/SUBAGENTS.md`
+
+### Process Hardening
+
+-   **Location**: `vtcode-process-hardening/` (dedicated crate)
+-   **Purpose**: Apply security hardening measures before the main binary executes
+-   **Pattern**: Pre-main execution using `#[ctor::ctor]` constructor decorator
+-   **Features**:
+    -   **Linux/Android**: `PR_SET_DUMPABLE` (ptrace disable), `RLIMIT_CORE` (disable core dumps), `LD_*` env var removal
+    -   **macOS**: `PT_DENY_ATTACH` (debugger prevention), `RLIMIT_CORE`, `DYLD_*` env var removal
+    -   **BSD**: `RLIMIT_CORE`, `LD_*` env var removal
+    -   **Windows**: Placeholder for future mitigation policies
+-   **Key Detail**: Uses `std::env::vars_os()` to handle non-UTF-8 environment variables correctly
+-   **Exit Codes**: 5 (prctl), 6 (ptrace), 7 (setrlimit) indicate hardening failures
+-   **Documentation**: `docs/PROCESS_HARDENING.md`
+-   **Integration**: Called via `#[ctor::ctor]` in `src/main.rs:init()`
 
 ## Communication Style
 
