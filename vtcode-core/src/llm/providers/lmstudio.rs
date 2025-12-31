@@ -12,6 +12,10 @@ use crate::llm::types as llm_types;
 use anyhow::Result;
 use async_trait::async_trait;
 
+pub mod client;
+
+pub use client::LMStudioClient;
+
 #[derive(Debug, Deserialize, Serialize)]
 struct LmStudioModelsResponse {
     data: Vec<LmStudioModel>,
@@ -28,6 +32,9 @@ struct LmStudioModel {
     owned_by: Option<String>,
 }
 
+const LMSTUDIO_CONNECTION_ERROR: &str =
+    "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
+
 /// Fetches available models from the LM Studio API endpoint
 pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
     let resolved_base_url = override_base_url(
@@ -39,8 +46,11 @@ pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<Strin
     // Construct the models endpoint URL
     let models_url = format!("{}/models", resolved_base_url);
 
-    // Create HTTP client
-    let client = reqwest::Client::new();
+    // Create HTTP client with connection timeout
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
 
     // Make GET request to fetch models
     let response = client
@@ -48,12 +58,20 @@ pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<Strin
         .header("Content-Type", "application/json")
         .send()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to fetch LM Studio models: {}", e))?;
+        .map_err(|e| {
+            tracing::warn!("Failed to connect to LM Studio server: {e:?}");
+            anyhow::anyhow!(LMSTUDIO_CONNECTION_ERROR)
+        })?;
 
     if !response.status().is_success() {
         return Err(anyhow::anyhow!(
-            "Failed to fetch LM Studio models: HTTP {}",
-            response.status()
+            "Failed to fetch LM Studio models: HTTP {}. {}",
+            response.status(),
+            if response.status() == reqwest::StatusCode::NOT_FOUND {
+                "Ensure LM Studio server is running with 'lms server start'."
+            } else {
+                ""
+            }
         ));
     }
 
