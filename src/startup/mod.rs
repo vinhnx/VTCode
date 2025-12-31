@@ -3,7 +3,6 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow, bail};
 
-mod config_optimizer;
 mod first_run;
 
 use crate::tools::RipgrepStatus;
@@ -107,7 +106,7 @@ use first_run::maybe_run_first_run_setup;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::constants::defaults;
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::loader::{ConfigBuilder, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::config::validator::ConfigValidator;
@@ -162,28 +161,32 @@ impl StartupContext {
         let (config_path_override, inline_config_overrides) =
             parse_cli_config_entries(&args.config);
 
-        let mut config = if let Some(path_override) = config_path_override {
+        let mut builder = ConfigBuilder::new().workspace(workspace.clone());
+        if let Some(path_override) = config_path_override {
             let resolved_path = resolve_config_path(&workspace, &path_override);
-            ConfigManager::load_from_file(&resolved_path)
-                .with_context(|| {
-                    format!(
-                        "Failed to load vtcode configuration from {}",
-                        resolved_path.display()
-                    )
-                })?
-                .config()
-                .clone()
-        } else {
-            ConfigManager::load_from_workspace(&workspace)
-                .with_context(|| {
-                    format!(
-                        "Failed to load vtcode configuration for workspace {}",
-                        workspace.display()
-                    )
-                })?
-                .config()
-                .clone()
-        };
+            builder = builder.config_file(resolved_path);
+        }
+
+        if !inline_config_overrides.is_empty() {
+            builder = builder.cli_overrides(&inline_config_overrides);
+        }
+
+        // Apply explicit CLI overrides for model and provider
+        if let Some(ref model) = args.model {
+            builder = builder.cli_override(
+                "agent.model".to_owned(),
+                toml::Value::String(model.clone()),
+            );
+        }
+        if let Some(ref provider) = args.provider {
+            builder = builder.cli_override(
+                "agent.provider".to_owned(),
+                toml::Value::String(provider.clone()),
+            );
+        }
+
+        let manager = builder.build().context("Failed to load configuration")?;
+        let mut config = manager.config().clone();
 
         let (full_auto_requested, automation_prompt) = match args.full_auto.clone() {
             Some(value) => {
@@ -197,11 +200,6 @@ impl StartupContext {
         };
 
         let _first_run = maybe_run_first_run_setup(args, &workspace, &mut config).await?;
-
-        if !inline_config_overrides.is_empty() {
-            apply_inline_config_overrides(&mut config, &inline_config_overrides)
-                .context("Failed to apply inline --config overrides")?;
-        }
 
         if automation_prompt.is_some() && args.command.is_some() {
             bail!(
@@ -445,14 +443,6 @@ fn resolve_config_path(workspace: &Path, candidate: &Path) -> PathBuf {
     } else {
         workspace_candidate
     }
-}
-
-fn apply_inline_config_overrides(
-    config: &mut VTCodeConfig,
-    overrides: &[(String, String)],
-) -> Result<()> {
-    // Use optimized direct struct manipulation instead of serialization round-trips
-    config_optimizer::ConfigOptimizer::apply_overrides(config, overrides)
 }
 
 async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
@@ -739,10 +729,12 @@ mod tests {
 
     #[test]
     fn applies_inline_overrides_to_config() -> Result<()> {
-        let mut config = VTCodeConfig::default();
         let overrides = vec![("agent.provider".to_owned(), "\"openai\"".to_owned())];
 
-        apply_inline_config_overrides(&mut config, &overrides)?;
+        let manager = ConfigBuilder::new()
+            .cli_overrides(&overrides)
+            .build()?;
+        let config = manager.config();
 
         assert_eq!(config.agent.provider, "openai");
         Ok(())

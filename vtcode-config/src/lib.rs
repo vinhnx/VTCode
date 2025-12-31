@@ -67,7 +67,10 @@ pub use defaults::{
 pub use hooks::{
     HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig, LifecycleHooksConfig,
 };
-pub use loader::{ConfigManager, SyntaxHighlightingConfig, VTCodeConfig};
+pub use loader::{
+    ConfigBuilder, ConfigManager, SyntaxHighlightingConfig, VTCodeConfig, merge_toml_values,
+};
+pub use loader::layers::{ConfigLayerEntry, ConfigLayerSource, ConfigLayerStack};
 pub use mcp::{
     McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpProviderConfig,
     McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
