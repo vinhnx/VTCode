@@ -17,6 +17,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
+pub mod pull;
+pub mod parser;
+pub mod url;
+pub mod client;
+
+pub use pull::{OllamaPullEvent, OllamaPullProgressReporter, CliPullProgressReporter, TuiPullProgressReporter};
+pub use parser::pull_events_from_value;
+pub use url::{is_openai_compatible_base_url, base_url_to_host_root};
+pub use client::OllamaClient;
+
 use super::common::{
     convert_usage_to_llm_types, override_base_url, parse_client_prompt_common, resolve_model,
 };
@@ -47,6 +57,10 @@ struct OllamaModelDetails {
     quantization_level: String,
 }
 
+const OLLAMA_CONNECTION_ERROR: &str = 
+    "No running Ollama server detected. Start it with: `ollama serve` (after installing)\n\
+     Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file";
+
 /// Fetches available local Ollama models from the Ollama API endpoint
 pub async fn fetch_ollama_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
     use crate::config::constants::{env_vars, urls};
@@ -60,8 +74,11 @@ pub async fn fetch_ollama_models(base_url: Option<String>) -> Result<Vec<String>
     // Construct the tags endpoint URL
     let tags_url = format!("{}/api/tags", resolved_base_url);
 
-    // Create HTTP client
-    let client = reqwest::Client::new();
+    // Create HTTP client with connection timeout
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
 
     // Make GET request to fetch models
     let response = client
@@ -69,12 +86,20 @@ pub async fn fetch_ollama_models(base_url: Option<String>) -> Result<Vec<String>
         .header("Content-Type", "application/json")
         .send()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to fetch Ollama models: {}", e))?;
+        .map_err(|e| {
+            tracing::warn!("Failed to connect to Ollama server: {e:?}");
+            anyhow::anyhow!(OLLAMA_CONNECTION_ERROR)
+        })?;
 
     if !response.status().is_success() {
         return Err(anyhow::anyhow!(
-            "Failed to fetch Ollama models: HTTP {}",
-            response.status()
+            "Failed to fetch Ollama models: HTTP {}. {}",
+            response.status(),
+            if response.status() == reqwest::StatusCode::NOT_FOUND {
+                "Ensure Ollama server is running."
+            } else {
+                ""
+            }
         ));
     }
 
