@@ -1294,9 +1294,7 @@ impl ModelId {
             | ModelId::GPT5Nano
             | ModelId::CodexMiniLatest => "5",
             // Anthropic generations
-            ModelId::ClaudeOpus45
-            | ModelId::ClaudeSonnet45
-            | ModelId::ClaudeHaiku45 => "4.5",
+            ModelId::ClaudeOpus45 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeOpus41 => "4.1",
             ModelId::ClaudeSonnet4 => "4",
             // DeepSeek generations

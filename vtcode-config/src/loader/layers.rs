@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
-use toml::Value as TomlValue;
 use crate::loader::merge_toml_values;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use toml::Value as TomlValue;
 
 /// Source of a configuration layer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

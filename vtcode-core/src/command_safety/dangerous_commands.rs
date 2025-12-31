@@ -92,11 +92,7 @@ mod tests {
 
     #[test]
     fn git_reset_hard_is_dangerous() {
-        let cmd = vec![
-            "git".to_string(),
-            "reset".to_string(),
-            "--hard".to_string(),
-        ];
+        let cmd = vec!["git".to_string(), "reset".to_string(), "--hard".to_string()];
         assert!(is_dangerous_to_call_with_exec(&cmd));
     }
 

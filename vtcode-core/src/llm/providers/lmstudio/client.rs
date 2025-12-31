@@ -6,8 +6,7 @@ use std::time::Duration;
 
 use serde_json::Value as JsonValue;
 
-const LMSTUDIO_CONNECTION_ERROR: &str =
-    "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
+const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
 
 /// Client for interacting with a local LM Studio instance.
 #[derive(Clone, Debug)]
@@ -168,9 +167,7 @@ impl LMStudioClient {
             .stderr(std::process::Stdio::null())
             .status()
             .map_err(|e| {
-                io::Error::other(format!(
-                    "Failed to execute '{lms} get --yes {model}': {e}"
-                ))
+                io::Error::other(format!("Failed to execute '{lms} get --yes {model}': {e}"))
             })?;
 
         if !status.success() {
@@ -245,8 +242,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client =
-            LMStudioClient::try_from_base_url(&server.uri()).await;
+        let client = LMStudioClient::try_from_base_url(&server.uri()).await;
         assert!(client.is_ok());
 
         let client = client.unwrap();
@@ -275,10 +271,12 @@ mod tests {
         let result = client.fetch_models().await;
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("No 'data' array in response"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No 'data' array in response")
+        );
     }
 
     #[tokio::test]
@@ -313,9 +311,11 @@ mod tests {
 
         let result = LMStudioClient::try_from_base_url(&server.uri()).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Server returned error: 404"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Server returned error: 404")
+        );
     }
 }

@@ -4,20 +4,16 @@ use crate::tools::apply_patch::{Patch, PatchOperation};
 use crate::tools::editing::PatchLine;
 use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::Tool;
-use crate::tools::types::VTCodePtySession;
 
 use crate::utils::diff::{DiffOptions, compute_diff};
 use crate::utils::serde_helpers::deserialize_opt_maybe_quoted;
 use anyhow::{Context, Result, anyhow};
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use chrono::prelude::Utc;
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use shell_words::{join, split};
-use std::fmt::Write as _;
 use std::{
     env,
     path::{Path, PathBuf},
@@ -25,15 +21,10 @@ use std::{
 };
 use tokio::fs;
 use tokio::time::sleep;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, info, warn};
 
-use crate::config::constants::defaults::{
-    DEFAULT_PTY_OUTPUT_BYTE_FUSE, DEFAULT_PTY_OUTPUT_MAX_TOKENS,
-};
+use crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS;
 
-const RUN_PTY_POLL_TIMEOUT_SECS: u64 = 5;
-// For known long-running commands, wait longer before returning partial output
-const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
 const SEARCH_REPLACE_MAX_BYTES: usize = 2 * 1024 * 1024;
 
 // Conservative PTY command policy inspired by bash allow/deny defaults.
@@ -119,16 +110,6 @@ fn matches_context(
 
     true
 }
-
-const LONG_RUNNING_COMMANDS: &[&str] = &[
-    "cargo", "npm", "yarn", "pnpm", "pip", "python", "make", "docker",
-];
-
-/// Commands that produce structured build output (errors, warnings)
-/// For these, we apply smarter extraction that prioritizes error lines.
-const BUILD_OUTPUT_COMMANDS: &[&str] = &[
-    "cargo", "rustc", "npm", "yarn", "pnpm", "tsc", "eslint", "make", "gcc", "clang",
-];
 
 use super::ToolRegistry;
 
@@ -852,47 +833,8 @@ impl ToolRegistry {
         })
     }
 
-    pub(super) fn run_pty_cmd_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_run_pty_command(args).await })
-    }
-
-    pub(super) fn create_pty_session_executor(
-        &mut self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_create_pty_session(args).await })
-    }
-
-    pub(super) fn list_pty_sessions_executor(
-        &mut self,
-        _args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_list_pty_sessions().await })
-    }
-
-    pub(super) fn close_pty_session_executor(
-        &mut self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_close_pty_session(args).await })
-    }
-
-    pub(super) fn send_pty_input_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_send_pty_input(args).await })
-    }
-
-    pub(super) fn read_pty_session_executor(
-        &mut self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_read_pty_session(args).await })
-    }
-
-    pub(super) fn resize_pty_session_executor(
-        &mut self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_resize_pty_session(args).await })
+    pub(super) fn unified_exec_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_unified_exec(args).await })
     }
 
     pub(super) fn web_fetch_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -1898,24 +1840,256 @@ impl ToolRegistry {
         }))
     }
 
-    async fn execute_run_pty_command(&mut self, args: Value) -> Result<Value> {
-        let payload = value_as_object(&args, "run_pty_cmd expects an object payload")?;
-        let setup = self.prepare_ephemeral_pty_command(payload).await?;
+    async fn execute_unified_exec(&mut self, args: Value) -> Result<Value> {
+        let payload = value_as_object(&args, "unified_exec expects an object payload")?;
 
-        // Guard: ensure command is not empty - this should not happen if parse_command_parts worked correctly
-        if setup.command.is_empty() {
-            let debug_info = format!(
-                "Available keys in payload: {:?}",
-                payload.keys().collect::<Vec<_>>()
-            );
-            return Err(anyhow!(
-                "Internal error: prepared PTY command is empty after parsing. {}. \
-                 Please ensure 'command' parameter is a non-empty string or array in run_pty_cmd call.",
-                debug_info
-            ));
+        let command = payload
+            .get("command")
+            .or_else(|| payload.get("cmd"))
+            .and_then(|v| v.as_str());
+        let input = payload
+            .get("input")
+            .or_else(|| payload.get("chars"))
+            .and_then(|v| v.as_str());
+        let session_id = payload.get("session_id").and_then(|v| v.as_str());
+        let action = payload.get("action").and_then(|v| v.as_str());
+
+        // Inferred action if not provided
+        let action = action.unwrap_or_else(|| {
+            if command.is_some() {
+                "run"
+            } else if input.is_some() {
+                "write"
+            } else if session_id.is_some() {
+                "poll"
+            } else {
+                "list"
+            }
+        });
+
+        match action {
+            "run" => {
+                let mut mapped_payload = payload.clone();
+                if let Some(cmd) = command {
+                    mapped_payload.insert("command".to_string(), json!(cmd));
+                }
+                let mut setup = self.prepare_ephemeral_pty_command(&mapped_payload).await?;
+                if is_interactive_shell(&setup.command) {
+                    setup.session_id = generate_session_id("uexec");
+                }
+                setup.yield_time_ms = payload.get("yield_time_ms").and_then(|v| v.as_u64());
+                if let Some(max_tokens) = payload.get("max_output_tokens").and_then(|v| v.as_u64())
+                {
+                    setup.max_tokens = max_tokens as usize;
+                }
+
+                self.run_unified_exec_command(setup).await
+            }
+            "write" => {
+                let sid = session_id
+                    .ok_or_else(|| anyhow!("session_id is required for 'write' action"))?;
+                let chars = input.ok_or_else(|| anyhow!("input is required for 'write' action"))?;
+
+                let yield_time_ms = payload
+                    .get("yield_time_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(250);
+                let max_tokens = payload
+                    .get("max_output_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as usize)
+                    .unwrap_or(DEFAULT_PTY_OUTPUT_MAX_TOKENS);
+
+                self.pty_manager()
+                    .send_input_to_session(sid, chars.as_bytes(), false)?;
+                let capture = self
+                    .wait_for_pty_yield(sid, Duration::from_millis(yield_time_ms))
+                    .await;
+
+                let mut output = filter_pty_output(&strip_ansi(&capture.output));
+                let mut truncated = false;
+                if max_tokens > 0 && output.len() > max_tokens * 4 {
+                    output.truncate(max_tokens * 4);
+                    output.push_str("\n[Output truncated]");
+                    truncated = true;
+                }
+
+                let mut response = json!({
+                    "output": output,
+                    "wall_time": capture.duration.as_secs_f64(),
+                });
+
+                if let Some(code) = capture.exit_code {
+                    response
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("exit_code".to_string(), json!(code));
+                } else {
+                    response
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("process_id".to_string(), json!(sid));
+                }
+
+                if truncated {
+                    response
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("truncated".to_string(), json!(true));
+                }
+                Ok(response)
+            }
+            "poll" => {
+                let sid = session_id
+                    .ok_or_else(|| anyhow!("session_id is required for 'poll' action"))?;
+                let yield_time_ms = payload
+                    .get("yield_time_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100);
+                let capture = self
+                    .wait_for_pty_yield(sid, Duration::from_millis(yield_time_ms))
+                    .await;
+                let output = filter_pty_output(&strip_ansi(&capture.output));
+                let mut response = json!({
+                    "output": output,
+                    "wall_time": capture.duration.as_secs_f64(),
+                });
+                if let Some(code) = capture.exit_code {
+                    response
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("exit_code".to_string(), json!(code));
+                } else {
+                    response
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("process_id".to_string(), json!(sid));
+                }
+                Ok(response)
+            }
+            "list" => {
+                let sessions = self.pty_manager().list_sessions();
+                Ok(json!({
+                    "sessions": sessions,
+                    "count": sessions.len()
+                }))
+            }
+            "close" => {
+                let sid = session_id
+                    .ok_or_else(|| anyhow!("session_id is required for 'close' action"))?;
+                self.pty_manager().close_session(sid)?;
+                Ok(json!({
+                    "success": true,
+                    "message": format!("Session {} closed", sid)
+                }))
+            }
+            _ => Err(anyhow!("Unknown action: {}", action)),
+        }
+    }
+
+    async fn run_unified_exec_command(&mut self, setup: PtyCommandSetup) -> Result<Value> {
+        enforce_pty_command_policy(&setup.display_command, setup.confirm)?;
+
+        let yield_duration = setup
+            .yield_time_ms
+            .map(Duration::from_millis)
+            .unwrap_or(Duration::from_secs(10));
+
+        let _session_guard = self
+            .start_pty_session()
+            .context("Maximum PTY sessions reached; cannot start new session")?;
+
+        // We don't use PtySessionLifecycle here because we might want the session to persist
+        self.increment_active_pty_sessions();
+
+        let session_id = setup.session_id.clone();
+
+        self.pty_manager().create_session(
+            session_id.clone(),
+            setup.command.clone(),
+            setup.working_dir_path.clone(),
+            setup.size(),
+        )?;
+
+        let capture = self.wait_for_pty_yield(&session_id, yield_duration).await;
+
+        let mut output = filter_pty_output(&strip_ansi(&capture.output));
+        let mut truncated = false;
+
+        if setup.max_tokens > 0 && output.len() > setup.max_tokens * 4 {
+            output.truncate(setup.max_tokens * 4);
+            output.push_str("\n[Output truncated]");
+            truncated = true;
         }
 
-        self.run_ephemeral_pty_command(setup).await
+        let wall_time = capture.duration.as_secs_f64();
+        let mut response = json!({
+            "output": output,
+            "wall_time": wall_time,
+        });
+
+        if let Some(code) = capture.exit_code {
+            response
+                .as_object_mut()
+                .unwrap()
+                .insert("exit_code".to_string(), json!(code));
+            self.decrement_active_pty_sessions();
+        } else {
+            response
+                .as_object_mut()
+                .unwrap()
+                .insert("process_id".to_string(), json!(session_id));
+            // We keep the session active, so we don't decrement here?
+            // Actually, vtcode's PTY manager might handle cleanup.
+        }
+
+        if truncated {
+            response
+                .as_object_mut()
+                .unwrap()
+                .insert("truncated".to_string(), json!(true));
+        }
+
+        Ok(response)
+    }
+
+    async fn wait_for_pty_yield(
+        &self,
+        session_id: &str,
+        yield_duration: Duration,
+    ) -> PtyEphemeralCapture {
+        let mut output = String::new();
+        let start = Instant::now();
+        let poll_interval = Duration::from_millis(50);
+
+        loop {
+            if let Ok(Some(code)) = self.pty_manager().is_session_completed(session_id) {
+                if let Ok(Some(final_output)) =
+                    self.pty_manager().read_session_output(session_id, true)
+                {
+                    output.push_str(&final_output);
+                }
+                return PtyEphemeralCapture {
+                    output,
+                    exit_code: Some(code),
+                    duration: start.elapsed(),
+                };
+            }
+
+            if let Ok(Some(new_output)) = self.pty_manager().read_session_output(session_id, true) {
+                output.push_str(&new_output);
+            }
+
+            if start.elapsed() >= yield_duration {
+                return PtyEphemeralCapture {
+                    output,
+                    exit_code: None,
+                    duration: start.elapsed(),
+                };
+            }
+
+            sleep(poll_interval).await;
+        }
     }
 
     async fn prepare_ephemeral_pty_command(
@@ -1977,7 +2151,7 @@ impl ToolRegistry {
             }
         }
 
-        let timeout_secs = parse_timeout_secs(
+        let _timeout_secs = parse_timeout_secs(
             payload.get("timeout_secs"),
             self.pty_config().command_timeout_seconds,
         )?;
@@ -1990,7 +2164,7 @@ impl ToolRegistry {
             .pty_manager()
             .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
             .await?;
-        let working_dir_display = self.pty_manager().describe_working_dir(&working_dir_path);
+        let _working_dir_display = self.pty_manager().describe_working_dir(&working_dir_path);
 
         // Parse max_tokens for output truncation (defaults to DEFAULT_PTY_OUTPUT_MAX_TOKENS)
         let max_tokens = payload
@@ -2009,771 +2183,13 @@ impl ToolRegistry {
             command,
             display_command,
             working_dir_path,
-            working_dir_display,
             session_id: generate_session_id("run"),
             rows,
             cols,
-            timeout_secs,
+            yield_time_ms: None,
             max_tokens,
             confirm,
         })
-    }
-
-    async fn run_ephemeral_pty_command(&mut self, setup: PtyCommandSetup) -> Result<Value> {
-        // Guard: ensure command is not empty before attempting execution
-        if setup.command.is_empty() {
-            return Err(anyhow!("PTY command cannot be empty"));
-        }
-
-        enforce_pty_command_policy(&setup.display_command, setup.confirm)?;
-
-        // Execute the PTY command exactly once.
-        // We do NOT retry on exit code (application error) because:
-        // 1. It causes "multi retry" behavior where a single failed command runs 3 times.
-        // 2. Retrying permanent errors (like 127 Command Not Found) is futile.
-        // 3. The agent should decide whether to retry based on the error message.
-
-        // We pass 0 as retry_count since we are not retrying.
-        let result = self.execute_single_pty_attempt(&setup, 0).await?;
-
-        let mut capture = result.1;
-        // Strip ANSI escape codes and filter junk output to provide clean text to the agent
-        capture.output = filter_pty_output(&strip_ansi(&capture.output));
-
-        let snapshot = result.2;
-        let mut truncated = false;
-
-        // Apply smart truncation to prevent context overflow
-        // This is critical for commands like `cargo clippy` that can produce 8000+ lines
-        if setup.max_tokens > 0 && !capture.output.is_empty() {
-            let original_len = capture.output.len();
-            let original_lines = capture.output.lines().count();
-
-            // Check if this is build tool output that benefits from error extraction
-            let is_build_output = setup.command.iter().any(|arg| {
-                let lower = arg.to_lowercase();
-                BUILD_OUTPUT_COMMANDS.iter().any(|cmd| lower.contains(cmd))
-            });
-
-            if is_build_output {
-                // Smart extraction: prioritize errors/warnings for build output
-                capture.output =
-                    extract_build_errors_and_summary(&capture.output, setup.max_tokens);
-                truncated = true;
-            } else {
-                // Apply byte fuse as secondary safeguard
-                if capture.output.len() > DEFAULT_PTY_OUTPUT_BYTE_FUSE {
-                    // Truncate to byte limit with marker
-                    if let Some(truncate_point) = capture
-                        .output
-                        .char_indices()
-                        .rev()
-                        .find(|(byte_idx, _)| *byte_idx < DEFAULT_PTY_OUTPUT_BYTE_FUSE)
-                        .map(|(idx, _)| idx + 1)
-                    {
-                        capture.output.truncate(truncate_point);
-                        capture.output.push_str("\n[Output truncated]");
-                    }
-                    truncated = true;
-                }
-            }
-
-            // Add truncation notice if output was reduced
-            let final_lines = capture.output.lines().count();
-            if original_lines > final_lines || original_len > capture.output.len() {
-                capture.output = format!(
-                    "{}\n\n[Output truncated: {} lines / {} bytes → {} lines / {} bytes]",
-                    capture.output,
-                    original_lines,
-                    original_len,
-                    final_lines,
-                    capture.output.len()
-                );
-            }
-        }
-
-        let response = build_ephemeral_pty_response(
-            &setup,
-            capture,
-            snapshot,
-            truncated,
-            pty_capabilities_from_config(self.pty_config()),
-        );
-        Ok(response)
-    }
-
-    async fn execute_single_pty_attempt(
-        &mut self,
-        setup: &PtyCommandSetup,
-        retry_count: u32,
-    ) -> Result<(Option<i32>, PtyEphemeralCapture, VTCodePtySession)> {
-        let _session_guard = self
-            .start_pty_session()
-            .context("Maximum PTY sessions reached; cannot start new session")?;
-        let mut lifecycle = PtySessionLifecycle::start(self)?;
-
-        // Increment active PTY sessions counter
-        self.increment_active_pty_sessions();
-
-        // Ensure we always decrement the counter when the session ends
-        let result = async {
-            self.pty_manager()
-                .create_session(
-                    setup.session_id.clone(),
-                    setup.command.clone(),
-                    setup.working_dir_path.clone(),
-                    setup.size(),
-                )
-                .with_context(|| {
-                    format!(
-                        "failed to create PTY session '{}' for command {:?} (attempt {})",
-                        setup.session_id,
-                        setup.command,
-                        retry_count + 1
-                    )
-                })?;
-            lifecycle.commit();
-
-            // Use adaptive timeout: longer for known long-running commands
-            let poll_timeout = if is_long_running_command(&setup.command) {
-                Duration::from_secs(RUN_PTY_POLL_TIMEOUT_LONG_RUNNING)
-            } else {
-                Duration::from_secs(RUN_PTY_POLL_TIMEOUT_SECS)
-            };
-
-            // Wait for full command completion, not just initial output
-            let capture = self
-                .wait_for_pty_completion(&setup.session_id, poll_timeout)
-                .await;
-
-            let snapshot = self
-                .pty_manager()
-                .snapshot_session(&setup.session_id)
-                .with_context(|| {
-                    format!("failed to snapshot PTY session '{}'", setup.session_id)
-                })?;
-
-            Ok((capture.exit_code, capture, snapshot))
-        }
-        .await;
-
-        // Decrement active PTY sessions counter (always executed)
-        self.decrement_active_pty_sessions();
-
-        result
-    }
-
-    async fn wait_for_pty_completion(
-        &self,
-        session_id: &str,
-        poll_timeout: Duration,
-    ) -> PtyEphemeralCapture {
-        let mut output = String::new();
-        let start = Instant::now();
-        let poll_interval = Duration::from_millis(50);
-        let max_backoff = Duration::from_millis(400);
-        let mut backoff = poll_interval;
-        let mut last_progress = start;
-        let min_wait = Duration::from_millis(200);
-
-        loop {
-            // Check if session has completed
-            if let Ok(Some(code)) = self.pty_manager().is_session_completed(session_id) {
-                // Drain any remaining output
-                if let Ok(Some(final_output)) =
-                    self.pty_manager().read_session_output(session_id, true)
-                {
-                    if let Some(callback) = &self.progress_callback {
-                        callback("run_pty_cmd", &final_output);
-                    }
-                    output.push_str(&final_output);
-                }
-
-                return PtyEphemeralCapture {
-                    output,
-                    exit_code: Some(code),
-                    completed: true,
-                    duration: start.elapsed(),
-                };
-            }
-
-            let mut made_progress = false;
-            // Read any available output
-            if let Ok(Some(mut new_output)) =
-                self.pty_manager().read_session_output(session_id, true)
-                && !new_output.is_empty()
-            {
-                if output.len().saturating_add(new_output.len()) > DEFAULT_PTY_OUTPUT_BYTE_FUSE {
-                    let remaining = DEFAULT_PTY_OUTPUT_BYTE_FUSE.saturating_sub(output.len());
-                    if remaining > 0 {
-                        new_output.truncate(remaining);
-                        output.push_str(&new_output);
-                    }
-                    output.push_str("\n[Output truncated: byte fuse reached]");
-                    return PtyEphemeralCapture {
-                        output,
-                        exit_code: None,
-                        completed: false,
-                        duration: start.elapsed(),
-                    };
-                }
-
-                if let Some(callback) = &self.progress_callback {
-                    callback("run_pty_cmd", &new_output);
-                }
-                output.push_str(&new_output);
-                last_progress = Instant::now();
-                made_progress = true;
-            }
-
-            let elapsed = start.elapsed();
-
-            if made_progress {
-                backoff = poll_interval;
-            } else {
-                let next_backoff_ms =
-                    (backoff.as_millis().saturating_mul(3).saturating_div(2)) as u64;
-                let next_backoff = Duration::from_millis(next_backoff_ms);
-                backoff = next_backoff.max(poll_interval).min(max_backoff);
-                if last_progress.elapsed() > Duration::from_secs(5) {
-                    backoff = max_backoff;
-                }
-            }
-
-            // Minimum wait before returning
-            if !output.is_empty() && elapsed > min_wait {
-                // For fast commands (< 2s), wait for completion
-                if elapsed < Duration::from_secs(2) {
-                    sleep(backoff).await;
-                    continue;
-                }
-            }
-
-            // For agent loop: if we're dealing with long-running commands, wait much longer
-            // The original poll_timeout was too aggressive for build processes
-            let effective_timeout =
-                if poll_timeout >= Duration::from_secs(RUN_PTY_POLL_TIMEOUT_LONG_RUNNING) {
-                    // For long-running commands (like cargo, npm), use extended timeout
-                    Duration::from_secs(600) // 10 minutes for long-running commands
-                } else {
-                    // For regular commands, use original timeout behavior
-                    Duration::from_secs(60) // 1 minute for regular commands
-                };
-
-            // Check if we've exceeded the effective timeout
-            if elapsed > effective_timeout {
-                debug!(
-                    "PTY command exceeded timeout of {:?} (original: {:?}), returning partial output",
-                    effective_timeout, poll_timeout
-                );
-                return PtyEphemeralCapture {
-                    output,
-                    exit_code: None, // Indicate still running
-                    completed: false,
-                    duration: elapsed,
-                };
-            }
-
-            sleep(backoff).await;
-        }
-    }
-
-    async fn execute_create_pty_session(&mut self, args: Value) -> Result<Value> {
-        let payload = value_as_object(&args, "create_pty_session expects an object payload")?;
-        let session_id =
-            parse_session_id(payload, "create_pty_session requires a 'session_id' string")?;
-
-        let mut command_parts = parse_command_parts(
-            payload,
-            "create_pty_session requires a 'command' value",
-            "PTY session command cannot be empty",
-        )?;
-
-        let login_shell = payload
-            .get("login")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-
-        let shell_program = resolve_shell_preference(
-            payload.get("shell").and_then(|value| value.as_str()),
-            self.pty_config(),
-        );
-        let should_replace = payload.get("shell").is_some()
-            || (command_parts.len() == 1 && is_default_shell_placeholder(&command_parts[0]));
-        if should_replace {
-            command_parts = vec![shell_program];
-        }
-
-        if login_shell
-            && !command_parts.is_empty()
-            && !should_use_windows_command_tokenizer(Some(&command_parts[0]))
-            && !command_parts.iter().skip(1).any(|arg| arg == "-l")
-        {
-            command_parts.push("-l".to_string());
-        }
-
-        let working_dir = self
-            .pty_manager()
-            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
-            .await?;
-
-        let rows =
-            parse_pty_dimension("rows", payload.get("rows"), self.pty_config().default_rows)?;
-        let cols =
-            parse_pty_dimension("cols", payload.get("cols"), self.pty_config().default_cols)?;
-
-        let size = PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        };
-
-        debug!(
-            target: "vtcode::pty",
-            session_id = %session_id,
-            command = ?command_parts,
-            working_dir = %working_dir.display(),
-            rows,
-            cols,
-            "creating PTY session"
-        );
-
-        // Start PTY session and store guard to keep session alive for the duration
-        let _guard = self.start_pty_session()?;
-        let result = match self.pty_manager().create_session(
-            session_id.clone(),
-            command_parts.clone(),
-            working_dir.clone(),
-            size,
-        ) {
-            Ok(meta) => meta,
-            Err(error) => {
-                // Guard will be dropped here, automatically decrementing session count
-                // Attempt to cleanup the failed session if it was created
-                let _ = self.pty_manager().close_session(&session_id);
-                return Err(error).with_context(|| {
-                    format!(
-                        "Failed to create PTY session '{}' with command {:?} in {}",
-                        session_id,
-                        command_parts,
-                        working_dir.display()
-                    )
-                });
-            }
-        };
-
-        // Check if the session is still running (should be, since we just created it)
-        let is_completed = match self.pty_manager().is_session_completed(&session_id) {
-            Ok(Some(exit_code)) => {
-                // Process has exited immediately - likely command not found or permission denied
-                // This is often caused by:
-                // - Command not found in PATH
-                // - Permission denied (executable not marked as +x)
-                // - Shell not found
-                // Try to capture any output to help diagnose
-                let output = self
-                    .pty_manager()
-                    .read_session_output(&session_id, false)
-                    .unwrap_or(None)
-                    .unwrap_or_default();
-
-                if exit_code != 0 {
-                    debug!(
-                        target: "vtcode::pty",
-                        session_id = %session_id,
-                        exit_code = exit_code,
-                        output = %output,
-                        "PTY session exited immediately after creation"
-                    );
-                }
-
-                Some(exit_code)
-            }
-            Ok(None) => {
-                // Process is still running
-                None
-            }
-            Err(_) => {
-                // Error checking status, assume completed
-                Some(-1) // Use -1 to indicate error state
-            }
-        };
-
-        let mut response = snapshot_to_map(result, PtySnapshotViewOptions::default());
-        response.insert("success".to_string(), Value::Bool(true));
-
-        // Add status information
-        match is_completed {
-            Some(exit_code) => {
-                response.insert("is_exited".to_string(), Value::Bool(true));
-                response.insert("exit_code".to_string(), Value::Number(exit_code.into()));
-            }
-            None => {
-                response.insert("is_exited".to_string(), Value::Bool(false)); // Still running
-                response.insert("exit_code".to_string(), Value::Null); // No exit code yet
-            }
-        }
-
-        let mut value = Value::Object(response);
-        let stdout = value
-            .get("scrollback")
-            .or_else(|| value.get("screen_contents"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        add_unified_metadata(
-            &mut value,
-            stdout,
-            is_completed,
-            Some(is_completed.is_some()),
-            None,
-            Some(false),
-            pty_capabilities_from_config(self.pty_config()),
-        );
-
-        Ok(value)
-    }
-
-    async fn execute_list_pty_sessions(&self) -> Result<Value> {
-        let sessions = self.pty_manager().list_sessions();
-        let mut identifiers = Vec::with_capacity(sessions.len());
-        let mut details = Vec::with_capacity(sessions.len());
-        for session in sessions {
-            identifiers.push(session.id.clone());
-            details.push(Value::Object(snapshot_to_map(
-                session,
-                PtySnapshotViewOptions::default(),
-            )));
-        }
-
-        let mut value = json!({
-            "success": true,
-            "sessions": identifiers,
-            "details": details,
-        });
-        add_unified_metadata(
-            &mut value,
-            None,
-            None,
-            None,
-            None,
-            Some(false),
-            pty_capabilities_from_config(self.pty_config()),
-        );
-        Ok(value)
-    }
-
-    async fn execute_close_pty_session(&mut self, args: Value) -> Result<Value> {
-        let payload = value_as_object(&args, "close_pty_session expects an object payload")?;
-        let session_id =
-            parse_session_id(payload, "close_pty_session requires a 'session_id' string")?;
-
-        // Check if the session is still running BEFORE closing
-        // (after close, the session will no longer be accessible)
-        let exit_code = match self.pty_manager().is_session_completed(session_id.as_str()) {
-            Ok(Some(code)) => Some(code),
-            Ok(None) => None,   // Process was still running when we checked
-            Err(_) => Some(-1), // Error state
-        };
-
-        let metadata = self
-            .pty_manager()
-            .close_session(session_id.as_str())
-            .with_context(|| format!("failed to close PTY session '{session_id}'"))?;
-        self.end_pty_session();
-
-        let mut response = snapshot_to_map(metadata, PtySnapshotViewOptions::default());
-        response.insert("success".to_string(), Value::Bool(true));
-
-        // Report the exit code we captured before closing
-        match exit_code {
-            Some(code) => {
-                response.insert("is_exited".to_string(), Value::Bool(true));
-                response.insert("exit_code".to_string(), Value::Number(code.into()));
-            }
-            None => {
-                response.insert("is_exited".to_string(), Value::Bool(false));
-                response.insert("exit_code".to_string(), Value::Null);
-            }
-        }
-
-        let mut value = Value::Object(response);
-        let stdout = value
-            .get("scrollback")
-            .or_else(|| value.get("screen_contents"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        add_unified_metadata(
-            &mut value,
-            stdout,
-            exit_code,
-            Some(exit_code.is_some()),
-            None,
-            Some(false),
-            pty_capabilities_from_config(self.pty_config()),
-        );
-
-        Ok(value)
-    }
-
-    async fn execute_send_pty_input(&mut self, args: Value) -> Result<Value> {
-        let payload = value_as_object(&args, "send_pty_input expects an object payload")?;
-        let input = PtyInputPayload::from_map(payload)?;
-
-        // Check if session exists and is still running before attempting to send input
-        let session_exists = self
-            .pty_manager()
-            .snapshot_session(input.session_id.as_str())
-            .is_ok();
-        if !session_exists {
-            return Err(anyhow!(
-                "PTY session '{}' does not exist. Create it first with create_pty_session.",
-                input.session_id
-            ));
-        }
-
-        // Check if session has already exited
-        let is_completed = self
-            .pty_manager()
-            .is_session_completed(input.session_id.as_str())
-            .unwrap_or(Some(-1));
-
-        if let Some(exit_code) = is_completed {
-            return Err(anyhow!(
-                "PTY session '{}' has already exited with code {}. Cannot send input to completed session.",
-                input.session_id,
-                exit_code
-            ));
-        }
-
-        let written = self
-            .pty_manager()
-            .send_input_to_session(
-                input.session_id.as_str(),
-                &input.buffer,
-                input.append_newline,
-            )
-            .with_context(|| format!(
-                "failed to write to PTY session '{}'. Session may have been closed or may not be writable.",
-                input.session_id
-            ))?;
-
-        if input.wait_ms > 0 {
-            sleep(Duration::from_millis(input.wait_ms)).await;
-        }
-
-        let output = self
-            .pty_manager()
-            .read_session_output(input.session_id.as_str(), input.drain_output)
-            .with_context(|| format!("failed to read PTY session '{}' output", input.session_id))?;
-        let snapshot = self
-            .pty_manager()
-            .snapshot_session(input.session_id.as_str())
-            .with_context(|| format!("failed to snapshot PTY session '{}'", input.session_id))?;
-
-        // Check if the session is still running
-        let is_completed = match self
-            .pty_manager()
-            .is_session_completed(input.session_id.as_str())
-        {
-            Ok(Some(exit_code)) => {
-                // Process has exited with code
-                Some(exit_code)
-            }
-            Ok(None) => {
-                // Process is still running
-                None
-            }
-            Err(_) => {
-                // Error checking status, assume completed
-                Some(-1) // Use -1 to indicate error state
-            }
-        };
-
-        let mut response = snapshot_to_map(snapshot, PtySnapshotViewOptions::default());
-        response.insert("success".to_string(), Value::Bool(true));
-        response.insert("written_bytes".to_string(), Value::from(written));
-        response.insert(
-            "appended_newline".to_string(),
-            Value::Bool(input.append_newline),
-        );
-        if let Some(output) = output {
-            response.insert(
-                "output".to_string(),
-                Value::String(filter_pty_output(&strip_ansi(&output))),
-            );
-        }
-
-        // Add the input that was sent as stdin (if it's valid UTF-8)
-        if !input.buffer.is_empty()
-            && let Ok(input_str) = std::str::from_utf8(&input.buffer)
-        {
-            response.insert("stdin".to_string(), Value::String(input_str.to_string()));
-        }
-
-        // Add status information
-        match is_completed {
-            Some(exit_code) => {
-                response.insert("is_exited".to_string(), Value::Bool(true));
-                response.insert("exit_code".to_string(), Value::Number(exit_code.into()));
-            }
-            None => {
-                response.insert("is_exited".to_string(), Value::Bool(false)); // Still running
-                response.insert("exit_code".to_string(), Value::Null); // No exit code yet
-            }
-        }
-
-        let mut value = Value::Object(response);
-        let stdout = value
-            .get("output")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        add_unified_metadata(
-            &mut value,
-            stdout,
-            is_completed,
-            Some(is_completed.is_some()),
-            None,
-            Some(false),
-            pty_capabilities_from_config(self.pty_config()),
-        );
-
-        Ok(value)
-    }
-
-    async fn execute_read_pty_session(&mut self, args: Value) -> Result<Value> {
-        let payload = value_as_object(&args, "read_pty_session expects an object payload")?;
-        let view_args = PtySessionViewArgs::from_map(payload)?;
-
-        let output = self
-            .pty_manager()
-            .read_session_output(view_args.session_id.as_str(), view_args.drain_output)
-            .with_context(|| {
-                format!(
-                    "failed to read PTY session '{}' output",
-                    view_args.session_id
-                )
-            })?;
-        let snapshot = self
-            .pty_manager()
-            .snapshot_session(view_args.session_id.as_str())
-            .with_context(|| {
-                format!("failed to snapshot PTY session '{}'", view_args.session_id)
-            })?;
-
-        // Check if the session is still running
-        let is_completed = match self
-            .pty_manager()
-            .is_session_completed(view_args.session_id.as_str())
-        {
-            Ok(Some(exit_code)) => {
-                // Process has exited with code
-                Some(exit_code)
-            }
-            Ok(None) => {
-                // Process is still running
-                None
-            }
-            Err(_) => {
-                // Error checking status, assume completed
-                Some(-1) // Use -1 to indicate error state
-            }
-        };
-
-        let mut response = snapshot_to_map(snapshot, view_args.view);
-        response.insert("success".to_string(), Value::Bool(true));
-
-        // Process output with optional truncation
-        let processed_output = if let Some(output) = output {
-            let output = filter_pty_output(&strip_ansi(&output));
-            if let Some(max_tokens) = view_args.max_tokens {
-                if max_tokens > 0 {
-                    // Simple byte-based truncation
-                    if output.len() > max_tokens * 4 {
-                        format!(
-                            "{}\n[... truncated by max_tokens: {} ...]",
-                            &output[..max_tokens * 4.min(output.len())],
-                            max_tokens
-                        )
-                    } else {
-                        output
-                    }
-                } else {
-                    output // Keep original if max_tokens is not valid
-                }
-            } else {
-                output // Keep original if no max_tokens specified
-            }
-        } else {
-            String::new() // No output to process
-        };
-
-        if !processed_output.is_empty() {
-            response.insert(
-                "output".to_string(),
-                Value::String(strip_ansi(&processed_output)),
-            );
-        }
-
-        // Add status information
-        match is_completed {
-            Some(exit_code) => {
-                response.insert("is_exited".to_string(), Value::Bool(true));
-                response.insert("exit_code".to_string(), Value::Number(exit_code.into()));
-            }
-            None => {
-                response.insert("is_exited".to_string(), Value::Bool(false)); // Still running
-                response.insert("exit_code".to_string(), Value::Null); // No exit code yet
-            }
-        }
-
-        let mut value = Value::Object(response);
-        let stdout = value
-            .get("output")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        add_unified_metadata(
-            &mut value,
-            stdout,
-            is_completed,
-            Some(is_completed.is_some()),
-            None,
-            Some(false),
-            pty_capabilities_from_config(self.pty_config()),
-        );
-
-        Ok(value)
-    }
-
-    async fn execute_resize_pty_session(&mut self, args: Value) -> Result<Value> {
-        let payload = value_as_object(&args, "resize_pty_session expects an object payload")?;
-        let session_id =
-            parse_session_id(payload, "resize_pty_session requires a 'session_id' string")?;
-
-        let current = self
-            .pty_manager()
-            .snapshot_session(session_id.as_str())
-            .with_context(|| format!("failed to snapshot PTY session '{session_id}'"))?;
-
-        let rows = parse_pty_dimension("rows", payload.get("rows"), current.rows)?;
-        let cols = parse_pty_dimension("cols", payload.get("cols"), current.cols)?;
-
-        let size = PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        };
-
-        let snapshot = self
-            .pty_manager()
-            .resize_session(session_id.as_str(), size)
-            .with_context(|| format!("failed to resize PTY session '{session_id}'"))?;
-
-        let mut response = snapshot_to_map(snapshot, PtySnapshotViewOptions::default());
-        response.insert("success".to_string(), Value::Bool(true));
-
-        Ok(Value::Object(response))
     }
 }
 
@@ -2939,124 +2355,8 @@ fn parse_pty_dimension(name: &str, value: Option<&Value>, default: u16) -> Resul
     Ok(numeric as u16)
 }
 
-fn bool_from_map(map: &Map<String, Value>, key: &str, default: bool) -> bool {
-    map.get(key)
-        .and_then(|value| value.as_bool())
-        .unwrap_or(default)
-}
-
-fn parse_session_id(payload: &Map<String, Value>, missing_error: &str) -> Result<String> {
-    let raw_id = payload
-        .get("session_id")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| anyhow!(missing_error.to_string()))?;
-    let trimmed = raw_id.trim();
-    if trimmed.is_empty() {
-        return Err(anyhow!("session_id cannot be empty"));
-    }
-
-    Ok(trimmed.to_string())
-}
-
-struct PtyCommandSetup {
-    command: Vec<String>,
-    display_command: String,
-    working_dir_path: PathBuf,
-    working_dir_display: String,
-    session_id: String,
-    rows: u16,
-    cols: u16,
-    timeout_secs: u64,
-    /// Maximum tokens for output truncation. Defaults to DEFAULT_PTY_OUTPUT_MAX_TOKENS.
-    /// Set to 0 to disable truncation (not recommended for large outputs).
-    max_tokens: usize,
-    confirm: bool,
-}
-
-impl PtyCommandSetup {
-    fn size(&self) -> PtySize {
-        PtySize {
-            rows: self.rows,
-            cols: self.cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct PtySnapshotViewOptions {
-    include_screen: bool,
-    include_scrollback: bool,
-}
-
-impl PtySnapshotViewOptions {
-    fn new(include_screen: bool, include_scrollback: bool) -> Self {
-        Self {
-            include_screen,
-            include_scrollback,
-        }
-    }
-}
-
-impl Default for PtySnapshotViewOptions {
-    fn default() -> Self {
-        Self {
-            include_screen: true,
-            include_scrollback: true,
-        }
-    }
-}
-
-fn snapshot_to_map(
-    snapshot: VTCodePtySession,
-    options: PtySnapshotViewOptions,
-) -> Map<String, Value> {
-    let VTCodePtySession {
-        id,
-        command,
-        args,
-        working_dir,
-        rows,
-        cols,
-        screen_contents,
-        scrollback,
-    } = snapshot;
-
-    let mut response = Map::new();
-    response.insert("session_id".to_string(), Value::String(id));
-    response.insert("command".to_string(), Value::String(command));
-    response.insert(
-        "args".to_string(),
-        Value::Array(args.into_iter().map(Value::String).collect()),
-    );
-    let working_directory = working_dir.unwrap_or_else(|| ".".into());
-    response.insert(
-        "working_directory".to_string(),
-        Value::String(working_directory),
-    );
-    response.insert("rows".to_string(), Value::from(rows));
-    response.insert("cols".to_string(), Value::from(cols));
-
-    if options.include_screen
-        && let Some(screen) = screen_contents
-    {
-        response.insert(
-            "screen_contents".to_string(),
-            Value::String(filter_pty_output(&strip_ansi(&screen))),
-        );
-    }
-
-    if options.include_scrollback
-        && let Some(scrollback) = scrollback
-    {
-        response.insert(
-            "scrollback".to_string(),
-            Value::String(filter_pty_output(&strip_ansi(&scrollback))),
-        );
-    }
-
-    response
+fn strip_ansi(text: &str) -> String {
+    crate::utils::ansi_parser::strip_ansi(text)
 }
 
 fn filter_pty_output(text: &str) -> String {
@@ -3075,129 +2375,35 @@ fn filter_pty_output(text: &str) -> String {
     filtered.join("\n")
 }
 
-fn strip_ansi(text: &str) -> String {
-    crate::utils::ansi_parser::strip_ansi(text)
+struct PtyCommandSetup {
+    command: Vec<String>,
+    display_command: String,
+    working_dir_path: PathBuf,
+    session_id: String,
+    rows: u16,
+    cols: u16,
+    yield_time_ms: Option<u64>,
+    /// Maximum tokens for output truncation. Defaults to DEFAULT_PTY_OUTPUT_MAX_TOKENS.
+    /// Set to 0 to disable truncation (not recommended for large outputs).
+    max_tokens: usize,
+    confirm: bool,
 }
 
-fn compute_output_stats(text: &str) -> Value {
-    json!({
-        "bytes": text.len(),
-        "lines": text.lines().count(),
-        "unicode_metrics": Value::Null,
-    })
+impl PtyCommandSetup {
+    fn size(&self) -> PtySize {
+        PtySize {
+            rows: self.rows,
+            cols: self.cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        }
+    }
 }
 
-fn add_unified_metadata(
-    value: &mut Value,
-    stdout: Option<String>,
+struct PtyEphemeralCapture {
+    output: String,
     exit_code: Option<i32>,
-    is_exited: Option<bool>,
-    duration_ms: Option<u128>,
-    truncated: Option<bool>,
-    capabilities: Value,
-) {
-    if let Value::Object(obj) = value {
-        if let Some(stdout) = stdout {
-            obj.entry("stdout".to_string())
-                .or_insert(Value::String(stdout.clone()));
-            obj.entry("stats".to_string())
-                .or_insert(compute_output_stats(&stdout));
-        } else if !obj.contains_key("stats") {
-            obj.insert(
-                "stats".to_string(),
-                json!({"bytes": 0, "lines": 0, "unicode_metrics": Value::Null}),
-            );
-        }
-
-        if let Some(code) = exit_code {
-            obj.entry("exit_code".to_string())
-                .or_insert(Value::Number(code.into()));
-        }
-
-        if let Some(done) = is_exited {
-            obj.entry("is_exited".to_string())
-                .or_insert(Value::Bool(done));
-        }
-
-        if let Some(ms) = duration_ms {
-            let ms_u64 = ms as u64;
-            obj.entry("duration_ms".to_string())
-                .or_insert(Value::Number(ms_u64.into()));
-        }
-
-        if let Some(flag) = truncated {
-            obj.entry("truncated".to_string())
-                .or_insert(Value::Bool(flag));
-        }
-
-        obj.entry("capabilities".to_string())
-            .or_insert(capabilities);
-    }
-}
-
-fn pty_capabilities_from_config(config: &PtyConfig) -> Value {
-    json!({
-        "platform": std::env::consts::OS,
-        "supports_login_shell": !cfg!(windows),
-        "supports_resize": true,
-        "max_sessions": config.max_sessions,
-        "max_scrollback_bytes": config.max_scrollback_bytes,
-        "supports_unicode_metrics": true,
-    })
-}
-
-#[cfg(test)]
-mod unified_metadata_tests {
-    use super::*;
-
-    #[test]
-    fn adds_stats_and_capabilities_when_stdout_present() {
-        let mut value = json!({});
-        add_unified_metadata(
-            &mut value,
-            Some("hello\nworld".to_string()),
-            Some(0),
-            Some(true),
-            Some(123),
-            Some(true),
-            json!({"supports_resize": true}),
-        );
-
-        let obj = value.as_object().expect("object");
-        assert_eq!(
-            obj.get("stdout").and_then(|v| v.as_str()),
-            Some("hello\nworld")
-        );
-        let stats = obj.get("stats").and_then(|v| v.as_object()).expect("stats");
-        assert_eq!(stats.get("bytes").and_then(|v| v.as_u64()), Some(11));
-        assert_eq!(stats.get("lines").and_then(|v| v.as_u64()), Some(2));
-        assert_eq!(obj.get("exit_code").and_then(|v| v.as_i64()), Some(0));
-        assert_eq!(obj.get("is_exited").and_then(|v| v.as_bool()), Some(true));
-        assert_eq!(obj.get("duration_ms").and_then(|v| v.as_u64()), Some(123));
-        assert_eq!(obj.get("truncated").and_then(|v| v.as_bool()), Some(true));
-        assert!(obj.get("capabilities").is_some());
-    }
-
-    #[test]
-    fn adds_defaults_when_stdout_missing() {
-        let mut value = json!({});
-        add_unified_metadata(
-            &mut value,
-            None,
-            None,
-            None,
-            None,
-            Some(false),
-            json!({"supports_resize": true}),
-        );
-
-        let obj = value.as_object().expect("object");
-        let stats = obj.get("stats").and_then(|v| v.as_object()).expect("stats");
-        assert_eq!(stats.get("bytes").and_then(|v| v.as_u64()), Some(0));
-        assert_eq!(stats.get("lines").and_then(|v| v.as_u64()), Some(0));
-        assert_eq!(obj.get("truncated").and_then(|v| v.as_bool()), Some(false));
-        assert!(obj.get("capabilities").is_some());
-    }
+    duration: Duration,
 }
 
 #[cfg(test)]
@@ -3467,669 +2673,6 @@ mod tests {
         assert!(payload.buffer.is_empty());
         assert!(payload.append_newline);
     }
-}
-
-struct PtySessionViewArgs {
-    session_id: String,
-    drain_output: bool,
-    view: PtySnapshotViewOptions,
-    max_tokens: Option<usize>,
-}
-
-impl PtySessionViewArgs {
-    fn from_map(map: &Map<String, Value>) -> Result<Self> {
-        let session_id = parse_session_id(map, "read_pty_session requires a 'session_id' string")?;
-        let drain_output = bool_from_map(map, "drain", false);
-        let include_screen = bool_from_map(map, "include_screen", true);
-        let include_scrollback = bool_from_map(map, "include_scrollback", true);
-        let max_tokens = map
-            .get("max_tokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize);
-
-        Ok(Self {
-            session_id,
-            drain_output,
-            view: PtySnapshotViewOptions::new(include_screen, include_scrollback),
-            max_tokens,
-        })
-    }
-}
-
-#[derive(Debug)]
-struct PtyInputPayload {
-    session_id: String,
-    buffer: Vec<u8>,
-    append_newline: bool,
-    wait_ms: u64,
-    drain_output: bool,
-}
-
-impl PtyInputPayload {
-    fn from_map(map: &Map<String, Value>) -> Result<Self> {
-        let session_id = parse_session_id(map, "send_pty_input requires a 'session_id' string")?;
-        let append_newline = bool_from_map(map, "append_newline", false);
-        let wait_ms = map
-            .get("wait_ms")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0);
-        let drain_output = bool_from_map(map, "drain", true);
-
-        let input_text = map.get("input").and_then(Value::as_str);
-        let input_base64_text = map.get("input_base64").and_then(Value::as_str);
-        let input_preview = input_text.map(Self::preview_string);
-        let input_base64_preview = input_base64_text.map(Self::preview_string);
-
-        debug!(
-            target: "vtcode::pty",
-            session_id = %session_id,
-            append_newline,
-            wait_ms,
-            drain_output,
-            input_len = input_text.map(|text| text.len()).unwrap_or(0),
-            input_preview = input_preview.as_deref(),
-            input_base64_len = input_base64_text.map(|text| text.len()).unwrap_or(0),
-            input_base64_preview = input_base64_preview.as_deref(),
-            "received send_pty_input payload"
-        );
-
-        let mut buffer = Vec::with_capacity(4096); // Pre-allocate 4KB buffer for typical PTY output
-
-        // Prefer input_base64 if present, else use input
-        if let Some(encoded) = map
-            .get("input_base64")
-            .and_then(|value| value.as_str())
-            .filter(|value| !value.is_empty())
-        {
-            let decoded = BASE64_STANDARD
-                .decode(encoded.as_bytes())
-                .context("input_base64 must be valid base64")?;
-            buffer.extend_from_slice(&decoded);
-        } else if let Some(text) = map.get("input").and_then(|value| value.as_str()) {
-            buffer.extend_from_slice(text.as_bytes());
-        }
-
-        debug!(
-            target: "vtcode::pty",
-            session_id = %session_id,
-            buffer_len = buffer.len(),
-            buffer_preview = %Self::preview_bytes(&buffer),
-            "prepared PTY input buffer"
-        );
-
-        if buffer.is_empty() && !append_newline {
-            debug!(
-                target: "vtcode::pty",
-                session_id = %session_id,
-                "rejecting empty PTY input without append_newline"
-            );
-            return Err(anyhow!(
-                "send_pty_input requires 'input' or 'input_base64' unless append_newline is true"
-            ));
-        }
-
-        trace!(
-            target: "vtcode::pty",
-            session_id = session_id.as_str(),
-            append_newline,
-            wait_ms,
-            drain_output,
-            has_input = map.contains_key("input"),
-            has_input_base64 = map.contains_key("input_base64"),
-            buffer_len = buffer.len(),
-            "parsed PTY input payload"
-        );
-
-        Ok(Self {
-            session_id,
-            buffer,
-            append_newline,
-            wait_ms,
-            drain_output,
-        })
-    }
-
-    fn preview_string(text: &str) -> String {
-        const MAX_PREVIEW: usize = 64;
-        if text.len() <= MAX_PREVIEW {
-            text.to_string()
-        } else {
-            format!("{}…", &text[..MAX_PREVIEW])
-        }
-    }
-
-    fn preview_bytes(bytes: &[u8]) -> String {
-        const MAX_BYTES: usize = 64;
-        if let Ok(text) = std::str::from_utf8(bytes) {
-            return Self::preview_string(text);
-        }
-
-        let mut hex = String::new();
-        for byte in bytes.iter().take(MAX_BYTES / 2) {
-            use std::fmt::Write as _;
-            let _ = write!(hex, "{:02x}", byte);
-        }
-        if bytes.len() > MAX_BYTES / 2 {
-            hex.push('…');
-        }
-        format!("hex:{}", hex)
-    }
-}
-
-struct PtyEphemeralCapture {
-    output: String,
-    exit_code: Option<i32>,
-    completed: bool,
-    duration: Duration,
-}
-
-struct PtyFollowUp {
-    summary: String,
-    warnings: Vec<String>,
-    errors: Vec<String>,
-    prompt: Option<String>,
-}
-
-fn summarize_pty_output(
-    output: &str,
-    exit_code: Option<i32>,
-    command: &[String],
-    duration: Duration,
-    completed: bool,
-) -> PtyFollowUp {
-    const MAX_SCAN_LINES: usize = 200;
-    const MAX_FINDINGS: usize = 5;
-
-    let mut warnings = Vec::new();
-    let mut errors = Vec::new();
-
-    for line in output.lines().take(MAX_SCAN_LINES) {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        let lower = trimmed.to_lowercase();
-        if lower.contains("warning") && warnings.len() < MAX_FINDINGS {
-            warnings.push(trimmed.to_string());
-            continue;
-        }
-
-        if lower.contains("error") && errors.len() < MAX_FINDINGS {
-            errors.push(trimmed.to_string());
-        }
-    }
-
-    let command_display = if command.is_empty() {
-        "<empty command>".to_string()
-    } else {
-        join(command.iter().map(|part| part.as_str()))
-    };
-
-    let status = if !completed {
-        "running".to_string()
-    } else if exit_code == Some(0) {
-        "succeeded".to_string()
-    } else if let Some(code) = exit_code {
-        format!("finished with exit code {code}")
-    } else {
-        "finished".to_string()
-    };
-
-    let mut summary = format!("{command_display}: {status}");
-    if completed {
-        summary.push_str(&format!(" ({:.1}s)", duration.as_secs_f32()));
-    }
-    if !warnings.is_empty() {
-        summary.push_str(&format!(" | warnings: {}", warnings.len()));
-    }
-    if !errors.is_empty() {
-        summary.push_str(&format!(" | errors: {}", errors.len()));
-    }
-
-    let prompt = if !completed {
-        None
-    } else if exit_code == Some(0) && !warnings.is_empty() {
-        Some(format!(
-            "{} warning{} detected. Should I address them now?",
-            warnings.len(),
-            if warnings.len() == 1 { "" } else { "s" }
-        ))
-    } else if exit_code.is_some_and(|code| code != 0) {
-        Some("Command failed. Investigate and fix the errors?".to_string())
-    } else {
-        None
-    };
-
-    PtyFollowUp {
-        summary,
-        warnings,
-        errors,
-        prompt,
-    }
-}
-
-fn build_ephemeral_pty_response(
-    setup: &PtyCommandSetup,
-    capture: PtyEphemeralCapture,
-    snapshot: VTCodePtySession,
-    truncated: bool,
-    capabilities: Value,
-) -> Value {
-    let PtyEphemeralCapture {
-        output,
-        exit_code,
-        completed,
-        duration,
-    } = capture;
-
-    let session_reference = if completed {
-        None
-    } else {
-        Some(setup.session_id.clone())
-    };
-    let code = if completed { exit_code } else { None };
-    let status = if completed { "completed" } else { "running" };
-
-    // Build a clear message for the agent based on status
-    let (mut message, output_override) = if completed {
-        if let Some(exit_code) = code {
-            if exit_code == 0 {
-                ("Command completed successfully".to_string(), None)
-            } else if exit_code == 127 {
-                // Command not found - provide immediate, actionable guidance
-                // IMPORTANT: We used to replace the output, but that hides the actual shell error (e.g. "zsh: command not found: cargo")
-                // Now we preserve the output but provide the helpful message in the "message" field and "critical_note"
-
-                // Try to extract the actual command that failed if it was wrapped in a shell
-                let mut cmd_name = setup
-                    .command
-                    .first()
-                    .map(|s| s.as_str())
-                    .unwrap_or("command");
-
-                if setup.command.len() >= 3 {
-                    let shell = std::path::Path::new(&setup.command[0]);
-                    let shell_name = shell.file_name().and_then(|n| n.to_str()).unwrap_or("");
-
-                    if shell_name.contains("sh")
-                        || shell_name.contains("cmd")
-                        || shell_name.contains("powershell")
-                        || shell_name.contains("pwsh")
-                    {
-                        // Scan arguments for the execution flag
-                        for (i, arg) in setup.command.iter().enumerate().skip(1) {
-                            if arg == "-c" || arg == "/C" || arg == "-Command" || arg == "-lc" {
-                                // The next argument should be the command string
-                                if let Some(cmd_str) = setup.command.get(i + 1) {
-                                    cmd_name =
-                                        cmd_str.split_whitespace().next().unwrap_or("command");
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let helpful_msg = generate_command_not_found_message(cmd_name);
-                (helpful_msg.clone(), None)
-            } else {
-                (format!("Command failed with exit code {}", exit_code), None)
-            }
-        } else {
-            ("Command completed".to_string(), None)
-        }
-    } else {
-        (
-            "Command is still running. Backend continues polling automatically. Do NOT call read_pty_session."
-                .to_string(),
-            None,
-        )
-    };
-
-    // Use the override output if available (for exit code 127), otherwise use actual output
-    let final_output = output_override.as_ref().unwrap_or(&output);
-
-    let follow_up = summarize_pty_output(final_output, code, &setup.command, duration, completed);
-    if completed && code == Some(0) && !follow_up.warnings.is_empty() {
-        message = format!(
-            "Command completed successfully with {} warning{}",
-            follow_up.warnings.len(),
-            if follow_up.warnings.len() == 1 {
-                ""
-            } else {
-                "s"
-            }
-        );
-    } else if completed && code.is_some_and(|c| c != 0 && c != 127) && !follow_up.errors.is_empty()
-    {
-        message = format!(
-            "Command failed with exit code {} ({} error{})",
-            code.unwrap_or_default(),
-            follow_up.errors.len(),
-            if follow_up.errors.len() == 1 { "" } else { "s" }
-        );
-    }
-
-    if let Some(prompt) = &follow_up.prompt {
-        message = format!("{} · {}", message, prompt);
-    }
-
-    // Detect if this is a git diff command - output is already rendered visually
-    let has_git = setup
-        .command
-        .iter()
-        .any(|arg| arg.to_lowercase().contains("git"));
-    let has_diff_cmd = setup.command.iter().any(|arg| {
-        let lower = arg.to_lowercase();
-        lower == "diff"
-            || lower == "show"
-            || lower == "log"
-            || lower.contains("git diff")
-            || lower.contains("git show")
-            || lower.contains("git log")
-    });
-    let is_git_diff = has_git && has_diff_cmd;
-
-    // Build annotated output for the agent (keeps raw content + follow-up hints)
-    let mut cleaned_output = strip_ansi(final_output);
-    let mut follow_lines: Vec<String> = Vec::new();
-    follow_lines.push(format!("Follow-up: {}", follow_up.summary));
-    if !follow_up.warnings.is_empty() {
-        let mut shown = 0usize;
-        for warning in follow_up.warnings.iter().take(3) {
-            follow_lines.push(format!("warning: {}", warning));
-            shown += 1;
-        }
-        if follow_up.warnings.len() > shown {
-            follow_lines.push(format!(
-                "(+{} more warnings)",
-                follow_up.warnings.len() - shown
-            ));
-        }
-    }
-    if !follow_up.errors.is_empty() {
-        let mut shown = 0usize;
-        for error in follow_up.errors.iter().take(3) {
-            follow_lines.push(format!("error: {}", error));
-            shown += 1;
-        }
-        if follow_up.errors.len() > shown {
-            follow_lines.push(format!("(+{} more errors)", follow_up.errors.len() - shown));
-        }
-    }
-    if let Some(prompt) = &follow_up.prompt {
-        follow_lines.push(format!("Next: {}", prompt));
-    }
-    if !follow_lines.is_empty() {
-        cleaned_output.push_str("\n\n");
-        cleaned_output.push_str(&follow_lines.join("\n"));
-    }
-
-    let mut response = json!({
-        "success": true,
-        "command": setup.command.clone(),
-        "output": cleaned_output,
-        "code": code,
-        "exit_code": code,
-        "status": status,
-        "message": message,
-        "mode": "pty",
-        "is_exited": completed,
-        "session_id": session_reference,
-        "id": setup.session_id.clone(),
-        "rows": snapshot.rows,
-        "cols": snapshot.cols,
-        "pty": {
-            "rows": snapshot.rows,
-            "cols": snapshot.cols,
-        },
-        "working_directory": setup.working_dir_display.clone(),
-        "working_dir": setup.working_dir_display.clone(),
-        "timeout_secs": setup.timeout_secs,
-        "duration_ms": if completed { duration.as_millis() } else { 0 },
-        "output_already_rendered": is_git_diff,
-    });
-
-    if let Value::Object(ref mut obj) = response {
-        obj.insert(
-            "follow_up".to_string(),
-            json!({
-                "summary": follow_up.summary,
-                "warnings": follow_up.warnings,
-                "errors": follow_up.errors,
-                "prompt": follow_up.prompt,
-            }),
-        );
-        if let Some(prompt) = follow_up.prompt {
-            obj.insert("follow_up_prompt".to_string(), Value::String(prompt));
-        }
-    }
-
-    // Add CRITICAL signals for exit code 127 to ABSOLUTELY PREVENT retry loops
-    if completed
-        && code == Some(127)
-        && let Value::Object(ref mut obj) = response
-    {
-        // Set flags to indicate this is a command-not-found error, but allow intelligent retries
-        // Fatal error remains true as this command failed, but we won't block all retries
-        obj.insert("fatal_error".to_string(), Value::Bool(true));
-        obj.insert("command_not_found".to_string(), Value::Bool(true));
-        obj.insert("final".to_string(), Value::Bool(true));
-
-        // Allow agent to retry with alternative approaches for exit code 127
-        // but provide clear guidance about what might work
-        obj.insert(
-            "agent_instruction".to_string(),
-            Value::String(
-                "AGENT: The command was not found (exit code 127). Before retrying, consider: \
-1. Check if this is a shell built-in that needs interactive mode (without -c flag) \
-2. Verify the command exists with 'which <command>' or 'command -v <command>' \
-3. For shell functions/aliases, ensure the shell is properly initialized \
-4. Try without the -l (login) flag if using an interactive shell wrapper \
-Only retry if you have a substantively different approach, not just changing shell flags."
-                    .to_string(),
-            ),
-        );
-
-        // Comprehensive explanation of the error and potential solutions
-        obj.insert(
-            "critical_note".to_string(),
-            Value::String(
-                "EXIT CODE 127: Command not found. The operating system searched PATH and could not \
-find this executable. This typically means: (1) The tool is not installed, \
-(2) It's not in a PATH directory, or (3) It's a shell built-in/alias not available \
-in non-interactive mode. Review the 'output' field for specific details."
-                    .to_string(),
-            ),
-        );
-        obj.insert(
-            "suggestion".to_string(),
-            Value::String(
-                "Potential solutions: Install the tool, add its directory to PATH, use an alternative \
-command, or if it's a shell built-in, ensure proper shell initialization. Avoid retrying \
-with minor shell flag variations unless you have reason to believe it will succeed."
-                    .to_string(),
-            ),
-        );
-        obj.insert(
-            "error_explanation".to_string(),
-            Value::String(
-                "Exit code 127 indicates 'command not found'. The OS searched all directories in PATH. \
-For interactive shell commands, ensure proper shell initialization or try without \
-non-interactive flags like -c."
-                    .to_string(),
-            ),
-        );
-
-        // Remove overly restrictive retry prevention flags to allow intelligent retry logic
-        // The agent_instruction field now provides guidance instead of absolute prohibition
-        obj.remove("do_not_retry");
-        obj.remove("do_not_attempt_workarounds");
-    }
-
-    add_unified_metadata(
-        &mut response,
-        Some(strip_ansi(final_output)),
-        code,
-        Some(completed),
-        Some(duration.as_millis()),
-        Some(truncated),
-        capabilities,
-    );
-
-    response
-}
-
-/// Generate helpful error message for exit code 127 (command not found)
-fn generate_command_not_found_message(cmd: &str) -> String {
-    match cmd {
-        "cargo" | "rustfmt" | "clippy" | "cargo-clippy" => {
-            "Command not found: This is a Rust tool. Try: source $HOME/.cargo/env && <command>. \
-             If Rust is not installed: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-                .to_string()
-        }
-        "git" => {
-            "Command not found: git is not installed or not in PATH. Install git for your system.".to_string()
-        }
-        "npm" | "node" => {
-            "Command not found: Node.js/npm is not installed or not in PATH. Install Node.js from https://nodejs.org".to_string()
-        }
-        "python" | "python3" => {
-            "Command not found: Python is not installed or not in PATH. Install Python 3 for your system.".to_string()
-        }
-        _ => {
-            format!(
-                "Command not found: '{}' is not in PATH or not installed. \
-                 Verify installation or add its directory to PATH. Do NOT retry with diagnostic commands.",
-                cmd
-            )
-        }
-    }
-}
-
-/// Extract errors, warnings, and summary from build tool output.
-/// Prioritizes error messages over verbose compilation progress.
-///
-/// For cargo/rustc output, extracts:
-/// - All error lines (error[E...]:) with 2 lines of context
-/// - All warning lines (warning:) with 1 line of context
-/// - Summary lines (Finished, error: could not compile, etc.)
-///
-/// This dramatically reduces output size while preserving actionable information.
-fn extract_build_errors_and_summary(output: &str, max_tokens: usize) -> String {
-    const TOKENS_PER_CHARACTER: f64 = 0.25;
-
-    let lines: Vec<&str> = output.lines().collect();
-    let total_lines = lines.len();
-
-    // If output is small enough, return as-is
-    let estimated_tokens = (output.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
-    if estimated_tokens <= max_tokens {
-        return output.to_string();
-    }
-
-    let mut extracted = Vec::with_capacity(100); // Pre-allocate for typical extraction size
-    let mut i = 0;
-
-    // Patterns that indicate important lines to keep
-    let error_patterns = ["error[E", "error:", "Error:", "ERROR:"];
-    let warning_patterns = ["warning:", "Warning:", "WARN:"];
-    let summary_patterns = [
-        "Finished",
-        "error: could not compile",
-        "error: aborting",
-        "Build failed",
-        "npm ERR!",
-        "failed to compile",
-        "generated",
-        "warning:",
-        "error:",
-        "Next:", // CRITICAL: Preserve agent follow-up prompts during truncation
-    ];
-
-    while i < total_lines {
-        let line = lines[i];
-        let is_error = error_patterns.iter().any(|p| line.contains(p));
-        let is_warning = warning_patterns.iter().any(|p| line.contains(p));
-        let is_summary = summary_patterns.iter().any(|p| line.contains(p));
-
-        if is_error {
-            // Include 2 lines before and after error for context
-            let start = i.saturating_sub(2);
-            let end = (i + 3).min(total_lines);
-            for j in start..end {
-                if !extracted.contains(&j) {
-                    extracted.push(j);
-                }
-            }
-        } else if is_warning {
-            // Include 1 line before and after warning
-            let start = i.saturating_sub(1);
-            let end = (i + 2).min(total_lines);
-            for j in start..end {
-                if !extracted.contains(&j) {
-                    extracted.push(j);
-                }
-            }
-        } else if is_summary && !extracted.contains(&i) {
-            extracted.push(i);
-        }
-
-        i += 1;
-    }
-
-    // Always include the last 10 lines (usually contains summary)
-    let tail_start = total_lines.saturating_sub(10);
-    for j in tail_start..total_lines {
-        if !extracted.contains(&j) {
-            extracted.push(j);
-        }
-    }
-
-    // Sort to maintain original order
-    extracted.sort();
-
-    // Build output with markers for skipped sections
-    let mut result = String::new();
-    let mut last_idx: Option<usize> = None;
-
-    for &idx in &extracted {
-        if let Some(last) = last_idx
-            && idx > last + 1
-        {
-            let skipped = idx - last - 1;
-            let _ = writeln!(result, "\n[... {} lines skipped ...]", skipped);
-        }
-        result.push_str(lines[idx]);
-        result.push('\n');
-        last_idx = Some(idx);
-    }
-
-    // If we extracted nothing useful, fall back to head+tail
-    if extracted.is_empty() || result.trim().is_empty() {
-        let head_lines = 50.min(total_lines / 3);
-        let tail_lines = 30.min(total_lines / 3);
-
-        result.clear();
-        for line in lines.iter().take(head_lines) {
-            result.push_str(line);
-            result.push('\n');
-        }
-        if total_lines > head_lines + tail_lines {
-            let _ = writeln!(
-                result,
-                "\n[... {} lines skipped ...]\n",
-                total_lines - head_lines - tail_lines
-            );
-        }
-        for line in lines.iter().skip(total_lines.saturating_sub(tail_lines)) {
-            result.push_str(line);
-            result.push('\n');
-        }
-    }
-
-    result
 }
 
 fn build_shell_command_string(
@@ -4482,10 +3025,6 @@ fn detect_posix_shell_candidate() -> Option<String> {
     None
 }
 
-fn is_default_shell_placeholder(program: &str) -> bool {
-    matches!(normalized_shell_name(program).as_str(), "bash" | "sh")
-}
-
 fn is_windows_shell(shell: &str) -> bool {
     matches!(
         normalized_shell_name(shell).as_str(),
@@ -4509,47 +3048,18 @@ fn generate_session_id(prefix: &str) -> String {
     format!("{prefix}-{timestamp}")
 }
 
-struct PtySessionLifecycle<'a> {
-    registry: &'a ToolRegistry,
-    active: bool,
-}
-
-impl<'a> PtySessionLifecycle<'a> {
-    fn start(registry: &'a ToolRegistry) -> Result<Self> {
-        registry.start_pty_session()?;
-        Ok(Self {
-            registry,
-            active: true,
-        })
-    }
-
-    fn commit(&mut self) {
-        self.active = false;
-    }
-}
-
-impl Drop for PtySessionLifecycle<'_> {
-    fn drop(&mut self) {
-        if self.active {
-            self.registry.end_pty_session();
-        }
-    }
-}
-
-/// Detects if a command is known to be long-running (build tools, package managers, etc.)
-fn is_long_running_command(command_parts: &[String]) -> bool {
+/// Detects if a command is an interactive shell (e.g., bash -i)
+fn is_interactive_shell(command_parts: &[String]) -> bool {
     if let Some(first) = command_parts.first() {
         let cmd = first.to_lowercase();
-        let basename = std::path::Path::new(&cmd)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-
-        // Check if it's a long-running command
-        LONG_RUNNING_COMMANDS
-            .iter()
-            .any(|&long_cmd| basename.starts_with(long_cmd) || basename == long_cmd)
+        let is_shell = cmd.contains("bash")
+            || cmd.contains("sh")
+            || cmd.contains("zsh")
+            || cmd.contains("fish")
+            || cmd.contains("pwsh")
+            || cmd.contains("cmd.exe");
+        let has_interactive_flag = command_parts.iter().any(|arg| arg == "-i" || arg == "/i");
+        is_shell && has_interactive_flag
     } else {
         false
     }

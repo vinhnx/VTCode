@@ -3,8 +3,8 @@
 use std::io;
 use std::time::Duration;
 
-use futures::stream::BoxStream;
 use futures::StreamExt;
+use futures::stream::BoxStream;
 use serde_json::Value as JsonValue;
 
 use super::pull::OllamaPullEvent;
@@ -16,8 +16,7 @@ pub struct OllamaClient {
     host_root: String,
 }
 
-const OLLAMA_CONNECTION_ERROR: &str =
-    "No running Ollama server detected. Start it with: `ollama serve` (after installing)\n\
+const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detected. Start it with: `ollama serve` (after installing)\n\
      Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file";
 
 impl OllamaClient {
@@ -57,7 +56,12 @@ impl OllamaClient {
     /// Fetch the list of model names available on the server.
     pub async fn fetch_models(&self) -> io::Result<Vec<String>> {
         let tags_url = format!("{}/api/tags", self.host_root.trim_end_matches('/'));
-        let resp = self.client.get(tags_url).send().await.map_err(io::Error::other)?;
+        let resp = self
+            .client
+            .get(tags_url)
+            .send()
+            .await
+            .map_err(io::Error::other)?;
 
         if !resp.status().is_success() {
             return Ok(Vec::new());

@@ -8,8 +8,8 @@
 //! - Audit logging & caching
 
 use crate::command_safety::{
-    command_might_be_dangerous, parse_bash_lc_commands, CommandDatabase, SafeCommandRegistry,
-    SafetyAuditLogger, SafetyDecision, SafetyDecisionCache,
+    CommandDatabase, SafeCommandRegistry, SafetyAuditLogger, SafetyDecision, SafetyDecisionCache,
+    command_might_be_dangerous, parse_bash_lc_commands,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -42,7 +42,12 @@ impl std::fmt::Display for EvaluationReason {
             Self::SafetyDeny(msg) => write!(f, "Safety Deny: {}", msg),
             Self::DangerousCommand(msg) => write!(f, "Dangerous: {}", msg),
             Self::CacheHit(allowed, msg) => {
-                write!(f, "Cache {} {}", if *allowed { "Allow" } else { "Deny" }, msg)
+                write!(
+                    f,
+                    "Cache {} {}",
+                    if *allowed { "Allow" } else { "Deny" },
+                    msg
+                )
             }
         }
     }
@@ -69,7 +74,6 @@ pub struct UnifiedCommandEvaluator {
     database: CommandDatabase,
     cache: SafetyDecisionCache,
     audit_logger: SafetyAuditLogger,
-
     // Policy component (wrapped for cloning)
     // Note: CommandPolicyEvaluator doesn't implement Clone in the codebase,
     // so we'll integrate it via Arc<Mutex<T>> in a real implementation
@@ -110,10 +114,8 @@ impl UnifiedCommandEvaluator {
 
         // 1. Check cache first
         if let Some(cached_decision) = self.cache.get(&command_text).await {
-            let reason = EvaluationReason::CacheHit(
-                cached_decision.is_safe,
-                cached_decision.reason.clone(),
-            );
+            let reason =
+                EvaluationReason::CacheHit(cached_decision.is_safe, cached_decision.reason.clone());
             // Note: Audit logging skipped for cached decisions (logged on original evaluation)
             return Ok(EvaluationResult {
                 allowed: cached_decision.is_safe,
@@ -182,9 +184,10 @@ impl UnifiedCommandEvaluator {
                 if command_might_be_dangerous(&script) {
                     let result = EvaluationResult {
                         allowed: false,
-                        primary_reason: EvaluationReason::DangerousCommand(
-                            format!("dangerous in sub-script: {}", script.join(" ")),
-                        ),
+                        primary_reason: EvaluationReason::DangerousCommand(format!(
+                            "dangerous in sub-script: {}",
+                            script.join(" ")
+                        )),
                         secondary_reasons: vec![],
                         resolved_path: None,
                     };
@@ -202,9 +205,10 @@ impl UnifiedCommandEvaluator {
                 if let SafetyDecision::Deny(reason) = self.registry.is_safe(&script) {
                     let result = EvaluationResult {
                         allowed: false,
-                        primary_reason: EvaluationReason::SafetyDeny(
-                            format!("sub-command denied: {}", reason),
-                        ),
+                        primary_reason: EvaluationReason::SafetyDeny(format!(
+                            "sub-command denied: {}",
+                            reason
+                        )),
                         secondary_reasons: vec![],
                         resolved_path: None,
                     };
@@ -229,11 +233,7 @@ impl UnifiedCommandEvaluator {
         };
         // Note: Audit logging could be added here via async task
         self.cache
-            .put(
-                command_text,
-                true,
-                "passed all safety checks".into(),
-            )
+            .put(command_text, true, "passed all safety checks".into())
             .await;
         Ok(result)
     }
@@ -455,10 +455,7 @@ impl PolicyAwareEvaluator {
     }
 
     /// Create with explicit policy decision
-    pub fn with_policy(
-        allow_policy_decision: bool,
-        policy_reason: impl Into<String>,
-    ) -> Self {
+    pub fn with_policy(allow_policy_decision: bool, policy_reason: impl Into<String>) -> Self {
         Self {
             unified: Arc::new(Mutex::new(UnifiedCommandEvaluator::new())),
             allow_policy_decision: Some(allow_policy_decision),
@@ -471,7 +468,8 @@ impl PolicyAwareEvaluator {
         let evaluator = self.unified.lock().await;
 
         // Apply policy layer if configured
-        if let (Some(policy_allowed), Some(reason)) = (&self.allow_policy_decision, &self.policy_reason)
+        if let (Some(policy_allowed), Some(reason)) =
+            (&self.allow_policy_decision, &self.policy_reason)
         {
             evaluator
                 .evaluate_with_policy(command, *policy_allowed, reason)

@@ -2,8 +2,8 @@ use crate::core::agent::task::{TaskOutcome, TaskResults};
 use crate::exec::events::ThreadEvent;
 use crate::gemini::{Content, Part};
 use crate::llm::provider::Message;
-use std::time::Duration;
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 use crate::core::agent::conversation::build_messages_from_conversation;
 
@@ -40,9 +40,15 @@ impl OutputStatus {
 #[derive(Debug, Clone)]
 pub enum PairableHistoryItem {
     /// Tool call without output (yet)
-    ToolCall { call_id: ToolCallId, tool_name: String },
+    ToolCall {
+        call_id: ToolCallId,
+        tool_name: String,
+    },
     /// Tool output for a previous call
-    ToolOutput { call_id: ToolCallId, status: OutputStatus },
+    ToolOutput {
+        call_id: ToolCallId,
+        status: OutputStatus,
+    },
 }
 
 /// Record of a missing output in conversation history
@@ -586,7 +592,8 @@ pub fn ensure_call_outputs_present(messages: &mut Vec<Message>) {
         let synthetic_message = Message::tool_response(
             missing.call_id.0.clone(),
             "canceled: Tool execution was interrupted. This synthetic output was created \
-             during history normalization to maintain conversation invariants.".to_string(),
+             during history normalization to maintain conversation invariants."
+                .to_string(),
         );
 
         tracing::warn!(
@@ -598,9 +605,9 @@ pub fn ensure_call_outputs_present(messages: &mut Vec<Message>) {
         let insert_pos = messages
             .iter()
             .position(|msg| {
-                msg.tool_calls.as_ref().is_some_and(|calls| {
-                    calls.iter().any(|call| call.id == missing.call_id.0)
-                })
+                msg.tool_calls
+                    .as_ref()
+                    .is_some_and(|calls| calls.iter().any(|call| call.id == missing.call_id.0))
             })
             .map(|pos| pos + 1);
 
@@ -648,10 +655,7 @@ pub fn remove_orphan_outputs(messages: &mut Vec<Message>) {
     });
 
     if messages.len() != initial_len {
-        tracing::info!(
-            "Removed {} orphan outputs",
-            initial_len - messages.len()
-        );
+        tracing::info!("Removed {} orphan outputs", initial_len - messages.len());
     }
 }
 
@@ -731,7 +735,10 @@ mod tests {
 
         let report = state.validate_history_invariants();
 
-        assert!(report.is_valid(), "Valid paired call/output should pass validation");
+        assert!(
+            report.is_valid(),
+            "Valid paired call/output should pass validation"
+        );
         assert!(report.missing_outputs.is_empty(), "No missing outputs");
         assert!(report.orphan_outputs.is_empty(), "No orphan outputs");
     }
@@ -835,7 +842,8 @@ mod tests {
         // Verify the synthetic output was added
         let last_msg = &state.conversation_messages[initial_len];
         assert_eq!(
-            last_msg.tool_call_id, Some("call_1".to_string()),
+            last_msg.tool_call_id,
+            Some("call_1".to_string()),
             "Synthetic output should have correct call_id"
         );
         assert!(
@@ -845,7 +853,10 @@ mod tests {
 
         // Validate after fix
         let report = state.validate_history_invariants();
-        assert!(report.is_valid(), "History should be valid after normalization");
+        assert!(
+            report.is_valid(),
+            "History should be valid after normalization"
+        );
     }
 
     /// Test 5: remove_orphan_outputs filters out orphaned responses
@@ -865,9 +876,10 @@ mod tests {
         state.conversation_messages.push(call1);
 
         // Add valid response for call_1
-        state
-            .conversation_messages
-            .push(Message::tool_response("call_1".to_string(), "valid result".to_string()));
+        state.conversation_messages.push(Message::tool_response(
+            "call_1".to_string(),
+            "valid result".to_string(),
+        ));
 
         // Add orphan response (no matching call)
         state.conversation_messages.push(Message::tool_response(
@@ -887,9 +899,10 @@ mod tests {
         );
 
         // Verify call_1 output is still there, orphan is gone
-        let has_call_1_output = state.conversation_messages.iter().any(|msg| {
-            msg.tool_call_id.as_ref().map_or(false, |id| id == "call_1")
-        });
+        let has_call_1_output = state
+            .conversation_messages
+            .iter()
+            .any(|msg| msg.tool_call_id.as_ref().map_or(false, |id| id == "call_1"));
         assert!(has_call_1_output, "Valid output should be retained");
 
         let has_orphan = state.conversation_messages.iter().any(|msg| {
@@ -931,9 +944,10 @@ mod tests {
         );
         state.conversation_messages.push(call2);
 
-        state
-            .conversation_messages
-            .push(Message::tool_response("call_2".to_string(), "written".to_string()));
+        state.conversation_messages.push(Message::tool_response(
+            "call_2".to_string(),
+            "written".to_string(),
+        ));
 
         // Add orphan response
         state.conversation_messages.push(Message::tool_response(
@@ -953,20 +967,20 @@ mod tests {
         );
 
         // Verify call_1 has synthetic output
-        let call_1_has_output = state.conversation_messages.iter().any(|msg| {
-            msg.tool_call_id.as_ref().map_or(false, |id| id == "call_1")
-        });
+        let call_1_has_output = state
+            .conversation_messages
+            .iter()
+            .any(|msg| msg.tool_call_id.as_ref().map_or(false, |id| id == "call_1"));
         assert!(
             call_1_has_output,
             "call_1 should have synthetic output after normalization"
         );
 
         // Verify orphan is gone
-        let has_orphan = state.conversation_messages.iter().any(|msg| {
-            msg.tool_call_id
-                .as_ref()
-                .map_or(false, |id| id == "orphan")
-        });
+        let has_orphan = state
+            .conversation_messages
+            .iter()
+            .any(|msg| msg.tool_call_id.as_ref().map_or(false, |id| id == "orphan"));
         assert!(!has_orphan, "Orphan should be removed after normalization");
     }
 
@@ -998,10 +1012,7 @@ mod tests {
 
         // Verify history is now valid
         let report = state.validate_history_invariants();
-        assert!(
-            report.is_valid(),
-            "After recovery, history should be valid"
-        );
+        assert!(report.is_valid(), "After recovery, history should be valid");
 
         // Verify synthetic output was created
         let has_recovered_call = state.conversation_messages.iter().any(|msg| {
@@ -1020,7 +1031,10 @@ mod tests {
                 .as_ref()
                 .map_or(false, |id| id == "old_call")
         });
-        assert!(!has_orphan, "Orphan output should be removed during recovery");
+        assert!(
+            !has_orphan,
+            "Orphan output should be removed during recovery"
+        );
     }
 
     /// Test 8: HistoryValidationReport summary messages
@@ -1072,12 +1086,14 @@ mod tests {
         }
 
         // Add outputs for calls 1 and 3, but not 2
-        state
-            .conversation_messages
-            .push(Message::tool_response("call_1".to_string(), "result_1".to_string()));
-        state
-            .conversation_messages
-            .push(Message::tool_response("call_3".to_string(), "result_3".to_string()));
+        state.conversation_messages.push(Message::tool_response(
+            "call_1".to_string(),
+            "result_1".to_string(),
+        ));
+        state.conversation_messages.push(Message::tool_response(
+            "call_3".to_string(),
+            "result_3".to_string(),
+        ));
 
         let report = state.validate_history_invariants();
 
@@ -1147,20 +1163,23 @@ mod tests {
                 thought_signature: None,
             }],
         });
-        state.conversation_messages.push(Message::assistant_with_tools(
-            "Calling A".to_string(),
-            vec![crate::llm::provider::ToolCall::function(
-                "call_a".to_string(),
-                "tool_a".to_string(),
-                "{}".to_string(),
-            )],
-        ));
+        state
+            .conversation_messages
+            .push(Message::assistant_with_tools(
+                "Calling A".to_string(),
+                vec![crate::llm::provider::ToolCall::function(
+                    "call_a".to_string(),
+                    "tool_a".to_string(),
+                    "{}".to_string(),
+                )],
+            ));
 
         // Turn 3: User (Response A)
         state.conversation.push(Content::user_text("Result A"));
-        state
-            .conversation_messages
-            .push(Message::tool_response("call_a".to_string(), "Result A".to_string()));
+        state.conversation_messages.push(Message::tool_response(
+            "call_a".to_string(),
+            "Result A".to_string(),
+        ));
 
         // Turn 4: Assistant (Call B)
         state.conversation.push(Content {
@@ -1170,20 +1189,23 @@ mod tests {
                 thought_signature: None,
             }],
         });
-        state.conversation_messages.push(Message::assistant_with_tools(
-            "Calling B".to_string(),
-            vec![crate::llm::provider::ToolCall::function(
-                "call_b".to_string(),
-                "tool_b".to_string(),
-                "{}".to_string(),
-            )],
-        ));
+        state
+            .conversation_messages
+            .push(Message::assistant_with_tools(
+                "Calling B".to_string(),
+                vec![crate::llm::provider::ToolCall::function(
+                    "call_b".to_string(),
+                    "tool_b".to_string(),
+                    "{}".to_string(),
+                )],
+            ));
 
         // Turn 5: User (Response B)
         state.conversation.push(Content::user_text("Result B"));
-        state
-            .conversation_messages
-            .push(Message::tool_response("call_b".to_string(), "Result B".to_string()));
+        state.conversation_messages.push(Message::tool_response(
+            "call_b".to_string(),
+            "Result B".to_string(),
+        ));
 
         // Total conversation length is 5.
         assert_eq!(state.conversation.len(), 5);

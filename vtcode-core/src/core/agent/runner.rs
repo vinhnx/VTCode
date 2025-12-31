@@ -481,12 +481,7 @@ impl AgentRunner {
         );
         task_state.warnings.push(detail.clone());
 
-        task_state.push_tool_error(
-            call_id.to_string(),
-            tool_name,
-            detail.clone(),
-            is_gemini,
-        );
+        task_state.push_tool_error(call_id.to_string(), tool_name, detail.clone(), is_gemini);
 
         if let Some(event) = command_event {
             event_recorder.command_finished(event, CommandExecutionStatus::Failed, None, &detail);

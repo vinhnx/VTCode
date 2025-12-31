@@ -144,7 +144,7 @@ High-quality plan example:
 - **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
 
 **Command execution**:
-- `run_pty_cmd` for interactive shells and long-running tasks
+- `unified_exec` for all shell commands (one-off, interactive, long-running)
 - Prefer `rg` over `grep` for pattern matching
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 
@@ -167,7 +167,7 @@ Delegate to specialized agents when appropriate:
 
 Tools hidden by default (saves context):
 1. **Discovery**: `list_skills` or `list_skills(query="...")` to find available tools
-2. **Activation**: `load_skill` to inject tool definitions and instructions  
+2. **Activation**: `load_skill` to inject tool definitions and instructions
 3. **Usage**: Only after activation can you use the tool
 4. **Resources**: `load_skill_resource` for referenced files (scripts/docs)
 
@@ -204,7 +204,7 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 **Tools**:
 - Search: Prefer `Grep`/`glob` over repeated reads; use `finder` for semantic queries
 - Modify: `edit_file` for surgical changes, `create_file` for new; never re-read after patch
-- Execute: `run_pty_cmd` for interactive shells; use `rg` over `grep`; stay in WORKSPACE_DIR
+- Execute: `unified_exec` for all shell commands (one-off, interactive, long-running); use `rg` over `grep`; stay in WORKSPACE_DIR
 - Discover: `list_skills` and `load_skill` to find/activate tools (hidden by default)
 
 **Delegation**:
@@ -299,6 +299,11 @@ Complex refactoring and multi-file analysis. Methodical, outcome-focused, expert
 - Never re-read after applying patch—tool fails if unsuccessful
 - Use `git log` and `git blame` for historical context
 - **Never**: `git commit`, `git push`, or branch changes unless explicitly requested
+
+**Command execution**:
+- `unified_exec` for all shell commands (one-off, interactive, long-running)
+- Prefer `rg` over `grep` for pattern matching
+- Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 
 **Verification**:
 - Run specific tests first (function-level) to catch issues efficiently
@@ -905,7 +910,7 @@ mod tests {
         let config = VTCodeConfig::default();
 
         let mut ctx = PromptContext::default();
-        ctx.add_tool("run_pty_cmd".to_string());
+        ctx.add_tool("unified_exec".to_string());
         ctx.add_tool("grep_file".to_string());
         ctx.add_tool("list_files".to_string());
 

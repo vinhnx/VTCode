@@ -47,7 +47,10 @@ pub fn parse_shell_commands(script: &str) -> std::result::Result<Vec<Vec<String>
         Ok(commands) if !commands.is_empty() => return Ok(commands),
         Ok(_) => {} // Empty result, fall through to basic parsing
         Err(e) => {
-            eprintln!("Tree-sitter bash parsing failed: {}, falling back to basic tokenization", e);
+            eprintln!(
+                "Tree-sitter bash parsing failed: {}, falling back to basic tokenization",
+                e
+            );
         }
     }
 
@@ -109,7 +112,10 @@ fn extract_command_from_node(node: tree_sitter::Node, source: &str) -> Option<Ve
 
     // Extract arguments from command node
     for child in node.children(&mut cursor) {
-        if matches!(child.kind(), "word" | "simple_expansion" | "variable_expansion") {
+        if matches!(
+            child.kind(),
+            "word" | "simple_expansion" | "variable_expansion"
+        ) {
             let text = child.utf8_text(source.as_bytes());
             if let Ok(arg) = text {
                 let trimmed = arg.trim();
@@ -265,7 +271,11 @@ mod tests {
 
     #[test]
     fn parse_bash_lc_git_status() {
-        let cmd = vec!["bash".to_string(), "-lc".to_string(), "git status".to_string()];
+        let cmd = vec![
+            "bash".to_string(),
+            "-lc".to_string(),
+            "git status".to_string(),
+        ];
         let commands = parse_bash_lc_commands(&cmd);
         assert!(commands.is_some());
         let commands = commands.unwrap();

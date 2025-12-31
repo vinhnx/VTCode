@@ -12,8 +12,8 @@
 //! - Text processing
 //! - System utilities (read-only)
 
-use std::collections::HashMap;
 use super::safe_command_registry::CommandRule;
+use std::collections::HashMap;
 
 /// Database of command rules by category
 #[derive(Clone)]
@@ -31,9 +31,17 @@ impl CommandDatabase {
 
         // Source control (read-only safe + dangerous operations)
         for cmd in Self::source_control() {
-            rules.insert(cmd, CommandRule::with_allowed_subcommands(vec![
-                "branch", "status", "log", "diff", "show", "rev-parse",
-            ]));
+            rules.insert(
+                cmd,
+                CommandRule::with_allowed_subcommands(vec![
+                    "branch",
+                    "status",
+                    "log",
+                    "diff",
+                    "show",
+                    "rev-parse",
+                ]),
+            );
         }
 
         // Build systems
@@ -62,8 +70,8 @@ impl CommandDatabase {
     /// File operations (read-only commands)
     fn file_operations() -> Vec<String> {
         vec![
-            "cat", "head", "tail", "wc", "file", "stat", "ls", "find",
-            "locate", "which", "whereis", "tree", "du", "df",
+            "cat", "head", "tail", "wc", "file", "stat", "ls", "find", "locate", "which",
+            "whereis", "tree", "du", "df",
         ]
         .into_iter()
         .map(|s| s.to_string())
@@ -97,8 +105,7 @@ impl CommandDatabase {
     /// Development tool commands
     fn development_tools() -> Vec<String> {
         vec![
-            "node", "python", "ruby", "go", "java", "javac",
-            "gcc", "g++", "clang", "rustc",
+            "node", "python", "ruby", "go", "java", "javac", "gcc", "g++", "clang", "rustc",
         ]
         .into_iter()
         .map(|s| s.to_string())
@@ -108,8 +115,8 @@ impl CommandDatabase {
     /// Text processing commands
     fn text_processing() -> Vec<String> {
         vec![
-            "grep", "sed", "awk", "cut", "paste", "sort", "uniq",
-            "tr", "rev", "expand", "unexpand", "fmt", "pr",
+            "grep", "sed", "awk", "cut", "paste", "sort", "uniq", "tr", "rev", "expand",
+            "unexpand", "fmt", "pr",
         ]
         .into_iter()
         .map(|s| s.to_string())

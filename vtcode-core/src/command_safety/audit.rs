@@ -24,18 +24,13 @@ pub struct AuditEntry {
 
 impl AuditEntry {
     /// Creates a new audit entry
-    pub fn new(
-        command: Vec<String>,
-        allowed: bool,
-        reason: String,
-        decision_type: String,
-    ) -> Self {
+    pub fn new(command: Vec<String>, allowed: bool, reason: String, decision_type: String) -> Self {
         // Use a simple timestamp (can be improved with chrono if available)
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs().to_string())
             .unwrap_or_else(|_| "unknown".to_string());
-        
+
         Self {
             command,
             allowed,
@@ -120,7 +115,12 @@ mod tests {
     #[tokio::test]
     async fn creates_audit_entry() {
         let cmd = vec!["git".to_string(), "status".to_string()];
-        let entry = AuditEntry::new(cmd, true, "git status allowed".to_string(), "Allow".to_string());
+        let entry = AuditEntry::new(
+            cmd,
+            true,
+            "git status allowed".to_string(),
+            "Allow".to_string(),
+        );
         assert!(entry.allowed);
         assert!(!entry.timestamp.is_empty());
     }
@@ -129,7 +129,12 @@ mod tests {
     async fn logs_entries() {
         let logger = SafetyAuditLogger::new(true);
         let cmd = vec!["git".to_string(), "status".to_string()];
-        let entry = AuditEntry::new(cmd, true, "git status allowed".to_string(), "Allow".to_string());
+        let entry = AuditEntry::new(
+            cmd,
+            true,
+            "git status allowed".to_string(),
+            "Allow".to_string(),
+        );
 
         logger.log(entry).await;
         assert_eq!(logger.count().await, 1);
@@ -140,10 +145,24 @@ mod tests {
         let logger = SafetyAuditLogger::new(true);
 
         let cmd1 = vec!["git".to_string(), "status".to_string()];
-        logger.log(AuditEntry::new(cmd1, true, "allowed".to_string(), "Allow".to_string())).await;
+        logger
+            .log(AuditEntry::new(
+                cmd1,
+                true,
+                "allowed".to_string(),
+                "Allow".to_string(),
+            ))
+            .await;
 
         let cmd2 = vec!["git".to_string(), "reset".to_string()];
-        logger.log(AuditEntry::new(cmd2, false, "denied".to_string(), "Deny".to_string())).await;
+        logger
+            .log(AuditEntry::new(
+                cmd2,
+                false,
+                "denied".to_string(),
+                "Deny".to_string(),
+            ))
+            .await;
 
         let denied = logger.denied_entries().await;
         assert_eq!(denied.len(), 1);

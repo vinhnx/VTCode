@@ -17,15 +17,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
-pub mod pull;
-pub mod parser;
-pub mod url;
 pub mod client;
+pub mod parser;
+pub mod pull;
+pub mod url;
 
-pub use pull::{OllamaPullEvent, OllamaPullProgressReporter, CliPullProgressReporter, TuiPullProgressReporter};
-pub use parser::pull_events_from_value;
-pub use url::{is_openai_compatible_base_url, base_url_to_host_root};
 pub use client::OllamaClient;
+pub use parser::pull_events_from_value;
+pub use pull::{
+    CliPullProgressReporter, OllamaPullEvent, OllamaPullProgressReporter, TuiPullProgressReporter,
+};
+pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 
 use super::common::{
     convert_usage_to_llm_types, override_base_url, parse_client_prompt_common, resolve_model,
@@ -57,8 +59,7 @@ struct OllamaModelDetails {
     quantization_level: String,
 }
 
-const OLLAMA_CONNECTION_ERROR: &str = 
-    "No running Ollama server detected. Start it with: `ollama serve` (after installing)\n\
+const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detected. Start it with: `ollama serve` (after installing)\n\
      Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file";
 
 /// Fetches available local Ollama models from the Ollama API endpoint

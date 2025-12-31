@@ -175,8 +175,8 @@ impl SafeCommandRegistry {
 
         // ──── Safe read-only tools ────
         for cmd in &[
-            "cat", "ls", "pwd", "echo", "grep", "head", "tail", "wc", "tr", "cut", "paste",
-            "sort", "uniq", "rev", "seq", "expr", "uname", "whoami", "id", "stat", "which",
+            "cat", "ls", "pwd", "echo", "grep", "head", "tail", "wc", "tr", "cut", "paste", "sort",
+            "uniq", "rev", "seq", "expr", "uname", "whoami", "id", "stat", "which",
         ] {
             rules.insert(
                 cmd.to_string(),
@@ -213,10 +213,7 @@ impl SafeCommandRegistry {
         // Check safe subcommands (if restricted list exists)
         if let Some(ref safe_subs) = rule.safe_subcommands {
             if command.len() < 2 {
-                return SafetyDecision::Deny(format!(
-                    "Command {} requires a subcommand",
-                    cmd_name
-                ));
+                return SafetyDecision::Deny(format!("Command {} requires a subcommand", cmd_name));
             }
             let subcommand = &command[1];
             if !safe_subs.contains(subcommand) {
@@ -229,9 +226,10 @@ impl SafeCommandRegistry {
 
         // Check forbidden options
         for forbidden in &rule.forbidden_options {
-            if command.iter().any(|arg| {
-                arg == forbidden || arg.starts_with(&format!("{}=", forbidden))
-            }) {
+            if command
+                .iter()
+                .any(|arg| arg == forbidden || arg.starts_with(&format!("{}=", forbidden)))
+            {
                 return SafetyDecision::Deny(format!(
                     "Option {} is not allowed for {}",
                     forbidden, cmd_name
@@ -280,9 +278,10 @@ impl SafeCommandRegistry {
 
         for arg in command.iter().skip(1) {
             if UNSAFE_OPTIONS.contains(&arg.as_str()) {
-                return SafetyDecision::Deny(
-                    format!("base64 {} is not allowed (output redirection)", arg),
-                );
+                return SafetyDecision::Deny(format!(
+                    "base64 {} is not allowed (output redirection)",
+                    arg
+                ));
             }
             if arg.starts_with("--output=") || (arg.starts_with("-o") && arg != "-o") {
                 return SafetyDecision::Deny(
@@ -308,9 +307,7 @@ impl SafeCommandRegistry {
             }
         }
 
-        SafetyDecision::Deny(
-            "sed only allows safe pattern: sed -n {N|M,N}p".to_string(),
-        )
+        SafetyDecision::Deny("sed only allows safe pattern: sed -n {N|M,N}p".to_string())
     }
 
     /// Helper: validate sed -n pattern
@@ -403,11 +400,7 @@ mod tests {
     #[test]
     fn find_with_delete_is_dangerous() {
         let registry = SafeCommandRegistry::new();
-        let cmd = vec![
-            "find".to_string(),
-            ".".to_string(),
-            "-delete".to_string(),
-        ];
+        let cmd = vec!["find".to_string(), ".".to_string(), "-delete".to_string()];
         assert!(matches!(registry.is_safe(&cmd), SafetyDecision::Deny(_)));
     }
 
@@ -445,22 +438,14 @@ mod tests {
     #[test]
     fn sed_n_single_line_is_safe() {
         let registry = SafeCommandRegistry::new();
-        let cmd = vec![
-            "sed".to_string(),
-            "-n".to_string(),
-            "10p".to_string(),
-        ];
+        let cmd = vec!["sed".to_string(), "-n".to_string(), "10p".to_string()];
         assert_eq!(registry.is_safe(&cmd), SafetyDecision::Allow);
     }
 
     #[test]
     fn sed_n_range_is_safe() {
         let registry = SafeCommandRegistry::new();
-        let cmd = vec![
-            "sed".to_string(),
-            "-n".to_string(),
-            "1,5p".to_string(),
-        ];
+        let cmd = vec!["sed".to_string(), "-n".to_string(), "1,5p".to_string()];
         assert_eq!(registry.is_safe(&cmd), SafetyDecision::Allow);
     }
 
@@ -492,7 +477,10 @@ mod tests {
 
     #[test]
     fn extract_command_name_from_path() {
-        assert_eq!(SafeCommandRegistry::extract_command_name("/usr/bin/git"), "git");
+        assert_eq!(
+            SafeCommandRegistry::extract_command_name("/usr/bin/git"),
+            "git"
+        );
         assert_eq!(
             SafeCommandRegistry::extract_command_name("/usr/local/bin/cargo"),
             "cargo"

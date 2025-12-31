@@ -275,24 +275,28 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         FunctionDeclaration {
-            name: tools::RUN_PTY_CMD.to_string(),
-            description: "Execute shell commands (git, cargo, npm). PTY terminal emulation. Respects command policies. Output auto-truncated.".to_string(),
+            name: tools::UNIFIED_EXEC.to_string(),
+            description: "Unified execution tool for all shell operations. Can run new commands, write to existing sessions, poll for output, list active sessions, or close them.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "command": {
-                        "description": "Shell command (string or array).",
-                        "oneOf": [
-                            {"type": "string"},
-                            {"type": "array", "items": {"type": "string"}}
-                        ]
+                    "command": {"type": "string", "description": "The command to execute (to start a new session)."},
+                    "input": {"type": "string", "description": "The input to write to stdin (for an existing session)."},
+                    "session_id": {"type": "string", "description": "The session ID to target (required for write, poll, and close)."},
+                    "action": {
+                        "type": "string",
+                        "enum": ["run", "write", "poll", "list", "close"],
+                        "description": "Action to perform. If not provided, it's inferred: 'run' if command is present, 'write' if input is present, 'poll' if only session_id is present."
                     },
-                    "cwd": {"type": "string", "description": "Working directory."},
-                    "timeout_secs": {"type": "integer", "description": "Timeout (seconds).", "default": 180},
+                    "workdir": {"type": "string", "description": "Working directory for new sessions."},
+                    "cwd": {"type": "string", "description": "Alias for workdir."},
+                    "shell": {"type": "string", "description": "Shell to use (e.g., /bin/bash)."},
+                    "login": {"type": "boolean", "description": "Whether to use a login shell.", "default": true},
+                    "timeout_secs": {"type": "integer", "description": "Timeout in seconds for one-off commands.", "default": 180},
+                    "yield_time_ms": {"type": "integer", "description": "Time to wait for output (ms).", "default": 1000},
                     "confirm": {"type": "boolean", "description": "Confirm destructive ops.", "default": false},
-                    "max_tokens": {"type": "integer", "description": "Max output tokens before truncation."}
-                },
-                "required": ["command"]
+                    "max_output_tokens": {"type": "integer", "description": "Max tokens to return."}
+                }
             }),
         },
 
