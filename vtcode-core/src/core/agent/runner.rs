@@ -70,6 +70,7 @@ struct ToolFailureContext<'a> {
     task_state: &'a mut TaskRunState,
     event_recorder: &'a mut ExecEventRecorder,
     command_event: &'a crate::core::agent::events::ActiveCommandHandle,
+    is_gemini: bool,
 }
 
 #[cfg(test)]
@@ -91,7 +92,7 @@ mod tests {
 
     #[test]
     fn finalize_outcome_marks_success() {
-        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5);
+        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
         state.has_completed = true;
         state.turns_executed = 2;
 
@@ -102,7 +103,7 @@ mod tests {
 
     #[test]
     fn finalize_outcome_turn_limit() {
-        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5);
+        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
         state.turns_executed = 6;
 
         state.finalize_outcome(6);
@@ -115,7 +116,7 @@ mod tests {
 
     #[test]
     fn finalize_outcome_tool_loop_limit() {
-        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 2);
+        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 2, 10000);
         state.turns_executed = 2;
         state.tool_loop_limit_hit = true;
 
@@ -132,7 +133,7 @@ mod tests {
 
     #[test]
     fn into_results_computes_metrics() {
-        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5);
+        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
         state.turn_durations_ms = vec![100, 200, 300];
         state.turns_executed = 3;
         state.completion_outcome = TaskOutcome::Success;
@@ -345,10 +346,14 @@ impl AgentRunner {
             return;
         }
 
-        let split_at = task_state
+        let preferred_split_at = task_state
             .conversation
             .len()
             .saturating_sub(preserve_recent_turns);
+
+        // Context Manager: Find a safe split point that doesn't break tool call/output pairs.
+        let split_at = task_state.find_safe_split_point(preferred_split_at);
+
         if split_at == 0 {
             return;
         }
@@ -389,6 +394,10 @@ impl AgentRunner {
         task_state.conversation = new_conversation;
         task_state.conversation_messages =
             build_messages_from_conversation(system_instruction, &task_state.conversation);
+
+        // Context Manager: Ensure history invariants are maintained after summarization.
+        task_state.normalize();
+
         task_state.last_processed_message_idx = task_state.conversation.len();
     }
 
@@ -433,19 +442,23 @@ impl AgentRunner {
         failure_ctx.event_recorder.warning(&failure_text);
         // Move failure_text into warnings first, then reference for conversation
         failure_ctx.task_state.warnings.push(failure_text.clone());
-        failure_ctx.task_state.conversation.push(Content {
-            role: ROLE_USER.into(),
-            parts: vec![Part::Text {
-                text: failure_text,
-                thought_signature: None,
-            }],
-        });
+
         if let Some(call_id) = tool_response_id {
-            let error_payload = serde_json::json!({ "error": error.to_string() }).to_string();
-            failure_ctx
-                .task_state
-                .conversation_messages
-                .push(Message::tool_response(call_id.to_owned(), error_payload));
+            failure_ctx.task_state.push_tool_error(
+                call_id.to_string(),
+                tool_name,
+                failure_text,
+                failure_ctx.is_gemini,
+            );
+        } else {
+            // Fallback for when we don't have a call_id (should be rare in Codex-style)
+            failure_ctx.task_state.conversation.push(Content {
+                role: ROLE_USER.into(),
+                parts: vec![Part::Text {
+                    text: failure_text,
+                    thought_signature: None,
+                }],
+            });
         }
     }
 
@@ -457,6 +470,7 @@ impl AgentRunner {
         call_id: &str,
         tool_name: &str,
         command_event: Option<&crate::core::agent::events::ActiveCommandHandle>,
+        is_gemini: bool,
     ) {
         let detail = format!("{ERR_TOOL_DENIED}: {tool_name}");
         runner_println!(
@@ -466,17 +480,13 @@ impl AgentRunner {
             format!("{} {}", style("(WARN)").yellow().bold(), detail)
         );
         task_state.warnings.push(detail.clone());
-        task_state.conversation.push(Content {
-            role: ROLE_USER.into(),
-            parts: vec![Part::Text {
-                text: detail.clone(),
-                thought_signature: None,
-            }],
-        });
-        let error_payload = serde_json::json!({ "error": detail }).to_string();
-        task_state
-            .conversation_messages
-            .push(Message::tool_response(call_id.to_owned(), error_payload));
+
+        task_state.push_tool_error(
+            call_id.to_string(),
+            tool_name,
+            detail.clone(),
+            is_gemini,
+        );
 
         if let Some(event) = command_event {
             event_recorder.command_finished(event, CommandExecutionStatus::Failed, None, &detail);
@@ -662,6 +672,7 @@ impl AgentRunner {
                     &call_id,
                     &name,
                     None,
+                    is_gemini,
                 );
                 continue;
             }
@@ -735,7 +746,7 @@ impl AgentRunner {
                         );
                         halt_turn = true;
                     }
-                    task_state.push_tool_error(call_id, error_msg, is_gemini);
+                    task_state.push_tool_error(call_id, &name, error_msg, is_gemini);
                     event_recorder.command_finished(
                         &command_event,
                         CommandExecutionStatus::Failed,
@@ -794,6 +805,7 @@ impl AgentRunner {
                     &call.id,
                     &name,
                     Some(&command_event),
+                    is_gemini,
                 );
                 continue;
             }
@@ -857,6 +869,7 @@ impl AgentRunner {
                             task_state,
                             event_recorder,
                             command_event: &command_event,
+                            is_gemini,
                         };
                         self.record_tool_failure(
                             &mut failure_ctx,
@@ -877,6 +890,7 @@ impl AgentRunner {
                             task_state,
                             event_recorder,
                             command_event: &command_event,
+                            is_gemini,
                         };
                         self.record_tool_failure(
                             &mut failure_ctx,
@@ -892,6 +906,7 @@ impl AgentRunner {
                             task_state,
                             event_recorder,
                             command_event: &command_event,
+                            is_gemini,
                         };
                         self.record_tool_failure(
                             &mut failure_ctx,
@@ -1399,9 +1414,14 @@ impl AgentRunner {
             // Determine loop guards via cached configuration
             let max_tool_loops = self.config().tools.max_tool_loops.max(1);
             let preserve_recent_turns = self.config().context.preserve_recent_turns;
+            let max_context_tokens = self.config().context.max_context_tokens;
 
-            let mut task_state =
-                TaskRunState::new(conversation, conversation_messages, max_tool_loops);
+            let mut task_state = TaskRunState::new(
+                conversation,
+                conversation_messages,
+                max_tool_loops,
+                max_context_tokens,
+            );
             // Pre-reserve capacity for conversation messages to avoid reallocations
             // Typical: 2-3 messages per turn (user input + assistant response + potential tool calls)
             task_state.conversation_messages.reserve(self.max_turns * 3);
@@ -1419,7 +1439,7 @@ impl AgentRunner {
             // Agent execution loop uses max_turns for conversation flow
             for turn in 0..self.max_turns {
                 // Check context utilization before each turn
-                let utilization = self.context_optimizer.borrow().utilization();
+                let utilization = task_state.utilization();
                 if utilization > 0.90 {
                     // At 90%+ utilization, warn and consider stopping
                     warn!("Context at {:.1}% - approaching limit", utilization * 100.0);

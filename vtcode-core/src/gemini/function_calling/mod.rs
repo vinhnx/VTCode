@@ -13,6 +13,8 @@ pub struct FunctionCall {
 pub struct FunctionResponse {
     pub name: String,
     pub response: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -10,7 +10,7 @@ const LMSTUDIO_CONNECTION_ERROR: &str =
     "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
 
 /// Client for interacting with a local LM Studio instance.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LMStudioClient {
     client: reqwest::Client,
     base_url: String,

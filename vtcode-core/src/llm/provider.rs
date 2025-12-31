@@ -490,6 +490,50 @@ impl From<&str> for MessageContent {
 }
 
 impl Message {
+    /// Estimate the number of tokens in this message (rough approximation).
+    pub fn estimate_tokens(&self) -> usize {
+        let mut count = 0;
+
+        // Role overhead (approximate)
+        count += 4;
+
+        // Content tokens
+        match &self.content {
+            MessageContent::Text(text) => count += crate::llm::utils::estimate_token_count(text),
+            MessageContent::Parts(parts) => {
+                for part in parts {
+                    match part {
+                        ContentPart::Text { text } => {
+                            count += crate::llm::utils::estimate_token_count(text)
+                        }
+                        ContentPart::Image { .. } => count += 1000, // Rough estimate for images
+                    }
+                }
+            }
+        }
+
+        // Tool calls tokens
+        if let Some(tool_calls) = &self.tool_calls {
+            for call in tool_calls {
+                count += 20; // Base overhead per call
+                if let Some(func) = &call.function {
+                    count += crate::llm::utils::estimate_token_count(&func.name);
+                    count += crate::llm::utils::estimate_token_count(&func.arguments);
+                }
+                if let Some(sig) = &call.thought_signature {
+                    count += crate::llm::utils::estimate_token_count(sig);
+                }
+            }
+        }
+
+        // Tool call ID (for responses)
+        if let Some(id) = &self.tool_call_id {
+            count += crate::llm::utils::estimate_token_count(id);
+        }
+
+        count
+    }
+
     /// Helper to create a base message with common defaults.
     /// Public for use in provider implementations.
     #[inline]
