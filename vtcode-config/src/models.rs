@@ -549,7 +549,7 @@ impl ModelId {
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
             ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
-            ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_5,
+            ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
             ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_5_20250929,
@@ -737,7 +737,7 @@ impl ModelId {
             ModelId::CodexMiniLatest => "Codex Mini Latest",
             // Anthropic models
             ModelId::ClaudeOpus45 => "Claude Opus 4.5",
-            ModelId::ClaudeOpus41 => "Claude Opus 4.5",
+            ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
             ModelId::ClaudeSonnet4 => "Claude Sonnet 4",
@@ -1294,10 +1294,11 @@ impl ModelId {
             | ModelId::GPT5Nano
             | ModelId::CodexMiniLatest => "5",
             // Anthropic generations
-            ModelId::ClaudeOpus45 => "4.5",
-            ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
+            ModelId::ClaudeOpus45
+            | ModelId::ClaudeSonnet45
+            | ModelId::ClaudeHaiku45 => "4.5",
+            ModelId::ClaudeOpus41 => "4.1",
             ModelId::ClaudeSonnet4 => "4",
-            ModelId::ClaudeOpus41 => "4.5",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
             // xAI generations
@@ -1359,6 +1360,10 @@ impl FromStr for ModelId {
     type Err = ModelParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some(model) = Self::parse_openrouter_model(s) {
+            return Ok(model);
+        }
+
         use crate::constants::models;
         match s {
             // Gemini models
@@ -1476,13 +1481,7 @@ impl FromStr for ModelId {
             s if s == models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA => {
                 Ok(ModelId::HuggingFaceXiaomiMimoV2FlashNovita)
             }
-            _ => {
-                if let Some(model) = Self::parse_openrouter_model(s) {
-                    Ok(model)
-                } else {
-                    Err(ModelParseError::InvalidModel(s.to_string()))
-                }
-            }
+            _ => Err(ModelParseError::InvalidModel(s.to_string())),
         }
     }
 }
@@ -2050,9 +2049,13 @@ mod tests {
         assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaGlm46Cloud));
         assert!(ollama_models.contains(&ModelId::OllamaGemini3ProPreviewLatestCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaGemini3FlashPreviewCloud));
         assert!(ollama_models.contains(&ModelId::OllamaDevstral2123bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
-        assert_eq!(ollama_models.len(), 13); // 13 Ollama models
+        assert!(ollama_models.contains(&ModelId::OllamaMinimaxM21Cloud));
+        assert!(ollama_models.contains(&ModelId::OllamaNemotron3Nano30bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaGlm47Cloud));
+        assert_eq!(ollama_models.len(), 17); // 17 Ollama models
 
         let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
         assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));
