@@ -6328,6 +6328,7 @@ dependencies = [
  "vtcode-markdown-store",
  "walkdir",
  "which 8.0.0",
+ "wiremock",
  "zip",
 ]
 

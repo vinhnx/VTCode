@@ -604,6 +604,7 @@ impl GeminiProvider {
                         function_response: FunctionResponse {
                             name: func_name,
                             response: response_payload,
+                            id: Some(tool_call_id.clone()),
                         },
                         thought_signature: None, // Function responses don't carry thought signatures
                     });
