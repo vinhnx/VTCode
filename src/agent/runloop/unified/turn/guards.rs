@@ -18,7 +18,7 @@ pub(crate) fn validate_tool_args_security(
     name: &str,
     args: &serde_json::Value,
 ) -> Option<Vec<String>> {
-    use vtcode_core::tools::validation::{paths, commands};
+    use vtcode_core::tools::validation::{commands, paths};
 
     let mut failures = Vec::new();
 
@@ -46,26 +46,26 @@ pub(crate) fn validate_tool_args_security(
             })
             .copied()
             .collect();
-        
+
         for m in missing {
             failures.push(format!("Missing required argument: {}", m));
         }
     }
 
     if !failures.is_empty() {
-         return Some(failures);
+        return Some(failures);
     }
-    
+
     // 2. Perform security checks
     // --------------------------
-    
+
     // Path safety checks
     if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
         if let Err(e) = paths::validate_path_safety(path) {
             failures.push(format!("Path security check failed: {}", e));
         }
     }
-    
+
     // Command safety checks
     // Check both 'command' argument and specific tool usage
     if name == tool_names::RUN_PTY_CMD {
@@ -75,7 +75,7 @@ pub(crate) fn validate_tool_args_security(
             }
         }
     }
-    
+
     if failures.is_empty() {
         None
     } else {
@@ -89,7 +89,7 @@ pub(crate) fn validate_required_tool_args(
     name: &str,
     args: &serde_json::Value,
 ) -> Option<Vec<&'static str>> {
-    // This function is kept for backward compatibility if needed, 
+    // This function is kept for backward compatibility if needed,
     // but the logic is now superset in validate_tool_args_security.
     // We map the new result back to the old signature roughly.
     let result = validate_tool_args_security(name, args);

@@ -47,7 +47,7 @@ impl IncrementalSystemPrompt {
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
         let read_guard = self.cached_prompt.read().await;
- 
+
         // Check if we can use the cached version
         if read_guard.config_hash == config_hash
             && read_guard.context_hash == context_hash
@@ -56,10 +56,10 @@ impl IncrementalSystemPrompt {
         {
             return read_guard.content.clone();
         }
- 
+
         // Drop read lock before acquiring write lock
         drop(read_guard);
- 
+
         // Rebuild the prompt
         self.rebuild_prompt(
             base_system_prompt,
@@ -83,7 +83,7 @@ impl IncrementalSystemPrompt {
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
         let mut write_guard = self.cached_prompt.write().await;
- 
+
         // Double-check after acquiring write lock
         if write_guard.config_hash == config_hash
             && write_guard.context_hash == context_hash
@@ -92,19 +92,21 @@ impl IncrementalSystemPrompt {
         {
             return write_guard.content.clone();
         }
- 
+
         // Build the new prompt
-        let new_content = self.build_prompt_content(base_system_prompt, retry_attempts, context, agent_config).await;
- 
+        let new_content = self
+            .build_prompt_content(base_system_prompt, retry_attempts, context, agent_config)
+            .await;
+
         // Update cache
         write_guard.content = new_content.clone();
         write_guard.config_hash = config_hash;
         write_guard.context_hash = context_hash;
         write_guard.retry_attempts = retry_attempts;
- 
+
         new_content
     }
- 
+
     /// Actually build the prompt content (this is where the logic goes)
     async fn build_prompt_content(
         &self,
@@ -116,7 +118,7 @@ impl IncrementalSystemPrompt {
         use std::fmt::Write;
         use vtcode_core::project_doc::get_user_instructions;
         use vtcode_core::skills::types::SkillMetadata;
- 
+
         let mut prompt = String::with_capacity(base_system_prompt.len() + 1024);
         prompt.push_str(base_system_prompt);
 
@@ -178,19 +180,20 @@ impl IncrementalSystemPrompt {
                 })
                 .collect();
             let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-            if let Some(unified) =
-                get_user_instructions(cfg, &cwd, Some(&skill_metadata[..])).await
+            if let Some(unified) = get_user_instructions(cfg, &cwd, Some(&skill_metadata[..])).await
             {
                 let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{}", unified);
             }
-        }
- else {
+        } else {
             // Fallback if config is missing (basic skills rendering)
             if !context.discovered_skills.is_empty() {
-                let _ = writeln!(prompt, "\n# SKILLS\nUse `list_skills` to see available capabilities.");
+                let _ = writeln!(
+                    prompt,
+                    "\n# SKILLS\nUse `list_skills` to see available capabilities."
+                );
             }
         }
- 
+
         prompt
     }
 
@@ -295,13 +298,13 @@ mod tests {
             .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
             .await;
         assert_eq!(prompt1, base_prompt);
- 
+
         // Second call with same parameters - should use cache
         let prompt2 = prompt_builder
             .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
             .await;
         assert_eq!(prompt2, base_prompt);
- 
+
         // Verify cache stats
         let (is_cached, size) = prompt_builder.cache_stats().await;
         assert!(is_cached);
@@ -324,12 +327,12 @@ mod tests {
         let _ = prompt_builder
             .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
             .await;
- 
+
         // Rebuild with different retry attempts
         let prompt = prompt_builder
             .rebuild_prompt(base_prompt, 1, 1, 1, &context, None)
             .await;
- 
+
         assert!(prompt.contains("Retry #1"));
     }
 

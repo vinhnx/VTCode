@@ -60,8 +60,13 @@ impl IntegrityTag {
             Ok(bytes) => bytes,
             Err(_) => return false,
         };
-        
-        hmac::verify(&key, payload.to_string().as_bytes(), &expected_signature_bytes).is_ok()
+
+        hmac::verify(
+            &key,
+            payload.to_string().as_bytes(),
+            &expected_signature_bytes,
+        )
+        .is_ok()
     }
 }
 

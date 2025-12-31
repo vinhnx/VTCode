@@ -6,8 +6,11 @@ import {
     AnalyzeCommand,
     AskCommand,
     AskSelectionCommand,
+    FindFilesCommand,
+    ListFilesCommand,
     OpenConfigCommand,
     RefreshCommand,
+    SearchFilesCommand,
     TrustWorkspaceCommand,
     UpdatePlanCommand,
 } from "./commands";
@@ -185,6 +188,9 @@ export function activate(context: vscode.ExtensionContext) {
         new OpenConfigCommand(),
         new TrustWorkspaceCommand(),
         new RefreshCommand(),
+        new FindFilesCommand(),
+        new ListFilesCommand(),
+        new SearchFilesCommand(),
     ]);
 
     // Add command registry to disposables

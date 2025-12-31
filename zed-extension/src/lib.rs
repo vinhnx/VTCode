@@ -9,6 +9,7 @@ mod context;
 mod editor;
 mod error_handling;
 mod executor;
+mod file_search_service;
 mod metrics;
 mod output;
 mod validation;
@@ -20,7 +21,8 @@ pub use cache::{
 };
 pub use command_builder::CommandBuilder;
 pub use commands::{
-    analyze_workspace, ask_about_selection, ask_agent, check_status, launch_chat, CommandResponse,
+    analyze_workspace, ask_about_selection, ask_agent, check_status, find_files, launch_chat,
+    list_files, search_files, CommandResponse,
 };
 pub use config::{find_config, load_config, Config};
 pub use context::{Diagnostic, DiagnosticSeverity, EditorContext, QuickFix};
@@ -31,6 +33,7 @@ pub use error_handling::{
 pub use executor::{
     check_vtcode_available, execute_command, execute_command_with_timeout, get_vtcode_version,
 };
+pub use file_search_service::{FileMatch, FileSearchService, FileSearchServiceConfig};
 pub use metrics::{CommandTimer, MetricStats, MetricsCollector};
 pub use output::{MessageType, OutputChannel, OutputMessage};
 pub use validation::{validate_config, ValidationError, ValidationResult};
@@ -121,6 +124,28 @@ impl VTCodeExtension {
     /// Execute "Check Status" command
     pub fn check_status_command(&self) -> CommandResponse {
         check_status()
+    }
+
+    /// Execute "Find Files" command with fuzzy pattern matching
+    ///
+    /// Uses optimized parallel file search for fast results.
+    /// Respects .gitignore files automatically.
+    pub fn find_files_command(&self, pattern: &str, limit: Option<usize>) -> CommandResponse {
+        find_files(pattern, limit)
+    }
+
+    /// Execute "List Files" command
+    ///
+    /// Enumerates all workspace files with optional exclusions.
+    pub fn list_files_command(&self, exclude_patterns: Option<&str>) -> CommandResponse {
+        list_files(exclude_patterns)
+    }
+
+    /// Execute "Search Files" command with pattern and exclusions
+    ///
+    /// Combined operation for more advanced file discovery scenarios.
+    pub fn search_files_command(&self, pattern: &str, exclude: &str) -> CommandResponse {
+        search_files(pattern, exclude)
     }
 
     /// Get the output channel

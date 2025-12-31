@@ -66,8 +66,7 @@ impl ContextManager {
             if msg.tool_calls.is_some() || msg.tool_call_id.is_some() {
                 self.cached_stats.tool_usage_count += 1;
             }
-            if msg.content.as_text().contains("error")
-               || msg.content.as_text().contains("failed") {
+            if msg.content.as_text().contains("error") || msg.content.as_text().contains("failed") {
                 self.cached_stats.error_count += 1;
             }
         }
@@ -83,7 +82,7 @@ impl ContextManager {
         if self.base_system_prompt.trim().is_empty() {
             bail!("Base system prompt is empty; cannot build prompt");
         }
-        
+
         // Update statistics incrementally
         self.update_stats(attempt_history);
 
@@ -134,7 +133,12 @@ mod tests {
 
     #[tokio::test]
     async fn pre_request_check_returns_proceed() {
-        let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+        let manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
 
         let history = vec![uni::Message::user("hello".to_string())];
         assert_eq!(
@@ -145,8 +149,12 @@ mod tests {
 
     #[tokio::test]
     async fn build_system_prompt_with_empty_base_prompt_fails() {
-        let mut manager =
-            ContextManager::new("".to_string(), (), Arc::new(RwLock::new(HashMap::new())), None);
+        let mut manager = ContextManager::new(
+            "".to_string(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
 
         let result = manager.build_system_prompt(&[], 0, false).await;
         assert!(result.is_err());

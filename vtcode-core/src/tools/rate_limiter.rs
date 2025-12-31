@@ -90,19 +90,19 @@ impl RateLimiterInner {
     fn refill(&mut self) {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_refill);
-        
+
         // Calculate refill based on milliseconds for finer granularity
         let millis = elapsed.as_millis() as u64;
-        
+
         // Minimum refill interval of 50ms to avoid excessive overhead
         if millis < 50 {
             return;
         }
-        
+
         // Fractional refill: per_sec tokens per 1000ms
         // Using integer math: tokens = (per_sec * millis) / 1000
         let added = ((self.config.per_sec as u64).saturating_mul(millis) / 1000) as u32;
-        
+
         if added > 0 {
             self.tokens = (self.tokens + added).min(self.config.burst);
             self.last_refill = now;

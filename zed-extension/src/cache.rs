@@ -490,7 +490,7 @@ mod tests {
     #[test]
     fn test_cache_entry_creation() {
         let entry = CacheEntry::new("test".to_string());
-        assert_eq!(entry.value, "test");
+        assert_eq!(*entry.value, "test".to_string());
         assert_eq!(entry.access_count, 0);
     }
 

@@ -12,16 +12,16 @@ use thiserror::Error;
 pub enum ToolError {
     #[error("Invalid input for {0}: {1}")]
     Input(String, String),
-    
+
     #[error("Security violation in {0}: {1}")]
     Security(String, String),
-    
+
     #[error("Execution failed for {0}: {1}")]
     Execution(String, String),
-    
+
     #[error("System error in {0}: {1}")]
     System(String, String),
-    
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

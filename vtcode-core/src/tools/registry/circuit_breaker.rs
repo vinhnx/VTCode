@@ -29,8 +29,8 @@ impl From<u8> for CircuitState {
     }
 }
 
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 /// Persistable state of the circuit breaker
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -114,15 +114,21 @@ impl McpCircuitBreaker {
         if let Ok(data) = fs::read_to_string(&path) {
             if let Ok(state) = serde_json::from_str::<PersistedState>(&data) {
                 breaker.state.store(state.state, Ordering::Release);
-                breaker.consecutive_failures.store(state.consecutive_failures, Ordering::Relaxed);
-                
+                breaker
+                    .consecutive_failures
+                    .store(state.consecutive_failures, Ordering::Relaxed);
+
                 if let Some(epoch) = state.last_failure_epoch_secs {
-                     // Only restore if plausible (roughly sanity check vs now)
-                     let now = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
-                     // If it's in the past and within reasonable bounds (e.g. not older than a year and not in future)
-                     if epoch <= now {
-                         *breaker.last_failure_time.lock() = Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(epoch));
-                     }
+                    // Only restore if plausible (roughly sanity check vs now)
+                    let now = SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    // If it's in the past and within reasonable bounds (e.g. not older than a year and not in future)
+                    if epoch <= now {
+                        *breaker.last_failure_time.lock() =
+                            Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(epoch));
+                    }
                 }
             }
         }
@@ -133,8 +139,12 @@ impl McpCircuitBreaker {
     fn persist(&self) {
         if let Some(path) = &self.persistence_path {
             let last_failure = *self.last_failure_time.lock();
-            let epoch = last_failure.map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs());
-            
+            let epoch = last_failure.map(|t| {
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+            });
+
             let state = PersistedState {
                 state: self.state.load(Ordering::Acquire),
                 consecutive_failures: self.consecutive_failures.load(Ordering::Acquire),
@@ -142,8 +152,8 @@ impl McpCircuitBreaker {
             };
 
             if let Ok(data) = serde_json::to_string(&state) {
-                 // Best effort write
-                 let _ = fs::write(path, data);
+                // Best effort write
+                let _ = fs::write(path, data);
             }
         }
     }
