@@ -29,6 +29,7 @@ use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
+use vtcode_core::core::agent::state::recover_history_from_crash;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
@@ -348,7 +349,13 @@ pub(crate) async fn initialize_session(
 
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
 
-    let conversation_history = build_conversation_history_from_resume(resume).await;
+    let mut conversation_history = build_conversation_history_from_resume(resume).await;
+
+    // Context Manager: Enforce call/output invariants during session resume.
+    // This ensures that if the previous session crashed or was interrupted during tool execution,
+    // we have synthetic outputs for any pending tool calls to maintain history validity.
+    recover_history_from_crash(&mut conversation_history);
+
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
     let base_system_prompt = read_system_prompt(
         &config.workspace,

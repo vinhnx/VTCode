@@ -64,22 +64,64 @@ pub fn build_messages_from_conversation(
 
     for content in conversation {
         let mut text = String::new();
+        let mut tool_calls = Vec::new();
+        let mut tool_responses = Vec::new();
+
         for part in &content.parts {
-            if let Part::Text {
-                text: part_text, ..
-            } = part
-            {
-                if !text.is_empty() {
-                    text.push('\n');
+            match part {
+                Part::Text {
+                    text: part_text, ..
+                } => {
+                    if !text.is_empty() {
+                        text.push('\n');
+                    }
+                    text.push_str(part_text);
                 }
-                text.push_str(part_text);
+                Part::FunctionCall {
+                    function_call,
+                    thought_signature,
+                } => {
+                    tool_calls.push(crate::llm::provider::ToolCall {
+                        id: function_call.id.clone().unwrap_or_default(),
+                        call_type: "function".to_string(),
+                        function: Some(crate::llm::provider::FunctionCall {
+                            name: function_call.name.clone(),
+                            arguments: function_call.args.to_string(),
+                        }),
+                        text: None,
+                        thought_signature: thought_signature.clone(),
+                    });
+                }
+                Part::FunctionResponse {
+                    function_response, ..
+                } => {
+                    let id = function_response
+                        .id
+                        .clone()
+                        .unwrap_or_else(|| "unknown".to_string());
+                    let response_str = function_response.response.to_string();
+                    tool_responses.push(Message::tool_response(id, response_str));
+                }
             }
         }
 
-        let message = match content.role.as_str() {
+        if !tool_responses.is_empty() {
+            messages.extend(tool_responses);
+            if !text.is_empty() {
+                messages.push(Message::user(text));
+            }
+            continue;
+        }
+
+        let mut message = match content.role.as_str() {
             "model" => Message::assistant(text),
             _ => Message::user(text),
         };
+
+        if !tool_calls.is_empty() {
+            message.tool_calls = Some(tool_calls);
+        }
+
         messages.push(message);
     }
 

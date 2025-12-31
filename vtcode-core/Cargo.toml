@@ -205,6 +205,7 @@ assert_fs = "1.1"
 mockito = "1.7"
 proptest = "1.5"
 criterion = "0.5"
+wiremock = "0.6.5"
 
 [[bench]]
 name = "tool_pipeline"
