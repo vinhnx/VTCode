@@ -1,5 +1,6 @@
 #[cfg(feature = "bootstrap")]
 pub mod bootstrap;
+pub mod layers;
 
 use crate::acp::AgentClientProtocolConfig;
 use crate::context::ContextFeaturesConfig;
@@ -796,6 +797,8 @@ target/, build/, dist/, node_modules/, vendor/
     }
 }
 
+use crate::loader::layers::{ConfigLayerEntry, ConfigLayerSource, ConfigLayerStack};
+
 /// Configuration manager for loading and validating configurations
 #[derive(Clone)]
 pub struct ConfigManager {
@@ -803,6 +806,7 @@ pub struct ConfigManager {
     config_path: Option<PathBuf>,
     workspace_root: Option<PathBuf>,
     config_file_name: String,
+    layer_stack: ConfigLayerStack,
 }
 
 impl ConfigManager {
@@ -820,84 +824,193 @@ impl ConfigManager {
         let config_dir = workspace_paths.config_dir();
         let config_file_name = defaults_provider.config_file_name().to_string();
 
-        // Helper to finalize manager with workspace info
-        let finalize = |mut manager: Self, root: PathBuf, name: String| {
-            manager.workspace_root = Some(root);
-            manager.config_file_name = name;
-            manager
-        };
+        let mut layer_stack = ConfigLayerStack::default();
 
-        // Try configuration file in workspace root first
-        let config_path = workspace_root.join(&config_file_name);
-        if config_path.exists() {
-            let manager = Self::load_from_file(&config_path)?;
-            return Ok(finalize(manager, workspace_root, config_file_name));
-        }
-
-        // Try config directory fallback (e.g., .vtcode/vtcode.toml)
-        let fallback_path = config_dir.join(&config_file_name);
-        if fallback_path.exists() {
-            let manager = Self::load_from_file(&fallback_path)?;
-            return Ok(finalize(manager, workspace_root, config_file_name));
-        }
-
-        // Try ~/.vtcode/vtcode.toml in user home directory
-        for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
-            if home_config_path.exists() {
-                let manager = Self::load_from_file(&home_config_path)?;
-                return Ok(finalize(manager, workspace_root, config_file_name));
+        // 1. System config (e.g., /etc/vtcode/vtcode.toml)
+        #[cfg(unix)]
+        {
+            let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
+            if system_config.exists() {
+                if let Ok(toml) = Self::load_toml_from_file(&system_config) {
+                    layer_stack.push(ConfigLayerEntry::new(
+                        ConfigLayerSource::System {
+                            file: system_config,
+                        },
+                        toml,
+                    ));
+                }
             }
         }
 
-        // Try project-specific configuration within the workspace config directory
+        // 2. User home config (~/.vtcode/vtcode.toml)
+        for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
+            if home_config_path.exists() {
+                if let Ok(toml) = Self::load_toml_from_file(&home_config_path) {
+                    layer_stack.push(ConfigLayerEntry::new(
+                        ConfigLayerSource::User {
+                            file: home_config_path,
+                        },
+                        toml,
+                    ));
+                }
+            }
+        }
+
+        // 2. Project-specific config (.vtcode/projects/<project>/config/vtcode.toml)
         if let Some(project_config_path) =
             Self::project_config_path(&config_dir, &workspace_root, &config_file_name)
         {
-            let manager = Self::load_from_file(&project_config_path)?;
-            return Ok(finalize(manager, workspace_root, config_file_name));
+            if let Ok(toml) = Self::load_toml_from_file(&project_config_path) {
+                layer_stack.push(ConfigLayerEntry::new(
+                    ConfigLayerSource::Project {
+                        file: project_config_path,
+                    },
+                    toml,
+                ));
+            }
         }
 
-        // Use default configuration if no file found
-        let config = VTCodeConfig::default();
+        // 3. Workspace config (vtcode.toml in workspace root)
+        let workspace_config_path = workspace_root.join(&config_file_name);
+        if workspace_config_path.exists() {
+            if let Ok(toml) = Self::load_toml_from_file(&workspace_config_path) {
+                layer_stack.push(ConfigLayerEntry::new(
+                    ConfigLayerSource::Workspace {
+                        file: workspace_config_path.clone(),
+                    },
+                    toml,
+                ));
+            }
+        }
+
+        // 4. Config directory fallback (.vtcode/vtcode.toml)
+        let fallback_path = config_dir.join(&config_file_name);
+        if fallback_path.exists() && fallback_path != workspace_config_path {
+            if let Ok(toml) = Self::load_toml_from_file(&fallback_path) {
+                layer_stack.push(ConfigLayerEntry::new(
+                    ConfigLayerSource::Workspace {
+                        file: fallback_path,
+                    },
+                    toml,
+                ));
+            }
+        }
+
+        // If no layers found, use default config
+        if layer_stack.layers().is_empty() {
+            let config = VTCodeConfig::default();
+            config
+                .validate()
+                .context("Default configuration failed validation")?;
+
+            return Ok(Self {
+                config,
+                config_path: None,
+                workspace_root: Some(workspace_root),
+                config_file_name,
+                layer_stack,
+            });
+        }
+
+        let effective_toml = layer_stack.effective_config();
+        let config: VTCodeConfig = effective_toml
+            .try_into()
+            .context("Failed to deserialize effective configuration")?;
+
         config
             .validate()
-            .context("Default configuration failed validation")?;
+            .context("Configuration failed validation")?;
+
+        let config_path = layer_stack.layers().last().and_then(|l| match &l.source {
+            ConfigLayerSource::User { file } => Some(file.clone()),
+            ConfigLayerSource::Project { file } => Some(file.clone()),
+            ConfigLayerSource::Workspace { file } => Some(file.clone()),
+            ConfigLayerSource::System { file } => Some(file.clone()),
+            ConfigLayerSource::Runtime => None,
+        });
 
         Ok(Self {
             config,
-            config_path: None,
+            config_path,
             workspace_root: Some(workspace_root),
             config_file_name,
+            layer_stack,
         })
+    }
+
+    fn load_toml_from_file(path: &Path) -> Result<toml::Value> {
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read config file: {}", path.display()))?;
+        let value: toml::Value = toml::from_str(&content)
+            .with_context(|| format!("Failed to parse config file: {}", path.display()))?;
+        Ok(value)
     }
 
     /// Load configuration from a specific file
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {}", path.display()))?;
-
-        let config: VTCodeConfig = toml::from_str(&content)
-            .with_context(|| format!("Failed to parse config file: {}", path.display()))?;
-
-        config
-            .validate()
-            .with_context(|| format!("Failed to validate config file: {}", path.display()))?;
-
+        let defaults_provider = defaults::current_config_defaults();
         let config_file_name = path
             .file_name()
             .and_then(|name| name.to_str().map(ToOwned::to_owned))
-            .unwrap_or_else(|| {
-                defaults::current_config_defaults()
-                    .config_file_name()
-                    .to_string()
-            });
+            .unwrap_or_else(|| defaults_provider.config_file_name().to_string());
+
+        let mut layer_stack = ConfigLayerStack::default();
+
+        // 1. System config
+        #[cfg(unix)]
+        {
+            let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
+            if system_config.exists() {
+                if let Ok(toml) = Self::load_toml_from_file(&system_config) {
+                    layer_stack.push(ConfigLayerEntry::new(
+                        ConfigLayerSource::System {
+                            file: system_config,
+                        },
+                        toml,
+                    ));
+                }
+            }
+        }
+
+        // 2. User home config
+        for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
+            if home_config_path.exists() {
+                if let Ok(toml) = Self::load_toml_from_file(&home_config_path) {
+                    layer_stack.push(ConfigLayerEntry::new(
+                        ConfigLayerSource::User {
+                            file: home_config_path,
+                        },
+                        toml,
+                    ));
+                }
+            }
+        }
+
+        // 3. The specific file provided (Workspace layer)
+        let toml = Self::load_toml_from_file(path)?;
+        layer_stack.push(ConfigLayerEntry::new(
+            ConfigLayerSource::Workspace {
+                file: path.to_path_buf(),
+            },
+            toml,
+        ));
+
+        let effective_toml = layer_stack.effective_config();
+        let config: VTCodeConfig = effective_toml.try_into().with_context(|| {
+            format!("Failed to parse effective config with file: {}", path.display())
+        })?;
+
+        config.validate().with_context(|| {
+            format!("Failed to validate effective config with file: {}", path.display())
+        })?;
 
         Ok(Self {
             config,
             config_path: Some(path.to_path_buf()),
             workspace_root: path.parent().map(Path::to_path_buf),
             config_file_name,
+            layer_stack,
         })
     }
 
@@ -909,6 +1022,16 @@ impl ConfigManager {
     /// Get the configuration file path (if loaded from file)
     pub fn config_path(&self) -> Option<&Path> {
         self.config_path.as_deref()
+    }
+
+    /// Get the configuration layer stack
+    pub fn layer_stack(&self) -> &ConfigLayerStack {
+        &self.layer_stack
+    }
+
+    /// Get the effective TOML configuration
+    pub fn effective_config(&self) -> toml::Value {
+        self.layer_stack.effective_config()
     }
 
     /// Get session duration from agent config
@@ -1014,7 +1137,134 @@ impl ConfigManager {
             .and_then(|name| name.to_str())
             .map(|name| name.to_string())
     }
+}
 
+/// Builder for creating a [`ConfigManager`] with custom overrides.
+#[derive(Debug, Clone, Default)]
+pub struct ConfigBuilder {
+    workspace: Option<PathBuf>,
+    config_file: Option<PathBuf>,
+    cli_overrides: Vec<(String, toml::Value)>,
+}
+
+impl ConfigBuilder {
+    /// Create a new configuration builder.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the workspace directory.
+    pub fn workspace(mut self, path: PathBuf) -> Self {
+        self.workspace = Some(path);
+        self
+    }
+
+    /// Set a specific configuration file to use instead of the default workspace config.
+    pub fn config_file(mut self, path: PathBuf) -> Self {
+        self.config_file = Some(path);
+        self
+    }
+
+    /// Add a CLI override (e.g., "agent.provider", "openai").
+    pub fn cli_override(mut self, key: String, value: toml::Value) -> Self {
+        self.cli_overrides.push((key, value));
+        self
+    }
+
+    /// Add multiple CLI overrides from string pairs.
+    ///
+    /// Values are parsed as TOML. If parsing fails, they are treated as strings.
+    pub fn cli_overrides(mut self, overrides: &[(String, String)]) -> Self {
+        for (key, value) in overrides {
+            let toml_value = value.parse::<toml::Value>().unwrap_or_else(|_| toml::Value::String(value.clone()));
+            self.cli_overrides.push((key.clone(), toml_value));
+        }
+        self
+    }
+
+    /// Build the [`ConfigManager`].
+    pub fn build(self) -> Result<ConfigManager> {
+        let workspace = self
+            .workspace
+            .clone()
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+        let mut manager = if let Some(config_file) = self.config_file {
+            ConfigManager::load_from_file(config_file)?
+        } else {
+            ConfigManager::load_from_workspace(workspace)?
+        };
+
+        if !self.cli_overrides.is_empty() {
+            let mut runtime_toml = toml::Table::new();
+            for (key, value) in self.cli_overrides {
+                Self::insert_dotted_key(&mut runtime_toml, &key, value);
+            }
+
+            let runtime_layer = ConfigLayerEntry::new(
+                ConfigLayerSource::Runtime,
+                toml::Value::Table(runtime_toml),
+            );
+
+            manager.layer_stack.push(runtime_layer);
+
+            // Re-evaluate config
+            let effective_toml = manager.layer_stack.effective_config();
+            manager.config = effective_toml.try_into().context(
+                "Failed to deserialize effective configuration after runtime overrides",
+            )?;
+            manager
+                .config
+                .validate()
+                .context("Configuration failed validation after runtime overrides")?;
+        }
+
+        Ok(manager)
+    }
+
+    fn insert_dotted_key(table: &mut toml::Table, key: &str, value: toml::Value) {
+        let parts: Vec<&str> = key.split('.').collect();
+        let mut current = table;
+        for (i, part) in parts.iter().enumerate() {
+            if i == parts.len() - 1 {
+                current.insert(part.to_string(), value);
+                return;
+            }
+
+            if !current.contains_key(*part) || !current[*part].is_table() {
+                current.insert(part.to_string(), toml::Value::Table(toml::Table::new()));
+            }
+
+            current = current
+                .get_mut(*part)
+                .and_then(|v| v.as_table_mut())
+                .expect("Value must be a table");
+        }
+    }
+}
+
+/// Recursively merge two TOML values.
+///
+/// If both values are tables, they are merged recursively.
+/// Otherwise, the `overlay` value replaces the `base` value.
+pub fn merge_toml_values(base: &mut toml::Value, overlay: &toml::Value) {
+    match (base, overlay) {
+        (toml::Value::Table(base_table), toml::Value::Table(overlay_table)) => {
+            for (key, value) in overlay_table {
+                if let Some(base_value) = base_table.get_mut(key) {
+                    merge_toml_values(base_value, value);
+                } else {
+                    base_table.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        (base, overlay) => {
+            *base = overlay.clone();
+        }
+    }
+}
+
+impl ConfigManager {
     /// Persist configuration to the manager's associated path or workspace
     pub fn save_config(&self, config: &VTCodeConfig) -> Result<()> {
         if let Some(path) = &self.config_path {
@@ -1042,6 +1292,142 @@ mod tests {
     use vtcode_commons::reference::StaticWorkspacePaths;
 
     #[test]
+    fn test_layered_config_loading() {
+        let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
+        let workspace_root = workspace.path();
+
+        // 1. User config
+        let home_dir = workspace_root.join("home");
+        fs::create_dir_all(&home_dir).expect("failed to create home dir");
+        let user_config_path = home_dir.join("vtcode.toml");
+        fs::write(&user_config_path, "agent.provider = \"anthropic\"")
+            .expect("failed to write user config");
+
+        // 2. Workspace config
+        let workspace_config_path = workspace_root.join("vtcode.toml");
+        fs::write(
+            &workspace_config_path,
+            "agent.default_model = \"claude-3-sonnet\"",
+        )
+        .expect("failed to write workspace config");
+
+        let static_paths =
+            StaticWorkspacePaths::new(workspace_root, &workspace_root.join(".vtcode"));
+        let provider = WorkspacePathsDefaults::new(Arc::new(static_paths))
+            .with_home_paths(vec![user_config_path.clone()]);
+
+        defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
+            let manager = ConfigManager::load_from_workspace(workspace_root)
+                .expect("failed to load config");
+
+            assert_eq!(manager.config().agent.provider, "anthropic");
+            assert_eq!(manager.config().agent.default_model, "claude-3-sonnet");
+
+            let layers = manager.layer_stack().layers();
+            // User + Workspace
+            assert_eq!(layers.len(), 2);
+            assert!(matches!(layers[0].source, ConfigLayerSource::User { .. }));
+            assert!(matches!(
+                layers[1].source,
+                ConfigLayerSource::Workspace { .. }
+            ));
+        });
+    }
+
+    #[test]
+    fn test_config_builder_overrides() {
+        let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
+        let workspace_root = workspace.path();
+
+        let workspace_config_path = workspace_root.join("vtcode.toml");
+        fs::write(&workspace_config_path, "agent.provider = \"openai\"")
+            .expect("failed to write workspace config");
+
+        let static_paths =
+            StaticWorkspacePaths::new(workspace_root, &workspace_root.join(".vtcode"));
+        let provider = WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![]);
+
+        defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
+            let manager = ConfigBuilder::new()
+                .workspace(workspace_root.to_path_buf())
+                .cli_override(
+                    "agent.provider".to_string(),
+                    toml::Value::String("gemini".to_string()),
+                )
+                .cli_override(
+                    "agent.default_model".to_string(),
+                    toml::Value::String("gemini-1.5-pro".to_string()),
+                )
+                .build()
+                .expect("failed to build config");
+
+            assert_eq!(manager.config().agent.provider, "gemini");
+            assert_eq!(manager.config().agent.default_model, "gemini-1.5-pro");
+
+            let layers = manager.layer_stack().layers();
+            // Workspace + Runtime
+            assert_eq!(layers.len(), 2);
+            assert!(matches!(
+                layers[0].source,
+                ConfigLayerSource::Workspace { .. }
+            ));
+            assert!(matches!(layers[1].source, ConfigLayerSource::Runtime));
+        });
+    }
+
+    #[test]
+    fn test_insert_dotted_key() {
+        let mut table = toml::Table::new();
+        ConfigBuilder::insert_dotted_key(
+            &mut table,
+            "a.b.c",
+            toml::Value::String("value".to_string()),
+        );
+
+        let a = table.get("a").unwrap().as_table().unwrap();
+        let b = a.get("b").unwrap().as_table().unwrap();
+        let c = b.get("c").unwrap().as_str().unwrap();
+        assert_eq!(c, "value");
+    }
+
+    #[test]
+    fn test_merge_toml_values() {
+        let mut base = toml::from_str::<toml::Value>(
+            r#"
+            [agent]
+            provider = "openai"
+            [tools]
+            default_policy = "prompt"
+        "#,
+        )
+        .unwrap();
+
+        let overlay = toml::from_str::<toml::Value>(
+            r#"
+            [agent]
+            provider = "anthropic"
+            default_model = "claude-3"
+        "#,
+        )
+        .unwrap();
+
+        merge_toml_values(&mut base, &overlay);
+
+        let agent = base.get("agent").unwrap().as_table().unwrap();
+        assert_eq!(agent.get("provider").unwrap().as_str().unwrap(), "anthropic");
+        assert_eq!(
+            agent.get("default_model").unwrap().as_str().unwrap(),
+            "claude-3"
+        );
+
+        let tools = base.get("tools").unwrap().as_table().unwrap();
+        assert_eq!(
+            tools.get("default_policy").unwrap().as_str().unwrap(),
+            "prompt"
+        );
+    }
+
+    #[test]
     fn syntax_highlighting_defaults_are_valid() {
         let config = SyntaxHighlightingConfig::default();
         config
@@ -1057,8 +1443,8 @@ mod tests {
             .validate()
             .expect_err("validation should fail for zero highlight timeout");
         assert!(
-            error.to_string().contains("highlight timeout"),
-            "expected error to mention highlight timeout, got: {}",
+            format!("{:#}", error).contains("highlight"),
+            "expected error to mention highlight, got: {:#}",
             error
         );
     }
