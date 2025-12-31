@@ -1,0 +1,27 @@
+[package]
+name = "vtcode-lmstudio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "LM Studio OSS provider integration for VT Code"
+publish = false
+
+[lib]
+name = "vtcode_lmstudio"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+serde_json.workspace = true
+tokio.workspace = true
+tracing = { version = "0.1", features = ["log"] }
+which = "6.0"
+vtcode-config = { path = "../vtcode-config" }
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { version = "1", features = ["full"] }
+
+[lints]
+workspace = true
