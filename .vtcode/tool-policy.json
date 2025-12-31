@@ -25,12 +25,7 @@
     "send_pty_input",
     "skill",
     "web_fetch",
-    "write_file",
-    "cargo_check",
-    "cargo_test",
-    "git_status",
-    "git_diff",
-    "git_log"
+    "write_file"
   ],
   "policies": {
     "apply_patch": "prompt",
@@ -57,12 +52,7 @@
     "agent_info": "prompt",
     "exec_code": "prompt",
     "exec_pty_cmd": "prompt",
-    "exec": "prompt",
-    "cargo_check": "allow",
-    "cargo_test": "allow",
-    "git_status": "allow",
-    "git_diff": "allow",
-    "git_log": "allow"
+    "exec": "prompt"
   },
   "constraints": {},
   "mcp": {
