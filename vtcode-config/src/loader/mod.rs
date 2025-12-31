@@ -870,26 +870,26 @@ impl ConfigManager {
             }
         }
 
-        // 3. Workspace config (vtcode.toml in workspace root)
+        // 3. Config directory fallback (.vtcode/vtcode.toml)
+        let fallback_path = config_dir.join(&config_file_name);
         let workspace_config_path = workspace_root.join(&config_file_name);
-        if workspace_config_path.exists() {
-            if let Ok(toml) = Self::load_toml_from_file(&workspace_config_path) {
+        if fallback_path.exists() && fallback_path != workspace_config_path {
+            if let Ok(toml) = Self::load_toml_from_file(&fallback_path) {
                 layer_stack.push(ConfigLayerEntry::new(
                     ConfigLayerSource::Workspace {
-                        file: workspace_config_path.clone(),
+                        file: fallback_path,
                     },
                     toml,
                 ));
             }
         }
 
-        // 4. Config directory fallback (.vtcode/vtcode.toml)
-        let fallback_path = config_dir.join(&config_file_name);
-        if fallback_path.exists() && fallback_path != workspace_config_path {
-            if let Ok(toml) = Self::load_toml_from_file(&fallback_path) {
+        // 4. Workspace config (vtcode.toml in workspace root)
+        if workspace_config_path.exists() {
+            if let Ok(toml) = Self::load_toml_from_file(&workspace_config_path) {
                 layer_stack.push(ConfigLayerEntry::new(
                     ConfigLayerSource::Workspace {
-                        file: fallback_path,
+                        file: workspace_config_path.clone(),
                     },
                     toml,
                 ));
