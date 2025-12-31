@@ -60,21 +60,18 @@ pub(crate) fn validate_tool_args_security(
     // --------------------------
 
     // Path safety checks
-    if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
-        if let Err(e) = paths::validate_path_safety(path) {
+    if let Some(path) = args.get("path").and_then(|v| v.as_str())
+        && let Err(e) = paths::validate_path_safety(path) {
             failures.push(format!("Path security check failed: {}", e));
         }
-    }
 
     // Command safety checks
     // Check both 'command' argument and specific tool usage
-    if name == tool_names::RUN_PTY_CMD {
-        if let Some(cmd) = args.get("command").and_then(|v| v.as_str()) {
-            if let Err(e) = commands::validate_command_safety(cmd) {
+    if name == tool_names::RUN_PTY_CMD
+        && let Some(cmd) = args.get("command").and_then(|v| v.as_str())
+            && let Err(e) = commands::validate_command_safety(cmd) {
                 failures.push(format!("Command security check failed: {}", e));
             }
-        }
-    }
 
     if failures.is_empty() {
         None

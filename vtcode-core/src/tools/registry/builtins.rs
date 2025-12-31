@@ -43,58 +43,15 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::code_intelligence_executor,
         ),
         // ============================================================
-        // SHELL EXECUTION (1 exposed + 6 hidden)
+        // SHELL EXECUTION (1 tool - unified)
         // ============================================================
         ToolRegistration::new(
-            tools::RUN_PTY_CMD,
+            tools::UNIFIED_EXEC,
             CapabilityLevel::Bash,
             true,
-            ToolRegistry::run_pty_cmd_executor,
+            ToolRegistry::unified_exec_executor,
         )
-        .with_aliases(["exec_pty_cmd", "exec"]),
-        // PTY session tools: hidden from LLM (internal use only)
-        ToolRegistration::new(
-            tools::CREATE_PTY_SESSION,
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::create_pty_session_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::LIST_PTY_SESSIONS,
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::list_pty_sessions_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::CLOSE_PTY_SESSION,
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::close_pty_session_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::SEND_PTY_INPUT,
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::send_pty_input_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::READ_PTY_SESSION,
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::read_pty_session_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::RESIZE_PTY_SESSION,
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::resize_pty_session_executor,
-        )
-        .with_llm_visibility(false),
+        .with_aliases([tools::RUN_PTY_CMD, "exec_pty_cmd", "exec", "shell"]),
         // ============================================================
         // FILE OPERATIONS (5 exposed + 2 deprecated)
         // ============================================================

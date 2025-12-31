@@ -451,6 +451,8 @@ read_file = "allow"               # Read files (no confirmation needed)
 read_pty_session = "allow"        # Read PTY session output (no no confirmation needed)
 resize_pty_session = "allow"      # Resize PTY sessions (no confirmation needed)
 run_pty_cmd = "prompt"            # Run commands in PTY (requires confirmation)
+exec_command = "prompt"           # Execute command in unified session (requires confirmation)
+write_stdin = "prompt"            # Write to stdin in unified session (requires confirmation)
 
 send_pty_input = "prompt"         # Send input to PTY (requires confirmation)
 write_file = "allow"              # Write files (no confirmation needed)
@@ -998,11 +1000,17 @@ impl ConfigManager {
 
         let effective_toml = layer_stack.effective_config();
         let config: VTCodeConfig = effective_toml.try_into().with_context(|| {
-            format!("Failed to parse effective config with file: {}", path.display())
+            format!(
+                "Failed to parse effective config with file: {}",
+                path.display()
+            )
         })?;
 
         config.validate().with_context(|| {
-            format!("Failed to validate effective config with file: {}", path.display())
+            format!(
+                "Failed to validate effective config with file: {}",
+                path.display()
+            )
         })?;
 
         Ok(Self {
@@ -1176,7 +1184,9 @@ impl ConfigBuilder {
     /// Values are parsed as TOML. If parsing fails, they are treated as strings.
     pub fn cli_overrides(mut self, overrides: &[(String, String)]) -> Self {
         for (key, value) in overrides {
-            let toml_value = value.parse::<toml::Value>().unwrap_or_else(|_| toml::Value::String(value.clone()));
+            let toml_value = value
+                .parse::<toml::Value>()
+                .unwrap_or_else(|_| toml::Value::String(value.clone()));
             self.cli_overrides.push((key.clone(), toml_value));
         }
         self
@@ -1201,18 +1211,16 @@ impl ConfigBuilder {
                 Self::insert_dotted_key(&mut runtime_toml, &key, value);
             }
 
-            let runtime_layer = ConfigLayerEntry::new(
-                ConfigLayerSource::Runtime,
-                toml::Value::Table(runtime_toml),
-            );
+            let runtime_layer =
+                ConfigLayerEntry::new(ConfigLayerSource::Runtime, toml::Value::Table(runtime_toml));
 
             manager.layer_stack.push(runtime_layer);
 
             // Re-evaluate config
             let effective_toml = manager.layer_stack.effective_config();
-            manager.config = effective_toml.try_into().context(
-                "Failed to deserialize effective configuration after runtime overrides",
-            )?;
+            manager.config = effective_toml
+                .try_into()
+                .context("Failed to deserialize effective configuration after runtime overrides")?;
             manager
                 .config
                 .validate()
@@ -1317,8 +1325,8 @@ mod tests {
             .with_home_paths(vec![user_config_path.clone()]);
 
         defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
-            let manager = ConfigManager::load_from_workspace(workspace_root)
-                .expect("failed to load config");
+            let manager =
+                ConfigManager::load_from_workspace(workspace_root).expect("failed to load config");
 
             assert_eq!(manager.config().agent.provider, "anthropic");
             assert_eq!(manager.config().agent.default_model, "claude-3-sonnet");
@@ -1414,7 +1422,10 @@ mod tests {
         merge_toml_values(&mut base, &overlay);
 
         let agent = base.get("agent").unwrap().as_table().unwrap();
-        assert_eq!(agent.get("provider").unwrap().as_str().unwrap(), "anthropic");
+        assert_eq!(
+            agent.get("provider").unwrap().as_str().unwrap(),
+            "anthropic"
+        );
         assert_eq!(
             agent.get("default_model").unwrap().as_str().unwrap(),
             "claude-3"

@@ -326,7 +326,8 @@ impl RegistryAccessFilter {
         if script_lower.contains("get-item") || script_lower.contains("get-itemproperty") {
             for (key, info) in get_dangerous_registry_paths().iter() {
                 if script_lower.contains(&format!("hklm:\\{}", info.path_pattern.to_lowercase()))
-                    || script_lower.contains(&format!("hkcu:\\{}", info.path_pattern.to_lowercase()))
+                    || script_lower
+                        .contains(&format!("hkcu:\\{}", info.path_pattern.to_lowercase()))
                 {
                     let hive = if script_lower
                         .contains(&format!("hklm:\\{}", info.path_pattern.to_lowercase()))
@@ -454,8 +455,11 @@ mod tests {
 
     #[test]
     fn test_is_dangerous_registry_access() {
-        let dangerous = "Set-ItemProperty -Path HKLM:\\System\\CurrentControlSet\\Services\\* -Value *";
-        assert!(RegistryAccessFilter::is_dangerous_registry_access(dangerous));
+        let dangerous =
+            "Set-ItemProperty -Path HKLM:\\System\\CurrentControlSet\\Services\\* -Value *";
+        assert!(RegistryAccessFilter::is_dangerous_registry_access(
+            dangerous
+        ));
 
         let safe = "Get-Item -Path HKCU:\\Software";
         assert!(!RegistryAccessFilter::is_dangerous_registry_access(safe));
@@ -477,7 +481,8 @@ mod tests {
         let low_risk = RegistryAccessFilter::filter_by_risk_level(script, RegistryRiskLevel::Low);
         assert!(low_risk.is_empty());
 
-        let medium_risk = RegistryAccessFilter::filter_by_risk_level(script, RegistryRiskLevel::Medium);
+        let medium_risk =
+            RegistryAccessFilter::filter_by_risk_level(script, RegistryRiskLevel::Medium);
         assert!(!medium_risk.is_empty());
     }
 

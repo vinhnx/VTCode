@@ -50,13 +50,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "WScript.Shell",
             risk_level: ComRiskLevel::Critical,
-            dangerous_methods: &[
-                "exec",
-                "run",
-                "createobject",
-                "sendkeys",
-                "popup",
-            ],
+            dangerous_methods: &["exec", "run", "createobject", "sendkeys", "popup"],
             description: "Allows arbitrary process execution and shell operations",
         },
     );
@@ -66,11 +60,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "Shell.Application",
             risk_level: ComRiskLevel::Critical,
-            dangerous_methods: &[
-                "shellexecute",
-                "open",
-                "createshelllink",
-            ],
+            dangerous_methods: &["shellexecute", "open", "createshelllink"],
             description: "Shell context for file operations and process execution",
         },
     );
@@ -81,11 +71,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "ActiveDirectory.ADSIObject",
             risk_level: ComRiskLevel::High,
-            dangerous_methods: &[
-                "setinfo",
-                "createobject",
-                "bindtoobject",
-            ],
+            dangerous_methods: &["setinfo", "createobject", "bindtoobject"],
             description: "Active Directory access for privilege escalation",
         },
     );
@@ -105,11 +91,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "Microsoft.XMLDOM",
             risk_level: ComRiskLevel::High,
-            dangerous_methods: &[
-                "load",
-                "loadxml",
-                "selectnodes",
-            ],
+            dangerous_methods: &["load", "loadxml", "selectnodes"],
             description: "XML processing that can load external content",
         },
     );
@@ -119,11 +101,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "MSXML2.XMLHTTP",
             risk_level: ComRiskLevel::High,
-            dangerous_methods: &[
-                "open",
-                "send",
-                "responsetext",
-            ],
+            dangerous_methods: &["open", "send", "responsetext"],
             description: "HTTP requests for downloading code/data",
         },
     );
@@ -149,10 +127,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "Microsoft.Update.Session",
             risk_level: ComRiskLevel::High,
-            dangerous_methods: &[
-                "createsearcher",
-                "createupdatedownloader",
-            ],
+            dangerous_methods: &["createsearcher", "createupdatedownloader"],
             description: "Windows Update enumeration for security bypass",
         },
     );
@@ -163,10 +138,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "Internet.Session",
             risk_level: ComRiskLevel::High,
-            dangerous_methods: &[
-                "getfile",
-                "openurl",
-            ],
+            dangerous_methods: &["getfile", "openurl"],
             description: "Direct internet access for file download",
         },
     );
@@ -176,11 +148,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "WinHttpRequest.5.1",
             risk_level: ComRiskLevel::High,
-            dangerous_methods: &[
-                "open",
-                "send",
-                "responsetext",
-            ],
+            dangerous_methods: &["open", "send", "responsetext"],
             description: "HTTP requests with credential support",
         },
     );
@@ -191,11 +159,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "WinMgmts",
             risk_level: ComRiskLevel::Medium,
-            dangerous_methods: &[
-                "execmethod",
-                "get",
-                "instancesof",
-            ],
+            dangerous_methods: &["execmethod", "get", "instancesof"],
             description: "WMI access for system manipulation",
         },
     );
@@ -205,9 +169,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "WbemScripting.SWbemLocator",
             risk_level: ComRiskLevel::Medium,
-            dangerous_methods: &[
-                "connectserver",
-            ],
+            dangerous_methods: &["connectserver"],
             description: "WMI locator for remote system access",
         },
     );
@@ -218,10 +180,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "Excel.Application",
             risk_level: ComRiskLevel::Medium,
-            dangerous_methods: &[
-                "run",
-                "activatex",
-            ],
+            dangerous_methods: &["run", "activatex"],
             description: "Excel macro execution via COM",
         },
     );
@@ -231,9 +190,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "Word.Application",
             risk_level: ComRiskLevel::Medium,
-            dangerous_methods: &[
-                "run",
-            ],
+            dangerous_methods: &["run"],
             description: "Word macro execution via COM",
         },
     );
@@ -243,9 +200,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "PowerPoint.Application",
             risk_level: ComRiskLevel::Medium,
-            dangerous_methods: &[
-                "run",
-            ],
+            dangerous_methods: &["run"],
             description: "PowerPoint macro execution via COM",
         },
     );
@@ -255,10 +210,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "Outlook.Application",
             risk_level: ComRiskLevel::Medium,
-            dangerous_methods: &[
-                "createitem",
-                "send",
-            ],
+            dangerous_methods: &["createitem", "send"],
             description: "Outlook access for email and credential theft",
         },
     );
@@ -405,7 +357,11 @@ mod tests {
         "#;
         let contexts = ComObjectAnalyzer::analyze_instantiation(script);
         assert!(!contexts.is_empty());
-        assert!(contexts[0].dangerous_methods_used.contains(&"run".to_string()));
+        assert!(
+            contexts[0]
+                .dangerous_methods_used
+                .contains(&"run".to_string())
+        );
     }
 
     #[test]
@@ -438,7 +394,8 @@ mod tests {
 
     #[test]
     fn test_creation_method_detection() {
-        let method1 = identify_creation_method("New-Object -ComObject WScript.Shell", "wscript.shell");
+        let method1 =
+            identify_creation_method("New-Object -ComObject WScript.Shell", "wscript.shell");
         assert_eq!(method1, "New-Object -ComObject");
 
         let method2 = identify_creation_method("[activexobject]'WScript.Shell'", "wscript.shell");

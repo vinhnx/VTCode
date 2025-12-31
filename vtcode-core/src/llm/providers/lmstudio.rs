@@ -32,8 +32,7 @@ struct LmStudioModel {
     owned_by: Option<String>,
 }
 
-const LMSTUDIO_CONNECTION_ERROR: &str =
-    "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
+const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
 
 /// Fetches available models from the LM Studio API endpoint
 pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
