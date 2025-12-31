@@ -26,7 +26,10 @@ pub fn is_dangerous_command_windows(command: &[String]) -> bool {
         .to_lowercase();
 
     // ──── PowerShell ────
-    if matches!(base_exe.as_str(), "powershell" | "pwsh" | "powershell.exe" | "pwsh.exe") {
+    if matches!(
+        base_exe.as_str(),
+        "powershell" | "pwsh" | "powershell.exe" | "pwsh.exe"
+    ) {
         return is_dangerous_powershell_invocation(command);
     }
 
@@ -68,9 +71,7 @@ fn is_dangerous_powershell_invocation(command: &[String]) -> bool {
     }
 
     // ──── Browser executables with URL ────
-    let browser_patterns = [
-        "firefox", "chrome", "msedge", "iexplore", "opera", "brave",
-    ];
+    let browser_patterns = ["firefox", "chrome", "msedge", "iexplore", "opera", "brave"];
     if has_url && browser_patterns.iter().any(|b| script_lower.contains(b)) {
         return true;
     }
@@ -147,10 +148,7 @@ mod tests {
 
     #[test]
     fn powershell_without_url_is_safe() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "Write-Host 'hello'".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "Write-Host 'hello'".to_string()];
         assert!(!is_dangerous_powershell_invocation(&cmd));
     }
 

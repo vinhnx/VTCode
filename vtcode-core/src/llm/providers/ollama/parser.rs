@@ -56,7 +56,7 @@ mod tests {
             _ => panic!("Expected Status event"),
         }
         match &events2[1] {
-            OllamaPullEvent::Success => {},
+            OllamaPullEvent::Success => {}
             _ => panic!("Expected Success event"),
         }
     }

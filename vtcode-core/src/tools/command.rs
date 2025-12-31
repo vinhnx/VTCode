@@ -83,9 +83,10 @@ impl CommandTool {
         // Unified command evaluation: combines safety rules + policy rules
         let confirm_ok = input.confirm.unwrap_or(false);
         let policy_allowed = self.policy.allows(command);
-        
+
         // Use unified evaluator with policy layer
-        let eval_result = self.unified_evaluator
+        let eval_result = self
+            .unified_evaluator
             .evaluate_with_policy(command, policy_allowed, "config policy")
             .await?;
 

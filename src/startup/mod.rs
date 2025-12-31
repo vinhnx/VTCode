@@ -173,10 +173,8 @@ impl StartupContext {
 
         // Apply explicit CLI overrides for model and provider
         if let Some(ref model) = args.model {
-            builder = builder.cli_override(
-                "agent.model".to_owned(),
-                toml::Value::String(model.clone()),
-            );
+            builder =
+                builder.cli_override("agent.model".to_owned(), toml::Value::String(model.clone()));
         }
         if let Some(ref provider) = args.provider {
             builder = builder.cli_override(
@@ -731,9 +729,7 @@ mod tests {
     fn applies_inline_overrides_to_config() -> Result<()> {
         let overrides = vec![("agent.provider".to_owned(), "\"openai\"".to_owned())];
 
-        let manager = ConfigBuilder::new()
-            .cli_overrides(&overrides)
-            .build()?;
+        let manager = ConfigBuilder::new().cli_overrides(&overrides).build()?;
         let config = manager.config();
 
         assert_eq!(config.agent.provider, "openai");

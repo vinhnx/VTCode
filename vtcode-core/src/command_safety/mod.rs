@@ -22,11 +22,11 @@ pub mod unified;
 #[cfg(windows)]
 pub mod windows;
 #[cfg(windows)]
-pub mod windows_enhanced;
-#[cfg(windows)]
 pub mod windows_cmdlet_db;
 #[cfg(windows)]
 pub mod windows_com_analyzer;
+#[cfg(windows)]
+pub mod windows_enhanced;
 #[cfg(windows)]
 pub mod windows_registry_filter;
 
@@ -39,15 +39,19 @@ pub use command_db::CommandDatabase;
 pub use dangerous_commands::command_might_be_dangerous;
 pub use safe_command_registry::{SafeCommandRegistry, SafetyDecision};
 pub use shell_parser::parse_bash_lc_commands;
-pub use unified::{EvaluationReason, EvaluationResult, UnifiedCommandEvaluator, PolicyAwareEvaluator};
+pub use unified::{
+    EvaluationReason, EvaluationResult, PolicyAwareEvaluator, UnifiedCommandEvaluator,
+};
+#[cfg(windows)]
+pub use windows_cmdlet_db::{CmdletCategory, CmdletDatabase, CmdletInfo, CmdletSeverity};
+#[cfg(windows)]
+pub use windows_com_analyzer::{ComObjectAnalyzer, ComObjectContext, ComObjectInfo, ComRiskLevel};
 #[cfg(windows)]
 pub use windows_enhanced::is_dangerous_windows_enhanced;
 #[cfg(windows)]
-pub use windows_cmdlet_db::{CmdletDatabase, CmdletSeverity, CmdletCategory, CmdletInfo};
-#[cfg(windows)]
-pub use windows_com_analyzer::{ComObjectAnalyzer, ComRiskLevel, ComObjectInfo, ComObjectContext};
-#[cfg(windows)]
-pub use windows_registry_filter::{RegistryAccessFilter, RegistryRiskLevel, RegistryPathInfo, RegistryAccessPattern};
+pub use windows_registry_filter::{
+    RegistryAccessFilter, RegistryAccessPattern, RegistryPathInfo, RegistryRiskLevel,
+};
 
 /// Evaluates if a command is safe to execute.
 /// Returns true if the command passes all safety checks.

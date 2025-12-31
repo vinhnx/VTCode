@@ -107,9 +107,7 @@ fn is_com_object_creation(script: &str) -> bool {
         "interop",
     ];
 
-    dangerous_objects
-        .iter()
-        .any(|obj| script.contains(obj))
+    dangerous_objects.iter().any(|obj| script.contains(obj))
 }
 
 /// Detects dangerous PowerShell cmdlets
@@ -153,7 +151,7 @@ fn is_dangerous_cmdlet(script: &str) -> bool {
 /// Detects code execution patterns (IEX, . source, &, etc.)
 fn is_code_execution_pattern(script: &str) -> bool {
     let patterns = [
-        "| iex",           // Pipeline to IEX
+        "| iex", // Pipeline to IEX
         "| invoke-expression",
         ". {",            // Dot sourcing
         "& {",            // Call operator with script block
@@ -259,10 +257,7 @@ fn is_dangerous_net_command(command: &[String]) -> bool {
 }
 
 fn is_powershell_executable(exe: &str) -> bool {
-    matches!(
-        exe,
-        "powershell" | "powershell.exe" | "pwsh" | "pwsh.exe"
-    )
+    matches!(exe, "powershell" | "powershell.exe" | "pwsh" | "pwsh.exe")
 }
 
 fn extract_exe_name(exe: &str) -> String {
@@ -306,19 +301,13 @@ mod tests {
 
     #[test]
     fn detects_iex_alias() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "IEX 'malicious code'".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "IEX 'malicious code'".to_string()];
         assert!(is_dangerous_windows_enhanced(&cmd));
     }
 
     #[test]
     fn detects_dot_sourcing() {
-        let cmd = vec![
-            "powershell".to_string(),
-            ". { malicious code }".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), ". { malicious code }".to_string()];
         assert!(is_dangerous_windows_enhanced(&cmd));
     }
 

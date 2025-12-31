@@ -5,9 +5,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::command_safety::{
-        UnifiedCommandEvaluator, PolicyAwareEvaluator, EvaluationReason,
-    };
+    use crate::command_safety::{EvaluationReason, PolicyAwareEvaluator, UnifiedCommandEvaluator};
 
     // ========== Core Safety Tests ==========
 
@@ -80,11 +78,7 @@ mod tests {
         for cmd in dangerous_commands {
             let cmd_vec: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
             let result = evaluator.evaluate(&cmd_vec).await.unwrap();
-            assert!(
-                !result.allowed,
-                "Expected {} to be blocked",
-                cmd.join(" ")
-            );
+            assert!(!result.allowed, "Expected {} to be blocked", cmd.join(" "));
         }
     }
 
@@ -100,11 +94,7 @@ mod tests {
         for cmd in dangerous_commands {
             let cmd_vec: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
             let result = evaluator.evaluate(&cmd_vec).await.unwrap();
-            assert!(
-                !result.allowed,
-                "Expected {} to be blocked",
-                cmd.join(" ")
-            );
+            assert!(!result.allowed, "Expected {} to be blocked", cmd.join(" "));
         }
     }
 
@@ -113,7 +103,12 @@ mod tests {
     #[tokio::test]
     async fn test_find_allowed_options() {
         let evaluator = UnifiedCommandEvaluator::new();
-        let cmd = vec!["find".to_string(), ".".to_string(), "-name".to_string(), "*.rs".to_string()];
+        let cmd = vec![
+            "find".to_string(),
+            ".".to_string(),
+            "-name".to_string(),
+            "*.rs".to_string(),
+        ];
         let result = evaluator.evaluate(&cmd).await.unwrap();
         assert!(result.allowed, "find with -name should be allowed");
     }
@@ -166,7 +161,10 @@ mod tests {
             "git status && cargo test".to_string(),
         ];
         let result = evaluator.evaluate(&cmd).await.unwrap();
-        assert!(result.allowed, "bash -lc with safe commands should be allowed");
+        assert!(
+            result.allowed,
+            "bash -lc with safe commands should be allowed"
+        );
     }
 
     #[tokio::test]
@@ -391,7 +389,12 @@ mod tests {
         let _ = result1;
 
         // Dangerous command with sudo
-        let cmd2 = vec!["sudo".to_string(), "rm".to_string(), "-rf".to_string(), "/".to_string()];
+        let cmd2 = vec![
+            "sudo".to_string(),
+            "rm".to_string(),
+            "-rf".to_string(),
+            "/".to_string(),
+        ];
         let result2 = evaluator.evaluate(&cmd2).await.unwrap();
         assert!(!result2.allowed);
     }

@@ -127,7 +127,13 @@ mod tests {
     #[tokio::test]
     async fn cache_stores_and_retrieves() {
         let cache = SafetyDecisionCache::new(10);
-        cache.put("git status".to_string(), true, "git status allowed".to_string()).await;
+        cache
+            .put(
+                "git status".to_string(),
+                true,
+                "git status allowed".to_string(),
+            )
+            .await;
 
         let decision = cache.get("git status").await;
         assert!(decision.is_some());
@@ -144,7 +150,9 @@ mod tests {
     #[tokio::test]
     async fn cache_tracks_access_count() {
         let cache = SafetyDecisionCache::new(10);
-        cache.put("cmd".to_string(), true, "allowed".to_string()).await;
+        cache
+            .put("cmd".to_string(), true, "allowed".to_string())
+            .await;
 
         let d1 = cache.get("cmd").await.unwrap();
         assert_eq!(d1.access_count, 1);
@@ -157,21 +165,31 @@ mod tests {
     async fn cache_respects_max_size() {
         let cache = SafetyDecisionCache::new(3);
 
-        cache.put("cmd1".to_string(), true, "allowed".to_string()).await;
-        cache.put("cmd2".to_string(), true, "allowed".to_string()).await;
-        cache.put("cmd3".to_string(), true, "allowed".to_string()).await;
+        cache
+            .put("cmd1".to_string(), true, "allowed".to_string())
+            .await;
+        cache
+            .put("cmd2".to_string(), true, "allowed".to_string())
+            .await;
+        cache
+            .put("cmd3".to_string(), true, "allowed".to_string())
+            .await;
 
         assert_eq!(cache.size().await, 3);
 
         // Adding a 4th entry should evict the least-used
-        cache.put("cmd4".to_string(), true, "allowed".to_string()).await;
+        cache
+            .put("cmd4".to_string(), true, "allowed".to_string())
+            .await;
         assert_eq!(cache.size().await, 3);
     }
 
     #[tokio::test]
     async fn cache_clears() {
         let cache = SafetyDecisionCache::new(10);
-        cache.put("cmd".to_string(), true, "allowed".to_string()).await;
+        cache
+            .put("cmd".to_string(), true, "allowed".to_string())
+            .await;
         assert_eq!(cache.size().await, 1);
 
         cache.clear().await;
@@ -181,8 +199,12 @@ mod tests {
     #[tokio::test]
     async fn cache_stats() {
         let cache = SafetyDecisionCache::new(10);
-        cache.put("cmd1".to_string(), true, "allowed".to_string()).await;
-        cache.put("cmd2".to_string(), true, "allowed".to_string()).await;
+        cache
+            .put("cmd1".to_string(), true, "allowed".to_string())
+            .await;
+        cache
+            .put("cmd2".to_string(), true, "allowed".to_string())
+            .await;
 
         let _d1 = cache.get("cmd1").await;
         let _d2 = cache.get("cmd2").await;

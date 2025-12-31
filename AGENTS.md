@@ -34,13 +34,13 @@ cargo c                              # Check compilation (alias)
 
 These shortcuts match intuitive agent expectations:
 
-- `cargo t` → `cargo test`
-- `cargo c` → `cargo check`
-- `cargo r` → `cargo run`
-- When running a specific test, agents intuitively try:
-  - `cargo test function_name` ✓ (this works)
-  - `cargo test --lib` ✓ (unit tests only)
-  - `cargo test --integration` ✓ (integration tests only)
+-   `cargo t` → `cargo test`
+-   `cargo c` → `cargo check`
+-   `cargo r` → `cargo run`
+-   When running a specific test, agents intuitively try:
+    -   `cargo test function_name` ✓ (this works)
+    -   `cargo test --lib` ✓ (unit tests only)
+    -   `cargo test --integration` ✓ (integration tests only)
 
 ## Workspace Structure
 
@@ -274,13 +274,16 @@ When agents guess wrong about commands, flags, or workflows, we treat that as a 
 ### Active Patterns
 
 **Cargo alias expectations**:
-- Agents try `cargo t` expecting `cargo test` → ✓ Paved with cargo aliases
-- Agents try `cargo c` expecting `cargo check` → ✓ Paved with cargo aliases
-- Agents try `cargo r` expecting `cargo run` → ✓ Paved with cargo aliases
+
+-   Agents try `cargo t` expecting `cargo test` → ✓ Paved with cargo aliases
+-   Agents try `cargo c` expecting `cargo check` → ✓ Paved with cargo aliases
+-   Agents try `cargo r` expecting `cargo run` → ✓ Paved with cargo aliases
 
 **Tool operation patterns**:
-- Agents expect `code_intelligence goto_definition` → Currently requires `code_intelligence` tool with `operation` param
-- Agents expect `spawn_subagent --name explore` → Currently requires positional `subagent_type` param
+
+-   Agents expect `code_intelligence goto_definition` → Currently requires `code_intelligence` tool with `operation` param
+-   Agents expect `spawn_subagent --name explore` → Currently requires positional `subagent_type` param
+-   Agents expect `exec_command` and `write_stdin` (Unified Exec) → ✓ Paved with `exec_command` and `write_stdin` tools (compatible with OpenAI Codex pattern)
 
 ### Reporting Friction
 
