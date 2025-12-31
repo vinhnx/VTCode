@@ -40,6 +40,8 @@ anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 regex = "1.12"
 num_cpus = "1.16"
+clap = { version = "4.5", features = ["derive"] }
+pretty_assertions = "1.4"
 
 
 [workspace]
@@ -53,7 +55,7 @@ members = [
     "vtcode-indexer",
     "vtcode-tools",
     "vtcode-bash-runner",
-    "vtcode-exec-events",
+    "vtcode-exec-events", "vtcode-file-search",
 ]
 exclude = ["zed-extension", "third-party/mcp-types"]
 

@@ -117,6 +117,7 @@ tui-prompts = "0.5"
 perg = "0.8.0"
 nucleo-matcher = "0.3"
 line-clipping = "0.3"
+vtcode-file-search = { path = "../vtcode-file-search" }
 pulldown-cmark = { version = "0.13", default-features = false, features = [
     "simd",
 ] }

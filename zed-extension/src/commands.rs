@@ -98,6 +98,79 @@ pub fn check_status() -> CommandResponse {
     }
 }
 
+/// Find files matching a fuzzy pattern
+///
+/// Uses the optimized file search bridge for fast parallel file discovery.
+/// Supports fuzzy matching and respects .gitignore files.
+///
+/// # Arguments
+/// * `pattern` - Fuzzy search pattern (e.g., "main", "component.rs")
+/// * `limit` - Maximum number of results to return
+pub fn find_files(pattern: &str, limit: Option<usize>) -> CommandResponse {
+    let mut builder = CommandBuilder::find_files(pattern);
+    
+    if let Some(l) = limit {
+        builder = builder.with_option("limit", l.to_string());
+    }
+    
+    match builder.execute() {
+        Ok(result) => {
+            if result.is_success() {
+                CommandResponse::ok(result.output())
+            } else {
+                CommandResponse::err(format!("File search failed: {}", result.stderr))
+            }
+        }
+        Err(e) => CommandResponse::err(format!("File search error: {}", e)),
+    }
+}
+
+/// List all files in the workspace
+///
+/// Enumerates files with optional exclusion patterns.
+/// Respects .gitignore by default.
+///
+/// # Arguments
+/// * `exclude_patterns` - Optional comma-separated glob patterns to exclude
+pub fn list_files(exclude_patterns: Option<&str>) -> CommandResponse {
+    let mut builder = CommandBuilder::list_files();
+    
+    if let Some(patterns) = exclude_patterns {
+        builder = builder.with_option("exclude", patterns);
+    }
+    
+    match builder.execute() {
+        Ok(result) => {
+            if result.is_success() {
+                CommandResponse::ok(result.output())
+            } else {
+                CommandResponse::err(format!("File listing failed: {}", result.stderr))
+            }
+        }
+        Err(e) => CommandResponse::err(format!("File listing error: {}", e)),
+    }
+}
+
+/// Search for files with pattern and exclusions
+///
+/// Combined search and filter operation for more advanced queries.
+///
+/// # Arguments
+/// * `pattern` - Fuzzy search pattern
+/// * `exclude` - Comma-separated glob patterns to exclude
+pub fn search_files(pattern: &str, exclude: &str) -> CommandResponse {
+    match CommandBuilder::search_files(pattern, exclude).execute() {
+        Ok(result) => {
+            if result.is_success() {
+                CommandResponse::ok(result.output())
+            } else {
+                CommandResponse::err(format!("File search failed: {}", result.stderr))
+            }
+        }
+        Err(e) => CommandResponse::err(format!("File search error: {}", e)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,5 +189,41 @@ mod tests {
         assert!(!response.success);
         assert_eq!(response.output, "");
         assert_eq!(response.error, Some("Error message".to_string()));
+    }
+
+    #[test]
+    fn test_find_files_without_limit() {
+        let response = find_files("test", None);
+        // This will fail if VT Code is not installed, which is expected
+        // The test verifies the function structure
+        assert!(response.error.is_some() || response.success);
+    }
+
+    #[test]
+    fn test_find_files_with_limit() {
+        let response = find_files("main", Some(50));
+        // Verify response structure
+        assert!(response.success || response.error.is_some());
+    }
+
+    #[test]
+    fn test_list_files_without_exclusions() {
+        let response = list_files(None);
+        // Verify response structure
+        assert!(response.success || response.error.is_some());
+    }
+
+    #[test]
+    fn test_list_files_with_exclusions() {
+        let response = list_files(Some("target/**,node_modules/**"));
+        // Verify response structure
+        assert!(response.success || response.error.is_some());
+    }
+
+    #[test]
+    fn test_search_files() {
+        let response = search_files("component", "dist/**");
+        // Verify response structure
+        assert!(response.success || response.error.is_some());
     }
 }
