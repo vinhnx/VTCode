@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "huggingface"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "nemotron-3-nano:30b-cloud"
+default_model = "MiniMaxAI/MiniMax-M2.1:novita"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"
@@ -25,7 +25,34 @@ ui_surface = "auto"
 max_conversation_turns = 80
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "medium"
+reasoning_effort = "low"
+system_prompt_mode = "default"
+tool_documentation_mode = "full"
+enable_split_tool_results = true
+todo_planning_mode = true
+verbosity = "medium"
+refine_temperature = 0.3
+enable_self_review = false
+max_review_passes = 1
+refine_prompts_enabled = false
+refine_prompts_max_passes = 1
+refine_prompts_model = ""
+project_doc_max_bytes = 16384
+instruction_max_bytes = 16384
+instruction_files = []
+max_task_retries = 2
+include_temporal_context = true
+temporal_context_use_utc = false
+include_working_directory = true
+vim_mode_enabled = false
+
+[agent.small_model]
+enabled = true
+model = ""
+temperature = 0.3
+use_for_large_reads = true
+use_for_web_summary = true
+use_for_git_history = true
 
 # Tool security configuration
 [tools]
@@ -37,11 +64,43 @@ default_policy = "prompt"
 
 # Maximum number of tool loops allowed per turn (prevents infinite loops)
 max_tool_loops = 50
+max_repeated_tool_calls = 3
+
+[agent.onboarding]
+enabled = true
+intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."
+include_project_overview = true
+include_language_summary = false
+include_guideline_highlights = true
+include_usage_tips_in_welcome = false
+include_recommended_actions_in_welcome = false
+guideline_highlight_limit = 3
+usage_tips = [
+    "Describe your current coding goal or ask for a quick status overview.",
+    "Reference AGENTS.md guidelines when proposing changes.",
+    "Prefer asking for targeted file reads or diffs before editing.",
+]
+recommended_actions = [
+    "Review the highlighted guidelines and share the task you want to tackle.",
+    "Ask for a workspace tour if you need more context.",
+]
 
 # Security configuration
 [security]
 # Require human confirmation for potentially dangerous actions
 human_in_the_loop = true
+require_write_tool_for_claims = true
+auto_apply_detected_patches = false
+zero_trust_mode = false
+encrypt_payloads = false
+integrity_checks = true
+hitl_notification_bell = true
+
+[agent.custom_prompts]
+enabled = true
+directory = "~/.vtcode/prompts"
+extra_directories = []
+max_file_size_kb = 64
 
 # UI configuration
 [ui]
@@ -50,6 +109,15 @@ tool_output_mode = "compact"
 
 # Maximum number of lines to display in tool output (prevents transcript flooding)
 tool_output_max_lines = 50
+tool_output_spool_bytes = 200000
+allow_tool_ansi = false
+inline_viewport_rows = 16
+
+[agent.custom_slash_commands]
+enabled = false
+directory = ""
+extra_directories = []
+max_file_size_kb = 0
 
 # Status line configuration
 [ui.status_line]
@@ -58,6 +126,8 @@ command = "./.vtcode/statusline/statusline.sh"
 refresh_interval_ms = 1000
 command_timeout_ms = 200
 
+[agent.custom_api_keys]
+
 # PTY (Pseudo Terminal) configuration
 [pty]
 enabled = true
@@ -65,6 +135,15 @@ default_rows = 24
 default_cols = 120
 max_sessions = 10
 command_timeout_seconds = 3600
+stdout_tail_lines = 20
+scrollback_lines = 400
+max_scrollback_bytes = 25000000
+large_output_threshold_kb = 5000
+
+[agent.checkpointing]
+enabled = true
+max_snapshots = 50
+max_age_days = 30
 
 # Timeouts
 [timeouts]
@@ -74,10 +153,496 @@ default_ceiling_seconds = 180
 pty_ceiling_seconds = 300
 # Maximum duration for streaming API responses in seconds
 streaming_ceiling_seconds = 600
+mcp_ceiling_seconds = 120
+warning_threshold_percent = 80
+adaptive_decay_ratio = 0.875
+adaptive_success_streak = 5
+adaptive_min_floor_ms = 1000
+
+[agent.vibe_coding]
+enabled = false
+min_prompt_length = 5
+min_prompt_words = 2
+enable_entity_resolution = true
+entity_index_cache = ".vtcode/entity_index.json"
+max_entity_matches = 5
+track_workspace_state = true
+max_recent_files = 20
+track_value_history = true
+enable_conversation_memory = true
+max_memory_turns = 50
+enable_pronoun_resolution = true
+enable_proactive_context = true
+max_context_files = 3
+max_context_snippets_per_file = 20
+max_search_results = 5
+enable_relative_value_inference = true
 
 # Lifecycle hooks - Execute shell commands in response to agent events
 # For documentation and examples, see: docs/guides/lifecycle-hooks.md
 [hooks.lifecycle]
+session_start = []
+session_end = []
+user_prompt_submit = []
+pre_tool_use = []
+post_tool_use = []
+task_completion = []
+
+[tools.policies]
+
+[tools.web_fetch]
+mode = "restricted"
+dynamic_blocklist_enabled = false
+dynamic_blocklist_path = "~/.vtcode/web_fetch_blocklist.json"
+dynamic_whitelist_enabled = false
+dynamic_whitelist_path = "~/.vtcode/web_fetch_whitelist.json"
+blocked_domains = []
+allowed_domains = []
+blocked_patterns = []
+enable_audit_logging = false
+audit_log_path = "~/.vtcode/web_fetch_audit.log"
+strict_https_only = true
+
+[tools.plugins]
+enabled = true
+manifests = []
+default_trust = "sandbox"
+allow = []
+deny = []
+auto_reload = true
+
+[commands]
+allow_list = [
+    "ls",
+    "pwd",
+    "cat",
+    "grep",
+    "find",
+    "head",
+    "tail",
+    "wc",
+    "git status",
+    "git diff",
+    "git log",
+    "git show",
+    "git branch",
+    "git remote",
+    "cargo check",
+    "cargo build",
+    "cargo build --release",
+    "cargo build --profile release",
+    "cargo test",
+    "cargo run",
+    "cargo clippy",
+    "cargo fmt",
+    "cargo tree",
+    "cargo metadata",
+    "cargo doc",
+    "rustc",
+    "which",
+    "echo",
+    "printf",
+    "date",
+    "tree",
+    "stat",
+    "file",
+    "sort",
+    "uniq",
+    "cut",
+    "awk",
+    "sed",
+    "tar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    "make",
+    "cmake",
+    "ninja",
+    "python3",
+    "python3 -m pip install",
+    "python3 -m pytest",
+    "python3 -m build",
+    "python",
+    "pip3",
+    "pip",
+    "virtualenv",
+    "node",
+    "npm",
+    "npm run build",
+    "npm run test",
+    "npm install",
+    "yarn",
+    "yarn build",
+    "yarn test",
+    "pnpm",
+    "pnpm build",
+    "pnpm test",
+    "bun",
+    "bun install",
+    "bun run",
+    "bun test",
+    "npx",
+    "go",
+    "go build",
+    "go test",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "javac",
+    "java",
+    "mvn",
+    "gradle",
+    "docker",
+    "docker-compose",
+]
+extra_path_entries = [
+    "$HOME/.cargo/bin",
+    "$HOME/.local/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "$HOME/.asdf/bin",
+    "$HOME/.asdf/shims",
+    "$HOME/go/bin",
+]
+deny_list = [
+    "rm -rf /",
+    "rm -rf ~",
+    "rm -rf /*",
+    "rm -rf /home",
+    "rm -rf /usr",
+    "rm -rf /etc",
+    "rm -rf /var",
+    "rm -rf /opt",
+    "rmdir /",
+    "rmdir /home",
+    "rmdir /usr",
+    "shutdown",
+    "reboot",
+    "halt",
+    "poweroff",
+    "init 0",
+    "init 6",
+    "systemctl poweroff",
+    "systemctl reboot",
+    "systemctl halt",
+    "sudo rm",
+    "sudo chmod 777",
+    "sudo chown",
+    "sudo passwd",
+    "sudo su",
+    "sudo -i",
+    "sudo bash",
+    "su root",
+    "su -",
+    "format",
+    "fdisk",
+    "mkfs",
+    "mkfs.ext4",
+    "mkfs.xfs",
+    "mkfs.vfat",
+    "dd if=/dev/zero",
+    "dd if=/dev/random",
+    "dd if=/dev/urandom",
+    "wget --no-check-certificate",
+    ":(){ :|:& };:",
+    "nohup bash -i",
+    "exec bash -i",
+    "eval",
+    "source /etc/bashrc",
+    "source ~/.bashrc",
+    "chmod 777",
+    "chmod -R 777",
+    "chown -R",
+    "chgrp -R",
+    "rm ~/.ssh/*",
+    "rm -r ~/.ssh",
+    "cat /etc/passwd",
+    "cat /etc/shadow",
+    "cat ~/.ssh/id_*",
+    "tail -f /var/log",
+    "head -n 1 /var/log",
+]
+allow_glob = [
+    "git *",
+    "cargo *",
+    "rustc *",
+    "python *",
+    "python3 *",
+    "pip *",
+    "pip3 *",
+    "node *",
+    "npm *",
+    "npm run *",
+    "yarn *",
+    "yarn run *",
+    "pnpm *",
+    "pnpm run *",
+    "bun *",
+    "bun run *",
+    "npx *",
+    "go *",
+    "gcc *",
+    "g++ *",
+    "clang *",
+    "clang++ *",
+    "javac *",
+    "java *",
+    "mvn *",
+    "gradle *",
+    "make *",
+    "cmake *",
+    "ninja *",
+    "docker *",
+    "docker-compose *",
+    "virtualenv *",
+    "tar *",
+    "zip *",
+    "unzip *",
+    "gzip *",
+    "gunzip *",
+]
+deny_glob = [
+    "rm *",
+    "sudo *",
+    "chmod *",
+    "chown *",
+    "kill *",
+    "pkill *",
+    "systemctl *",
+    "service *",
+    "mount *",
+    "umount *",
+    "docker run *",
+    "kubectl *",
+]
+allow_regex = [
+    '^(ls|pwd|cat|grep|find|head|tail|wc|echo|printf|date|tree|stat|file|sort|uniq|cut|awk|sed|tar|zip|unzip|gzip|gunzip)\b',
+    '^git (status|diff|log|show|branch|remote)\b',
+    '^cargo (check|build|test|run|doc|clippy|fmt|tree|metadata)\b',
+    '^rustc\b',
+    '^(python|python3) (-m | )?\w*',
+    '^(pip|pip3)\b',
+    '^virtualenv\b',
+    '^(node|npm|yarn|pnpm|bun|npx)\b',
+    '^go\b',
+    '^(gcc|g\+\+|clang|clang\++)\b',
+    '^(javac|java)\b',
+    '^(mvn|gradle)\b',
+    '^(make|cmake)\b',
+    '^(docker|docker-compose)\b',
+]
+deny_regex = [
+    'rm\s+(-rf|--force)',
+    'sudo\s+.*',
+    'chmod\s+.*',
+    'chown\s+.*',
+    'docker\s+run\s+.*--privileged',
+    'kubectl\s+(delete|drain|uncordon)',
+]
+
+[permissions]
+enabled = true
+resolve_commands = true
+audit_enabled = true
+audit_directory = "~/.vtcode/audit"
+log_allowed_commands = true
+log_denied_commands = true
+log_permission_prompts = true
+cache_enabled = true
+cache_ttl_seconds = 300
+
+[ui.keyboard_protocol]
+enabled = true
+mode = "default"
+disambiguate_escape_codes = true
+report_event_types = true
+report_alternate_keys = true
+report_all_keys = false
+
+[debug]
+enable_tracing = false
+trace_level = "info"
+trace_targets = []
+max_debug_log_size_mb = 50
+max_debug_log_age_days = 7
+
+[context]
+max_context_tokens = 90000
+trim_to_percent = 60
+preserve_recent_turns = 10
+
+[context.ledger]
+enabled = true
+max_entries = 12
+include_in_prompt = true
+preserve_in_compression = true
+
+[telemetry]
+trajectory_enabled = true
+dashboards_enabled = true
+sample_interval_ms = 1000
+retention_days = 14
+bottleneck_tracing = true
+
+[syntax_highlighting]
+enabled = true
+theme = "base16-ocean.dark"
+cache_themes = true
+max_file_size_mb = 10
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+    "cpp",
+    "c",
+    "php",
+    "html",
+    "css",
+    "sql",
+    "csharp",
+    "bash",
+]
+highlight_timeout_ms = 5000
+
+[automation.full_auto]
+enabled = false
+max_turns = 30
+allowed_tools = [
+    "read_file",
+    "list_files",
+    "grep_file",
+]
+require_profile_ack = true
+
+[prompt_cache]
+enabled = true
+cache_dir = "~/.vtcode/cache/prompts"
+max_entries = 1000
+max_age_days = 30
+enable_auto_cleanup = true
+min_quality_threshold = 0.7
+
+[prompt_cache.providers.openai]
+enabled = true
+min_prefix_tokens = 1024
+idle_expiration_seconds = 3600
+surface_metrics = true
+
+[prompt_cache.providers.anthropic]
+enabled = true
+default_ttl_seconds = 300
+extended_ttl_seconds = 3600
+max_breakpoints = 4
+cache_system_messages = true
+cache_user_messages = true
+
+[prompt_cache.providers.gemini]
+enabled = true
+mode = "implicit"
+min_prefix_tokens = 1024
+explicit_ttl_seconds = 3600
+
+[prompt_cache.providers.openrouter]
+enabled = true
+propagate_provider_capabilities = true
+report_savings = true
+
+[prompt_cache.providers.moonshot]
+enabled = true
+
+[prompt_cache.providers.xai]
+enabled = true
+
+[prompt_cache.providers.deepseek]
+enabled = true
+surface_metrics = true
+
+[prompt_cache.providers.zai]
+enabled = false
+
+[mcp]
+enabled = false
+providers = []
+max_concurrent_connections = 5
+request_timeout_seconds = 30
+retry_attempts = 3
+experimental_use_rmcp_client = true
+connection_pooling_enabled = true
+tool_cache_capacity = 100
+connection_timeout_seconds = 30
+
+[mcp.ui]
+mode = "compact"
+max_events = 50
+show_provider_names = true
+
+[mcp.ui.renderers]
+
+[mcp.server]
+enabled = false
+bind_address = "127.0.0.1"
+port = 3000
+transport = "sse"
+name = "vtcode-mcp-server"
+version = "0.55.1"
+exposed_tools = []
+
+[mcp.allowlist]
+enforce = false
+
+[mcp.allowlist.default]
+
+[mcp.allowlist.providers]
+
+[mcp.security]
+auth_enabled = false
+
+[mcp.security.rate_limit]
+requests_per_minute = 100
+concurrent_requests = 10
+
+[mcp.security.validation]
+schema_validation_enabled = true
+path_traversal_protection = true
+max_argument_size = 1048576
+
+[acp]
+enabled = false
+
+[acp.zed]
+enabled = false
+transport = "stdio"
+workspace_trust = "full_auto"
+
+[acp.zed.tools]
+read_file = true
+list_files = true
+
+[model]
+skip_loop_detection = false
+loop_detection_threshold = 2
+loop_detection_interactive = true
+
+[provider.anthropic]
+interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
+interleaved_thinking_budget_tokens = 12000
+interleaved_thinking_type_enabled = "enabled"
+
+[skills]
+render-mode = "lean"
+prompt-format = "xml"
+max-skills-in-prompt = 10
+enable-auto-trigger = true
+enable-description-matching = true
+min-keyword-matches = 2
+
+[output_style]
+active_style = "default"
 # Pre-tool use hooks - Run before tools execute, can block or validate
 # pre_tool_use = [
 #   # Example: Block modifications to sensitive files
