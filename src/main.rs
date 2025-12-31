@@ -20,8 +20,14 @@ mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
 mod hooks;
 mod ide_context;
-mod process_hardening;
 mod workspace_trust;
+
+// Apply process hardening before main() runs using the ctor pattern
+// This ensures hardening happens as early as possible in the binary lifecycle
+#[ctor::ctor]
+fn init() {
+    vtcode_process_hardening::pre_main_hardening();
+}
 
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
@@ -84,8 +90,7 @@ async fn run() -> Result<()> {
         eprintln!("vtcode: warning: failed to load .env: {err}");
     }
 
-    process_hardening::apply_process_hardening()
-        .context("failed to apply process hardening safeguards")?;
+    // Note: Process hardening is applied before main() via #[ctor::ctor] in the init() function above
 
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = match initialize_tracing(&args).await {

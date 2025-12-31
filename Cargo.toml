@@ -42,7 +42,13 @@ regex = "1.12"
 num_cpus = "1.16"
 clap = { version = "4.5", features = ["derive"] }
 pretty_assertions = "1.4"
+ctor = "0.2"
+libc = "0.2"
 
+[workspace.package]
+version = "0.55.1"
+edition = "2021"
+license = "MIT"
 
 [workspace]
 members = [
@@ -56,6 +62,7 @@ members = [
     "vtcode-tools",
     "vtcode-bash-runner",
     "vtcode-exec-events", "vtcode-file-search",
+    "vtcode-process-hardening",
 ]
 exclude = ["zed-extension", "third-party/mcp-types"]
 
@@ -111,8 +118,10 @@ unwrap_used = "deny"
 vtcode-acp-client = { path = "vtcode-acp-client", version = "0.55.1" }
 vtcode-config = { path = "vtcode-config", version = "0.55.1" }
 vtcode-core = { path = "vtcode-core", version = "0.55.1" }
+vtcode-process-hardening = { path = "vtcode-process-hardening", version = "0.55.1" }
 anyhow = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
+ctor = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 webbrowser = "1.0"
