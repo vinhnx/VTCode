@@ -137,6 +137,8 @@ pub mod execution_context;
 pub mod execution_tracker;
 pub mod fallback_chains;
 pub mod file_ops;
+pub mod file_search_bridge;
+pub mod file_search_rpc;
 pub mod file_tracker;
 pub mod generation_helpers;
 pub mod grep_cache;
@@ -163,8 +165,8 @@ pub mod tool_effectiveness;
 pub mod traits;
 pub mod tree_sitter;
 pub mod types;
-pub mod web_fetch;
 pub mod validation;
+pub mod web_fetch;
 
 // Production-grade improvements modules
 pub mod async_middleware;
@@ -196,6 +198,10 @@ pub use execution_tracker::{ExecutionRecord, ExecutionStats, ExecutionStatus, Ex
 pub use fallback_chains::{
     AbortCondition, ChainStopReason, FallbackChain, FallbackChainExecutor, FallbackChainResult,
     FallbackStep,
+};
+pub use file_search_rpc::{
+    FileMatchRpc, FileSearchRpcHandler, ListFilesRequest, ListFilesResponse, RpcError, RpcRequest,
+    RpcResponse, SearchFilesRequest, SearchFilesResponse,
 };
 pub use grep_file::GrepSearchManager;
 pub use lsp::LspTool;

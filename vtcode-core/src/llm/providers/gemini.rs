@@ -1919,8 +1919,14 @@ mod caching_tests {
         config.providers.gemini.mode = GeminiPromptCacheMode::Explicit;
         config.providers.gemini.explicit_ttl_seconds = Some(1200);
 
-        let provider =
-            GeminiProvider::from_config(Some("key".into()), None, None, Some(config.clone()), None, None);
+        let provider = GeminiProvider::from_config(
+            Some("key".into()),
+            None,
+            None,
+            Some(config.clone()),
+            None,
+            None,
+        );
 
         // Trigger request creation. It shouldn't panic or fail, even if explicit logic is placeholder.
         let request = LLMRequest {

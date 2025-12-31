@@ -11,6 +11,7 @@
 //! 4. If there is an in-flight search that is not a prefix of the latest thing
 //!    the user typed, it is cancelled.
 
+use super::file_search_bridge::{self, FileSearchConfig};
 use super::grep_cache::GrepSearchCache;
 use anyhow::{Context, Error as AnyhowError, Result};
 use glob::Pattern;
@@ -748,6 +749,70 @@ impl GrepSearchManager {
 
         Ok(result)
     }
+
+    /// Perform file enumeration using the optimized file search bridge
+    ///
+    /// This method uses the vtcode-file-search crate for parallel, fuzzy file discovery.
+    /// It's optimized for:
+    /// - Listing files in large directories
+    /// - Fuzzy filename matching
+    /// - Respecting .gitignore and .ignore files
+    /// - Parallel directory traversal
+    ///
+    /// # Arguments
+    ///
+    /// * `pattern` - Fuzzy search pattern for filenames (e.g., "main", "test.rs")
+    /// * `max_results` - Maximum number of files to return
+    /// * `cancel_flag` - Optional cancellation token for early termination
+    ///
+    /// # Returns
+    ///
+    /// A vector of file paths matching the pattern, sorted by match quality
+    pub fn enumerate_files_with_pattern(
+        &self,
+        pattern: String,
+        max_results: usize,
+        cancel_flag: Option<Arc<AtomicBool>>,
+    ) -> Result<Vec<String>> {
+        let config = FileSearchConfig::new(pattern, self.search_dir.clone())
+            .with_limit(max_results)
+            .respect_gitignore(true);
+
+        let results = file_search_bridge::search_files(config, cancel_flag)?;
+
+        Ok(results.matches.into_iter().map(|m| m.path).collect())
+    }
+
+    /// List all files in the search directory using the file search bridge
+    ///
+    /// This is useful for operations that need to enumerate all discoverable files
+    /// without a specific pattern match.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_results` - Maximum number of files to return
+    /// * `exclude_patterns` - Patterns to exclude from results (glob-style)
+    ///
+    /// # Returns
+    ///
+    /// A vector of file paths
+    pub fn list_all_files(
+        &self,
+        max_results: usize,
+        exclude_patterns: Vec<String>,
+    ) -> Result<Vec<String>> {
+        let mut config = FileSearchConfig::new("".to_string(), self.search_dir.clone())
+            .with_limit(max_results)
+            .respect_gitignore(true);
+
+        for pattern in exclude_patterns {
+            config = config.exclude(pattern);
+        }
+
+        let results = file_search_bridge::search_files(config, None)?;
+
+        Ok(results.matches.into_iter().map(|m| m.path).collect())
+    }
 }
 
 #[cfg(test)]
@@ -758,13 +823,44 @@ mod tests {
     #[test]
     fn finalize_matches_respects_max_bytes() {
         let mut input = GrepSearchInput::with_defaults("pat".into(), ".".into());
-        input.max_result_bytes = Some(8);
+        input.max_result_bytes = Some(100);
         input.max_results = Some(5);
 
         let matches = vec![json!({"text": "12345"}), json!({"text": "6789"})];
 
         let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
+        assert!(!truncated);
+        assert_eq!(kept.len(), 2);
+
+        // Test with smaller limit that truncates
+        input.max_result_bytes = Some(20);
+        let matches = vec![json!({"text": "12345"}), json!({"text": "6789"})];
+        let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
         assert!(truncated);
-        assert_eq!(kept.len(), 1);
+        assert_eq!(kept.len(), 1); // Only first match fits in 20 bytes
+    }
+
+    #[test]
+    fn test_grep_search_manager_creation() {
+        let manager = GrepSearchManager::new(PathBuf::from("."));
+        assert_eq!(manager.search_dir, PathBuf::from("."));
+    }
+
+    #[test]
+    fn test_grep_search_input_new() {
+        let input = GrepSearchInput::new("pattern".to_string(), "/path/to/search".to_string());
+        assert_eq!(input.pattern, "pattern");
+        assert_eq!(input.path, "/path/to/search");
+        assert!(input.case_sensitive.is_none());
+    }
+
+    #[test]
+    fn test_grep_search_input_with_defaults() {
+        let input = GrepSearchInput::with_defaults("pattern".to_string(), "/path".to_string());
+        assert_eq!(input.pattern, "pattern");
+        assert_eq!(input.path, "/path");
+        assert_eq!(input.case_sensitive, Some(true));
+        assert_eq!(input.include_hidden, Some(false));
+        assert_eq!(input.max_results, Some(MAX_SEARCH_RESULTS.get()));
     }
 }

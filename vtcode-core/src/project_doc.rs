@@ -109,10 +109,13 @@ pub async fn get_user_instructions(
     if let Some(bundle) = bundle {
         section.push_str("## PROJECT DOCUMENTATION\n");
         section.push_str("Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n");
-        
+
         for (i, segment) in bundle.sources.iter().enumerate() {
             let display_path = segment.to_string_lossy();
-            let _ = std::fmt::Write::write_fmt(&mut section, format_args!("### {}. {}\n", i + 1, display_path));
+            let _ = std::fmt::Write::write_fmt(
+                &mut section,
+                format_args!("### {}. {}\n", i + 1, display_path),
+            );
             // We need the actual content here, but ProjectDocBundle already has it concatenated.
             // For a single comprehensive block, we can just use the bundle.contents if we don't need per-file headers,
             // or we could refactor to keep them separate.

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
+use crate::tools::file_search_bridge::{self, FileSearchConfig};
 use crate::tools::tree_sitter::{
     CodeNavigator, LanguageAnalyzer, NavigationUtils, Position, SymbolInfo, TreeSitterAnalyzer,
 };
@@ -584,38 +585,76 @@ impl CodeIntelligenceTool {
         let extensions = [
             "rs", "py", "js", "ts", "tsx", "jsx", "go", "java", "sh", "bash",
         ];
-        let mut files = Vec::new();
 
-        let mut stack = vec![self.workspace_root.clone()];
+        // Use file search bridge for efficient parallel traversal with .gitignore support
+        let mut config = FileSearchConfig::new("".to_string(), self.workspace_root.clone())
+            .with_limit(500) // Reasonable limit for code intelligence
+            .respect_gitignore(true);
 
-        while let Some(dir) = stack.pop() {
-            if let Ok(mut entries) = tokio::fs::read_dir(&dir).await {
-                while let Ok(Some(entry)) = entries.next_entry().await {
-                    let path = entry.path();
-                    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-
-                    // Skip hidden directories and common excludes
-                    if file_name.starts_with('.')
-                        || file_name == "node_modules"
-                        || file_name == "target"
-                        || file_name == "build"
-                        || file_name == "dist"
-                    {
-                        continue;
-                    }
-
-                    if path.is_dir() {
-                        stack.push(path);
-                    } else if let Some(ext) = path.extension().and_then(|e| e.to_str())
-                        && extensions.contains(&ext)
-                    {
-                        files.push(path);
-                    }
-                }
-            }
+        // Exclude common directories that shouldn't be analyzed
+        for pattern in &[
+            "node_modules/**",
+            "target/**",
+            "build/**",
+            "dist/**",
+            ".git/**",
+            ".vscode/**",
+            ".cursor/**",
+        ] {
+            config = config.exclude(pattern.to_string());
         }
 
-        Ok(files)
+        match file_search_bridge::search_files(config, None) {
+            Ok(results) => {
+                // Filter by supported source file extensions
+                let files = results
+                    .matches
+                    .into_iter()
+                    .filter(|m| {
+                        extensions.iter().any(|ext| {
+                            m.path.ends_with(&format!(".{}", ext)) || m.path.ends_with(ext)
+                        })
+                    })
+                    .map(|m| PathBuf::from(&m.path))
+                    .collect::<Vec<_>>();
+
+                Ok(files)
+            }
+            Err(_) => {
+                // Fallback to manual traversal if file search fails
+                let mut files = Vec::new();
+                let mut stack = vec![self.workspace_root.clone()];
+
+                while let Some(dir) = stack.pop() {
+                    if let Ok(mut entries) = tokio::fs::read_dir(&dir).await {
+                        while let Ok(Some(entry)) = entries.next_entry().await {
+                            let path = entry.path();
+                            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+                            // Skip hidden directories and common excludes
+                            if file_name.starts_with('.')
+                                || file_name == "node_modules"
+                                || file_name == "target"
+                                || file_name == "build"
+                                || file_name == "dist"
+                            {
+                                continue;
+                            }
+
+                            if path.is_dir() {
+                                stack.push(path);
+                            } else if let Some(ext) = path.extension().and_then(|e| e.to_str())
+                                && extensions.contains(&ext)
+                            {
+                                files.push(path);
+                            }
+                        }
+                    }
+                }
+
+                Ok(files)
+            }
+        }
     }
 
     /// Get the tool name

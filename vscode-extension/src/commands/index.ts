@@ -5,3 +5,6 @@ export { UpdatePlanCommand } from "./updatePlanCommand";
 export { OpenConfigCommand } from "./openConfigCommand";
 export { TrustWorkspaceCommand } from "./trustWorkspaceCommand";
 export { RefreshCommand } from "./refreshCommand";
+export { FindFilesCommand } from "./findFilesCommand";
+export { ListFilesCommand } from "./listFilesCommand";
+export { SearchFilesCommand } from "./searchFilesCommand";

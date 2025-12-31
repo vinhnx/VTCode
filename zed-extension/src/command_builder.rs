@@ -122,6 +122,23 @@ impl CommandBuilder {
     pub fn version() -> Self {
         Self::new("--version")
     }
+
+    /// Create a file search command with pattern
+    pub fn find_files(pattern: impl Into<String>) -> Self {
+        Self::new("find-files").with_option("pattern", pattern)
+    }
+
+    /// Create a file enumeration command
+    pub fn list_files() -> Self {
+        Self::new("list-files")
+    }
+
+    /// Create a file search command with exclusions
+    pub fn search_files(pattern: impl Into<String>, exclude: impl Into<String>) -> Self {
+        Self::new("find-files")
+            .with_option("pattern", pattern)
+            .with_option("exclude", exclude)
+    }
 }
 
 #[cfg(test)]
@@ -232,5 +249,31 @@ mod tests {
 
         let args = builder.build_args();
         assert!(args.len() >= 4);
+    }
+
+    #[test]
+    fn test_find_files_shortcut() {
+        let builder = CommandBuilder::find_files("main");
+        assert_eq!(builder.get_command(), "find-files");
+        let args = builder.build_args();
+        assert!(args.len() >= 2);
+        assert!(args.contains(&"--pattern".to_string()));
+    }
+
+    #[test]
+    fn test_list_files_shortcut() {
+        let builder = CommandBuilder::list_files();
+        assert_eq!(builder.get_command(), "list-files");
+        assert!(builder.build_args().is_empty());
+    }
+
+    #[test]
+    fn test_search_files_shortcut() {
+        let builder = CommandBuilder::search_files("component", "dist/**");
+        assert_eq!(builder.get_command(), "find-files");
+        let args = builder.build_args();
+        assert!(args.len() >= 4);
+        assert!(args.contains(&"--pattern".to_string()));
+        assert!(args.contains(&"--exclude".to_string()));
     }
 }
