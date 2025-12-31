@@ -129,6 +129,7 @@ pub mod bash_runner;
 pub mod cache; // Unified caching system
 pub mod cli;
 pub mod code;
+pub mod command_safety; // Command safety detection (Codex patterns)
 pub mod commands;
 pub mod config;
 pub mod constants;

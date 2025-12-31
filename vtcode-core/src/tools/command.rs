@@ -1,6 +1,7 @@
 //! Command execution tool
 
 use super::types::*;
+use crate::command_safety::UnifiedCommandEvaluator;
 use crate::config::CommandsConfig;
 use crate::execpolicy::{sanitize_working_dir, validate_command};
 use crate::tools::command_policy::CommandPolicyEvaluator;
@@ -18,6 +19,8 @@ use std::path::PathBuf;
 pub struct CommandTool {
     workspace_root: PathBuf,
     policy: CommandPolicyEvaluator,
+    /// Unified command evaluator combining policy and safety rules
+    unified_evaluator: UnifiedCommandEvaluator,
     extra_path_entries: Vec<PathBuf>,
 }
 
@@ -30,6 +33,7 @@ impl CommandTool {
         // Note: We use the workspace_root directly here. Full validation happens
         // in prepare_invocation which is async.
         let policy = CommandPolicyEvaluator::from_config(&commands_config);
+        let unified_evaluator = UnifiedCommandEvaluator::new();
         let extra_path_entries = path_env::compute_extra_search_paths(
             &commands_config.extra_path_entries,
             &workspace_root,
@@ -37,12 +41,14 @@ impl CommandTool {
         Self {
             workspace_root,
             policy,
+            unified_evaluator,
             extra_path_entries,
         }
     }
 
     pub fn update_commands_config(&mut self, commands_config: &CommandsConfig) {
         self.policy = CommandPolicyEvaluator::from_config(commands_config);
+        self.unified_evaluator = UnifiedCommandEvaluator::new();
         self.extra_path_entries = path_env::compute_extra_search_paths(
             &commands_config.extra_path_entries,
             &self.workspace_root,
@@ -74,14 +80,21 @@ impl CommandTool {
         let working_dir =
             sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
 
-        // Policy check: config rules first, fallback to strict allowlist
+        // Unified command evaluation: combines safety rules + policy rules
         let confirm_ok = input.confirm.unwrap_or(false);
-        if !self.policy.allows(command) {
-            // Forward confirmation status to validator so callers can opt-in to destructive commands
+        let policy_allowed = self.policy.allows(command);
+        
+        // Use unified evaluator with policy layer
+        let eval_result = self.unified_evaluator
+            .evaluate_with_policy(command, policy_allowed, "config policy")
+            .await?;
+
+        if !eval_result.allowed {
+            // If unified evaluator denied, forward to validator for custom checks
             validate_command(command, &self.workspace_root, &working_dir, confirm_ok).await?;
         }
 
-        // Require explicit confirmation for high-risk operations even if policy allows them
+        // Require explicit confirmation for high-risk operations even if evaluator allows them
         if is_risky_command(command) && !confirm_ok {
             return Err(anyhow!(
                 "Command appears destructive; set the `confirm` field to true to proceed."
