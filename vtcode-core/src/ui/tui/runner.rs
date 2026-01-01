@@ -23,6 +23,7 @@ use ratatui::{
 use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 use tokio_util::sync::CancellationToken;
+use tokio::task::spawn_blocking;
 
 use crate::config::{constants::ui, types::UiSurfacePreference};
 use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
@@ -98,8 +99,6 @@ const RAW_MODE_ENABLE_ERROR: &str = "failed to enable raw mode for inline termin
 const RAW_MODE_DISABLE_ERROR: &str = "failed to disable raw mode after inline session";
 const ENABLE_BRACKETED_PASTE_ERROR: &str = "failed to enable bracketed paste for inline terminal";
 const DISABLE_BRACKETED_PASTE_ERROR: &str = "failed to disable bracketed paste for inline terminal";
-const KEYBOARD_ENHANCEMENT_QUERY_ERROR: &str =
-    "failed to determine keyboard enhancement support for inline terminal";
 
 struct TerminalModeState {
     focus_change_enabled: bool,
@@ -335,6 +334,28 @@ pub async fn run_tui(
         session.set_custom_prompts(prompts);
     }
 
+    let mut stderr = io::stderr();
+    let keyboard_support = detect_keyboard_enhancement_support(
+        options
+            .keyboard_flags
+            .unwrap_or(KeyboardEnhancementFlags::empty()),
+    )
+    .await;
+    let keyboard_flags = options.keyboard_flags.unwrap_or_else(|| {
+        // Default flags match current hardcoded behavior
+        KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+            | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+            | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+    });
+    let mode_state = enable_terminal_modes(&mut stderr, keyboard_flags, keyboard_support)?;
+    if surface.use_alternate() {
+        execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
+    }
+
+    let backend = CrosstermBackend::new(stderr);
+    let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;
+    prepare_terminal(&mut terminal)?;
+
     // Create event listener and channels using the new async pattern
     let (mut input_listener, event_channels) = EventListener::new();
     let cancellation_token = CancellationToken::new();
@@ -344,7 +365,12 @@ pub async fn run_tui(
     let last_input_elapsed_ms = event_channels.last_input_elapsed_ms.clone();
     let session_start = event_channels.session_start;
 
-    // Spawn the async event loop with adaptive tick rate
+    // Ensure any capability or resize responses emitted during terminal setup are not treated as
+    // the user's first keystrokes.
+    drain_startup_events();
+
+    // Spawn the async event loop after the terminal is fully configured so the first keypress is
+    // captured immediately (avoids cooked-mode buffering before raw mode is enabled).
     let event_loop_handle = tokio::spawn(async move {
         spawn_event_loop(
             event_channels_for_loop.tx.clone(),
@@ -355,22 +381,6 @@ pub async fn run_tui(
         )
         .await;
     });
-
-    let mut stderr = io::stderr();
-    let keyboard_flags = options.keyboard_flags.unwrap_or_else(|| {
-        // Default flags match current hardcoded behavior
-        KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-            | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-            | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
-    });
-    let mode_state = enable_terminal_modes(&mut stderr, keyboard_flags)?;
-    if surface.use_alternate() {
-        execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
-    }
-
-    let backend = CrosstermBackend::new(stderr);
-    let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;
-    prepare_terminal(&mut terminal)?;
 
     let drive_result = drive_terminal(
         &mut terminal,
@@ -415,6 +425,7 @@ pub async fn run_tui(
 fn enable_terminal_modes(
     stderr: &mut io::Stderr,
     keyboard_flags: KeyboardEnhancementFlags,
+    keyboard_enhancement_supported: bool,
 ) -> Result<TerminalModeState> {
     execute!(stderr, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
     enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
@@ -427,8 +438,8 @@ fn enable_terminal_modes(
         }
     };
 
-    let keyboard_enhancements_pushed = if !keyboard_flags.is_empty()
-        && supports_keyboard_enhancement().context(KEYBOARD_ENHANCEMENT_QUERY_ERROR)?
+    let keyboard_enhancements_pushed = if keyboard_enhancement_supported
+        && !keyboard_flags.is_empty()
     {
         match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
             Ok(_) => {
@@ -476,6 +487,31 @@ fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     execute!(stderr, DisableBracketedPaste).context(DISABLE_BRACKETED_PASTE_ERROR)?;
 
     Ok(())
+}
+
+async fn detect_keyboard_enhancement_support(flags: KeyboardEnhancementFlags) -> bool {
+    if flags.is_empty() {
+        return false;
+    }
+
+    // The crossterm capability probe can block while waiting for a terminal response. Bound it so
+    // startup is not delayed.
+    match tokio::time::timeout(
+        Duration::from_millis(200),
+        spawn_blocking(|| supports_keyboard_enhancement().unwrap_or(false)),
+    )
+    .await
+    {
+        Ok(Ok(supported)) => supported,
+        Ok(Err(join_error)) => {
+            tracing::debug!(%join_error, "keyboard enhancement support probe failed");
+            false
+        }
+        Err(_) => {
+            tracing::warn!("keyboard enhancement support probe timed out; disabling protocol to avoid startup lag");
+            false
+        }
+    }
 }
 
 async fn drive_terminal<B: Backend>(
@@ -671,4 +707,14 @@ fn finalize_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Result<()> {
         .flush()
         .context("failed to flush inline terminal after session")?;
     Ok(())
+}
+
+/// Drain any pending crossterm events that may have been emitted during terminal setup (e.g.,
+/// resize or focus responses) so that the first user keystroke is processed immediately.
+fn drain_startup_events() {
+    use ratatui::crossterm::event;
+
+    while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+        let _ = event::read();
+    }
 }
