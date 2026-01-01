@@ -260,3 +260,26 @@ pub use pattern_engine::{DetectedPattern, ExecutionEvent, ExecutionSummary, Patt
 pub use registry::build_function_declarations;
 pub use registry::build_function_declarations_for_level;
 pub use registry::build_function_declarations_with_mode;
+
+// Codex-compatible handler architecture exports
+pub use handlers::{
+    // Core handler traits and types
+    ApprovalPolicy, ConfiguredToolSpec, ContentItem, DiffTracker, FileChange, FreeformTool,
+    FreeformToolFormat, JsonSchema as ToolJsonSchema, McpToolResult, ResponsesApiTool,
+    SandboxPermissions, SharedDiffTracker, ShellEnvironmentPolicy, ShellToolCallParams,
+    ToolCallError, ToolEvent, ToolEventBegin, ToolEventFailure, ToolEventSuccess, ToolHandler,
+    ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSession, ToolSpec, TurnContext,
+    // Orchestrator and sandboxing
+    Approvable, CommandSpec, ExecEnv, ExecExpiration, ExecToolCallOutput, OutputText,
+    SandboxAttempt, SandboxConfig, SandboxManager, SandboxMode, SandboxPolicy,
+    SandboxTransformError, Sandboxable, SandboxablePreference, StdoutStream, ToolCtx, ToolError,
+    ToolOrchestrator, ToolRuntime,
+    // Event emission
+    ExecCommandInput, ExecCommandSource, ParsedCommand, ToolEmitter, ToolEventCtx,
+    ToolEventFailureKind, ToolEventStage,
+    // Apply patch handler
+    ApplyPatchHandler, ApplyPatchRequest, ApplyPatchRuntime, ApplyPatchToolArgs,
+    create_apply_patch_freeform_tool, create_apply_patch_json_tool, intercept_apply_patch,
+    // Subagent
+    SpawnSubagentTool,
+};
