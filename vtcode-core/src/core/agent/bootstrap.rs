@@ -13,8 +13,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 
-use crate::config::models::ModelId;
+use crate::config::models::{ModelId, Provider};
 use crate::config::types::{AgentConfig, SessionInfo};
+use crate::models_manager::ModelsManager;
 use crate::utils::error_messages::{ERR_CREATE_DIR, ERR_GET_METADATA};
 
 use crate::core::decision_tracker::DecisionTracker;
@@ -35,6 +36,7 @@ pub struct AgentComponentSet {
     pub tool_registry: Arc<ToolRegistry>,
     pub decision_tracker: DecisionTracker,
     pub error_recovery: ErrorRecoveryManager,
+    pub models_manager: Arc<ModelsManager>,
 
     pub tree_sitter_analyzer: TreeSitterAnalyzer,
 
@@ -51,6 +53,7 @@ pub struct AgentComponentBuilder<'config> {
     tool_registry: Option<Arc<ToolRegistry>>,
     decision_tracker: Option<DecisionTracker>,
     error_recovery: Option<ErrorRecoveryManager>,
+    models_manager: Option<Arc<ModelsManager>>,
 
     tree_sitter_analyzer: Option<TreeSitterAnalyzer>,
     session_info: Option<SessionInfo>,
@@ -65,6 +68,7 @@ impl<'config> AgentComponentBuilder<'config> {
             tool_registry: None,
             decision_tracker: None,
             error_recovery: None,
+            models_manager: None,
             tree_sitter_analyzer: None,
             session_info: None,
         }
@@ -91,6 +95,12 @@ impl<'config> AgentComponentBuilder<'config> {
     /// Override the error recovery manager instance.
     pub fn with_error_recovery(mut self, manager: ErrorRecoveryManager) -> Self {
         self.error_recovery = Some(manager);
+        self
+    }
+
+    /// Override the models manager instance.
+    pub fn with_models_manager(mut self, manager: Arc<ModelsManager>) -> Self {
+        self.models_manager = Some(manager);
         self
     }
 
@@ -136,6 +146,15 @@ impl<'config> AgentComponentBuilder<'config> {
             }
         };
 
+        // Prefer custom manager if provided, otherwise reuse global singleton.
+        // The global singleton is provider-agnostic; provider filtering happens at query time.
+        let models_manager = self.models_manager.take().unwrap_or_else(|| {
+            // Clone Arc from global - this is cheap since ModelsManager is behind LazyLock
+            Arc::new(ModelsManager::with_provider(
+                self.config.provider.parse::<Provider>().ok().unwrap_or_default()
+            ))
+        });
+
         let decision_tracker = self.decision_tracker.unwrap_or_default();
 
         let error_recovery = self.error_recovery.unwrap_or_default();
@@ -145,6 +164,7 @@ impl<'config> AgentComponentBuilder<'config> {
             tool_registry,
             decision_tracker,
             error_recovery,
+            models_manager,
             tree_sitter_analyzer,
 
             session_info,

@@ -197,11 +197,38 @@ impl Default for LLMFactory {
 
 use std::sync::{LazyLock, Mutex};
 
+use crate::models_manager::ModelsManager;
+
 static FACTORY: LazyLock<Mutex<LLMFactory>> = LazyLock::new(|| Mutex::new(LLMFactory::new()));
+
+static MODELS_MANAGER: LazyLock<ModelsManager> = LazyLock::new(ModelsManager::new);
 
 /// Get global factory instance
 pub fn get_factory() -> &'static Mutex<LLMFactory> {
     &FACTORY
+}
+
+/// Get global models manager instance
+pub fn get_models_manager() -> &'static ModelsManager {
+    &MODELS_MANAGER
+}
+
+/// Infer provider from model slug using ModelsManager presets.
+///
+/// This provides a more accurate provider resolution than heuristic-based
+/// `provider_from_model` by checking against known model presets first.
+pub fn infer_provider_from_model(model: &str) -> Option<Provider> {
+    // First check ModelsManager presets for exact match
+    let manager = get_models_manager();
+    if let Ok(models) = manager.try_list_models() {
+        if let Some(preset) = models.iter().find(|m| m.model == model || m.id == model) {
+            return Some(preset.provider);
+        }
+    }
+    
+    // Fall back to ModelFamily detection
+    let family = crate::models_manager::find_family_for_model(model);
+    Some(family.provider)
 }
 
 /// Create provider from model name and API key
@@ -211,6 +238,14 @@ pub fn create_provider_for_model(
     api_key: String,
     prompt_cache: Option<PromptCachingConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
+    // Validate model exists in ModelsManager (non-blocking check using local presets)
+    if !get_models_manager().model_exists_sync(model) {
+        tracing::warn!(
+            model = model,
+            "Model not found in ModelsManager presets, proceeding with factory heuristics"
+        );
+    }
+
     let factory = get_factory().lock().map_err(|_| LLMError::Provider {
         message: ctx_err!("llm factory", "lock poisoned"),
         metadata: None,
