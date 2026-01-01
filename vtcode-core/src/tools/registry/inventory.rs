@@ -5,6 +5,8 @@ use std::time::{Duration, Instant};
 use tracing::info;
 
 use super::registration::{ToolMetadata, ToolRegistration};
+use crate::exec::skill_manager::SkillManager;
+use crate::tools::code_intelligence::CodeIntelligenceTool;
 use crate::tools::command::CommandTool;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
@@ -40,6 +42,8 @@ pub(super) struct ToolInventory {
     file_ops_tool: FileOpsTool,
     command_tool: CommandTool,
     grep_search: Arc<GrepSearchManager>,
+    code_intelligence: CodeIntelligenceTool,
+    skill_manager: SkillManager,
 }
 
 impl ToolInventory {
@@ -48,6 +52,8 @@ impl ToolInventory {
         let command_tool = CommandTool::new(workspace_root.clone());
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
         let file_ops_tool = FileOpsTool::new(workspace_root.clone(), Arc::clone(&grep_search));
+        let code_intelligence = CodeIntelligenceTool::new(workspace_root.clone());
+        let skill_manager = SkillManager::new(&workspace_root);
 
         Self {
             workspace_root,
@@ -60,6 +66,8 @@ impl ToolInventory {
             file_ops_tool,
             command_tool,
             grep_search,
+            code_intelligence,
+            skill_manager,
         }
     }
 
@@ -94,6 +102,14 @@ impl ToolInventory {
 
     pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {
         self.grep_search.clone()
+    }
+
+    pub fn code_intelligence_tool(&self) -> &CodeIntelligenceTool {
+        &self.code_intelligence
+    }
+
+    pub fn skill_manager(&self) -> &SkillManager {
+        &self.skill_manager
     }
 
     pub fn register_tool(&mut self, registration: ToolRegistration) -> anyhow::Result<()> {

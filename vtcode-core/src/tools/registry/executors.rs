@@ -1,10 +1,10 @@
+use crate::exec::code_executor::Language;
+use crate::exec::skill_manager::{Skill, SkillMetadata};
 use crate::tools::file_tracker::FileTracker;
 use crate::tools::registry::declarations::{
     UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction,
 };
 use crate::tools::traits::Tool;
-use crate::exec::code_executor::Language;
-use crate::exec::skill_manager::{Skill, SkillMetadata};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 
@@ -16,7 +16,6 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant, SystemTime},
 };
-use tokio::fs;
 
 use super::ToolRegistry;
 
@@ -93,53 +92,16 @@ impl ToolRegistry {
             UnifiedFileAction::Edit => self.execute_tool_ref("edit_file", &args).await,
             UnifiedFileAction::Patch => self.execute_apply_patch(args).await,
             UnifiedFileAction::Delete => {
-                let path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path in delete action"))?;
-                let full_path = self.workspace_root().join(path);
-                if full_path.is_dir() {
-                    fs::remove_dir_all(&full_path)
-                        .await
-                        .with_context(|| format!("Failed to delete directory: {}", path))?;
-                } else {
-                    fs::remove_file(&full_path)
-                        .await
-                        .with_context(|| format!("Failed to delete file: {}", path))?;
-                }
-                Ok(json!({ "success": true, "deleted": path }))
+                let tool = self.inventory.file_ops_tool().clone();
+                tool.delete_file(args).await
             }
             UnifiedFileAction::Move => {
-                let path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path in move action"))?;
-                let destination = args
-                    .get("destination")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing destination in move action"))?;
-                let from = self.workspace_root().join(path);
-                let to = self.workspace_root().join(destination);
-                fs::rename(&from, &to)
-                    .await
-                    .with_context(|| format!("Failed to move {} to {}", path, destination))?;
-                Ok(json!({ "success": true, "from": path, "to": destination }))
+                let tool = self.inventory.file_ops_tool().clone();
+                tool.move_file(args).await
             }
             UnifiedFileAction::Copy => {
-                let path = args
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing path in copy action"))?;
-                let destination = args
-                    .get("destination")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing destination in copy action"))?;
-                let from = self.workspace_root().join(path);
-                let to = self.workspace_root().join(destination);
-                fs::copy(&from, &to)
-                    .await
-                    .with_context(|| format!("Failed to copy {} to {}", path, destination))?;
-                Ok(json!({ "success": true, "from": path, "to": destination }))
+                let tool = self.inventory.file_ops_tool().clone();
+                tool.copy_file(args).await
             }
         }
     }
@@ -148,7 +110,25 @@ impl ToolRegistry {
         let action_str = args
             .get("action")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Missing action in unified_search"))?;
+            .or_else(|| {
+                // Smart action inference based on parameters
+                if args.get("pattern").is_some() || args.get("query").is_some() {
+                    Some("grep")
+                } else if args.get("operation").is_some() {
+                    Some("intelligence")
+                } else if args.get("url").is_some() {
+                    Some("web")
+                } else if args.get("sub_action").is_some() {
+                    Some("skill")
+                } else if args.get("scope").is_some() {
+                    Some("errors")
+                } else if args.get("path").is_some() {
+                    Some("list")
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow!("Missing action in unified_search. Valid actions: grep, list, intelligence, tools, errors, agent, web, skill"))?;
 
         let action: UnifiedSearchAction = serde_json::from_value(json!(action_str))
             .with_context(|| format!("Invalid action: {}", action_str))?;
@@ -194,12 +174,12 @@ impl ToolRegistry {
             .mcp_client()
             .ok_or_else(|| anyhow!("MCP client not available"))?;
 
+        let workspace_root = self.workspace_root_owned();
         let executor = crate::exec::code_executor::CodeExecutor::new(
             language,
             mcp_client.clone(),
-            self.workspace_root_owned(),
+            workspace_root.clone(),
         );
-        let workspace_root = self.workspace_root_owned();
         let execution_start = SystemTime::now();
 
         let result = executor.execute(code).await?;
@@ -254,8 +234,7 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing sub_action in skill"))?;
 
-        let skill_manager =
-            crate::exec::skill_manager::SkillManager::new(&self.workspace_root_owned());
+        let skill_manager = self.inventory.skill_manager();
 
         match sub_action {
             "save" => {
@@ -361,7 +340,12 @@ impl ToolRegistry {
 
     pub(super) fn grep_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let manager = self.inventory.grep_file_manager();
-        Box::pin(async move { manager.perform_search(serde_json::from_value(args)?).await.map(|r| json!(r)) })
+        Box::pin(async move {
+            manager
+                .perform_search(serde_json::from_value(args)?)
+                .await
+                .map(|r| json!(r))
+        })
     }
 
     pub(super) fn list_files_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -685,9 +669,7 @@ impl ToolRegistry {
     }
 
     async fn execute_code_intelligence(&mut self, args: Value) -> Result<Value> {
-        let workspace_root = self.workspace_root_owned();
-        use crate::tools::code_intelligence::CodeIntelligenceTool;
-        let tool = CodeIntelligenceTool::new(workspace_root);
+        let tool = self.inventory.code_intelligence_tool();
         tool.execute(args).await
     }
 
@@ -863,8 +845,12 @@ fn parse_command_parts(
 }
 
 fn resolve_shell_preference(pref: Option<&str>, config: &crate::config::PtyConfig) -> String {
-    pref.map(|s| s.to_string())
-        .unwrap_or_else(|| config.preferred_shell.clone().unwrap_or_else(|| "sh".to_string()))
+    pref.map(|s| s.to_string()).unwrap_or_else(|| {
+        config
+            .preferred_shell
+            .clone()
+            .unwrap_or_else(|| "sh".to_string())
+    })
 }
 
 fn normalized_shell_name(shell: &str) -> String {

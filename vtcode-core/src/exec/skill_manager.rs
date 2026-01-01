@@ -60,6 +60,7 @@ pub struct Skill {
 }
 
 /// Manager for skill storage and retrieval.
+#[derive(Clone)]
 pub struct SkillManager {
     skills_dir: PathBuf,
 }
