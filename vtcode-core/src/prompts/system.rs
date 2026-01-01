@@ -132,13 +132,13 @@ High-quality plan example:
 ## Tool Guidelines
 
 **Search & exploration**:
-- Prefer `Grep` or `glob` for fast searches over repeated `Read` calls
-- Use `finder` for semantic queries ("Where do we validate JWT tokens?")
-- Read complete files once; don't re-invoke `Read` on same file
-- Use `Bash` with `rg` (ripgrep) for patterns—much faster than `grep`
+- Prefer `unified_search` (action='grep') for fast searches over repeated `read` calls
+- Use `unified_search` (action='intelligence') for semantic queries ("Where do we validate JWT tokens?")
+- Read complete files once; don't re-invoke `read` on same file
+- Use `unified_exec` with `rg` (ripgrep) for patterns—much faster than `grep`
 
 **Code modification**:
-- `edit_file` for surgical changes; `create_file` for new or full replacements
+- `unified_file` (action='edit') for surgical changes; action='write' for new or full replacements
 - Never re-read after applying patch (tool fails if unsuccessful)
 - Use `git log` and `git blame` for code history context
 - **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
@@ -201,11 +201,10 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 - Fix root cause, not patches
 - Run tests/checks yourself after changes
 
-**Tools**:
-- Search: Prefer `Grep`/`glob` over repeated reads; use `finder` for semantic queries
-- Modify: `edit_file` for surgical changes, `create_file` for new; never re-read after patch
-- Execute: `unified_exec` for all shell commands (one-off, interactive, long-running); use `rg` over `grep`; stay in WORKSPACE_DIR
-- Discover: `list_skills` and `load_skill` to find/activate tools (hidden by default)
+**Search**: `unified_search` for all discovery (grep, list, intelligence); prefer `grep` over repeated reads
+**Modify**: `unified_file` for all file operations (read, write, edit, patch, delete); `edit` for surgical changes, `write` for new
+**Execute**: `unified_exec` for all shell commands (one-off, interactive, long-running); use `rg` over `grep`; stay in WORKSPACE_DIR
+**Discover**: `list_skills` and `load_skill` to find/activate tools (hidden by default)
 
 **Delegation**:
 - Use `spawn_subagent` (explore/plan/general/code-reviewer/debugger) for specialized tasks
@@ -229,7 +228,7 @@ Stop when done."#;
 const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 
 - Act and verify. Direct tone.
-- Scoped: list_files, grep_file (≤5), read_file (max_tokens).
+- Scoped: unified_search (≤5), unified_file (max_tokens).
 - Tools hidden by default. `list_skills --search <term>` to find them.
 - Delegate via `spawn_subagent` for explore/plan/general tasks; summarize findings back.
 - WORKSPACE_DIR only. Confirm destructive ops."#;
@@ -288,13 +287,13 @@ Complex refactoring and multi-file analysis. Methodical, outcome-focused, expert
 ## Tool Strategy
 
 **Search & exploration**:
-- Prefer `Grep` or `glob` for fast searches over repeated `Read` calls
-- Use `finder` for semantic queries ("Where do we validate authentication?")
-- Read complete files once; never re-invoke `Read` on same file
-- Use `Bash` with `rg` (ripgrep) for pattern matching—much faster than `grep`
+- Prefer `unified_search` (action='grep') for fast searches over repeated `read` calls
+- Use `unified_search` (action='intelligence') for semantic queries ("Where do we validate authentication?")
+- Read complete files once; never re-invoke `read` on same file
+- Use `unified_exec` with `rg` (ripgrep) for pattern matching—much faster than `grep`
 
 **Code modification**:
-- `edit_file` for surgical changes; `create_file` for new or full replacements
+- `unified_file` (action='edit') for surgical changes; action='write' for new or full replacements
 - Edit in dependency order; validate params before execution
 - Never re-read after applying patch—tool fails if unsuccessful
 - Use `git log` and `git blame` for historical context
@@ -1059,9 +1058,8 @@ mod tests {
         config.agent.include_working_directory = true;
 
         let mut ctx = PromptContext::default();
-        ctx.add_tool("read_file".to_string());
-        ctx.add_tool("edit_file".to_string());
-        ctx.add_tool("grep_file".to_string());
+        ctx.add_tool("unified_file".to_string());
+        ctx.add_tool("unified_search".to_string());
         ctx.infer_capability_level();
         ctx.set_current_directory(PathBuf::from("/workspace"));
 
@@ -1085,7 +1083,7 @@ mod tests {
 
         // Verify specific guideline for this tool set
         assert!(
-            result.contains("read_file") && result.contains("before"),
+            result.contains("unified_file") && result.contains("before"),
             "Should have read-before-edit guideline"
         );
     }

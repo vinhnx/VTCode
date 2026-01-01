@@ -115,425 +115,7 @@ use super::ToolRegistry;
 
 impl ToolRegistry {
     #[allow(dead_code)]
-    pub(super) fn get_errors_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            #[derive(serde::Deserialize)]
-            struct Args {
-                #[serde(default = "default_scope")]
-                scope: String,
-                #[serde(default = "default_limit")]
-                limit: usize,
-                #[serde(default = "default_detailed")]
-                detailed: bool,
-                #[serde(default)]
-                pattern: Option<String>,
-            }
-
-            fn default_scope() -> String {
-                "archive".into()
-            }
-
-            const fn default_limit() -> usize {
-                5
-            }
-
-            const fn default_detailed() -> bool {
-                false
-            }
-
-            let parsed: Args = serde_json::from_value(args).unwrap_or(Args {
-                scope: default_scope(),
-                limit: default_limit(),
-                detailed: default_detailed(),
-                pattern: None,
-            });
-
-            // Use Cow to avoid allocation when possible
-            let workspace_root = self.workspace_root_str();
-
-            // Initialize comprehensive error report with pre-allocated vectors
-            let mut error_report = serde_json::json!({
-                "timestamp": Utc::now().to_rfc3339(),
-                "workspace": workspace_root,
-                "scope": parsed.scope,
-                "detailed": parsed.detailed,
-                "total_errors": 0,
-                "recent_errors": Vec::<Value>::with_capacity(parsed.limit.min(100)), // Cap capacity to prevent excessive allocation
-                "suggestions": Vec::<String>::with_capacity(20), // Pre-allocate for common suggestions
-                "diagnostics": {
-                    "tool_execution_failures": Vec::<Value>::with_capacity(10),
-                    "recent_tool_calls": Vec::<Value>::with_capacity(20),
-                    "system_state": {}
-                }
-            });
-
-            if parsed.scope == "archive" || parsed.scope == "all" {
-                // Search in session archives
-                let sessions =
-                    match crate::utils::session_archive::list_recent_sessions(parsed.limit).await {
-                        Ok(list) => list,
-                        Err(err) => {
-                            tracing::warn!("Failed to list session archives: {}", err);
-                            Vec::with_capacity(0) // Use with_capacity(0) instead of Vec::new()
-                        }
-                    };
-
-                let mut issues = Vec::with_capacity(parsed.limit.min(100)); // Cap capacity to prevent excessive allocation
-                let mut total_errors = 0usize;
-
-                for listing in sessions {
-                    for message in listing.snapshot.messages {
-                        // Check assistant messages for error-like content
-                        if message.role == crate::llm::provider::MessageRole::Assistant {
-                            let text = message.content.as_text();
-                            let lower = text.to_lowercase();
-
-                            // Use shared error detection patterns
-                            let error_patterns = crate::tools::constants::ERROR_DETECTION_PATTERNS;
-
-                            let matches_pattern = if let Some(ref pattern) = parsed.pattern {
-                                lower.contains(&pattern.to_lowercase())
-                            } else {
-                                error_patterns.iter().any(|&pat| lower.contains(pat))
-                            };
-
-                            if matches_pattern {
-                                total_errors += 1;
-                                issues.push(serde_json::json!({
-                                    "type": "session_error",
-                                    "workspace": listing.snapshot.metadata.workspace_label,
-                                    "path": listing.snapshot.metadata.workspace_path,
-                                    "message": text.trim(),
-                                    "timestamp": listing.snapshot.ended_at.to_rfc3339(),
-                                }));
-                            }
-                        }
-                    }
-                }
-
-                error_report["recent_errors"] = serde_json::to_value(issues)
-                    .unwrap_or_else(|_| serde_json::Value::Array(vec![]));
-                error_report["total_errors"] = serde_json::to_value(total_errors)
-                    .unwrap_or_else(|_| serde_json::Value::Number(serde_json::Number::from(0)));
-            }
-
-            // Enhanced suggestions with self-fix capabilities
-            let mut suggestions: Vec<String> = Vec::with_capacity(10);
-            let total_errors = error_report["total_errors"]
-                .as_u64()
-                .unwrap_or(0)
-                .try_into()
-                .unwrap_or(0_usize);
-
-            if total_errors > 0 {
-                suggestions.push(
-                    "Review recent assistant tool calls and session archives for more details"
-                        .into(),
-                );
-
-                if parsed.detailed {
-                    suggestions
-                        .push("Consider running 'debug_agent' for more system diagnostics".into());
-                    suggestions
-                        .push("Try 'analyze_agent' to understand current behavior patterns".into());
-                    suggestions.push(
-                        "Use 'search_tools' to find specific tools for error handling".into(),
-                    );
-                }
-
-                // Self-fix suggestions based on common error patterns
-                // Extract error messages to check for patterns
-                let empty_vec = Vec::with_capacity(0); // Use with_capacity(0) instead of Vec::new()
-                let recent_errors_array = error_report["recent_errors"]
-                    .as_array()
-                    .unwrap_or(&empty_vec);
-                let error_messages: Vec<String> = recent_errors_array
-                    .iter()
-                    .filter_map(|err| err.get("message").and_then(|m| m.as_str()))
-                    .map(|s| s.to_lowercase())
-                    .collect();
-
-                // File not found errors
-                if error_messages.iter().any(|msg| {
-                    msg.contains("not found")
-                        || msg.contains("no such file")
-                        || msg.contains("file does not exist")
-                }) {
-                    suggestions.extend_from_slice(&[
-                        String::from("File not found errors: Verify file paths exist and are accessible"),
-                        String::from("Try using 'list_files' to check directory contents before accessing files"),
-                        String::from("Consider creating missing files with 'create_file' or 'write_file' tools"),
-                    ]);
-                }
-
-                // Permission errors
-                if error_messages.iter().any(|msg| {
-                    msg.contains("permission")
-                        || msg.contains("access denied")
-                        || msg.contains("forbidden")
-                }) {
-                    suggestions.push(
-                        "Permission errors: Check file permissions and workspace access".into(),
-                    );
-                    suggestions.push(
-                        "Consider running with appropriate permissions or changing file ownership"
-                            .into(),
-                    );
-                }
-
-                // Command execution errors
-                if error_messages.iter().any(|msg| {
-                    msg.contains("command not found")
-                        || msg.contains("command failed")
-                        || msg.contains("exit code")
-                }) {
-                    suggestions.push("Command execution errors: Verify command availability with 'list_files' or check PATH environment".into());
-                    suggestions.push(
-                        "Use 'run_pty_cmd' to test commands manually before automation".into(),
-                    );
-                }
-
-                // Git-related errors
-                if error_messages.iter().any(|msg| {
-                    msg.contains("git") && (msg.contains("error") || msg.contains("fatal"))
-                }) {
-                    suggestions
-                        .push("Git errors: Check repository status and Git configuration".into());
-                    suggestions.push(
-                        "Run 'run_pty_cmd' with 'git status' to diagnose repository issues".into(),
-                    );
-                }
-
-                // Network/HTTP errors
-                if error_messages.iter().any(|msg| {
-                    msg.contains("connection")
-                        || msg.contains("timeout")
-                        || msg.contains("network")
-                        || msg.contains("http")
-                        || msg.contains("ssl")
-                        || msg.contains("tls")
-                }) {
-                    suggestions.push(
-                        "Network/HTTP errors: Check internet connectivity and proxy settings"
-                            .into(),
-                    );
-                    suggestions.push(
-                        "Verify API endpoints and credentials if using external services".into(),
-                    );
-                    suggestions.push(
-                        "Consider using 'web_fetch' with proper error handling for web requests"
-                            .into(),
-                    );
-                }
-
-                // Memory/resource errors
-                if error_messages.iter().any(|msg| {
-                    msg.contains("memory")
-                        || msg.contains("oom")
-                        || msg.contains("out of")
-                        || msg.contains("resource")
-                        || msg.contains("too large")
-                }) {
-                    suggestions.push(
-                        "Memory/resource errors: Consider processing data in smaller chunks".into(),
-                    );
-                    suggestions.push("Use 'execute_code' with memory-efficient algorithms when handling large files".into());
-                }
-
-                // Add a general recommendation to use the enhanced get_errors
-                suggestions.push(
-                    "For more detailed diagnostics, run 'get_errors' with detailed=true parameter"
-                        .into(),
-                );
-            } else {
-                suggestions.push("No obvious errors discovered in recent sessions".into());
-                if parsed.detailed {
-                    suggestions.push(
-                        "Run 'debug_agent' or 'analyze_agent' for proactive system checks".into(),
-                    );
-                    suggestions.push("Consider performing routine maintenance tasks if working with large projects".into());
-                }
-            }
-
-            error_report["suggestions"] = serde_json::to_value(suggestions)
-                .unwrap_or_else(|_| serde_json::Value::Array(vec![]));
-
-            // Add system diagnostics if detailed mode
-            if parsed.detailed {
-                let available_tools = self.available_tools().await;
-
-                // Get actual recent tool execution history
-                let recent_executions = self.get_recent_tool_executions(20); // Last 20 executions
-                let recent_failures = self.get_recent_tool_failures(10); // Last 10 failures
-
-                // Convert to JSON format for the report with capacity planning
-                let recent_tool_calls: Vec<Value> = recent_executions
-                    .iter()
-                    .map(|record| {
-                        json!({
-                            "tool_name": &record.tool_name, // Use reference to avoid clone
-                            "timestamp": record.timestamp.duration_since(std::time::UNIX_EPOCH)
-                                .map(|d| d.as_secs())
-                                .unwrap_or(0),
-                            "success": record.success,
-                        })
-                    })
-                    .collect();
-
-                // Convert failures to JSON format with capacity planning
-                let tool_execution_failures: Vec<Value> = recent_failures
-                    .iter()
-                    .map(|record| {
-                        json!({
-                            "tool_name": &record.tool_name, // Use reference to avoid clone
-                            "timestamp": record.timestamp.duration_since(std::time::UNIX_EPOCH)
-                                .map(|d| d.as_secs())
-                                .unwrap_or(0),
-                            "error": match &record.result {
-                                Ok(_) => "Unexpected success in failure list".to_string(),
-                                Err(e) => e.clone(),
-                            },
-                            "args": &record.args, // Use reference to avoid clone
-                        })
-                    })
-                    .collect();
-
-                // Use Cow to avoid allocation
-                let workspace_root = self.workspace_root_str();
-                let system_state = json!({
-                    "available_tools_count": available_tools.len(),
-                    "workspace_root": workspace_root,
-                    "recent_tool_calls": recent_tool_calls
-                });
-
-                // Self-diagnosis logic
-                let mut self_diagnosis_issues: Vec<String> = Vec::with_capacity(5);
-
-                // Check for common system issues
-                if available_tools.is_empty() {
-                    self_diagnosis_issues.push("No tools are currently available - this may indicate a system initialization issue".into());
-                }
-
-                // Check workspace status
-                let workspace_path = self.workspace_root();
-                if !workspace_path.exists() {
-                    self_diagnosis_issues.push(format!(
-                        "Workspace directory does not exist: {}",
-                        workspace_path.display()
-                    ));
-                } else if !workspace_path.is_dir() {
-                    self_diagnosis_issues.push(format!(
-                        "Workspace path is not a directory: {}",
-                        workspace_path.display()
-                    ));
-                }
-
-                // Check for execution failures in history
-                if !recent_failures.is_empty() {
-                    let failure_count = recent_failures.len();
-                    self_diagnosis_issues.push(format!(
-                        "Found {} recent tool execution failures that need attention",
-                        failure_count
-                    ));
-                }
-
-                // Provide self-fix suggestions
-                let mut self_fix_suggestions: Vec<String> = Vec::with_capacity(5);
-                if !self_diagnosis_issues.is_empty() {
-                    self_fix_suggestions
-                        .push("Run system initialization to ensure proper setup".into());
-                    self_fix_suggestions.push("Verify workspace directory and permissions".into());
-                    self_fix_suggestions
-                        .push("Check that all required tools are properly configured".into());
-
-                    if !recent_failures.is_empty() {
-                        self_fix_suggestions
-                            .push("Review recent tool failures and their error messages".into());
-                        self_fix_suggestions.push(
-                            "Consider retrying failed operations with corrected parameters".into(),
-                        );
-                    }
-                } else if total_errors == 0 && recent_failures.is_empty() {
-                    self_fix_suggestions
-                        .push("System appears healthy. No immediate issues detected.".into());
-                    if parsed.scope != "all" {
-                        self_fix_suggestions.push(
-                            "Consider running with scope='all' for comprehensive check".into(),
-                        );
-                    }
-                } else {
-                    self_fix_suggestions.push(
-                        "Based on the errors found, review the suggestions provided above".into(),
-                    );
-                    self_fix_suggestions.push(
-                        "Consider running 'debug_agent' for additional system insights".into(),
-                    );
-
-                    if !recent_failures.is_empty() {
-                        self_fix_suggestions.push(
-                            "Examine recent tool execution failures in the diagnostics section"
-                                .into(),
-                        );
-                    }
-                }
-
-                let self_diagnosis_summary = if !self_diagnosis_issues.is_empty() {
-                    format!(
-                        "Self-diagnosis found {} potential system issues. {}",
-                        self_diagnosis_issues.len(),
-                        self_diagnosis_issues.join("; ")
-                    )
-                } else {
-                    "Self-diagnosis: System appears healthy with no critical issues detected".into()
-                };
-
-                error_report["diagnostics"] = json!({
-                    "tool_execution_failures": tool_execution_failures,
-                    "recent_tool_calls_count": recent_executions.len(),
-                    "recent_tool_failures_count": recent_failures.len(),
-                    "recent_tool_calls": recent_tool_calls,
-                    "system_state": system_state,
-                    "self_diagnosis": self_diagnosis_summary,
-                    "self_diagnosis_issues": self_diagnosis_issues,
-                    "self_fix_suggestions": self_fix_suggestions
-                });
-            }
-
-            Ok(error_report)
-        })
-    }
-
     /// Merged agent diagnostics tool (replaces debug_agent + analyze_agent)
-    pub(super) fn agent_info_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let mode = args.get("mode").and_then(|v| v.as_str()).unwrap_or("full");
-
-            let available_tools = self.available_tools().await;
-            let workspace_root = self.workspace_root_str();
-
-            match mode {
-                "debug" => Ok(json!({
-                    "tools_registered": available_tools,
-                    "workspace_root": workspace_root,
-                })),
-                "analyze" => Ok(json!({
-                    "available_tools_count": available_tools.len(),
-                    "available_tools": available_tools,
-                })),
-                "full" => Ok(json!({
-                    "tools_registered": available_tools.clone(),
-                    "workspace_root": workspace_root,
-                    "available_tools_count": available_tools.len(),
-                })),
-                _ => Ok(json!({
-                    "tools_registered": available_tools.clone(),
-                    "workspace_root": workspace_root,
-                    "available_tools_count": available_tools.len(),
-                })),
-            }
-        })
-    }
-
     pub(super) fn code_intelligence_executor(
         &mut self,
         args: Value,
@@ -837,6 +419,14 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_unified_exec(args).await })
     }
 
+    pub(super) fn unified_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_unified_file(args).await })
+    }
+
+    pub(super) fn unified_search_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_unified_search(args).await })
+    }
+
     pub(super) fn web_fetch_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         use crate::tools::web_fetch::WebFetchTool;
         // Get config from policy gateway or use defaults
@@ -997,105 +587,6 @@ impl ToolRegistry {
                 "path": path.display().to_string(),
                 "backup_created": input.backup,
             }))
-        })
-    }
-
-    pub(super) fn search_tools_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let mcp_client = self.mcp_client.clone();
-        let workspace_root = self.workspace_root_owned();
-        Box::pin(async move {
-            #[derive(Debug, Deserialize)]
-            struct SearchArgs {
-                keyword: String,
-                #[serde(default)]
-                detail_level: Option<String>,
-            }
-
-            let parsed: SearchArgs = serde_json::from_value(args)
-                .context("search_tools requires 'keyword' and optional 'detail_level'")?;
-
-            let detail_level = match parsed.detail_level.as_deref() {
-                Some("name-only") | Some("name") => DetailLevel::NameOnly,
-                Some("full") => DetailLevel::Full,
-                Some("name-and-description") | Some("description") | None => {
-                    DetailLevel::NameAndDescription
-                }
-                Some(invalid) => {
-                    return Err(anyhow!(
-                        "Invalid detail_level: '{}'. Must be one of: name-only, name-and-description, full",
-                        invalid
-                    ));
-                }
-            };
-
-            // Search MCP tools
-            let mut all_results = vec![];
-
-            if let Some(mcp_client) = mcp_client {
-                let discovery = ToolDiscovery::new(mcp_client);
-                if let Ok(results) = discovery.search_tools(&parsed.keyword, detail_level).await {
-                    all_results.extend(results);
-                }
-            }
-
-            // Also search local skills (using SkillsManager)
-            use crate::skills::SkillsManager;
-            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-            let codex_home = home.join(".vtcode");
-            let manager = SkillsManager::new(codex_home);
-            let outcome = manager.skills_for_cwd(&workspace_root);
-
-            let query_lower = parsed.keyword.to_lowercase();
-            // Filter skills
-            for skill in outcome.skills {
-                let name_matches = skill.name.to_lowercase().contains(&query_lower);
-                let desc_matches = skill.description.to_lowercase().contains(&query_lower);
-
-                if name_matches || desc_matches {
-                    all_results.push(crate::mcp::ToolDiscoveryResult {
-                        name: skill.name.clone(),
-                        provider: "skill".to_string(),
-                        description: skill.description.clone(),
-                        relevance_score: 1.0,
-                        input_schema: None,
-                    });
-                }
-            }
-
-            if all_results.is_empty() {
-                return Ok(json!({
-                    "keyword": parsed.keyword,
-                    "matched": 0,
-                    "results": [],
-                    "note": "Use 'skill' tool to load available skills directly by name"
-                }));
-            }
-
-            let tools_json: Vec<Value> = all_results
-                .iter()
-                .map(|r| r.to_json(detail_level))
-                .collect();
-
-            // Implement AGENTS.md pattern for large result sets
-            let matched = all_results.len();
-            let overflow_indication = if matched > 50 {
-                format!("[+{} more tools]", matched - 5)
-            } else {
-                String::new()
-            };
-
-            let mut response = json!({
-                "keyword": parsed.keyword,
-                "matched": matched,
-                "detail_level": detail_level.as_str(),
-                "results": tools_json,
-            });
-
-            if !overflow_indication.is_empty() {
-                response["overflow"] = json!(overflow_indication);
-            }
-
-            Ok(response)
         })
     }
 
@@ -1985,6 +1476,235 @@ impl ToolRegistry {
             }
             _ => Err(anyhow!("Unknown action: {}", action)),
         }
+    }
+
+    async fn execute_unified_file(&mut self, args: Value) -> Result<Value> {
+        let action = args.get("action").and_then(|v| v.as_str()).unwrap_or_else(|| {
+            if args.get("old_str").is_some() || args.get("old_text").is_some() {
+                "edit"
+            } else if args.get("patch").is_some() {
+                "patch"
+            } else if args.get("content").is_some() || args.get("contents").is_some() {
+                "write"
+            } else {
+                "read"
+            }
+        });
+
+        match action {
+            "read" => self.inventory.file_ops_tool().read_file(args).await,
+            "write" => self.inventory.file_ops_tool().write_file(args).await,
+            "edit" => self.edit_file(args).await,
+            "patch" => self.execute_apply_patch(args).await,
+            "delete" => self.inventory.file_ops_tool().delete_file(args).await,
+            _ => Err(anyhow!("Unsupported file action: {}", action)),
+        }
+    }
+
+    async fn execute_unified_search(&mut self, args: Value) -> Result<Value> {
+        let action = args.get("action").and_then(|v| v.as_str()).unwrap_or_else(|| {
+            if args.get("pattern").is_some() {
+                "grep"
+            } else if args.get("operation").is_some() {
+                "intelligence"
+            } else if args.get("keyword").is_some() {
+                "tools"
+            } else {
+                "list"
+            }
+        });
+
+        match action {
+            "grep" => {
+                let input: GrepSearchInput = serde_json::from_value(args)
+                    .context("grep requires a valid GrepSearchInput object")?;
+                let result = self.inventory.grep_file_manager().perform_search(input).await?;
+                Ok(serde_json::to_value(result)?)
+            }
+            "list" => self.inventory.file_ops_tool().execute(args).await,
+            "intelligence" => self.execute_code_intelligence(args).await,
+            "tools" => self.execute_search_tools(args).await,
+            "errors" => self.execute_get_errors(args).await,
+            "agent" => self.execute_agent_info(args).await,
+            _ => Err(anyhow!("Unsupported search action: {}", action)),
+        }
+    }
+
+    async fn execute_search_tools(&mut self, args: Value) -> Result<Value> {
+        let mcp_client = self.mcp_client.clone();
+        let workspace_root = self.workspace_root_owned();
+
+        #[derive(Debug, Deserialize)]
+        struct SearchArgs {
+            keyword: String,
+            #[serde(default)]
+            detail_level: Option<String>,
+        }
+
+        let parsed: SearchArgs = serde_json::from_value(args)
+            .context("search_tools requires 'keyword' and optional 'detail_level'")?;
+
+        let detail_level = match parsed.detail_level.as_deref() {
+            Some("name-only") | Some("name") => DetailLevel::NameOnly,
+            Some("full") => DetailLevel::Full,
+            Some("name-and-description") | Some("description") | None => {
+                DetailLevel::NameAndDescription
+            }
+            Some(invalid) => {
+                return Err(anyhow!(
+                    "Invalid detail_level: '{}'. Must be one of: name-only, name-and-description, full",
+                    invalid
+                ));
+            }
+        };
+
+        // Search MCP tools
+        let mut all_results = vec![];
+
+        if let Some(mcp_client) = mcp_client {
+            let discovery = ToolDiscovery::new(mcp_client);
+            if let Ok(results) = discovery.search_tools(&parsed.keyword, detail_level).await {
+                all_results.extend(results);
+            }
+        }
+
+        // Also search local skills (using SkillsManager)
+        use crate::skills::SkillsManager;
+        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+        let codex_home = home.join(".vtcode");
+        let manager = SkillsManager::new(codex_home);
+        let outcome = manager.skills_for_cwd(&workspace_root);
+
+        let query_lower = parsed.keyword.to_lowercase();
+        // Filter skills
+        for skill in outcome.skills {
+            let name_matches = skill.name.to_lowercase().contains(&query_lower);
+            let desc_matches = skill.description.to_lowercase().contains(&query_lower);
+
+            if name_matches || desc_matches {
+                all_results.push(json!({
+                    "name": skill.name,
+                    "description": skill.description,
+                    "type": "skill",
+                }));
+            }
+        }
+
+        Ok(json!({
+            "tools": all_results,
+            "count": all_results.len()
+        }))
+    }
+
+    async fn execute_get_errors(&mut self, args: Value) -> Result<Value> {
+        #[derive(serde::Deserialize)]
+        struct Args {
+            #[serde(default = "default_scope")]
+            scope: String,
+            #[serde(default = "default_limit")]
+            limit: usize,
+            #[serde(default = "default_detailed")]
+            detailed: bool,
+            #[serde(default)]
+            pattern: Option<String>,
+        }
+
+        fn default_scope() -> String {
+            "archive".into()
+        }
+
+        const fn default_limit() -> usize {
+            5
+        }
+
+        const fn default_detailed() -> bool {
+            false
+        }
+
+        let parsed: Args = serde_json::from_value(args).unwrap_or(Args {
+            scope: default_scope(),
+            limit: default_limit(),
+            detailed: default_detailed(),
+            pattern: None,
+        });
+
+        let workspace_root = self.workspace_root_str();
+
+        let mut error_report = json!({
+            "timestamp": Utc::now().to_rfc3339(),
+            "workspace": workspace_root,
+            "scope": parsed.scope,
+            "detailed": parsed.detailed,
+            "total_errors": 0,
+            "recent_errors": Vec::<Value>::new(),
+            "suggestions": Vec::<String>::new(),
+        });
+
+        if parsed.scope == "archive" || parsed.scope == "all" {
+            let sessions = crate::utils::session_archive::list_recent_sessions(parsed.limit).await?;
+            let mut issues = Vec::new();
+            let mut total_errors = 0usize;
+
+            for listing in sessions {
+                for message in listing.snapshot.messages {
+                    if message.role == crate::llm::provider::MessageRole::Assistant {
+                        let text = message.content.as_text();
+                        let lower = text.to_lowercase();
+                        let error_patterns = crate::tools::constants::ERROR_DETECTION_PATTERNS;
+
+                        let matches_pattern = if let Some(ref pattern) = parsed.pattern {
+                            lower.contains(&pattern.to_lowercase())
+                        } else {
+                            error_patterns.iter().any(|&pat| lower.contains(pat))
+                        };
+
+                        if matches_pattern {
+                            total_errors += 1;
+                            issues.push(json!({
+                                "type": "session_error",
+                                "workspace": listing.snapshot.metadata.workspace_label,
+                                "message": text.trim(),
+                                "timestamp": listing.snapshot.ended_at.to_rfc3339(),
+                            }));
+                        }
+                    }
+                }
+            }
+
+            error_report["recent_errors"] = json!(issues);
+            error_report["total_errors"] = json!(total_errors);
+        }
+
+        Ok(error_report)
+    }
+
+    async fn execute_agent_info(&mut self, args: Value) -> Result<Value> {
+        let mode = args.get("mode").and_then(|v| v.as_str()).unwrap_or("full");
+        let available_tools = self.available_tools().await;
+        let workspace_root = self.workspace_root_str();
+
+        match mode {
+            "debug" => Ok(json!({
+                "tools_registered": available_tools,
+                "workspace_root": workspace_root,
+            })),
+            "analyze" => Ok(json!({
+                "available_tools_count": available_tools.len(),
+                "available_tools": available_tools,
+            })),
+            _ => Ok(json!({
+                "tools_registered": available_tools.clone(),
+                "workspace_root": workspace_root,
+                "available_tools_count": available_tools.len(),
+            })),
+        }
+    }
+
+    async fn execute_code_intelligence(&mut self, args: Value) -> Result<Value> {
+        let workspace_root = self.workspace_root_owned();
+        use crate::tools::code_intelligence::CodeIntelligenceTool;
+        let tool = CodeIntelligenceTool::new(workspace_root);
+        tool.execute(args).await
     }
 
     async fn run_unified_exec_command(&mut self, setup: PtyCommandSetup) -> Result<Value> {

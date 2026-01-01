@@ -281,9 +281,11 @@ When agents guess wrong about commands, flags, or workflows, we treat that as a 
 
 **Tool operation patterns**:
 
--   Agents expect `code_intelligence goto_definition` → Currently requires `code_intelligence` tool with `operation` param
+-   Agents expect `code_intelligence goto_definition` → Unified under `unified_search` with `action="intelligence"`
 -   Agents expect `spawn_subagent --name explore` → Currently requires positional `subagent_type` param
--   Agents expect `exec_command` and `write_stdin` (Unified Exec) → ✓ Paved with `exec_command` and `write_stdin` tools (compatible with OpenAI Codex pattern)
+-   Agents expect `exec_command` and `write_stdin` (Unified Exec) → ✓ Paved with `unified_exec` (compatible with OpenAI Codex pattern)
+-   Agents expect `read_file`, `write_file`, `edit_file` → ✓ Unified under `unified_file` with `action` param
+-   Agents expect `grep_file`, `list_files`, `search_tools`, `get_errors`, `agent_info` → ✓ Unified under `unified_search` with `action` param (`grep`, `list`, `intelligence`, `tools`, `errors`, `agent`)
 
 ### Reporting Friction
 
