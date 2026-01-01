@@ -1,3 +1,4 @@
+use std::env;
 use std::io::{self, IsTerminal};
 use std::sync::atomic::AtomicU64;
 use std::time::{Duration, Instant};
@@ -494,15 +495,28 @@ async fn detect_keyboard_enhancement_support(flags: KeyboardEnhancementFlags) ->
         return false;
     }
 
+    if keyboard_protocol_env_disabled() {
+        tracing::info!("keyboard protocol disabled via VTCODE_KBD_PROTOCOL env override");
+        return false;
+    }
+
     // The crossterm capability probe can block while waiting for a terminal response. Bound it so
     // startup is not delayed.
+    let probe_start = Instant::now();
     match tokio::time::timeout(
         Duration::from_millis(200),
         spawn_blocking(|| supports_keyboard_enhancement().unwrap_or(false)),
     )
     .await
     {
-        Ok(Ok(supported)) => supported,
+        Ok(Ok(supported)) => {
+            tracing::debug!(
+                supported,
+                elapsed_ms = probe_start.elapsed().as_millis(),
+                "keyboard enhancement support probe completed"
+            );
+            supported
+        }
         Ok(Err(join_error)) => {
             tracing::debug!(%join_error, "keyboard enhancement support probe failed");
             false
@@ -511,6 +525,16 @@ async fn detect_keyboard_enhancement_support(flags: KeyboardEnhancementFlags) ->
             tracing::warn!("keyboard enhancement support probe timed out; disabling protocol to avoid startup lag");
             false
         }
+    }
+}
+
+fn keyboard_protocol_env_disabled() -> bool {
+    match env::var("VTCODE_KBD_PROTOCOL") {
+        Ok(val) => {
+            let v = val.trim().to_ascii_lowercase();
+            matches!(v.as_str(), "0" | "false" | "off" | "disable" | "disabled" | "no")
+        }
+        Err(_) => false,
     }
 }
 
