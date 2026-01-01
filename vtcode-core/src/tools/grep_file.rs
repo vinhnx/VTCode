@@ -70,8 +70,10 @@ const SEARCH_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Poll interval when waiting for an active search to complete
 const ACTIVE_SEARCH_COMPLETE_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
+use serde::{Deserialize, Serialize};
+
 /// Input parameters for ripgrep search
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GrepSearchInput {
     pub pattern: String,
     pub path: String,
@@ -168,7 +170,7 @@ fn is_hidden_path(path: &str) -> bool {
 }
 
 /// Result of a ripgrep search
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GrepSearchResult {
     pub query: String,
     pub matches: Vec<serde_json::Value>,

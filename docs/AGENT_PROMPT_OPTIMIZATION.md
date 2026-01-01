@@ -69,7 +69,7 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 
 ### Diagnostics tools
 
-Added guidance for diagnostic workflows: agents should use `tools::GET_ERRORS` to collect recent error traces, and fall back to `tools::DEBUG_AGENT` and `tools::ANALYZE_AGENT` for introspection and analysis. These tools are available as builtins and preferred for self-diagnosis workflows.
+Added guidance for diagnostic workflows: agents should use `unified_search` with `action="errors"` to collect recent error traces, and `action="agent"` for introspection and analysis. These actions replace the legacy `get_errors`, `debug_agent`, and `analyze_agent` tools.
 
 ---
 

@@ -963,6 +963,8 @@ pub mod tools {
     pub const SKILL: &str = "skill";
     pub const EXECUTE_CODE: &str = "execute_code";
     pub const UNIFIED_EXEC: &str = "unified_exec";
+    pub const UNIFIED_FILE: &str = "unified_file";
+    pub const UNIFIED_SEARCH: &str = "unified_search";
 
     pub const CODE_INTELLIGENCE: &str = "code_intelligence";
 

@@ -63,7 +63,8 @@ To check if the time MCP is available:
 1. Verify it's installed: uvx mcp-server-time --help
 2. Check .mcp.json is configured: cat .mcp.json | grep -A 3 "time"
 3. Ensure MCP is enabled: grep "enabled = true" vtcode.toml
-4. Run diagnostics: vtcode doctor
+4. Run diagnostics: unified_search(action="tools", keyword="time")
+5. Check for errors: unified_search(action="errors")
 
 If needed, install: pip install mcp-server-time
 ```
