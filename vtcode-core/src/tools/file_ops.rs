@@ -1224,6 +1224,114 @@ impl FileOpsTool {
         }))
     }
 
+    /// Move a file or directory.
+    pub async fn move_file(&self, args: Value) -> Result<Value> {
+        use super::types::MoveInput;
+        let input: MoveInput = serde_json::from_value(args).context(
+            "Error: Invalid 'move_file' arguments. Expected JSON object with: path (required, string), destination (required, string).",
+        )?;
+
+        let MoveInput {
+            path,
+            destination,
+            force,
+        } = input;
+
+        let from_path = self.workspace_root.join(&path);
+        let to_path = self.workspace_root.join(&destination);
+
+        if !tokio::fs::try_exists(&from_path).await? {
+            return Err(anyhow!("Source path '{}' does not exist", path));
+        }
+
+        if tokio::fs::try_exists(&to_path).await? && !force {
+            return Err(anyhow!(
+                "Destination path '{}' already exists. Use force=true to overwrite.",
+                destination
+            ));
+        }
+
+        // Ensure destination parent directory exists
+        if let Some(parent) = to_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        tokio::fs::rename(&from_path, &to_path)
+            .await
+            .with_context(|| format!("Failed to move '{}' to '{}'", path, destination))?;
+
+        info!(from = %path, to = %destination, "Moved successfully");
+
+        Ok(json!({
+            "success": true,
+            "from": path,
+            "to": destination,
+        }))
+    }
+
+    /// Copy a file or directory.
+    pub async fn copy_file(&self, args: Value) -> Result<Value> {
+        use super::types::CopyInput;
+        let input: CopyInput = serde_json::from_value(args).context(
+            "Error: Invalid 'copy_file' arguments. Expected JSON object with: path (required, string), destination (required, string). Optional: recursive (bool).",
+        )?;
+
+        let CopyInput {
+            path,
+            destination,
+            recursive,
+        } = input;
+
+        let from_path = self.workspace_root.join(&path);
+        let to_path = self.workspace_root.join(&destination);
+
+        if !tokio::fs::try_exists(&from_path).await? {
+            return Err(anyhow!("Source path '{}' does not exist", path));
+        }
+
+        // Ensure destination parent directory exists
+        if let Some(parent) = to_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        let metadata = tokio::fs::metadata(&from_path).await?;
+        if metadata.is_dir() {
+            if !recursive {
+                return Err(anyhow!(
+                    "Path '{}' is a directory. Use recursive=true to copy directories.",
+                    path
+                ));
+            }
+            // Simple recursive copy using walkdir
+            use walkdir::WalkDir;
+            for entry in WalkDir::new(&from_path).into_iter().filter_map(|e| e.ok()) {
+                let entry_path = entry.path();
+                let relative = entry_path.strip_prefix(&from_path).unwrap_or(entry_path);
+                let target = to_path.join(relative);
+
+                if entry.file_type().is_dir() {
+                    tokio::fs::create_dir_all(&target).await?;
+                } else {
+                    tokio::fs::copy(entry_path, &target)
+                        .await
+                        .with_context(|| format!("Failed to copy '{}'", entry_path.display()))?;
+                }
+            }
+        } else {
+            tokio::fs::copy(&from_path, &to_path)
+                .await
+                .with_context(|| format!("Failed to copy '{}' to '{}'", path, destination))?;
+        }
+
+        info!(from = %path, to = %destination, "Copied successfully");
+
+        Ok(json!({
+            "success": true,
+            "from": path,
+            "to": destination,
+        }))
+    }
+
     /// Write file with various modes and chunking support for large content
     pub async fn write_file(&self, args: Value) -> Result<Value> {
         let input: WriteInput = serde_json::from_value(args)

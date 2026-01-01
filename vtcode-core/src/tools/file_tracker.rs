@@ -150,7 +150,7 @@ pub struct TrackedFile {
 }
 
 mod system_time_serde {
-    use serde::{Serialize, Serializer};
+    use serde::Serializer;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     pub fn serialize<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>

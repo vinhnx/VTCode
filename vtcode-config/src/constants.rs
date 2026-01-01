@@ -966,6 +966,15 @@ pub mod tools {
     pub const UNIFIED_FILE: &str = "unified_file";
     pub const UNIFIED_SEARCH: &str = "unified_search";
 
+    pub const SEARCH: &str = "search";
+    pub const FIND: &str = "find";
+    pub const EXEC_PTY_CMD: &str = "exec_pty_cmd";
+    pub const EXEC: &str = "exec";
+    pub const SHELL: &str = "shell";
+    pub const FILE_OP: &str = "file_op";
+    pub const MOVE_FILE: &str = "move_file";
+    pub const COPY_FILE: &str = "copy_file";
+
     pub const CODE_INTELLIGENCE: &str = "code_intelligence";
     pub const GET_ERRORS: &str = "get_errors";
 

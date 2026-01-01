@@ -135,6 +135,22 @@ pub struct DeleteInput {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct MoveInput {
+    pub path: String,
+    pub destination: String,
+    #[serde(default)]
+    pub force: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CopyInput {
+    pub path: String,
+    pub destination: String,
+    #[serde(default)]
+    pub recursive: bool,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct EditInput {
     #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
     pub path: String,
