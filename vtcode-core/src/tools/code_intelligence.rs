@@ -120,6 +120,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Code Intelligence Tool
+#[derive(Clone)]
 pub struct CodeIntelligenceTool {
     workspace_root: PathBuf,
     lsp_tool: Arc<Mutex<LspTool>>,

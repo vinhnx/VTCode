@@ -32,8 +32,8 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             tools::WEB_FETCH,
             tools::SKILL,
             tools::SEARCH_TOOLS,
-            "search",
-            "find",
+            tools::SEARCH,
+            tools::FIND,
         ]),
         // ============================================================
         // SHELL EXECUTION (1 tool - unified)
@@ -52,9 +52,9 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             tools::CLOSE_PTY_SESSION,
             tools::SEND_PTY_INPUT,
             tools::READ_PTY_SESSION,
-            "exec_pty_cmd",
-            "exec",
-            "shell",
+            tools::EXEC_PTY_CMD,
+            tools::EXEC,
+            tools::SHELL,
         ]),
         // ============================================================
         // FILE OPERATIONS (1 tool - unified)
@@ -72,7 +72,9 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             tools::EDIT_FILE,
             tools::APPLY_PATCH,
             tools::CREATE_FILE,
-            "file_op",
+            tools::MOVE_FILE,
+            tools::COPY_FILE,
+            tools::FILE_OP,
         ]),
         // ============================================================
         // INTERNAL TOOLS (Hidden from LLM, used by unified tools)
