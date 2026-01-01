@@ -1,5 +1,42 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::OnceLock;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnifiedExecAction {
+    Run,
+    Write,
+    Poll,
+    List,
+    Close,
+    Code,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnifiedFileAction {
+    Read,
+    Write,
+    Edit,
+    Patch,
+    Delete,
+    Move,
+    Copy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnifiedSearchAction {
+    Grep,
+    List,
+    Intelligence,
+    Tools,
+    Errors,
+    Agent,
+    Web,
+    Skill,
+}
 
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
@@ -276,26 +313,34 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::UNIFIED_EXEC.to_string(),
-            description: "Unified execution tool for all shell operations. Can run new commands, write to existing sessions, poll for output, list active sessions, or close them.".to_string(),
+            description: "Unified execution tool. Run shell commands, write to sessions, poll output, or execute Python/JavaScript code.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "command": {"type": "string", "description": "The command to execute (to start a new session)."},
                     "input": {"type": "string", "description": "The input to write to stdin (for an existing session)."},
                     "session_id": {"type": "string", "description": "The session ID to target (required for write, poll, and close)."},
+                    "code": {"type": "string", "description": "Python 3 or JavaScript code to execute (for 'code' action)."},
+                    "language": {
+                        "type": "string",
+                        "enum": ["python3", "javascript"],
+                        "description": "Programming language for 'code' action.",
+                        "default": "python3"
+                    },
                     "action": {
                         "type": "string",
-                        "enum": ["run", "write", "poll", "list", "close"],
-                        "description": "Action to perform. If not provided, it's inferred: 'run' if command is present, 'write' if input is present, 'poll' if only session_id is present."
+                        "enum": ["run", "write", "poll", "list", "close", "code"],
+                        "description": "Action to perform. If not provided, it's inferred: 'run' if command is present, 'code' if code is present, 'write' if input is present, 'poll' if only session_id is present."
                     },
                     "workdir": {"type": "string", "description": "Working directory for new sessions."},
                     "cwd": {"type": "string", "description": "Alias for workdir."},
                     "shell": {"type": "string", "description": "Shell to use (e.g., /bin/bash)."},
                     "login": {"type": "boolean", "description": "Whether to use a login shell.", "default": true},
-                    "timeout_secs": {"type": "integer", "description": "Timeout in seconds for one-off commands.", "default": 180},
+                    "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 180},
                     "yield_time_ms": {"type": "integer", "description": "Time to wait for output (ms).", "default": 1000},
                     "confirm": {"type": "boolean", "description": "Confirm destructive ops.", "default": false},
-                    "max_output_tokens": {"type": "integer", "description": "Max tokens to return."}
+                    "max_output_tokens": {"type": "integer", "description": "Max tokens to return."},
+                    "track_files": {"type": "boolean", "description": "Track file changes during code execution.", "default": false}
                 }
             }),
         },
@@ -329,18 +374,21 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::UNIFIED_SEARCH.to_string(),
-            description: "Unified discovery tool. Search code (grep), list files, perform semantic navigation (intelligence), find tools, or check agent status/errors.".to_owned(),
+            description: "Unified discovery tool. Search code (grep), list files, perform semantic navigation (intelligence), find tools, check agent status/errors, fetch web content, or load skills.".to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["grep", "list", "intelligence", "tools", "errors", "agent"],
-                        "description": "Action to perform. 'grep' (regex search), 'list' (file listing), 'intelligence' (LSP navigation), 'tools' (find tools), 'errors' (session errors), 'agent' (status)."
+                        "enum": ["grep", "list", "intelligence", "tools", "errors", "agent", "web", "skill"],
+                        "description": "Action to perform. 'grep' (regex search), 'list' (file listing), 'intelligence' (LSP navigation), 'tools' (find tools), 'errors' (session errors), 'agent' (status), 'web' (fetch URL), 'skill' (load skill)."
                     },
                     "pattern": {"type": "string", "description": "Regex or literal pattern for 'grep' or 'errors' search."},
                     "path": {"type": "string", "description": "Directory or file path to search in.", "default": "."},
                     "keyword": {"type": "string", "description": "Keyword for 'tools' search."},
+                    "url": {"type": "string", "format": "uri", "description": "The URL to fetch content from (for 'web' action)."},
+                    "prompt": {"type": "string", "description": "The prompt to run on the fetched content (for 'web' action)."},
+                    "name": {"type": "string", "description": "Skill name to load (for 'skill' action)."},
                     "detail_level": {
                         "type": "string",
                         "enum": ["name-only", "name-and-description", "full"],
@@ -362,45 +410,13 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "max_results": {"type": "integer", "description": "Max results to return.", "default": 100},
                     "case_sensitive": {"type": "boolean", "description": "Case-sensitive search.", "default": false},
                     "context_lines": {"type": "integer", "description": "Context lines for 'grep' results.", "default": 0},
-                    "scope": {"type": "string", "description": "Scope for 'errors' action (archive|all).", "default": "archive"}
+                    "scope": {"type": "string", "description": "Scope for 'errors' action (archive|all).", "default": "archive"},
+                    "max_bytes": {"type": "integer", "description": "Maximum bytes to fetch for 'web' action.", "default": 500000},
+                    "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 30}
                 }
             }),
         },
 
-        FunctionDeclaration {
-            name: tools::SKILL.to_string(),
-            description: "Load a skill by name. Skills are subagents with instructions and scripts from .vtcode/skills/.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Skill name (e.g., 'spreadsheet-generator', 'doc-generator', 'pdf-report-generator')"}
-                },
-                "required": ["name"]
-            }),
-        },
-
-        FunctionDeclaration {
-            name: tools::EXECUTE_CODE.to_string(),
-            description: "Execute Python or JavaScript code. Access MCP tools as functions. Return results via `result = {...}`.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "code": {"type": "string", "description": "Python 3 or JavaScript code to execute"},
-                    "language": {
-                        "type": "string",
-                        "enum": ["python3", "javascript"],
-                        "description": "Programming language: 'python3' or 'javascript'",
-                        "default": "python3"
-                    },
-                    "timeout_secs": {
-                        "type": "integer",
-                        "description": "Maximum execution time in seconds (default: 30)",
-                        "default": 30
-                    }
-                },
-                "required": ["code", "language"]
-            }),
-        },
         // ============================================================
         // FILE OPERATIONS
         // ============================================================
@@ -569,24 +585,11 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         // NOTE: search_replace removed - use edit_file instead
         // NOTE: PTY session tools (create/list/close/send/read/resize) hidden from LLM - use run_pty_cmd
+        // NOTE: skill, execute_code, web_fetch merged into unified tools
 
         // ============================================================
         // NETWORK OPERATIONS
         // ============================================================
-        FunctionDeclaration {
-            name: tools::WEB_FETCH.to_string(),
-            description: "Fetch URL content, convert HTML to markdown, process with prompt. Returns AI-analyzed web content.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "format": "uri", "description": "The URL to fetch content from"},
-                    "prompt": {"type": "string", "description": "The prompt to run on the fetched content"},
-                    "max_bytes": {"type": "integer", "description": "Maximum bytes to fetch", "default": 500000},
-                    "timeout_secs": {"type": "integer", "description": "Timeout in seconds", "default": 30}
-                },
-                "required": ["url", "prompt"]
-            }),
-        },
     ]
 }
 

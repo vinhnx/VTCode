@@ -28,6 +28,10 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             tools::GREP_FILE,
             tools::LIST_FILES,
             tools::CODE_INTELLIGENCE,
+            tools::AGENT_INFO,
+            tools::WEB_FETCH,
+            tools::SKILL,
+            tools::SEARCH_TOOLS,
             "search",
             "find",
         ]),
@@ -40,7 +44,18 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             true,
             ToolRegistry::unified_exec_executor,
         )
-        .with_aliases([tools::RUN_PTY_CMD, "exec_pty_cmd", "exec", "shell"]),
+        .with_aliases([
+            tools::RUN_PTY_CMD,
+            tools::EXECUTE_CODE,
+            tools::CREATE_PTY_SESSION,
+            tools::LIST_PTY_SESSIONS,
+            tools::CLOSE_PTY_SESSION,
+            tools::SEND_PTY_INPUT,
+            tools::READ_PTY_SESSION,
+            "exec_pty_cmd",
+            "exec",
+            "shell",
+        ]),
         // ============================================================
         // FILE OPERATIONS (1 tool - unified)
         // ============================================================
@@ -60,29 +75,112 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             "file_op",
         ]),
         // ============================================================
-        // NETWORK & WEB (1 tool)
+        // INTERNAL TOOLS (Hidden from LLM, used by unified tools)
         // ============================================================
         ToolRegistration::new(
-            tools::WEB_FETCH,
-            CapabilityLevel::Bash,
+            tools::READ_FILE,
+            CapabilityLevel::CodeSearch,
             false,
-            ToolRegistry::web_fetch_executor,
-        ),
-        // ============================================================
-        // SPECIAL TOOLS (3 exposed + 2 deprecated)
-        // ============================================================
-        ToolRegistration::new(
-            tools::SKILL,
-            CapabilityLevel::Basic,
-            false,
-            ToolRegistry::skill_executor,
-        ),
-        ToolRegistration::new(
-            tools::EXECUTE_CODE,
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::execute_code_executor,
+            ToolRegistry::read_file_executor,
         )
-        .with_aliases(["exec_code"]),
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::WRITE_FILE,
+            CapabilityLevel::Editing,
+            false,
+            ToolRegistry::write_file_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::EDIT_FILE,
+            CapabilityLevel::Editing,
+            false,
+            ToolRegistry::edit_file_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::GREP_FILE,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::grep_file_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::LIST_FILES,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::list_files_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::RUN_PTY_CMD,
+            CapabilityLevel::Bash,
+            true,
+            ToolRegistry::run_pty_cmd_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::SEND_PTY_INPUT,
+            CapabilityLevel::Bash,
+            true,
+            ToolRegistry::send_pty_input_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::READ_PTY_SESSION,
+            CapabilityLevel::Bash,
+            true,
+            ToolRegistry::read_pty_session_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::LIST_PTY_SESSIONS,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::list_pty_sessions_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::CLOSE_PTY_SESSION,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::close_pty_session_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::CODE_INTELLIGENCE,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::code_intelligence_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::GET_ERRORS,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::get_errors_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::AGENT_INFO,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::agent_info_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::SEARCH_TOOLS,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::search_tools_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::APPLY_PATCH,
+            CapabilityLevel::Editing,
+            false,
+            ToolRegistry::apply_patch_executor,
+        )
+        .with_llm_visibility(false),
     ]
 }

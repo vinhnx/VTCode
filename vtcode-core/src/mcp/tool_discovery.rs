@@ -45,7 +45,7 @@ impl DetailLevel {
 }
 
 /// Result of a tool discovery operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ToolDiscoveryResult {
     pub name: String,
     pub provider: String,

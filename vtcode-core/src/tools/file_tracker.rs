@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use serde::Serialize;
 use serde_json::Value;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -140,11 +141,27 @@ sys.exit(0 if exists and is_file else 1)
 }
 
 /// Represents a tracked file with metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TrackedFile {
     pub absolute_path: PathBuf,
     pub size: u64,
+    #[serde(with = "system_time_serde")]
     pub modified: SystemTime,
+}
+
+mod system_time_serde {
+    use serde::{Serialize, Serializer};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    pub fn serialize<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let duration = time
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0));
+        serializer.serialize_u64(duration.as_secs())
+    }
 }
 
 impl TrackedFile {

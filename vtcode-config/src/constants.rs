@@ -967,6 +967,7 @@ pub mod tools {
     pub const UNIFIED_SEARCH: &str = "unified_search";
 
     pub const CODE_INTELLIGENCE: &str = "code_intelligence";
+    pub const GET_ERRORS: &str = "get_errors";
 
     /// Merged agent diagnostics tool (replaces debug_agent + analyze_agent)
     pub const AGENT_INFO: &str = "agent_info";
