@@ -147,6 +147,7 @@ pub mod mcp;
 pub mod memory; // Memory monitoring and pressure detection
 pub mod metrics;
 pub mod models;
+pub mod models_manager; // Models discovery, caching, and selection (Codex patterns)
 pub mod notifications;
 pub mod orchestrator;
 pub mod plugins;
@@ -207,6 +208,10 @@ pub use mcp::{
     validate_mcp_config,
 };
 pub use memory::{MemoryCheckpoint, MemoryMonitor, MemoryPressure, MemoryReport};
+pub use models_manager::{
+    ModelsCache, ModelsManager, ModelFamily, ModelPreset, builtin_model_presets,
+    model_family::find_family_for_model,
+};
 pub use notifications::{
     NotificationConfig, NotificationEvent, NotificationManager, get_global_notification_manager,
     init_global_notification_manager, notify_command_failure, notify_error,
