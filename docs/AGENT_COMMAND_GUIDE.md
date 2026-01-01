@@ -12,10 +12,10 @@ All responses include a `status` field:
 
 ```json
 {
-  "status": "completed",  // or "running"
-  "code": 0,              // Exit code (only if completed)
-  "output": "...",        // Output from command
-  "session_id": null      // Session ID (only if running)
+    "status": "completed", // or "running"
+    "code": 0, // Exit code (only if completed)
+    "output": "...", // Output from command
+    "session_id": null // Session ID (only if running)
 }
 ```
 
@@ -39,12 +39,12 @@ else if response.status == "running":
 
 ## Key Points
 
-| Scenario | What to Do | What NOT to Do |
-|----------|-----------|-----------------|
-| `status: "completed"` | Use the output and check `code` | - |
-| `status: "running"` | Inform user and move on |   Don't poll with read_pty_session |
-| See `session_id` in response |  It's there for UI progress tracking |   Don't use it for manual polling |
-| Command output continues in background |  Let backend handle it |   Don't make repeated calls |
+| Scenario                               | What to Do                          | What NOT to Do                   |
+| -------------------------------------- | ----------------------------------- | -------------------------------- |
+| `status: "completed"`                  | Use the output and check `code`     | -                                |
+| `status: "running"`                    | Inform user and move on             | Don't poll with read_pty_session |
+| See `session_id` in response           | It's there for UI progress tracking | Don't use it for manual polling  |
+| Command output continues in background | Let backend handle it               | Don't make repeated calls        |
 
 ## Example: Cargo Check
 

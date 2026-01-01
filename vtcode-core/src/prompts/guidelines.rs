@@ -158,10 +158,7 @@ mod tests {
 
     #[test]
     fn test_tool_preference_guidance() {
-        let tools = vec![
-            "unified_exec".to_string(),
-            "unified_search".to_string(),
-        ];
+        let tools = vec!["unified_exec".to_string(), "unified_search".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
             guidelines.contains("Prefer `unified_search`"),
@@ -189,9 +186,7 @@ mod tests {
 
     #[test]
     fn test_write_edit_guidance() {
-        let tools = vec![
-            "unified_file".to_string(),
-        ];
+        let tools = vec!["unified_file".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
             guidelines.contains("action='write'") && guidelines.contains("new files"),
