@@ -82,7 +82,6 @@ use std::time::SystemTime;
 /// Callback for tool progress and output streaming
 pub type ToolProgressCallback = Arc<dyn Fn(&str, &str) + Send + Sync>;
 
-#[cfg(test)]
 use super::traits::Tool;
 #[cfg(test)]
 use crate::config::types::CapabilityLevel;
@@ -698,6 +697,21 @@ impl ToolRegistry {
         registry
     }
 
+    /// Get a tool by name from the inventory
+    pub fn get_tool(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.inventory
+            .get_registration(name)
+            .and_then(|reg| match reg.handler() {
+                ToolHandler::TraitObject(tool) => Some(tool.clone()),
+                _ => None,
+            })
+    }
+
+    /// Get the workspace root as an owned PathBuf
+    pub fn workspace_root_owned(&self) -> PathBuf {
+        self.inventory.workspace_root().clone()
+    }
+
     async fn sync_policy_catalog(&mut self) {
         // Include aliases so policy prompts stay in sync with exposed names
         let available = self.available_tools().await;
@@ -937,11 +951,6 @@ impl ToolRegistry {
     /// Get workspace root as Cow<str> to avoid allocations when possible
     pub(crate) fn workspace_root_str(&self) -> Cow<'_, str> {
         self.workspace_root().to_string_lossy()
-    }
-
-    /// Get workspace root as PathBuf (clones only when needed)
-    pub(crate) fn workspace_root_owned(&self) -> PathBuf {
-        self.inventory.workspace_root().clone()
     }
 
     pub fn file_ops_tool(&self) -> &FileOpsTool {

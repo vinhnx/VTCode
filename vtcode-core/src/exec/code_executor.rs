@@ -96,7 +96,7 @@ impl Language {
 }
 
 /// Result of code execution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ExecutionResult {
     /// Exit code from the process
     pub exit_code: i32,
