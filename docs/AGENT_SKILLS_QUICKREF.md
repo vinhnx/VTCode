@@ -91,8 +91,8 @@ mode: false
 ## Agent Workflow
 
 ```
-1. List skills        → vtcode skills list
-2. View skill details → vtcode skills info <name>
+1. Discover skills    → unified_search(action="tools", keyword="...")
+2. View skill details → unified_search(action="tools", keyword="...", detail_level="full")
 3. Load in session    → /skills load <name>
 4. Use in chat        → Ask agent to use the skill
 5. Agent triggers     → Loads full instructions

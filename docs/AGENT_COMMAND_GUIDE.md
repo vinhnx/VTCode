@@ -1,9 +1,9 @@
 # Quick Reference: Agent Command Execution Guide
 
-## When Running Commands, Always Use `run_pty_cmd`
+## When Running Commands, Always Use `unified_exec`
 
 ```
-run_pty_cmd(command="cargo check", timeout_secs=300)
+unified_exec(command="cargo check", timeout_secs=300)
 ```
 
 ## Response Format
@@ -50,7 +50,7 @@ else if response.status == "running":
 
 ```
 Agent calls:
-  run_pty_cmd(command="cargo check", timeout_secs=300)
+  unified_exec(command="cargo check", timeout_secs=300)
 
 Response arrives in ~5 seconds:
   {

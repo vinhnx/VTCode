@@ -1,13 +1,9 @@
 use crate::config::types::CapabilityLevel;
 
 // Tool name constants - single source of truth for tool identifiers
-const TOOL_RUN_PTY_CMD: &str = "run_pty_cmd";
-const TOOL_EDIT_FILE: &str = "edit_file";
-const TOOL_WRITE_FILE: &str = "write_file";
-const TOOL_READ_FILE: &str = "read_file";
-const TOOL_GREP_FILE: &str = "grep_file";
-const TOOL_LIST_FILES: &str = "list_files";
-const TOOL_CODE_INTELLIGENCE: &str = "code_intelligence";
+const TOOL_UNIFIED_EXEC: &str = "unified_exec";
+const TOOL_UNIFIED_FILE: &str = "unified_file";
+const TOOL_UNIFIED_SEARCH: &str = "unified_search";
 
 /// Generate dynamic guidelines based on available tools and capability level
 ///
@@ -27,7 +23,7 @@ const TOOL_CODE_INTELLIGENCE: &str = "code_intelligence";
 /// use vtcode_core::prompts::guidelines::generate_tool_guidelines;
 /// use vtcode_core::config::types::CapabilityLevel;
 ///
-/// let tools = vec!["read_file".to_string(), "grep_file".to_string()];
+/// let tools = vec!["unified_file".to_string(), "unified_search".to_string()];
 /// let guidelines = generate_tool_guidelines(&tools, None);
 /// assert!(guidelines.contains("READ-ONLY MODE"));
 /// ```
@@ -38,15 +34,12 @@ pub fn generate_tool_guidelines(
     let mut guidelines = Vec::new();
 
     // Detect tool availability
-    let has_bash = available_tools.iter().any(|t| t == TOOL_RUN_PTY_CMD);
-    let has_edit = available_tools.iter().any(|t| t == TOOL_EDIT_FILE);
-    let has_write = available_tools.iter().any(|t| t == TOOL_WRITE_FILE);
-    let has_read = available_tools.iter().any(|t| t == TOOL_READ_FILE);
-    let has_grep = available_tools.iter().any(|t| t == TOOL_GREP_FILE);
-    let has_list = available_tools.iter().any(|t| t == TOOL_LIST_FILES);
+    let has_bash = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
+    let has_file = available_tools.iter().any(|t| t == TOOL_UNIFIED_FILE);
+    let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
 
     // Read-only mode detection
-    if !has_bash && !has_edit && !has_write {
+    if !has_bash && !has_file {
         guidelines.push(
             "**READ-ONLY MODE**: You cannot modify files or execute commands. \
              Focus on analysis, planning, and providing recommendations."
@@ -55,28 +48,21 @@ pub fn generate_tool_guidelines(
     }
 
     // Tool preference guidelines
-    if has_bash && (has_grep || has_list) {
+    if has_bash && has_search {
         guidelines.push(
-            "**Tool Selection**: Prefer `grep_file`/`list_files` over `run_pty_cmd` \
+            "**Tool Selection**: Prefer `unified_search` (action='grep' or 'list') over `unified_exec` \
              for file exploration - they're faster, provide structured output, and \
              respect .gitignore automatically."
                 .to_string(),
         );
     }
 
-    if has_read && has_edit {
+    if has_file {
         guidelines.push(
-            "**Edit Workflow**: Always use `read_file` to examine content before \
-             using `edit_file` - this ensures accurate `old_str` matching and \
-             prevents edit failures."
-                .to_string(),
-        );
-    }
-
-    if has_write && has_edit {
-        guidelines.push(
-            "**File Creation**: Use `write_file` for new files, `edit_file` for \
-             modifications to existing files. Never use both on the same file."
+            "**File Workflow**: Always use `unified_file` (action='read') to examine content before \
+             using action='edit' - this ensures accurate `old_str` matching and \
+             prevents edit failures. Use action='write' for new files, action='edit' for \
+             modifications to existing files."
                 .to_string(),
         );
     }
@@ -133,33 +119,20 @@ pub fn generate_tool_guidelines(
 /// use vtcode_core::prompts::guidelines::infer_capability_level;
 /// use vtcode_core::config::types::CapabilityLevel;
 ///
-/// let tools = vec!["read_file".to_string()];
+/// let tools = vec!["unified_file".to_string()];
 /// assert_eq!(infer_capability_level(&tools), CapabilityLevel::FileReading);
-///
-/// let tools = vec!["edit_file".to_string(), "write_file".to_string()];
-/// assert_eq!(infer_capability_level(&tools), CapabilityLevel::Editing);
 /// ```
 pub fn infer_capability_level(available_tools: &[String]) -> CapabilityLevel {
-    let has_code_search = available_tools
-        .iter()
-        .any(|t| t.contains(TOOL_CODE_INTELLIGENCE));
-    let has_edit = available_tools
-        .iter()
-        .any(|t| t == TOOL_EDIT_FILE || t == TOOL_WRITE_FILE);
-    let has_bash = available_tools.iter().any(|t| t == TOOL_RUN_PTY_CMD);
-    let has_list = available_tools.iter().any(|t| t == TOOL_LIST_FILES);
-    let has_read = available_tools.iter().any(|t| t == TOOL_READ_FILE);
+    let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
+    let has_file = available_tools.iter().any(|t| t == TOOL_UNIFIED_FILE);
+    let has_bash = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
 
-    if has_code_search {
+    if has_search {
         CapabilityLevel::CodeSearch
-    } else if has_edit {
+    } else if has_file {
         CapabilityLevel::Editing
     } else if has_bash {
         CapabilityLevel::Bash
-    } else if has_list {
-        CapabilityLevel::FileListing
-    } else if has_read {
-        CapabilityLevel::FileReading
     } else {
         CapabilityLevel::Basic
     }
@@ -171,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_read_only_mode_detection() {
-        let tools = vec!["read_file".to_string(), "grep_file".to_string()];
+        let tools = vec!["unified_search".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
             guidelines.contains("READ-ONLY MODE"),
@@ -186,27 +159,26 @@ mod tests {
     #[test]
     fn test_tool_preference_guidance() {
         let tools = vec![
-            "run_pty_cmd".to_string(),
-            "grep_file".to_string(),
-            "list_files".to_string(),
+            "unified_exec".to_string(),
+            "unified_search".to_string(),
         ];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
-            guidelines.contains("Prefer `grep_file`/`list_files`"),
-            "Should suggest using grep/list over bash"
+            guidelines.contains("Prefer `unified_search`"),
+            "Should suggest using search over bash"
         );
         assert!(
-            guidelines.contains("run_pty_cmd"),
+            guidelines.contains("unified_exec"),
             "Should mention bash as alternative"
         );
     }
 
     #[test]
     fn test_edit_workflow_guidance() {
-        let tools = vec!["read_file".to_string(), "edit_file".to_string()];
+        let tools = vec!["unified_file".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
-            guidelines.contains("read_file") && guidelines.contains("before"),
+            guidelines.contains("unified_file") && guidelines.contains("before"),
             "Should advise reading before editing"
         );
         assert!(
@@ -218,18 +190,16 @@ mod tests {
     #[test]
     fn test_write_edit_guidance() {
         let tools = vec![
-            "write_file".to_string(),
-            "edit_file".to_string(),
-            "read_file".to_string(),
+            "unified_file".to_string(),
         ];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
-            guidelines.contains("write_file") && guidelines.contains("new files"),
-            "Should explain write_file for new files"
+            guidelines.contains("action='write'") && guidelines.contains("new files"),
+            "Should explain write for new files"
         );
         assert!(
-            guidelines.contains("edit_file") && guidelines.contains("modifications"),
-            "Should explain edit_file for modifications"
+            guidelines.contains("action='edit'") && guidelines.contains("modifications"),
+            "Should explain edit for modifications"
         );
     }
 
@@ -249,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_capability_file_reading_guidance() {
-        let tools = vec!["read_file".to_string()];
+        let tools = vec!["unified_file".to_string()];
         let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::FileReading));
         assert!(
             guidelines.contains("Analysis Mode"),
@@ -264,11 +234,9 @@ mod tests {
     #[test]
     fn test_full_capabilities_no_special_guidance() {
         let tools = vec![
-            "read_file".to_string(),
-            "write_file".to_string(),
-            "edit_file".to_string(),
-            "run_pty_cmd".to_string(),
-            "grep_file".to_string(),
+            "unified_file".to_string(),
+            "unified_exec".to_string(),
+            "unified_search".to_string(),
         ];
         let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::Editing));
 
@@ -296,58 +264,51 @@ mod tests {
 
     #[test]
     fn test_capability_inference_file_reading() {
-        let tools = vec!["read_file".to_string()];
+        let tools = vec!["unified_file".to_string()];
         assert_eq!(
             infer_capability_level(&tools),
-            CapabilityLevel::FileReading,
-            "Should infer FileReading from read_file tool"
+            CapabilityLevel::Editing,
+            "Should infer Editing from unified_file tool"
         );
     }
 
     #[test]
     fn test_capability_inference_editing() {
-        let tools = vec!["edit_file".to_string()];
+        let tools = vec!["unified_file".to_string()];
         assert_eq!(
             infer_capability_level(&tools),
             CapabilityLevel::Editing,
-            "Should infer Editing from edit_file tool"
-        );
-
-        let tools = vec!["write_file".to_string()];
-        assert_eq!(
-            infer_capability_level(&tools),
-            CapabilityLevel::Editing,
-            "Should infer Editing from write_file tool"
+            "Should infer Editing from unified_file tool"
         );
     }
 
     #[test]
     fn test_capability_inference_bash() {
-        let tools = vec!["run_pty_cmd".to_string()];
+        let tools = vec!["unified_exec".to_string()];
         assert_eq!(
             infer_capability_level(&tools),
             CapabilityLevel::Bash,
-            "Should infer Bash from run_pty_cmd tool"
+            "Should infer Bash from unified_exec tool"
         );
     }
 
     #[test]
     fn test_capability_inference_file_listing() {
-        let tools = vec!["list_files".to_string()];
+        let tools = vec!["unified_search".to_string()];
         assert_eq!(
             infer_capability_level(&tools),
-            CapabilityLevel::FileListing,
-            "Should infer FileListing from list_files tool"
+            CapabilityLevel::CodeSearch,
+            "Should infer CodeSearch from unified_search tool"
         );
     }
 
     #[test]
     fn test_capability_inference_code_search() {
-        let tools = vec!["code_intelligence".to_string()];
+        let tools = vec!["unified_search".to_string()];
         assert_eq!(
             infer_capability_level(&tools),
             CapabilityLevel::CodeSearch,
-            "Should infer CodeSearch from code_intelligence tool"
+            "Should infer CodeSearch from unified_search tool"
         );
     }
 
@@ -371,7 +332,7 @@ mod tests {
     #[test]
     fn test_capability_inference_precedence() {
         // Code search should take precedence over editing
-        let tools = vec!["edit_file".to_string(), "code_intelligence".to_string()];
+        let tools = vec!["unified_file".to_string(), "unified_search".to_string()];
         assert_eq!(
             infer_capability_level(&tools),
             CapabilityLevel::CodeSearch,
@@ -379,7 +340,7 @@ mod tests {
         );
 
         // Editing should take precedence over bash
-        let tools = vec!["run_pty_cmd".to_string(), "edit_file".to_string()];
+        let tools = vec!["unified_exec".to_string(), "unified_file".to_string()];
         assert_eq!(
             infer_capability_level(&tools),
             CapabilityLevel::Editing,

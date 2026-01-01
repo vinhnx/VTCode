@@ -300,21 +300,70 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
 
-        FunctionDeclaration {
-            name: tools::SEARCH_TOOLS.to_string(),
-            description: "Search MCP tools by keyword. Returns names, descriptions, or full schemas based on detail_level.".to_string(),
+        FunctionDeclaration {            name: tools::UNIFIED_FILE.to_string(),
+            description: "Unified file operation tool. Can read, write, edit, patch, or delete files. Supports surgical edits and multi-file patches.".to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "keyword": {"type": "string", "description": "Search term to find relevant tools (searches name and description)"},
+                    "action": {
+                        "type": "string",
+                        "enum": ["read", "write", "edit", "patch", "delete", "move", "copy"],
+                        "description": "Action to perform. If not provided, it's inferred from other parameters."
+                    },
+                    "path": {"type": "string", "description": "File path (relative to workspace root)."},
+                    "content": {"type": "string", "description": "New content for 'write' action."},
+                    "old_str": {"type": "string", "description": "Text to replace for 'edit' action."},
+                    "new_str": {"type": "string", "description": "Replacement text for 'edit' action."},
+                    "patch": {"type": "string", "description": "Unified diff for 'patch' action."},
+                    "destination": {"type": "string", "description": "Target path for 'move' or 'copy' actions."},
+                    "start_line": {"type": "integer", "description": "Start line for 'read' action (1-indexed)."},
+                    "end_line": {"type": "integer", "description": "End line for 'read' action (inclusive)."},
+                    "offset": {"type": "integer", "description": "Alias for start_line."},
+                    "limit": {"type": "integer", "description": "Number of lines to read."},
+                    "mode": {"type": "string", "description": "Mode for 'read' (e.g., 'head', 'tail') or 'write' (e.g., 'fail_if_exists')."},
+                    "indentation": {"type": "boolean", "description": "Include indentation info in 'read' output.", "default": false}
+                },
+                "required": ["path"]
+            }),
+        },
+
+        FunctionDeclaration {
+            name: tools::UNIFIED_SEARCH.to_string(),
+            description: "Unified discovery tool. Search code (grep), list files, perform semantic navigation (intelligence), find tools, or check agent status/errors.".to_owned(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["grep", "list", "intelligence", "tools", "errors", "agent"],
+                        "description": "Action to perform. 'grep' (regex search), 'list' (file listing), 'intelligence' (LSP navigation), 'tools' (find tools), 'errors' (session errors), 'agent' (status)."
+                    },
+                    "pattern": {"type": "string", "description": "Regex or literal pattern for 'grep' or 'errors' search."},
+                    "path": {"type": "string", "description": "Directory or file path to search in.", "default": "."},
+                    "keyword": {"type": "string", "description": "Keyword for 'tools' search."},
                     "detail_level": {
                         "type": "string",
                         "enum": ["name-only", "name-and-description", "full"],
-                        "description": "Detail level: 'name-only' (minimal context), 'name-and-description' (default), or 'full' (includes input schema)",
+                        "description": "Detail level for 'tools' action.",
                         "default": "name-and-description"
-                    }
-                },
-                "required": ["keyword"]
+                    },
+                    "mode": {
+                        "type": "string",
+                        "description": "Mode for 'list' (list|recursive|tree|etc) or 'agent' (debug|analyze|full) action.",
+                        "default": "list"
+                    },
+                    "operation": {
+                        "type": "string",
+                        "enum": ["goto_definition", "find_references", "hover", "document_symbol", "workspace_symbol"],
+                        "description": "Operation for 'intelligence' action."
+                    },
+                    "line": {"type": "integer", "description": "Line number for 'intelligence' operations (0-indexed)."},
+                    "character": {"type": "integer", "description": "Character offset for 'intelligence' operations (0-indexed)."},
+                    "max_results": {"type": "integer", "description": "Max results to return.", "default": 100},
+                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive search.", "default": false},
+                    "context_lines": {"type": "integer", "description": "Context lines for 'grep' results.", "default": 0},
+                    "scope": {"type": "string", "description": "Scope for 'errors' action (archive|all).", "default": "archive"}
+                }
             }),
         },
 
@@ -352,22 +401,6 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                 "required": ["code", "language"]
             }),
         },
-        FunctionDeclaration {
-            name: tools::AGENT_INFO.to_string(),
-            description: "Agent diagnostics: tools, workspace, usage stats. mode: debug|analyze|full.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "mode": {
-                        "type": "string",
-                        "enum": ["debug", "analyze", "full"],
-                        "description": "debug (config/state), analyze (metrics), full (both)",
-                        "default": "full"
-                    }
-                }
-            }),
-        },
-
         // ============================================================
         // FILE OPERATIONS
         // ============================================================
