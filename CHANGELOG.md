@@ -3,6 +3,51 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.3] - 2026-01-02
+
+
+### Features
+    - feat(runner): add keyboard protocol environment check and enhance logging
+    - feat(tools): Add move and copy file operations with error handling
+    - feat(command-safety): Enhance command safety module with comprehensive integration and documentation
+    - feat(prompts): Revise system prompts for clarity, autonomy, and Codex alignment
+    - feat(dependencies): Update Cargo.lock and Cargo.toml with new packages and versions
+    - feat(ollama-integration): Implement comprehensive Ollama client and progress reporting system
+    - feat(process-hardening): Introduce vtcode-process-hardening crate for enhanced security measures
+    - feat(file-search): Implement vtcode-file-search crate and integration with extensions
+    - feat: Unify system prompt instruction generation and skill rendering via `get_user_instructions` and `AgentConfig`.
+    - feat: Improve context manager performance with incremental stats and bolster tool security with path and command validation.
+    - feat: Implement the Desire Paths philosophy by updating agent prompts and documentation to improve agent UX.
+
+
+### Bug Fixes
+    - fix: update dependencies and improve error handling in terminal functions
+    - fix(models): Correct ClaudeOpus41 version and update related assertions refactor(loader): Adjust config loading order and clarify comments feat(output-styles): Add kebab-case renaming for OutputStyleFileConfig
+
+
+### Refactors
+    - refactor(config): Remove ConfigOptimizer and implement ConfigBuilder for streamlined configuration management
+
+
+### Documentation
+    - docs: update changelog for v0.58.2 [skip ci]
+    - docs: update changelog for v0.58.1 [skip ci]
+    - docs: update changelog for v0.58.0 [skip ci]
+    - docs: update changelog for v0.57.0 [skip ci]
+    - docs: update changelog for v0.56.0 [skip ci]
+    - docs: Add Phase 3 extension integration planning and file search documentation
+    - docs: Update implementation summary and configuration for file search and system prompt enhancements
+
+
+### Chores
+    - chore: release v{{version}}
+    - chore: release v{{version}}
+    - chore: release v{{version}}
+    - chore: release v{{version}}
+    - chore: fix release metadata for vtcode-file-search and vtcode-process-hardening, add version constraint
+    - chore: add missing metadata to vtcode-file-search and vtcode-process-hardening
+    - chore(deps): bump the all-rust-deps group with 14 updates
+    - chore: update npm package.json to v0.55.1 [skip ci]
 # [Version 0.58.2] - 2026-01-02
 
 
