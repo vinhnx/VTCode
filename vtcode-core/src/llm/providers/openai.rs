@@ -27,9 +27,10 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(debug_assertions)]
+use std::time::Instant;
 use tokio::task::spawn_blocking;
-use tracing::debug;
 
 use openai_harmony::chat::{
     Author as HarmonyAuthor, Content as HarmonyContent, Conversation, DeveloperContent,
