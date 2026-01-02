@@ -457,24 +457,7 @@ update_homebrew_formula() {
         return 1
     fi
 
-    # Update all values using sed for better cross-platform compatibility
-    # Update version
-    sed -i.bak "s/version \"[0-9.]*\"/version \"$version\"/g" "$formula_path" || {
-        print_error "Failed to update version in formula"
-        rm "$formula_path.bak"
-        return 1
-    }
-
-    # Update x86_64 macOS SHA256 - match the pattern with arm?/else block
-    # First, find and replace in the arm? block (aarch64)
-    sed -i.bak "s/\(aarch64-apple-darwin.*sha256 \"\)[a-f0-9]*/\1$aarch64_sha256/g" "$formula_path" || {
-        print_error "Failed to update aarch64 macOS checksum"
-        rm "$formula_path.bak"
-        return 1
-    }
-    
-    # Now replace in the else block (x86_64)
-    # This is trickier because we need to be careful with the sed pattern
+    # Update all values using Python for reliable cross-platform compatibility
     python3 << PYTHON_SCRIPT || {
         print_error "Failed to update checksums via Python"
         exit 1
@@ -482,19 +465,23 @@ update_homebrew_formula() {
 import re
 
 # Read the file
-with open('$formula_path', 'r') as f:
+formula_path = '$formula_path'
+with open(formula_path, 'r') as f:
     content = f.read()
+
+# Update version
+content = re.sub(r'version\s+"[^"]*"', r'version "$version"', content)
 
 # Replace aarch64 macOS SHA256 (after aarch64-apple-darwin URL line)
 content = re.sub(
-    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[a-f0-9]+(")',
+    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*(")',
     r'\1$aarch64_sha256\2',
     content
 )
 
 # Replace x86_64 macOS SHA256 (after x86_64-apple-darwin URL line)
 content = re.sub(
-    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[a-f0-9]+(")',
+    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*(")',
     r'\1$x86_64_sha256\2',
     content
 )
@@ -502,7 +489,7 @@ content = re.sub(
 # Replace x86_64 Linux SHA256 if we have it
 if '$x86_64_linux_sha256':
     content = re.sub(
-        r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[a-f0-9]+(")',
+        r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*(")',
         r'\1$x86_64_linux_sha256\2',
         content
     )
@@ -510,18 +497,15 @@ if '$x86_64_linux_sha256':
 # Replace aarch64 Linux SHA256 if we have it
 if '$aarch64_linux_sha256':
     content = re.sub(
-        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[a-f0-9]+(")',
+        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*(")',
         r'\1$aarch64_linux_sha256\2',
         content
     )
 
 # Write back
-with open('$formula_path', 'w') as f:
+with open(formula_path, 'w') as f:
     f.write(content)
 PYTHON_SCRIPT
-
-    # Clean up backup files
-    rm -f "$formula_path.bak"
 
     print_success "Homebrew formula updated (version $version)"
     print_info "  x86_64 macOS SHA256: $x86_64_sha256"
