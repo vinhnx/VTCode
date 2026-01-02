@@ -37,6 +37,55 @@ All notable changes to vtcode will be documented in this file.
 
 
 ### Documentation
+    - docs: update changelog for v0.56.0 [skip ci]
+    - docs: Add Phase 3 extension integration planning and file search documentation
+    - docs: Update implementation summary and configuration for file search and system prompt enhancements
+    - docs: update changelog for v0.55.1 [skip ci]
+    - docs: update changelog for v0.55.0 [skip ci]
+    - docs: update changelog for v0.54.4 [skip ci]
+
+
+### Chores
+    - chore: add missing metadata to vtcode-file-search and vtcode-process-hardening
+    - chore: update npm package.json to v0.55.1 [skip ci]
+    - chore: release v0.55.1
+    - chore: release v0.55.0
+    - chore: release v0.54.4
+    - chore: update npm package.json to v0.54.3 [skip ci]
+# [Version 0.56.0] - 2026-01-02
+
+
+### Features
+    - feat(runner): add keyboard protocol environment check and enhance logging
+    - feat(tools): Add move and copy file operations with error handling
+    - feat(command-safety): Enhance command safety module with comprehensive integration and documentation
+    - feat(prompts): Revise system prompts for clarity, autonomy, and Codex alignment
+    - feat(dependencies): Update Cargo.lock and Cargo.toml with new packages and versions
+    - feat(ollama-integration): Implement comprehensive Ollama client and progress reporting system
+    - feat(process-hardening): Introduce vtcode-process-hardening crate for enhanced security measures
+    - feat(file-search): Implement vtcode-file-search crate and integration with extensions
+    - feat: Unify system prompt instruction generation and skill rendering via `get_user_instructions` and `AgentConfig`.
+    - feat: Improve context manager performance with incremental stats and bolster tool security with path and command validation.
+    - feat: Implement the Desire Paths philosophy by updating agent prompts and documentation to improve agent UX.
+    - feat: add tokio dependency and improve error handling in background task execution
+    - feat(subagents): document subagent system and built-in agents; update README and changelog
+    - feat(statusline): add custom status line scripts and JSON input handling
+    - feat: add reverse search and background operation handling in TUI
+    - feat(output-styles): implement output styles feature with customizable behavior and response formats
+    - feat(hooks): add lifecycle hooks for file protection, command logging, code formatting, markdown formatting, and notifications
+    - feat(marketplace): add marketplace and plugin management commands
+
+
+### Bug Fixes
+    - fix(models): Correct ClaudeOpus41 version and update related assertions refactor(loader): Adjust config loading order and clarify comments feat(output-styles): Add kebab-case renaming for OutputStyleFileConfig
+
+
+### Refactors
+    - refactor(config): Remove ConfigOptimizer and implement ConfigBuilder for streamlined configuration management
+    - refactor: improve Linux checksum handling and release verification in scripts
+
+
+### Documentation
     - docs: Add Phase 3 extension integration planning and file search documentation
     - docs: Update implementation summary and configuration for file search and system prompt enhancements
     - docs: update changelog for v0.55.1 [skip ci]
