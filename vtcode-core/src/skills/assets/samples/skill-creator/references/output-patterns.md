@@ -32,11 +32,13 @@ Details:
 ### Variations
 
 **Minimal (for scripts):**
+
 ```
 OK: 42 files processed
 ```
 
 **Verbose (for debugging):**
+
 ```
 [2024-01-15 10:30:45] Starting operation...
 [2024-01-15 10:30:45] Processing file 1/42: example.txt
@@ -54,12 +56,15 @@ Best for: Code generation, document creation.
 ## Generated: [Artifact Name]
 
 ### Preview
+
 [First 10-20 lines or summary]
 
 ### Location
+
 `/path/to/generated/file.ext`
 
 ### Next Steps
+
 1. Review the generated content
 2. Make any necessary adjustments
 3. [Context-specific action]
@@ -67,28 +72,33 @@ Best for: Code generation, document creation.
 
 ### Code Generation Example
 
-```markdown
+````markdown
 ## Generated: API Client
 
 ### Preview
+
 ```python
 class APIClient:
     def __init__(self, base_url: str, api_key: str):
         self.base_url = base_url
         self.api_key = api_key
-    
+
     def get(self, endpoint: str) -> dict:
         ...
 ```
+````
 
 ### Location
+
 `src/api_client.py`
 
 ### Next Steps
+
 1. Add error handling for your specific use cases
 2. Configure authentication in `.env`
 3. Run tests with `pytest tests/test_api_client.py`
-```
+
+````
 
 ## Pattern: Analysis Results
 
@@ -111,7 +121,7 @@ Best for: Data analysis, code review, audits.
 
 ### Details
 [Expandable/optional detailed analysis]
-```
+````
 
 ### Code Review Example
 
@@ -119,19 +129,23 @@ Best for: Data analysis, code review, audits.
 ## Analysis: Authentication Module
 
 ### Summary
+
 The authentication module has good structure but needs security improvements.
 
 ### Key Findings
+
 1. **Password hashing**: Using outdated MD5 algorithm
 2. **Session management**: No expiration set on tokens
 3. **Input validation**: Missing sanitization on username field
 
 ### Recommendations
-- Upgrade to bcrypt or Argon2 for password hashing
-- Add 24-hour expiration to JWT tokens
-- Add input validation using the sanitize_input utility
+
+-   Upgrade to bcrypt or Argon2 for password hashing
+-   Add 24-hour expiration to JWT tokens
+-   Add input validation using the sanitize_input utility
 
 ### Details
+
 See `references/security-audit.md` for full analysis.
 ```
 
@@ -143,24 +157,29 @@ Best for: Situations requiring user decision.
 ## Decision Required: [Topic]
 
 ### Context
+
 [Brief explanation of why decision is needed]
 
 ### Options
 
 **Option A: [Name]**
-- Pros: [Benefits]
-- Cons: [Drawbacks]
-- Best for: [Use case]
+
+-   Pros: [Benefits]
+-   Cons: [Drawbacks]
+-   Best for: [Use case]
 
 **Option B: [Name]**
-- Pros: [Benefits]
-- Cons: [Drawbacks]
-- Best for: [Use case]
+
+-   Pros: [Benefits]
+-   Cons: [Drawbacks]
+-   Best for: [Use case]
 
 ### Recommendation
+
 [Your suggested option with rationale]
 
 ### To proceed
+
 Reply with "A" or "B", or ask for more details.
 ```
 
@@ -168,37 +187,45 @@ Reply with "A" or "B", or ask for more details.
 
 Best for: Teaching or guiding through processes.
 
-```markdown
+````markdown
 ## Tutorial: [Topic]
 
 ### Prerequisites
-- [Requirement 1]
-- [Requirement 2]
+
+-   [Requirement 1]
+-   [Requirement 2]
 
 ### Step 1: [Action]
+
 [Explanation]
 
 ```command
 example command
 ```
+````
 
 You should see:
+
 ```
 expected output
 ```
 
 ### Step 2: [Action]
+
 [Explanation]
 
 ...
 
 ### Verification
+
 [How to confirm success]
 
 ### Troubleshooting
-- **Issue**: [Common problem]
-  **Solution**: [Fix]
-```
+
+-   **Issue**: [Common problem]
+    **Solution**: [Fix]
+
+````
 
 ## Pattern: Error Report
 
@@ -222,7 +249,7 @@ Best for: When operations fail or partially succeed.
 
 ### Prevention
 [How to avoid in future, if applicable]
-```
+````
 
 ### Example
 
@@ -230,23 +257,28 @@ Best for: When operations fail or partially succeed.
 ## Error: Database Connection Failed
 
 ### What Happened
+
 Unable to connect to PostgreSQL database at `db.example.com:5432`.
 
 ### Cause
+
 Connection timeout after 30 seconds. The database server appears unreachable.
 
 ### Impact
-- Cannot execute queries
-- Data sync operation aborted
-- No data loss (read-only operation)
+
+-   Cannot execute queries
+-   Data sync operation aborted
+-   No data loss (read-only operation)
 
 ### Resolution
+
 1. Check database server status: `pg_isready -h db.example.com`
 2. Verify network connectivity: `ping db.example.com`
 3. Check firewall rules for port 5432
 4. Retry operation once connection is restored
 
 ### Prevention
+
 Consider adding connection retry logic with exponential backoff.
 ```
 
@@ -254,21 +286,25 @@ Consider adding connection retry logic with exponential backoff.
 
 Best for: Modifications to existing content.
 
-```markdown
+````markdown
 ## Changes: [File/Resource Name]
 
 ### Summary
+
 [Number] changes made to [resource].
 
 ### Modifications
 
 **Line 42**: Updated import statement
+
 ```diff
 - from old_module import function
 + from new_module import function
 ```
+````
 
 **Lines 56-60**: Added error handling
+
 ```diff
 + try:
 +     result = process_data(input)
@@ -278,8 +314,10 @@ Best for: Modifications to existing content.
 ```
 
 ### Before/After Comparison
+
 [Optional full comparison for major changes]
-```
+
+````
 
 ## Combining Patterns
 
@@ -311,4 +349,4 @@ How would you like to handle the failed records?
 A) Skip and continue
 B) Fix manually and retry
 C) Roll back entire migration
-```
+````
