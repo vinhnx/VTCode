@@ -418,23 +418,29 @@ update_homebrew_formula() {
 
     print_info "Updating Homebrew formula..."
 
-    # Calculate SHA256 checksums (we already have them, but let's recalculate to be sure)
-    local x86_64_sha256=$(cat "dist/vtcode-v$version-x86_64-apple-darwin.sha256")
-    local aarch64_sha256=$(cat "dist/vtcode-v$version-aarch64-apple-darwin.sha256")
-
-    # Update the formula
+    # Verify required checksum files exist
     local formula_path="homebrew/vtcode.rb"
 
     if [ ! -f "$formula_path" ]; then
-        print_warning "Homebrew formula not found at $formula_path"
+        print_error "Homebrew formula not found at $formula_path"
         return 1
     fi
 
-    # Update version
-    sed -i.bak "s|version \"[0-9.]*\"|version \"$version\"|g" "$formula_path"
+    # Check if we have the required macOS checksums
+    if [ ! -f "dist/vtcode-v$version-x86_64-apple-darwin.sha256" ]; then
+        print_error "Missing x86_64 macOS checksum file"
+        return 1
+    fi
 
-    # Update x86_64 SHA256 (this is handled by the Python script below)
+    if [ ! -f "dist/vtcode-v$version-aarch64-apple-darwin.sha256" ]; then
+        print_error "Missing aarch64 macOS checksum file"
+        return 1
+    fi
 
+    # Read all checksums
+    local x86_64_sha256=$(cat "dist/vtcode-v$version-x86_64-apple-darwin.sha256")
+    local aarch64_sha256=$(cat "dist/vtcode-v$version-aarch64-apple-darwin.sha256")
+    
     # Read Linux checksums if they exist
     local x86_64_linux_sha256=""
     local aarch64_linux_sha256=""
@@ -445,41 +451,98 @@ update_homebrew_formula() {
         aarch64_linux_sha256=$(cat "dist/vtcode-v$version-aarch64-unknown-linux-gnu.sha256")
     fi
 
-    # Update all SHA256 values using Python for cross-platform compatibility
-    python3 -c "
+    # Validate checksums are not empty
+    if [ -z "$x86_64_sha256" ] || [ -z "$aarch64_sha256" ]; then
+        print_error "Invalid or empty checksums"
+        return 1
+    fi
+
+    # Update all values using sed for better cross-platform compatibility
+    # Update version
+    sed -i.bak "s/version \"[0-9.]*\"/version \"$version\"/g" "$formula_path" || {
+        print_error "Failed to update version in formula"
+        rm "$formula_path.bak"
+        return 1
+    }
+
+    # Update x86_64 macOS SHA256 - match the pattern with arm?/else block
+    # First, find and replace in the arm? block (aarch64)
+    sed -i.bak "s/\(aarch64-apple-darwin.*sha256 \"\)[a-f0-9]*/\1$aarch64_sha256/g" "$formula_path" || {
+        print_error "Failed to update aarch64 macOS checksum"
+        rm "$formula_path.bak"
+        return 1
+    }
+    
+    # Now replace in the else block (x86_64)
+    # This is trickier because we need to be careful with the sed pattern
+    python3 << PYTHON_SCRIPT || {
+        print_error "Failed to update checksums via Python"
+        exit 1
+    }
 import re
+
+# Read the file
 with open('$formula_path', 'r') as f:
     content = f.read()
 
-# Replace x86_64 macOS SHA256 (first occurrence after x86_64 url)
-content = re.sub(r'(x86_64-apple-darwin.*?sha256\s+\\\")([a-f0-9]+)(\\\")', r'\g<1>${x86_64_sha256}\g<3>', content, 1, re.DOTALL)
+# Replace aarch64 macOS SHA256 (after aarch64-apple-darwin URL line)
+content = re.sub(
+    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[a-f0-9]+(")',
+    r'\1$aarch64_sha256\2',
+    content
+)
 
-# Replace aarch64 macOS SHA256 (first occurrence after aarch64 url)
-content = re.sub(r'(aarch64-apple-darwin.*?sha256\s+\\\")([a-f0-9]+)(\\\")', r'\g<1>${aarch64_sha256}\g<3>', content, 1, re.DOTALL)
+# Replace x86_64 macOS SHA256 (after x86_64-apple-darwin URL line)
+content = re.sub(
+    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[a-f0-9]+(")',
+    r'\1$x86_64_sha256\2',
+    content
+)
 
-# Replace x86_64 Linux SHA256 (first occurrence with placeholder)
-if '${x86_64_linux_sha256}' != '':
-    content = re.sub(r'(sha256\\s+\\\")placeholder_x86_64_linux(\\\")', r'\g<1>${x86_64_linux_sha256}\g<3>', content, 1)
+# Replace x86_64 Linux SHA256 if we have it
+if '$x86_64_linux_sha256':
+    content = re.sub(
+        r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[a-f0-9]+(")',
+        r'\1$x86_64_linux_sha256\2',
+        content
+    )
 
-# Replace aarch64 Linux SHA256 (first occurrence with placeholder)
-if '${aarch64_linux_sha256}' != '':
-    content = re.sub(r'(sha256\\s+\\\")placeholder_aarch64_linux(\\\")', r'\g<1>${aarch64_linux_sha256}\g<3>', content, 1)
+# Replace aarch64 Linux SHA256 if we have it
+if '$aarch64_linux_sha256':
+    content = re.sub(
+        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[a-f0-9]+(")',
+        r'\1$aarch64_linux_sha256\2',
+        content
+    )
 
+# Write back
 with open('$formula_path', 'w') as f:
     f.write(content)
-"
+PYTHON_SCRIPT
 
     # Clean up backup files
-    rm "$formula_path.bak"
+    rm -f "$formula_path.bak"
 
-    print_success "Homebrew formula updated"
+    print_success "Homebrew formula updated (version $version)"
+    print_info "  x86_64 macOS SHA256: $x86_64_sha256"
+    print_info "  aarch64 macOS SHA256: $aarch64_sha256"
+    [ -n "$x86_64_linux_sha256" ] && print_info "  x86_64 Linux SHA256: $x86_64_linux_sha256"
+    [ -n "$aarch64_linux_sha256" ] && print_info "  aarch64 Linux SHA256: $aarch64_linux_sha256"
 
     # Commit and push the formula update
-    git add "$formula_path"
-    git commit -m "Update Homebrew formula to version $version" || true
-    git push || true
-
-    print_success "Homebrew formula committed and pushed"
+    if git add "$formula_path" 2>/dev/null; then
+        if git commit -m "chore: update homebrew formula to v$version" 2>/dev/null; then
+            if git push origin main 2>/dev/null; then
+                print_success "Homebrew formula committed and pushed"
+            else
+                print_warning "Failed to push homebrew formula update (may already be staged)"
+            fi
+        else
+            print_warning "No changes to commit for homebrew formula"
+        fi
+    else
+        print_warning "Failed to stage homebrew formula"
+    fi
 }
 
 # Main function

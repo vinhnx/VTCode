@@ -30,6 +30,37 @@ cargo t                              # Run tests (alias)
 cargo c                              # Check compilation (alias)
 ```
 
+### Release Commands
+
+```bash
+# Dry-run release (test first!)
+./scripts/release.sh --patch --dry-run
+
+# Actual patch release
+./scripts/release.sh --patch
+
+# Minor/major releases
+./scripts/release.sh --minor
+./scripts/release.sh --major
+
+# Custom version
+./scripts/release.sh 1.2.3
+
+# With options
+./scripts/release.sh --patch --skip-binaries --skip-crates
+```
+
+**Release Process**:
+1. Triggers version bump and crate publishing
+2. Creates git tags (`v0.58.3`)
+3. GitHub Actions automatically:
+   - Builds binaries for all platforms
+   - Uploads to GitHub Releases
+   - Updates Homebrew formula with checksums
+   - Commits and pushes formula changes
+
+See: `docs/HOMEBREW_RELEASE_GUIDE.md` for troubleshooting.
+
 ### Desire Path Commands (Paved for Agents)
 
 These shortcuts match intuitive agent expectations:
