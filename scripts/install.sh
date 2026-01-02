@@ -24,13 +24,13 @@ GITHUB_RELEASES="https://github.com/$REPO/releases/download"
 INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
 mkdir -p "$INSTALL_DIR"
 
-# Logging functions
+# Logging functions (all output to stderr to avoid interfering with command output)
 log_info() {
-    printf '%b\n' "${BLUE}INFO:${NC} $1"
+    printf '%b\n' "${BLUE}INFO:${NC} $1" >&2
 }
 
 log_success() {
-    printf '%b\n' "${GREEN}✓${NC} $1"
+    printf '%b\n' "${GREEN}✓${NC} $1" >&2
 }
 
 log_error() {
@@ -38,7 +38,7 @@ log_error() {
 }
 
 log_warning() {
-    printf '%b\n' "${YELLOW}⚠${NC} $1"
+    printf '%b\n' "${YELLOW}⚠${NC} $1" >&2
 }
 
 # Detect OS and architecture
