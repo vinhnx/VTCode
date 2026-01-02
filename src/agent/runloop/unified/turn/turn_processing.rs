@@ -1,6 +1,8 @@
 use anyhow::Result;
+#[cfg(debug_assertions)]
 use std::time::Instant;
 use tokio::task;
+#[cfg(debug_assertions)]
 use tracing::debug;
 
 use crate::agent::runloop::unified::extract_action_from_messages;
