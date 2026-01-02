@@ -14,8 +14,6 @@
 //! 4. Code Execution (High Risk)
 //! 5. File Operations (Variable Risk)
 
-use crate::command_safety::SafetyDecision;
-
 /// Enhanced Windows command safety detection
 pub fn is_dangerous_windows_enhanced(command: &[String]) -> bool {
     if command.is_empty() {
@@ -192,15 +190,13 @@ fn is_dangerous_network_operation(script: &str) -> bool {
 
 /// Detects dangerous file operations (execute, script execution)
 fn is_dangerous_file_operation(script: &str) -> bool {
-    let dangerous = [
-        "copy-item.*-destination.*powershell",
-        "get-content.*-encoding.*utf8.*|.*iex",
-        ".ps1\" | iex",
-        ".vbs",
-        ".bat\" | iex",
-    ];
-
     // Simplified pattern matching (would be improved with regex)
+    // Dangerous patterns include:
+    // - copy-item.*-destination.*powershell
+    // - get-content.*-encoding.*utf8.*|.*iex
+    // - .ps1" | iex
+    // - .vbs
+    // - .bat" | iex
     script.contains(".ps1") && (script.contains("iex") || script.contains("invoke-expression"))
 }
 

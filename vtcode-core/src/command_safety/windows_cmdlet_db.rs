@@ -13,7 +13,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
 /// Severity level of a cmdlet
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CmdletSeverity {
     Low = 1,
     Medium = 2,

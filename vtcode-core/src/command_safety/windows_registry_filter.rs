@@ -324,7 +324,7 @@ impl RegistryAccessFilter {
 
         // Detect Get-Item/Get-ItemProperty (read operations)
         if script_lower.contains("get-item") || script_lower.contains("get-itemproperty") {
-            for (key, info) in get_dangerous_registry_paths().iter() {
+            for (_key, info) in get_dangerous_registry_paths().iter() {
                 if script_lower.contains(&format!("hklm:\\{}", info.path_pattern.to_lowercase()))
                     || script_lower
                         .contains(&format!("hkcu:\\{}", info.path_pattern.to_lowercase()))
@@ -372,7 +372,7 @@ impl RegistryAccessFilter {
         // Detect New-ItemProperty (create operations)
         if script_lower.contains("new-itemproperty") {
             for (_, info) in get_dangerous_registry_paths().iter() {
-                let pattern = format!("run|runonce|services", info.path_pattern.to_lowercase());
+                let pattern = format!("run|runonce|services|{}", info.path_pattern.to_lowercase());
                 if script_lower.contains(&pattern) {
                     patterns.push(RegistryAccessPattern {
                         hive: "HKLM/HKCU".to_string(),
