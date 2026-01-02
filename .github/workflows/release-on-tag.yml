@@ -127,3 +127,126 @@ jobs:
           asset_name: vtcode-v${{ github.ref_name }}-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
           tag: ${{ github.ref }}
           overwrite: true
+
+      update-homebrew:
+        needs: build-binaries
+        name: Update Homebrew Formula
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+          contents: write
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v6
+            with:
+              fetch-depth: 0
+              token: ${{ secrets.GITHUB_TOKEN }}
+
+          - name: Setup Git
+            run: |
+              git config --global user.name 'github-actions[bot]'
+              git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          - name: Calculate SHA256 checksums
+            run: |
+              VERSION=${{ github.ref_name }}
+              VERSION=${VERSION#v}
+              
+              mkdir -p dist
+              
+              # Download all release assets to calculate checksums
+              gh release download v$VERSION --pattern "*.tar.gz" --pattern "*.zip" --dir dist 2>/dev/null || true
+              
+              # Calculate checksums
+              cd dist
+              
+              # macOS checksums
+              if [ -f "vtcode-v$VERSION-x86_64-apple-darwin.tar.gz" ]; then
+                shasum -a 256 "vtcode-v$VERSION-x86_64-apple-darwin.tar.gz" > "vtcode-v$VERSION-x86_64-apple-darwin.sha256"
+                echo "x86_64 macOS: $(cat vtcode-v$VERSION-x86_64-apple-darwin.sha256 | awk '{print $1}')"
+              fi
+              
+              if [ -f "vtcode-v$VERSION-aarch64-apple-darwin.tar.gz" ]; then
+                shasum -a 256 "vtcode-v$VERSION-aarch64-apple-darwin.tar.gz" > "vtcode-v$VERSION-aarch64-apple-darwin.sha256"
+                echo "aarch64 macOS: $(cat vtcode-v$VERSION-aarch64-apple-darwin.sha256 | awk '{print $1}')"
+              fi
+              
+              # Linux checksums
+              if [ -f "vtcode-v$VERSION-x86_64-unknown-linux-gnu.tar.gz" ]; then
+                shasum -a 256 "vtcode-v$VERSION-x86_64-unknown-linux-gnu.tar.gz" > "vtcode-v$VERSION-x86_64-unknown-linux-gnu.sha256"
+                echo "x86_64 Linux: $(cat vtcode-v$VERSION-x86_64-unknown-linux-gnu.sha256 | awk '{print $1}')"
+              fi
+              
+              if [ -f "vtcode-v$VERSION-aarch64-unknown-linux-gnu.tar.gz" ]; then
+                shasum -a 256 "vtcode-v$VERSION-aarch64-unknown-linux-gnu.tar.gz" > "vtcode-v$VERSION-aarch64-unknown-linux-gnu.sha256"
+                echo "aarch64 Linux: $(cat vtcode-v$VERSION-aarch64-unknown-linux-gnu.sha256 | awk '{print $1}')"
+              fi
+              
+              cd ..
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          - name: Update Homebrew formula
+            run: |
+              VERSION=${{ github.ref_name }}
+              VERSION=${VERSION#v}
+              
+              # Check if we have the required macOS checksums
+              if [ ! -f "dist/vtcode-v$VERSION-x86_64-apple-darwin.sha256" ] || [ ! -f "dist/vtcode-v$VERSION-aarch64-apple-darwin.sha256" ]; then
+                echo "ERROR: Missing required macOS checksum files"
+                ls -la dist/
+                exit 1
+              fi
+              
+              # Read checksums
+              X86_64_SHA=$(cat dist/vtcode-v$VERSION-x86_64-apple-darwin.sha256 | awk '{print $1}')
+              ARM64_SHA=$(cat dist/vtcode-v$VERSION-aarch64-apple-darwin.sha256 | awk '{print $1}')
+              
+              # Read Linux checksums if they exist
+              X86_64_LINUX_SHA=""
+              ARM64_LINUX_SHA=""
+              [ -f "dist/vtcode-v$VERSION-x86_64-unknown-linux-gnu.sha256" ] && X86_64_LINUX_SHA=$(cat dist/vtcode-v$VERSION-x86_64-unknown-linux-gnu.sha256 | awk '{print $1}')
+              [ -f "dist/vtcode-v$VERSION-aarch64-unknown-linux-gnu.sha256" ] && ARM64_LINUX_SHA=$(cat dist/vtcode-v$VERSION-aarch64-unknown-linux-gnu.sha256 | awk '{print $1}')
+              
+              echo "Updating formula for version $VERSION"
+              
+              # Use sed + python for reliable updates
+              python3 << PYTHON_EOF
+              import re
+              version = "$VERSION"
+              x86_64_sha = "$X86_64_SHA"
+              arm64_sha = "$ARM64_SHA"
+              x86_64_linux_sha = "$X86_64_LINUX_SHA"
+              arm64_linux_sha = "$ARM64_LINUX_SHA"
+
+              with open("homebrew/vtcode.rb", "r") as f:
+                  content = f.read()
+
+              # Update version
+              content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
+
+              # Update checksums
+              content = re.sub(r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[a-f0-9]+"', rf'\1{x86_64_sha}"', content)
+              content = re.sub(r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[a-f0-9]+"', rf'\1{arm64_sha}"', content)
+
+              if x86_64_linux_sha:
+                  content = re.sub(r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[a-f0-9]+"', rf'\1{x86_64_linux_sha}"', content)
+              if arm64_linux_sha:
+                  content = re.sub(r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[a-f0-9]+"', rf'\1{arm64_linux_sha}"', content)
+
+              with open("homebrew/vtcode.rb", "w") as f:
+                  f.write(content)
+              print("Updated homebrew/vtcode.rb")
+              PYTHON_EOF
+
+          - name: Commit and push Homebrew formula
+            run: |
+              if git diff --quiet homebrew/vtcode.rb; then
+                echo "No changes to commit"
+                exit 0
+              fi
+              
+              git add homebrew/vtcode.rb
+              git commit -m "chore: update homebrew formula to ${{ github.ref_name }}"
+              git push origin main
+            continue-on-error: true
