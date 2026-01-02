@@ -458,54 +458,60 @@ update_homebrew_formula() {
     fi
 
     # Update all values using Python for reliable cross-platform compatibility
-    python3 << PYTHON_SCRIPT || {
+    python3 << 'PYTHON_SCRIPT' || {
         print_error "Failed to update checksums via Python"
         exit 1
     }
 import re
 
 # Read the file
-formula_path = '$formula_path'
+formula_path = '%s'
+version = '%s'
+x86_64_sha256 = '%s'
+aarch64_sha256 = '%s'
+x86_64_linux_sha256 = '%s'
+aarch64_linux_sha256 = '%s'
+
 with open(formula_path, 'r') as f:
     content = f.read()
 
 # Update version
-content = re.sub(r'version\s+"[^"]*"', r'version "$version"', content)
+content = re.sub(r'version\s+"[^"]*"', 'version "' + version + '"', content)
 
 # Replace aarch64 macOS SHA256 (after aarch64-apple-darwin URL line)
 content = re.sub(
     r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*(")',
-    r'\1$aarch64_sha256\2',
+    r'\1' + aarch64_sha256 + r'\2',
     content
 )
 
 # Replace x86_64 macOS SHA256 (after x86_64-apple-darwin URL line)
 content = re.sub(
     r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*(")',
-    r'\1$x86_64_sha256\2',
+    r'\1' + x86_64_sha256 + r'\2',
     content
 )
 
 # Replace x86_64 Linux SHA256 if we have it
-if '$x86_64_linux_sha256':
+if x86_64_linux_sha256:
     content = re.sub(
         r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*(")',
-        r'\1$x86_64_linux_sha256\2',
+        r'\1' + x86_64_linux_sha256 + r'\2',
         content
     )
 
 # Replace aarch64 Linux SHA256 if we have it
-if '$aarch64_linux_sha256':
+if aarch64_linux_sha256:
     content = re.sub(
         r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*(")',
-        r'\1$aarch64_linux_sha256\2',
+        r'\1' + aarch64_linux_sha256 + r'\2',
         content
     )
 
 # Write back
 with open(formula_path, 'w') as f:
     f.write(content)
-PYTHON_SCRIPT
+PYTHON_SCRIPT "$formula_path" "$version" "$x86_64_sha256" "$aarch64_sha256" "$x86_64_linux_sha256" "$aarch64_linux_sha256"
 
     print_success "Homebrew formula updated (version $version)"
     print_info "  x86_64 macOS SHA256: $x86_64_sha256"

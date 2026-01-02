@@ -211,33 +211,34 @@ jobs:
               echo "Updating formula for version $VERSION"
               
               # Use Python for reliable updates
-              python3 << PYTHON_EOF
+              python3 << 'PYTHON_EOF'
               import re
-              version = "$VERSION"
-              x86_64_sha = "$X86_64_SHA"
-              arm64_sha = "$ARM64_SHA"
-              x86_64_linux_sha = "$X86_64_LINUX_SHA"
-              arm64_linux_sha = "$ARM64_LINUX_SHA"
+              version = "%s"
+              x86_64_sha = "%s"
+              arm64_sha = "%s"
+              x86_64_linux_sha = "%s"
+              arm64_linux_sha = "%s"
 
               with open("homebrew/vtcode.rb", "r") as f:
                   content = f.read()
 
               # Update version
-              content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
+              content = re.sub(r'version\s+"[^"]*"', 'version "' + version + '"', content)
 
               # Update checksums with flexible pattern
-              content = re.sub(r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*"', rf'\1{x86_64_sha}"', content)
-              content = re.sub(r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*"', rf'\1{arm64_sha}"', content)
+              content = re.sub(r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*"', r'\1' + x86_64_sha + '"', content)
+              content = re.sub(r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*"', r'\1' + arm64_sha + '"', content)
 
               if x86_64_linux_sha:
-                  content = re.sub(r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*"', rf'\1{x86_64_linux_sha}"', content)
+                  content = re.sub(r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*"', r'\1' + x86_64_linux_sha + '"', content)
               if arm64_linux_sha:
-                  content = re.sub(r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*"', rf'\1{arm64_linux_sha}"', content)
+                  content = re.sub(r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*"', r'\1' + arm64_linux_sha + '"', content)
 
               with open("homebrew/vtcode.rb", "w") as f:
                   f.write(content)
               print("Updated homebrew/vtcode.rb")
               PYTHON_EOF
+              "$VERSION" "$X86_64_SHA" "$ARM64_SHA" "$X86_64_LINUX_SHA" "$ARM64_LINUX_SHA"
 
           - name: Commit and push Homebrew formula
             run: |
