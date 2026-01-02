@@ -171,6 +171,25 @@ Tools hidden by default (saves context):
 3. **Usage**: Only after activation can you use the tool
 4. **Resources**: `load_skill_resource` for referenced files (scripts/docs)
 
+## Execution Policy & Sandboxing (Codex Patterns)
+
+**Sandbox Policies**:
+- `ReadOnly`: No file writes allowed (safe for exploration)
+- `WorkspaceWrite`: Write only within workspace boundaries
+- `DangerFullAccess`: Full system access (requires explicit approval)
+
+**Command Approval Flow**:
+1. Commands checked against policy rules (prefix matching)
+2. Heuristics applied for unknown commands (safe: ls, cat; dangerous: rm, sudo)
+3. Session-approved commands skip re-approval
+4. Forbidden commands blocked outright
+
+**Safe commands** (auto-allowed): ls, cat, head, tail, grep, find, echo, pwd, which, wc, sort, diff, env, date, whoami, file, stat, tree
+
+**Dangerous commands** (require approval or forbidden): rm, dd, mkfs, shutdown, reboot, kill, chmod, chown, sudo, su
+
+**Turn Diff Tracking**: All file changes within a turn are aggregated for unified diff view.
+
 ## Design Philosophy: Desire Paths
 
 When you guess wrong about commands or workflows, report it—the system improves interfaces (not docs) to match intuitive expectations. See AGENTS.md and docs/DESIRE_PATHS.md."#;
