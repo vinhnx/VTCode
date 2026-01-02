@@ -387,9 +387,6 @@ async fn run() -> Result<()> {
                 MarketplaceSubcommand::Remove { id } => {
                     cli::handle_marketplace_remove(id.clone()).await?;
                 }
-                MarketplaceSubcommand::Update { id } => {
-                    cli::handle_marketplace_update(id.clone()).await?;
-                }
             }
         }
         Some(Commands::Plugin(plugin_cmd)) => {
@@ -414,6 +411,13 @@ async fn run() -> Result<()> {
                     cli::handle_plugin_validate(path).await?;
                 }
             }
+        }
+        Some(Commands::SelfUpdate { check, force }) => {
+            let options = cli::update::UpdateCommandOptions {
+                check_only: *check,
+                force: *force,
+            };
+            cli::update::handle_update_command(options).await?;
         }
         _ => {
             // Default to chat

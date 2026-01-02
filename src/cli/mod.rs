@@ -7,6 +7,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 pub use vtcode_core::mcp::cli::handle_mcp_command;
 
 pub mod analyze;
+pub mod update;
 
 #[allow(dead_code)]
 #[derive(Default)]
