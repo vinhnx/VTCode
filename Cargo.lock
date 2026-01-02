@@ -959,7 +959,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fde0e0ec90c9dfb3b4b1a0891a7dcd0e2bffde2f7efed5fe7c9bb00e5bfb915e"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1562,7 +1562,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1755,7 +1755,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2743,7 +2743,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3284,7 +3284,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4115,7 +4115,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4633,7 +4633,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4646,7 +4646,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5455,7 +5455,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.3",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6281,7 +6281,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -6341,7 +6341,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -6356,7 +6356,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -6370,14 +6370,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "vtcode-config"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -6401,7 +6401,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -6517,7 +6517,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "log",
  "schemars 1.2.0",
@@ -6528,7 +6528,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-file-search"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "anyhow",
  "clap",
@@ -6544,7 +6544,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "anyhow",
  "ignore",
@@ -6555,7 +6555,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -6567,7 +6567,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-lmstudio"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "anyhow",
  "reqwest",
@@ -6581,7 +6581,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "anyhow",
  "fs2",
@@ -6595,7 +6595,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-process-hardening"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "libc",
  "pretty_assertions",
@@ -6603,7 +6603,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.58.10"
+version = "0.58.11"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -6849,7 +6849,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

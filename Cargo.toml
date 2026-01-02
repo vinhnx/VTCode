@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.58.10"
+version = "0.58.11"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers"
@@ -46,7 +46,7 @@ ctor = "0.2"
 libc = "0.2"
 
 [workspace.package]
-version = "0.58.10"
+version = "0.58.11"
 edition = "2021"
 license = "MIT"
 
@@ -116,10 +116,10 @@ unwrap_used = "deny"
 
 
 [dependencies]
-vtcode-acp-client = { path = "vtcode-acp-client", version = "0.58.10" }
-vtcode-config = { path = "vtcode-config", version = "0.58.10" }
-vtcode-core = { path = "vtcode-core", version = "0.58.10" }
-vtcode-process-hardening = { path = "vtcode-process-hardening", version = "0.58.10" }
+vtcode-acp-client = { path = "vtcode-acp-client", version = "0.58.11" }
+vtcode-config = { path = "vtcode-config", version = "0.58.11" }
+vtcode-core = { path = "vtcode-core", version = "0.58.11" }
+vtcode-process-hardening = { path = "vtcode-process-hardening", version = "0.58.11" }
 anyhow = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
 ctor = { workspace = true }
