@@ -3,12 +3,16 @@ permissions:
   contents: write
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v0.50.8). Leave empty to auto-detect from release.'
+        description: 'Version tag (e.g., v0.50.8). Leave empty to auto-detect from tag/release.'
         required: false
         type: string
 
@@ -49,7 +53,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.inputs.version || github.event.release.tag_name }}
+          ref: ${{ github.event.inputs.version || github.event.release.tag_name || github.ref }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -85,6 +89,20 @@ jobs:
           echo "OPENSSL_LIB_DIR=$OPENSSL_DIR/lib" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$OPENSSL_DIR/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
 
+      - name: Determine version tag
+        id: version
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ -n "${{ github.event.release.tag_name }}" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            # Extract from git ref for tag push trigger
+            VERSION="${{ github.ref }}"
+            VERSION="${VERSION#refs/tags/}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Build release binary
         run: cargo build --locked --release --target ${{ matrix.target }}
 
@@ -92,19 +110,19 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          tar -czf ../../../vtcode-${{ github.event.inputs.version || github.event.release.tag_name }}-${{ matrix.name }}.tar.gz vtcode
+          tar -czf ../../../vtcode-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz vtcode
 
       - name: Package binary (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ../../../vtcode-${{ github.event.inputs.version || github.event.release.tag_name }}-${{ matrix.name }}.zip vtcode.exe
+          7z a ../../../vtcode-${{ steps.version.outputs.version }}-${{ matrix.name }}.zip vtcode.exe
 
       - name: Upload binary
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.event.inputs.version || github.event.release.tag_name }}
-          files: vtcode-${{ github.event.inputs.version || github.event.release.tag_name }}-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
+          tag_name: ${{ steps.version.outputs.version }}
+          files: vtcode-${{ steps.version.outputs.version }}-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
           fail_on_unmatched_files: true

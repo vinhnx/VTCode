@@ -855,34 +855,13 @@ create_github_release() {
         --draft=false \
         --prerelease=false 2>&1); then
         print_success "GitHub release created: $tag"
-        
-        # Wait a moment for the release to be fully published
-        sleep 2
-        
-        # Trigger the build-release workflow by dispatching it
-        print_info "Triggering build-release workflow for version $version..."
-        if gh workflow run build-release.yml \
-            -f version="$tag" \
-            --ref main >/dev/null 2>&1; then
-            print_success "Build-release workflow triggered successfully"
-            print_info "Binary build will be available at: https://github.com/vinhnx/vtcode/releases/tag/$tag"
-            return 0
-        else
-            print_warning "Failed to trigger build-release workflow"
-            print_info "Workflow can be manually triggered at: https://github.com/vinhnx/vtcode/actions/workflows/build-release.yml"
-            return 1
-        fi
+        print_info "build-release workflow will automatically trigger on tag push"
+        print_info "Binary build will be available at: https://github.com/vinhnx/vtcode/releases/tag/$tag"
+        return 0
     else
         # Check if release already exists
         if echo "$gh_output" | grep -q "already exists"; then
             print_info "GitHub release already exists for $tag"
-            # Try to trigger the workflow anyway
-            if gh workflow run build-release.yml \
-                -f version="$tag" \
-                --ref main >/dev/null 2>&1; then
-                print_success "Build-release workflow triggered successfully"
-                return 0
-            fi
             return 0
         fi
         
