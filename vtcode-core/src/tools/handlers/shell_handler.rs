@@ -12,8 +12,8 @@ use serde::Deserialize;
 
 use super::orchestrator::{Approvable, Sandboxable, SandboxablePreference};
 use super::tool_handler::{
-    ShellToolCallParams, ToolCallError, ToolHandler, ToolInvocation,
-    ToolKind, ToolOutput, ToolPayload,
+    ShellToolCallParams, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
+    ToolPayload,
 };
 
 /// Default timeout for shell commands (30 seconds).
@@ -52,7 +52,10 @@ impl ShellHandler {
     }
 
     /// Parse shell parameters from payload.
-    fn parse_params(&self, invocation: &ToolInvocation) -> Result<ShellToolCallParams, ToolCallError> {
+    fn parse_params(
+        &self,
+        invocation: &ToolInvocation,
+    ) -> Result<ShellToolCallParams, ToolCallError> {
         match &invocation.payload {
             ToolPayload::Function { arguments } => {
                 // Parse as simple shell command string and wrap in ShellToolCallParams
@@ -73,7 +76,9 @@ impl ShellHandler {
                 })
             }
             ToolPayload::LocalShell { params } => Ok(params.clone()),
-            _ => Err(ToolCallError::respond("Invalid payload type for shell handler")),
+            _ => Err(ToolCallError::respond(
+                "Invalid payload type for shell handler",
+            )),
         }
     }
 
@@ -86,8 +91,15 @@ impl ShellHandler {
     ) -> Result<ShellOutput, ToolCallError> {
         // Join command parts or use single command
         let command = params.command.join(" ");
-        let workdir = params.workdir.as_ref().map(PathBuf::from).unwrap_or_else(|| cwd.clone());
-        let timeout_ms = params.timeout_ms.unwrap_or(DEFAULT_SHELL_TIMEOUT_MS).min(MAX_SHELL_TIMEOUT_MS);
+        let workdir = params
+            .workdir
+            .as_ref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| cwd.clone());
+        let timeout_ms = params
+            .timeout_ms
+            .unwrap_or(DEFAULT_SHELL_TIMEOUT_MS)
+            .min(MAX_SHELL_TIMEOUT_MS);
 
         // Build the command
         let mut cmd = tokio::process::Command::new(&self.default_shell);
@@ -109,13 +121,10 @@ impl ShellHandler {
         }
 
         // Execute with timeout
-        let result = tokio::time::timeout(
-            Duration::from_millis(timeout_ms),
-            cmd.output(),
-        )
-        .await
-        .map_err(|_| ToolCallError::Timeout(timeout_ms))?
-        .map_err(|e| ToolCallError::Internal(e.into()))?;
+        let result = tokio::time::timeout(Duration::from_millis(timeout_ms), cmd.output())
+            .await
+            .map_err(|_| ToolCallError::Timeout(timeout_ms))?
+            .map_err(|e| ToolCallError::Internal(e.into()))?;
 
         Ok(ShellOutput {
             stdout: String::from_utf8_lossy(&result.stdout).to_string(),
@@ -195,7 +204,10 @@ impl ToolHandler for ShellHandler {
             content_text = "(no output)".to_string();
         }
 
-        Ok(ToolOutput::with_success(content_text, output.exit_code == 0))
+        Ok(ToolOutput::with_success(
+            content_text,
+            output.exit_code == 0,
+        ))
     }
 }
 

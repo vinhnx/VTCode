@@ -66,13 +66,13 @@ pub mod spawn_subagent;
 
 // Adapter layer
 pub use adapter::{
-    create_cwd_session, DefaultToolSession, HandlerToToolAdapter, ToolToHandlerAdapter,
+    DefaultToolSession, HandlerToToolAdapter, ToolToHandlerAdapter, create_cwd_session,
 };
 
 // Apply patch handler
 pub use apply_patch_handler::{
-    ApplyPatchHandler, ApplyPatchRequest as ApplyPatchHandlerRequest, ApplyPatchRuntime, ApplyPatchToolArgs,
-    create_apply_patch_freeform_tool, create_apply_patch_json_tool,
+    ApplyPatchHandler, ApplyPatchRequest as ApplyPatchHandlerRequest, ApplyPatchRuntime,
+    ApplyPatchToolArgs, create_apply_patch_freeform_tool, create_apply_patch_json_tool,
 };
 
 // Events
@@ -82,36 +82,36 @@ pub use events::{
 };
 
 // Grep files handler
-pub use grep_files_handler::{create_grep_files_tool, GrepFilesArgs, GrepFilesHandler, GrepMatch};
+pub use grep_files_handler::{GrepFilesArgs, GrepFilesHandler, GrepMatch, create_grep_files_tool};
 
 // Intercept apply patch
 pub use intercept_apply_patch::{
-    intercept_apply_patch, ApplyPatchError, ApplyPatchRequest, CODEX_APPLY_PATCH_ARG,
+    ApplyPatchError, ApplyPatchRequest, CODEX_APPLY_PATCH_ARG, intercept_apply_patch,
     maybe_parse_apply_patch_from_command,
 };
 
 // List directory handler
-pub use list_dir_handler::{create_list_dir_tool, DirEntry, ListDirArgs, ListDirHandler};
+pub use list_dir_handler::{DirEntry, ListDirArgs, ListDirHandler, create_list_dir_tool};
 
 // Legacy Orchestrator (for backwards compatibility)
 pub use orchestrator::{
     Approvable as LegacyApprovable, CommandSpec as LegacyCommandSpec, ExecEnv as LegacyExecEnv,
     ExecExpiration, ExecToolCallOutput as LegacyExecToolCallOutput, OutputText,
     SandboxAttempt as LegacySandboxAttempt, SandboxConfig, SandboxManager as LegacySandboxManager,
-    SandboxMode as LegacySandboxMode, SandboxPolicy as LegacySandboxPolicy, SandboxTransformError as LegacySandboxTransformError,
-    Sandboxable as LegacySandboxable, SandboxablePreference as LegacySandboxablePreference, StdoutStream,
-    ToolCtx as LegacyToolCtx, ToolError as LegacyToolError, ToolOrchestrator as LegacyToolOrchestrator,
+    SandboxMode as LegacySandboxMode, SandboxPolicy as LegacySandboxPolicy,
+    SandboxTransformError as LegacySandboxTransformError, Sandboxable as LegacySandboxable,
+    SandboxablePreference as LegacySandboxablePreference, StdoutStream, ToolCtx as LegacyToolCtx,
+    ToolError as LegacyToolError, ToolOrchestrator as LegacyToolOrchestrator,
     ToolRuntime as LegacyToolRuntime,
 };
 
 // New Sandboxing module (Codex-compatible)
 pub use sandboxing::{
-    AskForApproval, Approvable, ApprovalCtx, ApprovalStore, BoxFuture, CommandSpec,
-    default_exec_approval_requirement, ExecApprovalRequirement, ExecEnv, ExecPolicyAmendment,
-    ExecToolCallOutput, execute_env, NetworkAccess, ReviewDecision, SandboxablePreference,
-    SandboxAttempt, SandboxManager, SandboxMode, SandboxOverride, SandboxPolicy,
-    SandboxTransformError, SandboxType, Sandboxable, ToolCtx, ToolError, ToolRuntime,
-    with_cached_approval,
+    Approvable, ApprovalCtx, ApprovalStore, AskForApproval, BoxFuture, CommandSpec,
+    ExecApprovalRequirement, ExecEnv, ExecPolicyAmendment, ExecToolCallOutput, NetworkAccess,
+    ReviewDecision, SandboxAttempt, SandboxManager, SandboxMode, SandboxOverride, SandboxPolicy,
+    SandboxTransformError, SandboxType, Sandboxable, SandboxablePreference, ToolCtx, ToolError,
+    ToolRuntime, default_exec_approval_requirement, execute_env, with_cached_approval,
 };
 
 // Tool Orchestrator (Codex-compatible)
@@ -119,11 +119,11 @@ pub use tool_orchestrator::ToolOrchestrator;
 
 // Turn Diff Tracker
 pub use turn_diff_tracker::{
-    FileChange as DiffFileChange, new_shared_tracker, SharedTurnDiffTracker, TurnDiffTracker,
+    FileChange as DiffFileChange, SharedTurnDiffTracker, TurnDiffTracker, new_shared_tracker,
 };
 
 // Read file handler
-pub use read_file_handler::{create_read_file_tool, FileMetadata, ReadFileArgs, ReadFileHandler};
+pub use read_file_handler::{FileMetadata, ReadFileArgs, ReadFileHandler, create_read_file_tool};
 
 // Router
 pub use router::{
@@ -132,7 +132,7 @@ pub use router::{
 };
 
 // Shell handler
-pub use shell_handler::{create_shell_tool, ShellHandler, ShellOutput};
+pub use shell_handler::{ShellHandler, ShellOutput, create_shell_tool};
 
 // Spawn subagent
 pub use spawn_subagent::SpawnSubagentTool;

@@ -13,8 +13,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use super::tool_handler::{
-    ToolCallError, ToolHandler, ToolInvocation, ToolOutput, ToolPayload,
-    ToolSession, ToolSpec, TurnContext,
+    ToolCallError, ToolHandler, ToolInvocation, ToolOutput, ToolPayload, ToolSession, ToolSpec,
+    TurnContext,
 };
 
 /// A parsed tool call ready for dispatch.
@@ -129,11 +129,7 @@ impl ToolRegistryBuilder {
     }
 
     /// Register multiple tool name aliases for the same handler.
-    pub fn register_aliases(
-        &mut self,
-        names: &[&str],
-        handler: Arc<dyn ToolHandler>,
-    ) -> &mut Self {
+    pub fn register_aliases(&mut self, names: &[&str], handler: Arc<dyn ToolHandler>) -> &mut Self {
         for name in names {
             self.handlers.insert((*name).to_string(), handler.clone());
         }
@@ -250,8 +246,8 @@ pub trait ToolRouterProvider: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::tool_handler::{ResponsesApiTool, ToolKind};
+    use super::*;
 
     struct MockHandler;
 
@@ -262,7 +258,10 @@ mod tests {
         }
 
         async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
-            Ok(ToolOutput::simple(format!("Handled: {}", invocation.tool_name)))
+            Ok(ToolOutput::simple(format!(
+                "Handled: {}",
+                invocation.tool_name
+            )))
         }
     }
 

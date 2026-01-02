@@ -7,10 +7,9 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use super::orchestrator::{Approvable, SandboxablePreference, Sandboxable};
+use super::orchestrator::{Approvable, Sandboxable, SandboxablePreference};
 use super::tool_handler::{
-    ToolCallError, ToolHandler, ToolInvocation,
-    ToolKind, ToolOutput, ToolPayload,
+    ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
 };
 
 /// Maximum file size to read (1MB).
@@ -57,11 +56,11 @@ impl ReadFileHandler {
     /// Parse arguments from payload.
     fn parse_args(&self, invocation: &ToolInvocation) -> Result<ReadFileArgs, ToolCallError> {
         match &invocation.payload {
-            ToolPayload::Function { arguments } => {
-                serde_json::from_str(arguments)
-                    .map_err(|e| ToolCallError::respond(format!("Invalid read_file arguments: {e}")))
-            }
-            _ => Err(ToolCallError::respond("Invalid payload type for read_file handler")),
+            ToolPayload::Function { arguments } => serde_json::from_str(arguments)
+                .map_err(|e| ToolCallError::respond(format!("Invalid read_file arguments: {e}"))),
+            _ => Err(ToolCallError::respond(
+                "Invalid payload type for read_file handler",
+            )),
         }
     }
 
@@ -191,11 +190,13 @@ impl ToolHandler for ReadFileHandler {
         let path = self.resolve_path(&args.path, &invocation);
 
         // Calculate end_line from num_lines if provided
-        let end_line = args.end_line.or_else(|| {
-            args.num_lines.map(|n| args.start_line.unwrap_or(1) + n - 1)
-        });
+        let end_line = args
+            .end_line
+            .or_else(|| args.num_lines.map(|n| args.start_line.unwrap_or(1) + n - 1));
 
-        let (content, _metadata) = self.read_file_contents(&path, args.start_line, end_line).await?;
+        let (content, _metadata) = self
+            .read_file_contents(&path, args.start_line, end_line)
+            .await?;
 
         Ok(ToolOutput::simple(content))
     }
@@ -210,7 +211,9 @@ pub fn create_read_file_tool() -> super::tool_handler::ToolSpec {
     properties.insert(
         "path".to_string(),
         JsonSchema::String {
-            description: Some("Path to the file to read (absolute or relative to workspace)".to_string()),
+            description: Some(
+                "Path to the file to read (absolute or relative to workspace)".to_string(),
+            ),
         },
     );
     properties.insert(
@@ -228,7 +231,9 @@ pub fn create_read_file_tool() -> super::tool_handler::ToolSpec {
     properties.insert(
         "num_lines".to_string(),
         JsonSchema::Number {
-            description: Some("Number of lines to read from start_line (alternative to end_line)".to_string()),
+            description: Some(
+                "Number of lines to read from start_line (alternative to end_line)".to_string(),
+            ),
         },
     );
 
@@ -246,8 +251,8 @@ pub fn create_read_file_tool() -> super::tool_handler::ToolSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::tool_handler::{ApprovalPolicy, ToolSpec};
+    use super::*;
 
     #[test]
     fn test_read_file_handler_kind() {
@@ -274,8 +279,10 @@ mod tests {
     }
 
     fn create_dummy_invocation() -> ToolInvocation {
+        use super::super::tool_handler::{
+            ShellEnvironmentPolicy, ToolEvent, ToolSession, TurnContext,
+        };
         use std::sync::Arc;
-        use super::super::tool_handler::{ToolSession, ToolEvent, TurnContext, ShellEnvironmentPolicy};
 
         struct DummySession;
 

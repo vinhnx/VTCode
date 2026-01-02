@@ -48,4 +48,4 @@ pub mod model_presets;
 pub use cache::ModelsCache;
 pub use manager::{ModelsManager, SharedModelsManager, new_shared_models_manager};
 pub use model_family::{ModelFamily, find_family_for_model};
-pub use model_presets::{ModelPreset, ModelInfo, builtin_model_presets, presets_for_provider};
+pub use model_presets::{ModelInfo, ModelPreset, builtin_model_presets, presets_for_provider};

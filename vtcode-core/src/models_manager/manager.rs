@@ -15,8 +15,8 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
 use super::cache::{self, ModelsCache};
-use super::model_family::{find_family_for_model, ModelFamily};
-use super::model_presets::{builtin_model_presets, presets_for_provider, ModelInfo, ModelPreset};
+use super::model_family::{ModelFamily, find_family_for_model};
+use super::model_presets::{ModelInfo, ModelPreset, builtin_model_presets, presets_for_provider};
 use crate::config::models::Provider;
 
 /// Cache file name
@@ -198,7 +198,11 @@ impl ModelsManager {
     /// Get the default model for a specific provider
     pub fn get_default_model_for_provider(&self, provider: Provider) -> String {
         // First check if there's a default in local presets
-        if let Some(preset) = self.local_models.iter().find(|p| p.provider == provider && p.is_default) {
+        if let Some(preset) = self
+            .local_models
+            .iter()
+            .find(|p| p.provider == provider && p.is_default)
+        {
             return preset.model.clone();
         }
 
@@ -256,11 +260,7 @@ impl ModelsManager {
             return false;
         }
 
-        let models: Vec<ModelInfo> = cache
-            .models
-            .into_iter()
-            .map(|m| m)
-            .collect();
+        let models: Vec<ModelInfo> = cache.models.into_iter().map(|m| m).collect();
 
         *self.etag.write().await = cache.etag;
         self.apply_remote_models(models).await;
@@ -268,7 +268,7 @@ impl ModelsManager {
     }
 
     /// Persist cache to disk
-    #[allow(dead_code)]  // Will be used when remote model fetching is implemented
+    #[allow(dead_code)] // Will be used when remote model fetching is implemented
     async fn persist_cache(&self, models: &[ModelInfo], etag: Option<String>) {
         let provider = *self.current_provider.read().await;
         let cache = ModelsCache {
@@ -362,7 +362,9 @@ impl ModelsManager {
     /// Find a model preset by ID
     pub async fn find_model(&self, model_id: &str) -> Option<ModelPreset> {
         let models = self.list_models().await;
-        models.into_iter().find(|m| m.model == model_id || m.id == model_id)
+        models
+            .into_iter()
+            .find(|m| m.model == model_id || m.id == model_id)
     }
 
     /// Check if a model exists
@@ -375,7 +377,9 @@ impl ModelsManager {
     /// This is a fast, non-blocking check that only looks at local presets.
     /// Use `model_exists` for the async version that includes remote models.
     pub fn model_exists_sync(&self, model_id: &str) -> bool {
-        self.local_models.iter().any(|m| m.model == model_id || m.id == model_id)
+        self.local_models
+            .iter()
+            .any(|m| m.model == model_id || m.id == model_id)
     }
 
     /// Get all supported providers

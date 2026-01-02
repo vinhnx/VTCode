@@ -9,8 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::orchestrator::{Approvable, Sandboxable, SandboxablePreference};
 use super::tool_handler::{
-    ToolCallError, ToolHandler, ToolInvocation,
-    ToolKind, ToolOutput, ToolPayload,
+    ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
 };
 
 /// Maximum entries to return.
@@ -64,11 +63,11 @@ impl ListDirHandler {
     /// Parse arguments from payload.
     fn parse_args(&self, invocation: &ToolInvocation) -> Result<ListDirArgs, ToolCallError> {
         match &invocation.payload {
-            ToolPayload::Function { arguments } => {
-                serde_json::from_str(arguments)
-                    .map_err(|e| ToolCallError::respond(format!("Invalid list_dir arguments: {e}")))
-            }
-            _ => Err(ToolCallError::respond("Invalid payload type for list_dir handler")),
+            ToolPayload::Function { arguments } => serde_json::from_str(arguments)
+                .map_err(|e| ToolCallError::respond(format!("Invalid list_dir arguments: {e}"))),
+            _ => Err(ToolCallError::respond(
+                "Invalid payload type for list_dir handler",
+            )),
         }
     }
 
@@ -162,18 +161,17 @@ impl ListDirHandler {
 
             // Recurse into subdirectories
             if args.recursive && is_dir && entries.len() < self.max_entries {
-                let sub_entries = Box::pin(self.list_directory(&entry_path, args, depth + 1)).await?;
+                let sub_entries =
+                    Box::pin(self.list_directory(&entry_path, args, depth + 1)).await?;
                 entries.extend(sub_entries);
             }
         }
 
         // Sort entries: directories first, then alphabetically
-        entries.sort_by(|a, b| {
-            match (a.is_dir, b.is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            }
+        entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
         });
 
         Ok(entries)
@@ -222,7 +220,13 @@ impl ToolHandler for ListDirHandler {
 
             if let Some(size) = entry.size {
                 if !entry.is_dir {
-                    output.push_str(&format!("{}{}{} ({})\n", prefix, entry.name, suffix, format_size(size)));
+                    output.push_str(&format!(
+                        "{}{}{} ({})\n",
+                        prefix,
+                        entry.name,
+                        suffix,
+                        format_size(size)
+                    ));
                 } else {
                     output.push_str(&format!("{}{}{}\n", prefix, entry.name, suffix));
                 }
@@ -291,7 +295,9 @@ pub fn create_list_dir_tool() -> super::tool_handler::ToolSpec {
 
     ToolSpec::Function(ResponsesApiTool {
         name: "list_dir".to_string(),
-        description: "List the contents of a directory. Returns file and directory names with metadata.".to_string(),
+        description:
+            "List the contents of a directory. Returns file and directory names with metadata."
+                .to_string(),
         parameters: JsonSchema::Object {
             properties,
             required: None,

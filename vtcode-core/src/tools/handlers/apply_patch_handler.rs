@@ -13,13 +13,12 @@ use serde::{Deserialize, Serialize};
 
 use super::events::{ToolEmitter, ToolEventCtx};
 use super::orchestrator::{
-    Approvable, ExecToolCallOutput, OutputText, SandboxAttempt,
-    Sandboxable, SandboxablePreference, ToolCtx, ToolError, ToolOrchestrator, ToolRuntime,
+    Approvable, ExecToolCallOutput, OutputText, SandboxAttempt, Sandboxable, SandboxablePreference,
+    ToolCtx, ToolError, ToolOrchestrator, ToolRuntime,
 };
 use super::tool_handler::{
-    FileChange, FreeformTool, FreeformToolFormat,
-    JsonSchema, ResponsesApiTool, ToolCallError, ToolHandler, ToolInvocation, ToolKind,
-    ToolOutput, ToolPayload, ToolSpec,
+    FileChange, FreeformTool, FreeformToolFormat, JsonSchema, ResponsesApiTool, ToolCallError,
+    ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSpec,
 };
 use crate::tools::editing::{Patch, PatchOperation};
 
@@ -90,9 +89,8 @@ impl ToolRuntime<ApplyPatchRequest, ExecToolCallOutput> for ApplyPatchRuntime {
         _ctx: &ToolCtx<'_>,
     ) -> Result<ExecToolCallOutput, ToolError> {
         // Parse and apply the patch
-        let patch = Patch::parse(&req.patch).map_err(|e| {
-            ToolError::Rejected(format!("Failed to parse patch: {}", e))
-        })?;
+        let patch = Patch::parse(&req.patch)
+            .map_err(|e| ToolError::Rejected(format!("Failed to parse patch: {}", e)))?;
 
         if patch.is_empty() {
             return Ok(ExecToolCallOutput {
@@ -169,21 +167,16 @@ impl ToolHandler for ApplyPatchHandler {
         };
 
         // Parse the patch to get file changes
-        let patch = Patch::parse(&patch_input).map_err(|e| {
-            ToolCallError::respond(format!("Failed to parse patch: {}", e))
-        })?;
+        let patch = Patch::parse(&patch_input)
+            .map_err(|e| ToolCallError::respond(format!("Failed to parse patch: {}", e)))?;
 
         // Convert patch operations to file changes for tracking
         let changes = convert_patch_to_changes(&patch, &turn.cwd);
 
         // Create emitter for event tracking
         let emitter = ToolEmitter::apply_patch(changes.clone(), true);
-        let event_ctx = ToolEventCtx::new(
-            session.as_ref(),
-            turn.as_ref(),
-            &call_id,
-            tracker.as_ref(),
-        );
+        let event_ctx =
+            ToolEventCtx::new(session.as_ref(), turn.as_ref(), &call_id, tracker.as_ref());
         emitter.begin(event_ctx).await;
 
         // Create request
@@ -205,16 +198,18 @@ impl ToolHandler for ApplyPatchHandler {
         };
 
         let result = orchestrator
-            .run(&mut runtime, &req, &tool_ctx, turn.as_ref(), turn.approval_policy)
+            .run(
+                &mut runtime,
+                &req,
+                &tool_ctx,
+                turn.as_ref(),
+                turn.approval_policy,
+            )
             .await;
 
         // Emit completion event and format output
-        let event_ctx = ToolEventCtx::new(
-            session.as_ref(),
-            turn.as_ref(),
-            &call_id,
-            tracker.as_ref(),
-        );
+        let event_ctx =
+            ToolEventCtx::new(session.as_ref(), turn.as_ref(), &call_id, tracker.as_ref());
         let content = emitter.finish(event_ctx, result).await?;
 
         Ok(ToolOutput::Function {
@@ -233,28 +228,41 @@ fn convert_patch_to_changes(patch: &Patch, cwd: &Path) -> HashMap<PathBuf, FileC
         match op {
             PatchOperation::AddFile { path, content } => {
                 let full_path = cwd.join(path);
-                changes.insert(full_path, FileChange::Add {
-                    content: content.clone(),
-                });
+                changes.insert(
+                    full_path,
+                    FileChange::Add {
+                        content: content.clone(),
+                    },
+                );
             }
             PatchOperation::DeleteFile { path } => {
                 let full_path = cwd.join(path);
                 changes.insert(full_path, FileChange::Delete);
             }
-            PatchOperation::UpdateFile { path, new_path, chunks: _ } => {
+            PatchOperation::UpdateFile {
+                path,
+                new_path,
+                chunks: _,
+            } => {
                 let full_path = cwd.join(path);
                 if let Some(new_path) = new_path {
-                    changes.insert(full_path, FileChange::Rename {
-                        new_path: cwd.join(new_path),
-                        content: None,
-                    });
+                    changes.insert(
+                        full_path,
+                        FileChange::Rename {
+                            new_path: cwd.join(new_path),
+                            content: None,
+                        },
+                    );
                 } else {
                     // For updates, we track as update with empty placeholders
                     // The actual content will be computed during application
-                    changes.insert(full_path, FileChange::Update {
-                        old_content: String::new(),
-                        new_content: String::new(),
-                    });
+                    changes.insert(
+                        full_path,
+                        FileChange::Update {
+                            old_content: String::new(),
+                            new_content: String::new(),
+                        },
+                    );
                 }
             }
         }
@@ -290,7 +298,10 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
 
     ToolSpec::Function(ResponsesApiTool {
         name: "apply_patch".to_string(),
-        description: format!("{}\n\n{}", APPLY_PATCH_DESCRIPTION, APPLY_PATCH_GRAMMAR_HELP),
+        description: format!(
+            "{}\n\n{}",
+            APPLY_PATCH_DESCRIPTION, APPLY_PATCH_GRAMMAR_HELP
+        ),
         strict: false,
         parameters: JsonSchema::Object {
             properties,
@@ -326,15 +337,16 @@ pub async fn intercept_apply_patch(
     };
 
     // Log warning about using shell for apply_patch
-    session.record_warning(format!(
-        "apply_patch was requested via {}. Use the apply_patch tool instead of exec_command.",
-        tool_name
-    )).await;
+    session
+        .record_warning(format!(
+            "apply_patch was requested via {}. Use the apply_patch tool instead of exec_command.",
+            tool_name
+        ))
+        .await;
 
     // Parse the patch
-    let patch = Patch::parse(&patch_input).map_err(|e| {
-        ToolCallError::respond(format!("Failed to parse patch: {}", e))
-    })?;
+    let patch = Patch::parse(&patch_input)
+        .map_err(|e| ToolCallError::respond(format!("Failed to parse patch: {}", e)))?;
 
     let changes = convert_patch_to_changes(&patch, cwd);
 
@@ -380,9 +392,7 @@ fn parse_apply_patch_command(command: &[String]) -> (bool, Option<String>) {
 
     match command {
         // Direct invocation: apply_patch <patch>
-        [cmd, body] if APPLY_PATCH_COMMANDS.contains(&cmd.as_str()) => {
-            (true, Some(body.clone()))
-        }
+        [cmd, body] if APPLY_PATCH_COMMANDS.contains(&cmd.as_str()) => (true, Some(body.clone())),
         // Shell heredoc form is not directly supported here
         // The Codex implementation uses tree-sitter to parse these
         _ => (false, None),
@@ -450,7 +460,10 @@ mod tests {
 
     #[test]
     fn test_parse_apply_patch_command_direct() {
-        let cmd = vec!["apply_patch".to_string(), "*** Begin Patch\n*** End Patch".to_string()];
+        let cmd = vec![
+            "apply_patch".to_string(),
+            "*** Begin Patch\n*** End Patch".to_string(),
+        ];
         let (is_patch, content) = parse_apply_patch_command(&cmd);
         assert!(is_patch);
         assert!(content.is_some());
