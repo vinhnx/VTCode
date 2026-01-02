@@ -9,6 +9,7 @@ pub struct UpdateCommandOptions {
     /// Check for updates without installing
     pub check_only: bool,
     /// Force update even if on latest version
+    #[allow(dead_code)]
     pub force: bool,
 }
 
