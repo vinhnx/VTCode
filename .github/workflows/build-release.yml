@@ -59,6 +59,12 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
       - name: Install x86_64 OpenSSL
         if: matrix.target == 'x86_64-apple-darwin'
         shell: bash
