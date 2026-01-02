@@ -3,6 +3,32 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.7] - 2026-01-02
+
+
+### Bug Fixes
+    - fix: suppress unused_imports warning in openai.rs for CI compatibility
+    - fix: install OpenSSL dependencies for Linux builds in CI
+    - fix: conditionally import debug-only items to fix release build
+    - fix: ensure get_download_url outputs only URL to stdout
+    - fix: redirect all logging to stderr in installer script
+
+
+### Documentation
+    - docs: add instructions for manually triggering release build
+    - docs: add quick reference for monitoring and auto-install
+    - docs: add release monitoring guide with auto-install instructions
+    - docs: add native installer readme - central documentation hub
+    - docs: deployment complete - v0.58.6 release ready
+    - docs: add release v0.58.6 and installer test guide
+    - docs: update changelog for v0.58.6 [skip ci]
+    - docs: add native installer implementation status report
+
+
+### Chores
+    - chore: update npm package.json to v0.58.6 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.58.5 version =  [skip ci]
 # [Version 0.58.6] - 2026-01-02
 
 
