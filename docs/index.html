@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VT Code Documentation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 { color: #0066cc; }
+        h2 { color: #0066cc; margin-top: 30px; }
+        a { color: #0066cc; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .link-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .link-card {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+        .link-card h3 { margin-top: 0; }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', monospace;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>VT Code Documentation</h1>
+    <p>Welcome to VT Code - a Rust-based semantic coding agent with intelligent code analysis.</p>
+
+    <h2>Quick Start</h2>
+    <pre><code>cargo install vtcode
+# or
+brew install vtcode
+
+export OPENAI_API_KEY="sk-..."
+vtcode</code></pre>
+
+    <h2>Documentation</h2>
+    <div class="link-grid">
+        <div class="link-card">
+            <h3>📚 Core Docs</h3>
+            <ul>
+                <li><a href="ARCHITECTURE.md">Architecture</a></li>
+                <li><a href="CONTRIBUTING.md">Contributing</a></li>
+                <li><a href="SECURITY.md">Security Model</a></li>
+                <li><a href="FAQ.md">FAQ</a></li>
+            </ul>
+        </div>
+        <div class="link-card">
+            <h3>🚀 Getting Started</h3>
+            <ul>
+                <li><a href="installation/">Installation Guides</a></li>
+                <li><a href="PROVIDER_GUIDES.md">Provider Setup</a></li>
+                <li><a href="user-guide/">User Guide</a></li>
+                <li><a href="SKILLS_GUIDE.md">Skills Guide</a></li>
+            </ul>
+        </div>
+        <div class="link-card">
+            <h3>⚙️ Development</h3>
+            <ul>
+                <li><a href="development/">Development Setup</a></li>
+                <li><a href="testing/">Testing</a></li>
+                <li><a href="CONTRIBUTING.md">Build Instructions</a></li>
+            </ul>
+        </div>
+        <div class="link-card">
+            <h3>🔧 Advanced</h3>
+            <ul>
+                <li><a href="mcp/">MCP Integration</a></li>
+                <li><a href="subagents/">Subagents</a></li>
+                <li><a href="EXECUTION_POLICY.md">Execution Policy</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>Key Features</h2>
+    <ul>
+        <li><strong>Multi-Provider LLM Support</strong> - OpenAI, Anthropic, Gemini, xAI, DeepSeek, Ollama, and more</li>
+        <li><strong>Code Intelligence</strong> - Tree-sitter based semantic code analysis</li>
+        <li><strong>Workspace Integration</strong> - Full workspace understanding and file operations</li>
+        <li><strong>Interactive Shell</strong> - PTY-based terminal with streaming output</li>
+        <li><strong>Command Safety</strong> - Execution policies and sandboxing</li>
+        <li><strong>Extensible</strong> - MCP and custom skills support</li>
+    </ul>
+
+    <h2>Links</h2>
+    <ul>
+        <li><a href="https://github.com/vinhnx/vtcode">GitHub Repository</a></li>
+        <li><a href="https://github.com/vinhnx/vtcode/releases">Releases</a></li>
+        <li><a href="https://crates.io/crates/vtcode">Crates.io</a></li>
+    </ul>
+
+    <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 0.9em;">
+        <p>VT Code is licensed under the MIT License</p>
+    </footer>
+</body>
+</html>
