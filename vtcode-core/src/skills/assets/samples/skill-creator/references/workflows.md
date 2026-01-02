@@ -53,9 +53,11 @@ Best for: Skills with clear step-by-step processes.
 ## Detailed Steps
 
 ### Step 1: Prepare
+
 [Detailed preparation instructions]
 
 ### Step 2: Initialize
+
 [Detailed initialization instructions]
 
 ...
@@ -67,21 +69,25 @@ Best for: Skills with clear step-by-step processes.
 ## Integration Workflow
 
 ### Step 1: Authentication
+
 1. Obtain API credentials
 2. Configure environment variables
 3. Test connection
 
 ### Step 2: Data Mapping
+
 1. Identify source fields
 2. Map to target schema
 3. Handle transformations
 
 ### Step 3: Execution
+
 1. Validate data
 2. Execute API calls
 3. Handle responses
 
 ### Step 4: Verification
+
 1. Check response codes
 2. Validate data integrity
 3. Log results
@@ -95,10 +101,12 @@ Best for: Skills that provide multiple independent operations.
 ## Available Operations
 
 ### Operation A: [Name]
+
 **When to use**: [Specific trigger/scenario]
 **Command**: `script_name.py --operation a`
 
 ### Operation B: [Name]
+
 **When to use**: [Specific trigger/scenario]
 **Command**: `script_name.py --operation b`
 ```
@@ -109,14 +117,17 @@ Best for: Skills that provide multiple independent operations.
 ## Conversions
 
 ### PDF to Text
+
 **When to use**: Extract text content from PDFs
 **Script**: `scripts/convert.py --from pdf --to txt`
 
 ### Images to PDF
+
 **When to use**: Combine images into a PDF document
 **Script**: `scripts/convert.py --from images --to pdf`
 
 ### Batch Convert
+
 **When to use**: Convert multiple files at once
 **Script**: `scripts/batch_convert.py --input-dir ./files --output-format docx`
 ```
@@ -129,14 +140,17 @@ Best for: Skills with context-dependent behavior.
 ## Handling Logic
 
 ### If [Condition A]
+
 Do X, then Y
 
 ### If [Condition B]
+
 Do Z instead
 
 ### Edge Cases
-- [Edge case 1]: Handle with [solution]
-- [Edge case 2]: Handle with [solution]
+
+-   [Edge case 1]: Handle with [solution]
+-   [Edge case 2]: Handle with [solution]
 ```
 
 ### Example: Error Handling Skill
@@ -145,18 +159,21 @@ Do Z instead
 ## Error Response Logic
 
 ### If API returns 4xx error
+
 1. Parse error message
 2. Check against known issues
 3. Suggest corrective action
 4. Retry if appropriate
 
 ### If API returns 5xx error
+
 1. Log error details
 2. Wait with exponential backoff
 3. Retry up to 3 times
 4. Escalate if still failing
 
 ### If timeout occurs
+
 1. Check network connectivity
 2. Reduce batch size
 3. Retry with longer timeout
@@ -168,44 +185,57 @@ Best for: Skills that serve both beginners and experts.
 
 ```markdown
 ## Quick Start (Beginner)
+
 [Simple, opinionated workflow]
 
 ## Standard Usage
+
 [Common patterns with options]
 
 ## Advanced Usage
+
 [Full control, all options]
 
 ## Expert Mode
+
 [Low-level access, edge cases]
 ```
 
 ### Example: Deployment Skill
 
-```markdown
+````markdown
 ## Deployment
 
 ### Quick Deploy (Beginner)
+
 ```bash
 scripts/deploy.py --quick
 ```
+````
+
 Uses sensible defaults for standard deployments.
 
 ### Standard Deploy
+
 ```bash
 scripts/deploy.py --env staging --notify
 ```
+
 Specify environment and notification preferences.
 
 ### Advanced Deploy
+
 ```bash
 scripts/deploy.py --env production --canary 10 --rollback-on-error --health-check-timeout 300
 ```
+
 Full control over deployment parameters.
 
 ### Expert: Custom Pipeline
+
 See `references/custom-pipeline.md` for building custom deployment pipelines.
-```
+
+````
 
 ## Combining Patterns
 
@@ -241,4 +271,4 @@ Most effective skills combine multiple patterns:
 
 ## Advanced Topics
 [Progressive complexity]
-```
+````

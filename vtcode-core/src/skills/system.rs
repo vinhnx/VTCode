@@ -12,7 +12,9 @@ const SYSTEM_SKILLS_DIR: Dir =
 const SYSTEM_SKILLS_DIR_NAME: &str = ".system";
 const SKILLS_DIR_NAME: &str = "skills";
 const SYSTEM_SKILLS_MARKER_FILENAME: &str = ".codex-system-skills.marker";
-const SYSTEM_SKILLS_MARKER_SALT: &str = "v1";
+/// Bump this version to force reinstallation of system skills.
+/// v2: Updated skills with Codex-compatible patterns (XML wrapping, workflows, scripts).
+const SYSTEM_SKILLS_MARKER_SALT: &str = "v2";
 
 /// Returns the on-disk cache location for embedded system skills.
 ///
