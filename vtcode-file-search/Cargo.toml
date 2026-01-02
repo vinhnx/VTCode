@@ -3,6 +3,8 @@ name = "vtcode-file-search"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+description = "Fast, parallel fuzzy file search library for VT Code"
+repository = "https://github.com/vinhnx/vtcode"
 
 [[bin]]
 name = "vtcode-file-search"

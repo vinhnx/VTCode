@@ -3,6 +3,8 @@ name = "vtcode-process-hardening"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Process hardening and security measures for VT Code"
+repository = "https://github.com/vinhnx/vtcode"
 
 [lib]
 name = "vtcode_process_hardening"
