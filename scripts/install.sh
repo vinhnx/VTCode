@@ -102,7 +102,7 @@ get_download_url() {
         exit 1
     fi
     
-    log_info "Latest version: $release_tag"
+    log_info "Latest version: $release_tag" >&2
     
     # Determine file extension based on platform
     local file_ext
@@ -114,7 +114,7 @@ get_download_url() {
         file_ext="zip"
     fi
     
-    # Build download URL
+    # Build download URL (must be on its own line, only echo output is captured)
     local filename="vtcode-${release_tag}-${platform}.${file_ext}"
     echo "${GITHUB_RELEASES}/${release_tag}/${filename}"
 }
