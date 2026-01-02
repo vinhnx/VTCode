@@ -817,22 +817,43 @@ create_github_release() {
 
     if ! command -v gh &> /dev/null; then
         print_warning "GitHub CLI (gh) not available - skipping GitHub release creation"
+        print_info "Create release manually at: https://github.com/vinhnx/vtcode/releases/new"
         return 0
     fi
 
     print_info "Creating GitHub release for tag: $tag"
 
+    # First, check if GitHub CLI is properly authenticated
+    if ! gh auth status >/dev/null 2>&1; then
+        print_warning "GitHub CLI not authenticated - skipping release creation"
+        print_info "Authenticate with: gh auth login"
+        print_info "Create release manually at: https://github.com/vinhnx/vtcode/releases/new"
+        return 1
+    fi
+
     # Generate release notes from commits
     local release_notes
-    release_notes=$(git log "$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 2 | tail -n 1)..HEAD" \
-        --no-merges --pretty=format:"- %s" 2>/dev/null || echo "Release $version")
+    local prev_tag
+    prev_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 2 | tail -n 1)
+    
+    if [[ -n "$prev_tag" ]]; then
+        release_notes=$(git log "$prev_tag..$tag" --no-merges --pretty=format:"- %s" 2>/dev/null)
+    else
+        release_notes=$(git log "$tag" --no-merges --pretty=format:"- %s" 2>/dev/null | head -20)
+    fi
+    
+    # Fallback if no commits found
+    if [[ -z "$release_notes" ]]; then
+        release_notes="Release $version - See changelog for details"
+    fi
 
     # Create the GitHub release
-    if gh release create "$tag" \
+    local gh_output
+    if gh_output=$(gh release create "$tag" \
         --title "VT Code v$version" \
         --notes "$release_notes" \
         --draft=false \
-        --prerelease=false; then
+        --prerelease=false 2>&1); then
         print_success "GitHub release created: $tag"
         
         # Wait a moment for the release to be fully published
@@ -842,18 +863,31 @@ create_github_release() {
         print_info "Triggering build-release workflow for version $version..."
         if gh workflow run build-release.yml \
             -f version="$tag" \
-            --ref main; then
+            --ref main >/dev/null 2>&1; then
             print_success "Build-release workflow triggered successfully"
             print_info "Binary build will be available at: https://github.com/vinhnx/vtcode/releases/tag/$tag"
             return 0
         else
             print_warning "Failed to trigger build-release workflow"
-            print_info "You can manually trigger the workflow from: https://github.com/vinhnx/vtcode/actions/workflows/build-release.yml"
+            print_info "Workflow can be manually triggered at: https://github.com/vinhnx/vtcode/actions/workflows/build-release.yml"
             return 1
         fi
     else
+        # Check if release already exists
+        if echo "$gh_output" | grep -q "already exists"; then
+            print_info "GitHub release already exists for $tag"
+            # Try to trigger the workflow anyway
+            if gh workflow run build-release.yml \
+                -f version="$tag" \
+                --ref main >/dev/null 2>&1; then
+                print_success "Build-release workflow triggered successfully"
+                return 0
+            fi
+            return 0
+        fi
+        
         print_warning "Failed to create GitHub release for $tag"
-        print_info "You can create it manually at: https://github.com/vinhnx/vtcode/releases/new"
+        print_info "You can create it manually at: https://github.com/vinhnx/vtcode/releases/new?tag=$tag"
         return 1
     fi
 }
