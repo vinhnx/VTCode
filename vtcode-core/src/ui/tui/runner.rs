@@ -568,7 +568,7 @@ async fn drive_terminal<B: Backend>(
                     InlineCommand::ForceRedraw => {
                         terminal
                             .clear()
-                            .context("failed to clear terminal for redraw")?;
+                            .map_err(|e| anyhow::anyhow!("failed to clear terminal for redraw: {}", e))?;
                         session.handle_command(InlineCommand::ForceRedraw);
                     }
                     cmd => {
@@ -591,7 +591,7 @@ async fn drive_terminal<B: Backend>(
         {
             terminal
                 .draw(|frame| session.render(frame))
-                .context("failed to draw inline session")?;
+                .map_err(|e| anyhow::anyhow!("failed to draw inline session: {}", e))?;
         }
 
         if session.should_exit() {
@@ -613,7 +613,7 @@ async fn drive_terminal<B: Backend>(
                                 inputs.clear_queue();
                             }
                             InlineCommand::ForceRedraw => {
-                                terminal.clear().context("failed to clear terminal for redraw")?;
+                                terminal.clear().map_err(|e| anyhow::anyhow!("failed to clear terminal for redraw: {}", e))?;
                                 session.handle_command(InlineCommand::ForceRedraw);
                             }
                             cmd => {
@@ -717,23 +717,23 @@ fn measure_terminal_dimensions() -> Option<(u16, u16)> {
 fn prepare_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Result<()> {
     terminal
         .hide_cursor()
-        .context("failed to hide inline cursor")?;
+        .map_err(|e| anyhow::anyhow!("failed to hide inline cursor: {}", e))?;
     terminal
         .clear()
-        .context("failed to clear inline terminal")?;
+        .map_err(|e| anyhow::anyhow!("failed to clear inline terminal: {}", e))?;
     Ok(())
 }
 
 fn finalize_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Result<()> {
     terminal
         .show_cursor()
-        .context("failed to show cursor after inline session")?;
+        .map_err(|e| anyhow::anyhow!("failed to show cursor after inline session: {}", e))?;
     terminal
         .clear()
-        .context("failed to clear inline terminal after session")?;
+        .map_err(|e| anyhow::anyhow!("failed to clear inline terminal after session: {}", e))?;
     terminal
         .flush()
-        .context("failed to flush inline terminal after session")?;
+        .map_err(|e| anyhow::anyhow!("failed to flush inline terminal after session: {}", e))?;
     Ok(())
 }
 
