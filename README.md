@@ -54,6 +54,8 @@
 
 ## Installation
 
+**Native Installer (Recommended)** - No dependencies, instant setup:
+
 **macOS & Linux:**
 
 ```bash
@@ -69,14 +71,14 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 **Alternative Installation Methods:**
 
 ```bash
-# Cargo (Rust package manager - Recommended)
+# Cargo (Rust package manager)
 cargo install vtcode
 
 # Homebrew (macOS/Linux)
 brew install vinhnx/tap/vtcode
 ```
 
-**See [Installation Guide](./docs/installation/) for more options and troubleshooting.**
+**See [Installation Guide](./docs/installation/) and [Native Installer Guide](./docs/NATIVE_INSTALLER.md) for more options and troubleshooting.**
 
 ## Usage
 

@@ -1,173 +1,301 @@
-# VT Code Installer for Windows
-# Usage: irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
+# VT Code Native Installer (Windows PowerShell)
+# Downloads and installs the latest VT Code binary from GitHub Releases
 
 param(
-    [string]$InstallDir = "",
-    [switch]$NoCleanup = $false
+    [string]$InstallDir = "$env:USERPROFILE\.local\bin",
+    [switch]$Help
 )
 
 $ErrorActionPreference = "Stop"
-$ProgressPreference = 'SilentlyContinue'
 
-# Logging
-function Write-Log { Write-Host "➜ $args" -ForegroundColor Cyan }
+# Configuration
+$Repo = "vinhnx/vtcode"
+$BinName = "vtcode.exe"
+$GitHubAPI = "https://api.github.com/repos/$Repo/releases/latest"
+$GitHubReleases = "https://github.com/$Repo/releases/download"
+
+# Logging functions
+function Write-Info { Write-Host "INFO: $args" -ForegroundColor Cyan }
 function Write-Success { Write-Host "✓ $args" -ForegroundColor Green }
-function Write-Error-Msg { Write-Host "✗ $args" -ForegroundColor Red }
-function Write-Warn { Write-Host "⚠ $args" -ForegroundColor Yellow }
+function Write-Error { Write-Host "✗ $args" -ForegroundColor Red }
+function Write-Warning { Write-Host "⚠ $args" -ForegroundColor Yellow }
 
-# Install with npm (recommended)
-# Get version
-function Get-Version {
-    Write-Log "Checking latest version..."
+# Show help
+function Show-Help {
+    Write-Host @"
+VT Code Native Installer (Windows PowerShell)
+
+Usage: .\install.ps1 [options]
+
+Options:
+  -InstallDir <path>   Installation directory (default: $env:USERPROFILE\.local\bin)
+  -Help                Show this help message
+
+Examples:
+  .\install.ps1                                         # Install to user directory
+  .\install.ps1 -InstallDir "C:\Program Files\vtcode" # Install to Program Files
+
+Note: Installing to Program Files may require administrator privileges.
+"@
+    exit 0
+}
+
+if ($Help) {
+    Show-Help
+}
+
+# Ensure installation directory exists
+if (-not (Test-Path $InstallDir)) {
+    Write-Info "Creating installation directory: $InstallDir"
+    New-Item -ItemType Directory -Path $InstallDir -Force > $null
+}
+
+# Fetch latest release from GitHub API
+function Get-LatestRelease {
+    Write-Info "Fetching latest VT Code release from GitHub..."
+    
     try {
-        $response = Invoke-RestMethod -Uri "https://api.github.com/repos/vinhnx/vtcode/releases/latest" -ErrorAction Stop
-        $version = $response.tag_name -replace "^v", ""
-        Write-Success "Latest: v$version"
-        return $version
-    } catch {
-        Write-Error-Msg "Failed to fetch version: $_"
+        $response = Invoke-RestMethod -Uri $GitHubAPI -ErrorAction Stop
+        return $response
+    }
+    catch {
+        Write-Error "Failed to fetch release info from GitHub API"
+        Write-Error "Error: $_"
         exit 1
     }
 }
 
-# Download and extract
-function Get-Binary {
-    param([string]$Version)
-
-    $url = "https://github.com/vinhnx/vtcode/releases/download/v${Version}/vtcode-v${Version}-x86_64-pc-windows-msvc.zip"
-    $tempDir = [System.IO.Path]::GetTempPath()
-    $archive = Join-Path $tempDir "vtcode-$Version.zip"
-
-    Write-Log "Downloading..."
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $archive -ErrorAction Stop
-    } catch {
-        Write-Error-Msg "Download failed: $_"
-        exit 1
-    }
-
-    Write-Log "Extracting..."
-    $extractDir = Join-Path $tempDir "vtcode-extract-$(Get-Random)"
-    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-
-    try {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($archive, $extractDir)
-    } catch {
-        Write-Error-Msg "Extract failed: $_"
-        exit 1
-    }
-
-    $binary = Join-Path $extractDir "vtcode.exe"
-    if (-not (Test-Path $binary)) {
-        Write-Error-Msg "Binary not found in archive"
-        exit 1
-    }
-
-    Write-Success "Downloaded"
-
+# Get platform-specific download URL
+function Get-DownloadUrl {
+    param([object]$Release)
+    
+    $ReleaseTag = $Release.tag_name
+    Write-Info "Latest version: $ReleaseTag"
+    
+    # Windows always uses x86_64-pc-windows-msvc
+    $Platform = "x86_64-pc-windows-msvc"
+    $Filename = "vtcode-$ReleaseTag-$Platform.zip"
+    $DownloadUrl = "$GitHubReleases/$ReleaseTag/$Filename"
+    
     return @{
-        Binary = $binary
-        TempDir = $extractDir
-        Archive = $archive
+        Url = $DownloadUrl
+        Tag = $ReleaseTag
+        Filename = $Filename
     }
 }
 
-# Find install directory
-function Get-InstallPath {
-    if ($InstallDir) {
-        if (-not (Test-Path $InstallDir)) {
-            New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-        }
-        return $InstallDir
-    }
-
-    # Try Program Files
-    $progFiles = [Environment]::GetFolderPath("ProgramFiles")
-    $vtDir = Join-Path $progFiles "VT Code"
-
-    if (-not (Test-Path $vtDir)) {
-        try {
-            New-Item -ItemType Directory -Path $vtDir -Force | Out-Null
-            Write-Log "Created: $vtDir"
-            return $vtDir
-        } catch {
-            # Fall through to LocalAppData
-        }
-    }
-
-    # Fall back to LocalAppData
-    $localApp = [Environment]::GetFolderPath("LocalApplicationData")
-    $vtDir = Join-Path $localApp "VT Code"
-    New-Item -ItemType Directory -Path $vtDir -Force | Out-Null
-    return $vtDir
-}
-
-# Install
-function Install-Binary {
-    param($BinInfo)
-
-    $installPath = Get-InstallPath
-    Write-Log "Installing to $installPath..."
-
-    # Stop running processes
-    Get-Process vtcode -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 300
-
-    $target = Join-Path $installPath "vtcode.exe"
-    Copy-Item $BinInfo.Binary $target -Force
-
-    Write-Success "Installed"
-
-    # Add to PATH
-    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-    if ($userPath -notlike "*$installPath*") {
-        Write-Log "Adding to PATH..."
-        [Environment]::SetEnvironmentVariable("PATH", "$installPath;$userPath", "User")
-        $env:PATH = "$installPath;$env:PATH"
-        Write-Success "Added to PATH"
-    }
-
-    # Cleanup
-    if (-not $NoCleanup) {
-        Remove-Item $BinInfo.TempDir -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item $BinInfo.Archive -Force -ErrorAction SilentlyContinue
-    }
-
-    return $target
-}
-
-# Verify
-function Verify {
-    param([string]$Binary)
-
-    Write-Log "Verifying..."
+# Download binary with progress
+function Download-Binary {
+    param(
+        [string]$Url,
+        [string]$OutputPath
+    )
+    
+    Write-Info "Downloading binary from GitHub..."
+    Write-Info "URL: $Url"
+    
     try {
-        $version = & $Binary --version 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Success "VT Code installed!"
-            return
-        }
-    } catch {}
-
-    Write-Error-Msg "Verification failed"
-    exit 1
+        # Use ProgressPreference to show download progress
+        $ProgressPreference = 'Continue'
+        Invoke-WebRequest -Uri $Url -OutFile $OutputPath -ErrorAction Stop
+        Write-Success "Downloaded successfully"
+    }
+    catch {
+        Write-Error "Failed to download binary"
+        Write-Error "Error: $_"
+        exit 1
+    }
 }
 
-# Main
-Write-Host ""
-Write-Host "VT Code Installer" -ForegroundColor Cyan
-Write-Host "=================" -ForegroundColor Cyan
-Write-Host ""
+# Verify checksum if available
+function Verify-Checksum {
+    param(
+        [string]$BinaryPath,
+        [string]$ReleaseTag
+    )
+    
+    Write-Info "Verifying binary integrity..."
+    
+    # Try to download checksums from GitHub
+    $ChecksumsUrl = "$GitHubReleases/$ReleaseTag/checksums.txt"
+    $TempChecksumFile = Join-Path $env:TEMP "vtcode-checksums.txt"
+    
+    try {
+        Invoke-WebRequest -Uri $ChecksumsUrl -OutFile $TempChecksumFile -ErrorAction SilentlyContinue
+    }
+    catch {
+        Write-Warning "Checksums file not found, skipping verification"
+        return
+    }
+    
+    if (-not (Test-Path $TempChecksumFile)) {
+        Write-Warning "Checksums file not found, skipping verification"
+        return
+    }
+    
+    $Filename = (Get-Item $BinaryPath).Name
+    $ExpectedChecksum = (Get-Content $TempChecksumFile | Select-String $Filename | ForEach-Object { $_ -split '\s+' } | Select-Object -First 1).Trim()
+    
+    if ([string]::IsNullOrEmpty($ExpectedChecksum)) {
+        Write-Warning "Checksum not found for this platform, skipping verification"
+        return
+    }
+    
+    # Compute actual checksum
+    $ActualChecksum = (Get-FileHash -Path $BinaryPath -Algorithm SHA256).Hash
+    
+    if ($ActualChecksum -ne $ExpectedChecksum) {
+        Write-Error "Checksum mismatch!"
+        Write-Error "Expected: $ExpectedChecksum"
+        Write-Error "Got:      $ActualChecksum"
+        exit 1
+    }
+    
+    Write-Success "Checksum verified"
+    
+    # Clean up temporary file
+    Remove-Item -Path $TempChecksumFile -Force -ErrorAction SilentlyContinue
+}
 
-# Install from GitHub releases
-$version = Get-Version
-$binInfo = Get-Binary -Version $version
-$binary = Install-Binary $binInfo
-Verify -Binary $binary
+# Extract binary from zip
+function Extract-Binary {
+    param(
+        [string]$ZipPath,
+        [string]$OutputDir
+    )
+    
+    Write-Info "Extracting binary..."
+    
+    try {
+        Expand-Archive -Path $ZipPath -DestinationPath $OutputDir -Force -ErrorAction Stop
+    }
+    catch {
+        Write-Error "Failed to extract binary"
+        Write-Error "Error: $_"
+        exit 1
+    }
+    
+    # Find the binary
+    $BinaryPath = Get-ChildItem -Path $OutputDir -Name "$BinName" -Recurse | Select-Object -First 1
+    
+    if ($null -eq $BinaryPath) {
+        Write-Error "Binary not found in archive"
+        exit 1
+    }
+    
+    return Join-Path $OutputDir $BinaryPath
+}
 
-Write-Host ""
-Write-Host "Quick start:" -ForegroundColor Cyan
-Write-Host '  $env:OPENAI_API_KEY = "sk-..."'
-Write-Host "  vtcode"
-Write-Host ""
+# Install binary
+function Install-Binary {
+    param(
+        [string]$Source,
+        [string]$Target
+    )
+    
+    Write-Info "Installing to $Target..."
+    
+    try {
+        Copy-Item -Path $Source -Destination $Target -Force -ErrorAction Stop
+        Write-Success "Binary installed to $Target"
+    }
+    catch {
+        Write-Error "Failed to install binary to $Target"
+        Write-Error "Error: $_"
+        Write-Info "You may need to run PowerShell as Administrator"
+        exit 1
+    }
+}
+
+# Check if installation directory is in PATH
+function Check-Path {
+    param([string]$InstallPath)
+    
+    $PathDirs = $env:PATH -split ';'
+    return $PathDirs -contains $InstallPath
+}
+
+# Add installation directory to PATH
+function Add-ToPath {
+    param([string]$InstallPath)
+    
+    Write-Warning "Installation directory is not in PATH"
+    Write-Info "Add the following to your user environment variables:"
+    Write-Host ""
+    Write-Host "  Path: $InstallPath"
+    Write-Host ""
+    Write-Info "To add it manually:"
+    Write-Host '  1. Press Win+X, select "System"'
+    Write-Host '  2. Click "Advanced system settings"'
+    Write-Host '  3. Click "Environment Variables"'
+    Write-Host '  4. Under "User variables", select "Path" and click "Edit"'
+    Write-Host "  5. Click "New" and add: $InstallPath"
+    Write-Host ""
+}
+
+# Cleanup temporary files
+function Cleanup {
+    Get-ChildItem -Path $env:TEMP -Name "vtcode-*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
+# Main installation flow
+function Main {
+    Write-Host "VT Code Native Installer (Windows)" -ForegroundColor Magenta
+    Write-Host ""
+    
+    # Create temporary directory for downloads
+    $TempDir = New-Item -ItemType Directory -Path "$env:TEMP\vtcode-install-$(Get-Random)" -Force
+    
+    try {
+        # Fetch latest release
+        $Release = Get-LatestRelease
+        
+        # Get download URL
+        $DownloadInfo = Get-DownloadUrl $Release
+        
+        # Download binary
+        $ArchivePath = Join-Path $TempDir "vtcode-binary.zip"
+        Download-Binary -Url $DownloadInfo.Url -OutputPath $ArchivePath
+        
+        # Verify checksum
+        Verify-Checksum -BinaryPath $ArchivePath -ReleaseTag $DownloadInfo.Tag
+        
+        # Extract binary
+        $ExtractDir = Join-Path $TempDir "extract"
+        New-Item -ItemType Directory -Path $ExtractDir -Force > $null
+        $BinaryPath = Extract-Binary -ZipPath $ArchivePath -OutputDir $ExtractDir
+        
+        # Install binary
+        $TargetPath = Join-Path $InstallDir $BinName
+        Install-Binary -Source $BinaryPath -Target $TargetPath
+        
+        # Check if in PATH
+        if (-not (Check-Path $InstallDir)) {
+            Add-ToPath $InstallDir
+        }
+        
+        Write-Host ""
+        Write-Success "Installation complete!"
+        Write-Info "VT Code is ready to use"
+        Write-Host ""
+        
+        # Test installation
+        try {
+            $Version = & $TargetPath --version
+            Write-Success "Version check passed: $Version"
+        }
+        catch {
+            Write-Warning "Could not verify installation, but binary appears to be installed"
+        }
+        
+        Write-Host ""
+        Write-Info "To get started, run: vtcode ask 'hello world'"
+    }
+    finally {
+        # Cleanup
+        Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+        Cleanup
+    }
+}
+
+Main

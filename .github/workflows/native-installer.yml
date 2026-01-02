@@ -1,0 +1,42 @@
+name: Native Installer - Generate Checksums
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  generate-checksums:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG=${{ github.event.release.tag_name }}
+          mkdir -p release-assets
+          
+          # Use gh CLI to download all assets
+          gh release download "$RELEASE_TAG" -D release-assets
+      
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          
+          # Generate SHA256 checksums for all binaries
+          sha256sum vtcode-* > checksums.txt
+          
+          # Display checksums
+          cat checksums.txt
+      
+      - name: Upload checksums to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG=${{ github.event.release.tag_name }}
+          gh release upload "$RELEASE_TAG" release-assets/checksums.txt --clobber
