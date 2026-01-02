@@ -805,6 +805,59 @@ verify_gh_account() {
     return 0
 }
 
+# Create a GitHub release and trigger the build-release workflow
+# Args:
+#   $1: version - Release version (e.g., 0.58.7)
+#   $2: tag - Git tag (e.g., v0.58.7)
+# Returns:
+#   0 on success, 1 on failure
+create_github_release() {
+    local version=$1
+    local tag=$2
+
+    if ! command -v gh &> /dev/null; then
+        print_warning "GitHub CLI (gh) not available - skipping GitHub release creation"
+        return 0
+    fi
+
+    print_info "Creating GitHub release for tag: $tag"
+
+    # Generate release notes from commits
+    local release_notes
+    release_notes=$(git log "$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 2 | tail -n 1)..HEAD" \
+        --no-merges --pretty=format:"- %s" 2>/dev/null || echo "Release $version")
+
+    # Create the GitHub release
+    if gh release create "$tag" \
+        --title "VT Code v$version" \
+        --notes "$release_notes" \
+        --draft=false \
+        --prerelease=false; then
+        print_success "GitHub release created: $tag"
+        
+        # Wait a moment for the release to be fully published
+        sleep 2
+        
+        # Trigger the build-release workflow by dispatching it
+        print_info "Triggering build-release workflow for version $version..."
+        if gh workflow run build-release.yml \
+            -f version="$tag" \
+            --ref main; then
+            print_success "Build-release workflow triggered successfully"
+            print_info "Binary build will be available at: https://github.com/vinhnx/vtcode/releases/tag/$tag"
+            return 0
+        else
+            print_warning "Failed to trigger build-release workflow"
+            print_info "You can manually trigger the workflow from: https://github.com/vinhnx/vtcode/actions/workflows/build-release.yml"
+            return 1
+        fi
+    else
+        print_warning "Failed to create GitHub release for $tag"
+        print_info "You can create it manually at: https://github.com/vinhnx/vtcode/releases/new"
+        return 1
+    fi
+}
+
 run_release() {
     local release_argument=$1
     local dry_run_flag=$2
@@ -1066,10 +1119,22 @@ main() {
     git push origin main && git push --tags origin
     print_success "Commits and tags pushed successfully"
 
+    # Create GitHub release and trigger build workflow
+    local release_tag="v$released_version"
+    if [[ "$skip_release_check" != 'true' ]]; then
+        print_info "Creating GitHub release and triggering build workflow..."
+        if create_github_release "$released_version" "$release_tag"; then
+            print_success "GitHub release created and build workflow triggered"
+        else
+            print_warning "Could not automatically create GitHub release"
+            print_info "You can create it manually at: https://github.com/vinhnx/vtcode/releases/new"
+        fi
+    fi
+
     # Inform user about GitHub Actions workflows that will run
-    print_info "GitHub Actions workflows triggered:"
-    print_info "  - Release workflow: Creates GitHub release and changelog"
-    print_info "  - Release-on-tag workflow: Builds and uploads binaries"
+    print_info "GitHub Actions workflows status:"
+    print_info "  - Build-release workflow: Builds binaries for all platforms"
+    print_info "  - Release creation: Done via gh release create command"
     print_info "These workflows may take 5-15 minutes to complete depending on platform builds"
 
     # Check if we should skip GitHub release verification
