@@ -3,6 +3,21 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.9] - 2026-01-02
+
+
+### Features
+    - feat: auto-trigger build-release workflow on GitHub release creation
+
+
+### Documentation
+    - docs: update changelog for v0.58.8 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.58.8 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.58.7 version =  [skip ci]
 # [Version 0.58.8] - 2026-01-02
 
 
