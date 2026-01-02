@@ -3,6 +3,22 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.11] - 2026-01-02
+
+
+### Bug Fixes
+    - fix: suppress dead_code warnings for planned/stub functions
+    - fix: build-release workflow now triggers on tag push events
+
+
+### Documentation
+    - docs: update changelog for v0.58.10 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.58.10 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.58.9 version =  [skip ci]
 # [Version 0.58.10] - 2026-01-02
 
 
