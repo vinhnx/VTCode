@@ -1,423 +1,389 @@
-#!/bin/bash
-# VT Code Installer
-# Usage: 
-#   Recommended: curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash [version]
-#   Alternative: npm install -g vtcode
+#!/usr/bin/env bash
 
-set -e
+# VT Code Native Installer
+# Downloads and installs the latest VT Code binary from GitHub Releases
+# Supports: macOS (Intel/Apple Silicon), Linux, Windows (WSL/Git Bash)
 
-GITHUB_REPO="vinhnx/vtcode"
+set -euo pipefail
 
-# Parse arguments
-TARGET_VERSION="$1"
-VERBOSE="${VT_INSTALL_VERBOSE:-false}"
-
-# Colors
+# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
-log() { echo -e "${BLUE}➜${NC} $1"; }
-success() { echo -e "${GREEN}✓${NC} $1"; }
-error() { echo -e "${RED}✗${NC} $1" >&2; }
-warn() { echo -e "${YELLOW}⚠${NC} $1" >&2; }
+# Configuration
+REPO="vinhnx/vtcode"
+INSTALL_DIR="${INSTALL_DIR:-.local/bin}"
+BIN_NAME="vtcode"
+GITHUB_API="https://api.github.com/repos/$REPO/releases/latest"
+GITHUB_RELEASES="https://github.com/$REPO/releases/download"
 
-verbose() {
-    if [ "$VERBOSE" = "true" ]; then
-        echo -e "${BLUE}[DEBUG]${NC} $1"
-    fi
+# Expand ~ to home directory
+INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
+mkdir -p "$INSTALL_DIR"
+
+# Logging functions
+log_info() {
+    printf '%b\n' "${BLUE}INFO:${NC} $1"
 }
 
-# Check dependencies
-check_dependencies() {
-    log "Checking dependencies..."
-    
-    if command -v curl >/dev/null 2>&1; then
-        DOWNLOADER="curl"
-        DOWNLOAD_CMD="curl -fsSL"
-    elif command -v wget >/dev/null 2>&1; then
-        DOWNLOADER="wget"
-        DOWNLOAD_CMD="wget -q -O -"
-    else
-        error "Either curl or wget is required"
-        exit 1
-    fi
-    
-    verbose "Using downloader: $DOWNLOADER"
-    
-    # Check for jq for better JSON parsing
-    if command -v jq >/dev/null 2>&1; then
-        HAS_JQ=true
-        verbose "jq found - will use for JSON parsing"
-    else
-        HAS_JQ=false
-        verbose "jq not found - will use grep/sed fallback"
-    fi
-    
-    success "Dependencies OK"
+log_success() {
+    printf '%b\n' "${GREEN}✓${NC} $1"
 }
 
-# Enhanced version extraction
-get_latest_version() {
-    local api_url="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
-    verbose "Fetching latest version from $api_url"
-    
-    local response
-    if [ "$DOWNLOADER" = "curl" ]; then
-        response=$(curl -fsSL "$api_url")
-    else
-        response=$(wget -q -O - "$api_url")
-    fi
-    
-    if [ -z "$response" ]; then
-        error "Failed to fetch release information"
-        return 1
-    fi
-    
-    local version
-    if [ "$HAS_JQ" = "true" ]; then
-        version=$(echo "$response" | jq -r '.tag_name // empty' 2>/dev/null || true)
-    else
-        # Fallback to grep/sed, but handle both 'v' prefix and without
-        version=$(echo "$response" | grep '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' | sed -E 's/^v//')
-    fi
-    
-    if [ -z "$version" ]; then
-        error "Failed to parse version from GitHub API response"
-        if [ "$VERBOSE" = "true" ]; then
-            error "Response: $response"
-        fi
-        return 1
-    fi
-    
-    # Remove 'v' prefix if present (ensure we don't double-prefix later)
-    version=$(echo "$version" | sed -E 's/^v//')
-    
-    verbose "Latest version: $version"
-    echo "$version"
+log_error() {
+    printf '%b\n' "${RED}✗${NC} $1" >&2
 }
 
-# Check if release has assets before downloading
-check_release_assets() {
-    local version="$1"
-    local platform="$2"
-    
-    local api_url="https://api.github.com/repos/$GITHUB_REPO/releases/tags/v${version}"
-    verbose "Checking assets for release v${version}"
-    
-    local response
-    if [ "$DOWNLOADER" = "curl" ]; then
-        response=$(curl -fsSL "$api_url" 2>/dev/null || echo "")
-    else
-        response=$(wget -q -O - "$api_url" 2>/dev/null || echo "")
-    fi
-    
-    if [ -z "$response" ]; then
-        error "Failed to fetch release information for v${version}"
-        return 1
-    fi
-    
-    local asset_count
-    if [ "$HAS_JQ" = "true" ]; then
-        asset_count=$(echo "$response" | jq -r '.assets | length' 2>/dev/null || echo "0")
-    else
-        # Crude check - look for "assets": [...]
-        asset_count=$(echo "$response" | grep -o '"assets":\s*\[' | wc -l)
-        # This is very crude, better to just check if we see asset names
-        if echo "$response" | grep -q "${platform}.tar.gz\|${platform}.zip"; then
-            verbose "Found asset matching pattern for $platform"
-            return 0
-        fi
-    fi
-    
-    if [ "$asset_count" = "0" ] 2>/dev/null; then
-        error "Release v${version} exists but has no assets uploaded yet"
-        error "The build workflow may still be running or was disabled"
-        return 1
-    fi
-    
-    verbose "Release v${version} has assets"
-    return 0
+log_warning() {
+    printf '%b\n' "${YELLOW}⚠${NC} $1"
 }
 
-# Detect platform with better error handling
+# Detect OS and architecture
 detect_platform() {
-    log "Detecting platform..."
+    local os
+    local arch
     
-    OS=$(uname -s 2>/dev/null || echo "")
-    ARCH=$(uname -m 2>/dev/null || echo "")
-    
-    if [ -z "$OS" ] || [ -z "$ARCH" ]; then
-        error "Failed to detect platform (OS: ${OS:-unknown}, ARCH: ${ARCH:-unknown})"
-        error "Please report this issue with your system details"
-        exit 1
-    fi
-    
-    verbose "Detected OS: $OS, ARCH: $ARCH"
-    
-    case "$OS" in
+    case "$(uname -s)" in
         Darwin)
-            case "$ARCH" in
-                arm64|aarch64) PLATFORM="aarch64-apple-darwin" ;;
-                x86_64) PLATFORM="x86_64-apple-darwin" ;;
-                *) error "Unsupported macOS architecture: $ARCH"; exit 1 ;;
-            esac
+            os="apple-darwin"
+            if [[ $(uname -m) == "arm64" ]]; then
+                arch="aarch64"
+            else
+                arch="x86_64"
+            fi
             ;;
         Linux)
-            case "$ARCH" in
-                x86_64) PLATFORM="x86_64-unknown-linux-gnu" ;;
-                aarch64|arm64) PLATFORM="aarch64-unknown-linux-gnu" ;;
-                armv7l) PLATFORM="armv7-unknown-linux-gnueabihf" ;;
-                *) error "Unsupported Linux architecture: $ARCH"; exit 1 ;;
-            esac
+            os="unknown-linux-gnu"
+            arch="x86_64"
             ;;
-        MINGW*|MSYS*|CYGWIN*)
-            error "Windows detected. Please use the PowerShell installer:"
-            error "irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex"
+        MINGW*|MSYS*)
+            log_error "Windows native is not supported. Please use WSL or Git Bash."
             exit 1
             ;;
         *)
-            error "Unsupported OS: $OS (architecture: $ARCH)"
-            error "Please check https://github.com/vinhnx/vtcode/releases for available builds"
+            log_error "Unsupported OS: $(uname -s)"
             exit 1
             ;;
     esac
     
-    verbose "Platform: $PLATFORM"
-    success "Platform detected: $PLATFORM"
+    echo "${arch}-${os}"
 }
 
-# Download with error handling and verification
-download_file() {
+# Fetch the latest release info from GitHub API
+fetch_latest_release() {
+    log_info "Fetching latest VT Code release..."
+    
+    local response
+    response=$(curl -fsSL "$GITHUB_API" 2>/dev/null || true)
+    
+    if [[ -z "$response" ]]; then
+        log_error "Failed to fetch release info from GitHub API"
+        log_info "Ensure you have internet connection and GitHub is accessible"
+        exit 1
+    fi
+    
+    echo "$response"
+}
+
+# Extract download URL for the detected platform
+get_download_url() {
+    local json="$1"
+    local platform="$2"
+    local release_tag
+    
+    # Extract tag name
+    release_tag=$(echo "$json" | grep -o '"tag_name": "[^"]*' | cut -d'"' -f4)
+    
+    if [[ -z "$release_tag" ]]; then
+        log_error "Could not parse release tag from GitHub API"
+        exit 1
+    fi
+    
+    log_info "Latest version: $release_tag"
+    
+    # Determine file extension based on platform
+    local file_ext
+    if [[ "$platform" == *"darwin"* ]]; then
+        file_ext="tar.gz"
+    elif [[ "$platform" == *"linux"* ]]; then
+        file_ext="tar.gz"
+    else
+        file_ext="zip"
+    fi
+    
+    # Build download URL
+    local filename="vtcode-${release_tag}-${platform}.${file_ext}"
+    echo "${GITHUB_RELEASES}/${release_tag}/${filename}"
+}
+
+# Download binary with progress
+download_binary() {
     local url="$1"
-    local output="$2"
+    local output_file="$2"
     
-    verbose "Downloading: $url"
-    verbose "Output: $output"
+    log_info "Downloading binary from GitHub..."
+    log_info "URL: $url"
     
-    # Check if URL exists first (avoid 404 during download)
-    if [ "$DOWNLOADER" = "curl" ]; then
-        if ! curl -fsSL --head "$url" >/dev/null 2>&1; then
-            error "Asset not found at URL: $url"
-            error "This may mean:"
-            error "  - The release version doesn't exist"
-            error "  - The platform $PLATFORM is not supported for this release"
-            error "  - The build workflow failed or was disabled"
-            return 1
-        fi
+    if ! curl -fSL -o "$output_file" "$url"; then
+        log_error "Failed to download binary"
+        exit 1
     fi
     
-    if [ "$DOWNLOADER" = "curl" ]; then
-        if [ -n "$output" ]; then
-            curl -fsSL --progress-bar -o "$output" "$url"
-        else
-            curl -fsSL "$url"
-        fi
-    elif [ "$DOWNLOADER" = "wget" ]; then
-        if [ -n "$output" ]; then
-            wget -q --show-progress -O "$output" "$url"
-        else
-            wget -q -O - "$url"
-        fi
-    fi
+    log_success "Downloaded successfully"
 }
 
-# Check if directory is writable
-check_install_dir() {
-    local dir="$1"
-    if [ -d "$dir" ] && [ -w "$dir" ]; then
+# Verify checksum if available
+verify_checksum() {
+    local binary_file="$1"
+    local release_tag="$2"
+    
+    log_info "Verifying binary integrity..."
+    
+    # Try to download checksums from GitHub release
+    local checksums_url="${GITHUB_RELEASES}/${release_tag}/checksums.txt"
+    local temp_checksums="/tmp/vtcode-checksums.txt"
+    
+    if ! curl -fsSL -o "$temp_checksums" "$checksums_url" 2>/dev/null; then
+        log_warning "Checksums file not found, skipping verification"
         return 0
-    else
-        return 1
     fi
+    
+    local basename_file
+    basename_file=$(basename "$binary_file")
+    
+    # Extract checksum for this platform
+    local expected_checksum
+    expected_checksum=$(grep "$basename_file" "$temp_checksums" 2>/dev/null | awk '{print $1}' || true)
+    
+    if [[ -z "$expected_checksum" ]]; then
+        log_warning "Checksum not found for this platform, skipping verification"
+        return 0
+    fi
+    
+    # Compute actual checksum
+    local actual_checksum
+    if command -v sha256sum &> /dev/null; then
+        actual_checksum=$(sha256sum "$binary_file" | awk '{print $1}')
+    elif command -v shasum &> /dev/null; then
+        actual_checksum=$(shasum -a 256 "$binary_file" | awk '{print $1}')
+    else
+        log_warning "sha256sum/shasum not found, skipping verification"
+        return 0
+    fi
+    
+    if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+        log_error "Checksum mismatch!"
+        log_error "Expected: $expected_checksum"
+        log_error "Got:      $actual_checksum"
+        exit 1
+    fi
+    
+    log_success "Checksum verified"
 }
 
-# Install with cargo as fallback
-install_with_cargo() {
-    if command -v cargo >/dev/null 2>&1; then
-        warn "Attempting to install with cargo (this may take a while)..."
-        log "Running: cargo install vtcode --version ${VERSION}"
-        
-        if cargo install vtcode --version "${VERSION}"; then
-            success "Successfully installed vtcode v${VERSION} via cargo"
-            echo ""
-            echo "Note: You may need to add ~/.cargo/bin to your PATH"
-            echo "  export PATH=\"~/.cargo/bin:\$PATH\""
-            exit 0
+# Extract binary from archive
+extract_binary() {
+    local archive="$1"
+    local platform="$2"
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    
+    log_info "Extracting binary..."
+    
+    if [[ "$platform" == *"darwin"* ]] || [[ "$platform" == *"linux"* ]]; then
+        tar -xzf "$archive" -C "$temp_dir"
+    else
+        # Windows/MSVC - requires 7z or unzip
+        if command -v 7z &> /dev/null; then
+            7z x "$archive" -o"$temp_dir" > /dev/null
+        elif command -v unzip &> /dev/null; then
+            unzip -q "$archive" -d "$temp_dir"
         else
-            error "Cargo installation failed"
-            return 1
+            log_error "Neither 7z nor unzip found. Cannot extract Windows binary."
+            exit 1
         fi
-    else
-        error "Cargo (Rust package manager) is not installed"
-        error ""
-        error "To install Rust and Cargo:"
-        error "  1. Visit: https://rustup.rs/"
-        error "  2. Install rustup (Rust toolchain installer)"
-        error "  3. Run: cargo install vtcode --version ${VERSION}"
-        error ""
-        error "Alternatively, check for pre-built binaries at:"
-        error "  https://github.com/${GITHUB_REPO}/releases/tag/v${VERSION}"
-        return 1
     fi
+    
+    # Find the binary
+    local binary_path
+    binary_path=$(find "$temp_dir" -type f -name "$BIN_NAME" -o -name "$BIN_NAME.exe" | head -1)
+    
+    if [[ -z "$binary_path" ]]; then
+        log_error "Binary not found in archive"
+        exit 1
+    fi
+    
+    echo "$binary_path"
 }
 
-# Main logic
+# Install binary to target directory
+install_binary() {
+    local source="$1"
+    local target="$2"
+    
+    log_info "Installing to $target..."
+    
+    # Make source executable
+    chmod +x "$source"
+    
+    # Copy to installation directory
+    if ! cp "$source" "$target"; then
+        log_error "Failed to install binary to $target"
+        log_info "You may need to use: sudo cp $source $target"
+        exit 1
+    fi
+    
+    chmod +x "$target"
+    log_success "Binary installed to $target"
+}
+
+# Check if install directory is in PATH
+check_path() {
+    local install_path="$1"
+    
+    if [[ ":$PATH:" == *":$install_path:"* ]]; then
+        return 0
+    fi
+    
+    return 1
+}
+
+# Add install directory to PATH (for common shells)
+add_to_path() {
+    local install_path="$1"
+    local shell_name
+    shell_name=$(basename "$SHELL")
+    
+    log_warning "Installation directory is not in PATH"
+    log_info "Add the following to your shell configuration file:"
+    echo ""
+    echo "  export PATH=\"$install_path:\$PATH\""
+    echo ""
+    
+    case "$shell_name" in
+        bash)
+            echo "Add to: ~/.bashrc or ~/.bash_profile"
+            ;;
+        zsh)
+            echo "Add to: ~/.zshrc"
+            ;;
+        fish)
+            echo "Add to: ~/.config/fish/config.fish (using: set -gx PATH $install_path \$PATH)"
+            ;;
+        *)
+            echo "Add to: ~/.${shell_name}rc or equivalent"
+            ;;
+    esac
+}
+
+# Cleanup temporary files
+cleanup() {
+    rm -f /tmp/vtcode-* /tmp/vtcode.tar.gz /tmp/vtcode.zip
+}
+
+# Main installation flow
 main() {
-    # Check dependencies first
-    check_dependencies
+    log_info "VT Code Native Installer"
+    echo ""
     
     # Detect platform
-    detect_platform
+    local platform
+    platform=$(detect_platform)
+    log_info "Detected platform: $platform"
     
-    # Get version
-    if [ -z "$TARGET_VERSION" ] || [ "$TARGET_VERSION" = "latest" ]; then
-        log "Checking latest version..."
-        VERSION=$(get_latest_version) || exit 1
-    else
-        # Remove 'v' prefix if present
-        VERSION="${TARGET_VERSION#v}"
-    fi
+    # Create temporary directory for downloads
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    trap "rm -rf $temp_dir cleanup" EXIT
     
-    if [ -z "$VERSION" ]; then
-        error "Failed to determine version"
-        exit 1
-    fi
+    # Fetch latest release
+    local release_json
+    release_json=$(fetch_latest_release)
     
-    log "Installing VT Code v${VERSION}..."
+    # Get download URL
+    local download_url
+    download_url=$(get_download_url "$release_json" "$platform")
     
-    # Check if release has assets before proceeding with download
-    if ! check_release_assets "$VERSION" "$PLATFORM"; then
-        warn "Missing pre-built binaries for v${VERSION} on $PLATFORM"
-        warn ""
-        warn "This could mean:"
-        warn "  1. Linux binaries are not yet available for this version"
-        warn "  2. The release workflow is disabled in GitHub Actions"
-        warn "  3. The build is still in progress"
-        warn "  4. This platform is not supported"
-        echo ""
-        
-        # Try cargo fallback (best option for Linux users)
-        log "Attempting to build from source with cargo (this may take 5-15 minutes)..."
-        if install_with_cargo; then
-            exit 0
-        fi
-        
-        error ""
-        error "Installation failed. Please try one of these alternatives:"
-        error ""
-        error "Option 1: Install Rust and build from source (recommended for Linux)"
-        error "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-        error "  source ~/.cargo/env"
-        error "  cargo install vtcode --version $VERSION"
-        error ""
-        error "Option 2: Download pre-built binaries (if available)"
-        error "  Visit: https://github.com/$GITHUB_REPO/releases/tag/v$VERSION"
-        error ""
-        error "Option 3: Use a different installation method"
-        error "  Cargo: cargo install vtcode"
-        error "  GitHub: Check releases page for your platform"
-        exit 1
-    fi
+    # Extract version for checksum verification
+    local release_tag
+    release_tag=$(echo "$release_json" | grep -o '"tag_name": "[^"]*' | cut -d'"' -f4)
     
-    log "Installing vtcode v$VERSION for $PLATFORM"
+    # Download binary
+    local archive_file="$temp_dir/vtcode-binary.tar.gz"
+    download_binary "$download_url" "$archive_file"
     
-    # Prepare temp dir
-    TEMP_DIR=$(mktemp -d)
-    cleanup() {
-        verbose "Cleaning up temp directory: $TEMP_DIR"
-        rm -rf "$TEMP_DIR"
-    }
-    trap cleanup EXIT
-    verbose "Created temp directory: $TEMP_DIR"
+    # Verify checksum
+    verify_checksum "$archive_file" "$release_tag"
     
-    # Download
-    FILENAME="vtcode-v${VERSION}-${PLATFORM}.tar.gz"
-    URL="https://github.com/$GITHUB_REPO/releases/download/v${VERSION}/${FILENAME}"
-    ARCHIVE="$TEMP_DIR/$FILENAME"
+    # Extract binary
+    local binary_path
+    binary_path=$(extract_binary "$archive_file" "$platform")
     
-    log "Downloading..."
-    log "  Source: $URL"
-    if ! download_file "$URL" "$ARCHIVE"; then
-        error "Download failed. Check version or internet connection."
-        exit 1
-    fi
+    # Install binary
+    local target_path="$INSTALL_DIR/$BIN_NAME"
+    install_binary "$binary_path" "$target_path"
     
-    # Verify download
-    if [ ! -f "$ARCHIVE" ] || [ ! -s "$ARCHIVE" ]; then
-        error "Downloaded file is empty or missing"
-        exit 1
-    fi
-    
-    verbose "Download complete: $(ls -lh "$ARCHIVE" | awk '{print $5}')"
-    
-    # Extract
-    log "Extracting..."
-    tar -xzf "$ARCHIVE" -C "$TEMP_DIR"
-    
-    BINARY_SRC="$TEMP_DIR/vtcode"
-    if [ ! -f "$BINARY_SRC" ]; then
-        # Handle case where tarball might have a subdirectory
-        BINARY_SRC=$(find "$TEMP_DIR" -name vtcode -type f | head -n 1)
-    fi
-    
-    if [ ! -f "$BINARY_SRC" ]; then
-        error "Binary not found in archive"
-        error "Archive contents:"
-        find "$TEMP_DIR" -type f -name "*" 2>/dev/null || true
-        exit 1
-    fi
-    
-    verbose "Binary found: $BINARY_SRC"
-    
-    # Install path
-    INSTALL_DIR=""
-    if check_install_dir "/usr/local/bin"; then
-        INSTALL_DIR="/usr/local/bin"
-    elif check_install_dir "/opt/local/bin"; then
-        INSTALL_DIR="/opt/local/bin"
-    else
-        INSTALL_DIR="$HOME/.local/bin"
-        mkdir -p "$INSTALL_DIR"
-    fi
-    
-    INSTALL_PATH="$INSTALL_DIR/vtcode"
-    
-    log "Installing to $INSTALL_PATH..."
-    cp "$BINARY_SRC" "$INSTALL_PATH"
-    chmod +x "$INSTALL_PATH"
-    
-    success "Installed vtcode v$VERSION"
-    
-    # Verify installation
-    if ! command -v vtcode >/dev/null 2>&1; then
-        echo ""
-        echo "Note: Please add $INSTALL_DIR to your PATH:"
-        echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
-        echo ""
-        echo "After updating PATH, run: vtcode --version"
-    else
-        echo ""
-        log "Verifying installation..."
-        vtcode --version
+    # Check if in PATH
+    if ! check_path "$INSTALL_DIR"; then
+        add_to_path "$INSTALL_DIR"
     fi
     
     echo ""
-    echo "Distribution Channels:"
-    if [[ "$PLATFORM" == *"linux"* ]]; then
-        echo "  Cargo (recommended for Linux): cargo install vtcode"
-    else
-        echo "  Cargo: cargo install vtcode"
-        echo "  Brew:  brew install vinhnx/tap/vtcode"
-    fi
-    echo "  NPM:   npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com"
-    echo "  NPM:   npm install -g vtcode (recommended)"
-    echo "  GitHub: https://github.com/$GITHUB_REPO/releases"
+    log_success "Installation complete!"
+    log_info "VT Code is ready to use"
     echo ""
-    success "Installation complete!"
+    
+    # Test installation
+    if "$target_path" --version &>/dev/null; then
+        log_success "Version check passed: $($target_path --version)"
+    else
+        log_warning "Could not verify installation, but binary appears to be installed"
+    fi
+    
+    echo ""
+    log_info "To get started, run: vtcode ask 'hello world'"
 }
 
-# Run main function
-main "$@"
+# Show usage
+show_usage() {
+    cat <<'USAGE'
+VT Code Native Installer
+
+Usage: ./install.sh [options]
+
+Options:
+  -d, --dir DIR      Installation directory (default: ~/.local/bin)
+  -h, --help         Show this help message
+
+Examples:
+  ./install.sh                          # Install to ~/.local/bin
+  ./install.sh --dir /usr/local/bin    # Install to /usr/local/bin (may need sudo)
+
+Environment variables:
+  INSTALL_DIR        Set installation directory
+USAGE
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -d|--dir)
+            INSTALL_DIR="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_usage
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            show_usage
+            exit 1
+            ;;
+    esac
+done
+
+main
