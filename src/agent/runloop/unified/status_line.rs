@@ -31,6 +31,7 @@ pub(crate) struct InputStatusState {
     // Context efficiency metrics
     pub(crate) context_utilization: Option<f64>,
     pub(crate) context_tokens: Option<usize>,
+    #[allow(dead_code)]
     pub(crate) semantic_value_per_token: Option<f64>,
     pub(crate) is_cancelling: bool,
 }
@@ -38,6 +39,7 @@ pub(crate) struct InputStatusState {
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Update context efficiency metrics in the status state
+#[allow(dead_code)]
 pub(crate) fn update_context_efficiency(
     state: &mut InputStatusState,
     utilization: f64,

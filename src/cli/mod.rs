@@ -76,6 +76,7 @@ pub async fn handle_marketplace_remove(id: String) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn handle_marketplace_update(id: Option<String>) -> Result<()> {
     match id {
         Some(marketplace_id) => println!("Updating marketplace: {}", marketplace_id),
