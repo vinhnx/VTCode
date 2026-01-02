@@ -211,7 +211,7 @@ pub use mcp::{
 };
 pub use memory::{MemoryCheckpoint, MemoryMonitor, MemoryPressure, MemoryReport};
 pub use models_manager::{
-    ModelsCache, ModelsManager, ModelFamily, ModelPreset, builtin_model_presets,
+    ModelFamily, ModelPreset, ModelsCache, ModelsManager, builtin_model_presets,
     model_family::find_family_for_model,
 };
 pub use notifications::{

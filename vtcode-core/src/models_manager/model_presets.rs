@@ -191,13 +191,24 @@ fn gemini_presets() -> Vec<ModelPreset> {
             id: "gemini-3-flash-preview".to_string(),
             model: "gemini-3-flash-preview".to_string(),
             display_name: "Gemini 3 Flash Preview".to_string(),
-            description: "Most intelligent model built for speed with superior search and grounding".to_string(),
+            description:
+                "Most intelligent model built for speed with superior search and grounding"
+                    .to_string(),
             provider: Provider::Gemini,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Low, description: "Fast responses".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced reasoning".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep reasoning".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Low,
+                    description: "Fast responses".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced reasoning".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep reasoning".to_string(),
+                },
             ],
             is_default: false,
             upgrade: None,
@@ -213,8 +224,14 @@ fn gemini_presets() -> Vec<ModelPreset> {
             provider: Provider::Gemini,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced reasoning".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep reasoning".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced reasoning".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep reasoning".to_string(),
+                },
             ],
             is_default: false,
             upgrade: None,
@@ -230,9 +247,18 @@ fn gemini_presets() -> Vec<ModelPreset> {
             provider: Provider::Gemini,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Low, description: "Fastest responses".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Maximum reasoning".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Low,
+                    description: "Fastest responses".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Maximum reasoning".to_string(),
+                },
             ],
             is_default: true,
             upgrade: None,
@@ -248,8 +274,14 @@ fn gemini_presets() -> Vec<ModelPreset> {
             provider: Provider::Gemini,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced reasoning".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep reasoning".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced reasoning".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep reasoning".to_string(),
+                },
             ],
             is_default: false,
             upgrade: None,
@@ -270,9 +302,18 @@ fn openai_presets() -> Vec<ModelPreset> {
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Low, description: "Fast responses".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Maximum reasoning".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Low,
+                    description: "Fast responses".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Maximum reasoning".to_string(),
+                },
             ],
             is_default: false,
             upgrade: None,
@@ -288,9 +329,18 @@ fn openai_presets() -> Vec<ModelPreset> {
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Low, description: "Fast".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Low,
+                    description: "Fast".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep".to_string(),
+                },
             ],
             is_default: false,
             upgrade: None,
@@ -306,9 +356,18 @@ fn openai_presets() -> Vec<ModelPreset> {
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Low, description: "Fast".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Low,
+                    description: "Fast".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep".to_string(),
+                },
             ],
             is_default: true,
             upgrade: None,
@@ -323,9 +382,10 @@ fn openai_presets() -> Vec<ModelPreset> {
             description: "Efficient GPT-5 variant".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-            ],
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -345,8 +405,14 @@ fn anthropic_presets() -> Vec<ModelPreset> {
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep reasoning".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep reasoning".to_string(),
+                },
             ],
             is_default: true,
             upgrade: None,
@@ -361,9 +427,10 @@ fn anthropic_presets() -> Vec<ModelPreset> {
             description: "Balanced Anthropic model".to_string(),
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-            ],
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -377,9 +444,10 @@ fn anthropic_presets() -> Vec<ModelPreset> {
             description: "Efficient Anthropic model".to_string(),
             provider: Provider::Anthropic,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Fast".to_string() },
-            ],
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Fast".to_string(),
+            }],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -399,8 +467,14 @@ fn deepseek_presets() -> Vec<ModelPreset> {
             provider: Provider::DeepSeek,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep thinking".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep thinking".to_string(),
+                },
             ],
             is_default: true,
             upgrade: None,
@@ -415,9 +489,10 @@ fn deepseek_presets() -> Vec<ModelPreset> {
             description: "Fast non-thinking mode".to_string(),
             provider: Provider::DeepSeek,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Fast".to_string() },
-            ],
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Fast".to_string(),
+            }],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -437,8 +512,14 @@ fn xai_presets() -> Vec<ModelPreset> {
             provider: Provider::XAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep".to_string(),
+                },
             ],
             is_default: true,
             upgrade: None,
@@ -453,9 +534,10 @@ fn xai_presets() -> Vec<ModelPreset> {
             description: "Code-focused Grok deployment".to_string(),
             provider: Provider::XAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-            ],
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -475,8 +557,14 @@ fn zai_presets() -> Vec<ModelPreset> {
             provider: Provider::ZAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep thinking".to_string() },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep thinking".to_string(),
+                },
             ],
             is_default: true,
             upgrade: None,
@@ -491,9 +579,10 @@ fn zai_presets() -> Vec<ModelPreset> {
             description: "GLM reasoning model".to_string(),
             provider: Provider::ZAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-            ],
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -504,131 +593,135 @@ fn zai_presets() -> Vec<ModelPreset> {
 }
 
 fn minimax_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "minimax-m2.1".to_string(),
-            model: "minimax-m2.1".to_string(),
-            display_name: "MiniMax M2.1".to_string(),
-            description: "Enhanced code understanding and reasoning".to_string(),
-            provider: Provider::Minimax,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep".to_string() },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(128_000),
-        },
-    ]
+    vec![ModelPreset {
+        id: "minimax-m2.1".to_string(),
+        model: "minimax-m2.1".to_string(),
+        display_name: "MiniMax M2.1".to_string(),
+        description: "Enhanced code understanding and reasoning".to_string(),
+        provider: Provider::Minimax,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            },
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::High,
+                description: "Deep".to_string(),
+            },
+        ],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(128_000),
+    }]
 }
 
 fn openrouter_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "openrouter/deepseek/deepseek-chat".to_string(),
-            model: "deepseek/deepseek-chat".to_string(),
-            display_name: "DeepSeek V3.2 (OpenRouter)".to_string(),
-            description: "DeepSeek via OpenRouter".to_string(),
-            provider: Provider::OpenRouter,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(128_000),
-        },
-    ]
+    vec![ModelPreset {
+        id: "openrouter/deepseek/deepseek-chat".to_string(),
+        model: "deepseek/deepseek-chat".to_string(),
+        display_name: "DeepSeek V3.2 (OpenRouter)".to_string(),
+        description: "DeepSeek via OpenRouter".to_string(),
+        provider: Provider::OpenRouter,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![ReasoningEffortPreset {
+            effort: ReasoningEffortLevel::Medium,
+            description: "Balanced".to_string(),
+        }],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(128_000),
+    }]
 }
 
 fn ollama_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "ollama/gpt-oss:20b".to_string(),
-            model: "gpt-oss:20b".to_string(),
-            display_name: "GPT-OSS 20B (Ollama)".to_string(),
-            description: "Open-weight GPT-OSS served locally".to_string(),
-            provider: Provider::Ollama,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(96_000),
-        },
-    ]
+    vec![ModelPreset {
+        id: "ollama/gpt-oss:20b".to_string(),
+        model: "gpt-oss:20b".to_string(),
+        display_name: "GPT-OSS 20B (Ollama)".to_string(),
+        description: "Open-weight GPT-OSS served locally".to_string(),
+        provider: Provider::Ollama,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![ReasoningEffortPreset {
+            effort: ReasoningEffortLevel::Medium,
+            description: "Balanced".to_string(),
+        }],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(96_000),
+    }]
 }
 
 fn moonshot_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "kimi-k2-thinking".to_string(),
-            model: "kimi-k2-thinking".to_string(),
-            display_name: "Kimi K2 Thinking".to_string(),
-            description: "Moonshot reasoning-tier model".to_string(),
-            provider: Provider::Moonshot,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::High, description: "Deep thinking".to_string() },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(128_000),
-        },
-    ]
+    vec![ModelPreset {
+        id: "kimi-k2-thinking".to_string(),
+        model: "kimi-k2-thinking".to_string(),
+        display_name: "Kimi K2 Thinking".to_string(),
+        description: "Moonshot reasoning-tier model".to_string(),
+        provider: Provider::Moonshot,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            },
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::High,
+                description: "Deep thinking".to_string(),
+            },
+        ],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(128_000),
+    }]
 }
 
 fn lmstudio_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "lmstudio/qwen2.5-7b-instruct".to_string(),
-            model: "qwen2.5-7b-instruct".to_string(),
-            display_name: "Qwen 2.5 7B (LM Studio)".to_string(),
-            description: "Qwen 2.5 served locally via LM Studio".to_string(),
-            provider: Provider::LmStudio,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(32_000),
-        },
-    ]
+    vec![ModelPreset {
+        id: "lmstudio/qwen2.5-7b-instruct".to_string(),
+        model: "qwen2.5-7b-instruct".to_string(),
+        display_name: "Qwen 2.5 7B (LM Studio)".to_string(),
+        description: "Qwen 2.5 served locally via LM Studio".to_string(),
+        provider: Provider::LmStudio,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![ReasoningEffortPreset {
+            effort: ReasoningEffortLevel::Medium,
+            description: "Balanced".to_string(),
+        }],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(32_000),
+    }]
 }
 
 fn huggingface_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "huggingface/deepseek-v3.2".to_string(),
-            model: "deepseek-ai/DeepSeek-V3-0324".to_string(),
-            display_name: "DeepSeek V3.2 (Hugging Face)".to_string(),
-            description: "DeepSeek via Hugging Face Inference".to_string(),
-            provider: Provider::HuggingFace,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset { effort: ReasoningEffortLevel::Medium, description: "Balanced".to_string() },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(128_000),
-        },
-    ]
+    vec![ModelPreset {
+        id: "huggingface/deepseek-v3.2".to_string(),
+        model: "deepseek-ai/DeepSeek-V3-0324".to_string(),
+        display_name: "DeepSeek V3.2 (Hugging Face)".to_string(),
+        description: "DeepSeek via Hugging Face Inference".to_string(),
+        provider: Provider::HuggingFace,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![ReasoningEffortPreset {
+            effort: ReasoningEffortLevel::Medium,
+            description: "Balanced".to_string(),
+        }],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(128_000),
+    }]
 }
 
 /// Get all model presets (for testing)

@@ -106,9 +106,7 @@ pub enum ToolEmitter {
         process_id: Option<String>,
     },
     /// Generic tool execution
-    Generic {
-        tool_name: String,
-    },
+    Generic { tool_name: String },
 }
 
 impl ToolEmitter {
@@ -190,18 +188,35 @@ impl ToolEmitter {
 
             // Apply patch success
             (Self::ApplyPatch { changes: _, .. }, ToolEventStage::Success(output)) => {
-                self.emit_patch_end(ctx, output.stdout.text.clone(), output.stderr.text.clone(), true)
-                    .await;
+                self.emit_patch_end(
+                    ctx,
+                    output.stdout.text.clone(),
+                    output.stderr.text.clone(),
+                    true,
+                )
+                .await;
             }
 
             // Apply patch failure
-            (Self::ApplyPatch { .. }, ToolEventStage::Failure(ToolEventFailureKind::Output(output))) => {
-                self.emit_patch_end(ctx, output.stdout.text.clone(), output.stderr.text.clone(), false)
-                    .await;
+            (
+                Self::ApplyPatch { .. },
+                ToolEventStage::Failure(ToolEventFailureKind::Output(output)),
+            ) => {
+                self.emit_patch_end(
+                    ctx,
+                    output.stdout.text.clone(),
+                    output.stderr.text.clone(),
+                    false,
+                )
+                .await;
             }
 
-            (Self::ApplyPatch { .. }, ToolEventStage::Failure(ToolEventFailureKind::Message(msg))) => {
-                self.emit_patch_end(ctx, String::new(), msg.clone(), false).await;
+            (
+                Self::ApplyPatch { .. },
+                ToolEventStage::Failure(ToolEventFailureKind::Message(msg)),
+            ) => {
+                self.emit_patch_end(ctx, String::new(), msg.clone(), false)
+                    .await;
             }
 
             // Shell/UnifiedExec begin
@@ -285,7 +300,8 @@ impl ToolEmitter {
     ) -> Result<String, ToolCallError> {
         match result {
             Ok(output) => {
-                self.emit(ctx, ToolEventStage::Success(output.clone())).await;
+                self.emit(ctx, ToolEventStage::Success(output.clone()))
+                    .await;
                 Ok(self.format_output_for_model(&output))
             }
             Err(ToolError::Rejected(msg)) => {
@@ -357,7 +373,13 @@ impl ToolEmitter {
     }
 
     /// Emit patch end event
-    async fn emit_patch_end(&self, ctx: ToolEventCtx<'_>, stdout: String, stderr: String, success: bool) {
+    async fn emit_patch_end(
+        &self,
+        ctx: ToolEventCtx<'_>,
+        stdout: String,
+        stderr: String,
+        success: bool,
+    ) {
         // Update diff tracker
         if let Some(tracker) = ctx.turn_diff_tracker {
             let mut guard = tracker.lock().await;
@@ -429,13 +451,23 @@ mod tests {
 
     #[test]
     fn test_emitter_tool_names() {
-        let shell = ToolEmitter::shell(vec!["ls".to_string()], PathBuf::new(), ExecCommandSource::Agent, false);
+        let shell = ToolEmitter::shell(
+            vec!["ls".to_string()],
+            PathBuf::new(),
+            ExecCommandSource::Agent,
+            false,
+        );
         assert_eq!(shell.tool_name(), "shell");
 
         let patch = ToolEmitter::apply_patch(HashMap::new(), true);
         assert_eq!(patch.tool_name(), "apply_patch");
 
-        let exec = ToolEmitter::unified_exec(&["echo".to_string()], PathBuf::new(), ExecCommandSource::Agent, None);
+        let exec = ToolEmitter::unified_exec(
+            &["echo".to_string()],
+            PathBuf::new(),
+            ExecCommandSource::Agent,
+            None,
+        );
         assert_eq!(exec.tool_name(), "exec_command");
 
         let generic = ToolEmitter::generic("custom_tool");

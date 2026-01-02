@@ -11,9 +11,8 @@ use async_trait::async_trait;
 use serde_json::Value;
 
 use super::tool_handler::{
-    ApprovalPolicy, ShellEnvironmentPolicy, ToolCallError, ToolEvent,
-    ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSession,
-    ToolSpec, TurnContext,
+    ApprovalPolicy, ShellEnvironmentPolicy, ToolCallError, ToolEvent, ToolHandler, ToolInvocation,
+    ToolKind, ToolOutput, ToolPayload, ToolSession, ToolSpec, TurnContext,
 };
 use crate::tool_policy::ToolPolicy;
 use crate::tools::result::ToolResult as SplitToolResult;
@@ -75,7 +74,9 @@ impl<H: ToolHandler + 'static> HandlerToToolAdapter<H> {
         let (text, is_success) = match &output {
             ToolOutput::Function { content, .. } => (content.clone(), output.is_success()),
             ToolOutput::Mcp { result } => {
-                let text = result.content.iter()
+                let text = result
+                    .content
+                    .iter()
                     .filter_map(|c| c.as_text())
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>()
@@ -98,26 +99,20 @@ impl<H: ToolHandler + 'static> Tool for HandlerToToolAdapter<H> {
 
         match self.handler.handle(invocation).await {
             Ok(output) => Ok(self.output_to_value(output)),
-            Err(ToolCallError::RespondToModel(msg)) => {
-                Ok(serde_json::json!({
-                    "success": false,
-                    "error": msg,
-                }))
-            }
-            Err(ToolCallError::Rejected(msg)) => {
-                Ok(serde_json::json!({
-                    "success": false,
-                    "rejected": true,
-                    "error": msg,
-                }))
-            }
-            Err(ToolCallError::Timeout(ms)) => {
-                Ok(serde_json::json!({
-                    "success": false,
-                    "timeout": true,
-                    "timeout_ms": ms,
-                }))
-            }
+            Err(ToolCallError::RespondToModel(msg)) => Ok(serde_json::json!({
+                "success": false,
+                "error": msg,
+            })),
+            Err(ToolCallError::Rejected(msg)) => Ok(serde_json::json!({
+                "success": false,
+                "rejected": true,
+                "error": msg,
+            })),
+            Err(ToolCallError::Timeout(ms)) => Ok(serde_json::json!({
+                "success": false,
+                "timeout": true,
+                "timeout_ms": ms,
+            })),
             Err(ToolCallError::Internal(e)) => Err(e),
         }
     }
@@ -131,7 +126,11 @@ impl<H: ToolHandler + 'static> Tool for HandlerToToolAdapter<H> {
 
                 // Create a summary for LLM (first 500 chars or key info)
                 let llm_content = if ui_content.len() > 500 {
-                    format!("{}...[truncated, {} chars total]", &ui_content[..500], ui_content.len())
+                    format!(
+                        "{}...[truncated, {} chars total]",
+                        &ui_content[..500],
+                        ui_content.len()
+                    )
                 } else {
                     ui_content.clone()
                 };
@@ -194,10 +193,8 @@ impl ToolHandler for ToolToHandlerAdapter {
     async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
         // Extract arguments from payload
         let args: Value = match &invocation.payload {
-            ToolPayload::Function { arguments } => {
-                serde_json::from_str(arguments)
-                    .map_err(|e| ToolCallError::respond(format!("Invalid arguments: {e}")))?
-            }
+            ToolPayload::Function { arguments } => serde_json::from_str(arguments)
+                .map_err(|e| ToolCallError::respond(format!("Invalid arguments: {e}")))?,
             _ => return Err(ToolCallError::respond("Unsupported payload type")),
         };
 
@@ -288,8 +285,8 @@ pub fn create_cwd_session() -> Arc<dyn ToolSession> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::tool_handler::{JsonSchema, ResponsesApiTool};
+    use super::*;
     use std::collections::BTreeMap;
 
     struct TestHandler;
@@ -330,7 +327,12 @@ mod tests {
         assert_eq!(adapter.description(), "A test tool");
 
         let result = adapter.execute(serde_json::json!({})).await.unwrap();
-        assert!(result.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
+        assert!(
+            result
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        );
     }
 
     #[test]

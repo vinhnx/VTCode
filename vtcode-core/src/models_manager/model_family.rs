@@ -161,7 +161,9 @@ impl ModelFamily {
             "tool_use" | "tools" => self.supports_tool_use,
             "streaming" => self.supports_streaming,
             "parallel_tools" => self.supports_parallel_tool_calls,
-            _ => self.experimental_supported_tools.contains(&feature.to_string()),
+            _ => self
+                .experimental_supported_tools
+                .contains(&feature.to_string()),
         }
     }
 }

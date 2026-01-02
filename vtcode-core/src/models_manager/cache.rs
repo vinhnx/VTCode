@@ -134,7 +134,9 @@ mod tests {
         let cache_path = dir.path().join("models_cache.json");
 
         let original = ModelsCache::new("gemini", vec![]);
-        save_cache(&cache_path, &original).await.expect("save succeeds");
+        save_cache(&cache_path, &original)
+            .await
+            .expect("save succeeds");
 
         let loaded = load_cache(&cache_path)
             .await

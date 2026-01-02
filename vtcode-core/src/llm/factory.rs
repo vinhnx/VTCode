@@ -225,7 +225,7 @@ pub fn infer_provider_from_model(model: &str) -> Option<Provider> {
             return Some(preset.provider);
         }
     }
-    
+
     // Fall back to ModelFamily detection
     let family = crate::models_manager::find_family_for_model(model);
     Some(family.provider)
