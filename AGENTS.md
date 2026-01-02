@@ -158,6 +158,23 @@ Understanding these patterns requires reading multiple files across the codebase
 -   **Custom Agents**: Define in `.vtcode/agents/` (project) or `~/.vtcode/agents/` (user) as Markdown with YAML frontmatter
 -   **Documentation**: `docs/subagents/SUBAGENTS.md`
 
+### Execution Policy System (Codex Patterns)
+
+-   **Location**: `vtcode-core/src/exec_policy/`, `vtcode-core/src/sandboxing/`
+-   **Purpose**: Command authorization and sandboxed execution inspired by OpenAI Codex
+-   **Key Components**:
+    -   `ExecPolicyManager`: Central coordinator for policy evaluation
+    -   `SandboxPolicy`: Isolation levels (ReadOnly, WorkspaceWrite, DangerFullAccess)
+    -   `SandboxManager`: Platform-specific transforms (macOS Seatbelt, Linux Landlock)
+    -   `ExecApprovalRequirement`: Skip, NeedsApproval, Forbidden outcomes
+-   **Policy Features**:
+    -   Prefix-based rule matching for command authorization
+    -   Heuristics for unknown commands (safe: ls, cat; dangerous: rm, sudo)
+    -   Session-scoped approval caching
+    -   Policy amendments for trusted patterns
+-   **Turn Diff Tracking**: `TurnDiffTracker` aggregates file changes across patches
+-   **Tool Trait Extensions**: `is_mutating()`, `is_parallel_safe()`, `kind()`, `matches_kind()`
+
 ### Process Hardening
 
 -   **Location**: `vtcode-process-hardening/` (dedicated crate)
