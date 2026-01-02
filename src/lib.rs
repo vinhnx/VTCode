@@ -168,5 +168,6 @@ pub mod tools;
 mod workspace_trust;
 
 pub mod startup;
+pub mod updater;
 
 pub use startup::StartupContext;

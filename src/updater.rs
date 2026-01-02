@@ -2,13 +2,12 @@ use anyhow::{Context, Result};
 use semver::Version;
 use std::env;
 use std::path::PathBuf;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Auto-updater for VT Code binary from GitHub Releases
 pub struct Updater {
     repo: String,
     current_version: Version,
-    check_interval_hours: u64,
 }
 
 impl Updater {
@@ -20,7 +19,6 @@ impl Updater {
         Ok(Self {
             repo: "vinhnx/vtcode".to_string(),
             current_version,
-            check_interval_hours: 24,
         })
     }
 

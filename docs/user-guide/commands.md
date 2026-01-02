@@ -103,9 +103,49 @@ Display current configuration, available tools, and live performance metrics for
 session. Use `--format` to choose `text`, `json`, or `html` output and `--detailed` to list each
 tool.
 
+## self-update (binary updates)
+
+Check for and install binary updates of VT Code from GitHub Releases. Updates are downloaded and verified against checksums for security.
+
+### Usage
+
+```bash
+# Check for available updates without installing
+vtcode self-update --check
+
+# Check for updates (same as above, default behavior)
+vtcode self-update
+```
+
+### Options
+
+- `--check` — Check for updates and display release notes without installing
+- `--force` — Force update even if already on the latest version
+
+### How it works
+
+1. The command checks the GitHub API for the latest VT Code release
+2. It compares the remote version with your current version
+3. If a new version is available, it shows release notes and download information
+4. Update checks are rate-limited to once per 24 hours (configurable via cache)
+5. Checksums are available in `checksums.txt` alongside release artifacts
+
+### Examples
+
+- Check for updates:
+  ```bash
+  vtcode self-update --check
+  ```
+
+- Check for updates and show if you're on the latest version:
+  ```bash
+  vtcode self-update
+  ```
+
 ## Tips
 
 -   The agent respects `.vtcodegitignore` to exclude files from search and I/O.
 -   Prefer `grep_file` for fast, focused searches with glob filters and context.
 -   Ask for “N lines of context” when searching to understand usage in-place.
 -   Shell commands are filtered by allow/deny lists and can be extended via `VTCODE_<AGENT>_COMMANDS_*` environment variables.
+-   Use `vtcode self-update --check` regularly to stay informed about new features and security updates.

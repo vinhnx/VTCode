@@ -903,6 +903,24 @@ pub enum Commands {
     ///   vtcode plugin uninstall commit-commands        # Uninstall a plugin
     #[command(subcommand)]
     Plugin(PluginSubcommand),
+
+    /// Check for and install binary updates from GitHub Releases
+    ///
+    /// This command checks for new versions of VT Code and can install updates.
+    /// Updates are downloaded from GitHub Releases and verified against checksums.
+    ///
+    /// Examples:
+    ///   • Check for updates - vtcode self-update
+    ///   • Force update - vtcode self-update --force
+    #[command(name = "self-update")]
+    SelfUpdate {
+        /// Check for updates without installing
+        #[arg(long)]
+        check: bool,
+        /// Force update even if on latest version
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// Marketplace subcommands
@@ -927,13 +945,6 @@ pub enum MarketplaceSubcommand {
     Remove {
         /// Marketplace ID to remove
         id: String,
-    },
-
-    /// Update marketplace listings
-    #[command(name = "update")]
-    Update {
-        /// Marketplace ID to update (update all if not specified)
-        id: Option<String>,
     },
 }
 
