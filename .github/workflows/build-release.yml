@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v0.50.8)'
-        required: true
+        description: 'Version tag (e.g., v0.50.8). Leave empty to auto-detect from release.'
+        required: false
         type: string
 
 env:
