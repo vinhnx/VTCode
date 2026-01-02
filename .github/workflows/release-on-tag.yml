@@ -210,7 +210,7 @@ jobs:
               
               echo "Updating formula for version $VERSION"
               
-              # Use sed + python for reliable updates
+              # Use Python for reliable updates
               python3 << PYTHON_EOF
               import re
               version = "$VERSION"
@@ -225,14 +225,14 @@ jobs:
               # Update version
               content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
 
-              # Update checksums
-              content = re.sub(r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[a-f0-9]+"', rf'\1{x86_64_sha}"', content)
-              content = re.sub(r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[a-f0-9]+"', rf'\1{arm64_sha}"', content)
+              # Update checksums with flexible pattern
+              content = re.sub(r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*"', rf'\1{x86_64_sha}"', content)
+              content = re.sub(r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*"', rf'\1{arm64_sha}"', content)
 
               if x86_64_linux_sha:
-                  content = re.sub(r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[a-f0-9]+"', rf'\1{x86_64_linux_sha}"', content)
+                  content = re.sub(r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*"', rf'\1{x86_64_linux_sha}"', content)
               if arm64_linux_sha:
-                  content = re.sub(r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[a-f0-9]+"', rf'\1{arm64_linux_sha}"', content)
+                  content = re.sub(r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*"', rf'\1{arm64_linux_sha}"', content)
 
               with open("homebrew/vtcode.rb", "w") as f:
                   f.write(content)
