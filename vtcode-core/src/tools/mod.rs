@@ -263,6 +263,8 @@ pub use registry::build_function_declarations_with_mode;
 
 // Codex-compatible handler architecture exports
 pub use handlers::{
+    // Turn diff tracker (from Codex)
+    DiffFileChange, SharedTurnDiffTracker, TurnDiffTracker, new_shared_tracker,
     // Core handler traits and types
     ApprovalPolicy, ConfiguredToolSpec, ContentItem, DiffTracker, FileChange, FreeformTool,
     FreeformToolFormat, JsonSchema as ToolJsonSchema, McpToolResult, ResponsesApiTool,

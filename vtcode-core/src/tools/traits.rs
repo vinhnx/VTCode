@@ -100,6 +100,67 @@ pub trait Tool: Send + Sync {
     fn deny_patterns(&self) -> Option<&'static [&'static str]> {
         None
     }
+
+    // ──────────────────────────────────────────────────────────────
+    // Codex-inspired methods for execution policy and parallel safety
+    // ──────────────────────────────────────────────────────────────
+
+    /// Whether this tool mutates state (files, environment, etc).
+    ///
+    /// Mutating tools require more careful policy evaluation and typically
+    /// cannot be run in parallel with other tools that touch the same resources.
+    ///
+    /// Default: true (conservative - assume mutation unless overridden)
+    fn is_mutating(&self) -> bool {
+        true
+    }
+
+    /// Whether this tool is safe to run in parallel with other tools.
+    ///
+    /// Non-mutating read-only tools can often run in parallel.
+    /// Mutating tools should generally return false.
+    ///
+    /// Default: opposite of is_mutating()
+    fn is_parallel_safe(&self) -> bool {
+        !self.is_mutating()
+    }
+
+    /// Get the kind/category of this tool for matching against policies.
+    ///
+    /// Used by ExecPolicyManager to apply category-level rules.
+    /// Common kinds: "shell", "file", "search", "network", "system"
+    fn kind(&self) -> &'static str {
+        "unknown"
+    }
+
+    /// Check if this tool matches a given kind pattern.
+    ///
+    /// Supports exact matches and wildcard patterns.
+    fn matches_kind(&self, pattern: &str) -> bool {
+        if pattern == "*" {
+            return true;
+        }
+        if pattern.ends_with('*') {
+            let prefix = &pattern[..pattern.len() - 1];
+            return self.kind().starts_with(prefix);
+        }
+        self.kind() == pattern
+    }
+
+    /// Resources this tool might access (paths, URLs, etc).
+    ///
+    /// Used for conflict detection in parallel execution planning.
+    fn resource_hints(&self, _args: &Value) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Estimated execution cost (1-10 scale).
+    ///
+    /// Used for scheduling and resource management.
+    /// 1 = instant, 5 = moderate, 10 = expensive/long-running
+    fn execution_cost(&self) -> u8 {
+        5
+    }
 }
 
 /// Trait for tools that operate on files

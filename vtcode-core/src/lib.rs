@@ -137,6 +137,7 @@ pub mod context; // Vibe coding support: entity resolution, workspace state, con
 pub mod core;
 pub mod diagnostics;
 pub mod exec;
+pub mod exec_policy; // Codex-style execution policy management
 pub mod execpolicy;
 pub mod gemini;
 pub mod http_client;
@@ -154,6 +155,7 @@ pub mod plugins;
 pub mod project_doc;
 pub mod prompts;
 pub mod safety;
+pub mod sandboxing; // Codex-style sandbox policy and execution environment
 pub mod security;
 pub mod skills;
 pub mod subagents;
@@ -228,6 +230,19 @@ pub use security::{IntegrityTag, PayloadEnvelope, ZeroTrustContext};
 pub use telemetry::{TelemetryEvent, TelemetryPipeline};
 
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
+
+// Codex-style execution policy and sandboxing
+pub use exec_policy::{
+    AskForApproval, Decision, ExecApprovalRequirement, ExecPolicyAmendment, ExecPolicyConfig,
+    ExecPolicyManager, Policy, PolicyEvaluation, PolicyParser, PrefixRule, RuleMatch,
+    SharedExecPolicyManager,
+};
+pub use sandboxing::{
+    CommandSpec as SandboxCommandSpec, ExecEnv as SandboxExecEnv, ExecExpiration,
+    SandboxManager as CodexSandboxManager, SandboxPermissions as CodexSandboxPermissions,
+    SandboxPolicy as CodexSandboxPolicy, SandboxType, WritableRoot,
+};
+
 pub use tools::grep_file::GrepSearchManager;
 pub use tools::tree_sitter::TreeSitterAnalyzer;
 pub use tools::{
