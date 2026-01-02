@@ -3,6 +3,41 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.6] - 2026-01-02
+
+
+### Features
+    - feat: add native installer with auto-updater module
+
+
+### Bug Fixes
+    - fix: ensure get_download_url outputs only URL to stdout
+    - fix: redirect all logging to stderr in installer script
+    - fix: correct Python variable substitution in Homebrew workflow
+    - fix: improve release.toml commit message template for consistency
+
+
+### Documentation
+    - docs: add native installer implementation status report
+    - docs: update changelog for v0.58.5 [skip ci]
+    - docs: add .nojekyll to bypass Jekyll processing
+    - docs: remove HTML index, use Jekyll markdown
+    - docs: add HTML landing page for GitHub Pages
+    - docs: add Jekyll config and documentation index
+    - docs: update Homebrew documentation - simplified architecture
+    - docs: add Homebrew verification checklist - release automation complete
+    - docs: add actionable next steps for completing homebrew distribution setup
+    - docs: add comprehensive homebrew fix summary with all solutions applied
+    - docs: explain why homebrew updates stopped and root cause analysis
+    - docs: add guide for setting up custom homebrew tap repository
+
+
+### Chores
+    - chore: update npm package.json to v0.58.5 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: remove Pages workflow - using simpler direct branch deployment
+    - chore: remove redundant release-on-tag.yml workflow
+    - chore: update npm package.json to v0.58.4 version =  [skip ci]
 # [Version 0.58.5] - 2026-01-02
 
 
