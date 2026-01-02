@@ -12,7 +12,7 @@ use ratatui::{
 };
 use terminal_size::{Height, Width, terminal_size};
 use tui_popup::PopupState;
-use tui_prompts::{Prompt, State, TextPrompt, TextRenderStyle, TextState};
+
 use unicode_width::UnicodeWidthStr;
 
 use super::measure_text_width;
@@ -907,13 +907,43 @@ fn render_secure_prompt(
     let sanitized: String = std::iter::repeat_n('•', grapheme_count).collect();
     let cursor_chars = input[..cursor].chars().count();
 
-    let mut state = TextState::new().with_value(sanitized);
-    state.focus();
-    *state.position_mut() = cursor_chars;
+    // Render label
+    let label_paragraph = Paragraph::new(config.label.clone());
+    let label_area = Rect {
+        x: area.x,
+        y: area.y,
+        width: area.width,
+        height: 1.min(area.height),
+    };
+    frame.render_widget(label_paragraph, label_area);
 
-    let prompt =
-        TextPrompt::from(config.label.clone()).with_render_style(TextRenderStyle::Password);
-    prompt.draw(frame, area, &mut state);
+    // Render input field
+    if area.height > 1 {
+        let input_area = Rect {
+            x: area.x,
+            y: area.y + 1,
+            width: area.width,
+            height: (area.height - 1).max(1),
+        };
+        
+        let input_text = if cursor_chars < sanitized.len() {
+            // Insert cursor character
+            let mut text = String::new();
+            let chars: Vec<char> = sanitized.chars().collect();
+            for (i, c) in chars.iter().enumerate() {
+                text.push(*c);
+                if i == cursor_chars {
+                    // Indicate cursor position (simplified, could use block)
+                }
+            }
+            text
+        } else {
+            sanitized.clone()
+        };
+
+        let input_paragraph = Paragraph::new(input_text);
+        frame.render_widget(input_paragraph, input_area);
+    }
 }
 
 fn highlight_segments(
