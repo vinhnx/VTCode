@@ -151,7 +151,11 @@ impl<'config> AgentComponentBuilder<'config> {
         let models_manager = self.models_manager.take().unwrap_or_else(|| {
             // Clone Arc from global - this is cheap since ModelsManager is behind LazyLock
             Arc::new(ModelsManager::with_provider(
-                self.config.provider.parse::<Provider>().ok().unwrap_or_default()
+                self.config
+                    .provider
+                    .parse::<Provider>()
+                    .ok()
+                    .unwrap_or_default(),
             ))
         });
 

@@ -34,21 +34,13 @@ pub enum ToolKind {
 #[derive(Clone, Debug)]
 pub enum ToolPayload {
     /// Standard function call with JSON arguments
-    Function {
-        arguments: String,
-    },
+    Function { arguments: String },
     /// Custom tool with freeform input (e.g., apply_patch)
-    Custom {
-        input: String,
-    },
+    Custom { input: String },
     /// MCP tool call
-    Mcp {
-        arguments: Option<Value>,
-    },
+    Mcp { arguments: Option<Value> },
     /// Local shell execution
-    LocalShell {
-        params: ShellToolCallParams,
-    },
+    LocalShell { params: ShellToolCallParams },
 }
 
 /// Shell command parameters (from Codex)
@@ -80,9 +72,7 @@ pub enum ToolOutput {
         success: Option<bool>,
     },
     /// MCP tool result
-    Mcp {
-        result: McpToolResult,
-    },
+    Mcp { result: McpToolResult },
 }
 
 impl ToolOutput {
@@ -134,9 +124,17 @@ impl ToolOutput {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentItem {
-    Text { text: String },
-    Image { data: String, mime_type: String },
-    Resource { uri: String, mime_type: Option<String> },
+    Text {
+        text: String,
+    },
+    Image {
+        data: String,
+        mime_type: String,
+    },
+    Resource {
+        uri: String,
+        mime_type: Option<String>,
+    },
 }
 
 impl ContentItem {
@@ -257,10 +255,18 @@ impl DiffTracker {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum FileChange {
-    Add { content: String },
+    Add {
+        content: String,
+    },
     Delete,
-    Update { old_content: String, new_content: String },
-    Rename { new_path: PathBuf, content: Option<String> },
+    Update {
+        old_content: String,
+        new_content: String,
+    },
+    Rename {
+        new_path: PathBuf,
+        content: Option<String>,
+    },
 }
 
 /// Tool execution events (from Codex)

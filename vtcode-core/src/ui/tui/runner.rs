@@ -23,8 +23,8 @@ use ratatui::{
 };
 use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
-use tokio_util::sync::CancellationToken;
 use tokio::task::spawn_blocking;
+use tokio_util::sync::CancellationToken;
 
 use crate::config::{constants::ui, types::UiSurfacePreference};
 use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
@@ -439,25 +439,24 @@ fn enable_terminal_modes(
         }
     };
 
-    let keyboard_enhancements_pushed = if keyboard_enhancement_supported
-        && !keyboard_flags.is_empty()
-    {
-        match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
-            Ok(_) => {
-                tracing::debug!(?keyboard_flags, "enabled keyboard enhancement flags");
-                true
+    let keyboard_enhancements_pushed =
+        if keyboard_enhancement_supported && !keyboard_flags.is_empty() {
+            match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
+                Ok(_) => {
+                    tracing::debug!(?keyboard_flags, "enabled keyboard enhancement flags");
+                    true
+                }
+                Err(error) => {
+                    tracing::debug!(%error, "failed to enable keyboard enhancement flags");
+                    false
+                }
             }
-            Err(error) => {
-                tracing::debug!(%error, "failed to enable keyboard enhancement flags");
-                false
+        } else {
+            if keyboard_flags.is_empty() {
+                tracing::debug!("keyboard protocol disabled via configuration");
             }
-        }
-    } else {
-        if keyboard_flags.is_empty() {
-            tracing::debug!("keyboard protocol disabled via configuration");
-        }
-        false
-    };
+            false
+        };
 
     Ok(TerminalModeState {
         focus_change_enabled,
@@ -522,7 +521,9 @@ async fn detect_keyboard_enhancement_support(flags: KeyboardEnhancementFlags) ->
             false
         }
         Err(_) => {
-            tracing::warn!("keyboard enhancement support probe timed out; disabling protocol to avoid startup lag");
+            tracing::warn!(
+                "keyboard enhancement support probe timed out; disabling protocol to avoid startup lag"
+            );
             false
         }
     }
@@ -532,7 +533,10 @@ fn keyboard_protocol_env_disabled() -> bool {
     match env::var("VTCODE_KBD_PROTOCOL") {
         Ok(val) => {
             let v = val.trim().to_ascii_lowercase();
-            matches!(v.as_str(), "0" | "false" | "off" | "disable" | "disabled" | "no")
+            matches!(
+                v.as_str(),
+                "0" | "false" | "off" | "disable" | "disabled" | "no"
+            )
         }
         Err(_) => false,
     }

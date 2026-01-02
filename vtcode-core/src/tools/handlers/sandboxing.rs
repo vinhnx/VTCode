@@ -74,9 +74,7 @@ pub enum ExecApprovalRequirement {
         proposed_execpolicy_amendment: Option<ExecPolicyAmendment>,
     },
     /// Execution forbidden for this tool call
-    Forbidden {
-        reason: String,
-    },
+    Forbidden { reason: String },
 }
 
 impl ExecApprovalRequirement {
@@ -231,11 +229,7 @@ pub trait Approvable<Req>: Send + Sync {
     }
 
     /// Check if approval should be bypassed
-    fn should_bypass_approval(
-        &self,
-        policy: AskForApproval,
-        already_approved: bool,
-    ) -> bool {
+    fn should_bypass_approval(&self, policy: AskForApproval, already_approved: bool) -> bool {
         if already_approved {
             return true;
         }
@@ -624,10 +618,8 @@ mod tests {
 
     #[test]
     fn test_never_policy_skips_approval() {
-        let result = default_exec_approval_requirement(
-            AskForApproval::Never,
-            &SandboxPolicy::default(),
-        );
+        let result =
+            default_exec_approval_requirement(AskForApproval::Never, &SandboxPolicy::default());
 
         assert_eq!(
             result,
@@ -680,7 +672,9 @@ mod tests {
 
         assert!(!store.contains("test").await);
 
-        store.set("test".to_string(), ReviewDecision::Approved).await;
+        store
+            .set("test".to_string(), ReviewDecision::Approved)
+            .await;
         assert!(store.contains("test").await);
         assert_eq!(store.get("test").await, Some(ReviewDecision::Approved));
     }
@@ -700,10 +694,8 @@ mod tests {
         assert_eq!(sandbox, SandboxType::None);
 
         // Forbid always returns None
-        let sandbox = manager.select_initial(
-            &SandboxPolicy::default(),
-            SandboxablePreference::Forbid,
-        );
+        let sandbox =
+            manager.select_initial(&SandboxPolicy::default(), SandboxablePreference::Forbid);
         assert_eq!(sandbox, SandboxType::None);
     }
 

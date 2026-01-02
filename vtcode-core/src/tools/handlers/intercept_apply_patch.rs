@@ -228,7 +228,14 @@ fn parse_patch_changes(patch: &str) -> Result<HashMap<PathBuf, FileChange>, Appl
         if line.starts_with("--- ") {
             // Save previous file if any
             if let Some(path) = current_file.take() {
-                save_file_change(&mut changes, path, is_new_file, is_deleted, &old_content, &new_content);
+                save_file_change(
+                    &mut changes,
+                    path,
+                    is_new_file,
+                    is_deleted,
+                    &old_content,
+                    &new_content,
+                );
             }
 
             // Parse old file path
@@ -272,7 +279,14 @@ fn parse_patch_changes(patch: &str) -> Result<HashMap<PathBuf, FileChange>, Appl
 
     // Save last file
     if let Some(path) = current_file {
-        save_file_change(&mut changes, path, is_new_file, is_deleted, &old_content, &new_content);
+        save_file_change(
+            &mut changes,
+            path,
+            is_new_file,
+            is_deleted,
+            &old_content,
+            &new_content,
+        );
     }
 
     Ok(changes)
@@ -437,7 +451,10 @@ mod tests {
         let changes = parse_patch_changes(patch).unwrap();
         assert!(changes.contains_key(&PathBuf::from("file.txt")));
         match changes.get(&PathBuf::from("file.txt")).unwrap() {
-            FileChange::Update { old_content, new_content } => {
+            FileChange::Update {
+                old_content,
+                new_content,
+            } => {
                 assert!(old_content.contains("old line"));
                 assert!(new_content.contains("new line"));
             }
@@ -449,7 +466,10 @@ mod tests {
     fn test_extract_patch_stdin_error() {
         let command = vec!["git".to_string(), "apply".to_string(), "-".to_string()];
         let result = extract_patch_from_command(&command);
-        assert!(matches!(result, Err(ApplyPatchError::StdinPatchNotSupported)));
+        assert!(matches!(
+            result,
+            Err(ApplyPatchError::StdinPatchNotSupported)
+        ));
     }
 
     #[test]
@@ -460,7 +480,10 @@ mod tests {
             "changes.patch".to_string(),
         ];
         let result = extract_patch_from_command(&command);
-        assert!(matches!(result, Err(ApplyPatchError::PatchFileNotSupported(_))));
+        assert!(matches!(
+            result,
+            Err(ApplyPatchError::PatchFileNotSupported(_))
+        ));
     }
 
     #[test]

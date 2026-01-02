@@ -9,8 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::orchestrator::{Approvable, Sandboxable, SandboxablePreference};
 use super::tool_handler::{
-    ToolCallError, ToolHandler, ToolInvocation,
-    ToolKind, ToolOutput, ToolPayload,
+    ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
 };
 
 /// Maximum number of matches to return.
@@ -75,11 +74,11 @@ impl GrepFilesHandler {
     /// Parse arguments from payload.
     fn parse_args(&self, invocation: &ToolInvocation) -> Result<GrepFilesArgs, ToolCallError> {
         match &invocation.payload {
-            ToolPayload::Function { arguments } => {
-                serde_json::from_str(arguments)
-                    .map_err(|e| ToolCallError::respond(format!("Invalid grep_files arguments: {e}")))
-            }
-            _ => Err(ToolCallError::respond("Invalid payload type for grep_files handler")),
+            ToolPayload::Function { arguments } => serde_json::from_str(arguments)
+                .map_err(|e| ToolCallError::respond(format!("Invalid grep_files arguments: {e}"))),
+            _ => Err(ToolCallError::respond(
+                "Invalid payload type for grep_files handler",
+            )),
         }
     }
 
@@ -115,7 +114,10 @@ impl GrepFilesHandler {
             .build()
             .map_err(|e| ToolCallError::respond(format!("Invalid pattern: {e}")))?;
 
-        let max_results = args.max_results.unwrap_or(self.max_matches).min(self.max_matches);
+        let max_results = args
+            .max_results
+            .unwrap_or(self.max_matches)
+            .min(self.max_matches);
         let context_before = args.context_before.unwrap_or(0).min(MAX_CONTEXT_LINES);
         let context_after = args.context_after.unwrap_or(0).min(MAX_CONTEXT_LINES);
 
@@ -139,11 +141,13 @@ impl GrepFilesHandler {
                         }
 
                         if regex.is_match(line) {
-                            let context_before_lines: Vec<String> = (idx.saturating_sub(context_before)..idx)
-                                .map(|i| lines[i].to_string())
-                                .collect();
+                            let context_before_lines: Vec<String> =
+                                (idx.saturating_sub(context_before)..idx)
+                                    .map(|i| lines[i].to_string())
+                                    .collect();
 
-                            let context_after_lines: Vec<String> = ((idx + 1)..(idx + 1 + context_after).min(lines.len()))
+                            let context_after_lines: Vec<String> = ((idx + 1)
+                                ..(idx + 1 + context_after).min(lines.len()))
                                 .map(|i| lines[i].to_string())
                                 .collect();
 
@@ -175,7 +179,8 @@ impl GrepFilesHandler {
         if search_path.is_file() {
             files.push(search_path.clone());
         } else if search_path.is_dir() {
-            self.collect_files_recursive(search_path, args, &mut files).await?;
+            self.collect_files_recursive(search_path, args, &mut files)
+                .await?;
         } else {
             return Err(ToolCallError::respond(format!(
                 "Path does not exist: {}",
@@ -294,7 +299,10 @@ impl ToolHandler for GrepFilesHandler {
                     output.push_str(&format!("{}:{}: {}\n", m.file, line_num, line));
                 }
             }
-            output.push_str(&format!("{}:{}> {}\n", m.file, m.line_number, m.line_content));
+            output.push_str(&format!(
+                "{}:{}> {}\n",
+                m.file, m.line_number, m.line_content
+            ));
             if !m.context_after.is_empty() {
                 for (i, line) in m.context_after.iter().enumerate() {
                     output.push_str(&format!("{}:{}: {}\n", m.file, m.line_number + 1 + i, line));
@@ -322,7 +330,9 @@ pub fn create_grep_files_tool() -> super::tool_handler::ToolSpec {
     properties.insert(
         "path".to_string(),
         JsonSchema::String {
-            description: Some("Path to search in (file or directory, defaults to workspace)".to_string()),
+            description: Some(
+                "Path to search in (file or directory, defaults to workspace)".to_string(),
+            ),
         },
     );
     properties.insert(
@@ -370,7 +380,8 @@ pub fn create_grep_files_tool() -> super::tool_handler::ToolSpec {
 
     ToolSpec::Function(ResponsesApiTool {
         name: "grep_files".to_string(),
-        description: "Search for a pattern in files. Returns matching lines with context.".to_string(),
+        description: "Search for a pattern in files. Returns matching lines with context."
+            .to_string(),
         parameters: JsonSchema::Object {
             properties,
             required: Some(vec!["pattern".to_string()]),
@@ -382,8 +393,8 @@ pub fn create_grep_files_tool() -> super::tool_handler::ToolSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::tool_handler::ToolSpec;
+    use super::*;
 
     #[test]
     fn test_grep_files_handler_kind() {
