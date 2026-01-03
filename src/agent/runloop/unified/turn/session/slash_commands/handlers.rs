@@ -1030,25 +1030,22 @@ pub async fn handle_manage_agents(
 
             // 1. Check project agents (.vtcode/agents/)
             let project_agents_dir = ctx.config.workspace.join(".vtcode/agents");
-            if project_agents_dir.exists() {
-                if let Ok(entries) = std::fs::read_dir(project_agents_dir) {
+            if project_agents_dir.exists()
+                && let Ok(entries) = std::fs::read_dir(project_agents_dir) {
                     for entry in entries.flatten() {
                         let path = entry.path();
                         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md")
-                        {
-                            if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                            && let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
                                 custom_agents.push(format!("  {: <15} - (project)", name));
                             }
-                        }
                     }
                 }
-            }
 
             // 2. Check user agents (~/.vtcode/agents/)
             if let Some(home) = dirs::home_dir() {
                 let user_agents_dir = home.join(".vtcode/agents");
-                if user_agents_dir.exists() {
-                    if let Ok(entries) = std::fs::read_dir(user_agents_dir) {
+                if user_agents_dir.exists()
+                    && let Ok(entries) = std::fs::read_dir(user_agents_dir) {
                         for entry in entries.flatten() {
                             let path = entry.path();
                             if path.is_file()
@@ -1058,14 +1055,11 @@ pub async fn handle_manage_agents(
                                         path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
                                     )
                                 })
-                            {
-                                if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                                && let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
                                     custom_agents.push(format!("  {: <15} - (user)", name));
                                 }
-                            }
                         }
                     }
-                }
             }
 
             if custom_agents.is_empty() {

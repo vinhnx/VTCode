@@ -313,14 +313,13 @@ pub(crate) async fn handle_tool_calls(
         } else {
             // Single tool group
             let call_id = &group.tool_calls[0].2;
-            if let Some(tc) = tool_calls.iter().find(|tc| &tc.id == call_id) {
-                if let Some(outcome) =
+            if let Some(tc) = tool_calls.iter().find(|tc| &tc.id == call_id)
+                && let Some(outcome) =
                     handle_tool_call(ctx, tc, repeated_tool_attempts, turn_modified_files, traj)
                         .await?
                 {
                     return Ok(Some(outcome));
                 }
-            }
         }
     }
 
