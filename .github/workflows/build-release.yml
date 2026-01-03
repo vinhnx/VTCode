@@ -30,21 +30,22 @@ defaults:
 
 jobs:
   build:
+    name: Build for ${{ matrix.name }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            name: x86_64-unknown-linux-gnu
+            name: Linux x86_64
           - os: macos-latest
             target: x86_64-apple-darwin
-            name: x86_64-apple-darwin
+            name: macOS x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
-            name: aarch64-apple-darwin
+            name: macOS ARM64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            name: x86_64-pc-windows-msvc
+            name: Windows x86_64
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -110,13 +111,13 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          tar -czf ../../../vtcode-${{ steps.version.outputs.version }}-${{ matrix.name }}.tar.gz vtcode
+          tar -czf ../../../vtcode-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz vtcode
 
       - name: Package binary (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ../../../vtcode-${{ steps.version.outputs.version }}-${{ matrix.name }}.zip vtcode.exe
+          7z a ../../../vtcode-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip vtcode.exe
 
       - name: Upload binary
         uses: softprops/action-gh-release@v2
@@ -124,5 +125,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          files: vtcode-${{ steps.version.outputs.version }}-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
+          files: vtcode-${{ steps.version.outputs.version }}-${{ matrix.target }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
           fail_on_unmatched_files: true
