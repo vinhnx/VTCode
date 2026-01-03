@@ -1,5 +1,5 @@
 use crate::config::TimeoutsConfig;
-use crate::config::core::{GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
+use crate::config::core::{GeminiPromptCacheSettings, PromptCachingConfig};
 use crate::llm::provider::LLMProvider;
 use crate::llm::provider_builder::ProviderConfig;
 use std::str::FromStr;
