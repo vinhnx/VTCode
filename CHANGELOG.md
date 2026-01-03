@@ -3,6 +3,39 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.13] - 2026-01-03
+
+
+### Features
+    - feat: enhance LLM provider initialization with client injection and refine prompt caching
+    - feat: Refactor tool registry to use MCP tool index cache and update mutability of inventory and tool policy access.
+    - feat: Implement parallel tool execution for agent actions and update tool registry operations to be asynchronous.
+    - feat: Refactor tool permission context and enhance command safety validation with new progress updates for tool execution.
+
+
+### Bug Fixes
+    - fix: resolve Windows build errors in vtcode-core
+
+
+### Refactors
+    - refactor: simplify nested conditional logic with chained `&& let` patterns
+    - refactor: update symbol name extraction to use `ChildByField` and add Rust language test.
+    - refactor: Extract progress update guard and elapsed time updater to `progress.rs` and add `PlaceholderSpinner::force_refresh`.
+
+
+### Documentation
+    - docs: update changelog for v0.58.12 [skip ci]
+    - docs: add Windows build fixes documentation
+
+
+### Style Changes
+    - style: apply consistent formatting and whitespace adjustments
+
+
+### Chores
+    - chore: update npm package.json to v0.58.12 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.58.11 version =  [skip ci]
 # [Version 0.58.12] - 2026-01-02
 
 
