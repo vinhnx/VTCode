@@ -169,6 +169,10 @@ pub mod validation;
 pub mod web_fetch;
 
 // Production-grade improvements modules
+pub mod async_pipeline;
+pub mod optimized_registry;
+
+// Production-grade improvements modules
 pub mod async_middleware;
 pub mod improvement_algorithms;
 pub mod improvements_cache; // Deprecated (pending migration) - kept for backward compatibility
@@ -186,6 +190,8 @@ mod improvements_integration_tests;
 mod improvements_real_workflow_tests;
 
 // Re-export main types and traits for backward compatibility
+pub use async_pipeline::{AsyncToolPipeline, ToolRequest as AsyncToolRequest, ExecutionPriority, ExecutionContext};
+pub use optimized_registry::{OptimizedToolRegistry, ToolMetadata as OptimizedToolMetadata};
 pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
 pub use code_intelligence::{CodeIntelligenceInput, CodeIntelligenceOutput, CodeIntelligenceTool};
@@ -230,7 +236,7 @@ pub use web_fetch::WebFetchTool;
 // Production-grade improvements re-exports
 pub use async_middleware::{
     AsyncCachingMiddleware, AsyncLoggingMiddleware, AsyncMiddleware, AsyncMiddlewareChain,
-    AsyncRetryMiddleware, ToolRequest as AsyncToolRequest, ToolResult,
+    AsyncRetryMiddleware, ToolRequest as MiddlewareToolRequest, ToolResult,
 };
 pub use improvement_algorithms::{
     MLScoreComponents, PatternDetector, PatternState, TimeDecayedScore, jaro_winkler_similarity,

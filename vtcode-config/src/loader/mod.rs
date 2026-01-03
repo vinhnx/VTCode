@@ -12,6 +12,7 @@ use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
 use crate::hooks::HooksConfig;
 use crate::mcp::McpClientConfig;
+use crate::optimization::OptimizationConfig;
 use crate::output_styles::OutputStyleConfig;
 use crate::root::{PtyConfig, UiConfig};
 use crate::telemetry::TelemetryConfig;
@@ -149,6 +150,10 @@ pub struct VTCodeConfig {
     /// Telemetry configuration (logging, trajectory)
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+
+    /// Performance optimization settings
+    #[serde(default)]
+    pub optimization: OptimizationConfig,
 
     /// Syntax highlighting configuration
     #[serde(default)]
