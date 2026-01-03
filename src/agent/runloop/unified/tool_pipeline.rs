@@ -248,23 +248,33 @@ pub(crate) async fn run_tool_call(
     }
 
     // Determine read-only tools for caching
-    let is_read_only_tool = matches!(
-        name.as_str(),
-        "read_file" | "list_files" | "grep_search" | "find_files" | "tree_sitter_analyze"
-    );
+    // Enhanced caching: Determine if tool is cacheable based on tool type and arguments
+    let is_cacheable_tool = is_tool_cacheable(&name, &args_val);
     let cache_target = cache_target_path(&name, &args_val);
 
-    // Attempt cache retrieval for read-only tools
-    if is_read_only_tool {
-        let mut cache = ctx.tool_result_cache.write().await;
-        let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(
+    // Attempt cache retrieval for cacheable tools
+    if is_cacheable_tool {
+        let workspace_path = ctx.tool_registry.workspace().to_string_lossy().to_string();
+        let cache_key = create_enhanced_cache_key(
             &name,
             &args_val,
             &cache_target,
+            &workspace_path,
         );
+        
+        let mut cache = ctx.tool_result_cache.write().await;
         if let Some(cached_output) = cache.get(&cache_key) {
             let cached_json: serde_json::Value =
                 serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
+            
+            // Telemetry: Log cache hit
+            tracing::debug!(
+                target: "vtcode.performance.cache",
+                "Cache hit for tool: {} (workspace: {})",
+                name,
+                workspace_path
+            );
+            
             let status = ToolExecutionStatus::Success {
                 output: cached_json,
                 stdout: None,
@@ -273,10 +283,20 @@ pub(crate) async fn run_tool_call(
                 has_more: false,
             };
             return Ok(ToolPipelineOutcome::from_status(status));
+        } else {
+            // Telemetry: Log cache miss
+            tracing::debug!(
+                target: "vtcode.performance.cache",
+                "Cache miss for tool: {} (workspace: {})",
+                name,
+                workspace_path
+            );
         }
     }
 
     // Force TUI redraw to ensure stable UI without added delay
+    // Note: In the enhanced version, this would use the UI redraw batcher
+    // For now, we keep the direct call for compatibility
     ctx.handle.force_redraw();
 
     // Execute with progress reporter
@@ -306,19 +326,21 @@ pub(crate) async fn run_tool_call(
     .await;
 
     // Handle loop detection for read-only tools: if blocked, try to return cached result
-    let outcome = if is_read_only_tool {
+    let outcome = if is_cacheable_tool {
         if let ToolExecutionStatus::Success { output, .. } = &outcome {
             // Check if this is actually a loop detection error wrapped as success
             if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool())
                 && loop_detected
             {
                 // Tool was blocked due to loop detection - try to get cached result
-                let mut cache = ctx.tool_result_cache.write().await;
-                let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(
+                let workspace_path = ctx.tool_registry.workspace().to_string_lossy().to_string();
+                let cache_key = create_enhanced_cache_key(
                     &name,
                     &args_val,
                     &cache_target,
+                    &workspace_path,
                 );
+                let mut cache = ctx.tool_result_cache.write().await;
                 if let Some(cached_output) = cache.get(&cache_key) {
                     // We have a cached result from a previous successful call - return it
                     let cached_json: serde_json::Value =
@@ -351,15 +373,17 @@ pub(crate) async fn run_tool_call(
     } = &outcome
     {
         tool_spinner.finish();
-        // Cache successful read-only results
-        if is_read_only_tool && *command_success {
-            let mut cache = ctx.tool_result_cache.write().await;
-            let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
-            let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(
+        // Cache successful cacheable results
+        if is_cacheable_tool && *command_success {
+            let workspace_path = ctx.tool_registry.workspace().to_string_lossy().to_string();
+            let cache_key = create_enhanced_cache_key(
                 &name,
                 &args_val,
                 &cache_target,
+                &workspace_path,
             );
+            let mut cache = ctx.tool_result_cache.write().await;
+            let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
             cache.insert_arc(cache_key, Arc::new(output_json));
         }
     }
@@ -898,6 +922,64 @@ fn spawn_timeout_warning_task(
             }
         }
     }))
+}
+
+/// Determine if a tool is cacheable based on tool type and arguments
+/// This function implements enhanced caching logic to support more tools
+fn is_tool_cacheable(tool_name: &str, args: &Value) -> bool {
+    // Always cache these read-only tools (original set)
+    if matches!(
+        tool_name,
+        "read_file" | "list_files" | "grep_search" | "find_files" | "tree_sitter_analyze"
+    ) {
+        return true;
+    }
+
+    // Cache search tools with stable arguments
+    if matches!(tool_name, "search_tools" | "get_errors" | "agent_info") {
+        // These tools typically have stable results within a session
+        return true;
+    }
+
+    // Cache code intelligence tools with specific arguments
+    if tool_name == "code_intelligence" {
+        // Only cache specific code intelligence operations that are deterministic
+        if let Some(operation) = args.get("operation").and_then(|v| v.as_str()) {
+            matches!(
+                operation,
+                "hover" | "document_symbol" | "workspace_symbol" | "signature_help"
+            )
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
+/// Enhanced cache key creation that includes workspace context in the target path
+/// This prevents cache collisions between different workspaces
+fn create_enhanced_cache_key(
+    tool_name: &str,
+    args: &Value,
+    cache_target: &str,
+    workspace: &str,
+) -> vtcode_core::tools::result_cache::ToolCacheKey {
+    // For file-based tools, include workspace in the target path to ensure uniqueness
+    // For non-file tools, use a workspace-specific target path
+    let enhanced_target = if cache_target.starts_with('/') || cache_target.contains(':') {
+        // Absolute path or special path - keep as is
+        cache_target.to_string()
+    } else {
+        // Relative path - prefix with workspace to ensure uniqueness
+        format!("{}/{}", workspace, cache_target)
+    };
+    
+    vtcode_core::tools::result_cache::ToolCacheKey::from_json(
+        tool_name,
+        args,
+        &enhanced_target,
+    )
 }
 
 fn cache_target_path(tool_name: &str, args: &Value) -> String {

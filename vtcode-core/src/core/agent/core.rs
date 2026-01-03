@@ -5,7 +5,6 @@ use crate::config::models::{ModelId, Provider};
 use crate::config::types::*;
 use crate::core::agent::bootstrap::{AgentComponentBuilder, AgentComponentSet};
 use crate::core::memory_pool::global_pool;
-use crate::tools::OptimizedToolRegistry;
 use vtcode_config::OptimizationConfig;
 
 use crate::core::agent::snapshots::{
@@ -26,7 +25,6 @@ pub struct Agent {
     config: AgentConfig,
     client: AnyClient,
     tool_registry: Arc<ToolRegistry>,
-    optimized_registry: Option<OptimizedToolRegistry>,
     optimization_config: OptimizationConfig,
     decision_tracker: DecisionTracker,
     error_recovery: ErrorRecoveryManager,
@@ -51,19 +49,11 @@ impl Agent {
     pub fn with_components(config: AgentConfig, components: AgentComponentSet) -> Self {
         // Use default optimization config for now - will be enhanced to read from VTCodeConfig
         let optimization_config = OptimizationConfig::default();
-        let optimized_registry = if optimization_config.tool_registry.use_optimized_registry {
-            Some(OptimizedToolRegistry::new(
-                optimization_config.tool_registry.max_concurrent_tools,
-            ))
-        } else {
-            None
-        };
 
         Self {
             config,
             client: components.client,
             tool_registry: components.tool_registry,
-            optimized_registry,
             optimization_config,
             decision_tracker: components.decision_tracker,
             error_recovery: components.error_recovery,
@@ -90,7 +80,6 @@ impl Agent {
             config,
             client: components.client,
             tool_registry: components.tool_registry,
-            optimized_registry: None, // Not needed anymore - real registry is optimized
             optimization_config,
             decision_tracker: components.decision_tracker,
             error_recovery: components.error_recovery,

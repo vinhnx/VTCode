@@ -9,7 +9,6 @@ use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, error, info, warn};
 
 use crate::core::memory_pool::global_pool;
-use crate::llm::optimized_client::OptimizedLLMClient;
 use crate::tools::async_pipeline::{
     AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest,
 };
@@ -133,9 +132,6 @@ pub struct OptimizedAgentEngine {
     /// Tool execution pipeline
     tool_pipeline: Arc<AsyncToolPipeline>,
 
-    /// LLM client
-    llm_client: Arc<OptimizedLLMClient>,
-
     /// State transition history for learning
     state_history: Arc<RwLock<VecDeque<StateTransition>>>,
 
@@ -151,12 +147,6 @@ pub struct OptimizedAgentEngine {
 pub struct PerformancePredictor {
     /// Historical execution patterns
     execution_patterns: Arc<RwLock<HashMap<String, ExecutionPattern>>>,
-
-    /// Tool dependency graph
-    tool_dependencies: Arc<RwLock<HashMap<String, Vec<String>>>>,
-
-    /// Resource usage predictions
-    resource_predictions: Arc<RwLock<HashMap<String, ResourceUsage>>>,
 }
 
 /// Historical execution pattern
@@ -173,7 +163,6 @@ impl OptimizedAgentEngine {
     pub fn new(
         session_id: String,
         tool_pipeline: Arc<AsyncToolPipeline>,
-        llm_client: Arc<OptimizedLLMClient>,
     ) -> Self {
         let (state_tx, state_rx) = mpsc::unbounded_channel();
 
@@ -199,7 +188,6 @@ impl OptimizedAgentEngine {
         Self {
             context: Arc::new(RwLock::new(context)),
             tool_pipeline,
-            llm_client,
             state_history: Arc::new(RwLock::new(VecDeque::with_capacity(1000))),
             predictor: Arc::new(PerformancePredictor::new()),
             state_tx,
@@ -660,8 +648,6 @@ impl PerformancePredictor {
     pub fn new() -> Self {
         Self {
             execution_patterns: Arc::new(RwLock::new(HashMap::new())),
-            tool_dependencies: Arc::new(RwLock::new(HashMap::new())),
-            resource_predictions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 

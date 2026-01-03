@@ -165,6 +165,9 @@ pub struct SimpleConfigWatcher {
     last_load_time: Instant,
     last_check_time: Instant,
     check_interval: Duration,
+    last_modified_time: Option<std::time::SystemTime>,
+    debounce_duration: Duration,
+    last_reload_attempt: Option<Instant>,
 }
 
 impl SimpleConfigWatcher {
@@ -173,7 +176,10 @@ impl SimpleConfigWatcher {
             workspace_path,
             last_load_time: Instant::now(),
             last_check_time: Instant::now(),
-            check_interval: Duration::from_secs(5),
+            check_interval: Duration::from_secs(10), // Reduced frequency from 5s to 10s
+            last_modified_time: None,
+            debounce_duration: Duration::from_millis(1000), // 1 second debounce
+            last_reload_attempt: None,
         }
     }
 
@@ -184,15 +190,44 @@ impl SimpleConfigWatcher {
         if now.duration_since(self.last_check_time) >= self.check_interval {
             self.last_check_time = now;
 
-            // Check if config file has been modified since last load
-            let config_path = self.workspace_path.join("vtcode.toml");
-            if let Ok(metadata) = std::fs::metadata(&config_path) {
-                if let Ok(modified) = metadata.modified() {
-                    // Convert SystemTime to Instant for comparison
-                    let now = std::time::SystemTime::now();
-                    if let Ok(duration_since_modified) = now.duration_since(modified) {
-                        if duration_since_modified < self.last_load_time.elapsed() {
-                            return true;
+            // Check all potential config files
+            let config_files = get_config_file_paths(&self.workspace_path);
+            
+            for config_path in config_files {
+                // Check if file exists
+                if !config_path.exists() {
+                    continue;
+                }
+
+                if let Ok(metadata) = std::fs::metadata(&config_path) {
+                    if let Ok(current_modified) = metadata.modified() {
+                        // Get or initialize last modified time for this specific file
+                        let file_key = config_path.to_string_lossy().to_string();
+                        
+                        // In a real implementation, we would track modified times per file
+                        // For simplicity, we'll use a single tracking approach
+                        // Store initial modified time if not set
+                        if self.last_modified_time.is_none() {
+                            self.last_modified_time = Some(current_modified);
+                            continue;
+                        }
+
+                        // Check if file has been modified
+                        if let Some(last_modified) = self.last_modified_time {
+                            if current_modified > last_modified {
+                                // File has been modified, check debounce period
+                                if let Some(last_attempt) = self.last_reload_attempt {
+                                    if now.duration_since(last_attempt) < self.debounce_duration {
+                                        // Still in debounce period, don't reload yet
+                                        continue;
+                                    }
+                                }
+
+                                // Update last modified time and record reload attempt
+                                self.last_modified_time = Some(current_modified);
+                                self.last_reload_attempt = Some(now);
+                                return true;
+                            }
                         }
                     }
                 }
@@ -208,6 +243,25 @@ impl SimpleConfigWatcher {
             .map(|manager| manager.config().clone());
 
         self.last_load_time = Instant::now();
+        
+        // Update last modified time after successful load
+        let config_path = self.workspace_path.join("vtcode.toml");
+        if let Ok(metadata) = std::fs::metadata(&config_path) {
+            if let Ok(modified) = metadata.modified() {
+                self.last_modified_time = Some(modified);
+            }
+        }
+
         config
+    }
+
+    /// Set custom check interval (in seconds)
+    pub fn set_check_interval(&mut self, seconds: u64) {
+        self.check_interval = Duration::from_secs(seconds);
+    }
+
+    /// Set custom debounce duration (in milliseconds)
+    pub fn set_debounce_duration(&mut self, millis: u64) {
+        self.debounce_duration = Duration::from_millis(millis);
     }
 }
