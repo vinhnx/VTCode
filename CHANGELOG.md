@@ -3,6 +3,24 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.15] - 2026-01-04
+
+
+### Features
+    - feat(core): add file system watcher and performance optimization infrastructure
+    - feat(core): integrate real performance optimizations into tool registry
+
+
+### Documentation
+    - docs: reorganize documentation and integrate skill tools into registry
+    - docs: update changelog for v0.58.14 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.58.14 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: remove unused GeminiPromptCacheMode import.
+    - chore: update npm package.json to v0.58.13 version =  [skip ci]
 # [Version 0.58.14] - 2026-01-03
 
 
