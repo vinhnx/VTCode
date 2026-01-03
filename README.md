@@ -17,38 +17,15 @@
 </p>
 
 <p align="center">
-<a href="https://crates.io/crates/vtcode">
-  <img src="https://img.shields.io/badge/crates-io-%23000000.svg?e&logo=rust&logoColor=white" alt="crates.io"/>
-</a>
-  <a href="https://docs.rs/vtcode">
-    <img src="https://img.shields.io/badge/docs-rs-%23000000.svg?e&logo=rust&logoColor=white" alt="docs.rs"/>
-  </a>
   <a href="https://crates.io/crates/vtcode">
     <img src="https://img.shields.io/crates/v/vtcode?color=fc8d62&label=crates.io" alt="Crates.io Version"/>
   </a>
   <a href="https://github.com/vinhnx/vtcode/releases">
     <img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=Release" alt="GitHub Release"/>
   </a>
-  <a href="https://smithery.ai/skills?ns=vinhnx&utm_source=github&utm_medium=badge">
-  <img src="https://smithery.ai/badge/skills/vinhnx" alt="Run in Smithery">
-</a>
 </p>
 
 <p align="center"><strong>VT Code</strong> is a research-preview terminal coding agent, with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.</p>
-
-<h6 align="center">* YouTube Video: <a href="https://youtu.be/MgYtSUF-Wjs">VT Code: The AI Agent for Your Terminal</a></h6>
-<h6 align="center"> * Blog: <a href="https://buymeacoffee.com/vinhnx/vt-code">Lessons from Building VT Code: An Open-Source CLI AI Coding Agent</a></h6>
-
-<p align="center">
-  <img src="resources/vhs/demo.gif" alt="VT Code demo" width="80%" />
-</p>
-
----
-
-## Documents
-
--   Ask Google Gemini CodeWiki <a href="https://codewiki.google/github.com/vinhnx/vtcode"><img src="https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white" alt="Ask CodeWiki"></a>
--   Ask Devin DeepWiki <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 
 ---
 
@@ -238,6 +215,14 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
     -   [Security Model](./docs/SECURITY_MODEL.md)
     -   [Security Audit](./docs/SECURITY_AUDIT.md)
     -   [Tool Policies](./docs/vtcode_tools_policy.md)
+
+
+---
+
+## Documents
+
+-   Ask Google Gemini CodeWiki <a href="https://codewiki.google/github.com/vinhnx/vtcode"><img src="https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white" alt="Ask CodeWiki"></a>
+-   Ask Devin DeepWiki <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 
 ---
 
