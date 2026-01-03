@@ -745,17 +745,19 @@ impl SkillValidator {
 
         // Check cache
         if let Ok(metadata) = std::fs::metadata(schema_path) {
-             if let Ok(mtime) = metadata.modified() {
-                 if let Some((cached_mtime, cached_result)) = self.schema_validation_cache.get(schema_path) {
-                     if *cached_mtime == mtime {
-                         let mut result = cached_result.clone();
-                         // Update execution time to reflect cache hit (near zero)
-                         result.execution_time_ms = start_time.elapsed().as_millis() as u64;
-                         result.message = format!("{} (cached)", result.message);
-                         return result;
-                     }
-                 }
-             }
+            if let Ok(mtime) = metadata.modified() {
+                if let Some((cached_mtime, cached_result)) =
+                    self.schema_validation_cache.get(schema_path)
+                {
+                    if *cached_mtime == mtime {
+                        let mut result = cached_result.clone();
+                        // Update execution time to reflect cache hit (near zero)
+                        result.execution_time_ms = start_time.elapsed().as_millis() as u64;
+                        result.message = format!("{} (cached)", result.message);
+                        return result;
+                    }
+                }
+            }
         }
 
         let result = match std::fs::read_to_string(schema_path) {
@@ -803,7 +805,8 @@ impl SkillValidator {
         // Update cache
         if let Ok(metadata) = std::fs::metadata(schema_path) {
             if let Ok(mtime) = metadata.modified() {
-                self.schema_validation_cache.insert(schema_path.to_path_buf(), (mtime, result.clone()));
+                self.schema_validation_cache
+                    .insert(schema_path.to_path_buf(), (mtime, result.clone()));
             }
         }
 
@@ -1116,10 +1119,9 @@ mod tests {
         use std::fs::File;
         use std::io::Write;
 
-
         let temp_dir = TempDir::new().unwrap();
         let schema_path = temp_dir.path().join("schema.json");
-        
+
         // precise sleep to ensure file system time resolution
         let sleep_fs = || std::thread::sleep(std::time::Duration::from_millis(50));
 
@@ -1131,7 +1133,7 @@ mod tests {
         sleep_fs();
 
         let mut validator = SkillValidator::new();
-        
+
         // 1. First validation - should cache
         let result1 = validator.validate_json_schema(&schema_path).await;
         assert_eq!(result1.status, CheckStatus::Passed);
@@ -1145,7 +1147,14 @@ mod tests {
         let result2 = validator.validate_json_schema(&schema_path).await;
         assert_eq!(result2.status, CheckStatus::Passed);
         // Verify we still have the same cache entry
-        assert_eq!(validator.schema_validation_cache.get(&schema_path).unwrap().0, cached_mtime);
+        assert_eq!(
+            validator
+                .schema_validation_cache
+                .get(&schema_path)
+                .unwrap()
+                .0,
+            cached_mtime
+        );
 
         // 3. Modify file - should invalidate cache
         sleep_fs();
@@ -1157,8 +1166,11 @@ mod tests {
 
         let result3 = validator.validate_json_schema(&schema_path).await;
         assert_eq!(result3.status, CheckStatus::Passed);
-        
+
         let (new_mtime, _) = validator.schema_validation_cache.get(&schema_path).unwrap();
-        assert_ne!(*new_mtime, cached_mtime, "Cache should have updated with new mtime");
+        assert_ne!(
+            *new_mtime, cached_mtime,
+            "Cache should have updated with new mtime"
+        );
     }
 }

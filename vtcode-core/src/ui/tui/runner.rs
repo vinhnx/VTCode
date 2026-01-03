@@ -566,9 +566,9 @@ async fn drive_terminal<B: Backend>(
                         inputs.clear_queue();
                     }
                     InlineCommand::ForceRedraw => {
-                        terminal
-                            .clear()
-                            .map_err(|e| anyhow::anyhow!("failed to clear terminal for redraw: {}", e))?;
+                        terminal.clear().map_err(|e| {
+                            anyhow::anyhow!("failed to clear terminal for redraw: {}", e)
+                        })?;
                         session.handle_command(InlineCommand::ForceRedraw);
                     }
                     cmd => {

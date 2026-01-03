@@ -56,7 +56,8 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub hooks: Option<&'a LifecycleHookEngine>,
     pub justification: Option<&'a vtcode_core::tools::ToolJustification>,
     pub approval_recorder: Option<&'a vtcode_core::tools::ApprovalRecorder>,
-    pub decision_ledger: Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
+    pub decision_ledger:
+        Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub hitl_notification_bell: bool,
 }
@@ -416,17 +417,17 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 .set_tool_policy(&tool_name_owned, ToolPolicy::Allow)
                 .await
             {
-                    tracing::warn!(
-                        "[background] Failed to persist auto-approval for '{}': {}",
-                        tool_name_owned,
-                        err
-                    );
-                } else {
-                    tracing::debug!(
-                        "[background] Successfully persisted auto-approval for '{}'",
-                        tool_name_owned
-                    );
-                }
+                tracing::warn!(
+                    "[background] Failed to persist auto-approval for '{}': {}",
+                    tool_name_owned,
+                    err
+                );
+            } else {
+                tracing::debug!(
+                    "[background] Successfully persisted auto-approval for '{}'",
+                    tool_name_owned
+                );
+            }
         });
 
         return Ok(ToolPermissionFlow::Approved);
@@ -549,7 +550,10 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
             // Persist to policy manager IMMEDIATELY (not in background)
             // This ensures the policy is saved before execution continues
-            if let Err(err) = tool_registry.set_tool_policy(tool_name, ToolPolicy::Allow).await {
+            if let Err(err) = tool_registry
+                .set_tool_policy(tool_name, ToolPolicy::Allow)
+                .await
+            {
                 tracing::warn!(
                     "Failed to persist permanent approval for '{}': {}",
                     tool_name,

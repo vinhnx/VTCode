@@ -32,7 +32,7 @@ impl Updater {
         debug!("Checking for VT Code updates...");
 
         let latest = self.fetch_latest_release().await?;
-        
+
         if latest.version > self.current_version {
             info!(
                 "New version available: {} (current: {})",
@@ -47,10 +47,7 @@ impl Updater {
 
     /// Fetch latest release info from GitHub API
     async fn fetch_latest_release(&self) -> Result<UpdateInfo> {
-        let url = format!(
-            "https://api.github.com/repos/{}/releases/latest",
-            self.repo
-        );
+        let url = format!("https://api.github.com/repos/{}/releases/latest", self.repo);
 
         let client = reqwest::Client::builder()
             .user_agent("vtcode-updater")
@@ -94,8 +91,7 @@ impl Updater {
 
     /// Generate platform-specific download URL
     fn get_download_url(&self, version: &Version) -> Result<String> {
-        let target = Self::get_target_triple()
-            .context("Unsupported platform for auto-update")?;
+        let target = Self::get_target_triple().context("Unsupported platform for auto-update")?;
 
         let file_ext = if target.contains("windows") {
             "zip"

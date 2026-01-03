@@ -167,9 +167,9 @@ pub mod capabilities;
 pub mod client;
 pub mod error_display;
 pub mod factory;
+pub mod http_client;
 pub mod provider;
 pub mod provider_base; // Shared provider utilities to eliminate duplicate code
-pub mod http_client;
 pub mod provider_builder;
 pub mod provider_config;
 pub mod providers;

@@ -888,14 +888,15 @@ impl ConfigManager {
 
         // 4. Workspace config (vtcode.toml in workspace root)
         if workspace_config_path.exists()
-            && let Ok(toml) = Self::load_toml_from_file(&workspace_config_path) {
-                layer_stack.push(ConfigLayerEntry::new(
-                    ConfigLayerSource::Workspace {
-                        file: workspace_config_path.clone(),
-                    },
-                    toml,
-                ));
-            }
+            && let Ok(toml) = Self::load_toml_from_file(&workspace_config_path)
+        {
+            layer_stack.push(ConfigLayerEntry::new(
+                ConfigLayerSource::Workspace {
+                    file: workspace_config_path.clone(),
+                },
+                toml,
+            ));
+        }
 
         // If no layers found, use default config
         if layer_stack.layers().is_empty() {
@@ -963,27 +964,29 @@ impl ConfigManager {
         {
             let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
             if system_config.exists()
-                && let Ok(toml) = Self::load_toml_from_file(&system_config) {
-                    layer_stack.push(ConfigLayerEntry::new(
-                        ConfigLayerSource::System {
-                            file: system_config,
-                        },
-                        toml,
-                    ));
-                }
+                && let Ok(toml) = Self::load_toml_from_file(&system_config)
+            {
+                layer_stack.push(ConfigLayerEntry::new(
+                    ConfigLayerSource::System {
+                        file: system_config,
+                    },
+                    toml,
+                ));
+            }
         }
 
         // 2. User home config
         for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
             if home_config_path.exists()
-                && let Ok(toml) = Self::load_toml_from_file(&home_config_path) {
-                    layer_stack.push(ConfigLayerEntry::new(
-                        ConfigLayerSource::User {
-                            file: home_config_path,
-                        },
-                        toml,
-                    ));
-                }
+                && let Ok(toml) = Self::load_toml_from_file(&home_config_path)
+            {
+                layer_stack.push(ConfigLayerEntry::new(
+                    ConfigLayerSource::User {
+                        file: home_config_path,
+                    },
+                    toml,
+                ));
+            }
         }
 
         // 3. The specific file provided (Workspace layer)

@@ -128,8 +128,8 @@ pub async fn run_turn_loop(
         // Check if we've reached the maximum number of tool loops
         if step_count > max_tool_loops {
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                ctx.renderer, 
-                &format!("Reached maximum tool loops ({})", max_tool_loops)
+                ctx.renderer,
+                &format!("Reached maximum tool loops ({})", max_tool_loops),
             )?;
             // When hitting max loops, this is still considered a completed turn
             // (the turn ended normally, just reached the loop limit)
@@ -164,7 +164,7 @@ pub async fn run_turn_loop(
                 crate::agent::runloop::unified::turn::turn_helpers::display_error(
                     ctx.renderer,
                     "LLM request failed",
-                    &err
+                    &err,
                 )?;
                 working_history.push(uni::Message::assistant(format!("Request failed: {}", err)));
                 result = TurnLoopResult::Aborted;

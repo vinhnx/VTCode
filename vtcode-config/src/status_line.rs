@@ -10,7 +10,6 @@ pub enum StatusLineMode {
     Hidden,
 }
 
-
 impl std::str::FromStr for StatusLineMode {
     type Err = String;
 

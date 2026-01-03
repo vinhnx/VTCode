@@ -30,7 +30,8 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
         && (command[1] == "-c" || command[1] == "-lc" || command[1] == "-ilc")
     {
         let script = &command[2];
-        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
+        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script)
+        {
             for sub_cmd in sub_commands {
                 if command_might_be_dangerous(&sub_cmd) {
                     return true;

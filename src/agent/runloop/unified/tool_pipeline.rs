@@ -213,7 +213,9 @@ pub(crate) async fn run_tool_call(
             approval_recorder: Some(ctx.approval_recorder),
             decision_ledger: Some(ctx.decision_ledger),
             tool_permission_cache: Some(ctx.tool_permission_cache),
-            hitl_notification_bell: vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
+            hitl_notification_bell: vt_cfg
+                .map(|cfg| cfg.security.hitl_notification_bell)
+                .unwrap_or(true),
         },
         &name,
         Some(&args_val),
@@ -593,12 +595,11 @@ async fn run_single_tool_attempt(
 
         // Spawn a background task to update progress periodically with elapsed time
         let _progress_update_guard = {
-            use crate::agent::runloop::unified::progress::{ProgressUpdateGuard, spawn_elapsed_time_updater};
-            let handle = spawn_elapsed_time_updater(
-                progress_reporter.clone(),
-                name.to_string(),
-                500,
-            );
+            use crate::agent::runloop::unified::progress::{
+                ProgressUpdateGuard, spawn_elapsed_time_updater,
+            };
+            let handle =
+                spawn_elapsed_time_updater(progress_reporter.clone(), name.to_string(), 500);
             ProgressUpdateGuard::new(handle)
         };
 
@@ -646,7 +647,7 @@ async fn run_single_tool_attempt(
 
             result = time::timeout(tool_timeout, exec_future) => ExecutionControl::Completed(result),
         };
-        
+
         // Stop the background update task (handled by guard drop)
 
         match control {

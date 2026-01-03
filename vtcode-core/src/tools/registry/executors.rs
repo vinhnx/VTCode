@@ -361,31 +361,19 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_send_pty_input(args).await })
     }
 
-    pub(super) fn read_pty_session_executor(
-        &self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn read_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_read_pty_session(args).await })
     }
 
-    pub(super) fn list_pty_sessions_executor(
-        &self,
-        _args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn list_pty_sessions_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_list_pty_sessions().await })
     }
 
-    pub(super) fn close_pty_session_executor(
-        &self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn close_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_close_pty_session(args).await })
     }
 
-    pub(super) fn code_intelligence_executor(
-        &self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn code_intelligence_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_code_intelligence(args).await })
     }
 

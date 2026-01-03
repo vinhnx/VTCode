@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use std::env;
-use vtcode::updater::{Updater, UpdateInfo};
 use crossterm::style::Stylize;
+use std::env;
+use vtcode::updater::{UpdateInfo, Updater};
 
 /// Options for the update command
 #[derive(Debug, Clone)]
@@ -23,13 +23,10 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
         current_version
     );
 
-    let updater = Updater::new(current_version)
-        .context("Failed to initialize updater")?;
+    let updater = Updater::new(current_version).context("Failed to initialize updater")?;
 
     match updater.check_for_updates().await {
-        Ok(Some(update_info)) => {
-            handle_update_available(&update_info, options).await
-        }
+        Ok(Some(update_info)) => handle_update_available(&update_info, options).await,
         Ok(None) => {
             println!(
                 "{} You're already on the latest version (v{})",
@@ -39,21 +36,14 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
             Ok(())
         }
         Err(err) => {
-            eprintln!(
-                "{} Failed to check for updates: {:#}",
-                "✗".red(),
-                err
-            );
+            eprintln!("{} Failed to check for updates: {:#}", "✗".red(), err);
             Err(err)
         }
     }
 }
 
 /// Handle when an update is available
-async fn handle_update_available(
-    update: &UpdateInfo,
-    options: UpdateCommandOptions,
-) -> Result<()> {
+async fn handle_update_available(update: &UpdateInfo, options: UpdateCommandOptions) -> Result<()> {
     println!(
         "\n{} New version available: v{}",
         "●".yellow(),
@@ -86,8 +76,7 @@ async fn handle_update_available(
     );
 
     // Record that we checked for updates (for rate limiting)
-    Updater::record_update_check()
-        .context("Failed to record update check")?;
+    Updater::record_update_check().context("Failed to record update check")?;
 
     println!(
         "{} {} installed successfully!",
@@ -95,10 +84,7 @@ async fn handle_update_available(
         format!("v{}", update.version).bold()
     );
 
-    println!(
-        "\n{} Restart VT Code to use the new version",
-        "→".cyan()
-    );
+    println!("\n{} Restart VT Code to use the new version", "→".cyan());
 
     Ok(())
 }

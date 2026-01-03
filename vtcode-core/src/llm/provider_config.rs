@@ -1,8 +1,8 @@
-use std::str::FromStr;
 use crate::config::TimeoutsConfig;
 use crate::config::core::{GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
 use crate::llm::provider::LLMProvider;
 use crate::llm::provider_builder::ProviderConfig;
+use std::str::FromStr;
 
 /// Gemini provider configuration
 pub struct GeminiProviderConfig;
@@ -12,7 +12,8 @@ impl ProviderConfig for GeminiProviderConfig {
     const DISPLAY_NAME: &'static str = "Gemini";
     const DEFAULT_MODEL: &'static str = crate::config::constants::models::google::GEMINI_2_5_FLASH;
     const API_BASE_URL: &'static str = crate::config::constants::urls::GEMINI_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::GEMINI_BASE_URL);
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        Some(crate::config::constants::env_vars::GEMINI_BASE_URL);
 
     type PromptCacheSettings = GeminiPromptCacheSettings;
 
@@ -24,8 +25,8 @@ impl ProviderConfig for GeminiProviderConfig {
         prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::gemini::GeminiProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::gemini::GeminiProvider;
 
         Box::new(GeminiProvider::new_with_client(
             api_key,
@@ -50,7 +51,8 @@ impl ProviderConfig for AnthropicProviderConfig {
     const DISPLAY_NAME: &'static str = "Anthropic";
     const DEFAULT_MODEL: &'static str = crate::config::constants::models::anthropic::DEFAULT_MODEL;
     const API_BASE_URL: &'static str = crate::config::constants::urls::ANTHROPIC_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::ANTHROPIC_BASE_URL);
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        Some(crate::config::constants::env_vars::ANTHROPIC_BASE_URL);
 
     type PromptCacheSettings = ();
 
@@ -86,7 +88,8 @@ impl ProviderConfig for OpenAIProviderConfig {
     const DISPLAY_NAME: &'static str = "OpenAI";
     const DEFAULT_MODEL: &'static str = crate::config::constants::models::openai::DEFAULT_MODEL;
     const API_BASE_URL: &'static str = crate::config::constants::urls::OPENAI_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::OPENAI_BASE_URL);
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        Some(crate::config::constants::env_vars::OPENAI_BASE_URL);
 
     type PromptCacheSettings = ();
 
@@ -98,8 +101,8 @@ impl ProviderConfig for OpenAIProviderConfig {
         _prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::openai::OpenAIProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::openai::OpenAIProvider;
 
         Box::new(OpenAIProvider::new_with_client(
             api_key,
@@ -122,7 +125,8 @@ impl ProviderConfig for DeepSeekProviderConfig {
     const DISPLAY_NAME: &'static str = "DeepSeek";
     const DEFAULT_MODEL: &'static str = crate::config::constants::models::deepseek::DEEPSEEK_CHAT;
     const API_BASE_URL: &'static str = crate::config::constants::urls::DEEPSEEK_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::DEEPSEEK_BASE_URL);
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        Some(crate::config::constants::env_vars::DEEPSEEK_BASE_URL);
 
     type PromptCacheSettings = ();
 
@@ -134,8 +138,8 @@ impl ProviderConfig for DeepSeekProviderConfig {
         _prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::deepseek::DeepSeekProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::deepseek::DeepSeekProvider;
 
         Box::new(DeepSeekProvider::new_with_client(
             api_key,
@@ -158,7 +162,8 @@ impl ProviderConfig for MoonshotProviderConfig {
     const DISPLAY_NAME: &'static str = "Moonshot";
     const DEFAULT_MODEL: &'static str = "kimi-k2-0905"; // Deprecated: use OpenRouter models instead
     const API_BASE_URL: &'static str = crate::config::constants::urls::MOONSHOT_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::MOONSHOT_BASE_URL);
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        Some(crate::config::constants::env_vars::MOONSHOT_BASE_URL);
 
     type PromptCacheSettings = ();
 
@@ -170,8 +175,8 @@ impl ProviderConfig for MoonshotProviderConfig {
         _prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::moonshot::MoonshotProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::moonshot::MoonshotProvider;
 
         Box::new(MoonshotProvider::new_with_client(
             api_key,
@@ -194,7 +199,8 @@ impl ProviderConfig for XAIProviderConfig {
     const DISPLAY_NAME: &'static str = "XAI";
     const DEFAULT_MODEL: &'static str = crate::config::constants::models::xai::DEFAULT_MODEL;
     const API_BASE_URL: &'static str = crate::config::constants::urls::XAI_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::XAI_BASE_URL);
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        Some(crate::config::constants::env_vars::XAI_BASE_URL);
 
     type PromptCacheSettings = ();
 
@@ -206,8 +212,8 @@ impl ProviderConfig for XAIProviderConfig {
         _prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::xai::XAIProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::xai::XAIProvider;
 
         Box::new(XAIProvider::new_with_client(
             api_key,
@@ -230,7 +236,8 @@ impl ProviderConfig for ZAIProviderConfig {
     const DISPLAY_NAME: &'static str = "ZAI";
     const DEFAULT_MODEL: &'static str = crate::config::constants::models::zai::DEFAULT_MODEL;
     const API_BASE_URL: &'static str = crate::config::constants::urls::Z_AI_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::Z_AI_BASE_URL);
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        Some(crate::config::constants::env_vars::Z_AI_BASE_URL);
 
     type PromptCacheSettings = ();
 
@@ -242,8 +249,8 @@ impl ProviderConfig for ZAIProviderConfig {
         _prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::zai::ZAIProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::zai::ZAIProvider;
 
         Box::new(ZAIProvider::new_with_client(
             api_key,
@@ -266,7 +273,8 @@ impl ProviderConfig for OpenRouterProviderConfig {
     const DISPLAY_NAME: &'static str = "OpenRouter";
     const DEFAULT_MODEL: &'static str = "openrouter/auto";
     const API_BASE_URL: &'static str = crate::config::constants::urls::OPENROUTER_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::OPENROUTER_BASE_URL);
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        Some(crate::config::constants::env_vars::OPENROUTER_BASE_URL);
 
     type PromptCacheSettings = ();
 
@@ -278,8 +286,8 @@ impl ProviderConfig for OpenRouterProviderConfig {
         _prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::openrouter::OpenRouterProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::openrouter::OpenRouterProvider;
 
         Box::new(OpenRouterProvider::new_with_client(
             api_key,
@@ -314,8 +322,8 @@ impl ProviderConfig for OllamaProviderConfig {
         _prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::ollama::OllamaProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::ollama::OllamaProvider;
 
         Box::new(OllamaProvider::new_with_client(
             _api_key,
@@ -350,8 +358,8 @@ impl ProviderConfig for LmStudioProviderConfig {
         _prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::lmstudio::LmStudioProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::lmstudio::LmStudioProvider;
 
         Box::new(LmStudioProvider::new_with_client(
             model,
@@ -373,7 +381,8 @@ impl ProviderConfig for MinimaxProviderConfig {
     const DISPLAY_NAME: &'static str = "Minimax";
     const DEFAULT_MODEL: &'static str = "abab5.5-chat";
     const API_BASE_URL: &'static str = crate::config::constants::urls::MINIMAX_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::MINIMAX_BASE_URL);
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        Some(crate::config::constants::env_vars::MINIMAX_BASE_URL);
 
     type PromptCacheSettings = ();
 
@@ -385,8 +394,8 @@ impl ProviderConfig for MinimaxProviderConfig {
         _prompt_cache_settings: Self::PromptCacheSettings,
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::minimax::MinimaxProvider;
         use crate::llm::providers::common::get_http_client_for_timeouts;
+        use crate::llm::providers::minimax::MinimaxProvider;
 
         Box::new(MinimaxProvider::new_with_client(
             api_key,
@@ -420,11 +429,12 @@ pub fn create_provider_unified(
 ) -> Result<Box<dyn LLMProvider>, crate::llm::provider::LLMError> {
     use crate::config::models::Provider;
 
-    let provider = Provider::from_str(provider_name)
-        .map_err(|_| crate::llm::provider::LLMError::InvalidRequest {
+    let provider = Provider::from_str(provider_name).map_err(|_| {
+        crate::llm::provider::LLMError::InvalidRequest {
             message: format!("Unknown provider: {}", provider_name),
             metadata: None,
-        })?;
+        }
+    })?;
 
     match provider {
         Provider::Gemini => {
@@ -599,11 +609,12 @@ pub fn create_provider_unified(
                 builder = builder.timeouts(t);
             }
             Ok(builder.build())
-        },
+        }
         Provider::HuggingFace => {
             // Placeholder for HuggingFace
             Err(crate::llm::provider::LLMError::Provider {
-                message: "HuggingFace provider is not fully implemented in create_provider_unified".to_string(),
+                message: "HuggingFace provider is not fully implemented in create_provider_unified"
+                    .to_string(),
                 metadata: None,
             })
         }

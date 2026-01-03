@@ -97,20 +97,25 @@ pub(crate) async fn execute_llm_request(
             let delay = calculate_backoff(attempt - 1, 500, 10_000);
             let delay_secs = delay.as_secs_f64();
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                ctx.renderer, 
-                &format!("LLM request failed, retrying in {:.1}s... (attempt {}/{})", delay_secs, attempt + 1, MAX_RETRIES)
+                ctx.renderer,
+                &format!(
+                    "LLM request failed, retrying in {:.1}s... (attempt {}/{})",
+                    delay_secs,
+                    attempt + 1,
+                    MAX_RETRIES
+                ),
             )?;
             tokio::time::sleep(delay).await;
         }
 
         // Create a new spinner for each attempt to ensuring it's active
         let spinner_msg = if attempt > 0 {
-             let action = action_suggestion.clone();
-             if action.is_empty() {
-                 format!("Retrying request (attempt {}/{})", attempt + 1, MAX_RETRIES)
-             } else {
-                 format!("{} (Retry {}/{})", action, attempt + 1, MAX_RETRIES)
-             }
+            let action = action_suggestion.clone();
+            if action.is_empty() {
+                format!("Retrying request (attempt {}/{})", attempt + 1, MAX_RETRIES)
+            } else {
+                format!("{} (Retry {}/{})", action, attempt + 1, MAX_RETRIES)
+            }
         } else {
             action_suggestion.clone()
         };
@@ -123,7 +128,7 @@ pub(crate) async fn execute_llm_request(
             spinner_msg,
         );
         task::yield_now().await;
-        
+
         #[cfg(debug_assertions)]
         {
             request_timer = Instant::now(); // Re-assign inside loop for each attempt
@@ -156,19 +161,19 @@ pub(crate) async fn execute_llm_request(
                 Err(ref err) => {
                     // Only retry streaming errors if we haven't emitted any tokens yet (best effort)
                     let msg = err.to_string();
-                    let is_retryable = msg.contains("rate limit") 
-                        || msg.contains("timeout") 
-                        || msg.contains("500") 
-                        || msg.contains("502") 
+                    let is_retryable = msg.contains("rate limit")
+                        || msg.contains("timeout")
+                        || msg.contains("500")
+                        || msg.contains("502")
                         || msg.contains("503")
                         || msg.contains("service unavailable")
                         || msg.contains("connection")
                         || msg.contains("network");
-                        
+
                     if is_retryable {
                         Err(anyhow::anyhow!(msg)) // Return err to retry loop
                     } else {
-                        Err(anyhow::anyhow!(msg)) 
+                        Err(anyhow::anyhow!(msg))
                     }
                 }
             }
@@ -188,7 +193,7 @@ pub(crate) async fn execute_llm_request(
                 tokio::pin!(generate_future);
                 let cancel_notifier = ctx.ctrl_c_notify.notified();
                 tokio::pin!(cancel_notifier);
-                
+
                 let outcome = tokio::select! {
                     res = &mut generate_future => {
                         match res {
@@ -209,7 +214,7 @@ pub(crate) async fn execute_llm_request(
                 outcome
             }
         };
-        
+
         // Log outcome
         #[cfg(debug_assertions)]
         {
@@ -233,34 +238,36 @@ pub(crate) async fn execute_llm_request(
             }
             Err(err) => {
                 let msg = err.to_string();
-                let is_retryable = msg.contains("rate limit") 
-                    || msg.contains("timeout") 
-                    || msg.contains("500") 
-                    || msg.contains("502") 
+                let is_retryable = msg.contains("rate limit")
+                    || msg.contains("timeout")
+                    || msg.contains("500")
+                    || msg.contains("502")
                     || msg.contains("503")
                     || msg.contains("service unavailable")
                     || msg.contains("connection")
                     || msg.contains("network");
-                
+
                 // Special check for user interruption - never retry
-                if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(ctx.ctrl_c_state) {
-                     llm_result = Err(err);
-                     _spinner.finish();
-                     break;
+                if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(
+                    ctx.ctrl_c_state,
+                ) {
+                    llm_result = Err(err);
+                    _spinner.finish();
+                    break;
                 }
 
                 if is_retryable && attempt < MAX_RETRIES - 1 {
                     _spinner.finish(); // Clean up spinner before retrying
                     // Continue to next attempt
-                     continue;
+                    continue;
                 }
-                
+
                 llm_result = Err(err);
                 _spinner.finish();
                 break;
             }
         }
-    };
+    }
 
     // Finalize response
 

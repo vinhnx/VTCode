@@ -12,7 +12,9 @@ pub struct ProgressUpdateGuard {
 
 impl ProgressUpdateGuard {
     pub fn new(handle: tokio::task::JoinHandle<()>) -> Self {
-        Self { handle: Some(handle) }
+        Self {
+            handle: Some(handle),
+        }
     }
 }
 
@@ -317,8 +319,6 @@ fn format_eta(duration: Duration) -> String {
     }
 }
 
-
-
 /// Spawns a background task that updates the progress message with elapsed time
 pub fn spawn_elapsed_time_updater(
     reporter: ProgressReporter,
@@ -336,12 +336,11 @@ pub fn spawn_elapsed_time_updater(
             } else {
                 format_duration(elapsed)
             };
-            
+
             reporter
                 .set_message(format!(
                     "Running {}... ({} elapsed)",
-                    task_name,
-                    duration_str
+                    task_name, duration_str
                 ))
                 .await;
         }

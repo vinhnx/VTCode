@@ -61,10 +61,7 @@ where
 
     pub fn build(self) -> Box<dyn LLMProvider> {
         let api_key = self.api_key.unwrap_or_default();
-        let model = crate::llm::providers::common::resolve_model(
-            self.model,
-            T::DEFAULT_MODEL,
-        );
+        let model = crate::llm::providers::common::resolve_model(self.model, T::DEFAULT_MODEL);
         let timeouts = self.timeouts.unwrap_or_default();
 
         let (prompt_cache_enabled, _) =
@@ -129,19 +126,25 @@ mod http_client_pool {
         pool.insert("default".to_string(), Arc::new(HttpClient::new()));
 
         // Timeout-configured clients
-        pool.insert("timeout_30s".to_string(), Arc::new(
-            HttpClient::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .expect("Failed to build HTTP client")
-        ));
+        pool.insert(
+            "timeout_30s".to_string(),
+            Arc::new(
+                HttpClient::builder()
+                    .timeout(Duration::from_secs(30))
+                    .build()
+                    .expect("Failed to build HTTP client"),
+            ),
+        );
 
-        pool.insert("timeout_120s".to_string(), Arc::new(
-            HttpClient::builder()
-                .timeout(Duration::from_secs(120))
-                .build()
-                .expect("Failed to build HTTP client")
-        ));
+        pool.insert(
+            "timeout_120s".to_string(),
+            Arc::new(
+                HttpClient::builder()
+                    .timeout(Duration::from_secs(120))
+                    .build()
+                    .expect("Failed to build HTTP client"),
+            ),
+        );
 
         Arc::new(RwLock::new(pool))
     });
@@ -164,9 +167,7 @@ mod http_client_pool {
             return default_client;
         }
 
-        tracing::warn!(
-            "HTTP client pool missing default client; constructing transient client"
-        );
+        tracing::warn!("HTTP client pool missing default client; constructing transient client");
         Arc::new(HttpClient::new())
     }
 
