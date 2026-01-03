@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-indexer"
-version = "0.58.12"
+version = "0.58.13"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Workspace-friendly code indexer extracted from VT Code"
