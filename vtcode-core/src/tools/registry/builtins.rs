@@ -184,5 +184,18 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::apply_patch_executor,
         )
         .with_llm_visibility(false),
+        // ============================================================
+        // SKILL MANAGEMENT TOOLS (3 tools)
+        // ============================================================
+        // Note: These tools are created dynamically in session_setup.rs
+        // because they depend on runtime context (skills map, tool registry).
+        // They are NOT registered here; instead they are registered
+        // on-demand in session initialization.
+        //
+        // Tools created in session_setup.rs:
+        // - list_skills
+        // - load_skill
+        // - load_skill_resource
+        // - spawn_subagent
     ]
 }

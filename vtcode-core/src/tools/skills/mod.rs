@@ -10,6 +10,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::warn;
 
 type SkillMap = Arc<RwLock<HashMap<String, Skill>>>;
 type ToolDefList = Arc<RwLock<Vec<ToolDefinition>>>;
@@ -101,7 +102,9 @@ impl Tool for LoadSkillTool {
                             crate::config::types::CapabilityLevel::Basic,
                             adapter,
                         );
-                        let _ = registry.register_tool(reg);
+                        if let Err(e) = registry.register_tool(reg).await {
+                            warn!("Failed to register tool for skill '{}': {}", name, e);
+                        }
                     }
                     activation_status = "Associated tools activated and added to context.";
                 } else {
