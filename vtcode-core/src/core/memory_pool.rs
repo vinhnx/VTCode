@@ -247,7 +247,7 @@ pub struct MemoryPoolTuningRecommendation {
 }
 
 /// Size recommendation enum
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum SizeRecommendation {
     Maintain,
     Increase(usize),

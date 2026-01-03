@@ -254,7 +254,7 @@ pub(crate) async fn run_tool_call(
 
     // Attempt cache retrieval for cacheable tools
     if is_cacheable_tool {
-        let workspace_path = ctx.tool_registry.workspace().to_string_lossy().to_string();
+        let workspace_path = ctx.tool_registry.workspace_root().to_string_lossy().to_string();
         let cache_key = create_enhanced_cache_key(
             &name,
             &args_val,
@@ -333,7 +333,7 @@ pub(crate) async fn run_tool_call(
                 && loop_detected
             {
                 // Tool was blocked due to loop detection - try to get cached result
-                let workspace_path = ctx.tool_registry.workspace().to_string_lossy().to_string();
+                let workspace_path = ctx.tool_registry.workspace_root().to_string_lossy().to_string();
                 let cache_key = create_enhanced_cache_key(
                     &name,
                     &args_val,
@@ -375,7 +375,7 @@ pub(crate) async fn run_tool_call(
         tool_spinner.finish();
         // Cache successful cacheable results
         if is_cacheable_tool && *command_success {
-            let workspace_path = ctx.tool_registry.workspace().to_string_lossy().to_string();
+            let workspace_path = ctx.tool_registry.workspace_root().to_string_lossy().to_string();
             let cache_key = create_enhanced_cache_key(
                 &name,
                 &args_val,
