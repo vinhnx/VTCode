@@ -63,6 +63,7 @@ use crate::tools::summarizers::{
     search::{GrepSummarizer, ListSummarizer},
 };
 use anyhow::{Result, anyhow};
+use parking_lot::Mutex; // Use parking_lot for better performance
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -83,6 +84,7 @@ use std::time::SystemTime;
 pub type ToolProgressCallback = Arc<dyn Fn(&str, &str) + Send + Sync>;
 
 use super::traits::Tool;
+use super::traits::ToolExecutor;
 #[cfg(test)]
 use crate::config::types::CapabilityLevel;
 
@@ -207,9 +209,9 @@ const MIN_READONLY_IDENTICAL_LIMIT: usize = 5;
 pub struct ToolExecutionHistory {
     records: Arc<RwLock<VecDeque<ToolExecutionRecord>>>,
     max_records: usize,
-    detect_window: usize,
-    identical_limit: usize,
-    rate_limit_per_minute: Option<usize>,
+    detect_window: Arc<std::sync::atomic::AtomicUsize>,
+    identical_limit: Arc<std::sync::atomic::AtomicUsize>,
+    rate_limit_per_minute: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl ToolExecutionHistory {
@@ -217,9 +219,13 @@ impl ToolExecutionHistory {
         Self {
             records: Arc::new(RwLock::new(VecDeque::new())),
             max_records,
-            detect_window: DEFAULT_LOOP_DETECT_WINDOW,
-            identical_limit: defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
-            rate_limit_per_minute: tool_rate_limit_from_env(),
+            detect_window: Arc::new(std::sync::atomic::AtomicUsize::new(DEFAULT_LOOP_DETECT_WINDOW)),
+            identical_limit: Arc::new(std::sync::atomic::AtomicUsize::new(
+                defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
+            )),
+            rate_limit_per_minute: Arc::new(std::sync::atomic::AtomicUsize::new(
+                tool_rate_limit_from_env().unwrap_or(0),
+            )),
         }
     }
 
@@ -231,13 +237,18 @@ impl ToolExecutionHistory {
         }
     }
 
-    pub fn set_loop_detection_limits(&mut self, detect_window: usize, identical_limit: usize) {
-        self.detect_window = detect_window.max(1);
-        self.identical_limit = identical_limit;
+    pub fn set_loop_detection_limits(&self, detect_window: usize, identical_limit: usize) {
+        self.detect_window
+            .store(detect_window.max(1), std::sync::atomic::Ordering::Relaxed);
+        self.identical_limit
+            .store(identical_limit, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn set_rate_limit_per_minute(&mut self, limit: Option<usize>) {
-        self.rate_limit_per_minute = limit.filter(|value| *value > 0);
+    pub fn set_rate_limit_per_minute(&self, limit: Option<usize>) {
+        self.rate_limit_per_minute.store(
+            limit.filter(|v| *v > 0).unwrap_or(0),
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
 
     pub fn get_recent_records(&self, count: usize) -> Vec<ToolExecutionRecord> {
@@ -269,6 +280,7 @@ impl ToolExecutionHistory {
 
     pub fn loop_limit(&self) -> usize {
         self.identical_limit
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn loop_limit_for(&self, tool_name: &str) -> usize {
@@ -276,15 +288,21 @@ impl ToolExecutionHistory {
     }
 
     pub fn rate_limit_per_minute(&self) -> Option<usize> {
-        self.rate_limit_per_minute
+        let val = self
+            .rate_limit_per_minute
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if val == 0 { None } else { Some(val) }
     }
 
     fn effective_identical_limit_for_tool(&self, tool_name: &str) -> usize {
+        let base_limit = self
+            .identical_limit
+            .load(std::sync::atomic::Ordering::Relaxed);
         match tool_name {
             tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
-                self.identical_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
+                base_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
             }
-            _ => self.identical_limit,
+            _ => base_limit,
         }
     }
 
@@ -310,7 +328,10 @@ impl ToolExecutionHistory {
             return (false, 0, String::new());
         }
 
-        let window = self.detect_window.max(limit.saturating_mul(2)).max(1);
+        let detect_window = self
+            .detect_window
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let window = detect_window.max(limit.saturating_mul(2)).max(1);
 
         let records = self.records.read().unwrap();
 
@@ -542,8 +563,8 @@ impl ToolLatencyStats {
 
 #[derive(Debug, Clone)]
 pub struct HarnessContext {
-    session_id: String,
-    task_id: Option<String>,
+    session_id: Arc<std::sync::RwLock<String>>,
+    task_id: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 impl Default for HarnessContext {
@@ -554,8 +575,8 @@ impl Default for HarnessContext {
             .unwrap_or_else(|_| "session-unknown".to_string());
 
         Self {
-            session_id,
-            task_id: None,
+            session_id: Arc::new(std::sync::RwLock::new(session_id)),
+            task_id: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 }
@@ -563,52 +584,77 @@ impl Default for HarnessContext {
 impl HarnessContext {
     pub fn with_session(session_id: impl Into<String>) -> Self {
         Self {
-            session_id: session_id.into(),
-            task_id: None,
+            session_id: Arc::new(std::sync::RwLock::new(session_id.into())),
+            task_id: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 
-    pub fn set_session_id(&mut self, session_id: impl Into<String>) {
-        self.session_id = session_id.into();
+    pub fn set_session_id(&self, session_id: impl Into<String>) {
+        *self.session_id.write().unwrap() = session_id.into();
     }
 
-    pub fn set_task_id(&mut self, task_id: Option<String>) {
-        self.task_id = task_id;
+    pub fn set_task_id(&self, task_id: Option<String>) {
+        *self.task_id.write().unwrap() = task_id;
     }
 
     pub fn snapshot(&self) -> HarnessContextSnapshot {
-        HarnessContextSnapshot::new(self.session_id.clone(), self.task_id.clone())
+        HarnessContextSnapshot::new(
+            self.session_id.read().unwrap().clone(),
+            self.task_id.read().unwrap().clone(),
+        )
+    }
+}
+
+#[derive(Clone)]
+#[derive(Debug)]
+struct ResiliencyContext {
+    adaptive_timeout_ceiling: HashMap<ToolTimeoutCategory, Duration>,
+    failure_trackers: HashMap<ToolTimeoutCategory, ToolFailureTracker>,
+    success_trackers: HashMap<ToolTimeoutCategory, u32>,
+    latency_stats: HashMap<ToolTimeoutCategory, ToolLatencyStats>,
+    adaptive_tuning: AdaptiveTimeoutTuning,
+}
+
+impl Default for ResiliencyContext {
+    fn default() -> Self {
+        Self {
+            adaptive_timeout_ceiling: HashMap::new(),
+            failure_trackers: HashMap::new(),
+            success_trackers: HashMap::new(),
+            latency_stats: HashMap::new(),
+            adaptive_tuning: AdaptiveTimeoutTuning::default(),
+        }
     }
 }
 
 #[derive(Clone)]
 pub struct ToolRegistry {
     inventory: ToolInventory,
-    policy_gateway: ToolPolicyGateway,
+    policy_gateway: Arc<tokio::sync::RwLock<ToolPolicyGateway>>,
     pty_sessions: PtySessionManager,
-    mcp_client: Option<Arc<McpClient>>,
-    mcp_tool_index: HashMap<String, Vec<String>>,
-    mcp_tool_presence: HashMap<String, bool>,
-    timeout_policy: ToolTimeoutPolicy,
+    mcp_client: Arc<std::sync::RwLock<Option<Arc<McpClient>>>>,
+    mcp_tool_index: Arc<tokio::sync::RwLock<HashMap<String, Vec<String>>>>,
+    mcp_tool_presence: Arc<tokio::sync::RwLock<HashMap<String, bool>>>,
+    timeout_policy: Arc<std::sync::RwLock<ToolTimeoutPolicy>>,
     execution_history: ToolExecutionHistory,
     harness_context: HarnessContext,
-    adaptive_timeout_ceiling: HashMap<ToolTimeoutCategory, Duration>,
-    failure_trackers: HashMap<ToolTimeoutCategory, ToolFailureTracker>,
-    success_trackers: HashMap<ToolTimeoutCategory, u32>,
-    latency_stats: HashMap<ToolTimeoutCategory, ToolLatencyStats>,
-    adaptive_tuning: AdaptiveTimeoutTuning,
+    
+    // Mutable runtime state wrapped for concurrent access
+    resiliency: Arc<Mutex<ResiliencyContext>>,
+
     /// MP-3: Circuit breaker for MCP client failures
     mcp_circuit_breaker: Arc<circuit_breaker::McpCircuitBreaker>,
-    initialized: bool,
+    initialized: Arc<std::sync::atomic::AtomicBool>,
     // Security & Identity
     shell_policy: Arc<RwLock<ShellPolicyChecker>>,
-    agent_type: Cow<'static, str>,
+    agent_type: Arc<std::sync::RwLock<Cow<'static, str>>>,
     // PTY Session Management
-    active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
+    active_pty_sessions: Arc<std::sync::RwLock<Option<Arc<std::sync::atomic::AtomicUsize>>>>,
+
     // Caching
     cached_available_tools: Arc<RwLock<Option<Vec<String>>>>,
     /// Callback for streaming tool output and progress
-    progress_callback: Option<ToolProgressCallback>,
+    progress_callback: Arc<std::sync::RwLock<Option<ToolProgressCallback>>>,
     // Performance Observability
     /// Total tool calls made in current session
     pub(crate) tool_call_counter: Arc<std::sync::atomic::AtomicU64>,
@@ -666,30 +712,26 @@ impl ToolRegistry {
             None => ToolPolicyGateway::new(&workspace_root).await,
         };
 
-        let mut registry = Self {
+        let registry = Self {
             inventory,
-            policy_gateway,
+            policy_gateway: Arc::new(tokio::sync::RwLock::new(policy_gateway)),
             pty_sessions,
-            mcp_client: None,
-            mcp_tool_index: HashMap::new(),
-            mcp_tool_presence: HashMap::new(),
-            timeout_policy: ToolTimeoutPolicy::default(),
+            mcp_client: Arc::new(std::sync::RwLock::new(None)),
+            mcp_tool_index: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            mcp_tool_presence: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            timeout_policy: Arc::new(std::sync::RwLock::new(ToolTimeoutPolicy::default())),
             execution_history: ToolExecutionHistory::new(100), // Keep last 100 executions
             harness_context: HarnessContext::default(),
-            adaptive_timeout_ceiling: HashMap::new(),
-            failure_trackers: HashMap::new(),
-            success_trackers: HashMap::new(),
-            latency_stats: HashMap::new(),
-            adaptive_tuning: AdaptiveTimeoutTuning::default(),
+            resiliency: Arc::new(Mutex::new(ResiliencyContext::default())),
             mcp_circuit_breaker: Arc::new(circuit_breaker::McpCircuitBreaker::new()),
-            initialized: false,
+            initialized: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             tool_call_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             pty_poll_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             shell_policy: Arc::new(RwLock::new(ShellPolicyChecker::new())),
-            agent_type: Cow::Borrowed("unknown"),
+            agent_type: Arc::new(std::sync::RwLock::new(Cow::Borrowed("unknown"))),
             cached_available_tools: Arc::new(RwLock::new(None)),
-            progress_callback: None,
-            active_pty_sessions: None,
+            progress_callback: Arc::new(std::sync::RwLock::new(None)),
+            active_pty_sessions: Arc::new(std::sync::RwLock::new(None)),
         };
 
         registry.sync_policy_catalog().await;
@@ -712,17 +754,20 @@ impl ToolRegistry {
         self.inventory.workspace_root().clone()
     }
 
-    async fn sync_policy_catalog(&mut self) {
+    async fn sync_policy_catalog(&self) {
         // Include aliases so policy prompts stay in sync with exposed names
         let available = self.available_tools().await;
-        let mcp_keys = self.mcp_policy_keys();
+        let mcp_keys = self.mcp_policy_keys().await;
         self.policy_gateway
+            .write()
+            .await
             .sync_available_tools(available, &mcp_keys)
             .await;
 
         // Seed default permissions from tool metadata when policy manager is present
         let registrations = self.inventory.registration_metadata();
-        if let Ok(policy) = self.policy_manager_mut() {
+        let mut policy_gateway = self.policy_gateway.write().await;
+        if let Ok(policy) = policy_gateway.policy_manager_mut() {
             let mut seeded = 0usize;
             for (name, metadata) in registrations {
                 if let Some(default_policy) = metadata.default_permission() {
@@ -767,7 +812,7 @@ impl ToolRegistry {
     ///
     /// # Returns
     /// `Result<()>` indicating success or an error if the tool is already registered
-    pub fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
+    pub async fn register_tool(&self, registration: ToolRegistration) -> Result<()> {
         self.inventory.register_tool(registration)?;
         // Invalidate cache
         if let Ok(mut cache) = self.cached_available_tools.write() {
@@ -792,7 +837,8 @@ impl ToolRegistry {
         tools.extend(self.inventory.registered_aliases());
 
         // Add MCP tools if available
-        if let Some(mcp_client) = &self.mcp_client {
+        let client_opt = { self.mcp_client.read().unwrap().clone() };
+        if let Some(mcp_client) = client_opt {
             match mcp_client.list_mcp_tools().await {
                 Ok(mcp_tools) => {
                     tools.reserve(mcp_tools.len());
@@ -826,7 +872,8 @@ impl ToolRegistry {
         }
 
         // Check if it's an MCP tool
-        if let Some(client) = &self.mcp_client {
+        let client_opt = { self.mcp_client.read().unwrap().clone() };
+        if let Some(client) = client_opt {
             if self.mcp_circuit_breaker.allow_request() {
                 if let Ok(tools) = client.list_mcp_tools().await {
                     if let Some(mcp_tool) = tools.into_iter().find(|t| t.name == tool_name) {
@@ -839,11 +886,12 @@ impl ToolRegistry {
         None
     }
 
-    fn mcp_policy_keys(&self) -> Vec<String> {
+    async fn mcp_policy_keys(&self) -> Vec<String> {
+        let index = self.mcp_tool_index.read().await;
         // Pre-calculate capacity
-        let capacity: usize = self.mcp_tool_index.values().map(|tools| tools.len()).sum();
+        let capacity: usize = index.values().map(|tools| tools.len()).sum();
         let mut keys = Vec::with_capacity(capacity);
-        for (provider, tools) in &self.mcp_tool_index {
+        for (provider, tools) in index.iter() {
             for tool in tools {
                 keys.push(format!("mcp::{}::{}", provider, tool));
             }
@@ -851,8 +899,9 @@ impl ToolRegistry {
         keys
     }
 
-    fn find_mcp_provider(&self, tool_name: &str) -> Option<String> {
-        for (provider, tools) in &self.mcp_tool_index {
+    async fn find_mcp_provider(&self, tool_name: &str) -> Option<String> {
+        let index = self.mcp_tool_index.read().await;
+        for (provider, tools) in index.iter() {
             if tools.iter().any(|candidate| candidate == tool_name) {
                 return Some(provider.clone());
             }
@@ -860,29 +909,35 @@ impl ToolRegistry {
         None
     }
 
-    pub async fn enable_full_auto_mode(&mut self, allowed_tools: &[String]) {
+    pub async fn enable_full_auto_mode(&self, allowed_tools: &[String]) {
         let available = self.available_tools().await;
         self.policy_gateway
+            .write()
+            .await
             .enable_full_auto_mode(allowed_tools, &available);
     }
 
-    pub fn set_agent_type(&mut self, agent_type: impl Into<Cow<'static, str>>) {
-        self.agent_type = agent_type.into();
+    pub async fn disable_full_auto_mode(&self) {
+        self.policy_gateway.write().await.disable_full_auto_mode();
+    }
+
+    pub fn set_agent_type(&self, agent_type: impl Into<Cow<'static, str>>) {
+        *self.agent_type.write().unwrap() = agent_type.into();
     }
 
     /// Set the callback for streaming tool output and progress
-    pub fn set_progress_callback(&mut self, callback: ToolProgressCallback) {
-        self.progress_callback = Some(callback);
+    pub fn set_progress_callback(&self, callback: ToolProgressCallback) {
+        *self.progress_callback.write().unwrap() = Some(callback);
     }
 
     /// Clear the progress callback
-    pub fn clear_progress_callback(&mut self) {
-        self.progress_callback = None;
+    pub fn clear_progress_callback(&self) {
+        *self.progress_callback.write().unwrap() = None;
     }
 
     /// Get the current progress callback if set
     pub fn progress_callback(&self) -> Option<ToolProgressCallback> {
-        self.progress_callback.clone()
+        self.progress_callback.read().unwrap().clone()
     }
 
     pub fn check_shell_policy(
@@ -891,7 +946,7 @@ impl ToolRegistry {
         deny_regex_patterns: &[String],
         deny_glob_patterns: &[String],
     ) -> Result<()> {
-        let agent_type = self.agent_type.clone();
+        let agent_type = self.agent_type.read().unwrap().clone();
         let mut checker = self.shell_policy.write().unwrap();
         checker.check_command(
             command,
@@ -901,12 +956,10 @@ impl ToolRegistry {
         )
     }
 
-    pub fn disable_full_auto_mode(&mut self) {
-        self.policy_gateway.disable_full_auto_mode();
-    }
 
-    pub fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
-        self.policy_gateway.current_full_auto_allowlist()
+
+    pub async fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
+        self.policy_gateway.read().await.current_full_auto_allowlist()
     }
 
     /// Check if a tool with the given name is registered
@@ -924,11 +977,12 @@ impl ToolRegistry {
 
         // If not found, check if it's an MCP tool
         if let Some(tool_name) = name.strip_prefix("mcp_") {
-            if self.find_mcp_provider(tool_name).is_some() {
+            if self.find_mcp_provider(tool_name).await.is_some() {
                 return true;
             }
 
-            if let Some(mcp_client) = &self.mcp_client {
+            let mcp_client_opt = self.mcp_client.read().unwrap().clone();
+            if let Some(mcp_client) = mcp_client_opt {
                 if let Ok(true) = mcp_client.has_mcp_tool(tool_name).await {
                     return true;
                 }
@@ -989,37 +1043,37 @@ impl ToolRegistry {
     }
 
     /// Update harness session identifier used for structured tool telemetry
-    pub fn set_harness_session(&mut self, session_id: impl Into<String>) {
+    pub fn set_harness_session(&self, session_id: impl Into<String>) {
         self.harness_context.set_session_id(session_id);
     }
 
     /// Update current task identifier used for structured tool telemetry
-    pub fn set_harness_task(&mut self, task_id: Option<String>) {
+    pub fn set_harness_task(&self, task_id: Option<String>) {
         self.harness_context.set_task_id(task_id);
     }
 
     /// Set the active PTY sessions counter for tracking
-    pub fn set_active_pty_sessions(&mut self, counter: Arc<std::sync::atomic::AtomicUsize>) {
-        self.active_pty_sessions = Some(counter);
+    pub fn set_active_pty_sessions(&self, counter: Arc<std::sync::atomic::AtomicUsize>) {
+        *self.active_pty_sessions.write().unwrap() = Some(counter);
     }
 
     /// Increment active PTY sessions count
     pub fn increment_active_pty_sessions(&self) {
-        if let Some(counter) = &self.active_pty_sessions {
+        if let Some(counter) = self.active_pty_sessions.read().unwrap().as_ref() {
             counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
     /// Decrement active PTY sessions count
     pub fn decrement_active_pty_sessions(&self) {
-        if let Some(counter) = &self.active_pty_sessions {
+        if let Some(counter) = self.active_pty_sessions.read().unwrap().as_ref() {
             counter.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
     /// Get the current active PTY sessions count
     pub fn active_pty_sessions_count(&self) -> usize {
-        if let Some(counter) = &self.active_pty_sessions {
+        if let Some(counter) = self.active_pty_sessions.read().unwrap().as_ref() {
             counter.load(std::sync::atomic::Ordering::Relaxed)
         } else {
             0
@@ -1057,50 +1111,53 @@ impl ToolRegistry {
         self.harness_context.snapshot()
     }
 
-    pub fn policy_manager_mut(&mut self) -> Result<&mut ToolPolicyManager> {
-        self.policy_gateway.policy_manager_mut()
-    }
+    // Removed policy_manager_mut as it requires &mut self. 
+    // Use self.policy_gateway.write().await.policy_manager_mut() instead.
 
-    pub fn policy_manager(&self) -> Result<&ToolPolicyManager> {
-        self.policy_gateway.policy_manager()
-    }
+    // Removed policy_manager() as it cannot return a reference through a lock.
+    // Use get_tool_policy() or other specific methods instead.
 
-    pub async fn set_policy_manager(&mut self, manager: ToolPolicyManager) {
-        self.policy_gateway.set_policy_manager(manager);
+    pub async fn set_policy_manager(&self, manager: ToolPolicyManager) {
+        self.policy_gateway.write().await.set_policy_manager(manager);
         self.sync_policy_catalog().await;
     }
 
-    pub async fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
-        self.policy_gateway.set_tool_policy(tool_name, policy).await
+    pub async fn set_tool_policy(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
+        let mut gateway = self.policy_gateway.write().await;
+        gateway.set_tool_policy(tool_name, policy).await
     }
 
-    pub fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
-        self.policy_gateway.get_tool_policy(tool_name)
+    pub async fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
+        self.policy_gateway.read().await.get_tool_policy(tool_name)
     }
 
-    pub async fn reset_tool_policies(&mut self) -> Result<()> {
-        self.policy_gateway.reset_tool_policies().await
+    pub async fn reset_tool_policies(&self) -> Result<()> {
+        self.policy_gateway.write().await.reset_tool_policies().await
     }
 
-    pub async fn allow_all_tools(&mut self) -> Result<()> {
-        self.policy_gateway.allow_all_tools().await
+    pub async fn allow_all_tools(&self) -> Result<()> {
+        self.policy_gateway.write().await.allow_all_tools().await
     }
 
-    pub async fn deny_all_tools(&mut self) -> Result<()> {
-        self.policy_gateway.deny_all_tools().await
+    pub async fn deny_all_tools(&self) -> Result<()> {
+        self.policy_gateway.write().await.deny_all_tools().await
     }
 
-    pub fn print_policy_status(&self) {
-        self.policy_gateway.print_policy_status();
+    pub async fn print_policy_status(&self) {
+        self.policy_gateway.read().await.print_policy_status();
     }
 
-    pub async fn initialize_async(&mut self) -> Result<()> {
-        if self.initialized && (self.mcp_client.is_none() || !self.mcp_tool_index.is_empty()) {
+    pub async fn initialize_async(&self) -> Result<()> {
+        let mcp_client_is_none = { self.mcp_client.read().unwrap().is_none() };
+        if self.initialized.load(std::sync::atomic::Ordering::Relaxed)
+            && (mcp_client_is_none || !self.mcp_tool_index.read().await.is_empty())
+        {
             return Ok(());
         }
 
-        if self.mcp_client.is_some()
-            && self.mcp_tool_index.is_empty()
+        let mcp_client_is_some = { self.mcp_client.read().unwrap().is_some() };
+        if mcp_client_is_some
+            && self.mcp_tool_index.read().await.is_empty()
             && let Err(err) = self.refresh_mcp_tools().await
         {
             warn!(
@@ -1110,13 +1167,14 @@ impl ToolRegistry {
         }
 
         self.sync_policy_catalog().await;
-        self.initialized = true;
+        self.initialized.store(true, std::sync::atomic::Ordering::Relaxed);
 
         Ok(())
     }
 
-    pub async fn apply_config_policies(&mut self, tools_config: &ToolsConfig) -> Result<()> {
-        if let Ok(policy_manager) = self.policy_manager_mut() {
+    pub async fn apply_config_policies(&self, tools_config: &ToolsConfig) -> Result<()> {
+        let mut policy_gateway = self.policy_gateway.write().await;
+        if let Ok(policy_manager) = policy_gateway.policy_manager_mut() {
             policy_manager.apply_tools_config(tools_config).await?;
         }
 
@@ -1131,16 +1189,18 @@ impl ToolRegistry {
         Ok(())
     }
 
-    pub fn apply_commands_config(&mut self, commands_config: &CommandsConfig) {
+    pub fn apply_commands_config(&self, commands_config: &CommandsConfig) {
         self.inventory
-            .command_tool_mut()
+            .command_tool()
+            .write()
+            .unwrap()
             .update_commands_config(commands_config);
         self.pty_sessions
             .manager()
             .apply_commands_config(commands_config);
     }
 
-    pub fn apply_timeout_policy(&mut self, timeouts: &TimeoutsConfig) {
+    pub fn apply_timeout_policy(&self, timeouts: &TimeoutsConfig) {
         let policy = ToolTimeoutPolicy::from_config(timeouts);
 
         // Validate the policy before applying
@@ -1149,43 +1209,44 @@ impl ToolRegistry {
                 error = %e,
                 "Invalid timeout configuration detected, using defaults"
             );
-            self.timeout_policy = ToolTimeoutPolicy::default();
+            *self.timeout_policy.write().unwrap() = ToolTimeoutPolicy::default();
         } else {
-            self.timeout_policy = policy;
+            *self.timeout_policy.write().unwrap() = policy;
         }
 
-        self.adaptive_tuning = load_adaptive_tuning_from_config(timeouts);
+        self.resiliency.lock().adaptive_tuning = load_adaptive_tuning_from_config(timeouts);
     }
 
-    pub fn timeout_policy(&self) -> &ToolTimeoutPolicy {
-        &self.timeout_policy
+    pub fn timeout_policy(&self) -> ToolTimeoutPolicy {
+        self.timeout_policy.read().unwrap().clone()
     }
 
     pub fn rate_limit_per_minute(&self) -> Option<usize> {
         self.execution_history.rate_limit_per_minute()
     }
 
-    fn initialize_resiliency_trackers(&mut self) {
+    fn initialize_resiliency_trackers(&self) {
         let categories = [
             ToolTimeoutCategory::Default,
             ToolTimeoutCategory::Pty,
             ToolTimeoutCategory::Mcp,
         ];
+        let mut state = self.resiliency.lock();
         for category in categories {
-            self.failure_trackers.entry(category).or_default();
-            self.success_trackers.entry(category).or_insert(0);
-            self.latency_stats
+            state.failure_trackers.entry(category).or_default();
+            state.success_trackers.entry(category).or_insert(0);
+            state.latency_stats
                 .entry(category)
                 .or_insert_with(|| ToolLatencyStats::new(50));
-            self.adaptive_timeout_ceiling
+            state.adaptive_timeout_ceiling
                 .entry(category)
                 .or_insert_with(|| Duration::from_secs(0));
         }
     }
 
     fn effective_timeout(&self, category: ToolTimeoutCategory) -> Option<Duration> {
-        let base = self.timeout_policy.ceiling_for(category);
-        let adaptive = self.adaptive_timeout_ceiling.get(&category).copied();
+        let base = self.timeout_policy.read().unwrap().ceiling_for(category);
+        let adaptive = self.resiliency.lock().adaptive_timeout_ceiling.get(&category).copied();
 
         match (base, adaptive) {
             (Some(b), Some(a)) if a.as_millis() > 0 => Some(std::cmp::min(b, a)),
@@ -1195,16 +1256,19 @@ impl ToolRegistry {
         }
     }
 
-    fn decay_adaptive_timeout(&mut self, category: ToolTimeoutCategory) {
-        if let Some(adaptive) = self.adaptive_timeout_ceiling.get_mut(&category) {
+    fn decay_adaptive_timeout(&self, category: ToolTimeoutCategory) {
+        let mut state = self.resiliency.lock();
+        let tuning = state.adaptive_tuning.clone();
+        
+        if let Some(adaptive) = state.adaptive_timeout_ceiling.get_mut(&category) {
             if adaptive.as_millis() == 0 {
                 return;
             }
             let before = *adaptive;
-            if let Some(base) = self.timeout_policy.ceiling_for(category) {
+            if let Some(base) = self.timeout_policy.read().unwrap().ceiling_for(category) {
                 if *adaptive < base {
                     let relaxed_ms = ((*adaptive).as_millis() as f64
-                        * (1.0 / self.adaptive_tuning.decay_ratio))
+                        * (1.0 / tuning.decay_ratio))
                         as u128;
                     let relaxed = Duration::from_millis(relaxed_ms as u64);
                     *adaptive = std::cmp::min(relaxed, base);
@@ -1212,13 +1276,13 @@ impl ToolRegistry {
             } else {
                 // If no base, relax upward modestly
                 let relaxed = Duration::from_millis(
-                    ((*adaptive).as_millis() as f64 * (1.0 / self.adaptive_tuning.decay_ratio))
+                    ((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio))
                         as u64,
                 );
                 *adaptive = relaxed;
             }
 
-            let floor = Duration::from_millis(self.adaptive_tuning.min_floor_ms);
+            let floor = Duration::from_millis(tuning.min_floor_ms);
             if *adaptive < floor {
                 *adaptive = floor;
             }
@@ -1228,36 +1292,41 @@ impl ToolRegistry {
                     category = %category.label(),
                     previous_ms = %before.as_millis(),
                     new_ms = %adaptive.as_millis(),
-                    decay_ratio = %self.adaptive_tuning.decay_ratio,
+                    decay_ratio = %tuning.decay_ratio,
                     "Adaptive timeout relaxed after success streak"
                 );
             }
         }
     }
 
-    fn record_tool_failure(&mut self, category: ToolTimeoutCategory) -> bool {
-        let tracker = self.failure_trackers.entry(category).or_default();
+    fn record_tool_failure(&self, category: ToolTimeoutCategory) -> bool {
+        let mut state = self.resiliency.lock();
+        state.success_trackers.insert(category, 0);
+        let tracker = state.failure_trackers.entry(category).or_default();
         tracker.record_failure();
-        self.success_trackers.insert(category, 0);
         tracker.should_circuit_break()
     }
 
-    fn reset_tool_failure(&mut self, category: ToolTimeoutCategory) {
-        if let Some(tracker) = self.failure_trackers.get_mut(&category) {
+    fn reset_tool_failure(&self, category: ToolTimeoutCategory) {
+        let mut state = self.resiliency.lock();
+        if let Some(tracker) = state.failure_trackers.get_mut(&category) {
             tracker.reset();
         }
-        self.success_trackers.insert(category, 0);
+        state.success_trackers.insert(category, 0);
     }
 
-    fn record_tool_latency(&mut self, category: ToolTimeoutCategory, duration: Duration) {
-        let stats = self
+    fn record_tool_latency(&self, category: ToolTimeoutCategory, duration: Duration) {
+        let mut state = self.resiliency.lock();
+        let tuning = state.adaptive_tuning.clone();
+        
+        let stats = state
             .latency_stats
             .entry(category)
             .or_insert_with(|| ToolLatencyStats::new(50));
         stats.record(duration);
 
         if let Some(p95) = stats.percentile(0.95) {
-            if let Some(ceiling) = self.timeout_policy.ceiling_for(category) {
+            if let Some(ceiling) = self.timeout_policy.read().unwrap().ceiling_for(category) {
                 if p95 > ceiling {
                     warn!(
                         category = %category.label(),
@@ -1268,11 +1337,11 @@ impl ToolRegistry {
                     let adjusted = std::cmp::min(
                         ceiling,
                         std::cmp::max(
-                            Duration::from_millis(self.adaptive_tuning.min_floor_ms),
+                            Duration::from_millis(tuning.min_floor_ms),
                             Self::scale_duration(p95, 11, 10),
                         ),
                     );
-                    self.adaptive_timeout_ceiling.insert(category, adjusted);
+                    state.adaptive_timeout_ceiling.insert(category, adjusted);
                     debug!(
                         category = %category.label(),
                         new_ceiling_ms = %adjusted.as_millis(),
@@ -1282,10 +1351,10 @@ impl ToolRegistry {
             } else {
                 // No ceiling configured; derive one from p95 with headroom
                 let derived = std::cmp::max(
-                    Duration::from_millis(self.adaptive_tuning.min_floor_ms),
+                    Duration::from_millis(tuning.min_floor_ms),
                     Self::scale_duration(p95, 12, 10),
                 );
-                self.adaptive_timeout_ceiling.insert(category, derived);
+                state.adaptive_timeout_ceiling.insert(category, derived);
                 debug!(
                     category = %category.label(),
                     new_ceiling_ms = %derived.as_millis(),
@@ -1296,7 +1365,7 @@ impl ToolRegistry {
     }
 
     fn should_circuit_break(&self, category: ToolTimeoutCategory) -> Option<Duration> {
-        self.failure_trackers
+        self.resiliency.lock().failure_trackers
             .get(&category)
             .filter(|tracker| tracker.should_circuit_break())
             .map(|tracker| tracker.backoff_duration())
@@ -1426,7 +1495,7 @@ impl ToolRegistry {
         Duration::from_millis(scaled as u64)
     }
 
-    pub async fn timeout_category_for(&mut self, name: &str) -> ToolTimeoutCategory {
+    pub async fn timeout_category_for(&self, name: &str) -> ToolTimeoutCategory {
         // Resolve alias through registration lookup
         let registration_opt = self.inventory.registration_for(name);
         if let Some(registration) = registration_opt {
@@ -1441,14 +1510,14 @@ impl ToolRegistry {
             if self.has_mcp_tool(stripped).await {
                 return ToolTimeoutCategory::Mcp;
             }
-        } else if self.find_mcp_provider(name).is_some() || self.has_mcp_tool(name).await {
+        } else if self.find_mcp_provider(name).await.is_some() || self.has_mcp_tool(name).await {
             return ToolTimeoutCategory::Mcp;
         }
 
         ToolTimeoutCategory::Default
     }
 
-    pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
+    pub async fn execute_tool(&self, name: &str, args: Value) -> Result<Value> {
         self.execute_tool_ref(name, &args).await
     }
 
@@ -1468,7 +1537,7 @@ impl ToolRegistry {
     /// // result.ui_content: [Full formatted output with all 127 matches]
     /// // Savings: ~98% token reduction
     /// ```
-    pub async fn execute_tool_dual(&mut self, name: &str, args: Value) -> Result<SplitToolResult> {
+    pub async fn execute_tool_dual(&self, name: &str, args: Value) -> Result<SplitToolResult> {
         // Execute the tool using existing infrastructure
         let result = self.execute_tool_ref(name, &args).await?;
 
@@ -1622,7 +1691,7 @@ impl ToolRegistry {
 
     /// Reference-taking version of execute_tool to avoid cloning by callers
     /// that already have access to an existing `Value`.
-    pub async fn execute_tool_ref(&mut self, name: &str, args: &Value) -> Result<Value> {
+    pub async fn execute_tool_ref(&self, name: &str, args: &Value) -> Result<Value> {
         // Look up the canonical tool name by trying to resolve the alias
         // The inventory's registration_for() handles alias resolution
         let (tool_name, tool_name_owned, display_name) =
@@ -1699,9 +1768,13 @@ impl ToolRegistry {
 
         let base_timeout_ms = self
             .timeout_policy
+            .read()
+            .unwrap()
             .ceiling_for(timeout_category)
             .map(|d| d.as_millis() as u64);
         let adaptive_timeout_ms = self
+            .resiliency
+            .lock()
             .adaptive_timeout_ceiling
             .get(&timeout_category)
             .filter(|d| d.as_millis() > 0)
@@ -1810,8 +1883,8 @@ impl ToolRegistry {
             }
         }
 
-        if self.policy_gateway.has_full_auto_allowlist()
-            && !self.policy_gateway.is_allowed_in_full_auto(&tool_name)
+        if self.policy_gateway.read().await.has_full_auto_allowlist()
+            && !self.policy_gateway.read().await.is_allowed_in_full_auto(&tool_name)
         {
             let _error = ToolExecutionError::new(
                 tool_name_owned.clone(),
@@ -1845,14 +1918,14 @@ impl ToolRegistry {
             .context("tool denied by full-auto allowlist"));
         }
 
-        let skip_policy_prompt = self.policy_gateway.take_preapproved(&tool_name);
+        let skip_policy_prompt = self.policy_gateway.write().await.take_preapproved(&tool_name);
 
         let decision = if skip_policy_prompt {
             ToolExecutionDecision::Allowed
         } else {
             // In TUI mode, permission should have been collected via ensure_tool_permission().
             // If not preapproved, check policy as fallback.
-            self.policy_gateway.should_execute_tool(&tool_name).await?
+            self.policy_gateway.write().await.should_execute_tool(&tool_name).await?
         };
 
         if !decision.is_allowed() {
@@ -1890,6 +1963,8 @@ impl ToolRegistry {
 
         let args = match self
             .policy_gateway
+            .read()
+            .await
             .apply_policy_constraints(&tool_name, args)
         {
             Ok(processed_args) => processed_args,
@@ -1935,7 +2010,8 @@ impl ToolRegistry {
             tool_exists = true;
         }
         // If not a standard tool, check if it's an MCP tool
-        else if let Some(mcp_client) = &self.mcp_client {
+        let mcp_client_opt = { self.mcp_client.read().unwrap().clone() };
+        if let Some(mcp_client) = mcp_client_opt {
             let mut resolved_mcp_name = if let Some(stripped) = name.strip_prefix("mcp_") {
                 stripped.to_string()
             } else {
@@ -1959,7 +2035,7 @@ impl ToolRegistry {
                     tool_exists = true;
                     is_mcp_tool = true;
                     mcp_tool_name = Some(resolved_mcp_name);
-                    mcp_provider = self.find_mcp_provider(mcp_tool_name.as_deref().unwrap());
+                    mcp_provider = self.find_mcp_provider(mcp_tool_name.as_deref().unwrap()).await;
                 }
                 Ok(false) => {
                     tool_exists = false;
@@ -2260,10 +2336,13 @@ impl ToolRegistry {
         match result {
             Ok(value) => {
                 self.reset_tool_failure(timeout_category);
-                let should_decay =
-                    if let Some(counter) = self.success_trackers.get_mut(&timeout_category) {
+                let should_decay = {
+                    let mut state = self.resiliency.lock();
+                    let success_streak = state.adaptive_tuning.success_streak;
+                    if let Some(counter) = state.success_trackers.get_mut(&timeout_category) {
                         *counter = counter.saturating_add(1);
-                        if *counter >= self.adaptive_tuning.success_streak {
+                        let counter_val = *counter;
+                        if counter_val >= success_streak {
                             *counter = 0;
                             true
                         } else {
@@ -2271,7 +2350,8 @@ impl ToolRegistry {
                         }
                     } else {
                         false
-                    };
+                    }
+                };
                 if should_decay {
                     self.decay_adaptive_timeout(timeout_category);
                 }
@@ -2350,30 +2430,31 @@ impl ToolRegistry {
     }
 
     /// Set the MCP client for this registry
-    pub fn with_mcp_client(mut self, mcp_client: Arc<McpClient>) -> Self {
-        self.mcp_client = Some(mcp_client);
-        self.mcp_tool_index.clear();
-        self.mcp_tool_presence.clear();
-        self.initialized = false;
+    pub async fn with_mcp_client(self, mcp_client: Arc<McpClient>) -> Self {
+        *self.mcp_client.write().unwrap() = Some(mcp_client);
+        self.mcp_tool_index.write().await.clear();
+        self.mcp_tool_presence.write().await.clear();
+        self.initialized.store(false, std::sync::atomic::Ordering::Relaxed);
         self
     }
 
     /// Attach an MCP client without consuming the registry
-    pub fn set_mcp_client(&mut self, mcp_client: Arc<McpClient>) {
-        self.mcp_client = Some(mcp_client);
-        self.mcp_tool_index.clear();
-        self.mcp_tool_presence.clear();
-        self.initialized = false;
+    pub async fn set_mcp_client(&self, mcp_client: Arc<McpClient>) {
+        *self.mcp_client.write().unwrap() = Some(mcp_client);
+        self.mcp_tool_index.write().await.clear();
+        self.mcp_tool_presence.write().await.clear();
+        self.initialized.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Get the MCP client if available
-    pub fn mcp_client(&self) -> Option<&Arc<McpClient>> {
-        self.mcp_client.as_ref()
+    pub fn mcp_client(&self) -> Option<Arc<McpClient>> {
+        { self.mcp_client.read().unwrap().clone() }
     }
 
     /// List all MCP tools
     pub async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
-        if let Some(mcp_client) = &self.mcp_client {
+        let client_opt = { self.mcp_client.read().unwrap().clone() };
+        if let Some(mcp_client) = client_opt {
             mcp_client.list_mcp_tools().await
         } else {
             Ok(Vec::new())
@@ -2381,28 +2462,31 @@ impl ToolRegistry {
     }
 
     /// Check if an MCP tool exists
-    pub async fn has_mcp_tool(&mut self, tool_name: &str) -> bool {
-        if self
-            .mcp_tool_index
-            .values()
-            .any(|tools| tools.iter().any(|candidate| candidate == tool_name))
+    pub async fn has_mcp_tool(&self, tool_name: &str) -> bool {
         {
-            self.mcp_tool_presence.insert(tool_name.to_string(), true);
-            return true;
+            let index = self.mcp_tool_index.read().await;
+            if index
+                .values()
+                .any(|tools| tools.iter().any(|candidate| candidate == tool_name))
+            {
+                self.mcp_tool_presence.write().await.insert(tool_name.to_string(), true);
+                return true;
+            }
         }
 
-        if let Some(cached) = self.mcp_tool_presence.get(tool_name) {
+        if let Some(cached) = self.mcp_tool_presence.read().await.get(tool_name) {
             return *cached;
         }
 
-        let Some(mcp_client) = &self.mcp_client else {
-            self.mcp_tool_presence.insert(tool_name.to_string(), false);
+        let mcp_client_opt = { self.mcp_client.read().unwrap().clone() };
+        let Some(mcp_client) = mcp_client_opt else {
+            self.mcp_tool_presence.write().await.insert(tool_name.to_string(), false);
             return false;
         };
 
         match mcp_client.has_mcp_tool(tool_name).await {
             Ok(result) => {
-                self.mcp_tool_presence.insert(tool_name.to_string(), result);
+                self.mcp_tool_presence.write().await.insert(tool_name.to_string(), result);
                 result
             }
             Err(err) => {
@@ -2411,7 +2495,7 @@ impl ToolRegistry {
                     error = %err,
                     "failed to query MCP tool presence"
                 );
-                self.mcp_tool_presence.insert(tool_name.to_string(), false);
+                self.mcp_tool_presence.write().await.insert(tool_name.to_string(), false);
                 false
             }
         }
@@ -2419,7 +2503,8 @@ impl ToolRegistry {
 
     /// Execute an MCP tool
     pub async fn execute_mcp_tool(&self, tool_name: &str, args: Value) -> Result<Value> {
-        if let Some(mcp_client) = &self.mcp_client {
+        let client_opt = { self.mcp_client.read().unwrap().clone() };
+        if let Some(mcp_client) = client_opt {
             mcp_client.execute_mcp_tool(tool_name, &args).await
         } else {
             Err(anyhow::anyhow!("MCP client not available"))
@@ -2427,7 +2512,8 @@ impl ToolRegistry {
     }
 
     async fn resolve_mcp_tool_alias(&self, tool_name: &str) -> Option<String> {
-        let Some(mcp_client) = &self.mcp_client else {
+        let client_opt = { self.mcp_client.read().unwrap().clone() };
+        let Some(mcp_client) = client_opt else {
             return None;
         };
 
@@ -2457,8 +2543,9 @@ impl ToolRegistry {
     }
 
     /// Refresh MCP tools (reconnect to providers and update tool lists)
-    pub async fn refresh_mcp_tools(&mut self) -> Result<()> {
-        if let Some(mcp_client) = &self.mcp_client {
+    pub async fn refresh_mcp_tools(&self) -> Result<()> {
+        let mcp_client_opt = { self.mcp_client.read().unwrap().clone() };
+        if let Some(mcp_client) = mcp_client_opt {
             debug!(
                 "Refreshing MCP tools for {} providers",
                 mcp_client.get_status().provider_count
@@ -2504,7 +2591,7 @@ impl ToolRegistry {
 
             for tool in &tools {
                 let registration =
-                    build_mcp_registration(Arc::clone(mcp_client), &tool.provider, tool, None);
+                    build_mcp_registration(Arc::clone(&mcp_client), &tool.provider, tool, None);
 
                 if !self.inventory.has_tool(registration.name())
                     && let Err(err) = self.inventory.register_tool(registration)
@@ -2530,17 +2617,24 @@ impl ToolRegistry {
                 tools.dedup();
             }
 
-            self.mcp_tool_index = provider_map;
-            self.mcp_tool_presence.clear();
-            for tools in self.mcp_tool_index.values() {
-                for tool in tools {
-                    self.mcp_tool_presence.insert(tool.clone(), true);
+            *self.mcp_tool_index.write().await = provider_map;
+            {
+                let mut presence = self.mcp_tool_presence.write().await;
+                presence.clear();
+                let index = self.mcp_tool_index.read().await;
+                for tools in index.values() {
+                    for tool in tools {
+                        presence.insert(tool.clone(), true);
+                    }
                 }
             }
 
+            let mcp_index = self.mcp_tool_index.read().await;
             if let Some(allowlist) = self
                 .policy_gateway
-                .update_mcp_tools(&self.mcp_tool_index)
+                .write()
+                .await
+                .update_mcp_tools(&mcp_index)
                 .await?
             {
                 mcp_client.update_allowlist(allowlist);
@@ -2559,7 +2653,7 @@ impl ToolRegistry {
 
 impl ToolRegistry {
     /// Prompt for permission before starting long-running tool executions to avoid spinner conflicts
-    pub async fn preflight_tool_permission(&mut self, name: &str) -> Result<bool> {
+    pub async fn preflight_tool_permission(&self, name: &str) -> Result<bool> {
         match self.evaluate_tool_policy(name).await? {
             ToolPermissionDecision::Allow => Ok(true),
             ToolPermissionDecision::Deny => Ok(false),
@@ -2567,7 +2661,7 @@ impl ToolRegistry {
         }
     }
 
-    pub async fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
+    pub async fn evaluate_tool_policy(&self, name: &str) -> Result<ToolPermissionDecision> {
         if let Some(tool_name) = name.strip_prefix("mcp_") {
             return self.evaluate_mcp_tool_policy(name, tool_name).await;
         }
@@ -2575,26 +2669,33 @@ impl ToolRegistry {
         let canonical = canonical_tool_name(name);
         let normalized = canonical.as_ref();
 
-        if !self.policy_gateway.has_policy_manager()
-            && let Some(registration) = self.inventory.registration_for(normalized)
-            && let Some(permission) = registration.default_permission()
         {
-            return Ok(match permission {
-                ToolPolicy::Allow => ToolPermissionDecision::Allow,
-                ToolPolicy::Deny => ToolPermissionDecision::Deny,
-                ToolPolicy::Prompt => ToolPermissionDecision::Prompt,
-            });
+            let gateway = self.policy_gateway.read().await;
+            if !gateway.has_policy_manager()
+                && let Some(registration) = self.inventory.registration_for(normalized)
+                && let Some(permission) = registration.default_permission()
+            {
+                return Ok(match permission {
+                    ToolPolicy::Allow => ToolPermissionDecision::Allow,
+                    ToolPolicy::Deny => ToolPermissionDecision::Deny,
+                    ToolPolicy::Prompt => ToolPermissionDecision::Prompt,
+                });
+            }
         }
 
-        self.policy_gateway.evaluate_tool_policy(normalized).await
+        self.policy_gateway
+            .write()
+            .await
+            .evaluate_tool_policy(normalized)
+            .await
     }
 
     async fn evaluate_mcp_tool_policy(
-        &mut self,
+        &self,
         full_name: &str,
         tool_name: &str,
     ) -> Result<ToolPermissionDecision> {
-        let provider = match self.find_mcp_provider(tool_name) {
+        let provider = match self.find_mcp_provider(tool_name).await {
             Some(provider) => provider,
             None => {
                 // Unknown provider for this tool; default to prompt for safety
@@ -2602,24 +2703,26 @@ impl ToolRegistry {
             }
         };
 
-        // Check full-auto allowlist first (aligned with policy_gateway behavior)
-        if self.policy_gateway.has_full_auto_allowlist()
-            && !self.policy_gateway.is_allowed_in_full_auto(full_name)
         {
-            return Ok(ToolPermissionDecision::Deny);
+            let gateway = self.policy_gateway.read().await;
+            // Check full-auto allowlist first (aligned with policy_gateway behavior)
+            if gateway.has_full_auto_allowlist() && !gateway.is_allowed_in_full_auto(full_name) {
+                return Ok(ToolPermissionDecision::Deny);
+            }
         }
 
-        if let Ok(policy_manager) = self.policy_manager_mut() {
+        let mut gateway = self.policy_gateway.write().await;
+        if let Ok(policy_manager) = gateway.policy_manager_mut() {
             match policy_manager.get_mcp_tool_policy(&provider, tool_name) {
                 ToolPolicy::Allow => {
-                    self.policy_gateway.preapprove(full_name);
+                    gateway.preapprove(full_name);
                     Ok(ToolPermissionDecision::Allow)
                 }
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
                     // In full-auto mode with Prompt policy, we still need to check
                     // if this specific tool is in the allowlist
-                    if self.policy_gateway.has_full_auto_allowlist() {
+                    if gateway.has_full_auto_allowlist() {
                         // If we reach here, the tool is in the allowlist (checked above)
                         // but has Prompt policy, so we should prompt
                         Ok(ToolPermissionDecision::Prompt)
@@ -2642,10 +2745,11 @@ impl ToolRegistry {
     /// In TUI mode we already showed the inline approval modal, so we allow preapproval for
     /// any tool to avoid re-prompting in the CLI layer. In CLI mode we keep the legacy
     /// allowlist restriction.
-    pub fn mark_tool_preapproved(&mut self, name: &str) {
+    pub async fn mark_tool_preapproved(&self, name: &str) {
+        let mut gateway = self.policy_gateway.write().await;
         // Allow all when TUI mode is active (approval already captured by modal)
         if std::env::var("VTCODE_TUI_MODE").is_ok() {
-            self.policy_gateway.preapprove(name);
+            gateway.preapprove(name);
             tracing::debug!(tool = %name, "Preapproved tool in TUI mode");
             return;
         }
@@ -2654,7 +2758,7 @@ impl ToolRegistry {
         const PREAPPROVABLE_TOOLS: &[&str] = &["debug_agent", "analyze_agent"];
 
         if PREAPPROVABLE_TOOLS.contains(&name) {
-            self.policy_gateway.preapprove(name);
+            gateway.preapprove(name);
         } else {
             tracing::warn!(
                 tool = %name,
@@ -2663,7 +2767,7 @@ impl ToolRegistry {
         }
     }
 
-    pub async fn persist_mcp_tool_policy(&mut self, name: &str, policy: ToolPolicy) -> Result<()> {
+    pub async fn persist_mcp_tool_policy(&self, name: &str, policy: ToolPolicy) -> Result<()> {
         if !name.starts_with("mcp_") {
             return Ok(());
         }
@@ -2672,11 +2776,13 @@ impl ToolRegistry {
             return Ok(());
         };
 
-        let Some(provider) = self.find_mcp_provider(tool_name) else {
+        let Some(provider) = self.find_mcp_provider(tool_name).await else {
             return Ok(());
         };
 
         self.policy_gateway
+            .write()
+            .await
             .persist_mcp_tool_policy(&provider, tool_name, policy)
             .await
     }
@@ -2859,5 +2965,39 @@ mod tests {
             Some(Duration::from_secs(90))
         );
         assert!((policy.warning_fraction() - 0.75).abs() < f32::EPSILON);
+    }
+}
+
+#[async_trait::async_trait]
+impl ToolExecutor for ToolRegistry {
+    async fn execute_tool(&self, name: &str, args: Value) -> Result<Value> {
+        self.execute_tool(name, args).await
+    }
+
+    async fn execute_tool_ref(&self, name: &str, args: &Value) -> Result<Value> {
+        self.execute_tool_ref(name, args).await
+    }
+
+    async fn available_tools(&self) -> Vec<String> {
+        self.available_tools().await
+    }
+
+    async fn has_tool(&self, name: &str) -> bool {
+        // Optimized check: check inventory first, then cached MCP presence
+        if self.inventory.has_tool(name) {
+            return true;
+        }
+
+        let presence = self.mcp_tool_presence.read().await;
+        if let Some(&present) = presence.get(name) {
+             return present;
+        }
+        
+        // Fallback to provider check if not in quick cache
+        if self.find_mcp_provider(name).await.is_some() {
+            return true;
+        }
+
+        false
     }
 }

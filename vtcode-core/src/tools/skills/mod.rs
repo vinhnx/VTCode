@@ -95,7 +95,7 @@ impl Tool for LoadSkillTool {
                 if let Some(registry_arc) = &self.tool_registry {
                     let mut adapters = self.dormant_adapters.write().await;
                     if let Some(adapter) = adapters.remove(name) {
-                        let mut registry = registry_arc.write().await;
+                        let registry = registry_arc.read().await;
                         let reg = crate::tools::registry::ToolRegistration::from_tool(
                             Box::leak(name.to_string().into_boxed_str()),
                             crate::config::types::CapabilityLevel::Basic,

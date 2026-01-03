@@ -46,7 +46,7 @@ pub(crate) enum ToolPermissionFlow {
 
 /// Context for tool permission checks to reduce argument count
 pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
-    pub tool_registry: &'a mut ToolRegistry,
+    pub tool_registry: &'a ToolRegistry,
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
     pub session: &'a mut S,
@@ -397,7 +397,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         && let Some(recorder) = approval_recorder
         && recorder.should_auto_approve(tool_name).await
     {
-        tool_registry.mark_tool_preapproved(tool_name);
+        tool_registry.mark_tool_preapproved(tool_name).await;
         tracing::debug!(
             "Auto-approved tool '{}' based on approval pattern history",
             tool_name
@@ -406,17 +406,16 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     }
 
     if !hook_requires_prompt && tool_name == tool_names::RUN_PTY_CMD {
-        tool_registry.mark_tool_preapproved(tool_name);
+        tool_registry.mark_tool_preapproved(tool_name).await;
 
         // Persist policy in background to avoid blocking
         let tool_name_owned = tool_name.to_string();
-        let mut registry_for_persist = tool_registry.clone();
+        let registry_for_persist = tool_registry.clone();
         tokio::spawn(async move {
-            if let Ok(manager) = registry_for_persist.policy_manager_mut() {
-                if let Err(err) = manager
-                    .set_policy(&tool_name_owned, ToolPolicy::Allow)
-                    .await
-                {
+            if let Err(err) = registry_for_persist
+                .set_tool_policy(&tool_name_owned, ToolPolicy::Allow)
+                .await
+            {
                     tracing::warn!(
                         "[background] Failed to persist auto-approval for '{}': {}",
                         tool_name_owned,
@@ -428,7 +427,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                         tool_name_owned
                     );
                 }
-            }
         });
 
         return Ok(ToolPermissionFlow::Approved);
@@ -489,7 +487,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     match decision {
         HitlDecision::Approved => {
             // One-time approval - mark as preapproved for this execution but don't persist
-            tool_registry.mark_tool_preapproved(tool_name);
+            tool_registry.mark_tool_preapproved(tool_name).await;
 
             // Cache permission grant for this session
             if let Some(cache) = tool_permission_cache {
@@ -514,7 +512,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         }
         HitlDecision::ApprovedSession => {
             // Session-only approval - mark as preapproved but don't persist
-            tool_registry.mark_tool_preapproved(tool_name);
+            tool_registry.mark_tool_preapproved(tool_name).await;
 
             // Cache permission grant for this session
             if let Some(cache) = tool_permission_cache {
@@ -539,7 +537,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         }
         HitlDecision::ApprovedPermanent => {
             // Permanent approval - mark and persist to policy SYNCHRONOUSLY
-            tool_registry.mark_tool_preapproved(tool_name);
+            tool_registry.mark_tool_preapproved(tool_name).await;
             tracing::info!("✓ Tool '{}' marked as preapproved", tool_name);
 
             // Cache permission grant permanently (synchronous - immediate effect)
@@ -551,16 +549,14 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
             // Persist to policy manager IMMEDIATELY (not in background)
             // This ensures the policy is saved before execution continues
-            if let Ok(manager) = tool_registry.policy_manager_mut() {
-                if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
-                    tracing::warn!(
-                        "Failed to persist permanent approval for '{}': {}",
-                        tool_name,
-                        err
-                    );
-                } else {
-                    tracing::info!("✓ Policy persisted for '{}'", tool_name);
-                }
+            if let Err(err) = tool_registry.set_tool_policy(tool_name, ToolPolicy::Allow).await {
+                tracing::warn!(
+                    "Failed to persist permanent approval for '{}': {}",
+                    tool_name,
+                    err
+                );
+            } else {
+                tracing::info!("✓ Policy persisted for '{}'", tool_name);
             }
 
             // Also persist MCP tool policy

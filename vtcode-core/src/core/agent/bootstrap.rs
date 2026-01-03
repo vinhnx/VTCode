@@ -140,7 +140,7 @@ impl<'config> AgentComponentBuilder<'config> {
         let tool_registry = match self.tool_registry {
             Some(registry) => registry,
             None => {
-                let mut registry = ToolRegistry::new(self.config.workspace.clone()).await;
+                let registry = ToolRegistry::new(self.config.workspace.clone()).await;
                 registry.set_harness_session(session_info.session_id.clone());
                 Arc::new(registry)
             }

@@ -391,7 +391,7 @@ pub(crate) async fn initialize_session(
         {
             let status = manager.get_status().await;
             if let super::async_mcp_manager::McpInitStatus::Ready { client } = &status {
-                tool_registry = tool_registry.with_mcp_client(Arc::clone(client));
+                tool_registry = tool_registry.with_mcp_client(Arc::clone(client)).await;
                 if let Err(err) = tool_registry.refresh_mcp_tools().await {
                     warn!("Failed to refresh MCP tools: {}", err);
                 }
@@ -406,6 +406,7 @@ pub(crate) async fn initialize_session(
                 .await;
             let allowlist = tool_registry
                 .current_full_auto_allowlist()
+                .await
                 .unwrap_or_default();
             full_auto_allowlist = Some(allowlist);
         }

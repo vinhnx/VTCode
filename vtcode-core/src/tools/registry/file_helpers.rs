@@ -18,19 +18,19 @@ const EDIT_FILE_MAX_CHARS: usize = 800;
 const EDIT_FILE_MAX_LINES: usize = 40;
 
 impl ToolRegistry {
-    pub async fn read_file(&mut self, args: Value) -> Result<Value> {
+    pub async fn read_file(&self, args: Value) -> Result<Value> {
         self.execute_tool(tools::READ_FILE, args).await
     }
 
-    pub async fn write_file(&mut self, args: Value) -> Result<Value> {
+    pub async fn write_file(&self, args: Value) -> Result<Value> {
         self.execute_tool(tools::WRITE_FILE, args).await
     }
 
-    pub async fn create_file(&mut self, args: Value) -> Result<Value> {
+    pub async fn create_file(&self, args: Value) -> Result<Value> {
         self.execute_tool(tools::CREATE_FILE, args).await
     }
 
-    pub async fn edit_file(&mut self, args: Value) -> Result<Value> {
+    pub async fn edit_file(&self, args: Value) -> Result<Value> {
         let input: EditInput = serde_json::from_value(args).context("invalid edit_file args")?;
 
         let old_len = input.old_str.len();
@@ -163,11 +163,11 @@ impl ToolRegistry {
         self.file_ops_tool().write_file(write_args).await
     }
 
-    pub async fn delete_file(&mut self, _args: Value) -> Result<Value> {
+    pub async fn delete_file(&self, _args: Value) -> Result<Value> {
         self.execute_tool(tools::DELETE_FILE, _args).await
     }
 
-    pub async fn grep_file(&mut self, args: Value) -> Result<Value> {
+    pub async fn grep_file(&self, args: Value) -> Result<Value> {
         self.execute_tool(tools::GREP_FILE, args).await
     }
 
@@ -175,7 +175,7 @@ impl ToolRegistry {
         self.grep_file_manager().last_result()
     }
 
-    pub async fn list_files(&mut self, args: Value) -> Result<Value> {
+    pub async fn list_files(&self, args: Value) -> Result<Value> {
         self.execute_tool(tools::LIST_FILES, args).await
     }
 }

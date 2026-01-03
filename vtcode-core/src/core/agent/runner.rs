@@ -492,7 +492,7 @@ impl AgentRunner {
 
     /// Build universal ToolDefinitions for the current agent.
     async fn build_universal_tools(&mut self) -> Result<Vec<ToolDefinition>> {
-        let gemini_tools = self.build_agent_tools()?;
+        let gemini_tools = self.build_agent_tools().await?;
 
         // Convert Gemini tools to universal ToolDefinition format
         let tools: Vec<ToolDefinition> = gemini_tools
@@ -674,7 +674,7 @@ impl AgentRunner {
 
             let tool_registry = self.tool_registry.clone();
             futures.push(async move {
-                let mut registry = tool_registry;
+                let registry = tool_registry;
                 let result = registry
                     .execute_tool_ref(&name, &args)
                     .await
@@ -1236,7 +1236,7 @@ impl AgentRunner {
 
         let max_repeated_tool_calls = config_value.tools.max_repeated_tool_calls.max(1);
         let config = Arc::new(config_value);
-        let mut tool_registry = ToolRegistry::new(workspace.clone()).await;
+        let tool_registry = ToolRegistry::new(workspace.clone()).await;
         tool_registry.set_harness_session(session_id.clone());
         tool_registry.set_agent_type(agent_type.to_string());
         tool_registry.apply_timeout_policy(&config.timeouts);
@@ -1962,7 +1962,7 @@ impl AgentRunner {
     }
 
     /// Build available tools for this agent type
-    fn build_agent_tools(&self) -> Result<Vec<Tool>> {
+    async fn build_agent_tools(&self) -> Result<Vec<Tool>> {
         use crate::llm::providers::gemini::sanitize_function_parameters;
 
         // Build function declarations based on available tools
@@ -1971,7 +1971,7 @@ impl AgentRunner {
         // Filter tools based on agent type and permissions
         let mut allowed_tools = Vec::with_capacity(declarations.len());
         for decl in declarations {
-            if !self.is_tool_allowed(&decl.name) {
+            if !self.is_tool_allowed(&decl.name).await {
                 continue;
             }
 
@@ -1988,17 +1988,12 @@ impl AgentRunner {
     }
 
     /// Check if a tool is allowed for this agent
-    fn is_tool_allowed(&self, tool_name: &str) -> bool {
-        if let Ok(policy_manager) = self.tool_registry.policy_manager() {
-            match policy_manager.get_policy(tool_name) {
-                crate::tool_policy::ToolPolicy::Allow | crate::tool_policy::ToolPolicy::Prompt => {
-                    true
-                }
-                crate::tool_policy::ToolPolicy::Deny => false,
-            }
-        } else {
-            true
-        }
+    async fn is_tool_allowed(&self, tool_name: &str) -> bool {
+        let policy = self.tool_registry.get_tool_policy(tool_name).await;
+        matches!(
+            policy,
+            crate::tool_policy::ToolPolicy::Allow | crate::tool_policy::ToolPolicy::Prompt
+        )
     }
 
     /// Validate if a tool name is safe, registered, and allowed by policy
@@ -2017,12 +2012,7 @@ impl AgentRunner {
         }
 
         // Enforce policy gate: Allow and Prompt are executable, Deny blocks
-        if let Ok(policy_manager) = self.tool_registry.policy_manager() {
-            return matches!(
-                policy_manager.get_policy(canonical),
-                crate::tool_policy::ToolPolicy::Allow | crate::tool_policy::ToolPolicy::Prompt
-            );
-        }
+        self.is_tool_allowed(canonical).await;
 
         true
     }
@@ -2098,7 +2088,7 @@ impl AgentRunner {
         const RETRY_DELAYS_MS: [u64; 3] = [200, 400, 800];
 
         // Clone the registry once and reuse across retries (avoids cloning on each attempt)
-        let mut registry = self.tool_registry.clone();
+        let registry = self.tool_registry.clone();
 
         // Execute tool with adaptive retry
         let mut last_error: Option<anyhow::Error> = None;

@@ -163,11 +163,11 @@ impl ToolPolicyGateway {
 
     pub async fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         let canonical = canonical_tool_name(tool_name);
-        self.tool_policy
-            .as_mut()
-            .expect("Tool policy manager not initialized")
-            .set_policy(canonical.as_ref(), policy)
-            .await
+        if let Some(ref mut manager) = self.tool_policy {
+            manager.set_policy(canonical.as_ref(), policy).await
+        } else {
+            Err(anyhow::anyhow!("Tool policy manager not initialized"))
+        }
     }
 
     pub fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {

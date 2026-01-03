@@ -37,7 +37,7 @@ pub async fn handle_create_project_command(
         features.split(',').map(|s| s.trim().to_owned()).collect()
     };
 
-    let mut registry = ToolRegistry::new(config.workspace.clone()).await;
+    let registry = ToolRegistry::new(config.workspace.clone()).await;
 
     // Step 1: Create project directory structure
     println!(

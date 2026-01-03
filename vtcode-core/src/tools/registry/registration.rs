@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::sync::Arc;
 
 pub type ToolExecutorFn =
-    for<'a> fn(&'a mut ToolRegistry, Value) -> BoxFuture<'a, anyhow::Result<Value>>;
+    for<'a> fn(&'a ToolRegistry, Value) -> BoxFuture<'a, anyhow::Result<Value>>;
 
 use std::fmt;
 

@@ -563,7 +563,7 @@ async fn handle_mcp_updates(
     if !*mcp_catalog_initialized {
         match mcp_manager.get_status().await {
             McpInitStatus::Ready { client } => {
-                tool_registry.set_mcp_client(Arc::clone(&client));
+                tool_registry.set_mcp_client(Arc::clone(&client)).await;
                 match tool_registry.refresh_mcp_tools().await {
                     Ok(()) => {
                         let mut registered_tools = 0usize;

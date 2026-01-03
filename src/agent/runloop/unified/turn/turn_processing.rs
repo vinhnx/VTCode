@@ -18,6 +18,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
+
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 
@@ -321,19 +322,17 @@ pub(crate) async fn handle_turn_processing_result(
                 params.response_streamed,
             )?;
 
-            for tool_call in &tool_calls {
-                if let Some(outcome) =
-                    crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_call(
-                        params.ctx,
-                        tool_call,
-                        params.repeated_tool_attempts,
-                        params.turn_modified_files,
-                        params.traj,
-                    )
-                    .await?
-                {
-                    return Ok(outcome);
-                }
+            if let Some(outcome) =
+                crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls(
+                    params.ctx,
+                    &tool_calls,
+                    params.repeated_tool_attempts,
+                    params.turn_modified_files,
+                    params.traj,
+                )
+                .await?
+            {
+                return Ok(outcome);
             }
             // Fall through to balancer
         }

@@ -43,7 +43,7 @@ pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCom
     // Prefer tool-driven diagnostics when available
     if ctx.tool_registry.has_tool(tools_consts::AGENT_INFO).await {
         ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::AGENT_INFO);
+            .mark_tool_preapproved(tools_consts::AGENT_INFO).await;
         match ctx
             .tool_registry
             .execute_tool_ref(
@@ -817,7 +817,7 @@ pub async fn handle_manage_skills(
             let registration =
                 ToolRegistration::from_tool(name_static, CapabilityLevel::Bash, adapter_arc);
 
-            if let Err(e) = ctx.tool_registry.register_tool(registration) {
+            if let Err(e) = ctx.tool_registry.register_tool(registration).await {
                 ctx.renderer.line(
                     MessageStyle::Error,
                     &format!("Failed to register skill as tool: {}", e),

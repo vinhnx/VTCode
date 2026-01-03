@@ -409,7 +409,7 @@ pub(crate) async fn run_tool_call(
 /// Production code should prefer `execute_tool_with_timeout_ref` to avoid cloning.
 #[allow(dead_code)]
 pub(crate) async fn execute_tool_with_timeout(
-    registry: &mut ToolRegistry,
+    registry: &ToolRegistry,
     name: &str,
     args: Value,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -429,7 +429,7 @@ pub(crate) async fn execute_tool_with_timeout(
 
 /// Execute a tool with a timeout and progress reporting (reference-based to avoid cloning args)
 pub(crate) async fn execute_tool_with_timeout_ref(
-    registry: &mut ToolRegistry,
+    registry: &ToolRegistry,
     name: &str,
     args: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -473,7 +473,7 @@ pub(crate) async fn execute_tool_with_timeout_ref(
 
 /// Execute a tool with progress reporting
 async fn execute_tool_with_progress(
-    registry: &mut ToolRegistry,
+    registry: &ToolRegistry,
     name: &str,
     args: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -549,7 +549,7 @@ async fn execute_tool_with_progress(
 }
 
 async fn run_single_tool_attempt(
-    registry: &mut ToolRegistry,
+    registry: &ToolRegistry,
     name: &str,
     args: &Value,
     ctrl_c_state: &Arc<CtrlCState>,

@@ -225,8 +225,8 @@ pub trait ToolExecutor: Send + Sync {
     }
 
     /// List available tools
-    fn available_tools(&self) -> Vec<String>;
+    async fn available_tools(&self) -> Vec<String>;
 
     /// Check if a tool exists
-    fn has_tool(&self, name: &str) -> bool;
+    async fn has_tool(&self, name: &str) -> bool;
 }
