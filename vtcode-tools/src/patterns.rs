@@ -62,7 +62,7 @@ impl PatternDetector {
             let seq: Vec<&str> = window.iter().map(|e| e.tool_name.as_str()).collect();
 
             // Reserve or get the vector once, then push window events into it.
-            let entry = sequence_map.entry(seq.clone()).or_insert_with(Vec::new);
+            let entry = sequence_map.entry(seq.clone()).or_default();
             for event in window {
                 entry.push(event);
             }

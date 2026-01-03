@@ -171,23 +171,23 @@ pub(crate) async fn handle_tool_call(
 
     // Ensure tool permission
     match ensure_tool_permission(
-        ctx.tool_registry,
+        crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
+            tool_registry: ctx.tool_registry,
+            renderer: ctx.renderer,
+            handle: ctx.handle,
+            session: ctx.session,
+            default_placeholder: ctx.default_placeholder.clone(),
+            ctrl_c_state: ctx.ctrl_c_state,
+            ctrl_c_notify: ctx.ctrl_c_notify,
+            hooks: ctx.lifecycle_hooks,
+            justification: None,
+            approval_recorder: Some(ctx.approval_recorder.as_ref()),
+            decision_ledger: Some(ctx.decision_ledger),
+            tool_permission_cache: Some(ctx.tool_permission_cache),
+            hitl_notification_bell: ctx.vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
+        },
         tool_name,
         Some(&args_val),
-        ctx.renderer,
-        ctx.handle,
-        ctx.session,
-        ctx.default_placeholder.clone(),
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        ctx.lifecycle_hooks,
-        None, // justification
-        Some(ctx.approval_recorder.as_ref()),
-        Some(ctx.decision_ledger),
-        Some(ctx.tool_permission_cache),
-        ctx.vt_cfg
-            .map(|cfg| cfg.security.hitl_notification_bell)
-            .unwrap_or(true),
     )
     .await
     {
@@ -1150,25 +1150,23 @@ pub(crate) async fn handle_text_response(
         }
 
         match ensure_tool_permission(
-            params.ctx.tool_registry,
+            crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
+                tool_registry: params.ctx.tool_registry,
+                renderer: params.ctx.renderer,
+                handle: params.ctx.handle,
+                session: params.ctx.session,
+                default_placeholder: params.ctx.default_placeholder.clone(),
+                ctrl_c_state: params.ctx.ctrl_c_state,
+                ctrl_c_notify: params.ctx.ctrl_c_notify,
+                hooks: params.ctx.lifecycle_hooks,
+                justification: None,
+                approval_recorder: Some(params.ctx.approval_recorder.as_ref()),
+                decision_ledger: Some(params.ctx.decision_ledger),
+                tool_permission_cache: Some(params.ctx.tool_permission_cache),
+                hitl_notification_bell: params.ctx.vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
+            },
             call_tool_name,
             Some(&call_args_val),
-            params.ctx.renderer,
-            params.ctx.handle,
-            params.ctx.session,
-            params.ctx.default_placeholder.clone(),
-            params.ctx.ctrl_c_state,
-            params.ctx.ctrl_c_notify,
-            params.ctx.lifecycle_hooks,
-            None, // justification
-            Some(params.ctx.approval_recorder.as_ref()),
-            Some(params.ctx.decision_ledger),
-            Some(params.ctx.tool_permission_cache),
-            params
-                .ctx
-                .vt_cfg
-                .map(|cfg| cfg.security.hitl_notification_bell)
-                .unwrap_or(true),
         )
         .await
         {

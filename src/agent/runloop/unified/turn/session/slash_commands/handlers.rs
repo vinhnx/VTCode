@@ -480,24 +480,23 @@ pub async fn handle_execute_tool(
     args: serde_json::Value,
 ) -> Result<SlashCommandControl> {
     match ensure_tool_permission(
-        ctx.tool_registry,
+        crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
+            tool_registry: ctx.tool_registry,
+            renderer: ctx.renderer,
+            handle: ctx.handle,
+            session: ctx.session,
+            default_placeholder: ctx.default_placeholder.clone(),
+            ctrl_c_state: ctx.ctrl_c_state,
+            ctrl_c_notify: ctx.ctrl_c_notify,
+            hooks: ctx.lifecycle_hooks,
+            justification: None,
+            approval_recorder: ctx.approval_recorder,
+            decision_ledger: Some(ctx.decision_ledger),
+            tool_permission_cache: Some(ctx.tool_permission_cache),
+            hitl_notification_bell: ctx.vt_cfg.as_ref().map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
+        },
         &name,
         Some(&args),
-        ctx.renderer,
-        ctx.handle,
-        ctx.session,
-        ctx.default_placeholder.clone(),
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        ctx.lifecycle_hooks,
-        None, // justification from agent
-        ctx.approval_recorder,
-        Some(ctx.decision_ledger),
-        Some(ctx.tool_permission_cache),
-        ctx.vt_cfg
-            .as_ref()
-            .map(|cfg| cfg.security.hitl_notification_bell)
-            .unwrap_or(true),
     )
     .await
     {

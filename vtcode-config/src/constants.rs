@@ -1544,7 +1544,8 @@ pub mod memory {
     pub const CRITICAL_TTL_REDUCTION_FACTOR: f64 = 0.1;
 
     /// Minimum RSA size to track in checkpoints (1 MB)
-    pub const MIN_RSS_CHECKPOINT_BYTES: usize = 1 * 1024 * 1024;
+    /// Minimum RSS size to track in checkpoints (1 MiB)
+    pub const MIN_RSS_CHECKPOINT_BYTES: usize = 1024 * 1024;
 
     /// Maximum memory checkpoint history to keep
     pub const MAX_CHECKPOINT_HISTORY: usize = 100;

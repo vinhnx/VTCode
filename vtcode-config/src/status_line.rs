@@ -2,17 +2,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Default)]
 pub enum StatusLineMode {
+    #[default]
     Auto,
     Command,
     Hidden,
 }
 
-impl Default for StatusLineMode {
-    fn default() -> Self {
-        StatusLineMode::Auto
-    }
-}
 
 impl std::str::FromStr for StatusLineMode {
     type Err = String;

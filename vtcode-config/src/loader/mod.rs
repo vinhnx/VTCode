@@ -832,63 +832,63 @@ impl ConfigManager {
         #[cfg(unix)]
         {
             let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
-            if system_config.exists() {
-                if let Ok(toml) = Self::load_toml_from_file(&system_config) {
-                    layer_stack.push(ConfigLayerEntry::new(
-                        ConfigLayerSource::System {
-                            file: system_config,
-                        },
-                        toml,
-                    ));
-                }
+            if system_config.exists()
+                && let Ok(toml) = Self::load_toml_from_file(&system_config)
+            {
+                layer_stack.push(ConfigLayerEntry::new(
+                    ConfigLayerSource::System {
+                        file: system_config,
+                    },
+                    toml,
+                ));
             }
         }
 
         // 2. User home config (~/.vtcode/vtcode.toml)
         for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
-            if home_config_path.exists() {
-                if let Ok(toml) = Self::load_toml_from_file(&home_config_path) {
-                    layer_stack.push(ConfigLayerEntry::new(
-                        ConfigLayerSource::User {
-                            file: home_config_path,
-                        },
-                        toml,
-                    ));
-                }
+            if home_config_path.exists()
+                && let Ok(toml) = Self::load_toml_from_file(&home_config_path)
+            {
+                layer_stack.push(ConfigLayerEntry::new(
+                    ConfigLayerSource::User {
+                        file: home_config_path,
+                    },
+                    toml,
+                ));
             }
         }
 
         // 2. Project-specific config (.vtcode/projects/<project>/config/vtcode.toml)
         if let Some(project_config_path) =
             Self::project_config_path(&config_dir, &workspace_root, &config_file_name)
+            && let Ok(toml) = Self::load_toml_from_file(&project_config_path)
         {
-            if let Ok(toml) = Self::load_toml_from_file(&project_config_path) {
-                layer_stack.push(ConfigLayerEntry::new(
-                    ConfigLayerSource::Project {
-                        file: project_config_path,
-                    },
-                    toml,
-                ));
-            }
+            layer_stack.push(ConfigLayerEntry::new(
+                ConfigLayerSource::Project {
+                    file: project_config_path,
+                },
+                toml,
+            ));
         }
 
         // 3. Config directory fallback (.vtcode/vtcode.toml)
         let fallback_path = config_dir.join(&config_file_name);
         let workspace_config_path = workspace_root.join(&config_file_name);
-        if fallback_path.exists() && fallback_path != workspace_config_path {
-            if let Ok(toml) = Self::load_toml_from_file(&fallback_path) {
-                layer_stack.push(ConfigLayerEntry::new(
-                    ConfigLayerSource::Workspace {
-                        file: fallback_path,
-                    },
-                    toml,
-                ));
-            }
+        if fallback_path.exists()
+            && fallback_path != workspace_config_path
+            && let Ok(toml) = Self::load_toml_from_file(&fallback_path)
+        {
+            layer_stack.push(ConfigLayerEntry::new(
+                ConfigLayerSource::Workspace {
+                    file: fallback_path,
+                },
+                toml,
+            ));
         }
 
         // 4. Workspace config (vtcode.toml in workspace root)
-        if workspace_config_path.exists() {
-            if let Ok(toml) = Self::load_toml_from_file(&workspace_config_path) {
+        if workspace_config_path.exists()
+            && let Ok(toml) = Self::load_toml_from_file(&workspace_config_path) {
                 layer_stack.push(ConfigLayerEntry::new(
                     ConfigLayerSource::Workspace {
                         file: workspace_config_path.clone(),
@@ -896,7 +896,6 @@ impl ConfigManager {
                     toml,
                 ));
             }
-        }
 
         // If no layers found, use default config
         if layer_stack.layers().is_empty() {
@@ -963,8 +962,8 @@ impl ConfigManager {
         #[cfg(unix)]
         {
             let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
-            if system_config.exists() {
-                if let Ok(toml) = Self::load_toml_from_file(&system_config) {
+            if system_config.exists()
+                && let Ok(toml) = Self::load_toml_from_file(&system_config) {
                     layer_stack.push(ConfigLayerEntry::new(
                         ConfigLayerSource::System {
                             file: system_config,
@@ -972,13 +971,12 @@ impl ConfigManager {
                         toml,
                     ));
                 }
-            }
         }
 
         // 2. User home config
         for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
-            if home_config_path.exists() {
-                if let Ok(toml) = Self::load_toml_from_file(&home_config_path) {
+            if home_config_path.exists()
+                && let Ok(toml) = Self::load_toml_from_file(&home_config_path) {
                     layer_stack.push(ConfigLayerEntry::new(
                         ConfigLayerSource::User {
                             file: home_config_path,
@@ -986,7 +984,6 @@ impl ConfigManager {
                         toml,
                     ));
                 }
-            }
         }
 
         // 3. The specific file provided (Workspace layer)

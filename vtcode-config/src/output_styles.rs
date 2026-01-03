@@ -41,6 +41,12 @@ pub struct OutputStyleManager {
     styles: HashMap<String, OutputStyle>,
 }
 
+impl Default for OutputStyleManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OutputStyleManager {
     pub fn new() -> Self {
         Self {
@@ -60,13 +66,12 @@ impl OutputStyleManager {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                if let Ok(output_style) = Self::load_from_file(&path) {
+            if path.extension().and_then(|s| s.to_str()) == Some("md")
+                && let Ok(output_style) = Self::load_from_file(&path) {
                     manager
                         .styles
                         .insert(output_style.config.name.clone(), output_style);
                 }
-            }
         }
 
         Ok(manager)
