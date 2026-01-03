@@ -40,7 +40,7 @@ impl UIRedrawBatcher {
 
     /// Create a new UIRedrawBatcher with auto-flush enabled
     pub fn with_auto_flush(handle: InlineHandle) -> Self {
-        let batcher = Self::new(handle);
+        let mut batcher = Self::new(handle);
         batcher.start_auto_flush();
         batcher
     }

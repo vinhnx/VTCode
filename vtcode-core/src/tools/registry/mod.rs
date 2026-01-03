@@ -49,7 +49,7 @@ use utils::normalize_tool_output;
 use crate::config::constants::defaults;
 use crate::config::constants::tools;
 use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
-use crate::core::memory_pool::{MemoryPoolTuningRecommendation, SizeRecommendation};
+use crate::core::memory_pool::SizeRecommendation;
 use crate::core::memory_pool::MemoryPool;
 use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::file_ops::FileOpsTool;
@@ -723,6 +723,8 @@ impl ToolRegistry {
             None => ToolPolicyGateway::new(&workspace_root).await,
         };
 
+        let optimization_config = vtcode_config::OptimizationConfig::default();
+
         let registry = Self {
             inventory,
             policy_gateway: Arc::new(tokio::sync::RwLock::new(policy_gateway)),
@@ -751,7 +753,7 @@ impl ToolRegistry {
                     optimization_config.tool_registry.hot_cache_size
                 ).unwrap(),
             ))),
-            optimization_config: optimization_config.clone(),
+            optimization_config,
         };
 
         registry.sync_policy_catalog().await;
@@ -1793,8 +1795,7 @@ impl ToolRegistry {
                 (SizeRecommendation::Maintain, SizeRecommendation::Maintain, SizeRecommendation::Maintain)
             ) {
                 tracing::debug!(
-                    "Memory pool tuning recommendation: string={:?}, value={:?}, vec={:?}, "
-                    "allocations_avoided={}",
+                    "Memory pool tuning recommendation: string={:?}, value={:?}, vec={:?}, allocations_avoided={}",
                     recommendation.string_size_recommendation,
                     recommendation.value_size_recommendation,
                     recommendation.vec_size_recommendation,
