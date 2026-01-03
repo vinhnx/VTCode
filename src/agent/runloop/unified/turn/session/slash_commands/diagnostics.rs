@@ -11,7 +11,7 @@ pub async fn handle_debug_agent(ctx: &SlashCommandContext<'_>) -> Result<SlashCo
     // Prefer tool-driven diagnostics when available
     if ctx.tool_registry.has_tool(tools_consts::AGENT_INFO).await {
         ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::AGENT_INFO);
+            .mark_tool_preapproved(tools_consts::AGENT_INFO).await;
         match ctx
             .tool_registry
             .execute_tool_ref(tools_consts::AGENT_INFO, &serde_json::json!({"mode": "debug"}))
@@ -85,7 +85,7 @@ pub async fn handle_analyze_agent(ctx: &SlashCommandContext<'_>) -> Result<Slash
         .await
     {
         ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::ANALYZE_AGENT);
+            .mark_tool_preapproved(tools_consts::ANALYZE_AGENT).await;
         match ctx
             .tool_registry
             .execute_tool_ref(tools_consts::ANALYZE_AGENT, &serde_json::json!({}))

@@ -119,7 +119,7 @@ async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
 /// Check filesystem permissions
 async fn check_filesystem_permissions(config: &AgentConfig) -> Result<()> {
     let workspace = config.workspace.clone(); // Clone only once for reuse
-    let mut registry = ToolRegistry::new(workspace).await;
+    let registry = ToolRegistry::new(workspace).await;
 
     // Try to list files in the workspace
     registry

@@ -139,7 +139,7 @@ impl PluginRuntime {
 
     pub async fn attach_to_registry(
         &self,
-        registry: &mut ToolRegistry,
+        registry: &ToolRegistry,
         manifest: &PluginManifest,
         installer: &dyn PluginInstaller,
     ) -> Result<()> {
@@ -150,7 +150,7 @@ impl PluginRuntime {
         self.validate_trust(manifest)?;
 
         let registration = installer.materialize(manifest).await?;
-        registry.register_tool(registration)?;
+        registry.register_tool(registration).await?;
         Ok(())
     }
 

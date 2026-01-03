@@ -20,19 +20,19 @@ use std::{
 use super::ToolRegistry;
 
 impl ToolRegistry {
-    pub(super) fn unified_exec_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn unified_exec_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_unified_exec(args).await })
     }
 
-    pub(super) fn unified_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn unified_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_unified_file(args).await })
     }
 
-    pub(super) fn unified_search_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn unified_search_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_unified_search(args).await })
     }
 
-    pub(super) async fn execute_unified_exec(&mut self, args: Value) -> Result<Value> {
+    pub(super) async fn execute_unified_exec(&self, args: Value) -> Result<Value> {
         let action_str = args
             .get("action")
             .and_then(|v| v.as_str())
@@ -64,7 +64,7 @@ impl ToolRegistry {
         }
     }
 
-    pub(super) async fn execute_unified_file(&mut self, args: Value) -> Result<Value> {
+    pub(super) async fn execute_unified_file(&self, args: Value) -> Result<Value> {
         let action_str = args
             .get("action")
             .and_then(|v| v.as_str())
@@ -106,7 +106,7 @@ impl ToolRegistry {
         }
     }
 
-    pub(super) async fn execute_unified_search(&mut self, args: Value) -> Result<Value> {
+    pub(super) async fn execute_unified_search(&self, args: Value) -> Result<Value> {
         let action_str = args
             .get("action")
             .and_then(|v| v.as_str())
@@ -297,7 +297,7 @@ impl ToolRegistry {
         }
     }
 
-    pub(super) async fn execute_apply_patch(&mut self, args: Value) -> Result<Value> {
+    pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
         let patch_source = args
             .get("input")
             .or_else(|| args.get("patch"))
@@ -324,21 +324,21 @@ impl ToolRegistry {
     // SPECIALIZED EXECUTORS (Hidden from LLM, used by unified tools)
     // ============================================================
 
-    pub(super) fn read_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn read_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.read_file(args).await })
     }
 
-    pub(super) fn write_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn write_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.write_file(args).await })
     }
 
-    pub(super) fn edit_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn edit_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.edit_file(args).await })
     }
 
-    pub(super) fn grep_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn grep_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let manager = self.inventory.grep_file_manager();
         Box::pin(async move {
             manager
@@ -348,60 +348,60 @@ impl ToolRegistry {
         })
     }
 
-    pub(super) fn list_files_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn list_files_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.execute(args).await })
     }
 
-    pub(super) fn run_pty_cmd_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn run_pty_cmd_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_run_pty_cmd(args).await })
     }
 
-    pub(super) fn send_pty_input_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn send_pty_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_send_pty_input(args).await })
     }
 
     pub(super) fn read_pty_session_executor(
-        &mut self,
+        &self,
         args: Value,
     ) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_read_pty_session(args).await })
     }
 
     pub(super) fn list_pty_sessions_executor(
-        &mut self,
+        &self,
         _args: Value,
     ) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_list_pty_sessions().await })
     }
 
     pub(super) fn close_pty_session_executor(
-        &mut self,
+        &self,
         args: Value,
     ) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_close_pty_session(args).await })
     }
 
     pub(super) fn code_intelligence_executor(
-        &mut self,
+        &self,
         args: Value,
     ) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_code_intelligence(args).await })
     }
 
-    pub(super) fn get_errors_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn get_errors_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_get_errors(args).await })
     }
 
-    pub(super) fn agent_info_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn agent_info_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_agent_info().await })
     }
 
-    pub(super) fn search_tools_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn search_tools_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_search_tools(args).await })
     }
 
-    pub(super) fn apply_patch_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn apply_patch_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_apply_patch_internal(args).await })
     }
 
@@ -409,7 +409,7 @@ impl ToolRegistry {
     // INTERNAL IMPLEMENTATIONS
     // ============================================================
 
-    async fn execute_run_pty_cmd(&mut self, args: Value) -> Result<Value> {
+    async fn execute_run_pty_cmd(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("run_pty_cmd requires a JSON object"))?;
@@ -550,7 +550,7 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    async fn execute_send_pty_input(&mut self, args: Value) -> Result<Value> {
+    async fn execute_send_pty_input(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("send_pty_input requires a JSON object"))?;
@@ -611,7 +611,7 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    async fn execute_read_pty_session(&mut self, args: Value) -> Result<Value> {
+    async fn execute_read_pty_session(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("read_pty_session requires a JSON object"))?;
@@ -647,12 +647,12 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    async fn execute_list_pty_sessions(&mut self) -> Result<Value> {
+    async fn execute_list_pty_sessions(&self) -> Result<Value> {
         let sessions = self.pty_manager().list_sessions();
         Ok(json!({ "sessions": sessions }))
     }
 
-    async fn execute_close_pty_session(&mut self, args: Value) -> Result<Value> {
+    async fn execute_close_pty_session(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("close_pty_session requires a JSON object"))?;
@@ -668,12 +668,12 @@ impl ToolRegistry {
         Ok(json!({ "success": true, "session_id": sid }))
     }
 
-    async fn execute_code_intelligence(&mut self, args: Value) -> Result<Value> {
+    async fn execute_code_intelligence(&self, args: Value) -> Result<Value> {
         let tool = self.inventory.code_intelligence_tool();
         tool.execute(args).await
     }
 
-    async fn execute_get_errors(&mut self, args: Value) -> Result<Value> {
+    async fn execute_get_errors(&self, args: Value) -> Result<Value> {
         // Simplified version of get_errors logic
         let scope = args
             .get("scope")
@@ -719,7 +719,7 @@ impl ToolRegistry {
         Ok(error_report)
     }
 
-    async fn execute_agent_info(&mut self) -> Result<Value> {
+    async fn execute_agent_info(&self) -> Result<Value> {
         let available_tools = self.available_tools().await;
         Ok(json!({
             "tools_registered": available_tools,
@@ -729,7 +729,7 @@ impl ToolRegistry {
         }))
     }
 
-    async fn execute_search_tools(&mut self, args: Value) -> Result<Value> {
+    async fn execute_search_tools(&self, args: Value) -> Result<Value> {
         let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
         let available_tools = self.available_tools().await;
 
@@ -741,7 +741,7 @@ impl ToolRegistry {
         Ok(json!({ "tools": filtered }))
     }
 
-    async fn execute_apply_patch_internal(&mut self, args: Value) -> Result<Value> {
+    async fn execute_apply_patch_internal(&self, args: Value) -> Result<Value> {
         let patch_source = args
             .get("input")
             .or_else(|| args.get("patch"))
