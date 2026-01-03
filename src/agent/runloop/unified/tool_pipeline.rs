@@ -591,48 +591,15 @@ async fn run_single_tool_attempt(
             return ToolExecutionStatus::Cancelled;
         }
 
-        // Guard to ensure background task is aborted when dropped
-        struct ProgressUpdateGuard {
-            handle: tokio::task::JoinHandle<()>,
-        }
-
-        impl Drop for ProgressUpdateGuard {
-            fn drop(&mut self) {
-                self.handle.abort();
-            }
-        }
-
         // Spawn a background task to update progress periodically with elapsed time
         let _progress_update_guard = {
-            let reporter = progress_reporter.clone();
-            let name = name.to_string();
-            let start = start_time;
-            let handle = tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_millis(500));
-                // Skip first tick
-                interval.tick().await;
-                
-                loop {
-                    interval.tick().await;
-                    let elapsed = start.elapsed();
-                    let elapsed_secs = elapsed.as_secs_f64();
-                    
-                    // Update progress bar based on time milestones
-                    let estimated_progress = if elapsed < std::time::Duration::from_millis(500) {
-                        30
-                    } else if elapsed < std::time::Duration::from_secs(2) {
-                        50
-                    } else if elapsed < std::time::Duration::from_secs(5) {
-                        70
-                    } else {
-                        85
-                    };
-                    
-                    reporter.set_progress(estimated_progress).await;
-                    reporter.set_message(format!("Executing {}... ({:.1}s)", name, elapsed_secs)).await;
-                }
-            });
-            ProgressUpdateGuard { handle }
+            use crate::agent::runloop::unified::progress::{ProgressUpdateGuard, spawn_elapsed_time_updater};
+            let handle = spawn_elapsed_time_updater(
+                progress_reporter.clone(),
+                name.to_string(),
+                500,
+            );
+            ProgressUpdateGuard::new(handle)
         };
 
         progress_reporter
