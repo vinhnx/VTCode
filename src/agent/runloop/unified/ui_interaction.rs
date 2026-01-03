@@ -202,10 +202,7 @@ pub(crate) struct PlaceholderSpinner {
 }
 
 impl PlaceholderSpinner {
-    /// Create a new spinner with progress reporting support
-    pub fn force_refresh(&self) {
-        self.handle.force_redraw();
-    }
+
 
     pub(crate) fn with_progress(
         handle: &InlineHandle,

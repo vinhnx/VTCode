@@ -4,7 +4,7 @@ use crate::config::types::CapabilityLevel;
 use super::registration::ToolRegistration;
 use super::{ToolInventory, ToolRegistry};
 
-pub(super) fn register_builtin_tools(inventory: &mut ToolInventory) {
+pub(super) fn register_builtin_tools(inventory: &ToolInventory) {
     for registration in builtin_tool_registrations() {
         let tool_name = registration.name();
         if let Err(err) = inventory.register_tool(registration) {

@@ -702,8 +702,8 @@ impl ToolRegistry {
         pty_config: PtyConfig,
         policy_manager: Option<ToolPolicyManager>,
     ) -> Self {
-        let mut inventory = ToolInventory::new(workspace_root.clone());
-        register_builtin_tools(&mut inventory);
+        let inventory = ToolInventory::new(workspace_root.clone());
+        register_builtin_tools(&inventory);
 
         let pty_sessions = pty::PtySessionManager::new(workspace_root.clone(), pty_config);
 
@@ -836,18 +836,32 @@ impl ToolRegistry {
         let mut tools = self.inventory.available_tools().to_vec();
         tools.extend(self.inventory.registered_aliases());
 
-        // Add MCP tools if available
-        let client_opt = { self.mcp_client.read().unwrap().clone() };
-        if let Some(mcp_client) = client_opt {
-            match mcp_client.list_mcp_tools().await {
-                Ok(mcp_tools) => {
-                    tools.reserve(mcp_tools.len());
-                    for tool in mcp_tools {
-                        tools.push(format!("mcp_{}", tool.name));
+        // Add MCP tools if available - use cache first
+        {
+            let index = self.mcp_tool_index.read().await;
+            if !index.is_empty() {
+                for tools_list in index.values() {
+                    for tool in tools_list {
+                        tools.push(format!("mcp_{}", tool));
                     }
                 }
-                Err(e) => {
-                    tracing::debug!("Failed to list MCP tools: {}", e);
+            } else {
+                // Background compute - if cache is empty, we might need a refresh
+                // But generally refresh_mcp_tools should have been called.
+                // Fallback to active client query if needed
+                let client_opt = { self.mcp_client.read().unwrap().clone() };
+                if let Some(mcp_client) = client_opt {
+                    match mcp_client.list_mcp_tools().await {
+                        Ok(mcp_tools) => {
+                            tools.reserve(mcp_tools.len());
+                            for tool in mcp_tools {
+                                tools.push(format!("mcp_{}", tool.name));
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!("Failed to list MCP tools: {}", e);
+                        }
+                    }
                 }
             }
         }
@@ -2434,6 +2448,9 @@ impl ToolRegistry {
         *self.mcp_client.write().unwrap() = Some(mcp_client);
         self.mcp_tool_index.write().await.clear();
         self.mcp_tool_presence.write().await.clear();
+        if let Ok(mut cache) = self.cached_available_tools.write() {
+            *cache = None;
+        }
         self.initialized.store(false, std::sync::atomic::Ordering::Relaxed);
         self
     }
@@ -2443,17 +2460,20 @@ impl ToolRegistry {
         *self.mcp_client.write().unwrap() = Some(mcp_client);
         self.mcp_tool_index.write().await.clear();
         self.mcp_tool_presence.write().await.clear();
+        if let Ok(mut cache) = self.cached_available_tools.write() {
+            *cache = None;
+        }
         self.initialized.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Get the MCP client if available
     pub fn mcp_client(&self) -> Option<Arc<McpClient>> {
-        { self.mcp_client.read().unwrap().clone() }
+        self.mcp_client.read().unwrap().clone()
     }
 
     /// List all MCP tools
     pub async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
-        let client_opt = { self.mcp_client.read().unwrap().clone() };
+        let client_opt = self.mcp_client.read().unwrap().clone();
         if let Some(mcp_client) = client_opt {
             mcp_client.list_mcp_tools().await
         } else {

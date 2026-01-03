@@ -397,7 +397,7 @@ impl ZedAgent {
         };
         let list_files_enabled = file_ops_tool.is_some();
 
-        let mut core_tool_registry = CoreToolRegistry::new(config.workspace.clone()).await;
+        let core_tool_registry = CoreToolRegistry::new(config.workspace.clone()).await;
         core_tool_registry.apply_commands_config(&commands_config);
         if let Err(error) = core_tool_registry
             .apply_config_policies(&tools_config)
@@ -1222,7 +1222,7 @@ impl ZedAgent {
         }
 
         let result = {
-            let mut registry = self.local_tool_registry.lock().await;
+            let registry = self.local_tool_registry.lock().await;
             registry.execute_tool_ref(tool_name, args).await
         };
         match result {

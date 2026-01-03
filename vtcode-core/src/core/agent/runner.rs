@@ -1332,7 +1332,7 @@ impl AgentRunner {
             match timeout(Duration::from_secs(30), mcp_client.initialize()).await {
                 Ok(Ok(())) => {
                     let mcp_client = Arc::new(mcp_client);
-                    self.tool_registry.set_mcp_client(Arc::clone(&mcp_client));
+                    self.tool_registry.set_mcp_client(Arc::clone(&mcp_client)).await;
                     if let Err(err) = self.tool_registry.refresh_mcp_tools().await {
                         warn!("Failed to refresh MCP tools: {}", err);
                     }
