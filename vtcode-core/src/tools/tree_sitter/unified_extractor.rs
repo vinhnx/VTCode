@@ -340,13 +340,13 @@ impl UnifiedSymbolExtractor {
             function_patterns: vec![
                 SymbolPattern {
                     node_kind: "function_item",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Function,
                     creates_scope: false,
                 },
                 SymbolPattern {
                     node_kind: "method_definition",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Function,
                     creates_scope: false,
                 },
@@ -354,19 +354,19 @@ impl UnifiedSymbolExtractor {
             type_patterns: vec![
                 SymbolPattern {
                     node_kind: "struct_item",
-                    name_extraction: NameExtraction::ChildByType("type_identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Type,
                     creates_scope: false,
                 },
                 SymbolPattern {
                     node_kind: "enum_item",
-                    name_extraction: NameExtraction::ChildByType("type_identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Type,
                     creates_scope: false,
                 },
                 SymbolPattern {
                     node_kind: "trait_item",
-                    name_extraction: NameExtraction::ChildByType("type_identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Type,
                     creates_scope: false,
                 },
@@ -395,7 +395,7 @@ impl UnifiedSymbolExtractor {
             function_patterns: vec![
                 SymbolPattern {
                     node_kind: "function_definition",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Function,
                     creates_scope: false,
                 },
@@ -403,7 +403,7 @@ impl UnifiedSymbolExtractor {
             type_patterns: vec![
                 SymbolPattern {
                     node_kind: "class_definition",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Type,
                     creates_scope: false,
                 },
@@ -425,7 +425,7 @@ impl UnifiedSymbolExtractor {
             function_patterns: vec![
                 SymbolPattern {
                     node_kind: "function_declaration",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Function,
                     creates_scope: false,
                 },
@@ -439,7 +439,7 @@ impl UnifiedSymbolExtractor {
             type_patterns: vec![
                 SymbolPattern {
                     node_kind: "class_declaration",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Type,
                     creates_scope: false,
                 },
@@ -447,7 +447,7 @@ impl UnifiedSymbolExtractor {
             variable_patterns: vec![
                 SymbolPattern {
                     node_kind: "variable_declarator",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
+                    name_extraction: NameExtraction::ChildByField("name"),
                     symbol_kind: SymbolKind::Variable,
                     creates_scope: false,
                 },
@@ -464,13 +464,13 @@ impl UnifiedSymbolExtractor {
         patterns.type_patterns.extend(vec![
             SymbolPattern {
                 node_kind: "interface_declaration",
-                name_extraction: NameExtraction::ChildByType("type_identifier"),
+                name_extraction: NameExtraction::ChildByField("name"),
                 symbol_kind: SymbolKind::Type,
                 creates_scope: false,
             },
             SymbolPattern {
                 node_kind: "type_alias_declaration",
-                name_extraction: NameExtraction::ChildByType("type_identifier"),
+                name_extraction: NameExtraction::ChildByField("name"),
                 symbol_kind: SymbolKind::Type,
                 creates_scope: false,
             },
@@ -666,5 +666,21 @@ mod tests {
 
         // Check type patterns
         assert!(patterns.type_patterns.iter().any(|p| p.node_kind == "class_definition"));
+    }
+
+    #[test]
+    fn test_extraction_rust() {
+        let source = "fn my_func() {} struct MyStruct {}";
+        let mut parser = tree_sitter::Parser::new();
+        let language: tree_sitter::Language = tree_sitter_rust::LANGUAGE.into();
+        parser.set_language(&language).unwrap();
+        let tree = parser.parse(source, None).unwrap();
+
+        let extractor = UnifiedSymbolExtractor::new();
+        let symbols = extractor.extract_symbols(&tree, source, LanguageSupport::Rust);
+
+        assert_eq!(symbols.len(), 2);
+        assert!(symbols.iter().any(|s| s.name == "my_func" && s.kind == SymbolKind::Function));
+        assert!(symbols.iter().any(|s| s.name == "MyStruct" && s.kind == SymbolKind::Type));
     }
 }
