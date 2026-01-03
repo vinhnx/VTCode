@@ -76,7 +76,9 @@
     "cargo_test": "allow",
     "git_status": "allow",
     "git_diff": "allow",
-    "git_log": "allow"
+    "git_log": "allow",
+    "list_skills": "allow",
+    "load_skill": "allow"
   },
   "constraints": {},
   "mcp": {

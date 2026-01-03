@@ -14,6 +14,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::traits::Tool;
+use vtcode_core::tools::handlers::SpawnSubagentTool;
+use vtcode_core::subagents::SubagentRegistry;
+use vtcode_config::subagent::SubagentsConfig;
+use vtcode_config::constants::tools as tool_constants;
 
 use super::async_mcp_manager::AsyncMcpManager;
 use super::palettes::apply_prompt_style;
@@ -420,23 +424,33 @@ pub(crate) async fn initialize_session(
         dormant_tool_defs.clone(),
     );
     let list_skills_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
-        "list_skills",
+        tool_constants::LIST_SKILLS,
         vtcode_core::config::types::CapabilityLevel::Basic,
         list_skills_tool,
     );
-    let _ = tool_registry.register_tool(list_skills_reg);
+    tool_registry.register_tool(list_skills_reg).await.context("Failed to register list_skills tool")?;
 
     // Add list_skills to active tool definitions
     {
         let mut tools_guard = tools.write().await;
         tools_guard.push(uni::ToolDefinition::function(
-             "list_skills".to_string(),
-             "List all available skills that can be loaded. Use this to discover capabilities before loading them.".to_string(),
+             tool_constants::LIST_SKILLS.to_string(),
+             "List all available skills that can be loaded. Use 'query' to filter by name or 'variety' to filter by type (agent_skill, system_utility).".to_string(),
              serde_json::json!({
-                 "type": "object",
-                 "properties": {},
-                 "additionalProperties": false
-             })
+                  "type": "object",
+                  "properties": {
+                      "query": {
+                          "type": "string",
+                          "description": "Optional: filter skills by name (case-insensitive)"
+                      },
+                      "variety": {
+                          "type": "string",
+                          "enum": ["agent_skill", "system_utility", "built_in"],
+                          "description": "Optional: filter by skill type"
+                      }
+                  },
+                  "additionalProperties": false
+              })
          ));
     }
 
@@ -444,16 +458,16 @@ pub(crate) async fn initialize_session(
     let load_resource_tool =
         vtcode_core::tools::skills::LoadSkillResourceTool::new(library_skills_map.clone());
     let load_resource_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
-        "load_skill_resource",
+        tool_constants::LOAD_SKILL_RESOURCE,
         vtcode_core::config::types::CapabilityLevel::Basic,
         load_resource_tool,
     );
-    let _ = tool_registry.register_tool(load_resource_reg);
+    tool_registry.register_tool(load_resource_reg).await.context("Failed to register load_skill_resource tool")?;
 
     {
         let mut tools_guard = tools.write().await;
         tools_guard.push(uni::ToolDefinition::function(
-             "load_skill_resource".to_string(),
+             tool_constants::LOAD_SKILL_RESOURCE.to_string(),
              "Load the content of a specific resource belonging to a skill. Use this when instructed by a skill's SKILL.md.".to_string(),
              serde_json::json!({
                 "type": "object",
@@ -485,16 +499,16 @@ pub(crate) async fn initialize_session(
         Some(Arc::new(RwLock::new(tool_registry.clone()))),
     );
     let load_skill_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
-        "load_skill",
+        tool_constants::LOAD_SKILL,
         vtcode_core::config::types::CapabilityLevel::Basic,
         load_skill_tool,
     );
-    let _ = tool_registry.register_tool(load_skill_reg);
+    tool_registry.register_tool(load_skill_reg).await.context("Failed to register load_skill tool")?;
 
     {
         let mut tools_guard = tools.write().await;
         tools_guard.push(uni::ToolDefinition::function(
-            "load_skill".to_string(),
+            tool_constants::LOAD_SKILL.to_string(),
             "Load a specific skill to see full instructions and activate its tools.".to_string(),
             serde_json::json!({
                 "type": "object",
@@ -506,7 +520,61 @@ pub(crate) async fn initialize_session(
         ));
     }
 
-    // 4. Discovered CLI tool adapters
+    // 4. SpawnSubagent
+    let subagent_registry = SubagentRegistry::new(config.workspace.clone(), SubagentsConfig::default()).await?;
+    let spawn_subagent_tool = SpawnSubagentTool::new(
+        Arc::new(subagent_registry),
+        config.clone(),
+        Arc::new(tool_registry.clone()),
+        config.workspace.clone(),
+    );
+    let spawn_subagent_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
+        tool_constants::SPAWN_SUBAGENT,
+        vtcode_core::config::types::CapabilityLevel::Basic,
+        spawn_subagent_tool,
+    );
+    tool_registry.register_tool(spawn_subagent_reg).await.context("Failed to register spawn_subagent tool")?;
+
+    {
+        let mut tools_guard = tools.write().await;
+        tools_guard.push(uni::ToolDefinition::function(
+            tool_constants::SPAWN_SUBAGENT.to_string(),
+            "Spawn a specialized subagent to handle a specific task with isolated context. Subagents are useful for focused expertise or preserving main conversation context.".to_string(),
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "Task description for the subagent"
+                    },
+                    "subagent_type": {
+                        "type": "string",
+                        "description": "Optional: specific subagent type (explore, plan, general, code-reviewer, debugger)"
+                    },
+                    "resume": {
+                        "type": "string",
+                        "description": "Optional: agent ID to resume"
+                    },
+                    "thoroughness": {
+                        "type": "string",
+                        "enum": ["quick", "medium", "very_thorough"],
+                        "description": "Optional: thoroughness level"
+                    },
+                    "timeout_seconds": {
+                        "type": "integer",
+                        "description": "Optional: timeout in seconds"
+                    },
+                    "parent_context": {
+                        "type": "string",
+                        "description": "Optional: context from parent agent"
+                    }
+                },
+                "required": ["prompt"]
+            }),
+        ));
+    }
+
+    // 5. Discovered CLI tool adapters
     // DEFERRED: Adapters are now kept in dormant_tool_defs and registered on-demand via load_skill
 
     let custom_prompts = CustomPromptRegistry::load(
