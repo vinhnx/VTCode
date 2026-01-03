@@ -234,7 +234,7 @@ impl SandboxManager {
             cwd: spec.cwd,
             env: spec.env,
             expiration: spec.expiration,
-            sandbox_active: false, // TODO: Implement Windows sandboxing
+            sandbox_active: false, // Windows sandboxing via Job Objects/Restricted Tokens is planned for a future release
             sandbox_type: SandboxType::WindowsRestrictedToken,
         })
     }

@@ -4,7 +4,6 @@
 //! that eliminates the massive code duplication in language-specific extraction.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use tree_sitter::{Node, Tree};
 use std::collections::HashSet;
 
@@ -21,6 +20,7 @@ pub struct UnifiedSymbolExtractor {
 
 /// Cached node kinds for O(1) lookup performance
 #[derive(Clone)]
+#[allow(dead_code)]
 struct NodeKindCache {
     function_kinds: HashSet<&'static str>,
     type_kinds: HashSet<&'static str>,
@@ -57,6 +57,7 @@ struct SymbolPattern {
 
 /// How to extract the name from a matched node
 #[derive(Clone)]
+#[allow(dead_code)]
 enum NameExtraction {
     /// Find a child node with a specific type
     ChildByType(&'static str),
@@ -216,7 +217,7 @@ impl UnifiedSymbolExtractor {
                     if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
                         symbols.push(SymbolInfo {
                             name: name.clone(), // Clone only when we have a match
-                            kind: pattern.symbol_kind,
+                            kind: pattern.symbol_kind.clone(),
                             position: Position {
                                 row: node.start_position().row,
                                 column: node.start_position().column,
@@ -242,7 +243,7 @@ impl UnifiedSymbolExtractor {
                     if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
                         symbols.push(SymbolInfo {
                             name: name.clone(),
-                            kind: pattern.symbol_kind,
+                            kind: pattern.symbol_kind.clone(),
                             position: Position {
                                 row: node.start_position().row,
                                 column: node.start_position().column,
@@ -268,7 +269,7 @@ impl UnifiedSymbolExtractor {
                     if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
                         symbols.push(SymbolInfo {
                             name, // No clone needed here
-                            kind: pattern.symbol_kind,
+                            kind: pattern.symbol_kind.clone(),
                             position: Position {
                                 row: node.start_position().row,
                                 column: node.start_position().column,

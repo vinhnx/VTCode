@@ -76,12 +76,10 @@ pub fn keyboard_protocol_to_flags(
                 | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
         }
         "full" => {
-            // NOTE: REPORT_ALL_KEYS is not available in crossterm 0.28.1
-            // For now, "full" mode uses the same flags as "default"
-            // TODO: Add REPORT_ALL_KEYS when crossterm is upgraded
             KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
                 | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
                 | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
+                | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
         }
         "minimal" => KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES,
         "custom" => {
@@ -95,9 +93,8 @@ pub fn keyboard_protocol_to_flags(
             if config.report_alternate_keys {
                 flags |= KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS;
             }
-            // NOTE: report_all_keys is not supported in crossterm 0.28.1
             if config.report_all_keys {
-                tracing::warn!("report_all_keys is not supported in crossterm 0.28.1, ignoring");
+                flags |= KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES;
             }
             flags
         }

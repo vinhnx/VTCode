@@ -54,6 +54,22 @@ impl MoonshotProvider {
         Self::with_model_internal(api_key, model, None, None)
     }
 
+    pub fn new_with_client(
+        api_key: String,
+        model: String,
+        http_client: reqwest::Client,
+        base_url: String,
+        _timeouts: TimeoutsConfig,
+    ) -> Self {
+        Self {
+            api_key,
+            base_url,
+            model,
+            http_client,
+            prompt_cache_enabled: false,
+        }
+    }
+
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,

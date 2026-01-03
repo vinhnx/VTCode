@@ -835,6 +835,28 @@ impl OpenAIProvider {
         Self::with_model_internal(api_key, model, None, None)
     }
 
+    pub fn new_with_client(
+        api_key: String,
+        model: String,
+        http_client: reqwest::Client,
+        base_url: String,
+        _timeouts: TimeoutsConfig,
+    ) -> Self {
+        use std::sync::Arc;
+        use std::sync::Mutex;
+        use std::collections::HashMap;
+
+        Self {
+            api_key: Arc::from(api_key.as_str()),
+            http_client,
+            base_url: Arc::from(base_url.as_str()),
+            model: Arc::from(model.as_str()),
+            prompt_cache_enabled: false,
+            prompt_cache_settings: Default::default(),
+            responses_api_modes: Mutex::new(HashMap::new()),
+        }
+    }
+
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,

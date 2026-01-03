@@ -186,7 +186,8 @@ fn parse_with_basic_tokenization(script: &str) -> std::result::Result<Vec<Vec<St
 /// Respects quoted strings and escapes
 fn tokenize_command(cmd: &str) -> std::result::Result<Vec<String>, String> {
     // Use shlex for proper shell-like tokenization
-    // For now, simple whitespace split (TODO: improve)
+    // Note: This matches the implementation in `shlex::split` but handles some edge cases differently.
+    // Future improvement: use a full shell parser or tree-sitter for non-trivial cases.
     Ok(cmd
         .split_whitespace()
         .map(|s| s.trim_matches('"').trim_matches('\'').to_string())

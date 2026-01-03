@@ -59,8 +59,8 @@ pub async fn handle_manage_skills(
             ctx.loaded_skills.write().await.remove(&name);
 
             // Unregister from tool registry (if support exists)
-            // Note: Current tool registry may not support dynamic unregistration
-            // This is a TODO for future enhancement
+            // Note: Current tool registry does not support dynamic unregistration.
+            // Future enhancement: Add tool unregistration support to `ToolRegistry`.
 
             ctx.renderer
                 .line(MessageStyle::Info, &format!("Unloaded skill: {}", name))?;

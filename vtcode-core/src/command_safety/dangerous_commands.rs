@@ -23,8 +23,21 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
         return true;
     }
 
-    // TODO: Support bash -lc "..." parsing for chained commands
-    // For now, this will be implemented in shell_parser module
+    // Support bash -lc "..." parsing for chained commands
+    // If the command is bash -c "..." or similar, parse the script and check each command
+    if command.len() >= 3
+        && (command[0] == "bash" || command[0] == "sh" || command[0] == "zsh")
+        && (command[1] == "-c" || command[1] == "-lc" || command[1] == "-ilc")
+    {
+        let script = &command[2];
+        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
+            for sub_cmd in sub_commands {
+                if command_might_be_dangerous(&sub_cmd) {
+                    return true;
+                }
+            }
+        }
+    }
 
     false
 }

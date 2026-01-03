@@ -67,11 +67,12 @@ where
         );
         let timeouts = self.timeouts.unwrap_or_default();
 
-        let (prompt_cache_enabled, prompt_cache_settings) =
+        let (prompt_cache_enabled, _) =
             crate::llm::providers::common::extract_prompt_cache_settings_default(
                 self.prompt_cache,
                 T::PROVIDER_KEY,
             );
+        let prompt_cache_settings = T::PromptCacheSettings::default();
 
         let base_url = crate::llm::providers::common::override_base_url(
             T::API_BASE_URL,
@@ -109,7 +110,7 @@ pub trait ProviderConfig {
     where
         Self::PromptCacheSettings: Send + Sync + 'static;
 
-    type PromptCacheSettings;
+    type PromptCacheSettings: Clone + Default + Send + Sync + 'static;
 }
 
 /// HTTP client pool to avoid creating new clients for each provider
@@ -170,9 +171,9 @@ mod http_client_pool {
     }
 
     pub fn get_http_client_for_timeouts(timeouts: &TimeoutsConfig) -> Arc<HttpClient> {
-        let key = if timeouts.request_timeout.as_secs() >= 120 {
+        let key = if timeouts.default_ceiling_seconds >= 120 {
             "timeout_120s"
-        } else if timeouts.request_timeout.as_secs() >= 30 {
+        } else if timeouts.default_ceiling_seconds >= 30 {
             "timeout_30s"
         } else {
             "default"

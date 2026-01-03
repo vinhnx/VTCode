@@ -144,10 +144,72 @@ impl ModelsManager {
             return Ok(());
         }
 
-        // TODO: Implement actual remote model fetching from provider APIs
-        // For now, we just use local presets
-        info!("Remote model fetching not yet implemented, using local presets");
-        Ok(())
+        let provider = *self.current_provider.read().await;
+
+        match provider {
+            Provider::Ollama => {
+                debug!("Fetching remote models for Ollama...");
+                match self.fetch_ollama_models().await {
+                    Ok(models) => {
+                        info!("Fetched {} models from Ollama", models.len());
+                        self.apply_remote_models(models.clone()).await;
+                        self.persist_cache(&models, None).await;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        error!("Failed to fetch Ollama models: {e}");
+                        // Fall back to local presets if fetch fails
+                        Ok(())
+                    }
+                }
+            }
+            _ => {
+                // For other providers, we don't have remote discovery yet
+                info!(
+                    "Remote model discovery for {:?} not implemented, using local presets",
+                    provider
+                );
+                Ok(())
+            }
+        }
+    }
+
+    /// Fetch models from Ollama API
+    async fn fetch_ollama_models(&self) -> anyhow::Result<Vec<ModelInfo>> {
+        let client = reqwest::Client::new();
+        let resp = client.get("http://localhost:11434/api/tags").send().await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow::anyhow!("Ollama API returned {}", resp.status()));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        let mut models = Vec::new();
+
+        if let Some(ollama_models) = json.get("models").and_then(|m| m.as_array()) {
+            for m in ollama_models {
+                if let Some(name) = m.get("name").and_then(|s| s.as_str()) {
+                    models.push(ModelInfo {
+                        slug: name.to_string(),
+                        display_name: format!("{} (Ollama)", name),
+                        description: format!("Ollama model: {}", name),
+                        provider: Provider::Ollama,
+                        default_reasoning_level: crate::config::types::ReasoningEffortLevel::Medium,
+                        supported_reasoning_levels: vec![],
+                        context_window: Some(32_000), // Default for most Ollama models
+                        supports_tool_use: true,
+                        supports_streaming: true,
+                        supports_reasoning: false,
+                        priority: 100,
+                        visibility: "list".to_string(),
+                        supported_in_api: true,
+                        upgrade: None,
+                    });
+                }
+            }
+        }
+
+        Ok(models)
     }
 
     /// List available models for the current provider
