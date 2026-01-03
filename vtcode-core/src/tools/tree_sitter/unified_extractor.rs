@@ -4,8 +4,8 @@
 //! that eliminates the massive code duplication in language-specific extraction.
 
 use std::collections::HashMap;
-use tree_sitter::{Node, Tree};
 use std::collections::HashSet;
+use tree_sitter::{Node, Tree};
 
 use super::analyzer::{LanguageSupport, Position};
 use super::languages::{SymbolInfo, SymbolKind};
@@ -76,38 +76,62 @@ impl UnifiedSymbolExtractor {
 
         // Initialize patterns for each supported language
         let rust_patterns = Self::rust_patterns();
-        cached_node_kinds.insert(LanguageSupport::Rust, Self::build_node_kind_cache(&rust_patterns));
+        cached_node_kinds.insert(
+            LanguageSupport::Rust,
+            Self::build_node_kind_cache(&rust_patterns),
+        );
         patterns.insert(LanguageSupport::Rust, rust_patterns);
 
         let python_patterns = Self::python_patterns();
-        cached_node_kinds.insert(LanguageSupport::Python, Self::build_node_kind_cache(&python_patterns));
+        cached_node_kinds.insert(
+            LanguageSupport::Python,
+            Self::build_node_kind_cache(&python_patterns),
+        );
         patterns.insert(LanguageSupport::Python, python_patterns);
 
         let js_patterns = Self::javascript_patterns();
-        cached_node_kinds.insert(LanguageSupport::JavaScript, Self::build_node_kind_cache(&js_patterns));
+        cached_node_kinds.insert(
+            LanguageSupport::JavaScript,
+            Self::build_node_kind_cache(&js_patterns),
+        );
         patterns.insert(LanguageSupport::JavaScript, js_patterns);
 
         let ts_patterns = Self::typescript_patterns();
-        cached_node_kinds.insert(LanguageSupport::TypeScript, Self::build_node_kind_cache(&ts_patterns));
+        cached_node_kinds.insert(
+            LanguageSupport::TypeScript,
+            Self::build_node_kind_cache(&ts_patterns),
+        );
         patterns.insert(LanguageSupport::TypeScript, ts_patterns);
 
         let go_patterns = Self::go_patterns();
-        cached_node_kinds.insert(LanguageSupport::Go, Self::build_node_kind_cache(&go_patterns));
+        cached_node_kinds.insert(
+            LanguageSupport::Go,
+            Self::build_node_kind_cache(&go_patterns),
+        );
         patterns.insert(LanguageSupport::Go, go_patterns);
 
         let java_patterns = Self::java_patterns();
-        cached_node_kinds.insert(LanguageSupport::Java, Self::build_node_kind_cache(&java_patterns));
+        cached_node_kinds.insert(
+            LanguageSupport::Java,
+            Self::build_node_kind_cache(&java_patterns),
+        );
         patterns.insert(LanguageSupport::Java, java_patterns);
 
         let bash_patterns = Self::bash_patterns();
-        cached_node_kinds.insert(LanguageSupport::Bash, Self::build_node_kind_cache(&bash_patterns));
+        cached_node_kinds.insert(
+            LanguageSupport::Bash,
+            Self::build_node_kind_cache(&bash_patterns),
+        );
         patterns.insert(LanguageSupport::Bash, bash_patterns);
 
         let swift_patterns = Self::swift_patterns();
-        cached_node_kinds.insert(LanguageSupport::Swift, Self::build_node_kind_cache(&swift_patterns));
+        cached_node_kinds.insert(
+            LanguageSupport::Swift,
+            Self::build_node_kind_cache(&swift_patterns),
+        );
         patterns.insert(LanguageSupport::Swift, swift_patterns);
 
-        Self { 
+        Self {
             patterns,
             cached_node_kinds,
         }
@@ -189,7 +213,7 @@ impl UnifiedSymbolExtractor {
         symbols: &mut Vec<SymbolInfo>,
     ) {
         let node_kind = node.kind();
-        
+
         // Get cached node kinds for O(1) lookup instead of O(n) iteration
         let cache = match self.cached_node_kinds.get(&language) {
             Some(cache) => cache,
@@ -214,7 +238,9 @@ impl UnifiedSymbolExtractor {
             // Find the matching pattern efficiently
             for pattern in &patterns.function_patterns {
                 if pattern.node_kind == node_kind {
-                    if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
+                    if let Some(name) =
+                        self.extract_name(&node, source_code, &pattern.name_extraction)
+                    {
                         symbols.push(SymbolInfo {
                             name: name.clone(), // Clone only when we have a match
                             kind: pattern.symbol_kind.clone(),
@@ -240,7 +266,9 @@ impl UnifiedSymbolExtractor {
             // Check type patterns
             for pattern in &patterns.type_patterns {
                 if pattern.node_kind == node_kind {
-                    if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
+                    if let Some(name) =
+                        self.extract_name(&node, source_code, &pattern.name_extraction)
+                    {
                         symbols.push(SymbolInfo {
                             name: name.clone(),
                             kind: pattern.symbol_kind.clone(),
@@ -266,7 +294,9 @@ impl UnifiedSymbolExtractor {
             // Check variable patterns
             for pattern in &patterns.variable_patterns {
                 if pattern.node_kind == node_kind {
-                    if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
+                    if let Some(name) =
+                        self.extract_name(&node, source_code, &pattern.name_extraction)
+                    {
                         symbols.push(SymbolInfo {
                             name, // No clone needed here
                             kind: pattern.symbol_kind.clone(),
@@ -298,7 +328,12 @@ impl UnifiedSymbolExtractor {
         }
     }
 
-    fn extract_name(&self, node: &Node, source_code: &str, extraction: &NameExtraction) -> Option<String> {
+    fn extract_name(
+        &self,
+        node: &Node,
+        source_code: &str,
+        extraction: &NameExtraction,
+    ) -> Option<String> {
         match extraction {
             NameExtraction::ChildByType(child_type) => {
                 node.child_by_field_name(child_type)
@@ -310,13 +345,10 @@ impl UnifiedSymbolExtractor {
                     })
                     .map(|child| source_code[child.byte_range()].to_string())
             }
-            NameExtraction::ChildByField(field_name) => {
-                node.child_by_field_name(field_name)
-                    .map(|child| source_code[child.byte_range()].to_string())
-            }
-            NameExtraction::NodeText => {
-                Some(source_code[node.byte_range()].to_string())
-            }
+            NameExtraction::ChildByField(field_name) => node
+                .child_by_field_name(field_name)
+                .map(|child| source_code[child.byte_range()].to_string()),
+            NameExtraction::NodeText => Some(source_code[node.byte_range()].to_string()),
             NameExtraction::CombinedChildren(children) => {
                 let mut parts = Vec::new();
                 for child_extraction in children {
@@ -371,51 +403,41 @@ impl UnifiedSymbolExtractor {
                     creates_scope: false,
                 },
             ],
-            variable_patterns: vec![
-                SymbolPattern {
-                    node_kind: "constant_item",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
-                    symbol_kind: SymbolKind::Variable,
-                    creates_scope: false,
-                },
-            ],
-            module_patterns: vec![
-                SymbolPattern {
-                    node_kind: "mod_item",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
-                    symbol_kind: SymbolKind::Module,
-                    creates_scope: true,
-                },
-            ],
+            variable_patterns: vec![SymbolPattern {
+                node_kind: "constant_item",
+                name_extraction: NameExtraction::ChildByType("identifier"),
+                symbol_kind: SymbolKind::Variable,
+                creates_scope: false,
+            }],
+            module_patterns: vec![SymbolPattern {
+                node_kind: "mod_item",
+                name_extraction: NameExtraction::ChildByType("identifier"),
+                symbol_kind: SymbolKind::Module,
+                creates_scope: true,
+            }],
         }
     }
 
     fn python_patterns() -> LanguagePatterns {
         LanguagePatterns {
-            function_patterns: vec![
-                SymbolPattern {
-                    node_kind: "function_definition",
-                    name_extraction: NameExtraction::ChildByField("name"),
-                    symbol_kind: SymbolKind::Function,
-                    creates_scope: false,
-                },
-            ],
-            type_patterns: vec![
-                SymbolPattern {
-                    node_kind: "class_definition",
-                    name_extraction: NameExtraction::ChildByField("name"),
-                    symbol_kind: SymbolKind::Type,
-                    creates_scope: false,
-                },
-            ],
-            variable_patterns: vec![
-                SymbolPattern {
-                    node_kind: "assignment",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
-                    symbol_kind: SymbolKind::Variable,
-                    creates_scope: false,
-                },
-            ],
+            function_patterns: vec![SymbolPattern {
+                node_kind: "function_definition",
+                name_extraction: NameExtraction::ChildByField("name"),
+                symbol_kind: SymbolKind::Function,
+                creates_scope: false,
+            }],
+            type_patterns: vec![SymbolPattern {
+                node_kind: "class_definition",
+                name_extraction: NameExtraction::ChildByField("name"),
+                symbol_kind: SymbolKind::Type,
+                creates_scope: false,
+            }],
+            variable_patterns: vec![SymbolPattern {
+                node_kind: "assignment",
+                name_extraction: NameExtraction::ChildByType("identifier"),
+                symbol_kind: SymbolKind::Variable,
+                creates_scope: false,
+            }],
             module_patterns: vec![],
         }
     }
@@ -436,22 +458,18 @@ impl UnifiedSymbolExtractor {
                     creates_scope: false,
                 },
             ],
-            type_patterns: vec![
-                SymbolPattern {
-                    node_kind: "class_declaration",
-                    name_extraction: NameExtraction::ChildByField("name"),
-                    symbol_kind: SymbolKind::Type,
-                    creates_scope: false,
-                },
-            ],
-            variable_patterns: vec![
-                SymbolPattern {
-                    node_kind: "variable_declarator",
-                    name_extraction: NameExtraction::ChildByField("name"),
-                    symbol_kind: SymbolKind::Variable,
-                    creates_scope: false,
-                },
-            ],
+            type_patterns: vec![SymbolPattern {
+                node_kind: "class_declaration",
+                name_extraction: NameExtraction::ChildByField("name"),
+                symbol_kind: SymbolKind::Type,
+                creates_scope: false,
+            }],
+            variable_patterns: vec![SymbolPattern {
+                node_kind: "variable_declarator",
+                name_extraction: NameExtraction::ChildByField("name"),
+                symbol_kind: SymbolKind::Variable,
+                creates_scope: false,
+            }],
             module_patterns: vec![],
         }
     }
@@ -516,14 +534,12 @@ impl UnifiedSymbolExtractor {
 
     fn java_patterns() -> LanguagePatterns {
         LanguagePatterns {
-            function_patterns: vec![
-                SymbolPattern {
-                    node_kind: "method_declaration",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
-                    symbol_kind: SymbolKind::Function,
-                    creates_scope: false,
-                },
-            ],
+            function_patterns: vec![SymbolPattern {
+                node_kind: "method_declaration",
+                name_extraction: NameExtraction::ChildByType("identifier"),
+                symbol_kind: SymbolKind::Function,
+                creates_scope: false,
+            }],
             type_patterns: vec![
                 SymbolPattern {
                     node_kind: "class_declaration",
@@ -538,58 +554,48 @@ impl UnifiedSymbolExtractor {
                     creates_scope: false,
                 },
             ],
-            variable_patterns: vec![
-                SymbolPattern {
-                    node_kind: "field_declaration",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
-                    symbol_kind: SymbolKind::Variable,
-                    creates_scope: false,
-                },
-            ],
-            module_patterns: vec![
-                SymbolPattern {
-                    node_kind: "package_declaration",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
-                    symbol_kind: SymbolKind::Module,
-                    creates_scope: true,
-                },
-            ],
+            variable_patterns: vec![SymbolPattern {
+                node_kind: "field_declaration",
+                name_extraction: NameExtraction::ChildByType("identifier"),
+                symbol_kind: SymbolKind::Variable,
+                creates_scope: false,
+            }],
+            module_patterns: vec![SymbolPattern {
+                node_kind: "package_declaration",
+                name_extraction: NameExtraction::ChildByType("identifier"),
+                symbol_kind: SymbolKind::Module,
+                creates_scope: true,
+            }],
         }
     }
 
     fn bash_patterns() -> LanguagePatterns {
         LanguagePatterns {
-            function_patterns: vec![
-                SymbolPattern {
-                    node_kind: "function_definition",
-                    name_extraction: NameExtraction::ChildByType("word"),
-                    symbol_kind: SymbolKind::Function,
-                    creates_scope: false,
-                },
-            ],
+            function_patterns: vec![SymbolPattern {
+                node_kind: "function_definition",
+                name_extraction: NameExtraction::ChildByType("word"),
+                symbol_kind: SymbolKind::Function,
+                creates_scope: false,
+            }],
             type_patterns: vec![],
-            variable_patterns: vec![
-                SymbolPattern {
-                    node_kind: "variable_assignment",
-                    name_extraction: NameExtraction::ChildByType("word"),
-                    symbol_kind: SymbolKind::Variable,
-                    creates_scope: false,
-                },
-            ],
+            variable_patterns: vec![SymbolPattern {
+                node_kind: "variable_assignment",
+                name_extraction: NameExtraction::ChildByType("word"),
+                symbol_kind: SymbolKind::Variable,
+                creates_scope: false,
+            }],
             module_patterns: vec![],
         }
     }
 
     fn swift_patterns() -> LanguagePatterns {
         LanguagePatterns {
-            function_patterns: vec![
-                SymbolPattern {
-                    node_kind: "function_declaration",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
-                    symbol_kind: SymbolKind::Function,
-                    creates_scope: false,
-                },
-            ],
+            function_patterns: vec![SymbolPattern {
+                node_kind: "function_declaration",
+                name_extraction: NameExtraction::ChildByType("identifier"),
+                symbol_kind: SymbolKind::Function,
+                creates_scope: false,
+            }],
             type_patterns: vec![
                 SymbolPattern {
                     node_kind: "class_declaration",
@@ -610,14 +616,12 @@ impl UnifiedSymbolExtractor {
                     creates_scope: false,
                 },
             ],
-            variable_patterns: vec![
-                SymbolPattern {
-                    node_kind: "property_declaration",
-                    name_extraction: NameExtraction::ChildByType("identifier"),
-                    symbol_kind: SymbolKind::Variable,
-                    creates_scope: false,
-                },
-            ],
+            variable_patterns: vec![SymbolPattern {
+                node_kind: "property_declaration",
+                name_extraction: NameExtraction::ChildByType("identifier"),
+                symbol_kind: SymbolKind::Variable,
+                creates_scope: false,
+            }],
             module_patterns: vec![],
         }
     }
@@ -640,7 +644,11 @@ mod tests {
         // Test that patterns are created for each language
         assert!(extractor.patterns.contains_key(&LanguageSupport::Rust));
         assert!(extractor.patterns.contains_key(&LanguageSupport::Python));
-        assert!(extractor.patterns.contains_key(&LanguageSupport::JavaScript));
+        assert!(
+            extractor
+                .patterns
+                .contains_key(&LanguageSupport::JavaScript)
+        );
     }
 
     #[test]
@@ -648,13 +656,38 @@ mod tests {
         let patterns = UnifiedSymbolExtractor::rust_patterns();
 
         // Check function patterns
-        assert!(patterns.function_patterns.iter().any(|p| p.node_kind == "function_item"));
-        assert!(patterns.function_patterns.iter().any(|p| p.node_kind == "method_definition"));
+        assert!(
+            patterns
+                .function_patterns
+                .iter()
+                .any(|p| p.node_kind == "function_item")
+        );
+        assert!(
+            patterns
+                .function_patterns
+                .iter()
+                .any(|p| p.node_kind == "method_definition")
+        );
 
         // Check type patterns
-        assert!(patterns.type_patterns.iter().any(|p| p.node_kind == "struct_item"));
-        assert!(patterns.type_patterns.iter().any(|p| p.node_kind == "enum_item"));
-        assert!(patterns.type_patterns.iter().any(|p| p.node_kind == "trait_item"));
+        assert!(
+            patterns
+                .type_patterns
+                .iter()
+                .any(|p| p.node_kind == "struct_item")
+        );
+        assert!(
+            patterns
+                .type_patterns
+                .iter()
+                .any(|p| p.node_kind == "enum_item")
+        );
+        assert!(
+            patterns
+                .type_patterns
+                .iter()
+                .any(|p| p.node_kind == "trait_item")
+        );
     }
 
     #[test]
@@ -662,10 +695,20 @@ mod tests {
         let patterns = UnifiedSymbolExtractor::python_patterns();
 
         // Check function patterns
-        assert!(patterns.function_patterns.iter().any(|p| p.node_kind == "function_definition"));
+        assert!(
+            patterns
+                .function_patterns
+                .iter()
+                .any(|p| p.node_kind == "function_definition")
+        );
 
         // Check type patterns
-        assert!(patterns.type_patterns.iter().any(|p| p.node_kind == "class_definition"));
+        assert!(
+            patterns
+                .type_patterns
+                .iter()
+                .any(|p| p.node_kind == "class_definition")
+        );
     }
 
     #[test]
@@ -680,7 +723,15 @@ mod tests {
         let symbols = extractor.extract_symbols(&tree, source, LanguageSupport::Rust);
 
         assert_eq!(symbols.len(), 2);
-        assert!(symbols.iter().any(|s| s.name == "my_func" && s.kind == SymbolKind::Function));
-        assert!(symbols.iter().any(|s| s.name == "MyStruct" && s.kind == SymbolKind::Type));
+        assert!(
+            symbols
+                .iter()
+                .any(|s| s.name == "my_func" && s.kind == SymbolKind::Function)
+        );
+        assert!(
+            symbols
+                .iter()
+                .any(|s| s.name == "MyStruct" && s.kind == SymbolKind::Type)
+        );
     }
 }

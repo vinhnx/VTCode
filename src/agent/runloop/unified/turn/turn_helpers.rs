@@ -1,12 +1,16 @@
 //! Common helpers for turn processing extracted to reduce duplication
 
+use crate::agent::runloop::unified::state::CtrlCState;
 use anyhow::Result;
 use std::time::Duration;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use crate::agent::runloop::unified::state::CtrlCState;
 
 /// Centralized error display with consistent formatting
-pub fn display_error(renderer: &mut AnsiRenderer, category: &str, error: &anyhow::Error) -> Result<()> {
+pub fn display_error(
+    renderer: &mut AnsiRenderer,
+    category: &str,
+    error: &anyhow::Error,
+) -> Result<()> {
     renderer.line_if_not_empty(MessageStyle::Output)?;
     renderer.line(MessageStyle::Error, &format!("{}: {}", category, error))
 }

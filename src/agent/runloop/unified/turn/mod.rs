@@ -7,11 +7,11 @@ pub mod session;
 mod session_loop;
 mod tool_execution;
 mod tool_outcomes;
+pub(crate) mod turn_helpers;
 mod turn_loop;
 mod turn_processing;
 mod ui_sync;
 pub(crate) mod utils;
-pub(crate) mod turn_helpers;
 pub(crate) mod workspace;
 
 pub(crate) use context::TurnOutcomeContext;

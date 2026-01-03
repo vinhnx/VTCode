@@ -22,8 +22,8 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionOutcome;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tool_policy::ToolPolicy;
-use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 use vtcode_core::tools::parallel_executor::ParallelExecutionPlanner;
+use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
@@ -156,7 +156,7 @@ pub(crate) async fn handle_tool_calls(
     }
 
     let groups = planner.plan(&planner_calls);
-    
+
     for group in groups {
         if group.len() > 1 && ctx.full_auto {
             // HP-5: Implement true parallel execution for non-conflicting groups in full-auto mode
@@ -174,10 +174,15 @@ pub(crate) async fn handle_tool_calls(
             for tc in &group_tool_calls {
                 let func = match tc.function.as_ref() {
                     Some(f) => f,
-                    None => { can_run_parallel = false; break; }
+                    None => {
+                        can_run_parallel = false;
+                        break;
+                    }
                 };
                 let tool_name = &func.name;
-                let args_val = tc.parsed_arguments().unwrap_or_else(|_| serde_json::json!({}));
+                let args_val = tc
+                    .parsed_arguments()
+                    .unwrap_or_else(|_| serde_json::json!({}));
 
                 // Quick safety check
                 {
@@ -189,7 +194,10 @@ pub(crate) async fn handle_tool_calls(
                 }
 
                 // Check policy - only parallelize if allowed
-                let is_allowed = matches!(ctx.tool_registry.get_tool_policy(tool_name).await, ToolPolicy::Allow);
+                let is_allowed = matches!(
+                    ctx.tool_registry.get_tool_policy(tool_name).await,
+                    ToolPolicy::Allow
+                );
 
                 if !is_allowed {
                     can_run_parallel = false;
@@ -200,9 +208,12 @@ pub(crate) async fn handle_tool_calls(
             }
 
             if can_run_parallel && !execution_items.is_empty() {
-                let tool_names: Vec<_> = execution_items.iter().map(|(_, name, _)| name.as_str()).collect();
+                let tool_names: Vec<_> = execution_items
+                    .iter()
+                    .map(|(_, name, _)| name.as_str())
+                    .collect();
                 let batch_msg = format!("Executing batch: [{}]", tool_names.join(", "));
-                
+
                 let progress_reporter = ProgressReporter::new();
                 let _spinner = crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::with_progress(
                     ctx.handle,
@@ -216,34 +227,38 @@ pub(crate) async fn handle_tool_calls(
                 let registry = ctx.tool_registry.clone();
                 let ctrl_c_state = Arc::clone(ctx.ctrl_c_state);
                 let ctrl_c_notify = Arc::clone(ctx.ctrl_c_notify);
-                
-                let futures: Vec<_> = execution_items.iter().map(|(call_id, name, args)| {
-                    let registry = registry.clone();
-                    let ctrl_c_state = Arc::clone(&ctrl_c_state);
-                    let ctrl_c_notify = Arc::clone(&ctrl_c_notify);
-                    let name = name.clone();
-                    let args = args.clone();
-                    let reporter = progress_reporter.clone();
-                    
-                    async move {
-                        let result = execute_tool_with_timeout_ref(
-                            &registry,
-                            &name,
-                            &args,
-                            &ctrl_c_state,
-                            &ctrl_c_notify,
-                            Some(&reporter),
-                        ).await;
-                        (call_id.clone(), name, args, result)
-                    }
-                }).collect();
+
+                let futures: Vec<_> = execution_items
+                    .iter()
+                    .map(|(call_id, name, args)| {
+                        let registry = registry.clone();
+                        let ctrl_c_state = Arc::clone(&ctrl_c_state);
+                        let ctrl_c_notify = Arc::clone(&ctrl_c_notify);
+                        let name = name.clone();
+                        let args = args.clone();
+                        let reporter = progress_reporter.clone();
+
+                        async move {
+                            let result = execute_tool_with_timeout_ref(
+                                &registry,
+                                &name,
+                                &args,
+                                &ctrl_c_state,
+                                &ctrl_c_notify,
+                                Some(&reporter),
+                            )
+                            .await;
+                            (call_id.clone(), name, args, result)
+                        }
+                    })
+                    .collect();
 
                 let results = join_all(futures).await;
 
                 // Handle results sequentially
                 for (call_id, name, args, status) in results {
                     let outcome = ToolPipelineOutcome::from_status(status);
-                    
+
                     // Update attempts
                     let signature_key = format!("{}:{}", name, args);
                     let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
@@ -280,20 +295,18 @@ pub(crate) async fn handle_tool_calls(
                         turn_modified_files,
                         ctx.vt_cfg,
                         traj,
-                    ).await?;
+                    )
+                    .await?;
                 }
                 continue; // Move to next group
             }
 
             // Fallback to sequential for the group if parallel not possible
             for tc in group_tool_calls {
-                if let Some(outcome) = handle_tool_call(
-                    ctx,
-                    tc,
-                    repeated_tool_attempts,
-                    turn_modified_files,
-                    traj,
-                ).await? {
+                if let Some(outcome) =
+                    handle_tool_call(ctx, tc, repeated_tool_attempts, turn_modified_files, traj)
+                        .await?
+                {
                     return Ok(Some(outcome));
                 }
             }
@@ -301,13 +314,10 @@ pub(crate) async fn handle_tool_calls(
             // Single tool group
             let call_id = &group.tool_calls[0].2;
             if let Some(tc) = tool_calls.iter().find(|tc| &tc.id == call_id) {
-                if let Some(outcome) = handle_tool_call(
-                    ctx,
-                    tc,
-                    repeated_tool_attempts,
-                    turn_modified_files,
-                    traj,
-                ).await? {
+                if let Some(outcome) =
+                    handle_tool_call(ctx, tc, repeated_tool_attempts, turn_modified_files, traj)
+                        .await?
+                {
                     return Ok(Some(outcome));
                 }
             }
@@ -369,7 +379,10 @@ pub(crate) async fn handle_tool_call(
             approval_recorder: Some(ctx.approval_recorder.as_ref()),
             decision_ledger: Some(ctx.decision_ledger),
             tool_permission_cache: Some(ctx.tool_permission_cache),
-            hitl_notification_bell: ctx.vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
+            hitl_notification_bell: ctx
+                .vt_cfg
+                .map(|cfg| cfg.security.hitl_notification_bell)
+                .unwrap_or(true),
         },
         tool_name,
         Some(&args_val),
@@ -1348,7 +1361,11 @@ pub(crate) async fn handle_text_response(
                 approval_recorder: Some(params.ctx.approval_recorder.as_ref()),
                 decision_ledger: Some(params.ctx.decision_ledger),
                 tool_permission_cache: Some(params.ctx.tool_permission_cache),
-                hitl_notification_bell: params.ctx.vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
+                hitl_notification_bell: params
+                    .ctx
+                    .vt_cfg
+                    .map(|cfg| cfg.security.hitl_notification_bell)
+                    .unwrap_or(true),
             },
             call_tool_name,
             Some(&call_args_val),

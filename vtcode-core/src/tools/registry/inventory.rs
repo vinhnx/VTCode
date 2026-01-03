@@ -200,11 +200,11 @@ impl ToolInventory {
     pub fn registration_for(&self, name: &str) -> Option<ToolRegistration> {
         // Check if name exists directly or resolve via case-insensitive alias
         let name_lower = name.to_ascii_lowercase();
-        
+
         let resolved_name = {
             let tools = self.tools.read().unwrap();
             let aliases = self.aliases.read().unwrap();
-            
+
             if tools.contains_key(name) {
                 name.to_owned()
             } else if let Some(aliased) = aliases.get(&name_lower) {
@@ -234,8 +234,10 @@ impl ToolInventory {
             if let Ok(mut last) = entry.last_used.write() {
                 *last = Instant::now();
             }
-            entry.use_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            
+            entry
+                .use_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             // Track frequently used for aliased tools
             if resolved_name != name {
                 self.frequently_used.write().unwrap().insert(resolved_name);
@@ -266,7 +268,8 @@ impl ToolInventory {
 
     pub fn has_tool(&self, name: &str) -> bool {
         let name_lower = name.to_ascii_lowercase();
-        self.tools.read().unwrap().contains_key(name) || self.aliases.read().unwrap().contains_key(&name_lower)
+        self.tools.read().unwrap().contains_key(name)
+            || self.aliases.read().unwrap().contains_key(&name_lower)
     }
 
     pub fn available_tools(&self) -> Vec<String> {

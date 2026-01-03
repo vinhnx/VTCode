@@ -202,8 +202,6 @@ pub(crate) struct PlaceholderSpinner {
 }
 
 impl PlaceholderSpinner {
-
-
     pub(crate) fn with_progress(
         handle: &InlineHandle,
         restore_left: Option<String>,

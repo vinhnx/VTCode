@@ -219,7 +219,9 @@ impl ToolExecutionHistory {
         Self {
             records: Arc::new(RwLock::new(VecDeque::new())),
             max_records,
-            detect_window: Arc::new(std::sync::atomic::AtomicUsize::new(DEFAULT_LOOP_DETECT_WINDOW)),
+            detect_window: Arc::new(std::sync::atomic::AtomicUsize::new(
+                DEFAULT_LOOP_DETECT_WINDOW,
+            )),
             identical_limit: Arc::new(std::sync::atomic::AtomicUsize::new(
                 defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
             )),
@@ -605,8 +607,7 @@ impl HarnessContext {
     }
 }
 
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ResiliencyContext {
     adaptive_timeout_ceiling: HashMap<ToolTimeoutCategory, Duration>,
     failure_trackers: HashMap<ToolTimeoutCategory, ToolFailureTracker>,
@@ -638,7 +639,7 @@ pub struct ToolRegistry {
     timeout_policy: Arc<std::sync::RwLock<ToolTimeoutPolicy>>,
     execution_history: ToolExecutionHistory,
     harness_context: HarnessContext,
-    
+
     // Mutable runtime state wrapped for concurrent access
     resiliency: Arc<Mutex<ResiliencyContext>>,
 
@@ -970,10 +971,11 @@ impl ToolRegistry {
         )
     }
 
-
-
     pub async fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
-        self.policy_gateway.read().await.current_full_auto_allowlist()
+        self.policy_gateway
+            .read()
+            .await
+            .current_full_auto_allowlist()
     }
 
     /// Check if a tool with the given name is registered
@@ -1125,14 +1127,17 @@ impl ToolRegistry {
         self.harness_context.snapshot()
     }
 
-    // Removed policy_manager_mut as it requires &mut self. 
+    // Removed policy_manager_mut as it requires &mut self.
     // Use self.policy_gateway.write().await.policy_manager_mut() instead.
 
     // Removed policy_manager() as it cannot return a reference through a lock.
     // Use get_tool_policy() or other specific methods instead.
 
     pub async fn set_policy_manager(&self, manager: ToolPolicyManager) {
-        self.policy_gateway.write().await.set_policy_manager(manager);
+        self.policy_gateway
+            .write()
+            .await
+            .set_policy_manager(manager);
         self.sync_policy_catalog().await;
     }
 
@@ -1146,7 +1151,11 @@ impl ToolRegistry {
     }
 
     pub async fn reset_tool_policies(&self) -> Result<()> {
-        self.policy_gateway.write().await.reset_tool_policies().await
+        self.policy_gateway
+            .write()
+            .await
+            .reset_tool_policies()
+            .await
     }
 
     pub async fn allow_all_tools(&self) -> Result<()> {
@@ -1181,7 +1190,8 @@ impl ToolRegistry {
         }
 
         self.sync_policy_catalog().await;
-        self.initialized.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.initialized
+            .store(true, std::sync::atomic::Ordering::Relaxed);
 
         Ok(())
     }
@@ -1249,10 +1259,12 @@ impl ToolRegistry {
         for category in categories {
             state.failure_trackers.entry(category).or_default();
             state.success_trackers.entry(category).or_insert(0);
-            state.latency_stats
+            state
+                .latency_stats
                 .entry(category)
                 .or_insert_with(|| ToolLatencyStats::new(50));
-            state.adaptive_timeout_ceiling
+            state
+                .adaptive_timeout_ceiling
                 .entry(category)
                 .or_insert_with(|| Duration::from_secs(0));
         }
@@ -1260,7 +1272,12 @@ impl ToolRegistry {
 
     fn effective_timeout(&self, category: ToolTimeoutCategory) -> Option<Duration> {
         let base = self.timeout_policy.read().unwrap().ceiling_for(category);
-        let adaptive = self.resiliency.lock().adaptive_timeout_ceiling.get(&category).copied();
+        let adaptive = self
+            .resiliency
+            .lock()
+            .adaptive_timeout_ceiling
+            .get(&category)
+            .copied();
 
         match (base, adaptive) {
             (Some(b), Some(a)) if a.as_millis() > 0 => Some(std::cmp::min(b, a)),
@@ -1273,7 +1290,7 @@ impl ToolRegistry {
     fn decay_adaptive_timeout(&self, category: ToolTimeoutCategory) {
         let mut state = self.resiliency.lock();
         let tuning = state.adaptive_tuning.clone();
-        
+
         if let Some(adaptive) = state.adaptive_timeout_ceiling.get_mut(&category) {
             if adaptive.as_millis() == 0 {
                 return;
@@ -1281,17 +1298,15 @@ impl ToolRegistry {
             let before = *adaptive;
             if let Some(base) = self.timeout_policy.read().unwrap().ceiling_for(category) {
                 if *adaptive < base {
-                    let relaxed_ms = ((*adaptive).as_millis() as f64
-                        * (1.0 / tuning.decay_ratio))
-                        as u128;
+                    let relaxed_ms =
+                        ((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio)) as u128;
                     let relaxed = Duration::from_millis(relaxed_ms as u64);
                     *adaptive = std::cmp::min(relaxed, base);
                 }
             } else {
                 // If no base, relax upward modestly
                 let relaxed = Duration::from_millis(
-                    ((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio))
-                        as u64,
+                    ((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio)) as u64,
                 );
                 *adaptive = relaxed;
             }
@@ -1332,7 +1347,7 @@ impl ToolRegistry {
     fn record_tool_latency(&self, category: ToolTimeoutCategory, duration: Duration) {
         let mut state = self.resiliency.lock();
         let tuning = state.adaptive_tuning.clone();
-        
+
         let stats = state
             .latency_stats
             .entry(category)
@@ -1379,7 +1394,9 @@ impl ToolRegistry {
     }
 
     fn should_circuit_break(&self, category: ToolTimeoutCategory) -> Option<Duration> {
-        self.resiliency.lock().failure_trackers
+        self.resiliency
+            .lock()
+            .failure_trackers
             .get(&category)
             .filter(|tracker| tracker.should_circuit_break())
             .map(|tracker| tracker.backoff_duration())
@@ -1898,7 +1915,11 @@ impl ToolRegistry {
         }
 
         if self.policy_gateway.read().await.has_full_auto_allowlist()
-            && !self.policy_gateway.read().await.is_allowed_in_full_auto(&tool_name)
+            && !self
+                .policy_gateway
+                .read()
+                .await
+                .is_allowed_in_full_auto(&tool_name)
         {
             let _error = ToolExecutionError::new(
                 tool_name_owned.clone(),
@@ -1932,14 +1953,22 @@ impl ToolRegistry {
             .context("tool denied by full-auto allowlist"));
         }
 
-        let skip_policy_prompt = self.policy_gateway.write().await.take_preapproved(&tool_name);
+        let skip_policy_prompt = self
+            .policy_gateway
+            .write()
+            .await
+            .take_preapproved(&tool_name);
 
         let decision = if skip_policy_prompt {
             ToolExecutionDecision::Allowed
         } else {
             // In TUI mode, permission should have been collected via ensure_tool_permission().
             // If not preapproved, check policy as fallback.
-            self.policy_gateway.write().await.should_execute_tool(&tool_name).await?
+            self.policy_gateway
+                .write()
+                .await
+                .should_execute_tool(&tool_name)
+                .await?
         };
 
         if !decision.is_allowed() {
@@ -2049,7 +2078,9 @@ impl ToolRegistry {
                     tool_exists = true;
                     is_mcp_tool = true;
                     mcp_tool_name = Some(resolved_mcp_name);
-                    mcp_provider = self.find_mcp_provider(mcp_tool_name.as_deref().unwrap()).await;
+                    mcp_provider = self
+                        .find_mcp_provider(mcp_tool_name.as_deref().unwrap())
+                        .await;
                 }
                 Ok(false) => {
                     tool_exists = false;
@@ -2451,7 +2482,8 @@ impl ToolRegistry {
         if let Ok(mut cache) = self.cached_available_tools.write() {
             *cache = None;
         }
-        self.initialized.store(false, std::sync::atomic::Ordering::Relaxed);
+        self.initialized
+            .store(false, std::sync::atomic::Ordering::Relaxed);
         self
     }
 
@@ -2463,7 +2495,8 @@ impl ToolRegistry {
         if let Ok(mut cache) = self.cached_available_tools.write() {
             *cache = None;
         }
-        self.initialized.store(false, std::sync::atomic::Ordering::Relaxed);
+        self.initialized
+            .store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Get the MCP client if available
@@ -2489,7 +2522,10 @@ impl ToolRegistry {
                 .values()
                 .any(|tools| tools.iter().any(|candidate| candidate == tool_name))
             {
-                self.mcp_tool_presence.write().await.insert(tool_name.to_string(), true);
+                self.mcp_tool_presence
+                    .write()
+                    .await
+                    .insert(tool_name.to_string(), true);
                 return true;
             }
         }
@@ -2500,13 +2536,19 @@ impl ToolRegistry {
 
         let mcp_client_opt = { self.mcp_client.read().unwrap().clone() };
         let Some(mcp_client) = mcp_client_opt else {
-            self.mcp_tool_presence.write().await.insert(tool_name.to_string(), false);
+            self.mcp_tool_presence
+                .write()
+                .await
+                .insert(tool_name.to_string(), false);
             return false;
         };
 
         match mcp_client.has_mcp_tool(tool_name).await {
             Ok(result) => {
-                self.mcp_tool_presence.write().await.insert(tool_name.to_string(), result);
+                self.mcp_tool_presence
+                    .write()
+                    .await
+                    .insert(tool_name.to_string(), result);
                 result
             }
             Err(err) => {
@@ -2515,7 +2557,10 @@ impl ToolRegistry {
                     error = %err,
                     "failed to query MCP tool presence"
                 );
-                self.mcp_tool_presence.write().await.insert(tool_name.to_string(), false);
+                self.mcp_tool_presence
+                    .write()
+                    .await
+                    .insert(tool_name.to_string(), false);
                 false
             }
         }
@@ -2884,11 +2929,13 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        registry.register_tool(ToolRegistration::from_tool_instance(
-            CUSTOM_TOOL_NAME,
-            CapabilityLevel::CodeSearch,
-            CustomEchoTool,
-        )).await?;
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                CUSTOM_TOOL_NAME,
+                CapabilityLevel::CodeSearch,
+                CustomEchoTool,
+            ))
+            .await?;
 
         registry.allow_all_tools().await.ok();
 
@@ -2910,11 +2957,13 @@ mod tests {
         registry.set_harness_session("session-history");
         registry.set_harness_task(Some("task-history".to_owned()));
 
-        registry.register_tool(ToolRegistration::from_tool_instance(
-            CUSTOM_TOOL_NAME,
-            CapabilityLevel::CodeSearch,
-            CustomEchoTool,
-        )).await?;
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                CUSTOM_TOOL_NAME,
+                CapabilityLevel::CodeSearch,
+                CustomEchoTool,
+            ))
+            .await?;
         registry.allow_all_tools().await?;
 
         let args = json!({"input": "value"});
@@ -3010,9 +3059,9 @@ impl ToolExecutor for ToolRegistry {
 
         let presence = self.mcp_tool_presence.read().await;
         if let Some(&present) = presence.get(name) {
-             return present;
+            return present;
         }
-        
+
         // Fallback to provider check if not in quick cache
         if self.find_mcp_provider(name).await.is_some() {
             return true;

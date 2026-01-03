@@ -43,7 +43,8 @@ pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCom
     // Prefer tool-driven diagnostics when available
     if ctx.tool_registry.has_tool(tools_consts::AGENT_INFO).await {
         ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::AGENT_INFO).await;
+            .mark_tool_preapproved(tools_consts::AGENT_INFO)
+            .await;
         match ctx
             .tool_registry
             .execute_tool_ref(
@@ -493,7 +494,11 @@ pub async fn handle_execute_tool(
             approval_recorder: ctx.approval_recorder,
             decision_ledger: Some(ctx.decision_ledger),
             tool_permission_cache: Some(ctx.tool_permission_cache),
-            hitl_notification_bell: ctx.vt_cfg.as_ref().map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
+            hitl_notification_bell: ctx
+                .vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.security.hitl_notification_bell)
+                .unwrap_or(true),
         },
         &name,
         Some(&args),
@@ -1048,7 +1053,11 @@ pub async fn handle_manage_agents(
                             let path = entry.path();
                             if path.is_file()
                                 && path.extension().and_then(|s| s.to_str()) == Some("md")
-                                && !custom_agents.iter().any(|a| a.contains(path.file_stem().and_then(|s| s.to_str()).unwrap_or("")))
+                                && !custom_agents.iter().any(|a| {
+                                    a.contains(
+                                        path.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
+                                    )
+                                })
                             {
                                 if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
                                     custom_agents.push(format!("  {: <15} - (user)", name));

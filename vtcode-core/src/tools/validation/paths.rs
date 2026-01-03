@@ -16,7 +16,9 @@ pub fn validate_path_safety(path: &str) -> Result<()> {
     // Reject absolute paths outside workspace
     // Note: We can't strictly block all absolute paths as the agent might need to access
     // explicitly allowed directories, but we can block obvious system critical paths.
-    const UNIX_CRITICAL: &[&str] = &["/etc", "/usr", "/bin", "/sbin", "/var", "/boot", "/root", "/dev"];
+    const UNIX_CRITICAL: &[&str] = &[
+        "/etc", "/usr", "/bin", "/sbin", "/var", "/boot", "/root", "/dev",
+    ];
     for prefix in UNIX_CRITICAL {
         if path.starts_with(prefix) {
             bail!("Access to system directory denied: {}", prefix);

@@ -925,7 +925,7 @@ fn render_secure_prompt(
             width: area.width,
             height: (area.height - 1).max(1),
         };
-        
+
         let input_text = if cursor_chars < sanitized.len() {
             // Insert cursor character
             let mut text = String::new();

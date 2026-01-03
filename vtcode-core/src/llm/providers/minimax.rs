@@ -55,13 +55,8 @@ impl MinimaxProvider {
         base_url: String,
         timeouts: TimeoutsConfig,
     ) -> Self {
-        let inner = AnthropicProvider::new_with_client(
-            api_key,
-            model,
-            http_client,
-            base_url,
-            timeouts,
-        );
+        let inner =
+            AnthropicProvider::new_with_client(api_key, model, http_client, base_url, timeouts);
         Self { inner }
     }
 }

@@ -151,8 +151,6 @@ impl ToolPolicyGateway {
             .ok_or_else(|| anyhow!("Tool policy manager not available"))
     }
 
-
-
     pub fn set_policy_manager(&mut self, manager: ToolPolicyManager) {
         self.tool_policy = Some(manager);
     }

@@ -842,9 +842,9 @@ impl OpenAIProvider {
         base_url: String,
         _timeouts: TimeoutsConfig,
     ) -> Self {
+        use std::collections::HashMap;
         use std::sync::Arc;
         use std::sync::Mutex;
-        use std::collections::HashMap;
 
         Self {
             api_key: Arc::from(api_key.as_str()),

@@ -66,11 +66,7 @@ impl ParseCache {
     }
 
     /// Try to get a cached parse result
-    pub fn get_cached_parse(
-        &self,
-        source_code: &str,
-        language: LanguageSupport,
-    ) -> Option<Tree> {
+    pub fn get_cached_parse(&self, source_code: &str, language: LanguageSupport) -> Option<Tree> {
         // Don't cache very large files
         if source_code.len() > self.max_source_size {
             return None;
@@ -112,12 +108,7 @@ impl ParseCache {
     }
 
     /// Cache a parse result
-    pub fn cache_parse(
-        &self,
-        source_code: &str,
-        language: LanguageSupport,
-        tree: Tree,
-    ) {
+    pub fn cache_parse(&self, source_code: &str, language: LanguageSupport, tree: Tree) {
         // Don't cache very large files
         if source_code.len() > self.max_source_size {
             return;
@@ -215,9 +206,11 @@ impl CachedTreeSitterAnalyzer {
 
         for language in languages {
             let mut parser = Parser::new();
-            let ts_language = get_language(language)
-                .map_err(|e| TreeSitterError::AnalysisError(format!("Language setup failed: {:?}", e)))?;
-            parser.set_language(&ts_language)
+            let ts_language = get_language(language).map_err(|e| {
+                TreeSitterError::AnalysisError(format!("Language setup failed: {:?}", e))
+            })?;
+            parser
+                .set_language(&ts_language)
                 .map_err(|e| TreeSitterError::LanguageSetupError(format!("{:?}", e)))?;
             parsers.insert(language, parser);
         }
@@ -228,20 +221,26 @@ impl CachedTreeSitterAnalyzer {
     }
 
     /// Parse source code with caching
-    pub fn parse(&mut self, source_code: &str, language: LanguageSupport) -> Result<Tree, TreeSitterError> {
+    pub fn parse(
+        &mut self,
+        source_code: &str,
+        language: LanguageSupport,
+    ) -> Result<Tree, TreeSitterError> {
         // Try to get from cache first
         if let Some(cached_tree) = self.cache.get_cached_parse(source_code, language) {
             return Ok(cached_tree);
         }
 
         // Get parser for this language
-        let parser = self.parsers
+        let parser = self
+            .parsers
             .get_mut(&language)
             .ok_or_else(|| TreeSitterError::UnsupportedLanguage(format!("{:?}", language)))?;
 
         // Parse the source code
-        let tree = parser.parse(source_code, None)
-            .ok_or_else(|| TreeSitterError::ParseError("Failed to parse source code".to_string()))?;
+        let tree = parser.parse(source_code, None).ok_or_else(|| {
+            TreeSitterError::ParseError("Failed to parse source code".to_string())
+        })?;
 
         // Cache the result
         self.cache.cache_parse(source_code, language, tree.clone());
@@ -272,9 +271,6 @@ impl Default for ParseCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-
-
 
     #[test]
     fn test_cache_key_hashing() {
