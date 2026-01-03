@@ -168,6 +168,7 @@ pub mod client;
 pub mod error_display;
 pub mod factory;
 pub mod http_client;
+pub mod optimized_client;
 pub mod provider;
 pub mod provider_base; // Shared provider utilities to eliminate duplicate code
 pub mod provider_builder;
@@ -176,7 +177,6 @@ pub mod providers;
 pub mod rig_adapter;
 pub mod tool_bridge;
 pub mod types;
-pub mod optimized_client;
 pub mod utils; // Shared utilities for request/response processing // Centralized HTTP client factory
 
 #[cfg(test)]
@@ -185,10 +185,10 @@ mod error_display_test;
 // Re-export main types for backward compatibility
 pub use capabilities::ProviderCapabilities;
 pub use client::{AnyClient, make_client};
-pub use optimized_client::{OptimizedLLMClient, OptimizedRequest, OptimizedResponse};
 pub use factory::{
     create_provider_with_config, get_factory, get_models_manager, infer_provider_from_model,
 };
+pub use optimized_client::{OptimizedLLMClient, OptimizedRequest, OptimizedResponse};
 pub use provider::{FinishReason, LLMStream, LLMStreamEvent, Usage};
 pub use providers::{
     AnthropicProvider, GeminiProvider, HuggingFaceProvider, OllamaProvider, OpenAIProvider,

@@ -6,6 +6,8 @@ use std::io::Write;
 use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 
+use vtcode::config_watcher::SimpleConfigWatcher;
+use tokio::time::{Duration, sleep};
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -56,6 +58,15 @@ pub(crate) async fn run_single_agent_loop_unified(
     // Note: The global panic hook in vtcode-core handles terminal restoration on panic
     let mut config = config.clone();
     let mut resume_state = resume;
+
+    // Idle detection state
+    let mut consecutive_idle_cycles = 0;
+    let mut last_activity_time = Instant::now();
+
+    // Initialize config watcher for smart reloading
+    let mut config_watcher = SimpleConfigWatcher::new(config.workspace.clone());
+    // Load initial config
+    let mut vt_cfg = config_watcher.load_config();
 
     loop {
         // Take the pending resume request (if any) for this session iteration.
@@ -384,13 +395,53 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
 
         if matches!(session_end_reason, SessionEndReason::NewSession) {
-            // Reload config to pick up any changes
-            vt_cfg =
-                vtcode_core::config::loader::ConfigManager::load_from_workspace(&config.workspace)
-                    .ok()
-                    .map(|manager| manager.config().clone());
+            // Smart config reloading using file watcher
+            if config_watcher.should_reload() {
+                vt_cfg = config_watcher.load_config();
+                println!("Configuration reloaded due to file changes");
+            }
+
             resume_state = None;
+
+            // Reset idle counters when starting a new session
+            consecutive_idle_cycles = 0;
+            last_activity_time = Instant::now();
             continue;
+        }
+
+        // Check for config changes periodically
+        if config_watcher.should_reload() {
+            vt_cfg = config_watcher.load_config();
+            println!("Configuration reloaded during idle period");
+        }
+
+        // Idle detection and back-off mechanism
+        if let Some(ref cfg) = vt_cfg {
+            let idle_config = &cfg.optimization.agent_execution;
+
+            // Check if idle detection is enabled (idle_timeout_ms > 0)
+            if idle_config.idle_timeout_ms > 0 {
+                let idle_duration = last_activity_time.elapsed().as_millis() as u64;
+
+                if idle_duration >= idle_config.idle_timeout_ms {
+                    consecutive_idle_cycles += 1;
+
+                    // Apply back-off if configured
+                    if idle_config.idle_backoff_ms > 0 {
+                        if consecutive_idle_cycles >= idle_config.max_idle_cycles {
+                            // Deep sleep - longer back-off for significant idle periods
+                            sleep(Duration::from_millis(idle_config.idle_backoff_ms * 2)).await;
+                            consecutive_idle_cycles = 0; // Reset after deep sleep
+                        } else {
+                            // Regular back-off for moderate idle periods
+                            sleep(Duration::from_millis(idle_config.idle_backoff_ms)).await;
+                        }
+                    }
+                } else {
+                    // Activity detected - reset idle counter
+                    consecutive_idle_cycles = 0;
+                }
+            }
         }
 
         break;

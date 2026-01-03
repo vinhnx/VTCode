@@ -101,16 +101,16 @@ pub fn search_files(
     let limit = NonZero::new(config.max_results).unwrap_or(NonZero::new(100).unwrap());
     let threads = NonZero::new(config.num_threads).unwrap_or(NonZero::new(1).unwrap());
 
-    file_search_run(
-        &config.pattern,
+    file_search_run(vtcode_file_search::FileSearchConfig {
+        pattern_text: config.pattern,
         limit,
-        &config.search_dir,
-        config.exclude_patterns,
+        search_directory: config.search_dir,
+        exclude: config.exclude_patterns,
         threads,
-        cancel,
-        config.compute_indices,
-        config.respect_gitignore,
-    )
+        cancel_flag: cancel,
+        compute_indices: config.compute_indices,
+        respect_gitignore: config.respect_gitignore,
+    })
 }
 
 /// Get filename from a file match

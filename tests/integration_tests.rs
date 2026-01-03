@@ -93,7 +93,7 @@ read_file = "allow"
             .unwrap();
 
         assert_eq!(
-            registry.get_tool_policy(tools::READ_FILE),
+            registry.get_tool_policy(tools::READ_FILE).await,
             RuntimeToolPolicy::Allow
         );
 

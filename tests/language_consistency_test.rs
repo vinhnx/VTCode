@@ -479,9 +479,7 @@ mod integration_tests {
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         // Allow tools for testing
-        if let Ok(pm) = registry.policy_manager_mut() {
-            let _ = pm.allow_all_tools().await;
-        }
+        let _ = registry.allow_all_tools().await;
 
         let response = registry
             .execute_tool(

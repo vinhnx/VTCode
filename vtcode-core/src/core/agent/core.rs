@@ -52,7 +52,9 @@ impl Agent {
         // Use default optimization config for now - will be enhanced to read from VTCodeConfig
         let optimization_config = OptimizationConfig::default();
         let optimized_registry = if optimization_config.tool_registry.use_optimized_registry {
-            Some(OptimizedToolRegistry::new(optimization_config.tool_registry.max_concurrent_tools))
+            Some(OptimizedToolRegistry::new(
+                optimization_config.tool_registry.max_concurrent_tools,
+            ))
         } else {
             None
         };
@@ -76,7 +78,7 @@ impl Agent {
     /// This method provides full integration with the VT Code configuration system,
     /// enabling optimizations based on user settings in vtcode.toml.
     pub fn with_components_and_optimization(
-        config: AgentConfig, 
+        config: AgentConfig,
         components: AgentComponentSet,
         optimization_config: OptimizationConfig,
     ) -> Self {
@@ -133,15 +135,19 @@ impl Agent {
                 self.config.workspace.display()
             );
             println!("  {} Tools loaded: {}", style("").dim(), tool_count);
-            
+
             // Show REAL optimization status
             if self.optimization_config.memory_pool.enabled {
                 println!("  {} Memory pool: enabled", style("").dim());
             }
             if self.tool_registry.has_optimizations_enabled() {
                 let (cache_size, cache_cap) = self.tool_registry.hot_cache_stats();
-                println!("  {} Tool registry optimizations: enabled (cache: {}/{})", 
-                    style("").dim(), cache_size, cache_cap);
+                println!(
+                    "  {} Tool registry optimizations: enabled (cache: {}/{})",
+                    style("").dim(),
+                    cache_size,
+                    cache_cap
+                );
             }
             println!();
         }
@@ -171,8 +177,8 @@ impl Agent {
 
     /// Check if optimizations are enabled in the tool registry
     pub fn has_optimizations_enabled(&self) -> bool {
-        self.optimization_config.memory_pool.enabled ||
-        self.tool_registry.has_optimizations_enabled()
+        self.optimization_config.memory_pool.enabled
+            || self.tool_registry.has_optimizations_enabled()
     }
 
     /// Get performance metrics

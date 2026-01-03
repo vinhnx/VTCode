@@ -48,8 +48,8 @@ use utils::normalize_tool_output;
 
 use crate::config::constants::defaults;
 use crate::config::constants::tools;
-use crate::core::memory_pool::MemoryPool;
 use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
+use crate::core::memory_pool::MemoryPool;
 use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
@@ -742,12 +742,12 @@ impl ToolRegistry {
             cached_available_tools: Arc::new(RwLock::new(None)),
             progress_callback: Arc::new(std::sync::RwLock::new(None)),
             active_pty_sessions: Arc::new(std::sync::RwLock::new(None)),
-            
+
             // REAL PERFORMANCE OPTIMIZATIONS - Actually integrated!
             memory_pool: Arc::new(MemoryPool::new()),
-            hot_tool_cache: Arc::new(parking_lot::RwLock::new(
-                lru::LruCache::new(std::num::NonZeroUsize::new(16).unwrap())
-            )),
+            hot_tool_cache: Arc::new(parking_lot::RwLock::new(lru::LruCache::new(
+                std::num::NonZeroUsize::new(16).unwrap(),
+            ))),
             optimization_config: vtcode_config::OptimizationConfig::default(),
         };
 
@@ -759,7 +759,11 @@ impl ToolRegistry {
     /// Get a tool by name from the inventory (with hot cache optimization)
     pub fn get_tool(&self, name: &str) -> Option<Arc<dyn Tool>> {
         // Check hot cache first if optimizations are enabled
-        if self.optimization_config.tool_registry.use_optimized_registry {
+        if self
+            .optimization_config
+            .tool_registry
+            .use_optimized_registry
+        {
             // Use a separate read and write operation to avoid borrow checker issues
             {
                 let cache = self.hot_tool_cache.read();
@@ -770,7 +774,8 @@ impl ToolRegistry {
         }
 
         // Fallback to inventory lookup
-        let tool = self.inventory
+        let tool = self
+            .inventory
             .get_registration(name)
             .and_then(|reg| match reg.handler() {
                 ToolHandler::TraitObject(tool) => Some(tool.clone()),
@@ -779,8 +784,14 @@ impl ToolRegistry {
 
         // Cache the result if optimizations are enabled and tool was found
         if let Some(ref tool_arc) = tool {
-            if self.optimization_config.tool_registry.use_optimized_registry {
-                self.hot_tool_cache.write().put(name.to_string(), tool_arc.clone());
+            if self
+                .optimization_config
+                .tool_registry
+                .use_optimized_registry
+            {
+                self.hot_tool_cache
+                    .write()
+                    .put(name.to_string(), tool_arc.clone());
             }
         }
 
@@ -1768,7 +1779,11 @@ impl ToolRegistry {
         };
 
         // PERFORMANCE OPTIMIZATION: Check hot cache for tool lookup if optimizations enabled
-        let cached_tool = if self.optimization_config.tool_registry.use_optimized_registry {
+        let cached_tool = if self
+            .optimization_config
+            .tool_registry
+            .use_optimized_registry
+        {
             let cache = self.hot_tool_cache.read();
             cache.peek(name).cloned()
         } else {
@@ -1795,9 +1810,16 @@ impl ToolRegistry {
 
         // PERFORMANCE OPTIMIZATION: Update hot cache with resolved tool if optimizations enabled
         if let Some(tool_arc) = cached_tool.as_ref() {
-            if self.optimization_config.tool_registry.use_optimized_registry && tool_name != name {
+            if self
+                .optimization_config
+                .tool_registry
+                .use_optimized_registry
+                && tool_name != name
+            {
                 // Cache the canonical name too for faster future lookups
-                self.hot_tool_cache.write().put(tool_name.clone(), tool_arc.clone());
+                self.hot_tool_cache
+                    .write()
+                    .put(tool_name.clone(), tool_arc.clone());
             }
         }
 
@@ -2337,13 +2359,19 @@ impl ToolRegistry {
                     }
                     ToolHandler::TraitObject(tool) => {
                         // PERFORMANCE OPTIMIZATION: Use cached tool if available and optimizations enabled
-                        if self.optimization_config.tool_registry.use_optimized_registry {
+                        if self
+                            .optimization_config
+                            .tool_registry
+                            .use_optimized_registry
+                        {
                             if let Some(cached_tool) = cached_tool.as_ref() {
                                 // Use cached tool instance to avoid registry lookup overhead
                                 cached_tool.execute(args).await
                             } else {
                                 // Cache the tool for future use
-                                self.hot_tool_cache.write().put(tool_name.clone(), tool.clone());
+                                self.hot_tool_cache
+                                    .write()
+                                    .put(tool_name.clone(), tool.clone());
                                 tool.execute(args).await
                             }
                         } else {
@@ -2802,9 +2830,13 @@ impl ToolRegistry {
     /// Configure performance optimizations for this registry
     pub fn configure_optimizations(&mut self, config: vtcode_config::OptimizationConfig) {
         self.optimization_config = config;
-        
+
         // Resize hot cache if needed
-        if self.optimization_config.tool_registry.use_optimized_registry {
+        if self
+            .optimization_config
+            .tool_registry
+            .use_optimized_registry
+        {
             let new_size = self.optimization_config.tool_registry.hot_cache_size;
             if let Some(new_cache_size) = std::num::NonZeroUsize::new(new_size) {
                 *self.hot_tool_cache.write() = lru::LruCache::new(new_cache_size);
@@ -2819,8 +2851,10 @@ impl ToolRegistry {
 
     /// Check if optimizations are enabled
     pub fn has_optimizations_enabled(&self) -> bool {
-        self.optimization_config.tool_registry.use_optimized_registry ||
-        self.optimization_config.memory_pool.enabled
+        self.optimization_config
+            .tool_registry
+            .use_optimized_registry
+            || self.optimization_config.memory_pool.enabled
     }
 
     /// Get memory pool for optimized allocations
@@ -2830,7 +2864,11 @@ impl ToolRegistry {
 
     /// Clear the hot tool cache (useful for testing or memory management)
     pub fn clear_hot_cache(&self) {
-        if self.optimization_config.tool_registry.use_optimized_registry {
+        if self
+            .optimization_config
+            .tool_registry
+            .use_optimized_registry
+        {
             self.hot_tool_cache.write().clear();
         }
     }

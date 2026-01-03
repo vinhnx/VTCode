@@ -73,16 +73,16 @@ async fn main() -> anyhow::Result<()> {
         cancel_flag_clone.store(true, std::sync::atomic::Ordering::Relaxed);
     });
 
-    let results = vtcode_file_search::run(
-        &pattern,
-        cli.limit,
-        &cli.cwd,
-        cli.exclude,
+    let results = vtcode_file_search::run(vtcode_file_search::FileSearchConfig {
+        pattern_text: pattern,
+        limit: cli.limit,
+        search_directory: cli.cwd,
+        exclude: cli.exclude,
         threads,
         cancel_flag,
-        cli.compute_indices,
-        cli.respect_gitignore,
-    )?;
+        compute_indices: cli.compute_indices,
+        respect_gitignore: cli.respect_gitignore,
+    })?;
 
     if cli.json {
         let json = serde_json::to_string_pretty(&results.matches)?;

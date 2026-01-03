@@ -190,8 +190,9 @@ mod improvements_integration_tests;
 mod improvements_real_workflow_tests;
 
 // Re-export main types and traits for backward compatibility
-pub use async_pipeline::{AsyncToolPipeline, ToolRequest as AsyncToolRequest, ExecutionPriority, ExecutionContext};
-pub use optimized_registry::{OptimizedToolRegistry, ToolMetadata as OptimizedToolMetadata};
+pub use async_pipeline::{
+    AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest as AsyncToolRequest,
+};
 pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
 pub use code_intelligence::{CodeIntelligenceInput, CodeIntelligenceOutput, CodeIntelligenceTool};
@@ -211,6 +212,7 @@ pub use file_search_rpc::{
 };
 pub use grep_file::GrepSearchManager;
 pub use lsp::LspTool;
+pub use optimized_registry::{OptimizedToolRegistry, ToolMetadata as OptimizedToolMetadata};
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
 pub use registry::{

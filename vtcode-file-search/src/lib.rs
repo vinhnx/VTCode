@@ -59,6 +59,18 @@ pub struct FileSearchResults {
     pub total_match_count: usize,
 }
 
+/// Configuration for file search operations.
+pub struct FileSearchConfig {
+    pub pattern_text: String,
+    pub limit: NonZero<usize>,
+    pub search_directory: std::path::PathBuf,
+    pub exclude: Vec<String>,
+    pub threads: NonZero<usize>,
+    pub cancel_flag: Arc<AtomicBool>,
+    pub compute_indices: bool,
+    pub respect_gitignore: bool,
+}
+
 /// Extract the filename from a path, with fallback to the full path.
 ///
 /// # Examples
@@ -148,28 +160,20 @@ impl BestMatchesList {
 ///
 /// # Arguments
 ///
-/// * `pattern_text` - Fuzzy search pattern
-/// * `limit` - Maximum number of results
-/// * `search_directory` - Root directory to search
-/// * `exclude` - Exclusion patterns (glob-style)
-/// * `threads` - Number of worker threads
-/// * `cancel_flag` - Atomic flag for cancellation
-/// * `compute_indices` - Whether to compute character indices for highlighting
-/// * `respect_gitignore` - Whether to respect .gitignore files
+/// * `config` - File search configuration containing all search parameters
 ///
 /// # Returns
 ///
 /// FileSearchResults containing matched files and total match count.
-pub fn run(
-    pattern_text: &str,
-    limit: NonZero<usize>,
-    search_directory: &Path,
-    exclude: Vec<String>,
-    threads: NonZero<usize>,
-    cancel_flag: Arc<AtomicBool>,
-    compute_indices: bool,
-    respect_gitignore: bool,
-) -> anyhow::Result<FileSearchResults> {
+pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
+    let pattern_text = &config.pattern_text;
+    let limit = config.limit;
+    let search_directory = &config.search_directory;
+    let exclude = &config.exclude;
+    let threads = config.threads;
+    let cancel_flag = &config.cancel_flag;
+    let compute_indices = config.compute_indices;
+    let respect_gitignore = config.respect_gitignore;
     // Store pattern text for cloning across threads
     // (Pattern is parsed per-match to work with Utf32Str)
 

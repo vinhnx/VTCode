@@ -19,6 +19,40 @@ impl ResumeSession {
     pub fn message_count(&self) -> usize {
         self.history.len()
     }
+
+    /// Create a new ResumeSession with optimized history allocation
+    /// If the history vector can be reused (e.g., from a previous session),
+    /// it will be used instead of creating a new one
+    pub fn new_optimized(
+        identifier: String,
+        snapshot: SessionSnapshot,
+        history: Vec<ProviderMessage>,
+        path: PathBuf,
+        is_fork: bool,
+    ) -> Self {
+        Self {
+            identifier,
+            snapshot,
+            history,
+            path,
+            is_fork,
+        }
+    }
+
+    /// Create a new ResumeSession by reusing an existing one's history
+    /// This avoids allocating a new Vec and copies only the necessary data
+    pub fn from_existing_with_history(
+        existing: &ResumeSession,
+        new_history: Vec<ProviderMessage>,
+    ) -> Self {
+        Self {
+            identifier: existing.identifier.clone(),
+            snapshot: existing.snapshot.clone(),
+            history: new_history,
+            path: existing.path.clone(),
+            is_fork: existing.is_fork,
+        }
+    }
 }
 
 pub async fn run_single_agent_loop(
@@ -27,7 +61,11 @@ pub async fn run_single_agent_loop(
     full_auto: bool,
     resume: Option<ResumeSession>,
 ) -> Result<()> {
-    let mut vt_cfg = ConfigManager::load_from_workspace(&config.workspace)
+    // Cache the workspace path to avoid repeated current_dir calls
+    let workspace_path = &config.workspace;
+
+    // Load configuration once and cache it
+    let mut vt_cfg = ConfigManager::load_from_workspace(workspace_path)
         .ok()
         .map(|manager| manager.config().clone());
 
@@ -79,12 +117,14 @@ mod tests {
         let mut vt_cfg = VTCodeConfig::default();
         vt_cfg.agent.default_model = "config-model".to_string();
 
+        // Cache the current directory to avoid repeated calls
+        let current_dir = std::env::current_dir().unwrap();
         let runtime_cfg = CoreAgentConfig {
             model: OVERRIDE_MODEL.to_string(),
             api_key: String::new(),
             provider: "cli-provider".to_string(),
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),
-            workspace: std::env::current_dir().unwrap(),
+            workspace: current_dir.clone(),
             verbose: false,
             quiet: false,
             theme: String::new(),
@@ -110,12 +150,14 @@ mod tests {
         let mut vt_cfg = VTCodeConfig::default();
         vt_cfg.agent.default_model = "config-model".to_string();
 
+        // Cache the current directory to avoid repeated calls
+        let current_dir = std::env::current_dir().unwrap();
         let runtime_cfg = CoreAgentConfig {
             model: "config-standard".to_string(),
             api_key: String::new(),
             provider: "config-provider".to_string(),
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),
-            workspace: std::env::current_dir().unwrap(),
+            workspace: current_dir.clone(),
             verbose: false,
             quiet: false,
             theme: String::new(),

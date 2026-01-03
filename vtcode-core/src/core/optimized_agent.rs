@@ -1,16 +1,18 @@
 //! Optimized agent execution loop with state machine and predictive optimization
 
+use anyhow::{Result, anyhow};
+use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use anyhow::{Result, anyhow};
-use serde_json::Value;
 use tokio::sync::{RwLock, mpsc};
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 use crate::core::memory_pool::global_pool;
-use crate::tools::async_pipeline::{AsyncToolPipeline, ToolRequest, ExecutionPriority, ExecutionContext};
 use crate::llm::optimized_client::OptimizedLLMClient;
+use crate::tools::async_pipeline::{
+    AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest,
+};
 
 /// Agent execution states
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,19 +129,19 @@ pub enum TransitionTrigger {
 pub struct OptimizedAgentEngine {
     /// Current agent context
     context: Arc<RwLock<AgentContext>>,
-    
+
     /// Tool execution pipeline
     tool_pipeline: Arc<AsyncToolPipeline>,
-    
+
     /// LLM client
     llm_client: Arc<OptimizedLLMClient>,
-    
+
     /// State transition history for learning
     state_history: Arc<RwLock<VecDeque<StateTransition>>>,
-    
+
     /// Performance predictor
     predictor: Arc<PerformancePredictor>,
-    
+
     /// Event channel for state changes
     state_tx: mpsc::UnboundedSender<StateTransition>,
     state_rx: Arc<RwLock<Option<mpsc::UnboundedReceiver<StateTransition>>>>,
@@ -149,10 +151,10 @@ pub struct OptimizedAgentEngine {
 pub struct PerformancePredictor {
     /// Historical execution patterns
     execution_patterns: Arc<RwLock<HashMap<String, ExecutionPattern>>>,
-    
+
     /// Tool dependency graph
     tool_dependencies: Arc<RwLock<HashMap<String, Vec<String>>>>,
-    
+
     /// Resource usage predictions
     resource_predictions: Arc<RwLock<HashMap<String, ResourceUsage>>>,
 }
@@ -174,7 +176,7 @@ impl OptimizedAgentEngine {
         llm_client: Arc<OptimizedLLMClient>,
     ) -> Self {
         let (state_tx, state_rx) = mpsc::unbounded_channel();
-        
+
         let context = AgentContext {
             session_id,
             current_state: AgentState::Idle,
@@ -211,14 +213,14 @@ impl OptimizedAgentEngine {
 
         // Start background state monitoring
         self.start_state_monitor().await?;
-        
+
         // Start performance prediction updates
         self.start_performance_predictor().await?;
 
         // Main execution loop
         loop {
             let current_state = self.context.read().await.current_state.clone();
-            
+
             match current_state {
                 AgentState::Idle => {
                     self.handle_idle_state().await?;
@@ -254,26 +256,29 @@ impl OptimizedAgentEngine {
     /// Handle idle state - wait for user input
     async fn handle_idle_state(&self) -> Result<()> {
         debug!("Agent in idle state, waiting for input");
-        
+
         // Perform background optimizations while idle
         self.optimize_while_idle().await?;
-        
+
         // Transition to processing when input is available
         // (This would be triggered by external input in a real implementation)
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         Ok(())
     }
 
     /// Handle prompt processing state
     async fn handle_processing_state(&self) -> Result<()> {
         debug!("Processing user prompt");
-        
+
         let start_time = Instant::now();
-        
+
         // Get performance predictions for this prompt
-        let predictions = self.predictor.predict_execution_pattern("user_prompt").await;
-        
+        let predictions = self
+            .predictor
+            .predict_execution_pattern("user_prompt")
+            .await;
+
         // Pre-warm caches based on predictions
         if let Some(pattern) = predictions {
             self.pre_warm_caches(&pattern.tool_sequence).await?;
@@ -281,65 +286,72 @@ impl OptimizedAgentEngine {
 
         // Simulate prompt processing
         tokio::time::sleep(Duration::from_millis(50)).await;
-        
+
         // Transition to tool execution if tools are needed
         self.transition_state(
             AgentState::ProcessingPrompt,
             AgentState::ExecutingTools,
             TransitionTrigger::ToolCompletion,
-        ).await?;
+        )
+        .await?;
 
         let processing_time = start_time.elapsed();
         debug!("Prompt processing completed in {:?}", processing_time);
-        
+
         Ok(())
     }
 
     /// Handle tool execution state with optimization
     async fn handle_tool_execution_state(&self) -> Result<()> {
         debug!("Executing tools with optimization");
-        
+
         let context = self.context.read().await;
         let hints = &context.performance_hints;
-        
+
         // Execute tools in parallel groups when possible
         for group in &hints.parallel_execution_groups {
             self.execute_tool_group_parallel(group).await?;
         }
-        
+
         // Check if all tools are complete
-        let all_complete = context.active_tools.values()
-            .all(|state| matches!(state.status, ToolStatus::Completed | ToolStatus::Failed { .. }));
-        
+        let all_complete = context.active_tools.values().all(|state| {
+            matches!(
+                state.status,
+                ToolStatus::Completed | ToolStatus::Failed { .. }
+            )
+        });
+
         if all_complete {
             drop(context);
             self.transition_state(
                 AgentState::ExecutingTools,
                 AgentState::GeneratingResponse,
                 TransitionTrigger::ToolCompletion,
-            ).await?;
+            )
+            .await?;
         }
-        
+
         Ok(())
     }
 
     /// Handle response generation state
     async fn handle_response_generation_state(&self) -> Result<()> {
         debug!("Generating response");
-        
+
         // Use optimized LLM client for response generation
         let response = self.generate_optimized_response().await?;
-        
+
         // Update conversation history
         self.update_conversation_history(response).await?;
-        
+
         // Transition back to idle
         self.transition_state(
             AgentState::GeneratingResponse,
             AgentState::Idle,
             TransitionTrigger::ToolCompletion,
-        ).await?;
-        
+        )
+        .await?;
+
         Ok(())
     }
 
@@ -353,7 +365,7 @@ impl OptimizedAgentEngine {
     /// Handle error state with recovery
     async fn handle_error_state(&self, error_type: &str) -> Result<()> {
         warn!("Handling error state: {}", error_type);
-        
+
         // Implement error recovery strategies
         match error_type {
             "tool_timeout" => self.recover_from_tool_timeout().await?,
@@ -362,22 +374,25 @@ impl OptimizedAgentEngine {
             _ => {
                 error!("Unknown error type: {}", error_type);
                 self.transition_state(
-                    AgentState::Error { error_type: error_type.to_string() },
+                    AgentState::Error {
+                        error_type: error_type.to_string(),
+                    },
                     AgentState::Idle,
                     TransitionTrigger::InternalError,
-                ).await?;
+                )
+                .await?;
             }
         }
-        
+
         Ok(())
     }
 
     /// Execute a group of tools in parallel
     async fn execute_tool_group_parallel(&self, tool_group: &[String]) -> Result<()> {
         debug!("Executing tool group in parallel: {:?}", tool_group);
-        
+
         let mut handles = Vec::new();
-        
+
         for tool_name in tool_group {
             let request = ToolRequest {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -392,35 +407,33 @@ impl OptimizedAgentEngine {
                     parent_request_id: None,
                 },
             };
-            
+
             let pipeline = Arc::clone(&self.tool_pipeline);
-            let handle = tokio::spawn(async move {
-                pipeline.submit_request(request).await
-            });
-            
+            let handle = tokio::spawn(async move { pipeline.submit_request(request).await });
+
             handles.push(handle);
         }
-        
+
         // Wait for all tools in group to complete
         for handle in handles {
             if let Err(e) = handle.await? {
                 warn!("Tool execution failed: {}", e);
             }
         }
-        
+
         Ok(())
     }
 
     /// Pre-warm caches based on predicted tool usage
     async fn pre_warm_caches(&self, predicted_tools: &[String]) -> Result<()> {
         debug!("Pre-warming caches for tools: {:?}", predicted_tools);
-        
+
         // This would implement cache warming logic
         // For now, just log the prediction
         for tool_name in predicted_tools {
             debug!("Cache warming candidate: {}", tool_name);
         }
-        
+
         Ok(())
     }
 
@@ -434,7 +447,7 @@ impl OptimizedAgentEngine {
     /// Update conversation history with new turn
     async fn update_conversation_history(&self, response: String) -> Result<()> {
         let mut context = self.context.write().await;
-        
+
         let turn = ConversationTurn {
             id: uuid::Uuid::new_v4().to_string(),
             user_message: "User input".to_string(), // Would be actual user input
@@ -443,14 +456,14 @@ impl OptimizedAgentEngine {
             timestamp: Instant::now(),
             execution_time: None,
         };
-        
+
         context.conversation_history.push(turn);
-        
+
         // Keep history bounded
         if context.conversation_history.len() > 100 {
             context.conversation_history.remove(0);
         }
-        
+
         Ok(())
     }
 
@@ -458,24 +471,27 @@ impl OptimizedAgentEngine {
     async fn optimize_while_idle(&self) -> Result<()> {
         // Update performance predictions
         self.predictor.update_predictions().await?;
-        
+
         // Clean up completed tool states
         self.cleanup_completed_tools().await?;
-        
+
         // Optimize memory usage
         self.optimize_memory_usage().await?;
-        
+
         Ok(())
     }
 
     /// Clean up completed tool execution states
     async fn cleanup_completed_tools(&self) -> Result<()> {
         let mut context = self.context.write().await;
-        
+
         context.active_tools.retain(|_, state| {
-            !matches!(state.status, ToolStatus::Completed | ToolStatus::Failed { .. })
+            !matches!(
+                state.status,
+                ToolStatus::Completed | ToolStatus::Failed { .. }
+            )
         });
-        
+
         Ok(())
     }
 
@@ -486,11 +502,11 @@ impl OptimizedAgentEngine {
         while history.len() > 500 {
             history.pop_front();
         }
-        
+
         // Return unused memory to pool
         let _pool = global_pool();
         // This would implement memory cleanup logic
-        
+
         Ok(())
     }
 
@@ -501,14 +517,17 @@ impl OptimizedAgentEngine {
         to: AgentState,
         trigger: TransitionTrigger,
     ) -> Result<()> {
-        debug!("State transition: {:?} -> {:?} (trigger: {:?})", from, to, trigger);
-        
+        debug!(
+            "State transition: {:?} -> {:?} (trigger: {:?})",
+            from, to, trigger
+        );
+
         // Update context
         {
             let mut context = self.context.write().await;
             context.current_state = to.clone();
         }
-        
+
         // Record transition
         let transition = StateTransition {
             from_state: from,
@@ -516,25 +535,27 @@ impl OptimizedAgentEngine {
             trigger,
             timestamp: Instant::now(),
         };
-        
+
         // Send transition event
         if let Err(e) = self.state_tx.send(transition.clone()) {
             warn!("Failed to send state transition event: {}", e);
         }
-        
+
         // Add to history
         let mut history = self.state_history.write().await;
         history.push_back(transition);
-        
+
         Ok(())
     }
 
     /// Start background state monitoring
     async fn start_state_monitor(&self) -> Result<()> {
         let mut rx_guard = self.state_rx.write().await;
-        let state_rx = rx_guard.take().ok_or_else(|| anyhow!("State monitor already started"))?;
+        let state_rx = rx_guard
+            .take()
+            .ok_or_else(|| anyhow!("State monitor already started"))?;
         drop(rx_guard);
-        
+
         tokio::spawn(async move {
             let mut rx = state_rx;
             while let Some(transition) = rx.recv().await {
@@ -542,17 +563,17 @@ impl OptimizedAgentEngine {
                 // This would implement state monitoring logic
             }
         });
-        
+
         Ok(())
     }
 
     /// Start performance predictor updates
     async fn start_performance_predictor(&self) -> Result<()> {
         let predictor = Arc::clone(&self.predictor);
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
-            
+
             loop {
                 interval.tick().await;
                 if let Err(e) = predictor.update_predictions().await {
@@ -560,14 +581,14 @@ impl OptimizedAgentEngine {
                 }
             }
         });
-        
+
         Ok(())
     }
 
     /// Recovery from tool timeout
     async fn recover_from_tool_timeout(&self) -> Result<()> {
         warn!("Recovering from tool timeout");
-        
+
         // Cancel timed out tools
         let mut context = self.context.write().await;
         for (_, state) in context.active_tools.iter_mut() {
@@ -575,53 +596,62 @@ impl OptimizedAgentEngine {
                 state.status = ToolStatus::Cancelled;
             }
         }
-        
+
         // Transition back to idle
         drop(context);
         self.transition_state(
-            AgentState::Error { error_type: "tool_timeout".to_string() },
+            AgentState::Error {
+                error_type: "tool_timeout".to_string(),
+            },
             AgentState::Idle,
             TransitionTrigger::InternalError,
-        ).await?;
-        
+        )
+        .await?;
+
         Ok(())
     }
 
     /// Recovery from memory limit
     async fn recover_from_memory_limit(&self) -> Result<()> {
         warn!("Recovering from memory limit");
-        
+
         // Force memory cleanup
         self.optimize_memory_usage().await?;
-        
+
         // Reduce concurrent tool limit
         let mut context = self.context.write().await;
-        context.resource_limits.max_concurrent_tools = 
+        context.resource_limits.max_concurrent_tools =
             (context.resource_limits.max_concurrent_tools / 2).max(1);
-        
+
         drop(context);
         self.transition_state(
-            AgentState::Error { error_type: "memory_limit".to_string() },
+            AgentState::Error {
+                error_type: "memory_limit".to_string(),
+            },
             AgentState::Idle,
             TransitionTrigger::InternalError,
-        ).await?;
-        
+        )
+        .await?;
+
         Ok(())
     }
 
     /// Recovery from rate limit
     async fn recover_from_rate_limit(&self) -> Result<()> {
         warn!("Recovering from rate limit");
-        
+
         // Wait before retrying
         tokio::time::sleep(Duration::from_secs(5)).await;
-        
+
         self.transition_state(
-            AgentState::Error { error_type: "rate_limit".to_string() },
+            AgentState::Error {
+                error_type: "rate_limit".to_string(),
+            },
             AgentState::Idle,
             TransitionTrigger::InternalError,
-        ).await?;
-        
+        )
+        .await?;
+
         Ok(())
     }
 }
@@ -644,10 +674,10 @@ impl PerformancePredictor {
     /// Update performance predictions based on historical data
     pub async fn update_predictions(&self) -> Result<()> {
         debug!("Updating performance predictions");
-        
+
         // This would implement machine learning-based prediction updates
         // For now, just log the update
-        
+
         Ok(())
     }
 }
