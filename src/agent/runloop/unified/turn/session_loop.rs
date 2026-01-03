@@ -63,8 +63,12 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut consecutive_idle_cycles = 0;
     let mut last_activity_time = Instant::now();
 
-    // Initialize config watcher for smart reloading
+    // Initialize config watcher for smart reloading with optimized settings
     let mut config_watcher = SimpleConfigWatcher::new(config.workspace.clone());
+    // Configure for better performance: longer check interval, shorter debounce
+    config_watcher.set_check_interval(15); // 15 seconds instead of default 10
+    config_watcher.set_debounce_duration(500); // 500ms debounce instead of default 1000ms
+    
     // Load initial config
     let mut vt_cfg = config_watcher.load_config();
 
@@ -105,6 +109,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut follow_up_placeholder = ui_setup.follow_up_placeholder;
         let mut next_checkpoint_turn = ui_setup.next_checkpoint_turn;
         let mut session_end_reason = ui_setup.session_end_reason;
+        let ui_redraw_batcher = ui_setup.ui_redraw_batcher;
 
         let SessionState {
             session_bootstrap,

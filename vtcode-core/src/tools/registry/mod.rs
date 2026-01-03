@@ -49,6 +49,7 @@ use utils::normalize_tool_output;
 use crate::config::constants::defaults;
 use crate::config::constants::tools;
 use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
+use crate::core::memory_pool::{MemoryPoolTuningRecommendation, SizeRecommendation};
 use crate::core::memory_pool::MemoryPool;
 use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::file_ops::FileOpsTool;
@@ -744,11 +745,13 @@ impl ToolRegistry {
             active_pty_sessions: Arc::new(std::sync::RwLock::new(None)),
 
             // REAL PERFORMANCE OPTIMIZATIONS - Actually integrated!
-            memory_pool: Arc::new(MemoryPool::new()),
+            memory_pool: Arc::new(MemoryPool::from_config(&optimization_config.memory_pool)),
             hot_tool_cache: Arc::new(parking_lot::RwLock::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(16).unwrap(),
+                std::num::NonZeroUsize::new(
+                    optimization_config.tool_registry.hot_cache_size
+                ).unwrap(),
             ))),
-            optimization_config: vtcode_config::OptimizationConfig::default(),
+            optimization_config: optimization_config.clone(),
         };
 
         registry.sync_policy_catalog().await;
@@ -1778,6 +1781,28 @@ impl ToolRegistry {
             None
         };
 
+        // PERFORMANCE OPTIMIZATION: Auto-tune memory pool based on usage patterns
+        if self.optimization_config.memory_pool.enabled {
+            let recommendation = self.memory_pool.auto_tune(&self.optimization_config.memory_pool);
+            
+            // Log recommendation if significant changes are suggested
+            if !matches!(
+                (recommendation.string_size_recommendation, 
+                 recommendation.value_size_recommendation, 
+                 recommendation.vec_size_recommendation),
+                (SizeRecommendation::Maintain, SizeRecommendation::Maintain, SizeRecommendation::Maintain)
+            ) {
+                tracing::debug!(
+                    "Memory pool tuning recommendation: string={:?}, value={:?}, vec={:?}, "
+                    "allocations_avoided={}",
+                    recommendation.string_size_recommendation,
+                    recommendation.value_size_recommendation,
+                    recommendation.vec_size_recommendation,
+                    recommendation.total_allocations_avoided
+                );
+            }
+        }
+
         // PERFORMANCE OPTIMIZATION: Check hot cache for tool lookup if optimizations enabled
         let cached_tool = if self
             .optimization_config
@@ -2352,6 +2377,8 @@ impl ToolRegistry {
                         // PERFORMANCE OPTIMIZATION: Use memory pool for tool execution if enabled
                         if self.optimization_config.memory_pool.enabled {
                             let _execution_guard = self.memory_pool.get_value();
+                            let _string_guard = self.memory_pool.get_string();
+                            let _vec_guard = self.memory_pool.get_vec();
                             executor(self, args).await
                         } else {
                             executor(self, args).await

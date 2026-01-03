@@ -81,14 +81,8 @@ pub struct AsyncToolPipeline {
 
 /// Batch processor for grouping similar tool requests
 pub struct BatchProcessor {
-    /// Current batch being assembled
-    current_batch: Arc<RwLock<Option<ToolBatch>>>,
-
     /// Batch size threshold
     batch_size: usize,
-
-    /// Batch timeout threshold
-    batch_timeout: Duration,
 }
 
 /// Pipeline performance metrics
@@ -360,12 +354,8 @@ impl AsyncToolPipeline {
 }
 
 impl BatchProcessor {
-    pub fn new(batch_size: usize, batch_timeout: Duration) -> Self {
-        Self {
-            current_batch: Arc::new(RwLock::new(None)),
-            batch_size,
-            batch_timeout,
-        }
+    pub fn new(batch_size: usize, _batch_timeout: Duration) -> Self {
+        Self { batch_size }
     }
 }
 

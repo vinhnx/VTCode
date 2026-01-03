@@ -95,6 +95,7 @@ pub(crate) struct SessionUISetup {
     pub default_placeholder: Option<String>,
     pub follow_up_placeholder: Option<String>,
     pub next_checkpoint_turn: usize,
+    pub ui_redraw_batcher: crate::agent::runloop::unified::turn::utils::UIRedrawBatcher,
 }
 
 async fn build_conversation_history_from_resume(
@@ -737,6 +738,9 @@ pub(crate) async fn initialize_session_ui(
 
     let mut ide_context_bridge = IdeContextBridge::from_env();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
+    
+    // Create UI redraw batcher for optimizing UI updates with auto-flush
+    let ui_redraw_batcher = crate::agent::runloop::unified::turn::utils::UIRedrawBatcher::with_auto_flush(handle.clone());
 
     // Load workspace files asynchronously in background.
     // See: https://ratatui.rs/faq/#when-should-i-use-tokio-and-async--await-
@@ -1075,6 +1079,7 @@ pub(crate) async fn initialize_session_ui(
         default_placeholder,
         follow_up_placeholder,
         next_checkpoint_turn,
+        ui_redraw_batcher,
     })
 }
 
