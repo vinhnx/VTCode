@@ -263,7 +263,7 @@ impl<V: Send + Sync> LruCache<V> {
 
     /// Get current cache statistics.
     pub async fn stats(&self) -> CacheStats {
-        self.stats.read().await.clone()
+        *self.stats.read().await
     }
 
     /// Get number of entries in cache.

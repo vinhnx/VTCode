@@ -44,6 +44,23 @@ pub(crate) enum ToolPermissionFlow {
     Interrupted,
 }
 
+/// Context for tool permission checks to reduce argument count
+pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
+    pub tool_registry: &'a mut ToolRegistry,
+    pub renderer: &'a mut AnsiRenderer,
+    pub handle: &'a InlineHandle,
+    pub session: &'a mut S,
+    pub default_placeholder: Option<String>,
+    pub ctrl_c_state: &'a Arc<CtrlCState>,
+    pub ctrl_c_notify: &'a Arc<Notify>,
+    pub hooks: Option<&'a LifecycleHookEngine>,
+    pub justification: Option<&'a vtcode_core::tools::ToolJustification>,
+    pub approval_recorder: Option<&'a vtcode_core::tools::ApprovalRecorder>,
+    pub decision_ledger: Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
+    pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
+    pub hitl_notification_bell: bool,
+}
+
 pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     display_name: &str,
     tool_name: &str,
@@ -301,24 +318,26 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 }
 
 pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
-    tool_registry: &mut ToolRegistry,
+    ctx: ToolPermissionsContext<'_, S>,
     tool_name: &str,
     tool_args: Option<&Value>,
-    renderer: &mut AnsiRenderer,
-    handle: &InlineHandle,
-    session: &mut S,
-    default_placeholder: Option<String>,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-    hooks: Option<&LifecycleHookEngine>,
-    justification: Option<&vtcode_core::tools::ToolJustification>,
-    approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
-    decision_ledger: Option<
-        &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
-    >,
-    tool_permission_cache: Option<&Arc<RwLock<ToolPermissionCache>>>,
-    hitl_notification_bell: bool,
 ) -> Result<ToolPermissionFlow> {
+    let ToolPermissionsContext {
+        tool_registry,
+        renderer,
+        handle,
+        session,
+        default_placeholder,
+        ctrl_c_state,
+        ctrl_c_notify,
+        hooks,
+        justification,
+        approval_recorder,
+        decision_ledger,
+        tool_permission_cache,
+        hitl_notification_bell,
+    } = ctx;
+
     // Check tool permission cache for previously granted permissions
     if let Some(cache) = tool_permission_cache {
         let permission_cache = cache.read().await;

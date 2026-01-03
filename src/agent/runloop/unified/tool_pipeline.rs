@@ -200,23 +200,23 @@ pub(crate) async fn run_tool_call(
 
     // Pre-flight permission check
     match ensure_tool_permission(
-        ctx.tool_registry,
+        crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
+            tool_registry: ctx.tool_registry,
+            renderer: ctx.renderer,
+            handle: ctx.handle,
+            session: ctx.session,
+            default_placeholder: default_placeholder.clone(),
+            ctrl_c_state,
+            ctrl_c_notify,
+            hooks: lifecycle_hooks,
+            justification: None,
+            approval_recorder: Some(ctx.approval_recorder),
+            decision_ledger: Some(ctx.decision_ledger),
+            tool_permission_cache: Some(ctx.tool_permission_cache),
+            hitl_notification_bell: vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
+        },
         &name,
         Some(&args_val),
-        ctx.renderer,
-        ctx.handle,
-        ctx.session,
-        default_placeholder.clone(),
-        ctrl_c_state,
-        ctrl_c_notify,
-        lifecycle_hooks,
-        None, // justification
-        Some(ctx.approval_recorder),
-        Some(ctx.decision_ledger),
-        Some(ctx.tool_permission_cache),
-        vt_cfg
-            .map(|cfg| cfg.security.hitl_notification_bell)
-            .unwrap_or(true),
     )
     .await
     {
@@ -591,21 +591,53 @@ async fn run_single_tool_attempt(
             return ToolExecutionStatus::Cancelled;
         }
 
+        // Guard to ensure background task is aborted when dropped
+        struct ProgressUpdateGuard {
+            handle: tokio::task::JoinHandle<()>,
+        }
+
+        impl Drop for ProgressUpdateGuard {
+            fn drop(&mut self) {
+                self.handle.abort();
+            }
+        }
+
+        // Spawn a background task to update progress periodically with elapsed time
+        let _progress_update_guard = {
+            let reporter = progress_reporter.clone();
+            let name = name.to_string();
+            let start = start_time;
+            let handle = tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_millis(500));
+                // Skip first tick
+                interval.tick().await;
+                
+                loop {
+                    interval.tick().await;
+                    let elapsed = start.elapsed();
+                    let elapsed_secs = elapsed.as_secs_f64();
+                    
+                    // Update progress bar based on time milestones
+                    let estimated_progress = if elapsed < std::time::Duration::from_millis(500) {
+                        30
+                    } else if elapsed < std::time::Duration::from_secs(2) {
+                        50
+                    } else if elapsed < std::time::Duration::from_secs(5) {
+                        70
+                    } else {
+                        85
+                    };
+                    
+                    reporter.set_progress(estimated_progress).await;
+                    reporter.set_message(format!("Executing {}... ({:.1}s)", name, elapsed_secs)).await;
+                }
+            });
+            ProgressUpdateGuard { handle }
+        };
+
         progress_reporter
             .set_message(format!("Executing {}...", name))
             .await;
-
-        let elapsed = start_time.elapsed();
-        let estimated_progress = if elapsed < std::time::Duration::from_millis(500) {
-            30
-        } else if elapsed < std::time::Duration::from_secs(2) {
-            50
-        } else if elapsed < std::time::Duration::from_secs(5) {
-            70
-        } else {
-            85
-        };
-        progress_reporter.set_progress(estimated_progress).await;
 
         let token = CancellationToken::new();
         let exec_future = cancellation::with_tool_cancellation(token.clone(), async {
@@ -647,6 +679,8 @@ async fn run_single_tool_attempt(
 
             result = time::timeout(tool_timeout, exec_future) => ExecutionControl::Completed(result),
         };
+        
+        // Stop the background update task (handled by guard drop)
 
         match control {
             ExecutionControl::Continue => continue,

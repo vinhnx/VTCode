@@ -119,7 +119,7 @@ impl Tool for AcpTool {
         let call_args = obj.get("args").cloned().unwrap_or(json!({}));
 
         let client = self.client.read().await;
-        let client = shared::check_client_initialized(&*client)?;
+        let client = shared::check_client_initialized(&client)?;
 
         match method {
             "sync" => client
@@ -189,7 +189,7 @@ impl Tool for AcpDiscoveryTool {
             .unwrap_or("list_online");
 
         let client = self.client.read().await;
-        let client = shared::check_client_initialized(&*client)?;
+        let client = shared::check_client_initialized(&client)?;
 
         match mode {
             "list_all" => {
@@ -284,7 +284,7 @@ impl Tool for AcpHealthTool {
         let agent_id = shared::get_required_field(obj, "agent_id", None)?;
 
         let client = self.client.read().await;
-        let client = shared::check_client_initialized(&*client)?;
+        let client = shared::check_client_initialized(&client)?;
 
         let is_online = client
             .ping(agent_id)

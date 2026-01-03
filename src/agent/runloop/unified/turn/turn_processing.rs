@@ -75,81 +75,189 @@ pub(crate) async fn execute_llm_request(
         ..Default::default()
     };
 
+    // Extract action suggestion once outside the loop
     let action_suggestion = extract_action_from_messages(ctx.working_history);
-    use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
-    let _spinner = PlaceholderSpinner::new(
-        ctx.handle,
-        ctx.input_status_state.left.clone(),
-        ctx.input_status_state.right.clone(),
-        action_suggestion,
-    );
-    task::yield_now().await;
 
-    #[cfg(debug_assertions)]
-    let request_timer = Instant::now();
-    #[cfg(debug_assertions)]
-    {
-        let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
-        debug!(
-            target = "vtcode::agent::llm",
-            model = %request.model,
-            streaming = use_streaming,
-            step = step_count,
-            messages = request.messages.len(),
-            tools = tool_count,
-            "Dispatching provider request"
-        );
-    }
-
+    // Validate request once before entering loop
     if let Err(err) = provider_client.validate_request(&request) {
-        _spinner.finish();
         return Err(anyhow::Error::new(err));
     }
 
-    let llm_result = if use_streaming {
-        stream_and_render_response(
-            provider_client,
-            request,
-            &_spinner,
-            ctx.renderer,
-            ctx.ctrl_c_state,
-            ctx.ctrl_c_notify,
-        )
-        .await
-    } else {
-        let provider_name = provider_client.name().to_string();
+    const MAX_RETRIES: usize = 3;
 
-        if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
-            _spinner.finish();
-            Err(uni::LLMError::Provider {
-                message: vtcode_core::llm::error_display::format_llm_error(
-                    &provider_name,
-                    "Interrupted by user",
-                ),
-                metadata: None,
-            })
+    let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
+
+    #[cfg(debug_assertions)]
+    let mut request_timer = Instant::now(); // Declare outside loop
+
+    for attempt in 0..MAX_RETRIES {
+        if attempt > 0 {
+            use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
+            let delay = calculate_backoff(attempt - 1, 500, 10_000);
+            let delay_secs = delay.as_secs_f64();
+            crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                ctx.renderer, 
+                &format!("LLM request failed, retrying in {:.1}s... (attempt {}/{})", delay_secs, attempt + 1, MAX_RETRIES)
+            )?;
+            tokio::time::sleep(delay).await;
+        }
+
+        // Create a new spinner for each attempt to ensuring it's active
+        let spinner_msg = if attempt > 0 {
+             let action = action_suggestion.clone();
+             if action.is_empty() {
+                 format!("Retrying request (attempt {}/{})", attempt + 1, MAX_RETRIES)
+             } else {
+                 format!("{} (Retry {}/{})", action, attempt + 1, MAX_RETRIES)
+             }
         } else {
-            let generate_future = provider_client.generate(request);
-            tokio::pin!(generate_future);
-            let cancel_notifier = ctx.ctrl_c_notify.notified();
-            tokio::pin!(cancel_notifier);
-            let outcome = tokio::select! {
-                res = &mut generate_future => {
-                    _spinner.finish();
-                    res.map(|resp| (resp, false))
+            action_suggestion.clone()
+        };
+
+        use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
+        let _spinner = PlaceholderSpinner::new(
+            ctx.handle,
+            ctx.input_status_state.left.clone(),
+            ctx.input_status_state.right.clone(),
+            spinner_msg,
+        );
+        task::yield_now().await;
+        
+        #[cfg(debug_assertions)]
+        {
+            request_timer = Instant::now(); // Re-assign inside loop for each attempt
+            let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
+            debug!(
+                target = "vtcode::agent::llm",
+                model = %request.model,
+                streaming = use_streaming,
+                step = step_count,
+                messages = request.messages.len(),
+                tools = tool_count,
+                attempt = attempt + 1,
+                "Dispatching provider request"
+            );
+        }
+
+        let step_result = if use_streaming {
+            let stream_result = stream_and_render_response(
+                provider_client,
+                request.clone(),
+                &_spinner,
+                ctx.renderer,
+                ctx.ctrl_c_state,
+                ctx.ctrl_c_notify,
+            )
+            .await;
+
+            match stream_result {
+                Ok((response, emitted)) => Ok((response, emitted)),
+                Err(ref err) => {
+                    // Only retry streaming errors if we haven't emitted any tokens yet (best effort)
+                    let msg = err.to_string();
+                    let is_retryable = msg.contains("rate limit") 
+                        || msg.contains("timeout") 
+                        || msg.contains("500") 
+                        || msg.contains("502") 
+                        || msg.contains("503")
+                        || msg.contains("service unavailable")
+                        || msg.contains("connection")
+                        || msg.contains("network");
+                        
+                    if is_retryable {
+                        Err(anyhow::anyhow!(msg)) // Return err to retry loop
+                    } else {
+                        Err(anyhow::anyhow!(msg)) 
+                    }
                 }
-                _ = &mut cancel_notifier => {
-                    _spinner.finish();
-                    Err(uni::LLMError::Provider {
-                        message: vtcode_core::llm::error_display::format_llm_error(
-                            &provider_name,
-                            "Interrupted by user",
-                        ),
-                        metadata: None,
-                    })
+            }
+        } else {
+            let provider_name = provider_client.name().to_string();
+
+            if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
+                Err(anyhow::Error::new(uni::LLMError::Provider {
+                    message: vtcode_core::llm::error_display::format_llm_error(
+                        &provider_name,
+                        "Interrupted by user",
+                    ),
+                    metadata: None,
+                }))
+            } else {
+                let generate_future = provider_client.generate(request.clone());
+                tokio::pin!(generate_future);
+                let cancel_notifier = ctx.ctrl_c_notify.notified();
+                tokio::pin!(cancel_notifier);
+                
+                let outcome = tokio::select! {
+                    res = &mut generate_future => {
+                        match res {
+                            Ok(resp) => Ok((resp, false)),
+                            Err(err) => Err(anyhow::Error::new(err))
+                        }
+                    }
+                    _ = &mut cancel_notifier => {
+                        Err(anyhow::Error::new(uni::LLMError::Provider {
+                            message: vtcode_core::llm::error_display::format_llm_error(
+                                &provider_name,
+                                "Interrupted by user",
+                            ),
+                            metadata: None,
+                        }))
+                    }
+                };
+                outcome
+            }
+        };
+        
+        // Log outcome
+        #[cfg(debug_assertions)]
+        {
+            debug!(
+                target = "vtcode::agent::llm",
+                model = %active_model,
+                streaming = use_streaming,
+                step = step_count,
+                elapsed_ms = request_timer.elapsed().as_millis(),
+                succeeded = step_result.is_ok(),
+                attempt = attempt + 1,
+                "Provider request finished"
+            );
+        }
+
+        match step_result {
+            Ok(val) => {
+                llm_result = Ok(val);
+                _spinner.finish();
+                break;
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                let is_retryable = msg.contains("rate limit") 
+                    || msg.contains("timeout") 
+                    || msg.contains("500") 
+                    || msg.contains("502") 
+                    || msg.contains("503")
+                    || msg.contains("service unavailable")
+                    || msg.contains("connection")
+                    || msg.contains("network");
+                
+                // Special check for user interruption - never retry
+                if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(ctx.ctrl_c_state) {
+                     llm_result = Err(err);
+                     _spinner.finish();
+                     break;
                 }
-            };
-            outcome
+
+                if is_retryable && attempt < MAX_RETRIES - 1 {
+                    _spinner.finish(); // Clean up spinner before retrying
+                    // Continue to next attempt
+                     continue;
+                }
+                
+                llm_result = Err(err);
+                _spinner.finish();
+                break;
+            }
         }
     };
 
@@ -168,12 +276,11 @@ pub(crate) async fn execute_llm_request(
         );
     }
 
+    // Check if result is error, if so return it. _spinner is already finished inside loop.
     let (response, response_streamed) = match llm_result {
         Ok(result) => result,
         Err(error) => {
-            // Finish spinner before returning error to remove it from transcript
-            _spinner.finish();
-            return Err(anyhow::Error::new(error));
+            return Err(error);
         }
     };
     // HP-1: No restoration needed - working_history was never modified
@@ -303,8 +410,8 @@ pub(crate) fn process_llm_response(
             let tool_display =
                 crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name);
             let missing_list = missing_params.join(", ");
-            renderer.line(
-                MessageStyle::Info,
+            crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                renderer,
                 &format!(
                     "Detected {} but missing required params: {}",
                     tool_display, missing_list
@@ -331,7 +438,7 @@ pub(crate) fn process_llm_response(
             } else {
                 format!("Detected {headline}")
             };
-            renderer.line(MessageStyle::Info, &notice)?;
+            crate::agent::runloop::unified::turn::turn_helpers::display_status(renderer, &notice)?;
             let call_id = format!("call_textual_{}", conversation_len);
             tool_calls.push(uni::ToolCall::function(
                 call_id.clone(),
