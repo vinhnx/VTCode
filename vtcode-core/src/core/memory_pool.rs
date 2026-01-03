@@ -253,7 +253,6 @@ pub enum SizeRecommendation {
     Increase(usize),
     Decrease(usize),
 }
-}
 
 impl From<MemoryPoolStats> for crate::telemetry::MemoryPoolTelemetry {
     fn from(stats: MemoryPoolStats) -> Self {
