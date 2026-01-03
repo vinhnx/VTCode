@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use tree_sitter::{Language, Parser, Tree};
+use tree_sitter::{Parser, Tree};
 
 use super::analyzer::{LanguageSupport, TreeSitterError, get_language};
 
@@ -23,6 +23,7 @@ struct ParseCacheKey {
 
 /// Cached parse result
 #[derive(Clone)]
+#[allow(dead_code)]
 struct CachedParse {
     /// The parsed syntax tree
     tree: Tree,
@@ -214,7 +215,8 @@ impl CachedTreeSitterAnalyzer {
 
         for language in languages {
             let mut parser = Parser::new();
-            let ts_language = get_language(language)?;
+            let ts_language = get_language(language)
+                .map_err(|e| TreeSitterError::AnalysisError(format!("Language setup failed: {:?}", e)))?;
             parser.set_language(&ts_language)
                 .map_err(|e| TreeSitterError::LanguageSetupError(format!("{:?}", e)))?;
             parsers.insert(language, parser);
@@ -270,12 +272,9 @@ impl Default for ParseCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tree_sitter::Language;
 
-    fn create_test_language() -> Language {
-        // Use Rust as the test language (always available)
-        tree_sitter_rust::language()
-    }
+
+
 
     #[test]
     fn test_cache_key_hashing() {

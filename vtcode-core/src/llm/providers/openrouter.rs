@@ -667,6 +667,23 @@ impl OpenRouterProvider {
         Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default())
     }
 
+    pub fn new_with_client(
+        api_key: String,
+        model: String,
+        http_client: reqwest::Client,
+        base_url: String,
+        _timeouts: TimeoutsConfig,
+    ) -> Self {
+        Self {
+            api_key,
+            http_client,
+            base_url,
+            model,
+            prompt_cache_enabled: false,
+            prompt_cache_settings: OpenRouterPromptCacheSettings::default(),
+        }
+    }
+
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,

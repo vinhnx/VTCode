@@ -49,7 +49,8 @@ fn is_dangerous_powershell_invocation(command: &[String]) -> bool {
 
     let script = &command[1];
 
-    // Simple heuristic checks (TODO: use PowerShell parser in Phase 3)
+    // Simple heuristic checks
+    // Note: A full PowerShell parser (Phase 3) would provide more accurate detection.
     let script_lower = script.to_lowercase();
 
     // ──── Patterns that launch browsers/URLs ────

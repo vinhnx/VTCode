@@ -13,8 +13,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::Path;
-use std::time::Instant;
+use std::path::{Path, PathBuf};
+use std::time::{Instant, SystemTime};
 use tracing::info;
 
 /// Validation configuration
@@ -220,8 +220,8 @@ pub struct SecurityWarning {
 pub struct SkillValidator {
     config: ValidationConfig,
     // Note: Validator from jsonschema crate doesn't implement Clone,
-    // so we can't cache compiled validators. Each validation will recompile.
-    // TODO: Consider using Arc<Validator> or implementing our own caching layer
+    // so we cache the validation result keyed by path and mtime instead.
+    schema_validation_cache: HashMap<PathBuf, (SystemTime, CheckResult)>,
 }
 
 impl SkillValidator {
@@ -240,7 +240,10 @@ impl Default for SkillValidator {
 impl SkillValidator {
     /// Create new validator with custom configuration
     pub fn with_config(config: ValidationConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            schema_validation_cache: HashMap::new(),
+        }
     }
 
     /// Validate a traditional skill from directory
@@ -740,7 +743,22 @@ impl SkillValidator {
             };
         }
 
-        match std::fs::read_to_string(schema_path) {
+        // Check cache
+        if let Ok(metadata) = std::fs::metadata(schema_path) {
+             if let Ok(mtime) = metadata.modified() {
+                 if let Some((cached_mtime, cached_result)) = self.schema_validation_cache.get(schema_path) {
+                     if *cached_mtime == mtime {
+                         let mut result = cached_result.clone();
+                         // Update execution time to reflect cache hit (near zero)
+                         result.execution_time_ms = start_time.elapsed().as_millis() as u64;
+                         result.message = format!("{} (cached)", result.message);
+                         return result;
+                     }
+                 }
+             }
+        }
+
+        let result = match std::fs::read_to_string(schema_path) {
             Ok(content) => {
                 match serde_json::from_str::<Value>(&content) {
                     Ok(schema_json) => {
@@ -780,7 +798,16 @@ impl SkillValidator {
                 details: None,
                 execution_time_ms: start_time.elapsed().as_millis() as u64,
             },
+        };
+
+        // Update cache
+        if let Ok(metadata) = std::fs::metadata(schema_path) {
+            if let Ok(mtime) = metadata.modified() {
+                self.schema_validation_cache.insert(schema_path.to_path_buf(), (mtime, result.clone()));
+            }
         }
+
+        result
     }
 
     /// Test basic tool execution
@@ -1082,5 +1109,56 @@ mod tests {
 
         let report = result.unwrap();
         assert_eq!(report.status, ValidationStatus::Invalid);
+    }
+
+    #[tokio::test]
+    async fn test_schema_validation_caching() {
+        use std::fs::File;
+        use std::io::Write;
+
+
+        let temp_dir = TempDir::new().unwrap();
+        let schema_path = temp_dir.path().join("schema.json");
+        
+        // precise sleep to ensure file system time resolution
+        let sleep_fs = || std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // Create initial schema
+        {
+            let mut file = File::create(&schema_path).unwrap();
+            write!(file, r#"{{"type": "string"}}"#).unwrap();
+        }
+        sleep_fs();
+
+        let mut validator = SkillValidator::new();
+        
+        // 1. First validation - should cache
+        let result1 = validator.validate_json_schema(&schema_path).await;
+        assert_eq!(result1.status, CheckStatus::Passed);
+        assert_eq!(validator.schema_validation_cache.len(), 1);
+
+        // Capture mtime in cache
+        let (cached_mtime, _) = validator.schema_validation_cache.get(&schema_path).unwrap();
+        let cached_mtime = *cached_mtime;
+
+        // 2. Second validation - should hit cache (mtime same)
+        let result2 = validator.validate_json_schema(&schema_path).await;
+        assert_eq!(result2.status, CheckStatus::Passed);
+        // Verify we still have the same cache entry
+        assert_eq!(validator.schema_validation_cache.get(&schema_path).unwrap().0, cached_mtime);
+
+        // 3. Modify file - should invalidate cache
+        sleep_fs();
+        {
+            let mut file = File::create(&schema_path).unwrap();
+            write!(file, r#"{{"type": "integer"}}"#).unwrap();
+        }
+        sleep_fs();
+
+        let result3 = validator.validate_json_schema(&schema_path).await;
+        assert_eq!(result3.status, CheckStatus::Passed);
+        
+        let (new_mtime, _) = validator.schema_validation_cache.get(&schema_path).unwrap();
+        assert_ne!(*new_mtime, cached_mtime, "Cache should have updated with new mtime");
     }
 }

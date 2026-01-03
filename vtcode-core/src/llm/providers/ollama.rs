@@ -136,6 +136,21 @@ impl OllamaProvider {
         Self::with_model_internal(model, None, Some(api_key))
     }
 
+    pub fn new_with_client(
+        api_key: String,
+        model: String,
+        http_client: reqwest::Client,
+        base_url: String,
+        _timeouts: TimeoutsConfig,
+    ) -> Self {
+        Self {
+            http_client,
+            base_url,
+            model,
+            api_key: Some(api_key),
+        }
+    }
+
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,

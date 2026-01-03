@@ -27,6 +27,27 @@ impl XAIProvider {
         Self::with_model_internal(api_key, model, None)
     }
 
+    pub fn new_with_client(
+        api_key: String,
+        model: String,
+        http_client: reqwest::Client,
+        base_url: String,
+        timeouts: TimeoutsConfig,
+    ) -> Self {
+        let inner = OpenAIProvider::new_with_client(
+            api_key,
+            model.clone(),
+            http_client,
+            base_url,
+            timeouts,
+        );
+        Self {
+            inner,
+            model,
+            prompt_cache_enabled: false,
+        }
+    }
+
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,

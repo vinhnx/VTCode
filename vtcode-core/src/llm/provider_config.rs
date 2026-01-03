@@ -1,9 +1,8 @@
+use std::str::FromStr;
 use crate::config::TimeoutsConfig;
-use crate::config::constants::{env_vars, urls};
 use crate::config::core::{GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
 use crate::llm::provider::LLMProvider;
-use crate::llm::provider_builder::{ProviderBuilder, ProviderConfig};
-use crate::llm::providers::common::{extract_prompt_cache_settings, override_base_url};
+use crate::llm::provider_builder::ProviderConfig;
 
 /// Gemini provider configuration
 pub struct GeminiProviderConfig;
@@ -31,7 +30,10 @@ impl ProviderConfig for GeminiProviderConfig {
         Box::new(GeminiProvider::new_with_client(
             api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
             prompt_cache_enabled,
@@ -66,7 +68,10 @@ impl ProviderConfig for AnthropicProviderConfig {
         Box::new(AnthropicProvider::new_with_client(
             api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -99,7 +104,10 @@ impl ProviderConfig for OpenAIProviderConfig {
         Box::new(OpenAIProvider::new_with_client(
             api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -132,7 +140,10 @@ impl ProviderConfig for DeepSeekProviderConfig {
         Box::new(DeepSeekProvider::new_with_client(
             api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -165,7 +176,10 @@ impl ProviderConfig for MoonshotProviderConfig {
         Box::new(MoonshotProvider::new_with_client(
             api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -198,7 +212,10 @@ impl ProviderConfig for XAIProviderConfig {
         Box::new(XAIProvider::new_with_client(
             api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -231,7 +248,10 @@ impl ProviderConfig for ZAIProviderConfig {
         Box::new(ZAIProvider::new_with_client(
             api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -264,7 +284,10 @@ impl ProviderConfig for OpenRouterProviderConfig {
         Box::new(OpenRouterProvider::new_with_client(
             api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -295,8 +318,12 @@ impl ProviderConfig for OllamaProviderConfig {
         use crate::llm::providers::common::get_http_client_for_timeouts;
 
         Box::new(OllamaProvider::new_with_client(
+            _api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -328,7 +355,10 @@ impl ProviderConfig for LmStudioProviderConfig {
 
         Box::new(LmStudioProvider::new_with_client(
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -361,7 +391,10 @@ impl ProviderConfig for MinimaxProviderConfig {
         Box::new(MinimaxProvider::new_with_client(
             api_key,
             model,
-            get_http_client_for_timeouts(&timeouts),
+            get_http_client_for_timeouts(
+                std::time::Duration::from_secs(30),
+                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
+            ),
             base_url,
             timeouts,
         ))
@@ -388,9 +421,10 @@ pub fn create_provider_unified(
     use crate::config::models::Provider;
 
     let provider = Provider::from_str(provider_name)
-        .map_err(|_| crate::llm::provider::LLMError::InvalidRequest { message: 
-            format!("Unknown provider: {}", provider_name, metadata: None }
-        ))?;
+        .map_err(|_| crate::llm::provider::LLMError::InvalidRequest {
+            message: format!("Unknown provider: {}", provider_name),
+            metadata: None,
+        })?;
 
     match provider {
         Provider::Gemini => {
@@ -565,6 +599,13 @@ pub fn create_provider_unified(
                 builder = builder.timeouts(t);
             }
             Ok(builder.build())
+        },
+        Provider::HuggingFace => {
+            // Placeholder for HuggingFace
+            Err(crate::llm::provider::LLMError::Provider {
+                message: "HuggingFace provider is not fully implemented in create_provider_unified".to_string(),
+                metadata: None,
+            })
         }
     }
 }

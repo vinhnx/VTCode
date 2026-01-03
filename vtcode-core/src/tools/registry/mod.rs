@@ -2888,7 +2888,7 @@ mod tests {
             CUSTOM_TOOL_NAME,
             CapabilityLevel::CodeSearch,
             CustomEchoTool,
-        ))?;
+        )).await?;
 
         registry.allow_all_tools().await.ok();
 
@@ -2914,7 +2914,7 @@ mod tests {
             CUSTOM_TOOL_NAME,
             CapabilityLevel::CodeSearch,
             CustomEchoTool,
-        ))?;
+        )).await?;
         registry.allow_all_tools().await?;
 
         let args = json!({"input": "value"});

@@ -119,7 +119,9 @@ fn set_core_file_size_limit_to_zero() {
 
 #[cfg(windows)]
 pub(crate) fn pre_main_hardening_windows() {
-    // TODO: Perform the appropriate security hardening for Windows.
+    // Windows process hardening would involve using Job Objects to limit
+    // resource usage and restrict UI access, or using restricted tokens.
+    // This is currently a future enhancement.
 }
 
 #[cfg(unix)]

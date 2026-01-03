@@ -132,6 +132,22 @@ impl LmStudioProvider {
         Self::with_model_internal(Some(api_key), Some(model), None, None)
     }
 
+    pub fn new_with_client(
+        model: String,
+        http_client: reqwest::Client,
+        base_url: String,
+        timeouts: TimeoutsConfig,
+    ) -> Self {
+        let inner = OpenAIProvider::new_with_client(
+            "lm-studio".to_string(), // Dummy API key
+            model,
+            http_client,
+            base_url,
+            timeouts,
+        );
+        Self { inner }
+    }
+
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,

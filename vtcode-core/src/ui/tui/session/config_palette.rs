@@ -117,14 +117,14 @@ impl ConfigPalette {
 
         // -- Features Section --
 
-        // TODO Planning Mode
+        // Planning Mode
         items.push(ConfigItem {
             key: "agent.todo_planning_mode".to_string(),
-            label: "TODO Planning Mode".to_string(),
+            label: "Planning Mode".to_string(),
             kind: ConfigItemKind::Bool {
                 value: config.agent.todo_planning_mode,
             },
-            description: Some("Enable TODO planning mode and onboarding hints".to_string()),
+            description: Some("Enable planning mode and onboarding hints".to_string()),
         });
 
         // Checkpointing

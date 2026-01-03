@@ -60,6 +60,24 @@ impl AnthropicProvider {
         )
     }
 
+    pub fn new_with_client(
+        api_key: String,
+        model: String,
+        http_client: reqwest::Client,
+        base_url: String,
+        _timeouts: TimeoutsConfig,
+    ) -> Self {
+        Self {
+            api_key,
+            http_client,
+            base_url,
+            model,
+            prompt_cache_enabled: false,
+            prompt_cache_settings: AnthropicPromptCacheSettings::default(),
+            anthropic_config: AnthropicConfig::default(),
+        }
+    }
+
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,

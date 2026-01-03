@@ -31,6 +31,12 @@ pub enum TreeSitterError {
 
     #[error("Query execution error: {0}")]
     QueryError(String),
+
+    #[error("Analysis error: {0}")]
+    AnalysisError(String),
+
+    #[error("Language setup error: {0}")]
+    LanguageSetupError(String),
 }
 
 /// Language support enumeration
