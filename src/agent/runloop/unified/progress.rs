@@ -5,6 +5,25 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
+/// RAII guard to ensure a background progress task is aborted when dropped
+pub struct ProgressUpdateGuard {
+    handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl ProgressUpdateGuard {
+    pub fn new(handle: tokio::task::JoinHandle<()>) -> Self {
+        Self { handle: Some(handle) }
+    }
+}
+
+impl Drop for ProgressUpdateGuard {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+    }
+}
+
 /// Tracks the state of a long-running operation with detailed progress information
 #[allow(dead_code)]
 pub struct ProgressState {
@@ -296,6 +315,37 @@ fn format_eta(duration: Duration) -> String {
             format!("{}h {}m", hours, minutes)
         }
     }
+}
+
+
+
+/// Spawns a background task that updates the progress message with elapsed time
+pub fn spawn_elapsed_time_updater(
+    reporter: ProgressReporter,
+    task_name: String,
+    interval_ms: u64,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(interval_ms));
+        let start = Instant::now();
+        loop {
+            interval.tick().await;
+            let elapsed = start.elapsed();
+            let duration_str = if elapsed.as_secs() < 60 {
+                format!("{:.1}s", elapsed.as_secs_f64())
+            } else {
+                format_duration(elapsed)
+            };
+            
+            reporter
+                .set_message(format!(
+                    "Running {}... ({} elapsed)",
+                    task_name,
+                    duration_str
+                ))
+                .await;
+        }
+    })
 }
 
 impl Default for ProgressReporter {
