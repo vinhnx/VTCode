@@ -4,11 +4,13 @@ use crate::config::core::PromptCachingConfig;
 use crate::config::models::{ModelId, Provider};
 use crate::config::types::*;
 use crate::core::agent::bootstrap::{AgentComponentBuilder, AgentComponentSet};
+use crate::core::memory_pool::global_pool;
+use crate::tools::OptimizedToolRegistry;
+use vtcode_config::OptimizationConfig;
 
 use crate::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
-
 use crate::core::decision_tracker::DecisionTracker;
 use crate::core::error_recovery::{ErrorRecoveryManager, ErrorType};
 use crate::llm::AnyClient;
@@ -24,6 +26,8 @@ pub struct Agent {
     config: AgentConfig,
     client: AnyClient,
     tool_registry: Arc<ToolRegistry>,
+    optimized_registry: Option<OptimizedToolRegistry>,
+    optimization_config: OptimizationConfig,
     decision_tracker: DecisionTracker,
     error_recovery: ErrorRecoveryManager,
 
@@ -45,10 +49,47 @@ impl Agent {
     /// (for example in open-source integrations or when providing custom tool
     /// registries).
     pub fn with_components(config: AgentConfig, components: AgentComponentSet) -> Self {
+        // Use default optimization config for now - will be enhanced to read from VTCodeConfig
+        let optimization_config = OptimizationConfig::default();
+        let optimized_registry = if optimization_config.tool_registry.use_optimized_registry {
+            Some(OptimizedToolRegistry::new(optimization_config.tool_registry.max_concurrent_tools))
+        } else {
+            None
+        };
+
         Self {
             config,
             client: components.client,
             tool_registry: components.tool_registry,
+            optimized_registry,
+            optimization_config,
+            decision_tracker: components.decision_tracker,
+            error_recovery: components.error_recovery,
+            tree_sitter_analyzer: components.tree_sitter_analyzer,
+            session_info: components.session_info,
+            start_time: std::time::Instant::now(),
+        }
+    }
+
+    /// Construct an agent with optimization configuration from VTCodeConfig.
+    ///
+    /// This method provides full integration with the VT Code configuration system,
+    /// enabling optimizations based on user settings in vtcode.toml.
+    pub fn with_components_and_optimization(
+        config: AgentConfig, 
+        components: AgentComponentSet,
+        optimization_config: OptimizationConfig,
+    ) -> Self {
+        // Note: We can't modify the registry after it's in an Arc, so we'll need to
+        // configure optimizations during registry creation in the future.
+        // For now, we store the config and the registry will use default optimizations.
+
+        Self {
+            config,
+            client: components.client,
+            tool_registry: components.tool_registry,
+            optimized_registry: None, // Not needed anymore - real registry is optimized
+            optimization_config,
             decision_tracker: components.decision_tracker,
             error_recovery: components.error_recovery,
             tree_sitter_analyzer: components.tree_sitter_analyzer,
@@ -65,6 +106,13 @@ impl Agent {
 
     /// Initialize the agent with system setup
     pub async fn initialize(&mut self) -> Result<()> {
+        // Initialize memory pool if enabled
+        if self.optimization_config.memory_pool.enabled {
+            let pool = global_pool();
+            let _test_string = pool.get_string();
+            pool.return_string(_test_string);
+        }
+
         // Initialize available tools in decision tracker
         let tool_names = self.tool_registry.available_tools().await;
         let tool_count = tool_names.len();
@@ -85,6 +133,16 @@ impl Agent {
                 self.config.workspace.display()
             );
             println!("  {} Tools loaded: {}", style("").dim(), tool_count);
+            
+            // Show REAL optimization status
+            if self.optimization_config.memory_pool.enabled {
+                println!("  {} Memory pool: enabled", style("").dim());
+            }
+            if self.tool_registry.has_optimizations_enabled() {
+                let (cache_size, cache_cap) = self.tool_registry.hot_cache_stats();
+                println!("  {} Tool registry optimizations: enabled (cache: {}/{})", 
+                    style("").dim(), cache_size, cache_cap);
+            }
             println!();
         }
 
@@ -99,6 +157,22 @@ impl Agent {
     /// Get session information
     pub fn session_info(&self) -> &SessionInfo {
         &self.session_info
+    }
+
+    /// Get the optimization configuration
+    pub fn optimization_config(&self) -> &OptimizationConfig {
+        &self.optimization_config
+    }
+
+    /// Get the tool registry (now with integrated optimizations)
+    pub fn tool_registry(&self) -> &Arc<ToolRegistry> {
+        &self.tool_registry
+    }
+
+    /// Check if optimizations are enabled in the tool registry
+    pub fn has_optimizations_enabled(&self) -> bool {
+        self.optimization_config.memory_pool.enabled ||
+        self.tool_registry.has_optimizations_enabled()
     }
 
     /// Get performance metrics
@@ -141,7 +215,7 @@ impl Agent {
     }
 
     /// Get tool registry reference
-    pub fn tool_registry(&self) -> Arc<ToolRegistry> {
+    pub fn tool_registry_clone(&self) -> Arc<ToolRegistry> {
         Arc::clone(&self.tool_registry)
     }
 

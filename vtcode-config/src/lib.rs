@@ -34,6 +34,7 @@ pub mod hooks;
 pub mod loader;
 pub mod mcp;
 pub mod models;
+pub mod optimization;
 pub mod output_styles;
 pub mod root;
 #[cfg(feature = "schema")]
@@ -76,6 +77,10 @@ pub use mcp::{
     McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
 pub use models::{ModelId, OpenRouterMetadata};
+pub use optimization::{
+    OptimizationConfig, MemoryPoolConfig, ToolRegistryConfig, AsyncPipelineConfig,
+    LLMClientConfig, AgentExecutionConfig, ProfilingConfig,
+};
 pub use output_styles::{OutputStyle, OutputStyleConfig, OutputStyleManager};
 pub use root::{PtyConfig, ToolOutputMode, UiConfig};
 #[cfg(feature = "schema")]

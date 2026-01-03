@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "XiaomiMiMo/MiMo-V2-Flash:novita"
+default_model = "nemotron-3-nano:30b-cloud"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"
@@ -479,12 +479,24 @@ max_entries = 12
 include_in_prompt = true
 preserve_in_compression = true
 
+[optimization.memory_pool]
+enabled = true
+max_string_pool_size = 64
+max_value_pool_size = 32
+max_vec_pool_size = 16
+
 [telemetry]
 trajectory_enabled = true
 dashboards_enabled = true
 sample_interval_ms = 1000
 retention_days = 14
 bottleneck_tracing = true
+
+[optimization.tool_registry]
+use_optimized_registry = false
+max_concurrent_tools = 4
+hot_cache_size = 16
+default_timeout_secs = 180
 
 [syntax_highlighting]
 enabled = true
@@ -509,6 +521,13 @@ enabled_languages = [
 ]
 highlight_timeout_ms = 5000
 
+[optimization.async_pipeline]
+enable_batching = false
+enable_caching = true
+max_batch_size = 5
+batch_timeout_ms = 100
+cache_size = 100
+
 [automation.full_auto]
 enabled = false
 max_turns = 30
@@ -519,6 +538,16 @@ allowed_tools = [
 ]
 require_profile_ack = true
 
+[optimization.llm_client]
+enable_connection_pooling = false
+enable_response_caching = true
+enable_request_batching = false
+connection_pool_size = 4
+response_cache_size = 50
+cache_ttl_secs = 300
+rate_limit_rps = 10.0
+rate_limit_burst = 20
+
 [prompt_cache]
 enabled = true
 cache_dir = "~/.vtcode/cache/prompts"
@@ -527,11 +556,28 @@ max_age_days = 30
 enable_auto_cleanup = true
 min_quality_threshold = 0.7
 
+[optimization.agent_execution]
+use_optimized_loop = false
+enable_performance_prediction = false
+state_history_size = 1000
+resource_monitor_interval_ms = 100
+max_memory_mb = 1024
+max_execution_time_secs = 300
+
 [prompt_cache.providers.openai]
 enabled = true
 min_prefix_tokens = 1024
 idle_expiration_seconds = 3600
 surface_metrics = true
+
+[optimization.profiling]
+enabled = false
+monitor_interval_ms = 100
+max_history_size = 1000
+auto_export_results = false
+export_file_path = "benchmark_results.json"
+enable_regression_testing = false
+max_regression_percent = 10.0
 
 [prompt_cache.providers.anthropic]
 enabled = true

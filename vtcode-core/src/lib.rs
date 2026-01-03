@@ -184,6 +184,9 @@ pub use config::{
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::AgentRunner;
+pub use core::optimized_agent::{OptimizedAgentEngine, AgentState, AgentContext};
+pub use core::memory_pool::{MemoryPool, global_pool};
+pub use core::performance_profiler::{PerformanceProfiler, BenchmarkResults, BenchmarkUtils};
 pub use core::agent::task::{
     ContextItem as RunnerContextItem, Task as RunnerTask, TaskOutcome as RunnerTaskOutcome,
     TaskResults as RunnerTaskResults,
@@ -244,6 +247,7 @@ pub use sandboxing::{
 };
 
 pub use tools::grep_file::GrepSearchManager;
+pub use tools::{AsyncToolPipeline, OptimizedToolRegistry, AsyncToolRequest, ExecutionPriority};
 pub use tools::tree_sitter::TreeSitterAnalyzer;
 pub use tools::{
     ToolRegistration, ToolRegistry, build_function_declarations,
