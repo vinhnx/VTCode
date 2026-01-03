@@ -78,8 +78,8 @@ pub use mcp::{
 };
 pub use models::{ModelId, OpenRouterMetadata};
 pub use optimization::{
-    OptimizationConfig, MemoryPoolConfig, ToolRegistryConfig, AsyncPipelineConfig,
-    LLMClientConfig, AgentExecutionConfig, ProfilingConfig,
+    AgentExecutionConfig, AsyncPipelineConfig, LLMClientConfig, MemoryPoolConfig,
+    OptimizationConfig, ProfilingConfig, ToolRegistryConfig,
 };
 pub use output_styles::{OutputStyle, OutputStyleConfig, OutputStyleManager};
 pub use root::{PtyConfig, ToolOutputMode, UiConfig};

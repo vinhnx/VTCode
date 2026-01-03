@@ -184,13 +184,13 @@ pub use config::{
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::AgentRunner;
-pub use core::optimized_agent::{OptimizedAgentEngine, AgentState, AgentContext};
-pub use core::memory_pool::{MemoryPool, global_pool};
-pub use core::performance_profiler::{PerformanceProfiler, BenchmarkResults, BenchmarkUtils};
 pub use core::agent::task::{
     ContextItem as RunnerContextItem, Task as RunnerTask, TaskOutcome as RunnerTaskOutcome,
     TaskResults as RunnerTaskResults,
 };
+pub use core::memory_pool::{MemoryPool, global_pool};
+pub use core::optimized_agent::{AgentContext, AgentState, OptimizedAgentEngine};
+pub use core::performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
 
 pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, PromptOptimizer};
 pub use core::timeout_detector::TimeoutDetector;
@@ -247,8 +247,8 @@ pub use sandboxing::{
 };
 
 pub use tools::grep_file::GrepSearchManager;
-pub use tools::{AsyncToolPipeline, OptimizedToolRegistry, AsyncToolRequest, ExecutionPriority};
 pub use tools::tree_sitter::TreeSitterAnalyzer;
+pub use tools::{AsyncToolPipeline, AsyncToolRequest, ExecutionPriority, OptimizedToolRegistry};
 pub use tools::{
     ToolRegistration, ToolRegistry, build_function_declarations,
     build_function_declarations_for_level, build_function_declarations_with_mode,

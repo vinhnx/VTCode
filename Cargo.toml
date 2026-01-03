@@ -126,6 +126,8 @@ ctor = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 webbrowser = "1.0"
+notify = "6.1.1" # For file watching functionality
+home = "0.5.9"   # For home directory detection
 tokio-util = { version = "0.7", features = ["compat"] }
 serde = { workspace = true }
 toml = "0.9.8"
@@ -201,6 +203,14 @@ inherits = "dev"
 debug = 0
 incremental = false
 overflow-checks = false
+
+[profile.bench]
+# Optimize benchmarks for accurate performance measurement
+codegen-units = 1
+lto = true
+opt-level = 3
+debug = false
+incremental = false
 
 
 

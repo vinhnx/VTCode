@@ -1,10 +1,10 @@
 //! Optimized LLM client with connection pooling and request batching
 
+use anyhow::Result;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use anyhow::Result;
-use serde_json::Value;
 use tokio::sync::{RwLock, Semaphore};
 use tracing::debug;
 
@@ -30,10 +30,10 @@ pub struct OptimizedResponse {
 pub struct ConnectionPool {
     /// Pool of reusable HTTP clients
     clients: Arc<RwLock<Vec<reqwest::Client>>>,
-    
+
     /// Maximum pool size
     max_size: usize,
-    
+
     /// Current pool utilization
     active_connections: Arc<Semaphore>,
 }
@@ -42,10 +42,10 @@ pub struct ConnectionPool {
 pub struct RequestBatcher {
     /// Pending requests waiting to be batched
     pending_requests: Arc<RwLock<HashMap<String, Vec<BatchedRequest>>>>,
-    
+
     /// Batch processing interval
     batch_interval: Duration,
-    
+
     /// Maximum batch size
     max_batch_size: usize,
 }
@@ -63,16 +63,16 @@ pub struct BatchedRequest {
 pub struct OptimizedLLMClient {
     /// Connection pool for HTTP requests
     connection_pool: Arc<ConnectionPool>,
-    
+
     /// Request batcher for similar requests
     request_batcher: Arc<RequestBatcher>,
-    
+
     /// Response cache for identical requests
     response_cache: Arc<RwLock<lru::LruCache<String, CachedResponse>>>,
-    
+
     /// Rate limiter for API calls
     rate_limiter: Arc<RateLimiter>,
-    
+
     /// Performance metrics
     metrics: Arc<RwLock<ClientMetrics>>,
 }
@@ -89,7 +89,7 @@ pub struct CachedResponse {
 pub struct RateLimiter {
     /// Semaphore for request rate limiting
     permits: Arc<Semaphore>,
-    
+
     /// Token bucket for burst handling
     token_bucket: Arc<RwLock<TokenBucket>>,
 }
@@ -117,7 +117,7 @@ pub struct ClientMetrics {
 impl ConnectionPool {
     pub fn new(max_size: usize) -> Self {
         let clients = Vec::with_capacity(max_size);
-        
+
         Self {
             clients: Arc::new(RwLock::new(clients)),
             max_size,
@@ -175,23 +175,23 @@ impl RequestBatcher {
     /// Add request to batch queue
     pub async fn add_request(&self, request: BatchedRequest) -> Result<()> {
         let batch_key = self.generate_batch_key(&request.request);
-        
+
         let mut pending = self.pending_requests.write().await;
         let batch = pending.entry(batch_key).or_insert_with(Vec::new);
-        
+
         batch.push(request);
-        
+
         // Trigger immediate processing if batch is full
         if batch.len() >= self.max_batch_size {
             // Process batch immediately
             let batch_requests = std::mem::take(batch);
             drop(pending);
-            
+
             tokio::spawn(async move {
                 Self::process_batch(batch_requests).await;
             });
         }
-        
+
         Ok(())
     }
 
@@ -201,17 +201,17 @@ impl RequestBatcher {
         use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
-        
+
         // Hash model for batching
         request.model.hash(&mut hasher);
-        
+
         format!("{:x}", hasher.finish())
     }
 
     /// Process a batch of similar requests
     async fn process_batch(requests: Vec<BatchedRequest>) {
         debug!("Processing batch of {} requests", requests.len());
-        
+
         // For now, process individually (could be optimized for providers that support batching)
         for request in requests {
             let result = Self::execute_single_request(request.request).await;
@@ -220,10 +220,12 @@ impl RequestBatcher {
     }
 
     /// Execute a single request (placeholder)
-    async fn execute_single_request(_request: OptimizedRequest) -> Result<OptimizedResponse, LLMError> {
+    async fn execute_single_request(
+        _request: OptimizedRequest,
+    ) -> Result<OptimizedResponse, LLMError> {
         // Placeholder implementation
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         Ok(OptimizedResponse {
             content: "Batched response".to_string(),
             usage: None,
@@ -234,29 +236,29 @@ impl RequestBatcher {
     pub async fn start_processing(&self) {
         let pending_requests = Arc::clone(&self.pending_requests);
         let batch_interval = self.batch_interval;
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(batch_interval);
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let batches_to_process = {
                     let mut pending = pending_requests.write().await;
                     let mut batches = Vec::new();
-                    
+
                     for (key, requests) in pending.iter_mut() {
                         if !requests.is_empty() {
                             batches.push((key.clone(), std::mem::take(requests)));
                         }
                     }
-                    
+
                     // Clean up empty entries
                     pending.retain(|_, v| !v.is_empty());
-                    
+
                     batches
                 };
-                
+
                 // Process all batches concurrently
                 for (_, batch) in batches_to_process {
                     tokio::spawn(async move {
@@ -285,7 +287,7 @@ impl RateLimiter {
     pub async fn acquire(&self) -> Result<()> {
         // Refill token bucket
         self.refill_tokens().await;
-        
+
         // Try to acquire a token
         let mut bucket = self.token_bucket.write().await;
         if bucket.tokens >= 1.0 {
@@ -293,7 +295,7 @@ impl RateLimiter {
             Ok(())
         } else {
             drop(bucket);
-            
+
             // Wait for permit from semaphore
             let _permit = self.permits.acquire().await?;
             Ok(())
@@ -305,7 +307,7 @@ impl RateLimiter {
         let mut bucket = self.token_bucket.write().await;
         let now = Instant::now();
         let elapsed = now.duration_since(bucket.last_refill).as_secs_f64();
-        
+
         let tokens_to_add = elapsed * bucket.refill_rate;
         bucket.tokens = (bucket.tokens + tokens_to_add).min(bucket.capacity);
         bucket.last_refill = now;
@@ -321,12 +323,9 @@ impl OptimizedLLMClient {
     ) -> Self {
         Self {
             connection_pool: Arc::new(ConnectionPool::new(pool_size)),
-            request_batcher: Arc::new(RequestBatcher::new(
-                Duration::from_millis(100),
-                10,
-            )),
+            request_batcher: Arc::new(RequestBatcher::new(Duration::from_millis(100), 10)),
             response_cache: Arc::new(RwLock::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(cache_size).unwrap()
+                std::num::NonZeroUsize::new(cache_size).unwrap(),
             ))),
             rate_limiter: Arc::new(RateLimiter::new(requests_per_second, burst_capacity)),
             metrics: Arc::new(RwLock::new(ClientMetrics::default())),
@@ -334,12 +333,15 @@ impl OptimizedLLMClient {
     }
 
     /// Make an optimized LLM request with caching and batching
-    pub async fn chat_optimized(&self, request: OptimizedRequest) -> Result<OptimizedResponse, LLMError> {
+    pub async fn chat_optimized(
+        &self,
+        request: OptimizedRequest,
+    ) -> Result<OptimizedResponse, LLMError> {
         let start_time = Instant::now();
-        
+
         // Generate cache key
         let cache_key = self.generate_cache_key(&request);
-        
+
         // Check cache first
         {
             let cache = self.response_cache.read().await;
@@ -352,7 +354,9 @@ impl OptimizedLLMClient {
         }
 
         // Acquire rate limit permit
-        self.rate_limiter.acquire().await
+        self.rate_limiter
+            .acquire()
+            .await
             .map_err(|_e| LLMError::RateLimit { metadata: None })?;
 
         // Create batched request
@@ -365,12 +369,19 @@ impl OptimizedLLMClient {
         };
 
         // Add to batch queue
-        self.request_batcher.add_request(batched_request).await
-            .map_err(|e| LLMError::InvalidRequest { message: e.to_string(), metadata: None })?;
+        self.request_batcher
+            .add_request(batched_request)
+            .await
+            .map_err(|e| LLMError::InvalidRequest {
+                message: e.to_string(),
+                metadata: None,
+            })?;
 
         // Wait for response
-        let response = response_rx.await
-            .map_err(|e| LLMError::InvalidRequest { message: e.to_string(), metadata: None })??;
+        let response = response_rx.await.map_err(|e| LLMError::InvalidRequest {
+            message: e.to_string(),
+            metadata: None,
+        })??;
 
         // Cache successful response
         let cached_response = CachedResponse {
@@ -378,19 +389,21 @@ impl OptimizedLLMClient {
             cached_at: Instant::now(),
             ttl: Duration::from_secs(300), // 5 minutes
         };
-        
-        self.response_cache.write().await.put(cache_key, cached_response);
+
+        self.response_cache
+            .write()
+            .await
+            .put(cache_key, cached_response);
 
         // Update metrics
         let execution_time = start_time.elapsed();
         let mut metrics = self.metrics.write().await;
         metrics.total_requests += 1;
-        
+
         // Update average response time using exponential moving average
         let alpha = 0.1;
-        metrics.avg_response_time_ms = 
-            alpha * execution_time.as_millis() as f64 + 
-            (1.0 - alpha) * metrics.avg_response_time_ms;
+        metrics.avg_response_time_ms = alpha * execution_time.as_millis() as f64
+            + (1.0 - alpha) * metrics.avg_response_time_ms;
 
         Ok(response)
     }
@@ -402,11 +415,11 @@ impl OptimizedLLMClient {
 
         let mut hasher = DefaultHasher::new();
         request.model.hash(&mut hasher);
-        
+
         for message in &request.messages {
             message.to_string().hash(&mut hasher);
         }
-        
+
         format!("{:x}", hasher.finish())
     }
 

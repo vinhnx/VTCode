@@ -1,11 +1,11 @@
 //! High-performance async tool execution pipeline with batching and streaming
 
+use anyhow::{Result, anyhow};
+use serde_json::Value;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use anyhow::{Result, anyhow};
-use serde_json::Value;
-use tokio::sync::{mpsc, Semaphore, RwLock};
+use tokio::sync::{RwLock, Semaphore, mpsc};
 use tokio::time::timeout;
 use tracing::{debug, error};
 
@@ -62,19 +62,19 @@ pub struct ToolBatch {
 pub struct AsyncToolPipeline {
     /// Request queue with priority ordering
     request_queue: Arc<RwLock<VecDeque<ToolRequest>>>,
-    
+
     /// Batch processor for grouping similar requests
     batch_processor: Arc<BatchProcessor>,
-    
+
     /// Execution semaphore for concurrency control
     execution_semaphore: Arc<Semaphore>,
-    
+
     /// Result cache for avoiding duplicate work
     result_cache: Arc<RwLock<lru::LruCache<String, ToolResult>>>,
-    
+
     /// Performance metrics collector
     metrics: Arc<RwLock<PipelineMetrics>>,
-    
+
     /// Shutdown signal
     shutdown_tx: Option<mpsc::Sender<()>>,
 }
@@ -83,10 +83,10 @@ pub struct AsyncToolPipeline {
 pub struct BatchProcessor {
     /// Current batch being assembled
     current_batch: Arc<RwLock<Option<ToolBatch>>>,
-    
+
     /// Batch size threshold
     batch_size: usize,
-    
+
     /// Batch timeout threshold
     batch_timeout: Duration,
 }
@@ -114,7 +114,7 @@ impl AsyncToolPipeline {
             batch_processor: Arc::new(BatchProcessor::new(batch_size, batch_timeout)),
             execution_semaphore: Arc::new(Semaphore::new(max_concurrent_tools)),
             result_cache: Arc::new(RwLock::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(cache_size).unwrap()
+                std::num::NonZeroUsize::new(cache_size).unwrap(),
             ))),
             metrics: Arc::new(RwLock::new(PipelineMetrics::default())),
             shutdown_tx: None,
@@ -135,7 +135,7 @@ impl AsyncToolPipeline {
         // Main processing loop
         tokio::spawn(async move {
             let mut batch_timer = tokio::time::interval(Duration::from_millis(50));
-            
+
             loop {
                 tokio::select! {
                     _ = batch_timer.tick() => {
@@ -169,17 +169,17 @@ impl AsyncToolPipeline {
 
         // Add to priority queue
         let mut queue = self.request_queue.write().await;
-        
+
         // Insert based on priority (higher priority first)
         let insert_pos = queue
             .iter()
             .position(|r| r.priority < request.priority)
             .unwrap_or(queue.len());
-        
+
         queue.insert(insert_pos, request.clone());
-        
+
         self.metrics.write().await.total_requests += 1;
-        
+
         Ok(request.id)
     }
 
@@ -200,7 +200,7 @@ impl AsyncToolPipeline {
 
             let batch_size = std::cmp::min(queue.len(), batch_processor.batch_size);
             let requests: Vec<_> = queue.drain(..batch_size).collect();
-            
+
             ToolBatch {
                 requests,
                 batch_id: uuid::Uuid::new_v4().to_string(),
@@ -212,22 +212,26 @@ impl AsyncToolPipeline {
             return;
         }
 
-        debug!("Processing batch {} with {} requests", batch.batch_id, batch.requests.len());
+        debug!(
+            "Processing batch {} with {} requests",
+            batch.batch_id,
+            batch.requests.len()
+        );
 
         // Process batch concurrently
         let mut handles = Vec::with_capacity(batch.requests.len());
         let batch_size = batch.requests.len(); // Store size before moving
-        
+
         for request in batch.requests {
             let semaphore = Arc::clone(execution_semaphore);
             let cache = Arc::clone(result_cache);
             let metrics_ref = Arc::clone(metrics);
-            
+
             let handle = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.unwrap();
                 Self::execute_single_request(request, cache, metrics_ref).await
             });
-            
+
             handles.push(handle);
         }
 
@@ -241,8 +245,7 @@ impl AsyncToolPipeline {
         // Update batch efficiency metrics
         let batch_time = batch.created_at.elapsed();
         let mut metrics_guard = metrics.write().await;
-        metrics_guard.batch_efficiency = 
-            batch_size as f64 / batch_time.as_millis() as f64;
+        metrics_guard.batch_efficiency = batch_size as f64 / batch_time.as_millis() as f64;
     }
 
     /// Execute a single tool request with caching and metrics
@@ -252,8 +255,11 @@ impl AsyncToolPipeline {
         metrics: Arc<RwLock<PipelineMetrics>>,
     ) -> Result<()> {
         let start_time = Instant::now();
-        let cache_key = format!("{}:{}", request.tool_name, 
-            serde_json::to_string(&request.args).unwrap_or_default());
+        let cache_key = format!(
+            "{}:{}",
+            request.tool_name,
+            serde_json::to_string(&request.args).unwrap_or_default()
+        );
 
         // Check cache again (double-checked locking pattern)
         {
@@ -267,14 +273,18 @@ impl AsyncToolPipeline {
         // Execute tool with timeout
         let execution_result = timeout(
             request.timeout,
-            Self::execute_tool_impl(&request.tool_name, &request.args)
-        ).await;
+            Self::execute_tool_impl(&request.tool_name, &request.args),
+        )
+        .await;
 
         let execution_time = start_time.elapsed();
         let result = match execution_result {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(e)) => Err(e),
-            Err(_) => Err(anyhow!("Tool execution timed out after {:?}", request.timeout)),
+            Err(_) => Err(anyhow!(
+                "Tool execution timed out after {:?}",
+                request.timeout
+            )),
         };
 
         // Create result with metrics
@@ -299,12 +309,11 @@ impl AsyncToolPipeline {
         } else {
             metrics_guard.failed_executions += 1;
         }
-        
+
         // Update average execution time using exponential moving average
         let alpha = 0.1; // Smoothing factor
-        metrics_guard.avg_execution_time_ms = 
-            alpha * execution_time.as_millis() as f64 + 
-            (1.0 - alpha) * metrics_guard.avg_execution_time_ms;
+        metrics_guard.avg_execution_time_ms = alpha * execution_time.as_millis() as f64
+            + (1.0 - alpha) * metrics_guard.avg_execution_time_ms;
 
         Ok(())
     }
@@ -317,7 +326,7 @@ impl AsyncToolPipeline {
         let mut hasher = DefaultHasher::new();
         request.tool_name.hash(&mut hasher);
         request.args.to_string().hash(&mut hasher);
-        
+
         format!("{}:{:x}", request.tool_name, hasher.finish())
     }
 
@@ -326,13 +335,13 @@ impl AsyncToolPipeline {
         // Simulate work with memory pool usage
         let pool = global_pool();
         let mut work_string = pool.get_string();
-        
+
         // Simulate some processing
         work_string.push_str("Executed tool with args");
         tokio::time::sleep(Duration::from_millis(10)).await;
-        
+
         pool.return_string(work_string);
-        
+
         Ok(Value::String("Tool execution result".to_string()))
     }
 

@@ -12,12 +12,12 @@ use tokio::sync::{Notify, RwLock};
 use tokio::time::{Duration, sleep};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-use vtcode_core::tools::ApprovalRecorder;
-use vtcode_core::tools::traits::Tool;
-use vtcode_core::tools::handlers::SpawnSubagentTool;
-use vtcode_core::subagents::SubagentRegistry;
-use vtcode_config::subagent::SubagentsConfig;
 use vtcode_config::constants::tools as tool_constants;
+use vtcode_config::subagent::SubagentsConfig;
+use vtcode_core::subagents::SubagentRegistry;
+use vtcode_core::tools::ApprovalRecorder;
+use vtcode_core::tools::handlers::SpawnSubagentTool;
+use vtcode_core::tools::traits::Tool;
 
 use super::async_mcp_manager::AsyncMcpManager;
 use super::palettes::apply_prompt_style;
@@ -428,7 +428,10 @@ pub(crate) async fn initialize_session(
         vtcode_core::config::types::CapabilityLevel::Basic,
         list_skills_tool,
     );
-    tool_registry.register_tool(list_skills_reg).await.context("Failed to register list_skills tool")?;
+    tool_registry
+        .register_tool(list_skills_reg)
+        .await
+        .context("Failed to register list_skills tool")?;
 
     // Add list_skills to active tool definitions
     {
@@ -462,7 +465,10 @@ pub(crate) async fn initialize_session(
         vtcode_core::config::types::CapabilityLevel::Basic,
         load_resource_tool,
     );
-    tool_registry.register_tool(load_resource_reg).await.context("Failed to register load_skill_resource tool")?;
+    tool_registry
+        .register_tool(load_resource_reg)
+        .await
+        .context("Failed to register load_skill_resource tool")?;
 
     {
         let mut tools_guard = tools.write().await;
@@ -503,7 +509,10 @@ pub(crate) async fn initialize_session(
         vtcode_core::config::types::CapabilityLevel::Basic,
         load_skill_tool,
     );
-    tool_registry.register_tool(load_skill_reg).await.context("Failed to register load_skill tool")?;
+    tool_registry
+        .register_tool(load_skill_reg)
+        .await
+        .context("Failed to register load_skill tool")?;
 
     {
         let mut tools_guard = tools.write().await;
@@ -521,7 +530,8 @@ pub(crate) async fn initialize_session(
     }
 
     // 4. SpawnSubagent
-    let subagent_registry = SubagentRegistry::new(config.workspace.clone(), SubagentsConfig::default()).await?;
+    let subagent_registry =
+        SubagentRegistry::new(config.workspace.clone(), SubagentsConfig::default()).await?;
     let spawn_subagent_tool = SpawnSubagentTool::new(
         Arc::new(subagent_registry),
         config.clone(),
@@ -533,7 +543,10 @@ pub(crate) async fn initialize_session(
         vtcode_core::config::types::CapabilityLevel::Basic,
         spawn_subagent_tool,
     );
-    tool_registry.register_tool(spawn_subagent_reg).await.context("Failed to register spawn_subagent tool")?;
+    tool_registry
+        .register_tool(spawn_subagent_reg)
+        .await
+        .context("Failed to register spawn_subagent tool")?;
 
     {
         let mut tools_guard = tools.write().await;

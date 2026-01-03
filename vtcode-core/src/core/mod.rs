@@ -51,7 +51,7 @@ pub mod trajectory;
 
 // Re-export main types
 pub use context_optimizer::ContextOptimizer;
-pub use memory_pool::{MemoryPool, global_pool};
-pub use optimized_agent::{OptimizedAgentEngine, AgentState, AgentContext};
-pub use performance_profiler::{PerformanceProfiler, BenchmarkResults, BenchmarkUtils};
 pub use execution_context::ExecutionContext;
+pub use memory_pool::{MemoryPool, global_pool};
+pub use optimized_agent::{AgentContext, AgentState, OptimizedAgentEngine};
+pub use performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};

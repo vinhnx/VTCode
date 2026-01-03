@@ -1,0 +1,213 @@
+use anyhow::{Context, Result};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
+use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+
+/// Configuration watcher that monitors config files for changes
+/// and automatically reloads them when modifications are detected
+pub struct ConfigWatcher {
+    workspace_path: PathBuf,
+    last_load_time: Arc<Mutex<Instant>>,
+    current_config: Arc<Mutex<Option<VTCodeConfig>>>,
+    watcher: Option<RecommendedWatcher>,
+    debounce_duration: Duration,
+    last_event_time: Arc<Mutex<Instant>>,
+}
+
+impl ConfigWatcher {
+    /// Create a new ConfigWatcher for the given workspace
+    pub fn new(workspace_path: PathBuf) -> Self {
+        Self {
+            workspace_path,
+            last_load_time: Arc::new(Mutex::new(Instant::now())),
+            current_config: Arc::new(Mutex::new(None)),
+            watcher: None,
+            debounce_duration: Duration::from_millis(500),
+            last_event_time: Arc::new(Mutex::new(Instant::now())),
+        }
+    }
+
+    /// Initialize the file watcher and load initial configuration
+    pub async fn initialize(&mut self) -> Result<()> {
+        // Load initial configuration
+        self.load_config().await?;
+
+        // Set up file watcher
+        let workspace_path = self.workspace_path.clone();
+        let last_event_time = self.last_event_time.clone();
+        let debounce_duration = self.debounce_duration;
+
+        let mut watcher = RecommendedWatcher::new(
+            move |res: Result<notify::Event, notify::Error>| {
+                if let Ok(event) = res {
+                    let now = Instant::now();
+                    let mut last_time = last_event_time.blocking_lock();
+
+                    // Debounce rapid file changes
+                    if now.duration_since(*last_time) >= debounce_duration {
+                        *last_time = now;
+
+                        // Check if the event is relevant to our config files
+                        if is_relevant_config_event(&event, &workspace_path) {
+                            println!("Config file changed: {:?}", event);
+                        }
+                    }
+                }
+            },
+            notify::Config::default(),
+        )?;
+
+        // Watch the workspace directory for config file changes
+        let config_paths = get_config_file_paths(&self.workspace_path);
+        for path in config_paths {
+            if let Some(parent) = path.parent() {
+                watcher
+                    .watch(parent, RecursiveMode::NonRecursive)
+                    .with_context(|| format!("Failed to watch config directory: {:?}", parent))?;
+            }
+        }
+
+        self.watcher = Some(watcher);
+        Ok(())
+    }
+
+    /// Load or reload configuration
+    pub async fn load_config(&mut self) -> Result<()> {
+        let config = ConfigManager::load_from_workspace(&self.workspace_path)
+            .ok()
+            .map(|manager| manager.config().clone());
+
+        let mut current = self.current_config.lock().await;
+        *current = config;
+
+        let mut last_load = self.last_load_time.lock().await;
+        *last_load = Instant::now();
+
+        Ok(())
+    }
+
+    /// Get the current configuration, reload if changed
+    pub async fn get_config(&mut self) -> Option<VTCodeConfig> {
+        // Check if we need to reload based on file changes
+        if self.should_reload().await {
+            if let Err(err) = self.load_config().await {
+                eprintln!("Failed to reload config: {}", err);
+            }
+        }
+
+        self.current_config.lock().await.clone()
+    }
+
+    /// Check if configuration should be reloaded based on file changes
+    async fn should_reload(&self) -> bool {
+        let last_event = self.last_event_time.lock().await;
+        let last_load = self.last_load_time.lock().await;
+
+        // Reload if there were recent file events after our last load
+        *last_event > *last_load
+    }
+
+    /// Get the last load time for debugging
+    pub async fn last_load_time(&self) -> Instant {
+        *self.last_load_time.lock().await
+    }
+}
+
+/// Check if a file event is relevant to VT Code configuration
+fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bool {
+    // Look for events on common config file names
+    let relevant_files = ["vtcode.toml", ".vtcode.toml", "config.toml"];
+
+    // Check the event kind (note: notify::Event has a single `kind` field, not `kinds`)
+    match &event.kind {
+        notify::EventKind::Create(_) | notify::EventKind::Modify(_) | notify::EventKind::Remove(_) => {
+            for path in &event.paths {
+                if let Some(file_name) = path.file_name() {
+                    if let Some(file_name_str) = file_name.to_str() {
+                        if relevant_files.contains(&file_name_str) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    false
+}
+
+/// Get all potential config file paths to watch
+fn get_config_file_paths(workspace_path: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    // Main config file
+    paths.push(workspace_path.join("vtcode.toml"));
+
+    // Alternative config file
+    paths.push(workspace_path.join(".vtcode.toml"));
+
+    // Global config (if applicable)
+    if let Some(home_dir) = home::home_dir() {
+        paths.push(home_dir.join(".vtcode.toml"));
+    }
+
+    paths
+}
+
+/// Simple config watcher that doesn't use file system events
+/// Useful for environments where file watching isn't available
+pub struct SimpleConfigWatcher {
+    workspace_path: PathBuf,
+    last_load_time: Instant,
+    last_check_time: Instant,
+    check_interval: Duration,
+}
+
+impl SimpleConfigWatcher {
+    pub fn new(workspace_path: PathBuf) -> Self {
+        Self {
+            workspace_path,
+            last_load_time: Instant::now(),
+            last_check_time: Instant::now(),
+            check_interval: Duration::from_secs(5),
+        }
+    }
+
+    pub fn should_reload(&mut self) -> bool {
+        let now = Instant::now();
+
+        // Only check periodically
+        if now.duration_since(self.last_check_time) >= self.check_interval {
+            self.last_check_time = now;
+
+            // Check if config file has been modified since last load
+            let config_path = self.workspace_path.join("vtcode.toml");
+            if let Ok(metadata) = std::fs::metadata(&config_path) {
+                if let Ok(modified) = metadata.modified() {
+                    // Convert SystemTime to Instant for comparison
+                    let now = std::time::SystemTime::now();
+                    if let Ok(duration_since_modified) = now.duration_since(modified) {
+                        if duration_since_modified < self.last_load_time.elapsed() {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    pub fn load_config(&mut self) -> Option<VTCodeConfig> {
+        let config = ConfigManager::load_from_workspace(&self.workspace_path)
+            .ok()
+            .map(|manager| manager.config().clone());
+
+        self.last_load_time = Instant::now();
+        config
+    }
+}

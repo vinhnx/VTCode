@@ -1,9 +1,9 @@
 //! Memory pool for reducing allocations in hot paths
 
-use std::collections::VecDeque;
-use std::sync::Arc;
 use parking_lot::Mutex;
 use serde_json::Value;
+use std::collections::VecDeque;
+use std::sync::Arc;
 
 /// Pre-allocated memory pools for common data structures
 pub struct MemoryPool {
@@ -23,7 +23,10 @@ impl MemoryPool {
 
     /// Get a reusable string, clearing it first
     pub fn get_string(&self) -> String {
-        self.string_pool.lock().pop_front().unwrap_or_else(String::new)
+        self.string_pool
+            .lock()
+            .pop_front()
+            .unwrap_or_else(String::new)
     }
 
     /// Return a string to the pool after clearing it
@@ -70,7 +73,7 @@ impl Default for MemoryPool {
 }
 
 /// Global memory pool instance
-static MEMORY_POOL: once_cell::sync::Lazy<Arc<MemoryPool>> = 
+static MEMORY_POOL: once_cell::sync::Lazy<Arc<MemoryPool>> =
     once_cell::sync::Lazy::new(|| Arc::new(MemoryPool::new()));
 
 /// Get the global memory pool

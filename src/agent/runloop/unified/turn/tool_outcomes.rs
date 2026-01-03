@@ -317,9 +317,9 @@ pub(crate) async fn handle_tool_calls(
                 && let Some(outcome) =
                     handle_tool_call(ctx, tc, repeated_tool_attempts, turn_modified_files, traj)
                         .await?
-                {
-                    return Ok(Some(outcome));
-                }
+            {
+                return Ok(Some(outcome));
+            }
         }
     }
 

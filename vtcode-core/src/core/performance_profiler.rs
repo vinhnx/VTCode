@@ -1,10 +1,10 @@
 //! Performance benchmarking and profiling tools for VT Code optimizations
 
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 /// Performance benchmark results
@@ -38,10 +38,10 @@ pub struct ResourceMetrics {
 pub struct PerformanceProfiler {
     /// Active benchmark sessions
     sessions: Arc<RwLock<HashMap<String, BenchmarkSession>>>,
-    
+
     /// System resource monitor
     resource_monitor: Arc<ResourceMonitor>,
-    
+
     /// Historical benchmark results
     history: Arc<RwLock<Vec<BenchmarkResults>>>,
 }
@@ -60,10 +60,10 @@ pub struct BenchmarkSession {
 pub struct ResourceMonitor {
     /// Current resource usage
     current_metrics: Arc<RwLock<ResourceMetrics>>,
-    
+
     /// Monitoring interval
     monitor_interval: Duration,
-    
+
     /// Whether monitoring is active
     is_monitoring: Arc<RwLock<bool>>,
 }
@@ -87,7 +87,10 @@ impl PerformanceProfiler {
             resource_snapshots: Vec::new(),
         };
 
-        self.sessions.write().await.insert(name.to_string(), session);
+        self.sessions
+            .write()
+            .await
+            .insert(name.to_string(), session);
         self.resource_monitor.start_monitoring().await?;
 
         Ok(())
@@ -99,7 +102,7 @@ impl PerformanceProfiler {
         if let Some(session) = sessions.get_mut(session_name) {
             session.iterations += 1;
             session.durations.push(duration);
-            
+
             // Capture resource snapshot every 100 operations
             if session.iterations % 100 == 0 {
                 let metrics = self.resource_monitor.get_current_metrics().await;
@@ -114,14 +117,15 @@ impl PerformanceProfiler {
     pub async fn end_benchmark(&self, session_name: &str) -> Result<BenchmarkResults> {
         let session = {
             let mut sessions = self.sessions.write().await;
-            sessions.remove(session_name)
+            sessions
+                .remove(session_name)
                 .ok_or_else(|| anyhow::anyhow!("Benchmark session '{}' not found", session_name))?
         };
 
         self.resource_monitor.stop_monitoring().await?;
 
         let results = self.calculate_results(session).await;
-        
+
         // Store in history
         self.history.write().await.push(results.clone());
 
@@ -131,11 +135,12 @@ impl PerformanceProfiler {
     /// Calculate benchmark results from session data
     async fn calculate_results(&self, session: BenchmarkSession) -> BenchmarkResults {
         let total_duration = session.start_time.elapsed();
-        let mut durations_ns: Vec<u64> = session.durations
+        let mut durations_ns: Vec<u64> = session
+            .durations
             .iter()
             .map(|d| d.as_nanos() as u64)
             .collect();
-        
+
         durations_ns.sort_unstable();
 
         let avg_duration_ns = if !durations_ns.is_empty() {
@@ -149,14 +154,20 @@ impl PerformanceProfiler {
 
         let percentile_95_ns = if !durations_ns.is_empty() {
             let index = (durations_ns.len() as f64 * 0.95) as usize;
-            durations_ns.get(index.min(durations_ns.len() - 1)).copied().unwrap_or(0)
+            durations_ns
+                .get(index.min(durations_ns.len() - 1))
+                .copied()
+                .unwrap_or(0)
         } else {
             0
         };
 
         let percentile_99_ns = if !durations_ns.is_empty() {
             let index = (durations_ns.len() as f64 * 0.99) as usize;
-            durations_ns.get(index.min(durations_ns.len() - 1)).copied().unwrap_or(0)
+            durations_ns
+                .get(index.min(durations_ns.len() - 1))
+                .copied()
+                .unwrap_or(0)
         } else {
             0
         };
@@ -169,17 +180,27 @@ impl PerformanceProfiler {
 
         // Calculate average resource usage
         let avg_memory_mb = if !session.resource_snapshots.is_empty() {
-            Some(session.resource_snapshots.iter()
-                .map(|m| m.memory_used_mb)
-                .sum::<f64>() / session.resource_snapshots.len() as f64)
+            Some(
+                session
+                    .resource_snapshots
+                    .iter()
+                    .map(|m| m.memory_used_mb)
+                    .sum::<f64>()
+                    / session.resource_snapshots.len() as f64,
+            )
         } else {
             None
         };
 
         let avg_cpu_percent = if !session.resource_snapshots.is_empty() {
-            Some(session.resource_snapshots.iter()
-                .map(|m| m.cpu_percent)
-                .sum::<f64>() / session.resource_snapshots.len() as f64)
+            Some(
+                session
+                    .resource_snapshots
+                    .iter()
+                    .map(|m| m.cpu_percent)
+                    .sum::<f64>()
+                    / session.resource_snapshots.len() as f64,
+            )
         } else {
             None
         };
@@ -205,15 +226,23 @@ impl PerformanceProfiler {
     }
 
     /// Compare two benchmark results
-    pub fn compare_results(&self, baseline: &BenchmarkResults, current: &BenchmarkResults) -> ComparisonReport {
+    pub fn compare_results(
+        &self,
+        baseline: &BenchmarkResults,
+        current: &BenchmarkResults,
+    ) -> ComparisonReport {
         let throughput_change = if baseline.throughput_ops_per_sec > 0.0 {
-            ((current.throughput_ops_per_sec - baseline.throughput_ops_per_sec) / baseline.throughput_ops_per_sec) * 100.0
+            ((current.throughput_ops_per_sec - baseline.throughput_ops_per_sec)
+                / baseline.throughput_ops_per_sec)
+                * 100.0
         } else {
             0.0
         };
 
         let avg_latency_change = if baseline.avg_duration_ns > 0 {
-            ((current.avg_duration_ns as f64 - baseline.avg_duration_ns as f64) / baseline.avg_duration_ns as f64) * 100.0
+            ((current.avg_duration_ns as f64 - baseline.avg_duration_ns as f64)
+                / baseline.avg_duration_ns as f64)
+                * 100.0
         } else {
             0.0
         };
@@ -279,10 +308,10 @@ impl ResourceMonitor {
 
         tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             while *is_monitoring_flag.read().await {
                 interval_timer.tick().await;
-                
+
                 let metrics = Self::collect_system_metrics().await;
                 *current_metrics.write().await = metrics;
             }
@@ -306,7 +335,7 @@ impl ResourceMonitor {
     async fn collect_system_metrics() -> ResourceMetrics {
         // This is a simplified implementation
         // In a real system, you'd use system APIs or libraries like `sysinfo`
-        
+
         ResourceMetrics {
             memory_used_mb: Self::get_memory_usage_mb(),
             cpu_percent: Self::get_cpu_usage_percent(),
@@ -334,7 +363,7 @@ impl ResourceMonitor {
                 }
             }
         }
-        
+
         // Fallback estimation
         100.0
     }
@@ -416,25 +445,33 @@ impl BenchmarkUtils {
         max_regression_percent: f64,
     ) -> Result<bool> {
         let history = profiler.get_history().await;
-        
-        let baseline = history.iter()
+
+        let baseline = history
+            .iter()
             .find(|r| r.test_name == baseline_name)
             .ok_or_else(|| anyhow::anyhow!("Baseline '{}' not found", baseline_name))?;
-            
-        let current = history.iter()
+
+        let current = history
+            .iter()
             .find(|r| r.test_name == current_name)
             .ok_or_else(|| anyhow::anyhow!("Current '{}' not found", current_name))?;
 
         let comparison = profiler.compare_results(baseline, current);
-        
+
         // Check if performance regressed beyond threshold
-        let regression = comparison.avg_latency_change_percent > max_regression_percent ||
-                        comparison.throughput_change_percent < -max_regression_percent;
+        let regression = comparison.avg_latency_change_percent > max_regression_percent
+            || comparison.throughput_change_percent < -max_regression_percent;
 
         if regression {
             eprintln!("Performance regression detected:");
-            eprintln!("  Latency change: {:.2}%", comparison.avg_latency_change_percent);
-            eprintln!("  Throughput change: {:.2}%", comparison.throughput_change_percent);
+            eprintln!(
+                "  Latency change: {:.2}%",
+                comparison.avg_latency_change_percent
+            );
+            eprintln!(
+                "  Throughput change: {:.2}%",
+                comparison.throughput_change_percent
+            );
         }
 
         Ok(!regression)
@@ -455,49 +492,45 @@ mod tests {
     #[tokio::test]
     async fn test_benchmark_session() -> Result<()> {
         let profiler = PerformanceProfiler::new();
-        
+
         profiler.start_benchmark("test_session").await?;
-        
+
         // Simulate some operations
         for i in 0..10 {
             let duration = Duration::from_millis(10 + i);
             profiler.record_operation("test_session", duration).await?;
         }
-        
+
         let results = profiler.end_benchmark("test_session").await?;
-        
+
         assert_eq!(results.test_name, "test_session");
         assert_eq!(results.iterations, 10);
         assert!(results.avg_duration_ns > 0);
-        
+
         Ok(())
     }
 
     #[tokio::test]
     async fn test_benchmark_utils() -> Result<()> {
         let profiler = PerformanceProfiler::new();
-        
-        let results = BenchmarkUtils::benchmark_function(
-            &profiler,
-            "test_function",
-            100,
-            || {
-                // Simulate work
-                std::thread::sleep(Duration::from_micros(100));
-                42
-            },
-        ).await?;
-        
+
+        let results = BenchmarkUtils::benchmark_function(&profiler, "test_function", 100, || {
+            // Simulate work
+            std::thread::sleep(Duration::from_micros(100));
+            42
+        })
+        .await?;
+
         assert_eq!(results.iterations, 100);
         assert!(results.throughput_ops_per_sec > 0.0);
-        
+
         Ok(())
     }
 
     #[tokio::test]
     async fn test_async_benchmark() -> Result<()> {
         let profiler = PerformanceProfiler::new();
-        
+
         let results = BenchmarkUtils::benchmark_async_function(
             &profiler,
             "test_async_function",
@@ -506,11 +539,12 @@ mod tests {
                 sleep(Duration::from_micros(200)).await;
                 "result"
             },
-        ).await?;
-        
+        )
+        .await?;
+
         assert_eq!(results.iterations, 50);
         assert!(results.avg_duration_ns > 0);
-        
+
         Ok(())
     }
 }
