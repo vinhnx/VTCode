@@ -3,6 +3,21 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.21] - 2026-01-04
+
+
+### Bug Fixes
+    - fix: suppress dead code warnings for unused UI and agent functions
+
+
+### Documentation
+    - docs: update changelog for v0.58.20 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.58.20 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.58.19 version =  [skip ci]
 # [Version 0.58.20] - 2026-01-04
 
 
