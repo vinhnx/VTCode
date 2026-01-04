@@ -3,6 +3,30 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.19] - 2026-01-04
+
+
+### Features
+    - feat(core): enhance tool caching and UI redraw optimization
+
+
+### Bug Fixes
+    - fix: prefix unused variable with underscore in config_watcher
+    - fix: remove dead code and fix compilation errors
+
+
+### Documentation
+    - docs: update changelog for v0.58.18 [skip ci]
+    - docs: update changelog for v0.58.17 [skip ci]
+    - docs: update changelog for v0.58.16 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.58.18 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore(release): bump version to {{version}}
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.58.15 version =  [skip ci]
 # [Version 0.58.18] - 2026-01-04
 
 
