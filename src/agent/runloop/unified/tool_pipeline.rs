@@ -254,19 +254,18 @@ pub(crate) async fn run_tool_call(
 
     // Attempt cache retrieval for cacheable tools
     if is_cacheable_tool {
-        let workspace_path = ctx.tool_registry.workspace_root().to_string_lossy().to_string();
-        let cache_key = create_enhanced_cache_key(
-            &name,
-            &args_val,
-            &cache_target,
-            &workspace_path,
-        );
-        
+        let workspace_path = ctx
+            .tool_registry
+            .workspace_root()
+            .to_string_lossy()
+            .to_string();
+        let cache_key = create_enhanced_cache_key(&name, &args_val, &cache_target, &workspace_path);
+
         let mut cache = ctx.tool_result_cache.write().await;
         if let Some(cached_output) = cache.get(&cache_key) {
             let cached_json: serde_json::Value =
                 serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
-            
+
             // Telemetry: Log cache hit
             tracing::debug!(
                 target: "vtcode.performance.cache",
@@ -274,7 +273,7 @@ pub(crate) async fn run_tool_call(
                 name,
                 workspace_path
             );
-            
+
             let status = ToolExecutionStatus::Success {
                 output: cached_json,
                 stdout: None,
@@ -333,13 +332,13 @@ pub(crate) async fn run_tool_call(
                 && loop_detected
             {
                 // Tool was blocked due to loop detection - try to get cached result
-                let workspace_path = ctx.tool_registry.workspace_root().to_string_lossy().to_string();
-                let cache_key = create_enhanced_cache_key(
-                    &name,
-                    &args_val,
-                    &cache_target,
-                    &workspace_path,
-                );
+                let workspace_path = ctx
+                    .tool_registry
+                    .workspace_root()
+                    .to_string_lossy()
+                    .to_string();
+                let cache_key =
+                    create_enhanced_cache_key(&name, &args_val, &cache_target, &workspace_path);
                 let mut cache = ctx.tool_result_cache.write().await;
                 if let Some(cached_output) = cache.get(&cache_key) {
                     // We have a cached result from a previous successful call - return it
@@ -375,13 +374,13 @@ pub(crate) async fn run_tool_call(
         tool_spinner.finish();
         // Cache successful cacheable results
         if is_cacheable_tool && *command_success {
-            let workspace_path = ctx.tool_registry.workspace_root().to_string_lossy().to_string();
-            let cache_key = create_enhanced_cache_key(
-                &name,
-                &args_val,
-                &cache_target,
-                &workspace_path,
-            );
+            let workspace_path = ctx
+                .tool_registry
+                .workspace_root()
+                .to_string_lossy()
+                .to_string();
+            let cache_key =
+                create_enhanced_cache_key(&name, &args_val, &cache_target, &workspace_path);
             let mut cache = ctx.tool_result_cache.write().await;
             let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
             cache.insert_arc(cache_key, Arc::new(output_json));
@@ -974,12 +973,8 @@ fn create_enhanced_cache_key(
         // Relative path - prefix with workspace to ensure uniqueness
         format!("{}/{}", workspace, cache_target)
     };
-    
-    vtcode_core::tools::result_cache::ToolCacheKey::from_json(
-        tool_name,
-        args,
-        &enhanced_target,
-    )
+
+    vtcode_core::tools::result_cache::ToolCacheKey::from_json(tool_name, args, &enhanced_target)
 }
 
 fn cache_target_path(tool_name: &str, args: &Value) -> String {

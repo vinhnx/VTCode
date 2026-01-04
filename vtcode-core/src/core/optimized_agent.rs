@@ -160,10 +160,7 @@ pub struct ExecutionPattern {
 }
 
 impl OptimizedAgentEngine {
-    pub fn new(
-        session_id: String,
-        tool_pipeline: Arc<AsyncToolPipeline>,
-    ) -> Self {
+    pub fn new(session_id: String, tool_pipeline: Arc<AsyncToolPipeline>) -> Self {
         let (state_tx, state_rx) = mpsc::unbounded_channel();
 
         let context = AgentContext {

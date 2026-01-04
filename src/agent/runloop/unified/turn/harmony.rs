@@ -43,22 +43,44 @@ pub(crate) fn strip_harmony_syntax(text: &str) -> String {
 
     result.push_str(current);
 
-    // Clean up any remaining tags just in case
-    let tags = [
-        "<|start|>",
-        "<|end|>",
-        "<|message|>",
-        "<|channel|>",
-        "<|constrain|>",
-        "<|call|>",
-        "<|return|>",
-    ];
-    let mut final_result = result;
-    for tag in tags {
-        final_result = final_result.replace(tag, "");
+    // Optimization: Single-pass cleanup of remaining tags using in-place filtering
+    // This avoids multiple String allocations from repeated .replace() calls
+    let mut final_result = String::with_capacity(result.len());
+    let mut chars = result.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '<' && chars.peek() == Some(&'|') {
+            // Potential tag start - scan ahead to find closing |>
+            let mut tag_buf = String::with_capacity(16);
+            tag_buf.push(c);
+            let mut found_end = false;
+            for next_c in chars.by_ref() {
+                tag_buf.push(next_c);
+                if next_c == '>' && tag_buf.ends_with("|>") {
+                    found_end = true;
+                    break;
+                }
+                // Limit tag length to avoid unbounded scanning
+                if tag_buf.len() > 20 {
+                    break;
+                }
+            }
+            // If not a valid tag pattern, include the characters
+            if !found_end {
+                final_result.push_str(&tag_buf);
+            }
+            // Otherwise, skip the tag (don't add to final_result)
+        } else {
+            final_result.push(c);
+        }
     }
 
-    final_result.trim().to_string()
+    // Trim in-place by finding start/end bounds
+    let trimmed = final_result.trim();
+    if trimmed.len() == final_result.len() {
+        final_result
+    } else {
+        trimmed.to_string()
+    }
 }
 
 #[cfg(test)]

@@ -10,7 +10,7 @@ use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext, TurnProcessingResult,
 };
 use crate::agent::runloop::unified::turn::guards::{
-    handle_turn_balancer, validate_required_tool_args,
+    handle_turn_balancer, validate_tool_args_security,
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::HandleTextResponseParams;
 use crate::agent::runloop::unified::ui_interaction::stream_and_render_response;
@@ -310,6 +310,10 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub turn_modified_files: &'a mut BTreeSet<PathBuf>,
     pub traj: &'a TrajectoryLogger,
     pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
+    /// Pre-computed max tool loops limit for efficiency
+    pub max_tool_loops: usize,
+    /// Pre-computed tool repeat limit for efficiency
+    pub tool_repeat_limit: usize,
 }
 
 /// Dispatch the appropriate response handler based on the processing result.
@@ -355,6 +359,8 @@ pub(crate) async fn handle_turn_processing_result(
                     turn_modified_files: params.turn_modified_files,
                     traj: params.traj,
                     session_end_reason: params.session_end_reason,
+                    max_tool_loops: params.max_tool_loops,
+                    tool_repeat_limit: params.tool_repeat_limit,
                 },
             )
             .await;
@@ -371,7 +377,14 @@ pub(crate) async fn handle_turn_processing_result(
         }
     };
 
-    Ok(handle_turn_balancer(params.ctx, params.step_count, params.repeated_tool_attempts).await)
+    Ok(handle_turn_balancer(
+        params.ctx,
+        params.step_count,
+        params.repeated_tool_attempts,
+        params.max_tool_loops,
+        params.tool_repeat_limit,
+    )
+    .await)
 }
 
 /// Process an LLM response and return a `TurnProcessingResult` describing whether
@@ -408,19 +421,19 @@ pub(crate) fn process_llm_response(
         && let Some((name, args)) =
             crate::agent::runloop::text_tools::detect_textual_tool_call(&text)
     {
-        // Validate required arguments before adding the tool call.
-        // This prevents executing tools with empty args that will fail and trigger loop detection.
-        if let Some(missing_params) = validate_required_tool_args(&name, &args) {
-            // Show warning about missing parameters but don't add the tool call.
+        // Validate required arguments and security before adding the tool call.
+        // This prevents executing tools with empty args or security violations.
+        if let Some(validation_failures) = validate_tool_args_security(&name, &args) {
+            // Show warning about validation failures but don't add the tool call.
             // This allows the model to continue naturally instead of failing execution.
             let tool_display =
                 crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name);
-            let missing_list = missing_params.join(", ");
+            let failures_list = validation_failures.join("; ");
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                 renderer,
                 &format!(
-                    "Detected {} but missing required params: {}",
-                    tool_display, missing_list
+                    "Detected {} but validation failed: {}",
+                    tool_display, failures_list
                 ),
             )?;
             // Don't set interpreted_textual_call = true, let it fall through to TextResponse

@@ -14,16 +14,18 @@ use vtcode_core::config::constants::tools as tool_names;
 /// allowing the Model to continue naturally instead of hitting loop detection.
 /// Validates that a textual tool call has required arguments and passes security checks.
 /// Returns `None` if valid, or `Some(failures)` if validation fails.
+///
+/// Optimization: Uses static slices for required params to avoid allocations
 pub(crate) fn validate_tool_args_security(
     name: &str,
     args: &serde_json::Value,
 ) -> Option<Vec<String>> {
     use vtcode_core::tools::validation::{commands, paths};
 
-    let mut failures = Vec::new();
+    // Optimization: Early return for tools with no requirements
+    static EMPTY_REQUIRED: &[&str] = &[];
 
-    // 1. Check required arguments
-    // -------------------------
+    // 1. Check required arguments using static slices
     let required: &[&str] = match name {
         n if n == tool_names::READ_FILE => &["path"],
         n if n == tool_names::WRITE_FILE => &["path", "content"],
@@ -33,53 +35,53 @@ pub(crate) fn validate_tool_args_security(
         n if n == tool_names::CODE_INTELLIGENCE => &["operation"],
         n if n == tool_names::RUN_PTY_CMD => &["command"],
         n if n == tool_names::APPLY_PATCH => &["patch"],
-        _ => &[],
+        _ => EMPTY_REQUIRED,
     };
 
-    if !required.is_empty() {
-        let missing: Vec<&str> = required
-            .iter()
-            .filter(|key| {
-                args.get(*key)
-                    .map(|v| v.is_null() || (v.is_string() && v.as_str().unwrap_or("").is_empty()))
-                    .unwrap_or(true)
-            })
-            .copied()
-            .collect();
+    // Optimization: Pre-allocate failures vec only when needed
+    let mut failures: Option<Vec<String>> = None;
 
-        for m in missing {
-            failures.push(format!("Missing required argument: {}", m));
+    if !required.is_empty() {
+        for key in required {
+            let is_missing = args
+                .get(*key)
+                .map(|v| v.is_null() || (v.is_string() && v.as_str().unwrap_or("").is_empty()))
+                .unwrap_or(true);
+
+            if is_missing {
+                failures
+                    .get_or_insert_with(|| Vec::with_capacity(4))
+                    .push(format!("Missing required argument: {}", key));
+            }
         }
     }
 
-    if !failures.is_empty() {
-        return Some(failures);
+    // Early return if required args are missing
+    if failures.is_some() {
+        return failures;
     }
 
-    // 2. Perform security checks
-    // --------------------------
-
+    // 2. Perform security checks only if required args passed
     // Path safety checks
     if let Some(path) = args.get("path").and_then(|v| v.as_str())
         && let Err(e) = paths::validate_path_safety(path)
     {
-        failures.push(format!("Path security check failed: {}", e));
+        failures
+            .get_or_insert_with(|| Vec::with_capacity(2))
+            .push(format!("Path security check failed: {}", e));
     }
 
     // Command safety checks
-    // Check both 'command' argument and specific tool usage
     if name == tool_names::RUN_PTY_CMD
         && let Some(cmd) = args.get("command").and_then(|v| v.as_str())
         && let Err(e) = commands::validate_command_safety(cmd)
     {
-        failures.push(format!("Command security check failed: {}", e));
+        failures
+            .get_or_insert_with(|| Vec::with_capacity(2))
+            .push(format!("Command security check failed: {}", e));
     }
 
-    if failures.is_empty() {
-        None
-    } else {
-        Some(failures)
-    }
+    failures
 }
 
 // Deprecated: use validate_tool_args_security instead
@@ -120,20 +122,11 @@ pub(crate) async fn handle_turn_balancer(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
     repeated_tool_attempts: &mut HashMap<String, usize>,
+    max_tool_loops: usize,
+    tool_repeat_limit: usize,
 ) -> TurnHandlerOutcome {
     use vtcode_core::llm::provider as uni;
     // --- Turn balancer: cap low-signal churn ---
-    let max_tool_loops = ctx
-        .vt_cfg
-        .map(|cfg| cfg.tools.max_tool_loops)
-        .filter(|&value| value > 0)
-        .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS);
-
-    let tool_repeat_limit = ctx
-        .vt_cfg
-        .map(|cfg| cfg.tools.max_repeated_tool_calls)
-        .filter(|&value| value > 0)
-        .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
 
     if crate::agent::runloop::unified::turn::utils::should_trigger_turn_balancer(
         step_count,

@@ -738,9 +738,12 @@ pub(crate) async fn initialize_session_ui(
 
     let mut ide_context_bridge = IdeContextBridge::from_env();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
-    
+
     // Create UI redraw batcher for optimizing UI updates with auto-flush
-    let ui_redraw_batcher = crate::agent::runloop::unified::turn::utils::UIRedrawBatcher::with_auto_flush(handle.clone());
+    let ui_redraw_batcher =
+        crate::agent::runloop::unified::turn::utils::UIRedrawBatcher::with_auto_flush(
+            handle.clone(),
+        );
 
     // Load workspace files asynchronously in background.
     // See: https://ratatui.rs/faq/#when-should-i-use-tokio-and-async--await-

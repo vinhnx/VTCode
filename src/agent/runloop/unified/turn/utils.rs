@@ -54,7 +54,7 @@ impl UIRedrawBatcher {
             let auto_flush_notify = self.auto_flush_notify.clone();
             let handle = self.handle.clone();
             let min_batch_interval = self.min_batch_interval;
-            
+
             self.auto_flush_task = Some(tokio::spawn(async move {
                 loop {
                     // Wait for notification or timeout
@@ -96,10 +96,10 @@ impl UIRedrawBatcher {
             self.handle.force_redraw();
             return;
         }
-        
+
         let mut pending = self.pending_redraws.lock().await;
         *pending += 1;
-        
+
         // Check if we should flush the batch
         if *pending >= self.max_batch_size {
             self.flush().await;

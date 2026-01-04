@@ -123,7 +123,9 @@ fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bo
 
     // Check the event kind (note: notify::Event has a single `kind` field, not `kinds`)
     match &event.kind {
-        notify::EventKind::Create(_) | notify::EventKind::Modify(_) | notify::EventKind::Remove(_) => {
+        notify::EventKind::Create(_)
+        | notify::EventKind::Modify(_)
+        | notify::EventKind::Remove(_) => {
             for path in &event.paths {
                 if let Some(file_name) = path.file_name() {
                     if let Some(file_name_str) = file_name.to_str() {
@@ -192,7 +194,7 @@ impl SimpleConfigWatcher {
 
             // Check all potential config files
             let config_files = get_config_file_paths(&self.workspace_path);
-            
+
             for config_path in config_files {
                 // Check if file exists
                 if !config_path.exists() {
@@ -203,7 +205,7 @@ impl SimpleConfigWatcher {
                     if let Ok(current_modified) = metadata.modified() {
                         // Get or initialize last modified time for this specific file
                         let _file_key = config_path.to_string_lossy().to_string();
-                        
+
                         // In a real implementation, we would track modified times per file
                         // For simplicity, we'll use a single tracking approach
                         // Store initial modified time if not set
@@ -243,7 +245,7 @@ impl SimpleConfigWatcher {
             .map(|manager| manager.config().clone());
 
         self.last_load_time = Instant::now();
-        
+
         // Update last modified time after successful load
         let config_path = self.workspace_path.join("vtcode.toml");
         if let Ok(metadata) = std::fs::metadata(&config_path) {

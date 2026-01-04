@@ -6,11 +6,20 @@ use std::io::Write;
 use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-use vtcode::config_watcher::SimpleConfigWatcher;
 use tokio::time::{Duration, sleep};
+use vtcode::config_watcher::SimpleConfigWatcher;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+
+/// Optimization: Pre-computed idle detection thresholds to avoid repeated config lookups
+#[derive(Clone, Copy)]
+struct IdleDetectionConfig {
+    timeout_ms: u64,
+    backoff_ms: u64,
+    max_cycles: usize,
+    enabled: bool,
+}
 
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
@@ -32,6 +41,27 @@ use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{SessionEndReason, SessionStartTrigger};
 
 const RECENT_MESSAGE_LIMIT: usize = 16;
+
+/// Optimization: Extract idle detection config once to avoid repeated Option unwrapping
+#[inline]
+fn extract_idle_config(vt_cfg: Option<&VTCodeConfig>) -> IdleDetectionConfig {
+    vt_cfg
+        .map(|cfg| {
+            let idle_config = &cfg.optimization.agent_execution;
+            IdleDetectionConfig {
+                timeout_ms: idle_config.idle_timeout_ms,
+                backoff_ms: idle_config.idle_backoff_ms,
+                max_cycles: idle_config.max_idle_cycles,
+                enabled: idle_config.idle_timeout_ms > 0,
+            }
+        })
+        .unwrap_or(IdleDetectionConfig {
+            timeout_ms: 0,
+            backoff_ms: 0,
+            max_cycles: 0,
+            enabled: false,
+        })
+}
 
 #[allow(dead_code)]
 enum TurnLoopResult {
@@ -68,9 +98,12 @@ pub(crate) async fn run_single_agent_loop_unified(
     // Configure for better performance: longer check interval, shorter debounce
     config_watcher.set_check_interval(15); // 15 seconds instead of default 10
     config_watcher.set_debounce_duration(500); // 500ms debounce instead of default 1000ms
-    
+
     // Load initial config
     let mut vt_cfg = config_watcher.load_config();
+
+    // Optimization: Pre-compute idle detection config to avoid repeated lookups
+    let mut idle_config = extract_idle_config(vt_cfg.as_ref());
 
     loop {
         // Take the pending resume request (if any) for this session iteration.
@@ -142,15 +175,18 @@ pub(crate) async fn run_single_agent_loop_unified(
         );
 
         let mut session_stats = SessionStats::default();
-        let mut linked_directories: Vec<LinkedDirectory> = Vec::new();
+        // Optimization: Pre-allocate with small capacity for typical usage
+        let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);
         let mut model_picker_state: Option<ModelPickerState> = None;
         let mut palette_state: Option<ActivePalette> = None;
         let mut last_forced_redraw = Instant::now();
         let mut input_status_state = InputStatusState::default();
-        let mut queued_inputs: VecDeque<String> = VecDeque::new();
+        // Optimization: Pre-allocate for common batch input scenarios
+        let mut queued_inputs: VecDeque<String> = VecDeque::with_capacity(8);
         let mut ctrl_c_notice_displayed = false;
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
-        let mut last_known_mcp_tools: Vec<String> = Vec::new();
+        // Optimization: Pre-allocate for typical MCP tool count
+        let mut last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
         let mut last_mcp_refresh = std::time::Instant::now();
 
         loop {
@@ -403,6 +439,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             // Smart config reloading using file watcher
             if config_watcher.should_reload() {
                 vt_cfg = config_watcher.load_config();
+                // Optimization: Update idle config when config changes
+                idle_config = extract_idle_config(vt_cfg.as_ref());
                 println!("Configuration reloaded due to file changes");
             }
 
@@ -417,35 +455,32 @@ pub(crate) async fn run_single_agent_loop_unified(
         // Check for config changes periodically
         if config_watcher.should_reload() {
             vt_cfg = config_watcher.load_config();
+            // Optimization: Update idle config when config changes
+            idle_config = extract_idle_config(vt_cfg.as_ref());
             println!("Configuration reloaded during idle period");
         }
 
-        // Idle detection and back-off mechanism
-        if let Some(ref cfg) = vt_cfg {
-            let idle_config = &cfg.optimization.agent_execution;
+        // Idle detection and back-off mechanism (optimized: use pre-computed config)
+        if idle_config.enabled {
+            let idle_duration = last_activity_time.elapsed().as_millis() as u64;
 
-            // Check if idle detection is enabled (idle_timeout_ms > 0)
-            if idle_config.idle_timeout_ms > 0 {
-                let idle_duration = last_activity_time.elapsed().as_millis() as u64;
+            if idle_duration >= idle_config.timeout_ms {
+                _consecutive_idle_cycles += 1;
 
-                if idle_duration >= idle_config.idle_timeout_ms {
-                    _consecutive_idle_cycles += 1;
-
-                    // Apply back-off if configured
-                    if idle_config.idle_backoff_ms > 0 {
-                        if _consecutive_idle_cycles >= idle_config.max_idle_cycles {
-                            // Deep sleep - longer back-off for significant idle periods
-                            sleep(Duration::from_millis(idle_config.idle_backoff_ms * 2)).await;
-                            _consecutive_idle_cycles = 0; // Reset after deep sleep
-                        } else {
-                            // Regular back-off for moderate idle periods
-                            sleep(Duration::from_millis(idle_config.idle_backoff_ms)).await;
-                        }
+                // Apply back-off if configured
+                if idle_config.backoff_ms > 0 {
+                    if _consecutive_idle_cycles >= idle_config.max_cycles {
+                        // Deep sleep - longer back-off for significant idle periods
+                        sleep(Duration::from_millis(idle_config.backoff_ms * 2)).await;
+                        _consecutive_idle_cycles = 0; // Reset after deep sleep
+                    } else {
+                        // Regular back-off for moderate idle periods
+                        sleep(Duration::from_millis(idle_config.backoff_ms)).await;
                     }
-                } else {
-                    // Activity detected - reset idle counter
-                    _consecutive_idle_cycles = 0;
                 }
+            } else {
+                // Activity detected - reset idle counter
+                _consecutive_idle_cycles = 0;
             }
         }
 
