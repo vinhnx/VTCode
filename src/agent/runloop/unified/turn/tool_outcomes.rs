@@ -1037,33 +1037,19 @@ pub(crate) async fn run_turn_handle_tool_success(
 
 #[allow(dead_code)]
 pub(crate) async fn run_turn_handle_tool_failure(
-    name: &str,
-    error: anyhow::Error,
-    renderer: &mut AnsiRenderer,
-    handle: &vtcode_core::ui::tui::InlineHandle,
-    session_stats: &mut SessionStats,
-    traj: &vtcode_core::core::trajectory::TrajectoryLogger,
-    working_history: &mut Vec<uni::Message>,
-    call_id: &str,
-    dec_id: &str,
-    mcp_panel_state: &mut mcp_events::McpPanelState,
-    decision_ledger: &Arc<
-        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
-    >,
-    tool_result_cache: Option<&Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>>,
-    vt_cfg: Option<&VTCodeConfig>,
+    params: RunTurnHandleToolFailureParams<'_>,
 ) -> Result<()> {
     // Finish spinner / ensure redraw is caller's responsibility
-    safe_force_redraw(handle, &mut Instant::now());
-    redraw_with_sync(handle).await?;
+    safe_force_redraw(params.handle, &mut Instant::now());
+    redraw_with_sync(params.handle).await?;
 
-    session_stats.record_tool(name);
+    params.session_stats.record_tool(params.name);
 
     // Display a simple failure message and log
-    let failure_msg = format!("Tool '{}' failed: {}", name, error);
-    renderer.line(MessageStyle::Error, &failure_msg)?;
+    let failure_msg = format!("Tool '{}' failed: {}", params.name, params.error);
+    params.renderer.line(MessageStyle::Error, &failure_msg)?;
     // Provide simple recovery hint to reduce repeated failures
-    let recovery_hint = match name {
+    let recovery_hint = match params.name {
         tools::GREP_FILE => {
             "Try narrowing the pattern or limiting files (e.g., use glob or specific paths)."
         }
@@ -1075,24 +1061,24 @@ pub(crate) async fn run_turn_handle_tool_failure(
         }
         _ => "Adjust arguments, try a smaller scope, or use a different tool.",
     };
-    renderer.line(MessageStyle::Info, recovery_hint)?;
-    working_history.push(uni::Message::system(format!(
+    params.renderer.line(MessageStyle::Info, recovery_hint)?;
+    params.working_history.push(uni::Message::system(format!(
         "Tool '{}' failed. Hint: {}",
-        name, recovery_hint
+        params.name, recovery_hint
     )));
 
-    traj.log_tool_call(working_history.len(), name, &serde_json::json!({}), false);
+    params.traj.log_tool_call(params.working_history.len(), params.name, &serde_json::json!({}), false);
 
-    let error_message = error.to_string();
+    let error_message = params.error.to_string();
     let error_json = serde_json::json!({ "error": error_message });
 
-    if let Some(tool_name) = name.strip_prefix("mcp_") {
-        renderer.line_if_not_empty(MessageStyle::Output)?;
-        renderer.line(
+    if let Some(tool_name) = params.name.strip_prefix("mcp_") {
+        params.renderer.line_if_not_empty(MessageStyle::Output)?;
+        params.renderer.line(
             MessageStyle::Error,
             &format!("MCP tool {} failed: {}", tool_name, error_message),
         )?;
-        handle.force_redraw();
+        params.handle.force_redraw();
         wait_for_redraw_complete().await?;
 
         let mut mcp_event = mcp_events::McpEvent::new(
@@ -1101,10 +1087,10 @@ pub(crate) async fn run_turn_handle_tool_failure(
             Some(serde_json::to_string(&error_json).unwrap_or_default()),
         );
         mcp_event.failure(Some(error_message.clone()));
-        mcp_panel_state.add_event(mcp_event);
+        params.mcp_panel_state.add_event(mcp_event);
     }
 
-    renderer.line(MessageStyle::Error, &error_message)?;
+    params.renderer.line(MessageStyle::Error, &error_message)?;
     // Render via the renderer adapter so all cache invalidation and MCP events are handled
     let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
         output: error_json.clone(),
@@ -1114,28 +1100,28 @@ pub(crate) async fn run_turn_handle_tool_failure(
         has_more: false,
     });
     handle_pipeline_output_renderer(
-        renderer,
-        session_stats,
-        mcp_panel_state,
-        tool_result_cache,
-        Some(decision_ledger),
-        name,
+        params.renderer,
+        params.session_stats,
+        params.mcp_panel_state,
+        params.tool_result_cache,
+        Some(params.decision_ledger),
+        params.name,
         &serde_json::json!({}),
         &outcome,
-        vt_cfg,
+        params.vt_cfg,
     )
     .await?;
 
-    working_history.push(uni::Message::tool_response_with_origin(
-        call_id.to_string(),
+    params.working_history.push(uni::Message::tool_response_with_origin(
+        params.call_id.to_string(),
         serde_json::to_string(&error_json).unwrap_or_default(),
-        name.to_string(),
+        params.name.to_string(),
     ));
 
     {
-        let mut ledger = decision_ledger.write().await;
+        let mut ledger = params.decision_ledger.write().await;
         ledger.record_outcome(
-            dec_id,
+            params.dec_id,
             DecisionOutcome::Failure {
                 error: error_message,
                 recovery_attempts: 0,
@@ -1147,6 +1133,23 @@ pub(crate) async fn run_turn_handle_tool_failure(
     Ok(())
 }
 
+pub(crate) struct RunTurnHandleToolFailureParams<'a> {
+    pub name: &'a str,
+    pub error: anyhow::Error,
+    pub renderer: &'a mut AnsiRenderer,
+    pub handle: &'a vtcode_core::ui::tui::InlineHandle,
+    pub session_stats: &'a mut SessionStats,
+    pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    pub working_history: &'a mut Vec<uni::Message>,
+    pub call_id: &'a str,
+    pub dec_id: &'a str,
+    pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
+    pub decision_ledger:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    pub tool_result_cache: Option<&'a Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>>,
+    pub vt_cfg: Option<&'a VTCodeConfig>,
+}
+
 pub(crate) struct RunTurnHandleToolTimeoutParams<'a> {
     pub name: &'a str,
     pub error: anyhow::Error,
@@ -1154,6 +1157,18 @@ pub(crate) struct RunTurnHandleToolTimeoutParams<'a> {
     pub handle: &'a vtcode_core::ui::tui::InlineHandle,
     pub session_stats: &'a mut SessionStats,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    pub working_history: &'a mut Vec<uni::Message>,
+    pub call_id: &'a str,
+    pub dec_id: &'a str,
+    pub decision_ledger:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+}
+
+pub(crate) struct RunTurnHandleToolCancelledParams<'a> {
+    pub name: &'a str,
+    pub renderer: &'a mut AnsiRenderer,
+    pub handle: &'a vtcode_core::ui::tui::InlineHandle,
+    pub session_stats: &'a mut SessionStats,
     pub working_history: &'a mut Vec<uni::Message>,
     pub call_id: &'a str,
     pub dec_id: &'a str,
@@ -1211,40 +1226,31 @@ pub(crate) async fn run_turn_handle_tool_timeout(
 
 #[allow(dead_code)]
 pub(crate) async fn run_turn_handle_tool_cancelled(
-    name: &str,
-    renderer: &mut AnsiRenderer,
-    handle: &vtcode_core::ui::tui::InlineHandle,
-    session_stats: &mut SessionStats,
-    working_history: &mut Vec<uni::Message>,
-    call_id: &str,
-    dec_id: &str,
-    decision_ledger: &Arc<
-        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
-    >,
+    params: RunTurnHandleToolCancelledParams<'_>,
 ) -> Result<TurnLoopResult> {
-    safe_force_redraw(handle, &mut Instant::now());
-    redraw_with_sync(handle).await?;
+    safe_force_redraw(params.handle, &mut Instant::now());
+    redraw_with_sync(params.handle).await?;
 
-    session_stats.record_tool(name);
+    params.session_stats.record_tool(params.name);
 
-    renderer.line_if_not_empty(MessageStyle::Output)?;
-    renderer.line(
+    params.renderer.line_if_not_empty(MessageStyle::Output)?;
+    params.renderer.line(
         MessageStyle::Info,
         "Operation cancelled by user. Stopping current turn.",
     )?;
 
     let err_json = serde_json::json!({ "error": "Tool execution cancelled by user" });
 
-    working_history.push(uni::Message::tool_response_with_origin(
-        call_id.to_string(),
+    params.working_history.push(uni::Message::tool_response_with_origin(
+        params.call_id.to_string(),
         serde_json::to_string(&err_json).unwrap_or_else(|_| "{}".to_string()),
-        name.to_string(),
+        params.name.to_string(),
     ));
 
     {
-        let mut ledger = decision_ledger.write().await;
+        let mut ledger = params.decision_ledger.write().await;
         ledger.record_outcome(
-            dec_id,
+            params.dec_id,
             DecisionOutcome::Failure {
                 error: "Cancelled by user".to_string(),
                 recovery_attempts: 0,
