@@ -46,7 +46,7 @@ const SELF_REVIEW_MIN_LENGTH: usize = 240;
 
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
-    mut vt_cfg: Option<VTCodeConfig>,
+    _vt_cfg: Option<VTCodeConfig>,
     skip_confirmations: bool,
     full_auto: bool,
     resume: Option<ResumeSession>,
@@ -60,7 +60,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut resume_state = resume;
 
     // Idle detection state
-    let mut consecutive_idle_cycles = 0;
+    let mut _consecutive_idle_cycles = 0;
     let mut last_activity_time = Instant::now();
 
     // Initialize config watcher for smart reloading with optimized settings
@@ -109,7 +109,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut follow_up_placeholder = ui_setup.follow_up_placeholder;
         let mut next_checkpoint_turn = ui_setup.next_checkpoint_turn;
         let mut session_end_reason = ui_setup.session_end_reason;
-        let ui_redraw_batcher = ui_setup.ui_redraw_batcher;
+        let _ui_redraw_batcher = ui_setup.ui_redraw_batcher;
 
         let SessionState {
             session_bootstrap,
@@ -409,7 +409,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             resume_state = None;
 
             // Reset idle counters when starting a new session
-            consecutive_idle_cycles = 0;
+            _consecutive_idle_cycles = 0;
             last_activity_time = Instant::now();
             continue;
         }
@@ -429,14 +429,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                 let idle_duration = last_activity_time.elapsed().as_millis() as u64;
 
                 if idle_duration >= idle_config.idle_timeout_ms {
-                    consecutive_idle_cycles += 1;
+                    _consecutive_idle_cycles += 1;
 
                     // Apply back-off if configured
                     if idle_config.idle_backoff_ms > 0 {
-                        if consecutive_idle_cycles >= idle_config.max_idle_cycles {
+                        if _consecutive_idle_cycles >= idle_config.max_idle_cycles {
                             // Deep sleep - longer back-off for significant idle periods
                             sleep(Duration::from_millis(idle_config.idle_backoff_ms * 2)).await;
-                            consecutive_idle_cycles = 0; // Reset after deep sleep
+                            _consecutive_idle_cycles = 0; // Reset after deep sleep
                         } else {
                             // Regular back-off for moderate idle periods
                             sleep(Duration::from_millis(idle_config.idle_backoff_ms)).await;
@@ -444,7 +444,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                 } else {
                     // Activity detected - reset idle counter
-                    consecutive_idle_cycles = 0;
+                    _consecutive_idle_cycles = 0;
                 }
             }
         }
