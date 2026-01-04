@@ -202,7 +202,7 @@ impl SimpleConfigWatcher {
                 if let Ok(metadata) = std::fs::metadata(&config_path) {
                     if let Ok(current_modified) = metadata.modified() {
                         // Get or initialize last modified time for this specific file
-                        let file_key = config_path.to_string_lossy().to_string();
+                        let _file_key = config_path.to_string_lossy().to_string();
                         
                         // In a real implementation, we would track modified times per file
                         // For simplicity, we'll use a single tracking approach
