@@ -12,6 +12,7 @@ use crate::hooks::lifecycle::{HookMessage, HookMessageLevel};
 /// UI Redraw Batcher for optimizing UI updates
 /// This struct batches multiple redraw requests into a single operation
 /// to reduce UI jank and improve performance
+#[allow(dead_code)]
 pub struct UIRedrawBatcher {
     handle: InlineHandle,
     pending_redraws: Arc<Mutex<usize>>,
@@ -89,6 +90,7 @@ impl UIRedrawBatcher {
     }
 
     /// Request a redraw (batched)
+    #[allow(dead_code)]
     pub async fn request_redraw(&self) {
         if !self.enabled {
             self.handle.force_redraw();
@@ -108,6 +110,7 @@ impl UIRedrawBatcher {
     }
 
     /// Flush pending redraws if enough time has passed or batch is full
+    #[allow(dead_code)]
     pub async fn flush(&self) {
         let mut pending = self.pending_redraws.lock().await;
         if *pending == 0 {
@@ -123,6 +126,7 @@ impl UIRedrawBatcher {
     }
 
     /// Force immediate redraw (bypasses batching)
+    #[allow(dead_code)]
     pub fn force_redraw(&self) {
         self.handle.force_redraw();
         // Reset counters
@@ -131,11 +135,13 @@ impl UIRedrawBatcher {
     }
 
     /// Set minimum batch interval
+    #[allow(dead_code)]
     pub fn set_min_batch_interval(&mut self, duration: Duration) {
         self.min_batch_interval = duration;
     }
 
     /// Set maximum batch size
+    #[allow(dead_code)]
     pub fn set_max_batch_size(&mut self, size: usize) {
         self.max_batch_size = size;
     }

@@ -23,6 +23,7 @@ impl ResumeSession {
     /// Create a new ResumeSession with optimized history allocation
     /// If the history vector can be reused (e.g., from a previous session),
     /// it will be used instead of creating a new one
+    #[allow(dead_code)]
     pub fn new_optimized(
         identifier: String,
         snapshot: SessionSnapshot,
@@ -41,6 +42,7 @@ impl ResumeSession {
 
     /// Create a new ResumeSession by reusing an existing one's history
     /// This avoids allocating a new Vec and copies only the necessary data
+    #[allow(dead_code)]
     pub fn from_existing_with_history(
         existing: &ResumeSession,
         new_history: Vec<ProviderMessage>,
