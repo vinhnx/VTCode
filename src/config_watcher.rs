@@ -92,11 +92,10 @@ impl ConfigWatcher {
     /// Get the current configuration, reload if changed
     pub async fn get_config(&mut self) -> Option<VTCodeConfig> {
         // Check if we need to reload based on file changes
-        if self.should_reload().await {
-            if let Err(err) = self.load_config().await {
+        if self.should_reload().await
+            && let Err(err) = self.load_config().await {
                 eprintln!("Failed to reload config: {}", err);
             }
-        }
 
         self.current_config.lock().await.clone()
     }
@@ -127,13 +126,11 @@ fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bo
         | notify::EventKind::Modify(_)
         | notify::EventKind::Remove(_) => {
             for path in &event.paths {
-                if let Some(file_name) = path.file_name() {
-                    if let Some(file_name_str) = file_name.to_str() {
-                        if relevant_files.contains(&file_name_str) {
+                if let Some(file_name) = path.file_name()
+                    && let Some(file_name_str) = file_name.to_str()
+                        && relevant_files.contains(&file_name_str) {
                             return true;
                         }
-                    }
-                }
             }
         }
         _ => {}
@@ -201,8 +198,8 @@ impl SimpleConfigWatcher {
                     continue;
                 }
 
-                if let Ok(metadata) = std::fs::metadata(&config_path) {
-                    if let Ok(current_modified) = metadata.modified() {
+                if let Ok(metadata) = std::fs::metadata(&config_path)
+                    && let Ok(current_modified) = metadata.modified() {
                         // Get or initialize last modified time for this specific file
                         let _file_key = config_path.to_string_lossy().to_string();
 
@@ -215,24 +212,21 @@ impl SimpleConfigWatcher {
                         }
 
                         // Check if file has been modified
-                        if let Some(last_modified) = self.last_modified_time {
-                            if current_modified > last_modified {
+                        if let Some(last_modified) = self.last_modified_time
+                            && current_modified > last_modified {
                                 // File has been modified, check debounce period
-                                if let Some(last_attempt) = self.last_reload_attempt {
-                                    if now.duration_since(last_attempt) < self.debounce_duration {
+                                if let Some(last_attempt) = self.last_reload_attempt
+                                    && now.duration_since(last_attempt) < self.debounce_duration {
                                         // Still in debounce period, don't reload yet
                                         continue;
                                     }
-                                }
 
                                 // Update last modified time and record reload attempt
                                 self.last_modified_time = Some(current_modified);
                                 self.last_reload_attempt = Some(now);
                                 return true;
                             }
-                        }
                     }
-                }
             }
         }
 
@@ -248,11 +242,10 @@ impl SimpleConfigWatcher {
 
         // Update last modified time after successful load
         let config_path = self.workspace_path.join("vtcode.toml");
-        if let Ok(metadata) = std::fs::metadata(&config_path) {
-            if let Ok(modified) = metadata.modified() {
+        if let Ok(metadata) = std::fs::metadata(&config_path)
+            && let Ok(modified) = metadata.modified() {
                 self.last_modified_time = Some(modified);
             }
-        }
 
         config
     }
