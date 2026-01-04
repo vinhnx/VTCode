@@ -49,8 +49,8 @@ use utils::normalize_tool_output;
 use crate::config::constants::defaults;
 use crate::config::constants::tools;
 use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
-use crate::core::memory_pool::SizeRecommendation;
 use crate::core::memory_pool::MemoryPool;
+use crate::core::memory_pool::SizeRecommendation;
 use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
@@ -749,9 +749,8 @@ impl ToolRegistry {
             // REAL PERFORMANCE OPTIMIZATIONS - Actually integrated!
             memory_pool: Arc::new(MemoryPool::from_config(&optimization_config.memory_pool)),
             hot_tool_cache: Arc::new(parking_lot::RwLock::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(
-                    optimization_config.tool_registry.hot_cache_size
-                ).unwrap(),
+                std::num::NonZeroUsize::new(optimization_config.tool_registry.hot_cache_size)
+                    .unwrap(),
             ))),
             optimization_config,
         };
@@ -1785,14 +1784,22 @@ impl ToolRegistry {
 
         // PERFORMANCE OPTIMIZATION: Auto-tune memory pool based on usage patterns
         if self.optimization_config.memory_pool.enabled {
-            let recommendation = self.memory_pool.auto_tune(&self.optimization_config.memory_pool);
-            
+            let recommendation = self
+                .memory_pool
+                .auto_tune(&self.optimization_config.memory_pool);
+
             // Log recommendation if significant changes are suggested
             if !matches!(
-                (recommendation.string_size_recommendation, 
-                 recommendation.value_size_recommendation, 
-                 recommendation.vec_size_recommendation),
-                (SizeRecommendation::Maintain, SizeRecommendation::Maintain, SizeRecommendation::Maintain)
+                (
+                    recommendation.string_size_recommendation,
+                    recommendation.value_size_recommendation,
+                    recommendation.vec_size_recommendation
+                ),
+                (
+                    SizeRecommendation::Maintain,
+                    SizeRecommendation::Maintain,
+                    SizeRecommendation::Maintain
+                )
             ) {
                 tracing::debug!(
                     "Memory pool tuning recommendation: string={:?}, value={:?}, vec={:?}, allocations_avoided={}",

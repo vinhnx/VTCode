@@ -113,7 +113,8 @@ pub async fn run_turn_loop(
         .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS);
 
     let mut step_count = 0;
-    let mut repeated_tool_attempts: HashMap<String, usize> = HashMap::new();
+    // Optimization: Pre-allocate HashMap with expected capacity to reduce rehashing
+    let mut repeated_tool_attempts: HashMap<String, usize> = HashMap::with_capacity(16);
 
     // Reset safety validator for a new turn
     {
@@ -121,6 +122,12 @@ pub async fn run_turn_loop(
         validator.set_limits(max_tool_loops, 100); // Session limit 100 as default
         validator.start_turn();
     }
+
+    // Optimization: Pre-compute tool repeat limit once
+    let tool_repeat_limit = vt_cfg
+        .map(|cfg| cfg.tools.max_repeated_tool_calls)
+        .filter(|&value| value > 0)
+        .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
 
     loop {
         step_count += 1;
@@ -189,6 +196,8 @@ pub async fn run_turn_loop(
             turn_modified_files: &mut turn_modified_files,
             traj,
             session_end_reason,
+            max_tool_loops,
+            tool_repeat_limit,
         })
         .await?
         {

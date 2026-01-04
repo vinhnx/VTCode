@@ -37,7 +37,11 @@ impl MemoryPool {
     }
 
     /// Create a new memory pool with custom sizes
-    pub fn with_capacities(string_capacity: usize, value_capacity: usize, vec_capacity: usize) -> Self {
+    pub fn with_capacities(
+        string_capacity: usize,
+        value_capacity: usize,
+        vec_capacity: usize,
+    ) -> Self {
         Self {
             string_pool: Mutex::new(VecDeque::with_capacity(string_capacity)),
             value_pool: Mutex::new(VecDeque::with_capacity(value_capacity)),
@@ -49,15 +53,9 @@ impl MemoryPool {
     /// Create a memory pool from configuration
     pub fn from_config(config: &MemoryPoolConfig) -> Self {
         Self {
-            string_pool: Mutex::new(VecDeque::with_capacity(
-                config.max_string_pool_size
-            )),
-            value_pool: Mutex::new(VecDeque::with_capacity(
-                config.max_value_pool_size
-            )),
-            vec_pool: Mutex::new(VecDeque::with_capacity(
-                config.max_vec_pool_size
-            )),
+            string_pool: Mutex::new(VecDeque::with_capacity(config.max_string_pool_size)),
+            value_pool: Mutex::new(VecDeque::with_capacity(config.max_value_pool_size)),
+            vec_pool: Mutex::new(VecDeque::with_capacity(config.max_vec_pool_size)),
             stats: Mutex::new(MemoryPoolStats::default()),
         }
     }
@@ -78,8 +76,16 @@ impl MemoryPool {
     }
 
     /// Return a string to the pool after clearing it
+    /// Optimization: Only clear if string has content, preserve capacity for reuse
     pub fn return_string(&self, mut s: String) {
-        s.clear();
+        // Optimization: Preserve capacity for strings with reasonable size
+        // This avoids reallocations when the string is reused
+        if s.capacity() > 4096 {
+            // Large strings: shrink to avoid memory bloat
+            s = String::with_capacity(256);
+        } else {
+            s.clear();
+        }
         let mut pool = self.string_pool.lock();
         // Use capacity as the limit to respect configuration
         if pool.len() < pool.capacity() {
@@ -102,10 +108,21 @@ impl MemoryPool {
     }
 
     /// Return a Value to the pool
+    /// Optimization: Only pool simple values to avoid memory bloat from large objects
     pub fn return_value(&self, v: Value) {
-        let mut pool = self.value_pool.lock();
-        if pool.len() < 32 {
-            pool.push_back(v);
+        // Optimization: Only pool null/simple values, skip large objects/arrays
+        let should_pool = match &v {
+            Value::Null | Value::Bool(_) | Value::Number(_) => true,
+            Value::String(s) => s.len() < 1024,
+            Value::Array(arr) => arr.is_empty(),
+            Value::Object(obj) => obj.is_empty(),
+        };
+
+        if should_pool {
+            let mut pool = self.value_pool.lock();
+            if pool.len() < pool.capacity() {
+                pool.push_back(v);
+            }
         }
     }
 
@@ -125,8 +142,14 @@ impl MemoryPool {
     }
 
     /// Return a Vec<String> to the pool after clearing it
+    /// Optimization: Preserve capacity for vectors with reasonable size
     pub fn return_vec(&self, mut v: Vec<String>) {
-        v.clear();
+        // Optimization: Shrink large vectors to avoid memory bloat
+        if v.capacity() > 128 {
+            v = Vec::with_capacity(32);
+        } else {
+            v.clear();
+        }
         let mut pool = self.vec_pool.lock();
         // Use capacity as the limit to respect configuration
         if pool.len() < pool.capacity() {
@@ -148,7 +171,7 @@ impl MemoryPool {
     /// Returns recommendations for configuration adjustments
     pub fn auto_tune(&self, config: &MemoryPoolConfig) -> MemoryPoolTuningRecommendation {
         let stats = self.get_stats();
-        
+
         // Calculate hit rates
         let string_hit_rate = if stats.string_hits + stats.string_misses > 0 {
             stats.string_hits as f64 / (stats.string_hits + stats.string_misses) as f64
@@ -169,8 +192,10 @@ impl MemoryPool {
         };
 
         // Calculate current pool utilization
-        let string_utilization = self.string_pool.lock().len() as f64 / config.max_string_pool_size as f64;
-        let value_utilization = self.value_pool.lock().len() as f64 / config.max_value_pool_size as f64;
+        let string_utilization =
+            self.string_pool.lock().len() as f64 / config.max_string_pool_size as f64;
+        let value_utilization =
+            self.value_pool.lock().len() as f64 / config.max_value_pool_size as f64;
         let vec_utilization = self.vec_pool.lock().len() as f64 / config.max_vec_pool_size as f64;
 
         // Generate tuning recommendations
@@ -182,29 +207,33 @@ impl MemoryPool {
             value_utilization,
             vec_utilization,
             total_allocations_avoided: stats.allocations_avoided,
-            
+
             // Recommendations based on usage patterns
             string_size_recommendation: calculate_size_recommendation(
                 string_hit_rate,
                 string_utilization,
-                config.max_string_pool_size
+                config.max_string_pool_size,
             ),
             value_size_recommendation: calculate_size_recommendation(
                 value_hit_rate,
                 value_utilization,
-                config.max_value_pool_size
+                config.max_value_pool_size,
             ),
             vec_size_recommendation: calculate_size_recommendation(
                 vec_hit_rate,
                 vec_utilization,
-                config.max_vec_pool_size
+                config.max_vec_pool_size,
             ),
         }
     }
 }
 
 /// Calculate size recommendation based on hit rate and utilization
-fn calculate_size_recommendation(hit_rate: f64, utilization: f64, current_size: usize) -> SizeRecommendation {
+fn calculate_size_recommendation(
+    hit_rate: f64,
+    utilization: f64,
+    current_size: usize,
+) -> SizeRecommendation {
     if hit_rate < 0.3 {
         // Low hit rate - pool might be too small or not used effectively
         if utilization > 0.8 {
@@ -280,6 +309,53 @@ impl From<MemoryPoolStats> for crate::telemetry::MemoryPoolTelemetry {
 impl Default for MemoryPool {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl MemoryPool {
+    /// Pre-warm the pool with initial allocations
+    /// Call this during startup to avoid allocation latency during hot paths
+    pub fn pre_warm(&self, string_count: usize, value_count: usize, vec_count: usize) {
+        {
+            let mut pool = self.string_pool.lock();
+            let to_add = string_count.min(pool.capacity().saturating_sub(pool.len()));
+            for _ in 0..to_add {
+                pool.push_back(String::with_capacity(256));
+            }
+        }
+        {
+            let mut pool = self.value_pool.lock();
+            let to_add = value_count.min(pool.capacity().saturating_sub(pool.len()));
+            for _ in 0..to_add {
+                pool.push_back(Value::Null);
+            }
+        }
+        {
+            let mut pool = self.vec_pool.lock();
+            let to_add = vec_count.min(pool.capacity().saturating_sub(pool.len()));
+            for _ in 0..to_add {
+                pool.push_back(Vec::with_capacity(16));
+            }
+        }
+    }
+
+    /// Get a string with pre-allocated capacity for better performance
+    pub fn get_string_with_capacity(&self, capacity: usize) -> String {
+        let mut stats = self.stats.lock();
+        let result = self.string_pool.lock().pop_front();
+        if let Some(mut s) = result {
+            stats.string_hits += 1;
+            stats.allocations_avoided += 1;
+            s.clear();
+            // Reserve additional capacity if needed
+            if s.capacity() < capacity {
+                s.reserve(capacity - s.capacity());
+            }
+            s
+        } else {
+            stats.string_misses += 1;
+            String::with_capacity(capacity)
+        }
     }
 }
 

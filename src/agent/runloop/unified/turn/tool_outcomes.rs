@@ -160,7 +160,8 @@ pub(crate) async fn handle_tool_calls(
     for group in groups {
         if group.len() > 1 && ctx.full_auto {
             // HP-5: Implement true parallel execution for non-conflicting groups in full-auto mode
-            let mut group_tool_calls = Vec::new();
+            // Optimization: Pre-allocate with group size to avoid reallocations
+            let mut group_tool_calls = Vec::with_capacity(group.len());
             for (_, _, call_id) in &group.tool_calls {
                 if let Some(tc) = tool_calls.iter().find(|tc| &tc.id == call_id) {
                     group_tool_calls.push(tc);
@@ -169,7 +170,8 @@ pub(crate) async fn handle_tool_calls(
 
             // Check if all tools in group are safe and approved
             let mut can_run_parallel = true;
-            let mut execution_items = Vec::new();
+            // Optimization: Pre-allocate execution_items with expected capacity
+            let mut execution_items = Vec::with_capacity(group_tool_calls.len());
 
             for tc in &group_tool_calls {
                 let func = match tc.function.as_ref() {
@@ -910,7 +912,8 @@ pub(crate) async fn run_turn_handle_tool_success(
         }
     }
 
-    let mut notice_lines: Vec<String> = Vec::new();
+    // Optimization: Pre-allocate with estimated capacity to avoid reallocation
+    let mut notice_lines: Vec<String> = Vec::with_capacity(params.modified_files.len() + 3);
     if !params.modified_files.is_empty() {
         notice_lines.push("Files touched:".to_string());
         for file in &params.modified_files {
@@ -1263,6 +1266,10 @@ pub(crate) struct HandleTextResponseParams<'a> {
     pub turn_modified_files: &'a mut std::collections::BTreeSet<std::path::PathBuf>,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
+    /// Pre-computed max tool loops limit for efficiency
+    pub max_tool_loops: usize,
+    /// Pre-computed tool repeat limit for efficiency
+    pub tool_repeat_limit: usize,
 }
 
 pub(crate) async fn handle_text_response(
@@ -1341,6 +1348,8 @@ pub(crate) async fn handle_text_response(
                     params.ctx,
                     params.step_count,
                     params.repeated_tool_attempts,
+                    params.max_tool_loops,
+                    params.tool_repeat_limit,
                 )
                 .await);
             }
@@ -1459,10 +1468,14 @@ pub(crate) async fn handle_text_response(
                     ));
             }
         }
-        Ok(
-            handle_turn_balancer(params.ctx, params.step_count, params.repeated_tool_attempts)
-                .await,
+        Ok(handle_turn_balancer(
+            params.ctx,
+            params.step_count,
+            params.repeated_tool_attempts,
+            params.max_tool_loops,
+            params.tool_repeat_limit,
         )
+        .await)
     } else {
         let msg = uni::Message::assistant(params.text.clone());
         let msg_with_reasoning = if let Some(reasoning_text) = params.reasoning {

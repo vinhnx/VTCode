@@ -188,7 +188,7 @@ impl Default for MemoryPoolConfig {
 impl Default for ToolRegistryConfig {
     fn default() -> Self {
         Self {
-            use_optimized_registry: false, // Conservative default
+            use_optimized_registry: true, // Enable by default for better performance
             max_concurrent_tools: 4,
             hot_cache_size: 16,
             default_timeout_secs: 180,
@@ -226,7 +226,7 @@ impl Default for LLMClientConfig {
 impl Default for AgentExecutionConfig {
     fn default() -> Self {
         Self {
-            use_optimized_loop: false,            // Conservative default
+            use_optimized_loop: true, // Enable by default for better performance
             enable_performance_prediction: false, // Conservative default
             state_history_size: 1000,
             resource_monitor_interval_ms: 100,
