@@ -4,12 +4,10 @@ use anyhow::{Context, Result};
 use ratatui::crossterm::{
     event::{
         DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
-        KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
     terminal::{
         self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-        supports_keyboard_enhancement,
     },
 };
 
@@ -19,7 +17,6 @@ struct TerminalState {
     raw_mode_enabled: bool,
     bracketed_paste_enabled: bool,
     focus_change_enabled: bool,
-    keyboard_enhancements_pushed: bool,
 }
 
 /// Manages entering and exiting alternate screen with proper state preservation
@@ -60,7 +57,7 @@ impl AlternateScreenSession {
     /// # Errors
     ///
     /// Returns an error if any terminal operation fails.
-    pub fn enter(keyboard_flags: Option<KeyboardEnhancementFlags>) -> Result<Self> {
+    pub fn enter() -> Result<Self> {
         let mut stdout = io::stdout();
 
         // Save current state
@@ -68,7 +65,6 @@ impl AlternateScreenSession {
             raw_mode_enabled: false, // We'll enable it fresh
             bracketed_paste_enabled: false,
             focus_change_enabled: false,
-            keyboard_enhancements_pushed: false,
         };
 
         // Enter alternate screen first
@@ -92,25 +88,6 @@ impl AlternateScreenSession {
         // Enable focus change events
         if execute!(stdout, EnableFocusChange).is_ok() {
             session.original_state.focus_change_enabled = true;
-        }
-
-        // Enable keyboard enhancements if supported
-        let flags = keyboard_flags.unwrap_or_else(|| {
-            // Default flags match current hardcoded behavior
-            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
-        });
-
-        if !flags.is_empty()
-            && supports_keyboard_enhancement()
-                .context("failed to query keyboard enhancement support")?
-            && execute!(stdout, PushKeyboardEnhancementFlags(flags)).is_ok()
-        {
-            session.original_state.keyboard_enhancements_pushed = true;
-            tracing::debug!(?flags, "enabled keyboard enhancement flags");
-        } else if flags.is_empty() {
-            tracing::debug!("keyboard protocol disabled via configuration");
         }
 
         Ok(session)
@@ -148,7 +125,7 @@ impl AlternateScreenSession {
     where
         F: FnOnce() -> Result<T>,
     {
-        let session = Self::enter(None)?;
+        let session = Self::enter()?;
         let result = f();
         session.exit()?;
         result
@@ -164,13 +141,6 @@ impl AlternateScreenSession {
         let mut errors = Vec::new();
 
         // Restore in reverse order of setup
-
-        // Pop keyboard enhancements
-        if self.original_state.keyboard_enhancements_pushed
-            && let Err(e) = execute!(stdout, PopKeyboardEnhancementFlags)
-        {
-            errors.push(format!("failed to pop keyboard enhancement flags: {}", e));
-        }
 
         // Disable focus change
         if self.original_state.focus_change_enabled
@@ -245,7 +215,7 @@ mod tests {
         // This test verifies that we can enter and exit alternate screen
         // without panicking. We can't easily verify the actual terminal state
         // in a unit test, but we can at least ensure the code doesn't crash.
-        let session = AlternateScreenSession::enter(None);
+        let session = AlternateScreenSession::enter();
         assert!(session.is_ok());
 
         if let Ok(session) = session {
@@ -276,7 +246,7 @@ mod tests {
     fn test_drop_cleanup() {
         // Verify that Drop properly cleans up
         {
-            let _session = AlternateScreenSession::enter(None);
+            let _session = AlternateScreenSession::enter();
             // Session dropped here
         }
         // If we get here without hanging, Drop worked

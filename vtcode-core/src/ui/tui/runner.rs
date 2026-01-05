@@ -1,4 +1,3 @@
-use std::env;
 use std::io::{self, IsTerminal};
 use std::sync::atomic::AtomicU64;
 use std::time::{Duration, Instant};
@@ -8,13 +7,11 @@ use futures::{FutureExt, StreamExt};
 use ratatui::crossterm::{
     event::{
         DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
-        Event as CrosstermEvent, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-        PushKeyboardEnhancementFlags,
+        Event as CrosstermEvent,
     },
     execute,
     terminal::{
         self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-        supports_keyboard_enhancement,
     },
 };
 use ratatui::{
@@ -23,7 +20,6 @@ use ratatui::{
 };
 use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
-use tokio::task::spawn_blocking;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::{constants::ui, types::UiSurfacePreference};
@@ -304,8 +300,8 @@ pub struct TuiOptions {
     pub log_theme: Option<String>,
     pub event_callback: Option<InlineEventCallback>,
     pub custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
-    pub keyboard_flags: Option<KeyboardEnhancementFlags>,
     pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+    pub keyboard_protocol: crate::config::KeyboardProtocolConfig,
 }
 
 pub async fn run_tui(
@@ -335,20 +331,9 @@ pub async fn run_tui(
         session.set_custom_prompts(prompts);
     }
 
+    let keyboard_flags = crate::config::keyboard_protocol_to_flags(&options.keyboard_protocol);
     let mut stderr = io::stderr();
-    let keyboard_support = detect_keyboard_enhancement_support(
-        options
-            .keyboard_flags
-            .unwrap_or(KeyboardEnhancementFlags::empty()),
-    )
-    .await;
-    let keyboard_flags = options.keyboard_flags.unwrap_or_else(|| {
-        // Default flags match current hardcoded behavior
-        KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-            | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-            | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
-    });
-    let mode_state = enable_terminal_modes(&mut stderr, keyboard_flags, keyboard_support)?;
+    let mode_state = enable_terminal_modes(&mut stderr, keyboard_flags)?;
     if surface.use_alternate() {
         execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
     }
@@ -425,9 +410,10 @@ pub async fn run_tui(
 
 fn enable_terminal_modes(
     stderr: &mut io::Stderr,
-    keyboard_flags: KeyboardEnhancementFlags,
-    keyboard_enhancement_supported: bool,
+    keyboard_flags: ratatui::crossterm::event::KeyboardEnhancementFlags,
 ) -> Result<TerminalModeState> {
+    use ratatui::crossterm::event::PushKeyboardEnhancementFlags;
+    
     execute!(stderr, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
     enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
 
@@ -439,24 +425,17 @@ fn enable_terminal_modes(
         }
     };
 
-    let keyboard_enhancements_pushed =
-        if keyboard_enhancement_supported && !keyboard_flags.is_empty() {
-            match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
-                Ok(_) => {
-                    tracing::debug!(?keyboard_flags, "enabled keyboard enhancement flags");
-                    true
-                }
-                Err(error) => {
-                    tracing::debug!(%error, "failed to enable keyboard enhancement flags");
-                    false
-                }
+    let keyboard_enhancements_pushed = if !keyboard_flags.is_empty() {
+        match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
+            Ok(_) => true,
+            Err(error) => {
+                tracing::debug!(%error, "failed to push keyboard enhancement flags for inline terminal");
+                false
             }
-        } else {
-            if keyboard_flags.is_empty() {
-                tracing::debug!("keyboard protocol disabled via configuration");
-            }
-            false
-        };
+        }
+    } else {
+        false
+    };
 
     Ok(TerminalModeState {
         focus_change_enabled,
@@ -465,13 +444,15 @@ fn enable_terminal_modes(
 }
 
 fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
+    use ratatui::crossterm::event::PopKeyboardEnhancementFlags;
     let mut stderr = io::stderr();
+
     if state.keyboard_enhancements_pushed
         && let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags)
     {
         tracing::debug!(
             %error,
-            "failed to disable keyboard enhancement flags for inline terminal"
+            "failed to pop keyboard enhancement flags for inline terminal"
         );
     }
 
@@ -487,59 +468,6 @@ fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     execute!(stderr, DisableBracketedPaste).context(DISABLE_BRACKETED_PASTE_ERROR)?;
 
     Ok(())
-}
-
-async fn detect_keyboard_enhancement_support(flags: KeyboardEnhancementFlags) -> bool {
-    if flags.is_empty() {
-        return false;
-    }
-
-    if keyboard_protocol_env_disabled() {
-        tracing::info!("keyboard protocol disabled via VTCODE_KBD_PROTOCOL env override");
-        return false;
-    }
-
-    // The crossterm capability probe can block while waiting for a terminal response. Bound it so
-    // startup is not delayed.
-    let probe_start = Instant::now();
-    match tokio::time::timeout(
-        Duration::from_millis(200),
-        spawn_blocking(|| supports_keyboard_enhancement().unwrap_or(false)),
-    )
-    .await
-    {
-        Ok(Ok(supported)) => {
-            tracing::debug!(
-                supported,
-                elapsed_ms = probe_start.elapsed().as_millis(),
-                "keyboard enhancement support probe completed"
-            );
-            supported
-        }
-        Ok(Err(join_error)) => {
-            tracing::debug!(%join_error, "keyboard enhancement support probe failed");
-            false
-        }
-        Err(_) => {
-            tracing::warn!(
-                "keyboard enhancement support probe timed out; disabling protocol to avoid startup lag"
-            );
-            false
-        }
-    }
-}
-
-fn keyboard_protocol_env_disabled() -> bool {
-    match env::var("VTCODE_KBD_PROTOCOL") {
-        Ok(val) => {
-            let v = val.trim().to_ascii_lowercase();
-            matches!(
-                v.as_str(),
-                "0" | "false" | "off" | "disable" | "disabled" | "no"
-            )
-        }
-        Err(_) => false,
-    }
 }
 
 async fn drive_terminal<B: Backend>(

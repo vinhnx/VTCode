@@ -25,7 +25,7 @@ Certain shell configurations (bash, zsh) may have key bindings that consume Alt 
 
 ### 3. Incompatible Terminal Emulator
 
-Some older terminal emulators (including the default Terminal.app) have limited support for modern keyboard protocols like Kitty or Helix protocols that properly distinguish Alt modifiers.
+Some older terminal emulators (including the default Terminal.app) have limited Alt key support.
 
 ## Solutions
 
@@ -44,16 +44,16 @@ Upgrade to a terminal emulator with proper Alt key support:
    - Download: https://www.warp.dev/
 
 3. **Ghostty** (MIT licensed, modern)
-   - Excellent terminal protocol support (Kitty keyboard protocol)
-   - Download: https://ghostty.org/
+    - Excellent Alt key support and terminal protocol support
+    - Download: https://ghostty.org/
 
 4. **Alacritty** (Free, minimal, cross-platform)
-   - Modern keyboard handling with Kitty protocol support
-   - Install: `brew install alacritty`
+    - Modern keyboard handling with full Alt key support
+    - Install: `brew install alacritty`
 
 5. **WezTerm** (Free, Lua-configurable)
-   - Modern keyboard protocol support
-   - Install: `brew install wezterm`
+    - Full keyboard protocol support
+    - Install: `brew install wezterm`
 
 After installing any of these emulators, Alt shortcuts in VT Code should work immediately without additional configuration.
 
@@ -142,19 +142,7 @@ When you press Alt+a, you should see output like:
 
 This indicates the terminal is properly sending an escape sequence for the Alt key.
 
-### Solution 5: Enable Kitty Keyboard Protocol (Advanced)
 
-For terminal emulators that support it (Kitty, Ghostty, Wezterm, Alacritty), VT Code can use the advanced Kitty keyboard protocol for better key handling:
-
-The Kitty keyboard protocol is automatically detected and used by VT Code when available. VT Code will automatically enable it if your terminal supports it.
-
-To verify support:
-```bash
-# Check if VT Code detects your terminal capability
-vtcode ask "Show my terminal type"
-```
-
-Look for output mentioning "Kitty" or "XTerm" keyboard protocol support.
 
 ## Platform-Specific Guidance
 

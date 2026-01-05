@@ -103,11 +103,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return None;
     }
 
-    // Handle Vim mode keybindings
-    if session.vim_state.is_normal() {
-        return crate::ui::tui::session::vim_handler::handle_vim_mode_key(session, &key);
-    }
-
     // Handle reverse search (Ctrl+R)
     if has_control && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) {
         if !session.reverse_search_state.active {

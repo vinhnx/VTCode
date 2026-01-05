@@ -177,16 +177,6 @@ impl ConfigPalette {
             description: Some("Enable Model Context Protocol support".to_string()),
         });
 
-        // Vim Mode
-        items.push(ConfigItem {
-            key: "agent.vim_mode_enabled".to_string(),
-            label: "Vim Mode".to_string(),
-            kind: ConfigItemKind::Bool {
-                value: config.agent.vim_mode_enabled,
-            },
-            description: Some("Enable Vim-style keybindings for text editing".to_string()),
-        });
-
         // -- Limits & Session Section --
 
         // Max Context Tokens
@@ -452,22 +442,6 @@ impl ConfigPalette {
                     self.config.ui.allow_tool_ansi = !self.config.ui.allow_tool_ansi;
                     changed = true;
                 }
-                "ui.keyboard_protocol.enabled" => {
-                    self.config.ui.keyboard_protocol.enabled =
-                        !self.config.ui.keyboard_protocol.enabled;
-                    changed = true;
-                }
-                "ui.keyboard_protocol.mode" => {
-                    self.config.ui.keyboard_protocol.mode =
-                        match self.config.ui.keyboard_protocol.mode.as_str() {
-                            "default" => "full".to_string(),
-                            "full" => "minimal".to_string(),
-                            "minimal" => "custom".to_string(),
-                            "custom" => "default".to_string(),
-                            _ => "default".to_string(),
-                        };
-                    changed = true;
-                }
                 "agent.theme" => {
                     let themes = crate::ui::theme::available_themes();
                     let current = &self.config.agent.theme;
@@ -566,8 +540,20 @@ impl ConfigPalette {
                     self.config.mcp.enabled = !self.config.mcp.enabled;
                     changed = true;
                 }
-                "agent.vim_mode_enabled" => {
-                    self.config.agent.vim_mode_enabled = !self.config.agent.vim_mode_enabled;
+                "ui.keyboard_protocol.enabled" => {
+                    self.config.ui.keyboard_protocol.enabled =
+                        !self.config.ui.keyboard_protocol.enabled;
+                    changed = true;
+                }
+                "ui.keyboard_protocol.mode" => {
+                    self.config.ui.keyboard_protocol.mode =
+                        match self.config.ui.keyboard_protocol.mode.as_str() {
+                            "default" => "full".to_string(),
+                            "full" => "minimal".to_string(),
+                            "minimal" => "custom".to_string(),
+                            "custom" => "default".to_string(),
+                            _ => "default".to_string(),
+                        };
                     changed = true;
                 }
                 "ui.inline_viewport_rows"

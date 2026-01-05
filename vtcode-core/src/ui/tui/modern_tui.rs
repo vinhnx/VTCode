@@ -8,13 +8,12 @@ use ratatui::crossterm::{
     cursor,
     event::{
         self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
-        Event as CrosstermEvent, KeyEventKind, KeyboardEnhancementFlags,
-        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+        Event as CrosstermEvent, KeyEventKind, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
     },
     execute,
     terminal::{
         self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
-        supports_keyboard_enhancement,
     },
 };
 use std::{
@@ -56,8 +55,8 @@ pub struct ModernTui {
     pub tick_rate: f64,
     pub mouse: bool,
     pub paste: bool,
+    pub keyboard_flags: KeyboardEnhancementFlags,
     pub panic_guard: Option<TuiPanicGuard>,
-    keyboard_flags: KeyboardEnhancementFlags,
 }
 
 // A trait to allow both old and new TUI implementations to work with the same interface
@@ -94,15 +93,18 @@ impl ModernTui {
             tick_rate: 4.0,
             mouse: false,
             paste: false,
+            keyboard_flags: KeyboardEnhancementFlags::empty(),
             panic_guard: None,
-            keyboard_flags: KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
         })
     }
 
     pub fn tick_rate(mut self, tick_rate: f64) -> Self {
         self.tick_rate = tick_rate;
+        self
+    }
+
+    pub fn keyboard_flags(mut self, flags: KeyboardEnhancementFlags) -> Self {
+        self.keyboard_flags = flags;
         self
     }
 
@@ -118,11 +120,6 @@ impl ModernTui {
 
     pub fn paste(mut self, paste: bool) -> Self {
         self.paste = paste;
-        self
-    }
-
-    pub fn keyboard_flags(mut self, flags: KeyboardEnhancementFlags) -> Self {
-        self.keyboard_flags = flags;
         self
     }
 
@@ -143,12 +140,9 @@ impl ModernTui {
         // Enable focus change events if supported
         let _ = execute!(stderr, EnableFocusChange);
 
-        // Enable keyboard enhancements if supported
-        if supports_keyboard_enhancement().unwrap_or(false) && !self.keyboard_flags.is_empty() {
+        // Push keyboard enhancement flags if configured
+        if !self.keyboard_flags.is_empty() {
             let _ = execute!(stderr, PushKeyboardEnhancementFlags(self.keyboard_flags));
-            tracing::debug!(?self.keyboard_flags, "enabled keyboard enhancement flags");
-        } else if self.keyboard_flags.is_empty() {
-            tracing::debug!("keyboard protocol disabled via configuration");
         }
 
         self.start_event_task();
@@ -159,6 +153,9 @@ impl ModernTui {
         self.stop().await?;
         if terminal::is_raw_mode_enabled().unwrap_or(false) {
             self.terminal.flush().context("failed to flush terminal")?;
+            if !self.keyboard_flags.is_empty() {
+                let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
+            }
             if self.paste {
                 execute!(io::stderr(), DisableBracketedPaste)
                     .context("failed to disable bracketed paste")?;
@@ -171,7 +168,6 @@ impl ModernTui {
                 .context("failed to leave alternate screen")?;
             terminal::disable_raw_mode().context("failed to disable raw mode")?;
             let _ = execute!(io::stderr(), DisableFocusChange);
-            let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
         }
 
         self.panic_guard = None;
@@ -183,6 +179,9 @@ impl ModernTui {
         self.stop().await?;
         if terminal::is_raw_mode_enabled().unwrap_or(false) {
             let _ = self.terminal.flush();
+            if !self.keyboard_flags.is_empty() {
+                let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
+            }
             if self.paste {
                 let _ = execute!(io::stderr(), DisableBracketedPaste);
             }
@@ -192,8 +191,7 @@ impl ModernTui {
             let _ = execute!(io::stderr(), LeaveAlternateScreen, cursor::Show);
             let _ = terminal::disable_raw_mode();
             let _ = execute!(io::stderr(), DisableFocusChange);
-            let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
-        }
+            }
 
         self.panic_guard = None;
 
@@ -323,7 +321,6 @@ impl Drop for ModernTui {
         let _ = execute!(io::stderr(), LeaveAlternateScreen, cursor::Show);
         let _ = disable_raw_mode();
         let _ = execute!(io::stderr(), DisableFocusChange);
-        let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
     }
 }
 

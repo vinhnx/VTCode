@@ -25,7 +25,6 @@ max_task_retries = 2
 include_temporal_context = true
 temporal_context_use_utc = false
 include_working_directory = true
-vim_mode_enabled = false
 
 [agent.small_model]
 enabled = true
