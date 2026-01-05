@@ -6451,6 +6451,8 @@ version = "0.58.24"
 dependencies = [
  "anyhow",
  "assert_fs",
+ "lru 0.12.5",
+ "parking_lot",
  "path-clean",
  "serde",
  "shell-escape",
