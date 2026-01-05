@@ -43,6 +43,7 @@ pub fn spawn_session(
         event_callback,
         None,
         active_pty_sessions,
+        crate::config::KeyboardProtocolConfig::default(),
     )
 }
 
@@ -56,6 +57,7 @@ pub fn spawn_session_with_prompts(
     event_callback: Option<InlineEventCallback>,
     custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
     active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
+    keyboard_protocol: crate::config::KeyboardProtocolConfig,
 ) -> Result<InlineSession> {
     use std::io::IsTerminal;
 
@@ -83,7 +85,7 @@ pub fn spawn_session_with_prompts(
                 event_callback,
                 custom_prompts,
                 active_pty_sessions,
-                keyboard_protocol: crate::config::KeyboardProtocolConfig::default(),
+                keyboard_protocol,
             },
         )
         .await
