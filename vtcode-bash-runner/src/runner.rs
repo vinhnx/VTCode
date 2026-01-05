@@ -3,11 +3,17 @@ use crate::executor::{
 };
 use crate::policy::CommandPolicy;
 use anyhow::{Context, Result, anyhow, bail};
+use lru::LruCache;
+use parking_lot::Mutex;
 use path_clean::PathClean;
 use shell_escape::escape;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use vtcode_commons::WorkspacePaths;
+
+/// LRU cache for canonicalized paths to reduce fs::canonicalize() calls
+type PathCache = Arc<Mutex<LruCache<PathBuf, PathBuf>>>;
 
 pub struct BashRunner<E, P> {
     executor: E,
@@ -15,6 +21,8 @@ pub struct BashRunner<E, P> {
     workspace_root: PathBuf,
     working_dir: PathBuf,
     shell_kind: ShellKind,
+    /// Cache for canonicalized paths (capacity: 256)
+    path_cache: PathCache,
 }
 
 impl<E, P> BashRunner<E, P>
@@ -40,6 +48,9 @@ where
             workspace_root: canonical_root.clone(),
             working_dir: canonical_root,
             shell_kind: default_shell_kind(),
+            path_cache: Arc::new(Mutex::new(LruCache::new(
+                std::num::NonZeroUsize::new(256).unwrap(), // Safe: constant > 0
+            ))),
         })
     }
 
@@ -62,6 +73,27 @@ where
         self.shell_kind
     }
 
+    /// Canonicalize a path with LRU caching to reduce filesystem calls
+    fn cached_canonicalize(&self, path: &Path) -> Result<PathBuf> {
+        // Check cache first
+        {
+            let mut cache = self.path_cache.lock();
+            if let Some(cached) = cache.get(path) {
+                return Ok(cached.clone());
+            }
+        }
+
+        // Cache miss - perform canonicalization
+        let canonical = path
+            .canonicalize()
+            .with_context(|| format!("failed to canonicalize `{}`", path.display()))?;
+
+        // Store in cache
+        self.path_cache.lock().put(path.to_path_buf(), canonical.clone());
+
+        Ok(canonical)
+    }
+
     pub fn cd(&mut self, path: &str) -> Result<()> {
         let candidate = self.resolve_path(path);
         if !candidate.exists() {
@@ -71,9 +103,7 @@ where
             bail!("path `{}` is not a directory", candidate.display());
         }
 
-        let canonical = candidate
-            .canonicalize()
-            .with_context(|| format!("failed to canonicalize `{}`", candidate.display()))?;
+        let canonical = self.cached_canonicalize(&candidate)?;
 
         self.ensure_within_workspace(&canonical)?;
 
@@ -364,9 +394,7 @@ where
             bail!("path `{}` does not exist", path.display());
         }
 
-        let canonical = path
-            .canonicalize()
-            .with_context(|| format!("failed to canonicalize `{}`", path.display()))?;
+        let canonical = self.cached_canonicalize(&path)?;
 
         self.ensure_within_workspace(&canonical)?;
         Ok(canonical)
@@ -386,16 +414,12 @@ where
         if let Ok(metadata) = fs::symlink_metadata(candidate)
             && metadata.file_type().is_symlink()
         {
-            let canonical = candidate
-                .canonicalize()
-                .with_context(|| format!("failed to canonicalize `{}`", candidate.display()))?;
+            let canonical = self.cached_canonicalize(candidate)?;
             return self.ensure_within_workspace(&canonical);
         }
 
         if candidate.exists() {
-            let canonical = candidate
-                .canonicalize()
-                .with_context(|| format!("failed to canonicalize `{}`", candidate.display()))?;
+            let canonical = self.cached_canonicalize(candidate)?;
             self.ensure_within_workspace(&canonical)
         } else {
             let parent = self.canonicalize_existing_parent(candidate)?;
@@ -407,9 +431,7 @@ where
         let mut current = candidate.parent();
         while let Some(path) = current {
             if path.exists() {
-                return path
-                    .canonicalize()
-                    .with_context(|| format!("failed to canonicalize `{}`", path.display()));
+                return self.cached_canonicalize(path);
             }
             current = path.parent();
         }
@@ -498,7 +520,9 @@ mod tests {
         );
         let mut runner = runner?;
         runner.cd("nested")?;
-        assert_eq!(runner.working_dir(), nested);
+            // Canonicalize expected path to match runner's canonical working_dir
+            let expected = nested.canonicalize()?;
+            assert_eq!(runner.working_dir(), expected);
         Ok(())
     }
 

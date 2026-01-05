@@ -23,7 +23,7 @@ enum Chunk<'a> {
 /// Time complexity: O((N+M)D) where N,M are lengths and D is edit distance.
 fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
     if old.is_empty() && new.is_empty() {
-        return Vec::new();
+        return Vec::with_capacity(0);
     }
     if old.is_empty() {
         return vec![Chunk::Insert(new)];
@@ -63,7 +63,7 @@ fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
     let old_middle = &old_rest[..old_middle_end];
     let new_middle = &new_rest[..new_middle_end];
 
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(old_middle.len() + new_middle.len()); // Upper bound on chunks
 
     // Add common prefix
     if prefix_len > 0 {
@@ -89,7 +89,7 @@ fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
                 Edit::Delete => {
                     // Find the byte position for this character in old_middle
                     let ch = old_chars[old_pos];
-                    let byte_start = old_middle.char_indices().nth(old_pos).unwrap().0;
+                    let byte_start = old_middle.char_indices().nth(old_pos).expect("Myers diff guarantees valid index").0;
                     let byte_end = byte_start + ch.len_utf8();
                     result.push(Chunk::Delete(&old_middle[byte_start..byte_end]));
                     old_pos += 1;
@@ -97,7 +97,7 @@ fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
                 Edit::Insert => {
                     // Find the byte position for this character in new_middle
                     let ch = new_chars[new_pos];
-                    let byte_start = new_middle.char_indices().nth(new_pos).unwrap().0;
+                    let byte_start = new_middle.char_indices().nth(new_pos).expect("Myers diff guarantees valid index").0;
                     let byte_end = byte_start + ch.len_utf8();
                     result.push(Chunk::Insert(&new_middle[byte_start..byte_end]));
                     new_pos += 1;
@@ -186,7 +186,7 @@ fn backtrack_myers(
     mut k: i32,
     max_d: usize,
 ) -> Vec<Edit> {
-    let mut edits = Vec::new();
+    let mut edits = Vec::with_capacity(old.len() + new.len()); // Upper bound on edits
     let mut x = old.len();
     let mut y = new.len();
     let row_len = 2 * max_d + 1;
@@ -328,6 +328,9 @@ pub fn compute_diff(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundl
     let old_lines_owned = split_lines_with_terminator(old);
     let new_lines_owned = split_lines_with_terminator(new);
 
+        eprintln!("Old lines: {:?}", old_lines_owned);
+        eprintln!("New lines: {:?}", new_lines_owned);
+
     let mut old_refs: Vec<&str> = Vec::with_capacity(old_lines_owned.len());
     for s in &old_lines_owned {
         old_refs.push(s.as_str());
@@ -363,7 +366,7 @@ pub fn compute_diff(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundl
 
 fn split_lines_with_terminator(text: &str) -> Vec<String> {
     if text.is_empty() {
-        return Vec::new();
+        return Vec::with_capacity(0);
     }
 
     let mut lines: Vec<String> = text
@@ -384,7 +387,7 @@ fn collect_line_records<'a>(
     new_lines: &'a [&'a str],
 ) -> Vec<LineRecord<'a>> {
     let (old_encoded, new_encoded) = encode_line_sequences(old_lines, new_lines);
-    let mut records = Vec::new();
+    let mut records = Vec::with_capacity(old_lines.len() + new_lines.len()); // Upper bound
     let mut old_index = 0usize;
     let mut new_index = 0usize;
 
@@ -656,7 +659,7 @@ fn build_hunks(records: &[LineRecord<'_>], context: usize) -> Vec<DiffHunk> {
 }
 
 fn compute_hunk_ranges(records: &[LineRecord<'_>], context: usize) -> Vec<(usize, usize)> {
-    let mut ranges = Vec::new();
+    let mut ranges = Vec::with_capacity(4); // Typical: 1-5 change regions
     let mut current_start: Option<usize> = None;
     let mut current_end: usize = 0;
 
@@ -699,6 +702,8 @@ mod tests {
     fn computes_structured_diff() {
         let before = "a\nb\nc\n";
         let after = "a\nc\nd\n";
+            eprintln!("Before: {:?}", before);
+            eprintln!("After: {:?}", after);
         let bundle = compute_diff(
             before,
             after,
@@ -715,6 +720,8 @@ mod tests {
         let hunk = &bundle.hunks[0];
         assert_eq!(hunk.old_start, 1);
         assert_eq!(hunk.new_start, 1);
+            eprintln!("Formatted diff:\n{}", bundle.formatted);
+            eprintln!("Hunk lines: {:?}", hunk.lines);
         assert!(bundle.formatted.contains("@@"));
         assert!(bundle.formatted.contains("-b"));
         assert!(bundle.formatted.contains("+d"));

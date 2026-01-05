@@ -63,7 +63,7 @@ pub async fn discover_instruction_sources(
     home_dir: Option<&Path>,
     extra_patterns: &[String],
 ) -> Result<Vec<InstructionSource>> {
-    let mut sources = Vec::new();
+    let mut sources = Vec::with_capacity(8); // Typical: 2-4 global + 2-4 workspace
     let mut seen_paths = HashSet::new();
 
     if let Some(home) = home_dir {
@@ -105,7 +105,7 @@ pub async fn discover_instruction_sources(
         cursor = root.clone();
     }
 
-    let mut workspace_paths = Vec::new();
+    let mut workspace_paths = Vec::with_capacity(4); // Typical directory depth
     loop {
         let override_candidate = cursor.join(AGENTS_OVERRIDE_FILENAME);
         let agents_candidate = cursor.join(AGENTS_FILENAME);
@@ -161,7 +161,7 @@ pub async fn read_instruction_bundle(
     }
 
     let mut remaining = max_bytes;
-    let mut segments = Vec::new();
+    let mut segments = Vec::with_capacity(sources.len()); // One segment per source
     let mut truncated = false;
     let mut bytes_read = 0usize;
 
@@ -190,7 +190,7 @@ pub async fn read_instruction_bundle(
             .with_context(|| format!("Failed to read metadata for {}", source.path.display()))?;
 
         let mut reader = io::BufReader::new(file).take(remaining as u64);
-        let mut data = Vec::new();
+        let mut data = Vec::with_capacity(remaining.min(metadata.len() as usize));
         reader.read_to_end(&mut data).await.with_context(|| {
             format!(
                 "Failed to read instruction file from {}",

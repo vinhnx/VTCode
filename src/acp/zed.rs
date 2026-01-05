@@ -665,8 +665,8 @@ impl ZedAgent {
             if !items.is_empty() {
                 // Sort by index and normalize 1-based indexing to 0-based if needed
                 items.sort_unstable_by_key(|(idx, _)| *idx);
-                let min_index = items.first().unwrap().0;
-                let max_index = items.last().unwrap().0;
+                let min_index = items.first().map(|(idx, _)| *idx).unwrap_or(0);
+                let max_index = items.last().map(|(idx, _)| *idx).unwrap_or(0);
                 let mut parts = vec![String::new(); max_index + 1 - min_index];
                 for (idx, seg) in items.into_iter() {
                     let position = if min_index == 1 { idx - 1 } else { idx };
