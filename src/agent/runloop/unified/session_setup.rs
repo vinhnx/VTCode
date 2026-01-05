@@ -726,6 +726,9 @@ pub(crate) async fn initialize_session_ui(
         Some(interrupt_callback),
         Some(session_state.custom_prompts.clone()),
         None,
+        vt_cfg
+            .map(|cfg| cfg.ui.keyboard_protocol.clone())
+            .unwrap_or_default(),
     )
     .context("failed to launch inline session")?;
     let handle = session.clone_inline_handle();
