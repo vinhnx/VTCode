@@ -28,7 +28,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         // Configuration and settings
         SlashCommandInfo {
             name: "config",
-            description: "View the effective vtcode.toml configuration (including keyboard protocol settings)",
+            description: "View the effective vtcode.toml configuration",
         },
         SlashCommandInfo {
             name: "settings",

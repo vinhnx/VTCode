@@ -75,7 +75,6 @@ pub enum SlashCommandOutcome {
         prompt: String,
     },
     StartTerminalSetup,
-    ToggleVimMode,
     RewindToTurn {
         turn: usize,
         scope: vtcode_core::core::agent::snapshots::RevertScope,
@@ -822,17 +821,6 @@ pub async fn handle_slash_command(
             };
             render_help(renderer, specific_cmd, custom_slash_commands)?;
             Ok(SlashCommandOutcome::Handled)
-        }
-        "vim" => {
-            if !args.is_empty() {
-                renderer.line(
-                    MessageStyle::Error,
-                    "Usage: /vim (no arguments supported yet)",
-                )?;
-                return Ok(SlashCommandOutcome::Handled);
-            }
-
-            Ok(SlashCommandOutcome::ToggleVimMode)
         }
         "terminal-setup" => {
             if !args.is_empty() {

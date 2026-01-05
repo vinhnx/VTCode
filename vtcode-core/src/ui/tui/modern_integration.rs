@@ -1,6 +1,7 @@
 //! Integration module to bridge the modern TUI with the existing Session-based UI
 
 use crate::config::types::UiSurfacePreference;
+use crate::config::{keyboard_protocol_to_flags, KeyboardProtocolConfig};
 use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme};
@@ -18,6 +19,7 @@ pub struct ModernTuiConfig {
     pub show_logs: bool,
     pub log_theme: Option<String>,
     pub event_callback: Option<InlineEventCallback>,
+    pub keyboard_protocol: KeyboardProtocolConfig,
 }
 
 pub async fn run_modern_tui(
@@ -26,11 +28,13 @@ pub async fn run_modern_tui(
     config: ModernTuiConfig,
 ) -> Result<()> {
     // Create a new ModernTui instance
+    let keyboard_flags = keyboard_protocol_to_flags(&config.keyboard_protocol);
     let mut tui = ModernTui::new()?
         .tick_rate(4.0)
         .frame_rate(30.0)
         .mouse(true)
-        .paste(true);
+        .paste(true)
+        .keyboard_flags(keyboard_flags);
 
     // Create the session
     let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();

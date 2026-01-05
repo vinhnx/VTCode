@@ -128,31 +128,6 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ManageAgents { action } => {
             handlers::handle_manage_agents(ctx, action).await
         }
-        SlashCommandOutcome::ToggleVimMode => {
-            // Toggle Vim mode in the session
-            if ctx.vt_cfg.is_some() {
-                // Get the current vim mode state from config
-                let vim_enabled = ctx.vt_cfg.as_ref().unwrap().agent.vim_mode_enabled;
-
-                // Update the config to toggle vim mode
-                ctx.vt_cfg.as_mut().unwrap().agent.vim_mode_enabled = !vim_enabled;
-
-                if !vim_enabled {
-                    // Enable Vim mode
-                    ctx.renderer.line(
-                        vtcode_core::utils::ansi::MessageStyle::Info,
-                        "Vim mode: Enabled (press 'i' to enter insert mode, 'Esc' to return to normal mode)",
-                    )?;
-                } else {
-                    // Disable Vim mode
-                    ctx.renderer.line(
-                        vtcode_core::utils::ansi::MessageStyle::Info,
-                        "Vim mode: Disabled",
-                    )?;
-                }
-            }
-            Ok(SlashCommandControl::Continue)
-        }
         SlashCommandOutcome::RewindToTurn { turn, scope } => {
             handlers::handle_rewind_to_turn(ctx, turn, scope).await
         }

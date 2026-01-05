@@ -250,3 +250,4 @@ fn default_report_alternate_keys() -> bool {
 fn default_report_all_keys() -> bool {
     false
 }
+

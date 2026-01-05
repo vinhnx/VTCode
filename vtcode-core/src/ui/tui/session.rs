@@ -48,8 +48,6 @@ mod ansi_utils;
 mod command;
 pub mod config_palette;
 mod editing;
-mod vim_handler;
-mod vim_mode;
 
 mod events;
 mod message_renderer;
@@ -165,9 +163,6 @@ pub struct Session {
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,
-
-    // --- Vim Mode ---
-    pub(crate) vim_state: crate::ui::tui::session::vim_mode::VimState,
 
     // --- Reverse Search ---
     pub(crate) reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState,
@@ -294,9 +289,6 @@ impl Session {
 
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),
-
-            // --- Vim Mode ---
-            vim_state: crate::ui::tui::session::vim_mode::VimState::new(),
 
             // --- Reverse Search ---
             reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState::new(
