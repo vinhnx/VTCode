@@ -1,0 +1,308 @@
+//! Tool execution history and records.
+//!
+//! This module provides thread-safe recording and querying of tool executions,
+//! including loop detection and rate limiting.
+
+use std::collections::VecDeque;
+use std::env;
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, SystemTime};
+
+use serde_json::{Value, json};
+
+use crate::config::constants::{defaults, tools};
+
+/// Snapshot of harness context for execution records.
+#[derive(Debug, Clone)]
+pub struct HarnessContextSnapshot {
+    pub session_id: String,
+    pub task_id: Option<String>,
+}
+
+impl HarnessContextSnapshot {
+    /// Create a new harness context snapshot.
+    pub fn new(session_id: String, task_id: Option<String>) -> Self {
+        Self {
+            session_id,
+            task_id,
+        }
+    }
+
+    /// Serialize snapshot for middleware/telemetry consumers without cloning callers.
+    pub fn to_json(&self) -> Value {
+        json!({
+            "session_id": self.session_id,
+            "task_id": self.task_id,
+        })
+    }
+}
+
+/// Record of a single tool execution for diagnostics.
+#[derive(Debug, Clone)]
+pub struct ToolExecutionRecord {
+    pub tool_name: String,
+    pub requested_name: String,
+    pub is_mcp: bool,
+    pub mcp_provider: Option<String>,
+    pub args: Value,
+    pub result: Result<Value, String>,
+    pub timestamp: SystemTime,
+    pub success: bool,
+    pub context: HarnessContextSnapshot,
+    pub timeout_category: Option<String>,
+    pub base_timeout_ms: Option<u64>,
+    pub adaptive_timeout_ms: Option<u64>,
+    pub effective_timeout_ms: Option<u64>,
+    pub circuit_breaker: bool,
+}
+
+impl ToolExecutionRecord {
+    /// Create a new failed execution record.
+    #[allow(clippy::too_many_arguments)]
+    #[inline]
+    pub fn failure(
+        tool_name: String,
+        requested_name: String,
+        is_mcp: bool,
+        mcp_provider: Option<String>,
+        args: Value,
+        error_msg: String,
+        context: HarnessContextSnapshot,
+        timeout_category: Option<String>,
+        base_timeout_ms: Option<u64>,
+        adaptive_timeout_ms: Option<u64>,
+        effective_timeout_ms: Option<u64>,
+        circuit_breaker: bool,
+    ) -> Self {
+        Self {
+            tool_name,
+            requested_name,
+            is_mcp,
+            mcp_provider,
+            args,
+            result: Err(error_msg),
+            timestamp: SystemTime::now(),
+            success: false,
+            context,
+            timeout_category,
+            base_timeout_ms,
+            adaptive_timeout_ms,
+            effective_timeout_ms,
+            circuit_breaker,
+        }
+    }
+
+    /// Create a new successful execution record.
+    #[allow(clippy::too_many_arguments)]
+    #[inline]
+    pub fn success(
+        tool_name: String,
+        requested_name: String,
+        is_mcp: bool,
+        mcp_provider: Option<String>,
+        args: Value,
+        result: Value,
+        context: HarnessContextSnapshot,
+        timeout_category: Option<String>,
+        base_timeout_ms: Option<u64>,
+        adaptive_timeout_ms: Option<u64>,
+        effective_timeout_ms: Option<u64>,
+        circuit_breaker: bool,
+    ) -> Self {
+        Self {
+            tool_name,
+            requested_name,
+            is_mcp,
+            mcp_provider,
+            args,
+            result: Ok(result),
+            timestamp: SystemTime::now(),
+            success: true,
+            context,
+            timeout_category,
+            base_timeout_ms,
+            adaptive_timeout_ms,
+            effective_timeout_ms,
+            circuit_breaker,
+        }
+    }
+}
+
+/// Default window size for loop detection.
+const DEFAULT_LOOP_DETECT_WINDOW: usize = 5;
+/// Minimum limit for identical readonly operations.
+const MIN_READONLY_IDENTICAL_LIMIT: usize = 5;
+
+fn tool_rate_limit_from_env() -> Option<usize> {
+    env::var("VTCODE_TOOL_CALLS_PER_MIN")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<usize>().ok())
+        .filter(|value| *value > 0)
+}
+
+/// Thread-safe execution history for recording tool executions.
+#[derive(Clone)]
+pub struct ToolExecutionHistory {
+    records: Arc<RwLock<VecDeque<ToolExecutionRecord>>>,
+    max_records: usize,
+    detect_window: Arc<std::sync::atomic::AtomicUsize>,
+    identical_limit: Arc<std::sync::atomic::AtomicUsize>,
+    rate_limit_per_minute: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl ToolExecutionHistory {
+    /// Create a new execution history with a maximum record count.
+    pub fn new(max_records: usize) -> Self {
+        Self {
+            records: Arc::new(RwLock::new(VecDeque::new())),
+            max_records,
+            detect_window: Arc::new(std::sync::atomic::AtomicUsize::new(
+                DEFAULT_LOOP_DETECT_WINDOW,
+            )),
+            identical_limit: Arc::new(std::sync::atomic::AtomicUsize::new(
+                defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
+            )),
+            rate_limit_per_minute: Arc::new(std::sync::atomic::AtomicUsize::new(
+                tool_rate_limit_from_env().unwrap_or(0),
+            )),
+        }
+    }
+
+    /// Add a record to the history.
+    pub fn add_record(&self, record: ToolExecutionRecord) {
+        let mut records = self.records.write().unwrap();
+        records.push_back(record);
+        while records.len() > self.max_records {
+            records.pop_front();
+        }
+    }
+
+    /// Set loop detection parameters.
+    pub fn set_loop_detection_limits(&self, detect_window: usize, identical_limit: usize) {
+        self.detect_window
+            .store(detect_window.max(1), std::sync::atomic::Ordering::Relaxed);
+        self.identical_limit
+            .store(identical_limit, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Set the rate limit for tool executions per minute.
+    pub fn set_rate_limit_per_minute(&self, limit: Option<usize>) {
+        self.rate_limit_per_minute.store(
+            limit.filter(|v| *v > 0).unwrap_or(0),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+
+    /// Get the most recent records.
+    pub fn get_recent_records(&self, count: usize) -> Vec<ToolExecutionRecord> {
+        let records = self.records.read().unwrap();
+        let records_len = records.len();
+        let start = records_len.saturating_sub(count);
+        records.iter().skip(start).cloned().collect()
+    }
+
+    /// Get recent failures in chronological order.
+    pub fn get_recent_failures(&self, count: usize) -> Vec<ToolExecutionRecord> {
+        let records = self.records.read().unwrap();
+        let mut failures: Vec<ToolExecutionRecord> = records
+            .iter()
+            .rev()
+            .filter(|r| !r.success)
+            .take(count)
+            .cloned()
+            .collect();
+        failures.reverse();
+        failures
+    }
+
+    /// Clear all records.
+    pub fn clear(&self) {
+        let mut records = self.records.write().unwrap();
+        records.clear();
+    }
+
+    /// Get the current loop limit.
+    pub fn loop_limit(&self) -> usize {
+        self.identical_limit
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Get the effective loop limit for a specific tool.
+    pub fn loop_limit_for(&self, tool_name: &str) -> usize {
+        self.effective_identical_limit_for_tool(tool_name)
+    }
+
+    /// Get the rate limit per minute if configured.
+    pub fn rate_limit_per_minute(&self) -> Option<usize> {
+        let val = self
+            .rate_limit_per_minute
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if val == 0 { None } else { Some(val) }
+    }
+
+    fn effective_identical_limit_for_tool(&self, tool_name: &str) -> usize {
+        let base_limit = self
+            .identical_limit
+            .load(std::sync::atomic::Ordering::Relaxed);
+        match tool_name {
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
+                base_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
+            }
+            _ => base_limit,
+        }
+    }
+
+    /// Count calls within a time window.
+    pub fn calls_in_window(&self, window: Duration) -> usize {
+        let cutoff = SystemTime::now()
+            .checked_sub(window)
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+
+        let records = self.records.read().unwrap();
+        records
+            .iter()
+            .rev()
+            .take_while(|record| record.timestamp >= cutoff)
+            .count()
+    }
+
+    /// Detect if the agent is stuck in a loop.
+    ///
+    /// Returns (is_loop, repeat_count, tool_name) if a loop is detected.
+    pub fn detect_loop(&self, tool_name: &str, args: &Value) -> (bool, usize, String) {
+        let limit = self.effective_identical_limit_for_tool(tool_name);
+        if limit == 0 {
+            return (false, 0, String::new());
+        }
+
+        let detect_window = self
+            .detect_window
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let window = detect_window.max(limit.saturating_mul(2)).max(1);
+
+        let records = self.records.read().unwrap();
+        let recent: Vec<&ToolExecutionRecord> = records.iter().rev().take(window).collect();
+
+        if recent.is_empty() {
+            return (false, 0, String::new());
+        }
+
+        // Count how many of the recent calls match this exact tool + args combo
+        // CRITICAL FIX: Only count SUCCESSFUL calls to avoid cascade blocking
+        let mut identical_count = 0;
+        for record in &recent {
+            if record.tool_name == tool_name && record.args == *args && record.success {
+                identical_count += 1;
+            }
+        }
+
+        let is_loop = identical_count >= limit;
+        (is_loop, identical_count, tool_name.to_string())
+    }
+}
+
+impl Default for ToolExecutionHistory {
+    fn default() -> Self {
+        Self::new(100)
+    }
+}

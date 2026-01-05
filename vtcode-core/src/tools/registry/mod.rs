@@ -6,8 +6,10 @@ mod cache;
 mod circuit_breaker;
 mod declarations;
 mod error;
+mod execution_history;
 mod executors;
 mod file_helpers;
+mod harness;
 mod inventory;
 mod justification;
 mod justification_extractor;
@@ -15,9 +17,11 @@ mod policy;
 mod progressive_docs;
 mod pty;
 mod registration;
+mod resiliency;
 mod risk_scorer;
 mod shell_policy;
 mod telemetry;
+mod timeout;
 mod utils;
 
 use std::borrow::Cow;
@@ -29,6 +33,8 @@ pub use declarations::{
     build_function_declarations_with_mode,
 };
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
+pub use execution_history::{HarnessContextSnapshot, ToolExecutionHistory, ToolExecutionRecord};
+pub use harness::HarnessContext;
 pub use justification::{ApprovalPattern, JustificationManager, ToolJustification};
 pub use justification_extractor::JustificationExtractor;
 pub use progressive_docs::{
@@ -37,16 +43,19 @@ pub use progressive_docs::{
 };
 pub use pty::{PtySessionGuard, PtySessionManager};
 pub use registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
+pub use resiliency::{ResiliencyContext, ToolFailureTracker};
 pub use risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
 pub use shell_policy::ShellPolicyChecker;
 pub use telemetry::ToolTelemetryEvent;
+pub use timeout::{
+    AdaptiveTimeoutTuning, ToolLatencyStats, ToolTimeoutCategory, ToolTimeoutPolicy,
+};
 
 use builtins::register_builtin_tools;
 use inventory::ToolInventory;
 use policy::ToolPolicyGateway;
 use utils::normalize_tool_output;
 
-use crate::config::constants::defaults;
 use crate::config::constants::tools;
 use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
 use crate::core::memory_pool::MemoryPool;
@@ -78,7 +87,6 @@ const LOOP_THROTTLE_MAX_MS: u64 = 500;
 
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
 use crate::ui::search::fuzzy_match;
-use std::collections::VecDeque;
 use std::sync::RwLock;
 use std::time::SystemTime;
 
@@ -90,278 +98,8 @@ use super::traits::ToolExecutor;
 #[cfg(test)]
 use crate::config::types::CapabilityLevel;
 
-/// Record of a tool execution for diagnostics
-#[derive(Debug, Clone)]
-pub struct HarnessContextSnapshot {
-    pub session_id: String,
-    pub task_id: Option<String>,
-}
-
-impl HarnessContextSnapshot {
-    pub fn new(session_id: String, task_id: Option<String>) -> Self {
-        Self {
-            session_id,
-            task_id,
-        }
-    }
-
-    /// Serialize snapshot for middleware/telemetry consumers without cloning callers
-    pub fn to_json(&self) -> Value {
-        json!({
-            "session_id": self.session_id,
-            "task_id": self.task_id,
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ToolExecutionRecord {
-    pub tool_name: String,
-    pub requested_name: String,
-    pub is_mcp: bool,
-    pub mcp_provider: Option<String>,
-    pub args: Value,
-    pub result: Result<Value, String>, // Ok(result) or Err(error_message)
-    pub timestamp: SystemTime,
-    pub success: bool,
-    pub context: HarnessContextSnapshot,
-    pub timeout_category: Option<String>,
-    pub base_timeout_ms: Option<u64>,
-    pub adaptive_timeout_ms: Option<u64>,
-    pub effective_timeout_ms: Option<u64>,
-    pub circuit_breaker: bool,
-}
-
-impl ToolExecutionRecord {
-    /// Create a new failed execution record
-    #[allow(clippy::too_many_arguments)]
-    #[inline]
-    pub fn failure(
-        tool_name: String,
-        requested_name: String,
-        is_mcp: bool,
-        mcp_provider: Option<String>,
-        args: Value,
-        error_msg: String,
-        context: HarnessContextSnapshot,
-        timeout_category: Option<String>,
-        base_timeout_ms: Option<u64>,
-        adaptive_timeout_ms: Option<u64>,
-        effective_timeout_ms: Option<u64>,
-        circuit_breaker: bool,
-    ) -> Self {
-        Self {
-            tool_name,
-            requested_name,
-            is_mcp,
-            mcp_provider,
-            args,
-            result: Err(error_msg),
-            timestamp: SystemTime::now(),
-            success: false,
-            context,
-            timeout_category,
-            base_timeout_ms,
-            adaptive_timeout_ms,
-            effective_timeout_ms,
-            circuit_breaker,
-        }
-    }
-
-    /// Create a new successful execution record
-    #[allow(clippy::too_many_arguments)]
-    #[inline]
-    pub fn success(
-        tool_name: String,
-        requested_name: String,
-        is_mcp: bool,
-        mcp_provider: Option<String>,
-        args: Value,
-        result: Value,
-        context: HarnessContextSnapshot,
-        timeout_category: Option<String>,
-        base_timeout_ms: Option<u64>,
-        adaptive_timeout_ms: Option<u64>,
-        effective_timeout_ms: Option<u64>,
-        circuit_breaker: bool,
-    ) -> Self {
-        Self {
-            tool_name,
-            requested_name,
-            is_mcp,
-            mcp_provider,
-            args,
-            result: Ok(result),
-            timestamp: SystemTime::now(),
-            success: true,
-            context,
-            timeout_category,
-            base_timeout_ms,
-            adaptive_timeout_ms,
-            effective_timeout_ms,
-            circuit_breaker,
-        }
-    }
-}
-
-/// Thread-safe execution history for recording tool executions
+/// Default window size for loop detection.
 const DEFAULT_LOOP_DETECT_WINDOW: usize = 5;
-const MIN_READONLY_IDENTICAL_LIMIT: usize = 5;
-#[derive(Clone)]
-pub struct ToolExecutionHistory {
-    records: Arc<RwLock<VecDeque<ToolExecutionRecord>>>,
-    max_records: usize,
-    detect_window: Arc<std::sync::atomic::AtomicUsize>,
-    identical_limit: Arc<std::sync::atomic::AtomicUsize>,
-    rate_limit_per_minute: Arc<std::sync::atomic::AtomicUsize>,
-}
-
-impl ToolExecutionHistory {
-    pub fn new(max_records: usize) -> Self {
-        Self {
-            records: Arc::new(RwLock::new(VecDeque::new())),
-            max_records,
-            detect_window: Arc::new(std::sync::atomic::AtomicUsize::new(
-                DEFAULT_LOOP_DETECT_WINDOW,
-            )),
-            identical_limit: Arc::new(std::sync::atomic::AtomicUsize::new(
-                defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
-            )),
-            rate_limit_per_minute: Arc::new(std::sync::atomic::AtomicUsize::new(
-                tool_rate_limit_from_env().unwrap_or(0),
-            )),
-        }
-    }
-
-    pub fn add_record(&self, record: ToolExecutionRecord) {
-        let mut records = self.records.write().unwrap();
-        records.push_back(record);
-        while records.len() > self.max_records {
-            records.pop_front();
-        }
-    }
-
-    pub fn set_loop_detection_limits(&self, detect_window: usize, identical_limit: usize) {
-        self.detect_window
-            .store(detect_window.max(1), std::sync::atomic::Ordering::Relaxed);
-        self.identical_limit
-            .store(identical_limit, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    pub fn set_rate_limit_per_minute(&self, limit: Option<usize>) {
-        self.rate_limit_per_minute.store(
-            limit.filter(|v| *v > 0).unwrap_or(0),
-            std::sync::atomic::Ordering::Relaxed,
-        );
-    }
-
-    pub fn get_recent_records(&self, count: usize) -> Vec<ToolExecutionRecord> {
-        let records = self.records.read().unwrap();
-        let records_len = records.len();
-        let start = records_len.saturating_sub(count);
-        records.iter().skip(start).cloned().collect()
-    }
-
-    pub fn get_recent_failures(&self, count: usize) -> Vec<ToolExecutionRecord> {
-        let records = self.records.read().unwrap();
-        // Collect in reverse order and reverse at the end for chronological order
-        let mut failures: Vec<ToolExecutionRecord> = records
-            .iter()
-            .rev() // Go from newest to oldest
-            .filter(|r| !r.success)
-            .take(count)
-            .cloned()
-            .collect();
-        // Reverse to get chronological order (oldest to newest)
-        failures.reverse();
-        failures
-    }
-
-    pub fn clear(&self) {
-        let mut records = self.records.write().unwrap();
-        records.clear();
-    }
-
-    pub fn loop_limit(&self) -> usize {
-        self.identical_limit
-            .load(std::sync::atomic::Ordering::Relaxed)
-    }
-
-    pub fn loop_limit_for(&self, tool_name: &str) -> usize {
-        self.effective_identical_limit_for_tool(tool_name)
-    }
-
-    pub fn rate_limit_per_minute(&self) -> Option<usize> {
-        let val = self
-            .rate_limit_per_minute
-            .load(std::sync::atomic::Ordering::Relaxed);
-        if val == 0 { None } else { Some(val) }
-    }
-
-    fn effective_identical_limit_for_tool(&self, tool_name: &str) -> usize {
-        let base_limit = self
-            .identical_limit
-            .load(std::sync::atomic::Ordering::Relaxed);
-        match tool_name {
-            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
-                base_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
-            }
-            _ => base_limit,
-        }
-    }
-
-    pub fn calls_in_window(&self, window: Duration) -> usize {
-        let cutoff = SystemTime::now()
-            .checked_sub(window)
-            .unwrap_or(SystemTime::UNIX_EPOCH);
-
-        let records = self.records.read().unwrap();
-        records
-            .iter()
-            .rev()
-            .take_while(|record| record.timestamp >= cutoff)
-            .count()
-    }
-
-    /// Detect if the agent is stuck in a loop (calling the same tool repeatedly with identical params)
-    ///
-    /// Returns (is_loop, repeat_count, tool_name) if a loop is detected
-    pub fn detect_loop(&self, tool_name: &str, args: &Value) -> (bool, usize, String) {
-        let limit = self.effective_identical_limit_for_tool(tool_name);
-        if limit == 0 {
-            return (false, 0, String::new());
-        }
-
-        let detect_window = self
-            .detect_window
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let window = detect_window.max(limit.saturating_mul(2)).max(1);
-
-        let records = self.records.read().unwrap();
-
-        // Look at the recent calls within the configured window
-        let recent: Vec<&ToolExecutionRecord> = records.iter().rev().take(window).collect();
-
-        if recent.is_empty() {
-            return (false, 0, String::new());
-        }
-
-        // Count how many of the recent calls match this exact tool + args combo
-        // CRITICAL FIX: Only count SUCCESSFUL calls to avoid cascade blocking
-        // When a call fails due to loop detection, it shouldn't count toward future loop detection
-        let mut identical_count = 0;
-        for record in &recent {
-            if record.tool_name == tool_name && record.args == *args && record.success {
-                identical_count += 1;
-            }
-        }
-
-        // If we've called this exact combination at or above the configured limit, it's a loop
-        let is_loop = identical_count >= limit;
-
-        (is_loop, identical_count, tool_name.to_string())
-    }
-}
 
 fn tool_rate_limit_from_env() -> Option<usize> {
     env::var("VTCODE_TOOL_CALLS_PER_MIN")
@@ -370,264 +108,10 @@ fn tool_rate_limit_from_env() -> Option<usize> {
         .filter(|value| *value > 0)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ToolTimeoutCategory {
-    Default,
-    Pty,
-    Mcp,
-}
-
-impl ToolTimeoutCategory {
-    pub fn label(&self) -> &'static str {
-        match self {
-            ToolTimeoutCategory::Default => "standard",
-            ToolTimeoutCategory::Pty => "PTY",
-            ToolTimeoutCategory::Mcp => "MCP",
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ToolTimeoutPolicy {
-    default_ceiling: Option<Duration>,
-    pty_ceiling: Option<Duration>,
-    mcp_ceiling: Option<Duration>,
-    warning_fraction: f32,
-}
-
-impl Default for ToolTimeoutPolicy {
-    fn default() -> Self {
-        Self {
-            default_ceiling: Some(Duration::from_secs(180)),
-            pty_ceiling: Some(Duration::from_secs(300)),
-            mcp_ceiling: Some(Duration::from_secs(120)),
-            warning_fraction: 0.8,
-        }
-    }
-}
-
-impl ToolTimeoutPolicy {
-    pub fn from_config(config: &TimeoutsConfig) -> Self {
-        Self {
-            default_ceiling: config.ceiling_duration(config.default_ceiling_seconds),
-            pty_ceiling: config.ceiling_duration(config.pty_ceiling_seconds),
-            mcp_ceiling: config.ceiling_duration(config.mcp_ceiling_seconds),
-            warning_fraction: config.warning_threshold_fraction().clamp(0.0, 0.99),
-        }
-    }
-
-    /// Validate a single ceiling duration against bounds
-    #[inline]
-    fn validate_ceiling(ceiling: Option<Duration>, name: &str) -> anyhow::Result<()> {
-        if let Some(ceiling) = ceiling {
-            if ceiling < Duration::from_secs(1) {
-                anyhow::bail!(
-                    "{} must be at least 1 second (got {}s)",
-                    name,
-                    ceiling.as_secs()
-                );
-            }
-            if ceiling > Duration::from_secs(3600) {
-                anyhow::bail!(
-                    "{} must not exceed 3600 seconds/1 hour (got {}s)",
-                    name,
-                    ceiling.as_secs()
-                );
-            }
-        }
-        Ok(())
-    }
-
-    /// Validate the timeout policy configuration
-    ///
-    /// Ensures that:
-    /// - Ceiling values are within reasonable bounds (1s - 3600s)
-    /// - Warning fraction is between 0.0 and 1.0
-    /// - No ceiling is configured as 0 seconds
-    pub fn validate(&self) -> anyhow::Result<()> {
-        Self::validate_ceiling(self.default_ceiling, "default_ceiling_seconds")?;
-        Self::validate_ceiling(self.pty_ceiling, "pty_ceiling_seconds")?;
-        Self::validate_ceiling(self.mcp_ceiling, "mcp_ceiling_seconds")?;
-
-        // Validate warning fraction
-        if self.warning_fraction <= 0.0 {
-            anyhow::bail!(
-                "warning_threshold_percent must be greater than 0 (got {})",
-                self.warning_fraction * 100.0
-            );
-        }
-        if self.warning_fraction >= 1.0 {
-            anyhow::bail!(
-                "warning_threshold_percent must be less than 100 (got {})",
-                self.warning_fraction * 100.0
-            );
-        }
-
-        Ok(())
-    }
-
-    pub fn ceiling_for(&self, category: ToolTimeoutCategory) -> Option<Duration> {
-        match category {
-            ToolTimeoutCategory::Default => self.default_ceiling,
-            ToolTimeoutCategory::Pty => self.pty_ceiling.or(self.default_ceiling),
-            ToolTimeoutCategory::Mcp => self.mcp_ceiling.or(self.default_ceiling),
-        }
-    }
-
-    pub fn warning_fraction(&self) -> f32 {
-        self.warning_fraction
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-struct ToolFailureTracker {
-    consecutive_failures: u32,
-}
-
-impl ToolFailureTracker {
-    fn record_failure(&mut self) {
-        self.consecutive_failures = self.consecutive_failures.saturating_add(1);
-    }
-
-    fn reset(&mut self) {
-        self.consecutive_failures = 0;
-    }
-
-    fn should_circuit_break(&self) -> bool {
-        self.consecutive_failures >= 3
-    }
-
-    fn backoff_duration(&self) -> Duration {
-        let base_ms = 500;
-        let max_ms = 10_000;
-        let backoff_ms = base_ms * 2_u64.pow(self.consecutive_failures.saturating_sub(1).min(8));
-        Duration::from_millis(backoff_ms.min(max_ms))
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-struct ToolLatencyStats {
-    samples: VecDeque<Duration>,
-    max_samples: usize,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct AdaptiveTimeoutTuning {
-    decay_ratio: f64,
-    success_streak: u32,
-    min_floor_ms: u64,
-}
-
-impl Default for AdaptiveTimeoutTuning {
-    fn default() -> Self {
-        Self {
-            decay_ratio: 0.875,  // relax toward ceiling by 12.5%
-            success_streak: 5,   // decay after 5 consecutive successes
-            min_floor_ms: 1_000, // never clamp below 1s
-        }
-    }
-}
-
 fn load_adaptive_tuning_from_config(
     timeouts: &crate::config::TimeoutsConfig,
 ) -> AdaptiveTimeoutTuning {
-    AdaptiveTimeoutTuning {
-        decay_ratio: timeouts.adaptive_decay_ratio,
-        success_streak: timeouts.adaptive_success_streak,
-        min_floor_ms: timeouts.adaptive_min_floor_ms,
-    }
-}
-
-impl ToolLatencyStats {
-    fn new(max_samples: usize) -> Self {
-        Self {
-            samples: VecDeque::with_capacity(max_samples),
-            max_samples,
-        }
-    }
-
-    fn record(&mut self, duration: Duration) {
-        if self.samples.len() >= self.max_samples {
-            self.samples.pop_front();
-        }
-        self.samples.push_back(duration);
-    }
-
-    fn percentile(&self, pct: f64) -> Option<Duration> {
-        if self.samples.is_empty() {
-            return None;
-        }
-        let mut sorted: Vec<Duration> = self.samples.iter().copied().collect();
-        sorted.sort_unstable();
-        let idx =
-            ((pct.clamp(0.0, 1.0)) * (sorted.len().saturating_sub(1) as f64)).round() as usize;
-        sorted.get(idx).copied()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct HarnessContext {
-    session_id: Arc<std::sync::RwLock<String>>,
-    task_id: Arc<std::sync::RwLock<Option<String>>>,
-}
-
-impl Default for HarnessContext {
-    fn default() -> Self {
-        let session_id = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| format!("session-{}", d.as_millis()))
-            .unwrap_or_else(|_| "session-unknown".to_string());
-
-        Self {
-            session_id: Arc::new(std::sync::RwLock::new(session_id)),
-            task_id: Arc::new(std::sync::RwLock::new(None)),
-        }
-    }
-}
-
-impl HarnessContext {
-    pub fn with_session(session_id: impl Into<String>) -> Self {
-        Self {
-            session_id: Arc::new(std::sync::RwLock::new(session_id.into())),
-            task_id: Arc::new(std::sync::RwLock::new(None)),
-        }
-    }
-
-    pub fn set_session_id(&self, session_id: impl Into<String>) {
-        *self.session_id.write().unwrap() = session_id.into();
-    }
-
-    pub fn set_task_id(&self, task_id: Option<String>) {
-        *self.task_id.write().unwrap() = task_id;
-    }
-
-    pub fn snapshot(&self) -> HarnessContextSnapshot {
-        HarnessContextSnapshot::new(
-            self.session_id.read().unwrap().clone(),
-            self.task_id.read().unwrap().clone(),
-        )
-    }
-}
-
-#[derive(Clone, Debug)]
-struct ResiliencyContext {
-    adaptive_timeout_ceiling: HashMap<ToolTimeoutCategory, Duration>,
-    failure_trackers: HashMap<ToolTimeoutCategory, ToolFailureTracker>,
-    success_trackers: HashMap<ToolTimeoutCategory, u32>,
-    latency_stats: HashMap<ToolTimeoutCategory, ToolLatencyStats>,
-    adaptive_tuning: AdaptiveTimeoutTuning,
-}
-
-impl Default for ResiliencyContext {
-    fn default() -> Self {
-        Self {
-            adaptive_timeout_ceiling: HashMap::new(),
-            failure_trackers: HashMap::new(),
-            success_trackers: HashMap::new(),
-            latency_stats: HashMap::new(),
-            adaptive_tuning: AdaptiveTimeoutTuning::default(),
-        }
-    }
+    AdaptiveTimeoutTuning::from_config(timeouts)
 }
 
 #[derive(Clone)]

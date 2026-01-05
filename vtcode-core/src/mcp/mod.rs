@@ -24,6 +24,9 @@ pub mod rmcp_transport;
 pub mod schema;
 pub mod tool_discovery;
 pub mod tool_discovery_cache;
+pub mod traits;
+pub mod types;
+pub mod utils;
 
 pub use connection_pool::{
     ConnectionPoolStats, McpConnectionPool, McpPoolError, PooledMcpManager, PooledMcpStats,
@@ -38,22 +41,28 @@ pub use rmcp_transport::{
 };
 pub use schema::{validate_against_schema, validate_tool_input};
 pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
+pub use traits::{McpElicitationHandler, McpToolExecutor};
+pub use types::{
+    McpClientStatus, McpElicitationRequest, McpElicitationResponse, McpPromptDetail,
+    McpPromptInfo, McpResourceData, McpResourceInfo, McpToolInfo,
+};
+pub use utils::{
+    LOCAL_TIMEZONE_ENV_VAR, TIMEZONE_ARGUMENT, TZ_ENV_VAR, build_headers, detect_local_timezone,
+    ensure_timezone_argument, schema_requires_field,
+};
 
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
-use chrono::Local;
 use futures::FutureExt;
-use iana_time_zone::get_timezone;
 use jsonschema::Validator;
 use mcp_types::{
     CallToolRequestParams, CallToolResult, CallToolResultContentItem, ClientCapabilities,
     ClientCapabilitiesRoots, GetPromptRequestParams, GetPromptResult, Implementation,
-    InitializeRequestParams, InitializeResult, Prompt, PromptArgument, PromptMessage,
-    ReadResourceRequestParams, ReadResourceResult, ReadResourceResultContentsItem, Resource,
-    SUPPORTED_PROTOCOL_VERSIONS, Tool,
+    InitializeRequestParams, InitializeResult, Prompt, ReadResourceRequestParams,
+    ReadResourceResult, Resource, SUPPORTED_PROTOCOL_VERSIONS, Tool,
 };
 use parking_lot::RwLock;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::header::HeaderMap;
 use rmcp::handler::client::ClientHandler;
 pub use rmcp::model::ElicitationAction;
 use rmcp::model::{
@@ -68,7 +77,6 @@ use rmcp::transport::streamable_http_client::{
 };
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
-use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -82,96 +90,6 @@ use url::Url;
 
 const ELICITATION_SCHEMA_VALIDATION_FLAG: &str = "schemaValidation";
 
-/// Information about an MCP tool exposed by a provider.
-#[derive(Debug, Clone)]
-pub struct McpToolInfo {
-    pub name: String,
-    pub description: String,
-    pub provider: String,
-    pub input_schema: Value,
-}
-
-/// Summary of an MCP resource exposed by a provider.
-#[derive(Debug, Clone)]
-pub struct McpResourceInfo {
-    pub provider: String,
-    pub uri: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub mime_type: Option<String>,
-    pub size: Option<i64>,
-}
-
-/// Resource contents fetched from an MCP provider.
-#[derive(Debug, Clone)]
-pub struct McpResourceData {
-    pub provider: String,
-    pub uri: String,
-    pub contents: Vec<ReadResourceResultContentsItem>,
-    pub meta: Map<String, Value>,
-}
-
-/// Summary of an MCP prompt exposed by a provider.
-#[derive(Debug, Clone)]
-pub struct McpPromptInfo {
-    pub provider: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub arguments: Vec<PromptArgument>,
-}
-
-/// Fully rendered MCP prompt ready for use.
-#[derive(Debug, Clone)]
-pub struct McpPromptDetail {
-    pub provider: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub messages: Vec<PromptMessage>,
-    pub meta: Map<String, Value>,
-}
-
-/// Snapshot describing the MCP client at runtime.
-#[derive(Debug, Clone)]
-pub struct McpClientStatus {
-    pub enabled: bool,
-    pub provider_count: usize,
-    pub active_connections: usize,
-    pub configured_providers: Vec<String>,
-}
-
-/// Request payload for handling elicitation prompts from MCP providers.
-#[derive(Debug, Clone)]
-pub struct McpElicitationRequest {
-    pub message: String,
-    pub requested_schema: Value,
-}
-
-/// Result returned by an elicitation handler after interacting with the user.
-#[derive(Debug, Clone)]
-pub struct McpElicitationResponse {
-    pub action: ElicitationAction,
-    pub content: Option<Value>,
-}
-
-/// Callback interface used to resolve elicitation requests from MCP providers.
-#[async_trait]
-pub trait McpElicitationHandler: Send + Sync {
-    async fn handle_elicitation(
-        &self,
-        provider: &str,
-        request: McpElicitationRequest,
-    ) -> Result<McpElicitationResponse>;
-}
-
-/// Trait abstraction used by the tool registry to talk to the MCP client.
-#[async_trait]
-pub trait McpToolExecutor: Send + Sync {
-    async fn execute_mcp_tool(&self, tool_name: &str, args: &Value) -> Result<Value>;
-    async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>>;
-    async fn has_mcp_tool(&self, tool_name: &str) -> Result<bool>;
-    fn get_status(&self) -> McpClientStatus;
-}
-
 /// High level MCP client responsible for managing multiple providers and
 /// enforcing VT Code specific policies like tool allow lists.
 pub struct McpClient {
@@ -181,12 +99,8 @@ pub struct McpClient {
     tool_provider_index: RwLock<HashMap<String, String>>,
     resource_provider_index: RwLock<HashMap<String, String>>,
     prompt_provider_index: RwLock<HashMap<String, String>>,
-    elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+    elicitation_handler: Option<Arc<dyn traits::McpElicitationHandler>>,
 }
-
-const LOCAL_TIMEZONE_ENV_VAR: &str = "VT_LOCAL_TIMEZONE";
-const TZ_ENV_VAR: &str = "TZ";
-const TIMEZONE_ARGUMENT: &str = "timezone";
 
 impl McpClient {
     /// Create a new MCP client from the configuration.
@@ -1388,164 +1302,6 @@ impl McpProvider {
             })
             .collect()
     }
-}
-
-fn ensure_timezone_argument(
-    arguments: &mut Map<String, Value>,
-    requires_timezone: bool,
-) -> Result<()> {
-    if !requires_timezone || arguments.contains_key(TIMEZONE_ARGUMENT) {
-        return Ok(());
-    }
-
-    let timezone = detect_local_timezone()
-        .context("failed to determine a default timezone for MCP tool invocation")?;
-    debug!("Injecting local timezone '{timezone}' for MCP tool call");
-    arguments.insert(TIMEZONE_ARGUMENT.to_string(), Value::String(timezone));
-    Ok(())
-}
-
-fn detect_local_timezone() -> Result<String> {
-    if let Ok(value) = env::var(LOCAL_TIMEZONE_ENV_VAR) {
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            return Ok(trimmed.to_string());
-        }
-    }
-
-    if let Ok(value) = env::var(TZ_ENV_VAR) {
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            return Ok(trimmed.to_string());
-        }
-    }
-
-    match get_timezone() {
-        Ok(timezone) => Ok(timezone),
-        Err(err) => {
-            let fallback = Local::now().format("%:z").to_string();
-            warn!(
-                "Falling back to numeric offset '{fallback}' after failing to resolve IANA timezone: {err}"
-            );
-            Ok(fallback)
-        }
-    }
-}
-
-fn schema_requires_field(schema: &Value, field: &str) -> bool {
-    match schema {
-        Value::Object(map) => {
-            if map
-                .get("required")
-                .and_then(Value::as_array)
-                .map(|items| items.iter().any(|item| item.as_str() == Some(field)))
-                .unwrap_or(false)
-            {
-                return true;
-            }
-
-            for keyword in ["allOf", "anyOf", "oneOf"] {
-                if let Some(subschemas) = map.get(keyword).and_then(Value::as_array)
-                    && subschemas
-                        .iter()
-                        .any(|subschema| schema_requires_field(subschema, field))
-                {
-                    return true;
-                }
-            }
-
-            if let Some(items) = map.get("items")
-                && schema_requires_field(items, field)
-            {
-                return true;
-            }
-
-            if let Some(properties) = map.get("properties").and_then(Value::as_object)
-                && let Some(property_schema) = properties.get(field)
-                && schema_requires_field(property_schema, field)
-            {
-                return true;
-            }
-
-            false
-        }
-        _ => false,
-    }
-}
-
-fn build_headers(
-    static_headers: &HashMap<String, String>,
-    env_headers: &HashMap<String, String>,
-) -> HeaderMap {
-    let mut map = HeaderMap::new();
-
-    for (key, value) in static_headers {
-        match HeaderName::from_bytes(key.as_bytes()) {
-            Ok(name) => match HeaderValue::from_str(value) {
-                Ok(header_value) => {
-                    map.insert(name, header_value);
-                }
-                Err(err) => {
-                    warn!(
-                        header = key.as_str(),
-                        error = %err,
-                        "Skipping MCP HTTP header with invalid value"
-                    );
-                }
-            },
-            Err(err) => {
-                warn!(
-                    header = key.as_str(),
-                    error = %err,
-                    "Skipping MCP HTTP header with invalid name"
-                );
-            }
-        }
-    }
-
-    for (key, env_var) in env_headers {
-        match env::var(env_var) {
-            Ok(value) if !value.trim().is_empty() => match HeaderName::from_bytes(key.as_bytes()) {
-                Ok(name) => match HeaderValue::from_str(&value) {
-                    Ok(header_value) => {
-                        map.insert(name, header_value);
-                    }
-                    Err(err) => {
-                        warn!(
-                            header = key.as_str(),
-                            env_var = env_var.as_str(),
-                            error = %err,
-                            "Skipping MCP HTTP header from environment with invalid value"
-                        );
-                    }
-                },
-                Err(err) => {
-                    warn!(
-                        header = key.as_str(),
-                        env_var = env_var.as_str(),
-                        error = %err,
-                        "Skipping MCP HTTP header from environment with invalid name"
-                    );
-                }
-            },
-            Ok(_) => {
-                debug!(
-                    header = key.as_str(),
-                    env_var = env_var.as_str(),
-                    "Skipping MCP HTTP header from environment because the value is empty"
-                );
-            }
-            Err(_) => {
-                debug!(
-                    header = key.as_str(),
-                    env_var = env_var.as_str(),
-                    "Skipping MCP HTTP header from environment because the variable is unset"
-                );
-            }
-        }
-    }
-
-    map
 }
 
 /// Lightweight adapter around the rmcp transport mirroring Codex' `RmcpClient` API.

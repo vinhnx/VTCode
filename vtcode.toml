@@ -561,6 +561,9 @@ use_optimized_loop = false
 enable_performance_prediction = false
 state_history_size = 1000
 resource_monitor_interval_ms = 100
+idle_timeout_ms = 5000
+idle_backoff_ms = 100
+max_idle_cycles = 10
 max_memory_mb = 1024
 max_execution_time_secs = 300
 
