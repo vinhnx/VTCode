@@ -89,7 +89,9 @@ where
             .with_context(|| format!("failed to canonicalize `{}`", path.display()))?;
 
         // Store in cache
-        self.path_cache.lock().put(path.to_path_buf(), canonical.clone());
+        self.path_cache
+            .lock()
+            .put(path.to_path_buf(), canonical.clone());
 
         Ok(canonical)
     }
@@ -520,9 +522,9 @@ mod tests {
         );
         let mut runner = runner?;
         runner.cd("nested")?;
-            // Canonicalize expected path to match runner's canonical working_dir
-            let expected = nested.canonicalize()?;
-            assert_eq!(runner.working_dir(), expected);
+        // Canonicalize expected path to match runner's canonical working_dir
+        let expected = nested.canonicalize()?;
+        assert_eq!(runner.working_dir(), expected);
         Ok(())
     }
 

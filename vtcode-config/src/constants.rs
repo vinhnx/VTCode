@@ -742,6 +742,12 @@ pub mod ui {
     pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "";
     pub const INLINE_AGENT_QUOTE_PREFIX: &str = "";
     pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
+
+    /// Scroll percentage format in status bar
+    pub const SCROLL_INDICATOR_FORMAT: &str = "↕";
+    /// Show scroll percentage in status bar
+    pub const SCROLL_INDICATOR_ENABLED: bool = true;
+
     pub const INLINE_BLOCK_TOP_LEFT: &str = "╭";
     pub const INLINE_BLOCK_TOP_RIGHT: &str = "╮";
     pub const INLINE_BLOCK_BODY_LEFT: &str = "│";

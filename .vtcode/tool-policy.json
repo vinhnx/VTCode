@@ -58,7 +58,7 @@
     "exec_pty_cmd": "prompt",
     "exec": "prompt",
     "shell": "prompt",
-    "unified_exec": "prompt",
+    "unified_exec": "allow",
     "list_pty_sessions": "allow",
     "read_pty_session": "allow",
     "close_pty_session": "prompt",

@@ -1,7 +1,7 @@
 //! Integration module to bridge the modern TUI with the existing Session-based UI
 
 use crate::config::types::UiSurfacePreference;
-use crate::config::{keyboard_protocol_to_flags, KeyboardProtocolConfig};
+use crate::config::{KeyboardProtocolConfig, keyboard_protocol_to_flags};
 use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme};

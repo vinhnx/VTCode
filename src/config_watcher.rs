@@ -93,9 +93,10 @@ impl ConfigWatcher {
     pub async fn get_config(&mut self) -> Option<VTCodeConfig> {
         // Check if we need to reload based on file changes
         if self.should_reload().await
-            && let Err(err) = self.load_config().await {
-                eprintln!("Failed to reload config: {}", err);
-            }
+            && let Err(err) = self.load_config().await
+        {
+            eprintln!("Failed to reload config: {}", err);
+        }
 
         self.current_config.lock().await.clone()
     }
@@ -128,9 +129,10 @@ fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bo
             for path in &event.paths {
                 if let Some(file_name) = path.file_name()
                     && let Some(file_name_str) = file_name.to_str()
-                        && relevant_files.contains(&file_name_str) {
-                            return true;
-                        }
+                    && relevant_files.contains(&file_name_str)
+                {
+                    return true;
+                }
             }
         }
         _ => {}
@@ -199,34 +201,37 @@ impl SimpleConfigWatcher {
                 }
 
                 if let Ok(metadata) = std::fs::metadata(&config_path)
-                    && let Ok(current_modified) = metadata.modified() {
-                        // Get or initialize last modified time for this specific file
-                        let _file_key = config_path.to_string_lossy().to_string();
+                    && let Ok(current_modified) = metadata.modified()
+                {
+                    // Get or initialize last modified time for this specific file
+                    let _file_key = config_path.to_string_lossy().to_string();
 
-                        // In a real implementation, we would track modified times per file
-                        // For simplicity, we'll use a single tracking approach
-                        // Store initial modified time if not set
-                        if self.last_modified_time.is_none() {
-                            self.last_modified_time = Some(current_modified);
+                    // In a real implementation, we would track modified times per file
+                    // For simplicity, we'll use a single tracking approach
+                    // Store initial modified time if not set
+                    if self.last_modified_time.is_none() {
+                        self.last_modified_time = Some(current_modified);
+                        continue;
+                    }
+
+                    // Check if file has been modified
+                    if let Some(last_modified) = self.last_modified_time
+                        && current_modified > last_modified
+                    {
+                        // File has been modified, check debounce period
+                        if let Some(last_attempt) = self.last_reload_attempt
+                            && now.duration_since(last_attempt) < self.debounce_duration
+                        {
+                            // Still in debounce period, don't reload yet
                             continue;
                         }
 
-                        // Check if file has been modified
-                        if let Some(last_modified) = self.last_modified_time
-                            && current_modified > last_modified {
-                                // File has been modified, check debounce period
-                                if let Some(last_attempt) = self.last_reload_attempt
-                                    && now.duration_since(last_attempt) < self.debounce_duration {
-                                        // Still in debounce period, don't reload yet
-                                        continue;
-                                    }
-
-                                // Update last modified time and record reload attempt
-                                self.last_modified_time = Some(current_modified);
-                                self.last_reload_attempt = Some(now);
-                                return true;
-                            }
+                        // Update last modified time and record reload attempt
+                        self.last_modified_time = Some(current_modified);
+                        self.last_reload_attempt = Some(now);
+                        return true;
                     }
+                }
             }
         }
 
@@ -243,9 +248,10 @@ impl SimpleConfigWatcher {
         // Update last modified time after successful load
         let config_path = self.workspace_path.join("vtcode.toml");
         if let Ok(metadata) = std::fs::metadata(&config_path)
-            && let Ok(modified) = metadata.modified() {
-                self.last_modified_time = Some(modified);
-            }
+            && let Ok(modified) = metadata.modified()
+        {
+            self.last_modified_time = Some(modified);
+        }
 
         config
     }

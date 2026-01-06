@@ -340,8 +340,6 @@ const fn default_include_working_directory() -> bool {
     true // Enable by default - minimal overhead (~10 tokens)
 }
 
-
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentCustomPromptsConfig {

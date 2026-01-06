@@ -43,8 +43,8 @@ pub use schema::{validate_against_schema, validate_tool_input};
 pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
 pub use traits::{McpElicitationHandler, McpToolExecutor};
 pub use types::{
-    McpClientStatus, McpElicitationRequest, McpElicitationResponse, McpPromptDetail,
-    McpPromptInfo, McpResourceData, McpResourceInfo, McpToolInfo,
+    McpClientStatus, McpElicitationRequest, McpElicitationResponse, McpPromptDetail, McpPromptInfo,
+    McpResourceData, McpResourceInfo, McpToolInfo,
 };
 pub use utils::{
     LOCAL_TIMEZONE_ENV_VAR, TIMEZONE_ARGUMENT, TZ_ENV_VAR, build_headers, detect_local_timezone,

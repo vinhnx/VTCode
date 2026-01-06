@@ -203,4 +203,3 @@ mod keyboard_protocol_tests {
         assert!(config.validate().is_ok());
     }
 }
-

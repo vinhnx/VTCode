@@ -8,13 +8,11 @@ use ratatui::crossterm::{
     cursor,
     event::{
         self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
-        Event as CrosstermEvent, KeyEventKind, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-        PushKeyboardEnhancementFlags,
+        Event as CrosstermEvent, KeyEventKind, KeyboardEnhancementFlags,
+        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
-    terminal::{
-        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
-    },
+    terminal::{self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode},
 };
 use std::{
     io,
@@ -191,7 +189,7 @@ impl ModernTui {
             let _ = execute!(io::stderr(), LeaveAlternateScreen, cursor::Show);
             let _ = terminal::disable_raw_mode();
             let _ = execute!(io::stderr(), DisableFocusChange);
-            }
+        }
 
         self.panic_guard = None;
 
