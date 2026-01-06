@@ -58,7 +58,7 @@
     "exec_pty_cmd": "prompt",
     "exec": "prompt",
     "shell": "prompt",
-    "unified_exec": "allow",
+    "unified_exec": "prompt",
     "list_pty_sessions": "allow",
     "read_pty_session": "allow",
     "close_pty_session": "prompt",
@@ -76,7 +76,10 @@
     "cargo_test": "allow",
     "git_status": "allow",
     "git_diff": "allow",
-    "git_log": "allow"
+    "git_log": "allow",
+    "spawn_subagent": "allow",
+    "load_skill": "allow",
+    "list_skills": "allow"
   },
   "constraints": {},
   "mcp": {

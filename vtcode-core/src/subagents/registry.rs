@@ -220,7 +220,26 @@ impl SubagentRegistry {
         };
 
         registry.load_all_agents().await?;
+
+        // Clear any stale running entries on startup
+        // This handles cases where subagents weren't properly cleaned up
+        // due to crashes, panics, or interruptions
+        registry.clear_stale_subagents().await;
+
         Ok(registry)
+    }
+
+    /// Clear stale subagent entries (called on registry initialization)
+    async fn clear_stale_subagents(&self) {
+        let mut running = self.running.write().await;
+        let count = running.len();
+        if count > 0 {
+            info!(
+                "Clearing {} stale subagent entries from previous session",
+                count
+            );
+            running.clear();
+        }
     }
 
     /// Load subagents from all sources with proper priority
@@ -440,7 +459,40 @@ impl SubagentRegistry {
 
     /// Check if we can spawn another subagent
     pub async fn can_spawn(&self) -> bool {
+        // Clean up stale entries before checking
+        self.cleanup_stale_entries().await;
         self.running_count().await < self.config.max_concurrent
+    }
+
+    /// Cleanup subagent entries that have been running too long (likely stale)
+    /// This provides a safety net in case the cleanup guard fails
+    async fn cleanup_stale_entries(&self) {
+        let mut running = self.running.write().await;
+        let stale_threshold = std::time::Duration::from_secs(
+            self.config.default_timeout_seconds * 2  // 2x timeout = definitely stale
+        );
+
+        let now = std::time::Instant::now();
+        let initial_count = running.len();
+
+        running.retain(|agent_id, subagent| {
+            let elapsed = now.duration_since(subagent.started_at);
+            if elapsed > stale_threshold {
+                info!(
+                    agent_id = %agent_id,
+                    elapsed_secs = elapsed.as_secs(),
+                    "Cleaning up stale subagent entry"
+                );
+                false  // Remove stale entry
+            } else {
+                true  // Keep active entry
+            }
+        });
+
+        let removed = initial_count - running.len();
+        if removed > 0 {
+            info!("Cleaned up {} stale subagent entries", removed);
+        }
     }
 
     /// Get default timeout for subagent execution

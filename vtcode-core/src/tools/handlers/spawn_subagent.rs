@@ -122,7 +122,14 @@ impl Tool for SpawnSubagentTool {
             self.workspace_root.clone(),
         );
 
-        let result = runner.spawn(params).await?;
+        // Surface any spawn errors as a structured error payload so the tool
+        // pipeline can render the actual message instead of a generic failure.
+        let result = match runner.spawn(params).await {
+            Ok(result) => result,
+            Err(err) => {
+                return Ok(json!({ "error": err.to_string() }));
+            }
+        };
 
         // Convert result to JSON
         Ok(serde_json::to_value(&result)?)
@@ -206,8 +213,7 @@ impl Tool for SpawnSubagentTool {
                 },
                 "thoroughness": {
                     "type": "string",
-                    "enum": ["quick", "medium", "very_thorough"],
-                    "description": "Optional: thoroughness level for exploration tasks. Default: 'medium'."
+                    "description": "Optional: thoroughness level for exploration tasks. Options: 'quick', 'medium', 'very_thorough'. Default: 'medium'. Any unrecognized value defaults to 'medium'."
                 },
                 "timeout_seconds": {
                     "type": "integer",

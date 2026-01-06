@@ -14,10 +14,54 @@ use vtcode_config::subagent::{SubagentConfig, SubagentModel};
 
 use crate::config::models::ModelId;
 use crate::config::types::AgentConfig;
-use crate::llm::{AnyClient, make_client};
+use crate::llm::AnyClient;
 use crate::tools::ToolRegistry;
 
 use super::registry::SubagentRegistry;
+
+/// Check if a model string indicates a local provider (Ollama, LMStudio, etc.)
+///
+/// This uses heuristics from the LLM factory to detect local models.
+fn is_local_model(model: &str) -> bool {
+    let m = model.to_lowercase();
+
+    // Ollama format: "model:tag" without slashes
+    if m.contains(':') && !m.contains('/') && !m.contains('@') {
+        return true;
+    }
+
+    // LMStudio format
+    if m.starts_with("lmstudio-community/") {
+        return true;
+    }
+
+    // Explicit local provider prefixes
+    if m.starts_with("ollama/") || m.starts_with("local/") {
+        return true;
+    }
+
+    false
+}
+
+/// Cleanup guard to ensure subagent is unregistered even on panic/cancellation
+struct CleanupGuard {
+    registry: Arc<SubagentRegistry>,
+    agent_id: String,
+}
+
+impl Drop for CleanupGuard {
+    fn drop(&mut self) {
+        let registry = self.registry.clone();
+        let agent_id = self.agent_id.clone();
+
+        // Spawn a task to unregister since Drop can't be async
+        // Log any errors to ensure cleanup failures are visible
+        tokio::spawn(async move {
+            debug!(agent_id = %agent_id, "CleanupGuard: unregistering subagent");
+            registry.unregister_running(&agent_id).await;
+        });
+    }
+}
 
 /// Result from a subagent execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -185,13 +229,20 @@ impl SubagentRunner {
             .register_running(agent_id.clone(), subagent_config.clone())
             .await;
 
+        // Create cleanup guard to ensure unregister happens even on panic/cancellation
+        let cleanup_registry = self.registry.clone();
+        let cleanup_agent_id = agent_id.clone();
+        let _cleanup_guard = CleanupGuard {
+            registry: cleanup_registry,
+            agent_id: cleanup_agent_id,
+        };
+
         // Execute the subagent
         let result = self
             .execute_subagent(&agent_id, &subagent_config, &params)
             .await;
 
-        // Unregister
-        self.registry.unregister_running(&agent_id).await;
+        // Cleanup guard will automatically unregister when dropped
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -244,38 +295,75 @@ impl SubagentRunner {
     }
 
     /// Create LLM client for the subagent
+    ///
+    /// Uses raw model string instead of ModelId enum to support Ollama
+    /// and other providers with custom model names.
     fn create_client(&self, config: &SubagentConfig) -> Result<AnyClient> {
-        let model_id = self.resolve_model(config)?;
+        let model_string = self.resolve_model_string(config)?;
         let api_key = self.parent_config.api_key.clone();
-        make_client(api_key, model_id).context("Failed to create LLM client for subagent")
+
+        // Use factory directly with raw model string (bypasses ModelId parsing)
+        let provider = crate::llm::factory::create_provider_for_model(
+            &model_string,
+            api_key,
+            None,
+        ).context("Failed to create LLM provider for subagent")?;
+
+        // Wrap provider in client adapter
+        Ok(Box::new(crate::llm::ProviderClientAdapter::new(provider, model_string)))
     }
 
-    /// Resolve the model to use for this subagent
-    fn resolve_model(&self, config: &SubagentConfig) -> Result<ModelId> {
+    /// Resolve the model string to use for this subagent
+    ///
+    /// Returns raw model string (not ModelId) to support custom model names
+    /// from providers like Ollama, LMStudio, etc.
+    fn resolve_model_string(&self, config: &SubagentConfig) -> Result<String> {
+        let parent_model_str = &self.parent_config.model;
+
         match &config.model {
             SubagentModel::Inherit => {
-                // Use parent's model
-                self.parent_config
-                    .model
-                    .parse::<ModelId>()
-                    .context("Failed to parse parent model")
+                // Use parent's model string directly (works for Ollama custom names)
+                Ok(parent_model_str.clone())
             }
             SubagentModel::Alias(alias) => {
-                // Map alias to model ID
+                // For aliases, check if parent is using local provider
+                // If so, inherit parent model instead of mapping to cloud models
+                let is_local = is_local_model(parent_model_str);
+
+                if is_local {
+                    debug!(
+                        "Subagent alias '{}' overridden to inherit parent local model '{}'",
+                        alias, parent_model_str
+                    );
+                    return Ok(parent_model_str.clone());
+                }
+
+                // Map alias to default model string
                 match alias.to_lowercase().as_str() {
-                    "sonnet" => Ok(ModelId::default_subagent()),
-                    "opus" => Ok(ModelId::default_orchestrator()),
-                    "haiku" => {
-                        // Use a fast model for explore-type agents
-                        // Try to get provider-specific fast model
-                        Ok(ModelId::default_subagent())
+                    "sonnet" => Ok(ModelId::default_subagent().to_string()),
+                    "opus" => Ok(ModelId::default_orchestrator().to_string()),
+                    "haiku" => Ok(ModelId::default_subagent().to_string()),
+                    "inherit" => Ok(parent_model_str.clone()),
+                    _ => {
+                        // Try to parse as ModelId, otherwise use as-is
+                        if let Ok(model_id) = alias.parse::<ModelId>() {
+                            Ok(model_id.to_string())
+                        } else {
+                            // Use the alias as raw model string (supports custom models)
+                            Ok(alias.clone())
+                        }
                     }
-                    _ => alias
-                        .parse::<ModelId>()
-                        .context("Failed to parse model alias"),
                 }
             }
-            SubagentModel::ModelId(id) => id.parse::<ModelId>().context("Failed to parse model ID"),
+            SubagentModel::ModelId(id) => {
+                // Try to parse as ModelId, otherwise use as-is
+                if let Ok(model_id) = id.parse::<ModelId>() {
+                    Ok(model_id.to_string())
+                } else {
+                    // Use as raw model string
+                    Ok(id.clone())
+                }
+            }
         }
     }
 
@@ -320,7 +408,7 @@ impl SubagentRunner {
         config: &SubagentConfig,
         params: &SpawnParams,
     ) -> Result<(String, u32, TokenUsage)> {
-        let client = self.create_client(config)?;
+        let mut client = self.create_client(config)?;
         let system_prompt = self.build_system_prompt(config, params);
         let timeout = params
             .timeout
@@ -348,7 +436,7 @@ impl SubagentRunner {
         let response = tokio::time::timeout(timeout, async {
             // This is a simplified version - full implementation would
             // integrate with the agent runloop for multi-turn execution
-            self.single_turn_execution(&client, &system_prompt, &user_message, &tools)
+            self.single_turn_execution(&mut client, &system_prompt, &user_message, &tools)
                 .await
         })
         .await
@@ -370,30 +458,46 @@ impl SubagentRunner {
     }
 
     /// Simplified single-turn execution
+    ///
+    /// This performs a basic LLM call with the system prompt and user message.
+    /// For complex multi-turn tasks with tool usage, the full agent runloop
+    /// should be used instead.
     async fn single_turn_execution(
         &self,
-        _client: &AnyClient,
+        client: &mut AnyClient,
         system_prompt: &str,
         user_message: &str,
         _tools: &Arc<ToolRegistry>,
     ) -> Result<(String, u32, TokenUsage)> {
-        // This is a placeholder for the full agent loop integration
-        // In a complete implementation, this would:
-        // 1. Build messages with system prompt
-        // 2. Call LLM with tool declarations
-        // 3. Handle tool calls
-        // 4. Continue until task complete
+        // Build a combined prompt with system context and user request
+        let full_prompt = format!(
+            "{}\n\n---\n\n**Task:**\n{}",
+            system_prompt,
+            user_message
+        );
 
-        // For now, return a placeholder
-        Ok((
-            format!(
-                "[Subagent execution placeholder]\nPrompt: {}\nSystem: {}",
-                user_message,
-                &system_prompt[..100.min(system_prompt.len())]
-            ),
-            1,
-            TokenUsage::default(),
-        ))
+        debug!("Subagent executing with prompt length: {} chars", full_prompt.len());
+
+        // Call the LLM
+        let response = client
+            .generate(&full_prompt)
+            .await
+            .context("Failed to generate subagent response")?;
+
+        // Extract token usage if available
+        let tokens = response.usage.map(|u| TokenUsage {
+            input_tokens: u.prompt_tokens as u64,
+            output_tokens: u.completion_tokens as u64,
+            total_tokens: u.total_tokens as u64,
+        }).unwrap_or_default();
+
+        debug!(
+            "Subagent completed: {} output tokens, {} chars response",
+            tokens.output_tokens,
+            response.content.len()
+        );
+
+        Ok((response.content, 1, tokens))
     }
 }
 
