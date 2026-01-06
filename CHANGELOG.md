@@ -3,6 +3,22 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.58.25] - 2026-01-06
+
+
+### Features
+    - feat: add LRU cache for canonicalized paths and optimize vector allocations
+    - feat: restore Kitty keyboard protocol support and update session handling
+
+
+### Documentation
+    - docs: update changelog for v0.58.24 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.58.24 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.58.23 version =  [skip ci]
 # [Version 0.58.24] - 2026-01-05
 
 
