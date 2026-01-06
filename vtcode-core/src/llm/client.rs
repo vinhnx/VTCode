@@ -27,9 +27,18 @@ pub fn make_client(api_key: String, model: ModelId) -> Result<AnyClient, LLMErro
 }
 
 /// Adapter to use LLMProvider as LLMClient
-struct ProviderClientAdapter {
+///
+/// This allows using the provider interface through the simpler client trait.
+pub struct ProviderClientAdapter {
     provider: Box<dyn super::provider::LLMProvider>,
     model_id: String,
+}
+
+impl ProviderClientAdapter {
+    /// Create a new adapter wrapping an LLMProvider
+    pub fn new(provider: Box<dyn super::provider::LLMProvider>, model_id: String) -> Self {
+        Self { provider, model_id }
+    }
 }
 
 #[async_trait]

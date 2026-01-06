@@ -381,7 +381,7 @@ impl From<std::io::Error> for SubagentParseError {
 }
 
 /// Configuration for the subagent system in vtcode.toml
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct SubagentsConfig {
     /// Enable the subagent system
@@ -415,6 +415,18 @@ fn default_max_concurrent() -> usize {
 
 fn default_timeout_seconds() -> u64 {
     300 // 5 minutes
+}
+
+impl Default for SubagentsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_enabled(),
+            max_concurrent: default_max_concurrent(),
+            default_timeout_seconds: default_timeout_seconds(),
+            default_model: None,
+            additional_agent_dirs: Vec::new(),
+        }
+    }
 }
 
 /// Load subagent from a markdown file

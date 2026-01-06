@@ -571,8 +571,7 @@ pub(crate) async fn initialize_session(
                     },
                     "thoroughness": {
                         "type": "string",
-                        "enum": ["quick", "medium", "very_thorough"],
-                        "description": "Optional: thoroughness level"
+                        "description": "Optional: thoroughness level (quick, medium, very_thorough). Default: medium."
                     },
                     "timeout_seconds": {
                         "type": "integer",

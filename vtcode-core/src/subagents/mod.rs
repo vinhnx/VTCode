@@ -91,6 +91,9 @@
 pub mod registry;
 pub mod runner;
 
+#[cfg(test)]
+mod test_cleanup;
+
 pub use registry::{RunningSubagent, SubagentRegistry};
 pub use runner::{SpawnParams, SubagentResult, SubagentRunner, Thoroughness, TokenUsage};
 
