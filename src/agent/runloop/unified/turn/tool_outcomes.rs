@@ -1067,7 +1067,12 @@ pub(crate) async fn run_turn_handle_tool_failure(
         params.name, recovery_hint
     )));
 
-    params.traj.log_tool_call(params.working_history.len(), params.name, &serde_json::json!({}), false);
+    params.traj.log_tool_call(
+        params.working_history.len(),
+        params.name,
+        &serde_json::json!({}),
+        false,
+    );
 
     let error_message = params.error.to_string();
     let error_json = serde_json::json!({ "error": error_message });
@@ -1112,11 +1117,13 @@ pub(crate) async fn run_turn_handle_tool_failure(
     )
     .await?;
 
-    params.working_history.push(uni::Message::tool_response_with_origin(
-        params.call_id.to_string(),
-        serde_json::to_string(&error_json).unwrap_or_default(),
-        params.name.to_string(),
-    ));
+    params
+        .working_history
+        .push(uni::Message::tool_response_with_origin(
+            params.call_id.to_string(),
+            serde_json::to_string(&error_json).unwrap_or_default(),
+            params.name.to_string(),
+        ));
 
     {
         let mut ledger = params.decision_ledger.write().await;
@@ -1146,7 +1153,8 @@ pub(crate) struct RunTurnHandleToolFailureParams<'a> {
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub decision_ledger:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
-    pub tool_result_cache: Option<&'a Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>>,
+    pub tool_result_cache:
+        Option<&'a Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>>,
     pub vt_cfg: Option<&'a VTCodeConfig>,
 }
 
@@ -1241,11 +1249,13 @@ pub(crate) async fn run_turn_handle_tool_cancelled(
 
     let err_json = serde_json::json!({ "error": "Tool execution cancelled by user" });
 
-    params.working_history.push(uni::Message::tool_response_with_origin(
-        params.call_id.to_string(),
-        serde_json::to_string(&err_json).unwrap_or_else(|_| "{}".to_string()),
-        params.name.to_string(),
-    ));
+    params
+        .working_history
+        .push(uni::Message::tool_response_with_origin(
+            params.call_id.to_string(),
+            serde_json::to_string(&err_json).unwrap_or_else(|_| "{}".to_string()),
+            params.name.to_string(),
+        ));
 
     {
         let mut ledger = params.decision_ledger.write().await;

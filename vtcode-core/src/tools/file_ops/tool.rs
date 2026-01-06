@@ -1,8 +1,6 @@
 //! File operations tool implementation.
 
-use super::diff_preview::{
-    build_diff_preview, diff_preview_error_skip, diff_preview_size_skip,
-};
+use super::diff_preview::{build_diff_preview, diff_preview_error_skip, diff_preview_size_skip};
 use super::is_image_path;
 use crate::config::constants::diff;
 use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
@@ -15,7 +13,7 @@ use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use base64::Engine;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fmt::Write as FmtWrite;
@@ -2503,4 +2501,3 @@ mod paging_tests {
         );
     }
 }
-

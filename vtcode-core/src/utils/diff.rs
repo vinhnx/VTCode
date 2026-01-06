@@ -89,7 +89,11 @@ fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
                 Edit::Delete => {
                     // Find the byte position for this character in old_middle
                     let ch = old_chars[old_pos];
-                    let byte_start = old_middle.char_indices().nth(old_pos).expect("Myers diff guarantees valid index").0;
+                    let byte_start = old_middle
+                        .char_indices()
+                        .nth(old_pos)
+                        .expect("Myers diff guarantees valid index")
+                        .0;
                     let byte_end = byte_start + ch.len_utf8();
                     result.push(Chunk::Delete(&old_middle[byte_start..byte_end]));
                     old_pos += 1;
@@ -97,7 +101,11 @@ fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
                 Edit::Insert => {
                     // Find the byte position for this character in new_middle
                     let ch = new_chars[new_pos];
-                    let byte_start = new_middle.char_indices().nth(new_pos).expect("Myers diff guarantees valid index").0;
+                    let byte_start = new_middle
+                        .char_indices()
+                        .nth(new_pos)
+                        .expect("Myers diff guarantees valid index")
+                        .0;
                     let byte_end = byte_start + ch.len_utf8();
                     result.push(Chunk::Insert(&new_middle[byte_start..byte_end]));
                     new_pos += 1;
@@ -328,8 +336,8 @@ pub fn compute_diff(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundl
     let old_lines_owned = split_lines_with_terminator(old);
     let new_lines_owned = split_lines_with_terminator(new);
 
-        eprintln!("Old lines: {:?}", old_lines_owned);
-        eprintln!("New lines: {:?}", new_lines_owned);
+    eprintln!("Old lines: {:?}", old_lines_owned);
+    eprintln!("New lines: {:?}", new_lines_owned);
 
     let mut old_refs: Vec<&str> = Vec::with_capacity(old_lines_owned.len());
     for s in &old_lines_owned {
@@ -702,8 +710,8 @@ mod tests {
     fn computes_structured_diff() {
         let before = "a\nb\nc\n";
         let after = "a\nc\nd\n";
-            eprintln!("Before: {:?}", before);
-            eprintln!("After: {:?}", after);
+        eprintln!("Before: {:?}", before);
+        eprintln!("After: {:?}", after);
         let bundle = compute_diff(
             before,
             after,
@@ -720,8 +728,8 @@ mod tests {
         let hunk = &bundle.hunks[0];
         assert_eq!(hunk.old_start, 1);
         assert_eq!(hunk.new_start, 1);
-            eprintln!("Formatted diff:\n{}", bundle.formatted);
-            eprintln!("Hunk lines: {:?}", hunk.lines);
+        eprintln!("Formatted diff:\n{}", bundle.formatted);
+        eprintln!("Hunk lines: {:?}", hunk.lines);
         assert!(bundle.formatted.contains("@@"));
         assert!(bundle.formatted.contains("-b"));
         assert!(bundle.formatted.contains("+d"));

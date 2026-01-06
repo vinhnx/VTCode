@@ -413,7 +413,7 @@ fn enable_terminal_modes(
     keyboard_flags: ratatui::crossterm::event::KeyboardEnhancementFlags,
 ) -> Result<TerminalModeState> {
     use ratatui::crossterm::event::PushKeyboardEnhancementFlags;
-    
+
     execute!(stderr, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
     enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
 

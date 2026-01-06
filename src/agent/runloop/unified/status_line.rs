@@ -232,10 +232,7 @@ pub(crate) async fn update_input_status_if_changed(
 }
 
 #[allow(dead_code)]
-fn build_model_status_right(
-    model: &str,
-    reasoning: &str,
-) -> Option<String> {
+fn build_model_status_right(model: &str, reasoning: &str) -> Option<String> {
     let mut parts = Vec::new();
 
     if model.is_empty() {

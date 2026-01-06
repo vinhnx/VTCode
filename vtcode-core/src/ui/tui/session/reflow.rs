@@ -67,7 +67,8 @@ impl Session {
         let max_width = width as usize;
 
         if message.kind == InlineMessageKind::User && max_width > 0 {
-            wrapped.push(self.message_divider_line(max_width, message.kind));
+            let divider = self.message_divider_line(max_width, message.kind);
+            wrapped.push(divider);
         }
 
         let mut lines = self.wrap_line(base_line, max_width);
@@ -77,10 +78,12 @@ impl Session {
         if lines.is_empty() {
             lines.push(Line::default());
         }
+
         wrapped.extend(lines);
 
         if message.kind == InlineMessageKind::User && max_width > 0 {
-            wrapped.push(self.message_divider_line(max_width, message.kind));
+            let divider = self.message_divider_line(max_width, message.kind);
+            wrapped.push(divider);
         }
 
         if wrapped.is_empty() {

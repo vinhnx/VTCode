@@ -1,8 +1,8 @@
 //! Diff preview utilities for file operations.
 
 use crate::config::constants::diff;
-use crate::utils::diff::{compute_diff, DiffOptions};
-use serde_json::{json, Value};
+use crate::utils::diff::{DiffOptions, compute_diff};
+use serde_json::{Value, json};
 use std::time::Instant;
 
 /// Create a diff preview response when content exceeds the size limit.

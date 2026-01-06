@@ -351,4 +351,3 @@ impl ToolInventory {
         }
     }
 }
-

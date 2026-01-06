@@ -296,42 +296,64 @@ impl Session {
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
 
-        if left.is_none() && right.is_none() {
+        // Build scroll indicator if enabled
+        let scroll_indicator = if ui::SCROLL_INDICATOR_ENABLED {
+            Some(self.build_scroll_indicator())
+        } else {
+            None
+        };
+
+        if left.is_none() && right.is_none() && scroll_indicator.is_none() {
             return None;
         }
 
-        let style = self.styles.default_style().add_modifier(Modifier::DIM);
+        let dim_style = self.styles.default_style().add_modifier(Modifier::DIM);
         let mut spans = Vec::new();
 
-        match (left, right) {
-            (Some(left_value), Some(right_value)) => {
-                let left_width = measure_text_width(&left_value);
-                let right_width = measure_text_width(&right_value);
-                let padding = width.saturating_sub(left_width + right_width);
+        // Add left content (git status)
+        if let Some(left_value) = left.as_ref() {
+            spans.extend(self.create_git_status_spans(left_value, dim_style));
+        }
 
-                spans.extend(self.create_git_status_spans(&left_value, style));
+        // Build right side spans (scroll indicator + optional right content)
+        let mut right_spans: Vec<Span<'static>> = Vec::new();
+        if let Some(scroll) = &scroll_indicator {
+            right_spans.push(Span::styled(scroll.clone(), dim_style));
+        }
+        if let Some(right_value) = &right {
+            if !right_spans.is_empty() {
+                right_spans.push(Span::raw(" "));
+            }
+            right_spans.push(Span::styled(right_value.clone(), dim_style));
+        }
 
-                if padding > 0 {
-                    spans.push(Span::raw(" ".repeat(padding as usize)));
-                } else {
-                    spans.push(Span::raw(" ".to_owned()));
-                }
-                spans.push(Span::styled(right_value, style));
+        if !right_spans.is_empty() {
+            let left_width: u16 = spans.iter().map(|s| measure_text_width(&s.content)).sum();
+            let right_width: u16 = right_spans
+                .iter()
+                .map(|s| measure_text_width(&s.content))
+                .sum();
+            let padding = width.saturating_sub(left_width + right_width);
+
+            if padding > 0 {
+                spans.push(Span::raw(" ".repeat(padding as usize)));
+            } else if !spans.is_empty() {
+                spans.push(Span::raw(" "));
             }
-            (Some(left_value), None) => {
-                spans.extend(self.create_git_status_spans(&left_value, style));
-            }
-            (None, Some(right_value)) => {
-                let right_width = measure_text_width(&right_value);
-                if width > right_width {
-                    spans.push(Span::raw(" ".repeat((width - right_width) as usize)));
-                }
-                spans.push(Span::styled(right_value, style));
-            }
-            (None, None) => return None,
+            spans.extend(right_spans);
+        }
+
+        if spans.is_empty() {
+            return None;
         }
 
         Some(Line::from(spans))
+    }
+
+    /// Build scroll indicator string with percentage
+    fn build_scroll_indicator(&self) -> String {
+        let percent = self.scroll_manager.progress_percent();
+        format!("{} {:>3}%", ui::SCROLL_INDICATOR_FORMAT, percent)
     }
 
     #[allow(dead_code)]
