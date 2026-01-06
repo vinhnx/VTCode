@@ -171,6 +171,7 @@ pub struct Session {
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
 
     // --- Clipboard for yank/paste operations ---
+    #[allow(dead_code)]
     pub(crate) clipboard: String,
 }
 
@@ -413,12 +414,14 @@ impl Session {
     }
 
     /// Scroll to the top of the transcript
+    #[allow(dead_code)]
     pub(super) fn scroll_to_top(&mut self) {
         self.scroll_manager.scroll_to_top();
         self.mark_dirty();
     }
 
     /// Scroll to the bottom of the transcript
+    #[allow(dead_code)]
     pub(super) fn scroll_to_bottom(&mut self) {
         self.scroll_manager.scroll_to_bottom();
         self.mark_dirty();
