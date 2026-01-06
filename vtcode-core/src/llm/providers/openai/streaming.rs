@@ -2,6 +2,7 @@
 //!
 //! This module contains stream processing helpers for OpenAI API responses.
 
+#[cfg(debug_assertions)]
 use tracing::debug;
 
 use super::super::shared::StreamTelemetry;
