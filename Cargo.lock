@@ -6437,6 +6437,7 @@ dependencies = [
  "agent-client-protocol",
  "anyhow",
  "chrono",
+ "futures-util",
  "reqwest",
  "serde",
  "serde_json",
