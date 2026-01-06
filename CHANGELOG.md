@@ -3,6 +3,24 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.59.1] - 2026-01-07
+
+
+### Refactors
+    - refactor: update tool policies, enhance subagent cleanup, and improve documentation
+    - refactor: clean up code formatting and improve readability across multiple files
+
+
+### Documentation
+    - docs: update changelog for v0.59.0 [skip ci]
+    - docs: update changelog for v0.58.26 [skip ci]
+    - docs: update ACP V2 Migration Guide for improved clarity and formatting
+
+
+### Chores
+    - chore: update npm package.json to v0.59.0 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.58.25 version =  [skip ci]
 # [Version 0.59.0] - 2026-01-06
 
 
