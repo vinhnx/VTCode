@@ -1498,6 +1498,127 @@ impl PtyManager {
             .map(|opt| opt.map(exit_status_code))
     }
 
+    /// Sync all terminal sessions to files for dynamic context discovery
+    ///
+    /// This implements Cursor-style dynamic context discovery:
+    /// - Each terminal session is written to `.vtcode/terminals/{session_id}.txt`
+    /// - Includes metadata header (cwd, last command, exit code)
+    /// - Agent can reference terminal output via grep/read_file
+    pub async fn sync_sessions_to_files(&self) -> Result<Vec<std::path::PathBuf>> {
+        let terminals_dir = self.workspace_root.join(".vtcode").join("terminals");
+        tokio::fs::create_dir_all(&terminals_dir)
+            .await
+            .with_context(|| format!("Failed to create terminals directory: {}", terminals_dir.display()))?;
+
+        let sessions = self.list_sessions();
+        let mut written_files = Vec::with_capacity(sessions.len());
+
+        for session in &sessions {
+            let output = match self.read_session_output(&session.id, false) {
+                Ok(Some(output)) => output,
+                Ok(None) => String::new(),
+                Err(_) => continue,
+            };
+
+            let content = format_terminal_file(session, &output);
+            let file_path = terminals_dir.join(format!("{}.txt", sanitize_session_id(&session.id)));
+
+            if let Err(e) = tokio::fs::write(&file_path, &content).await {
+                tracing::warn!(
+                    session_id = %session.id,
+                    error = %e,
+                    "Failed to sync terminal session to file"
+                );
+                continue;
+            }
+
+            written_files.push(file_path);
+        }
+
+        // Write index file
+        let index_content = self.generate_terminals_index(&sessions);
+        let index_path = terminals_dir.join("INDEX.md");
+        tokio::fs::write(&index_path, &index_content)
+            .await
+            .with_context(|| format!("Failed to write terminals index: {}", index_path.display()))?;
+
+        tracing::info!(
+            sessions = sessions.len(),
+            files = written_files.len(),
+            "Synced terminal sessions to files"
+        );
+
+        Ok(written_files)
+    }
+
+    /// Generate INDEX.md content for terminal sessions
+    fn generate_terminals_index(&self, sessions: &[VTCodePtySession]) -> String {
+        let mut content = String::new();
+        content.push_str("# Terminal Sessions Index\n\n");
+        content.push_str("This file lists all active terminal sessions for dynamic discovery.\n");
+        content.push_str("Use `read_file` on individual session files for full output.\n\n");
+
+        if sessions.is_empty() {
+            content.push_str("*No active terminal sessions.*\n");
+        } else {
+            content.push_str(&format!("**Active Sessions**: {}\n\n", sessions.len()));
+            content.push_str("| Session ID | Command | Working Dir | Size |\n");
+            content.push_str("|------------|---------|-------------|------|\n");
+
+            for session in sessions {
+                let cwd = session
+                    .working_dir
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or("-");
+                let cmd_truncated = if session.command.len() > 25 {
+                    format!("{}...", &session.command[..22])
+                } else {
+                    session.command.clone()
+                };
+
+                content.push_str(&format!(
+                    "| `{}` | {} | {} | {}x{} |\n",
+                    session.id,
+                    cmd_truncated.replace('|', "\\|"),
+                    cwd.replace('|', "\\|"),
+                    session.cols,
+                    session.rows
+                ));
+            }
+
+            content.push_str("\n## Session Details\n\n");
+            for session in sessions {
+                content.push_str(&format!("### {}\n\n", session.id));
+                content.push_str(&format!("- **Command**: `{}`\n", session.command));
+                if !session.args.is_empty() {
+                    content.push_str(&format!("- **Args**: {}\n", session.args.join(" ")));
+                }
+                if let Some(cwd) = &session.working_dir {
+                    content.push_str(&format!("- **Working Dir**: {}\n", cwd));
+                }
+                content.push_str(&format!(
+                    "- **Terminal Size**: {}x{}\n",
+                    session.cols, session.rows
+                ));
+                content.push_str(&format!(
+                    "- **File**: `.vtcode/terminals/{}.txt`\n\n",
+                    sanitize_session_id(&session.id)
+                ));
+            }
+        }
+
+        content.push_str("---\n");
+        content.push_str("*Generated automatically. Do not edit manually.*\n");
+
+        content
+    }
+
+    /// Get the terminals directory path
+    pub fn terminals_dir(&self) -> std::path::PathBuf {
+        self.workspace_root.join(".vtcode").join("terminals")
+    }
+
     pub fn close_session(&self, session_id: &str) -> Result<VTCodePtySession> {
         // Remove session from global map first
         let handle = {
@@ -1729,6 +1850,45 @@ pub fn is_development_toolchain_command(program: &str) -> bool {
             | "clang++"
             | "which"
     )
+}
+
+// Helper functions for terminal file sync (dynamic context discovery)
+
+/// Sanitize session ID for use in filename
+fn sanitize_session_id(id: &str) -> String {
+    id.chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(64)
+        .collect()
+}
+
+/// Format terminal session as a file with metadata header
+fn format_terminal_file(session: &VTCodePtySession, output: &str) -> String {
+    let mut content = String::new();
+
+    // Metadata header
+    content.push_str("---\n");
+    content.push_str(&format!("session_id: {}\n", session.id));
+    content.push_str(&format!("command: {}\n", session.command));
+    if !session.args.is_empty() {
+        content.push_str(&format!("args: {}\n", session.args.join(" ")));
+    }
+    if let Some(cwd) = &session.working_dir {
+        content.push_str(&format!("cwd: {}\n", cwd));
+    }
+    content.push_str(&format!("size: {}x{}\n", session.cols, session.rows));
+    content.push_str("---\n\n");
+
+    // Terminal output
+    content.push_str(output);
+
+    content
 }
 
 #[cfg(test)]

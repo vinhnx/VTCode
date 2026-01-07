@@ -713,7 +713,33 @@ max_entries = 12
 # Include ledger summary in model prompts
 include_in_prompt = true
 
+# Dynamic Context Discovery (Cursor-style) - Write large outputs to files
+# Instead of truncating, large outputs are written to .vtcode/ directories
+# Agents can then retrieve them on-demand via read_file/grep_file
+[context.dynamic]
+# Enable dynamic context discovery features
+enabled = true
 
+# Threshold in bytes above which tool outputs are spooled to files (default: 8KB)
+tool_output_threshold = 8192
+
+# Sync terminal sessions to .vtcode/terminals/ files
+sync_terminals = true
+
+# Persist conversation history during summarization to .vtcode/history/
+persist_history = true
+
+# Sync MCP tool descriptions to .vtcode/mcp/tools/
+sync_mcp_tools = true
+
+# Generate skill index in .vtcode/skills/INDEX.md
+sync_skills = true
+
+# Maximum age in seconds for spooled files before cleanup (default: 1 hour)
+spool_max_age_secs = 3600
+
+# Maximum number of spooled files to keep
+max_spooled_files = 100
 
 # Token budget management - Track and limit token usage
 [context.token_budget]

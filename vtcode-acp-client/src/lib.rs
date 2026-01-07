@@ -51,11 +51,11 @@ pub mod messages;
 pub use capabilities::{
     AgentCapabilities, AgentFeatures, AgentInfo as AgentInfoV2, AuthCredentials,
     AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo, FilesystemCapabilities,
-    InitializeParams, InitializeResult, TerminalCapabilities, ToolCapability, UiCapabilities,
-    PROTOCOL_VERSION, SUPPORTED_VERSIONS,
+    InitializeParams, InitializeResult, PROTOCOL_VERSION, SUPPORTED_VERSIONS, TerminalCapabilities,
+    ToolCapability, UiCapabilities,
 };
 pub use client_v2::{AcpClientV2, AcpClientV2Builder};
-pub use jsonrpc::{JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse, JSONRPC_VERSION};
+pub use jsonrpc::{JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 pub use session::{
     AcpSession, ConversationTurn, PermissionOption, PromptContent, RequestPermissionParams,
     RequestPermissionResult, SessionCancelParams, SessionLoadParams, SessionLoadResult,

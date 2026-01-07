@@ -122,6 +122,9 @@ impl SkillManager {
             "Skill saved successfully"
         );
 
+        // Regenerate index after saving new skill
+        let _ = self.generate_index().await;
+
         Ok(())
     }
 
@@ -232,7 +235,86 @@ impl SkillManager {
 
         info!(skill_name = %name, "Skill deleted successfully");
 
+        // Regenerate index after deletion
+        let _ = self.generate_index().await;
+
         Ok(())
+    }
+
+    /// Generate INDEX.md with all skill names and descriptions
+    ///
+    /// This implements dynamic context discovery: agents can read the index
+    /// to discover available skills, then load specific skills as needed.
+    /// This is more token-efficient than loading all skill definitions.
+    pub async fn generate_index(&self) -> Result<std::path::PathBuf> {
+        let skills = self.list_skills().await?;
+
+        let mut content = String::new();
+        content.push_str("# Skills Index\n\n");
+        content.push_str("This file lists all available skills for dynamic discovery.\n");
+        content.push_str(
+            "Use `read_file` on individual skill directories for full documentation.\n\n",
+        );
+
+        if skills.is_empty() {
+            content.push_str("*No skills available yet.*\n\n");
+            content.push_str("Create skills using the `save_skill` tool.\n");
+        } else {
+            content.push_str("## Available Skills\n\n");
+            content.push_str("| Name | Language | Description | Tags |\n");
+            content.push_str("|------|----------|-------------|------|\n");
+
+            for skill in &skills {
+                let tags = if skill.tags.is_empty() {
+                    "-".to_string()
+                } else {
+                    skill.tags.join(", ")
+                };
+                let desc = skill.description.replace('|', "\\|");
+                let _ = writeln!(
+                    content,
+                    "| `{}` | {} | {} | {} |",
+                    skill.name, skill.language, desc, tags
+                );
+            }
+
+            content.push_str("\n## Quick Reference\n\n");
+            for skill in &skills {
+                let _ = writeln!(content, "### {}\n", skill.name);
+                let _ = writeln!(content, "{}\n", skill.description);
+                let _ = writeln!(
+                    content,
+                    "- **Language**: {}\n- **Path**: `.vtcode/skills/{}/SKILL.md`\n",
+                    skill.language, skill.name
+                );
+            }
+        }
+
+        content.push_str("\n---\n");
+        content.push_str("*Generated automatically. Do not edit manually.*\n");
+
+        // Ensure directory exists
+        tokio::fs::create_dir_all(&self.skills_dir)
+            .await
+            .context(ERR_CREATE_SKILLS_DIR)?;
+
+        let index_path = self.skills_dir.join("INDEX.md");
+        tokio::fs::write(&index_path, &content)
+            .await
+            .with_context(|| format!("Failed to write skills index: {}", index_path.display()))?;
+
+        info!(
+            skills_count = skills.len(),
+            path = %index_path.display(),
+            "Generated skills INDEX.md"
+        );
+
+        Ok(index_path)
+    }
+
+    /// Get the path to the INDEX.md file
+    pub fn index_path(&self) -> std::path::PathBuf {
+        self.skills_dir.join("INDEX.md")
     }
 
     /// Check if a skill is compatible with given tool versions

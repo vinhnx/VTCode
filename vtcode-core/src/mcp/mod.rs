@@ -430,6 +430,160 @@ impl McpClient {
         }
     }
 
+    /// Sync MCP tool descriptions to files for dynamic context discovery
+    ///
+    /// This implements Cursor-style dynamic context discovery:
+    /// - Tool descriptions are written to `.vtcode/mcp/tools/{provider}/{tool}.md`
+    /// - Status is written to `.vtcode/mcp/status.json`
+    /// - Agents can discover tools via grep/read_file without loading all schemas
+    ///
+    /// Returns the paths to written files (index path, tool count)
+    pub async fn sync_tools_to_files(&self, workspace_root: &Path) -> Result<(PathBuf, usize)> {
+        let tools = self.list_tools().await?;
+        let mcp_dir = workspace_root.join(".vtcode").join("mcp");
+        let tools_dir = mcp_dir.join("tools");
+
+        // Create directories
+        tokio::fs::create_dir_all(&tools_dir)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to create MCP tools directory: {}",
+                    tools_dir.display()
+                )
+            })?;
+
+        // Group tools by provider
+        let mut by_provider: HashMap<String, Vec<&McpToolInfo>> = HashMap::new();
+        for tool in &tools {
+            by_provider
+                .entry(tool.provider.clone())
+                .or_default()
+                .push(tool);
+        }
+
+        // Write tool files per provider
+        for (provider, provider_tools) in &by_provider {
+            let provider_dir = tools_dir.join(sanitize_filename(provider));
+            tokio::fs::create_dir_all(&provider_dir)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to create provider directory: {}",
+                        provider_dir.display()
+                    )
+                })?;
+
+            for tool in provider_tools {
+                let tool_content = format_tool_markdown(tool);
+                let tool_path = provider_dir.join(format!("{}.md", sanitize_filename(&tool.name)));
+                tokio::fs::write(&tool_path, &tool_content)
+                    .await
+                    .with_context(|| {
+                        format!("Failed to write tool file: {}", tool_path.display())
+                    })?;
+            }
+        }
+
+        // Write index file
+        let index_content = self.generate_tools_index(&tools, &by_provider);
+        let index_path = tools_dir.join("INDEX.md");
+        tokio::fs::write(&index_path, &index_content)
+            .await
+            .with_context(|| {
+                format!("Failed to write MCP tools index: {}", index_path.display())
+            })?;
+
+        // Write status file
+        let status = self.generate_status_json();
+        let status_path = mcp_dir.join("status.json");
+        let status_json = serde_json::to_string_pretty(&status)?;
+        tokio::fs::write(&status_path, &status_json)
+            .await
+            .with_context(|| format!("Failed to write MCP status: {}", status_path.display()))?;
+
+        info!(
+            tools = tools.len(),
+            providers = by_provider.len(),
+            index = %index_path.display(),
+            "Synced MCP tool descriptions to files"
+        );
+
+        Ok((index_path, tools.len()))
+    }
+
+    /// Generate INDEX.md content for MCP tools
+    fn generate_tools_index(
+        &self,
+        tools: &[McpToolInfo],
+        by_provider: &HashMap<String, Vec<&McpToolInfo>>,
+    ) -> String {
+        let mut content = String::new();
+        content.push_str("# MCP Tools Index\n\n");
+        content.push_str("This file lists all available MCP tools for dynamic discovery.\n");
+        content.push_str("Use `read_file` on individual tool files for full schema details.\n\n");
+
+        if tools.is_empty() {
+            content.push_str("*No MCP tools available.*\n\n");
+            content.push_str("Configure MCP servers in `vtcode.toml` or `.mcp.json`.\n");
+        } else {
+            content.push_str(&format!("**Total Tools**: {}\n\n", tools.len()));
+
+            // Summary table
+            content.push_str("## Quick Reference\n\n");
+            content.push_str("| Provider | Tool | Description |\n");
+            content.push_str("|----------|------|-------------|\n");
+
+            for tool in tools {
+                let desc = tool.description.lines().next().unwrap_or(&tool.description);
+                let desc_truncated = if desc.len() > 60 {
+                    format!("{}...", &desc[..57])
+                } else {
+                    desc.to_string()
+                };
+                content.push_str(&format!(
+                    "| {} | `{}` | {} |\n",
+                    tool.provider,
+                    tool.name,
+                    desc_truncated.replace('|', "\\|")
+                ));
+            }
+
+            // Per-provider sections
+            content.push_str("\n## Tools by Provider\n\n");
+            for (provider, provider_tools) in by_provider {
+                content.push_str(&format!("### {}\n\n", provider));
+                for tool in provider_tools {
+                    content.push_str(&format!(
+                        "- **{}**: {}\n  - Path: `.vtcode/mcp/tools/{}/{}.md`\n",
+                        tool.name,
+                        tool.description.lines().next().unwrap_or(&tool.description),
+                        sanitize_filename(provider),
+                        sanitize_filename(&tool.name)
+                    ));
+                }
+                content.push('\n');
+            }
+        }
+
+        content.push_str("\n---\n");
+        content.push_str("*Generated automatically. Do not edit manually.*\n");
+
+        content
+    }
+
+    /// Generate status.json content
+    fn generate_status_json(&self) -> Value {
+        let status = self.get_status();
+        json!({
+            "enabled": status.enabled,
+            "provider_count": status.provider_count,
+            "active_connections": status.active_connections,
+            "configured_providers": status.configured_providers,
+            "last_updated": chrono::Utc::now().to_rfc3339(),
+        })
+    }
+
     async fn collect_tools(&self, force_refresh: bool) -> Result<Vec<McpToolInfo>> {
         // Collect provider references in one pass
         let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
@@ -2091,6 +2245,83 @@ const DEFAULT_ENV_VARS: &[&str] = &[
     "POWERSHELL",
     "PWSH",
 ];
+
+// Helper functions for file-based tool discovery
+
+/// Sanitize a string for use in a filename
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// Format a tool description as Markdown
+fn format_tool_markdown(tool: &McpToolInfo) -> String {
+    let mut content = String::new();
+
+    content.push_str(&format!("# {}\n\n", tool.name));
+    content.push_str(&format!("**Provider**: {}\n\n", tool.provider));
+    content.push_str("## Description\n\n");
+    content.push_str(&tool.description);
+    content.push_str("\n\n");
+
+    content.push_str("## Input Schema\n\n");
+    content.push_str("```json\n");
+    content.push_str(
+        &serde_json::to_string_pretty(&tool.input_schema)
+            .unwrap_or_else(|_| tool.input_schema.to_string()),
+    );
+    content.push_str("\n```\n\n");
+
+    // Extract required fields if present
+    if let Some(obj) = tool.input_schema.as_object() {
+        if let Some(required) = obj.get("required").and_then(|v| v.as_array()) {
+            if !required.is_empty() {
+                content.push_str("## Required Parameters\n\n");
+                for req in required {
+                    if let Some(name) = req.as_str() {
+                        content.push_str(&format!("- `{}`\n", name));
+                    }
+                }
+                content.push('\n');
+            }
+        }
+
+        // Extract properties descriptions
+        if let Some(props) = obj.get("properties").and_then(|v| v.as_object()) {
+            if !props.is_empty() {
+                content.push_str("## Parameters\n\n");
+                for (param_name, param_schema) in props {
+                    let param_type = param_schema
+                        .get("type")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("any");
+                    let param_desc = param_schema
+                        .get("description")
+                        .and_then(|d| d.as_str())
+                        .unwrap_or("");
+                    content.push_str(&format!("### `{}`\n\n", param_name));
+                    content.push_str(&format!("- **Type**: {}\n", param_type));
+                    if !param_desc.is_empty() {
+                        content.push_str(&format!("- **Description**: {}\n", param_desc));
+                    }
+                    content.push('\n');
+                }
+            }
+        }
+    }
+
+    content.push_str("---\n");
+    content.push_str("*Generated automatically for dynamic context discovery.*\n");
+
+    content
+}
 
 #[cfg(test)]
 mod tests {

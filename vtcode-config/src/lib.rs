@@ -51,7 +51,7 @@ pub use acp::{
     WorkspaceTrustLevel,
 };
 pub use api_keys::ApiKeySources;
-pub use context::{ContextFeaturesConfig, LedgerConfig};
+pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
     FullAutoConfig, ModelConfig, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
