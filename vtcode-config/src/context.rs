@@ -1,6 +1,108 @@
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
+/// Configuration for dynamic context discovery
+///
+/// This implements Cursor-style dynamic context discovery patterns where
+/// large outputs are written to files instead of being truncated, allowing
+/// agents to retrieve them on demand via read_file/grep_file.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DynamicContextConfig {
+    /// Enable dynamic context discovery features
+    #[serde(default = "default_dynamic_enabled")]
+    pub enabled: bool,
+
+    /// Threshold in bytes above which tool outputs are spooled to files
+    #[serde(default = "default_tool_output_threshold")]
+    pub tool_output_threshold: usize,
+
+    /// Enable syncing terminal sessions to .vtcode/terminals/ files
+    #[serde(default = "default_sync_terminals")]
+    pub sync_terminals: bool,
+
+    /// Enable persisting conversation history during summarization
+    #[serde(default = "default_persist_history")]
+    pub persist_history: bool,
+
+    /// Enable syncing MCP tool descriptions to .vtcode/mcp/tools/
+    #[serde(default = "default_sync_mcp_tools")]
+    pub sync_mcp_tools: bool,
+
+    /// Enable generating skill index in .vtcode/skills/INDEX.md
+    #[serde(default = "default_sync_skills")]
+    pub sync_skills: bool,
+
+    /// Maximum age in seconds for spooled tool output files before cleanup
+    #[serde(default = "default_spool_max_age_secs")]
+    pub spool_max_age_secs: u64,
+
+    /// Maximum number of spooled files to keep
+    #[serde(default = "default_max_spooled_files")]
+    pub max_spooled_files: usize,
+}
+
+impl Default for DynamicContextConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_dynamic_enabled(),
+            tool_output_threshold: default_tool_output_threshold(),
+            sync_terminals: default_sync_terminals(),
+            persist_history: default_persist_history(),
+            sync_mcp_tools: default_sync_mcp_tools(),
+            sync_skills: default_sync_skills(),
+            spool_max_age_secs: default_spool_max_age_secs(),
+            max_spooled_files: default_max_spooled_files(),
+        }
+    }
+}
+
+impl DynamicContextConfig {
+    pub fn validate(&self) -> Result<()> {
+        ensure!(
+            self.tool_output_threshold >= 1024,
+            "Tool output threshold must be at least 1024 bytes"
+        );
+        ensure!(
+            self.max_spooled_files > 0,
+            "Max spooled files must be greater than zero"
+        );
+        Ok(())
+    }
+}
+
+fn default_dynamic_enabled() -> bool {
+    true
+}
+
+fn default_tool_output_threshold() -> usize {
+    8192 // 8KB
+}
+
+fn default_sync_terminals() -> bool {
+    true
+}
+
+fn default_persist_history() -> bool {
+    true
+}
+
+fn default_sync_mcp_tools() -> bool {
+    true
+}
+
+fn default_sync_skills() -> bool {
+    true
+}
+
+fn default_spool_max_age_secs() -> u64 {
+    3600 // 1 hour
+}
+
+fn default_max_spooled_files() -> usize {
+    100
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LedgerConfig {
@@ -58,6 +160,10 @@ pub struct ContextFeaturesConfig {
 
     #[serde(default)]
     pub ledger: LedgerConfig,
+
+    /// Dynamic context discovery settings (Cursor-style)
+    #[serde(default)]
+    pub dynamic: DynamicContextConfig,
 }
 
 impl Default for ContextFeaturesConfig {
@@ -67,6 +173,7 @@ impl Default for ContextFeaturesConfig {
             trim_to_percent: default_trim_to_percent(),
             preserve_recent_turns: default_preserve_recent_turns(),
             ledger: LedgerConfig::default(),
+            dynamic: DynamicContextConfig::default(),
         }
     }
 }
@@ -76,6 +183,9 @@ impl ContextFeaturesConfig {
         self.ledger
             .validate()
             .context("Invalid ledger configuration")?;
+        self.dynamic
+            .validate()
+            .context("Invalid dynamic context configuration")?;
         Ok(())
     }
 }

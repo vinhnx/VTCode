@@ -155,6 +155,9 @@ pub struct ToolRegistry {
     hot_tool_cache: Arc<parking_lot::RwLock<lru::LruCache<String, Arc<dyn Tool>>>>,
     /// Optimization configuration
     optimization_config: vtcode_config::OptimizationConfig,
+
+    /// Output spooler for dynamic context discovery (large outputs to files)
+    output_spooler: Arc<super::output_spooler::ToolOutputSpooler>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -237,6 +240,11 @@ impl ToolRegistry {
                     .unwrap(),
             ))),
             optimization_config,
+
+            // Dynamic context discovery - output spooler
+            output_spooler: Arc::new(super::output_spooler::ToolOutputSpooler::new(
+                &workspace_root,
+            )),
         };
 
         registry.sync_policy_catalog().await;
@@ -1049,6 +1057,44 @@ impl ToolRegistry {
             .filter(|v| *v >= 10_000)
             .unwrap_or(200_000);
         (entry_fuse, depth_fuse, token_fuse, byte_fuse)
+    }
+
+    /// Process tool output with dynamic context discovery
+    ///
+    /// This method implements Cursor-style dynamic context discovery:
+    /// 1. First checks if output should be spooled to a file (large outputs)
+    /// 2. If spooled, returns a file reference instead of truncated content
+    /// 3. Otherwise, applies standard sanitization
+    ///
+    /// This is more token-efficient as agents can use read_file/grep_file
+    /// to explore large outputs on demand.
+    async fn process_tool_output(&self, tool_name: &str, value: Value, is_mcp: bool) -> Value {
+        // Check if output should be spooled to file
+        if self.output_spooler.should_spool(&value) {
+            match self
+                .output_spooler
+                .process_output(tool_name, value.clone(), is_mcp)
+                .await
+            {
+                Ok(spooled) => return spooled,
+                Err(e) => {
+                    // Log error but fall back to standard sanitization
+                    warn!(
+                        tool = tool_name,
+                        error = %e,
+                        "Failed to spool tool output to file, falling back to truncation"
+                    );
+                }
+            }
+        }
+
+        // Fall back to standard sanitization
+        Self::sanitize_tool_output(value, is_mcp)
+    }
+
+    /// Get the output spooler for external access
+    pub fn output_spooler(&self) -> &super::output_spooler::ToolOutputSpooler {
+        &self.output_spooler
     }
 
     fn scale_duration(duration: Duration, num: u32, denom: u32) -> Duration {
@@ -2030,8 +2076,11 @@ impl ToolRegistry {
                     self.decay_adaptive_timeout(timeout_category);
                 }
                 self.record_tool_latency(timeout_category, execution_started_at.elapsed());
-                let sanitized_value = Self::sanitize_tool_output(value, is_mcp_tool);
-                let normalized_value = normalize_tool_output(sanitized_value);
+                // Dynamic context discovery: spool large outputs to files
+                let processed_value = self
+                    .process_tool_output(&tool_name_owned, value, is_mcp_tool)
+                    .await;
+                let normalized_value = normalize_tool_output(processed_value);
 
                 self.execution_history
                     .add_record(ToolExecutionRecord::success(

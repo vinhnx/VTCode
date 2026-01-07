@@ -408,7 +408,11 @@ mod tests {
     fn test_initialize_params_default() {
         let params = InitializeParams::default();
         assert!(!params.protocol_versions.is_empty());
-        assert!(params.protocol_versions.contains(&PROTOCOL_VERSION.to_string()));
+        assert!(
+            params
+                .protocol_versions
+                .contains(&PROTOCOL_VERSION.to_string())
+        );
     }
 
     #[test]

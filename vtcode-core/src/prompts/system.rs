@@ -542,6 +542,18 @@ pub async fn compose_system_instruction_text(
             );
         }
 
+        // Dynamic context discovery files
+        if cfg.context.dynamic.enabled {
+            instruction.push_str("\n### Dynamic Context Files\n\n");
+            instruction.push_str("Large outputs and context are written to files for on-demand retrieval:\n\n");
+            instruction.push_str("- `.vtcode/context/tool_outputs/` - Large tool outputs (use `read_file` or `grep_file` to explore)\n");
+            instruction.push_str("- `.vtcode/history/` - Conversation history during summarization\n");
+            instruction.push_str("- `.vtcode/mcp/tools/` - MCP tool descriptions and schemas\n");
+            instruction.push_str("- `.vtcode/terminals/` - Terminal session output with metadata\n");
+            instruction.push_str("- `.vtcode/skills/INDEX.md` - Available skills index\n\n");
+            instruction.push_str("**Tip**: When a tool result says 'spooled to file', use `read_file` to access the full output.\n");
+        }
+
         instruction.push_str("\n**IMPORTANT**: Respect these configuration policies. Commands not in the allow list will require user confirmation. Always inform users when actions require confirmation due to security policies.\n");
     }
 

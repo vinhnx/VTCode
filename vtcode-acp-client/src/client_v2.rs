@@ -13,7 +13,7 @@ use crate::capabilities::{
     InitializeParams, InitializeResult, SUPPORTED_VERSIONS,
 };
 use crate::error::{AcpError, AcpResult};
-use crate::jsonrpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse, JSONRPC_VERSION};
+use crate::jsonrpc::{JSONRPC_VERSION, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 use crate::session::{
     AcpSession, SessionCancelParams, SessionLoadParams, SessionLoadResult, SessionNewParams,
     SessionNewResult, SessionPromptParams, SessionPromptResult, SessionState,
@@ -21,13 +21,13 @@ use crate::session::{
 };
 
 use reqwest::{Client as HttpClient, StatusCode};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, trace, warn};
 
 /// ACP Client V2 with full protocol compliance
@@ -211,8 +211,9 @@ impl AcpClientV2 {
 
                 trace!(body_len = body.len(), "Received JSON-RPC response");
 
-                let rpc_response: JsonRpcResponse = serde_json::from_str(&body)
-                    .map_err(|e| AcpError::SerializationError(format!("Invalid response: {}", e)))?;
+                let rpc_response: JsonRpcResponse = serde_json::from_str(&body).map_err(|e| {
+                    AcpError::SerializationError(format!("Invalid response: {}", e))
+                })?;
 
                 if let Some(error) = rpc_response.error {
                     return Err(AcpError::RemoteError {
@@ -233,9 +234,7 @@ impl AcpClientV2 {
                 code: Some(401),
             }),
 
-            StatusCode::REQUEST_TIMEOUT => {
-                Err(AcpError::Timeout("Request timed out".to_string()))
-            }
+            StatusCode::REQUEST_TIMEOUT => Err(AcpError::Timeout("Request timed out".to_string())),
 
             _ => {
                 let body = response.text().await.unwrap_or_default();
@@ -371,7 +370,11 @@ impl AcpClientV2 {
             .await
             .insert(session_id.to_string(), result.session.clone());
 
-        debug!(session_id = session_id, turns = result.history.len(), "Session loaded");
+        debug!(
+            session_id = session_id,
+            turns = result.history.len(),
+            "Session loaded"
+        );
 
         Ok(result)
     }
@@ -411,11 +414,10 @@ impl AcpClientV2 {
         let result: SessionPromptResult = if let Some(custom_timeout) = timeout {
             tokio::time::timeout(
                 custom_timeout,
-                self.call::<_, SessionPromptResult>("session/prompt", Some(params))
+                self.call::<_, SessionPromptResult>("session/prompt", Some(params)),
             )
             .await
-            .map_err(|_| AcpError::Timeout("Prompt request timed out".to_string()))?
-            ?
+            .map_err(|_| AcpError::Timeout("Prompt request timed out".to_string()))??
         } else {
             self.call("session/prompt", Some(params)).await?
         };
@@ -567,7 +569,8 @@ impl AcpClientV2 {
                 if event_type.is_none() || event_type == Some("session/update") {
                     if !data_lines.is_empty() {
                         let data = data_lines.join("\n");
-                        if let Ok(notification) = serde_json::from_str::<SessionUpdateNotification>(&data)
+                        if let Ok(notification) =
+                            serde_json::from_str::<SessionUpdateNotification>(&data)
                         {
                             if tx.send(notification).await.is_err() {
                                 // Receiver dropped, exit

@@ -276,7 +276,10 @@ mod tests {
 
     #[test]
     fn test_response_success() {
-        let resp = JsonRpcResponse::success(json!({"session_id": "sess-123"}), Some(JsonRpcId::string("req-1")));
+        let resp = JsonRpcResponse::success(
+            json!({"session_id": "sess-123"}),
+            Some(JsonRpcId::string("req-1")),
+        );
 
         assert!(resp.is_success());
         assert!(!resp.is_error());

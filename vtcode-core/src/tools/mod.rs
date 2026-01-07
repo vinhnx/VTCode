@@ -171,6 +171,7 @@ pub mod web_fetch;
 // Production-grade improvements modules
 pub mod async_pipeline;
 pub mod optimized_registry;
+pub mod output_spooler;
 
 // Production-grade improvements modules
 pub mod async_middleware;
@@ -234,6 +235,9 @@ pub use tool_effectiveness::{
 pub use traits::{Tool, ToolExecutor};
 pub use types::*;
 pub use web_fetch::WebFetchTool;
+
+// Dynamic context discovery
+pub use output_spooler::{SpoolResult, SpoolerConfig, ToolOutputSpooler};
 
 // Production-grade improvements re-exports
 pub use async_middleware::{

@@ -2,9 +2,9 @@
 
 #[cfg(test)]
 mod tests {
+    use crate::subagents::{SubagentRegistry, SubagentsConfig};
     use std::path::PathBuf;
     use std::time::Duration;
-    use crate::subagents::{SubagentRegistry, SubagentsConfig};
 
     fn test_config() -> SubagentsConfig {
         SubagentsConfig {
@@ -22,10 +22,9 @@ mod tests {
         let config = test_config();
         let max_concurrent = config.max_concurrent;
 
-        let registry = SubagentRegistry::new(
-            PathBuf::from("/tmp/test"),
-            config
-        ).await.unwrap();
+        let registry = SubagentRegistry::new(PathBuf::from("/tmp/test"), config)
+            .await
+            .unwrap();
 
         // Initially should have 0 running
         let count = registry.running_count().await;
@@ -43,14 +42,15 @@ mod tests {
         let mut config = test_config();
         config.default_timeout_seconds = 1; // 1 second timeout
 
-        let registry = SubagentRegistry::new(
-            PathBuf::from("/tmp/test"),
-            config
-        ).await.unwrap();
+        let registry = SubagentRegistry::new(PathBuf::from("/tmp/test"), config)
+            .await
+            .unwrap();
 
         // Manually register a "running" subagent
         if let Some(agent_config) = registry.get("explore") {
-            registry.register_running("test-123".to_string(), agent_config.clone()).await;
+            registry
+                .register_running("test-123".to_string(), agent_config.clone())
+                .await;
         }
 
         // Should show 1 running (no cleanup yet)
@@ -72,16 +72,19 @@ mod tests {
         let mut config = test_config();
         config.max_concurrent = 2; // Only allow 2 concurrent
 
-        let registry = SubagentRegistry::new(
-            PathBuf::from("/tmp/test"),
-            config
-        ).await.unwrap();
+        let registry = SubagentRegistry::new(PathBuf::from("/tmp/test"), config)
+            .await
+            .unwrap();
 
         let agent_config = registry.get("explore").unwrap().clone();
 
         // Register 2 subagents
-        registry.register_running("test-1".to_string(), agent_config.clone()).await;
-        registry.register_running("test-2".to_string(), agent_config.clone()).await;
+        registry
+            .register_running("test-1".to_string(), agent_config.clone())
+            .await;
+        registry
+            .register_running("test-2".to_string(), agent_config.clone())
+            .await;
 
         // Should not be able to spawn more
         assert!(!registry.can_spawn().await);

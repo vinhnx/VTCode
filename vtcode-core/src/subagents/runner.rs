@@ -303,14 +303,14 @@ impl SubagentRunner {
         let api_key = self.parent_config.api_key.clone();
 
         // Use factory directly with raw model string (bypasses ModelId parsing)
-        let provider = crate::llm::factory::create_provider_for_model(
-            &model_string,
-            api_key,
-            None,
-        ).context("Failed to create LLM provider for subagent")?;
+        let provider = crate::llm::factory::create_provider_for_model(&model_string, api_key, None)
+            .context("Failed to create LLM provider for subagent")?;
 
         // Wrap provider in client adapter
-        Ok(Box::new(crate::llm::ProviderClientAdapter::new(provider, model_string)))
+        Ok(Box::new(crate::llm::ProviderClientAdapter::new(
+            provider,
+            model_string,
+        )))
     }
 
     /// Resolve the model string to use for this subagent
@@ -470,13 +470,12 @@ impl SubagentRunner {
         _tools: &Arc<ToolRegistry>,
     ) -> Result<(String, u32, TokenUsage)> {
         // Build a combined prompt with system context and user request
-        let full_prompt = format!(
-            "{}\n\n---\n\n**Task:**\n{}",
-            system_prompt,
-            user_message
-        );
+        let full_prompt = format!("{}\n\n---\n\n**Task:**\n{}", system_prompt, user_message);
 
-        debug!("Subagent executing with prompt length: {} chars", full_prompt.len());
+        debug!(
+            "Subagent executing with prompt length: {} chars",
+            full_prompt.len()
+        );
 
         // Call the LLM
         let response = client
@@ -485,11 +484,14 @@ impl SubagentRunner {
             .context("Failed to generate subagent response")?;
 
         // Extract token usage if available
-        let tokens = response.usage.map(|u| TokenUsage {
-            input_tokens: u.prompt_tokens as u64,
-            output_tokens: u.completion_tokens as u64,
-            total_tokens: u.total_tokens as u64,
-        }).unwrap_or_default();
+        let tokens = response
+            .usage
+            .map(|u| TokenUsage {
+                input_tokens: u.prompt_tokens as u64,
+                output_tokens: u.completion_tokens as u64,
+                total_tokens: u.total_tokens as u64,
+            })
+            .unwrap_or_default();
 
         debug!(
             "Subagent completed: {} output tokens, {} chars response",

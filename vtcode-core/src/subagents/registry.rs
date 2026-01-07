@@ -469,7 +469,7 @@ impl SubagentRegistry {
     async fn cleanup_stale_entries(&self) {
         let mut running = self.running.write().await;
         let stale_threshold = std::time::Duration::from_secs(
-            self.config.default_timeout_seconds * 2  // 2x timeout = definitely stale
+            self.config.default_timeout_seconds * 2, // 2x timeout = definitely stale
         );
 
         let now = std::time::Instant::now();
@@ -483,9 +483,9 @@ impl SubagentRegistry {
                     elapsed_secs = elapsed.as_secs(),
                     "Cleaning up stale subagent entry"
                 );
-                false  // Remove stale entry
+                false // Remove stale entry
             } else {
-                true  // Keep active entry
+                true // Keep active entry
             }
         });
 
