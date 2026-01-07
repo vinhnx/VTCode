@@ -12,6 +12,7 @@
 //! - `proactive_gatherer`: Automatically gathers relevant context
 
 pub mod conversation_memory;
+pub mod dynamic_init;
 pub mod entity_resolver;
 pub mod history_files;
 pub mod proactive_gatherer;
@@ -19,6 +20,7 @@ pub mod workspace_state;
 
 // Re-export key types for convenience
 pub use conversation_memory::{ConversationMemory, EntityMention, MentionHistory};
+pub use dynamic_init::{DynamicContextDirs, initialize_dynamic_context};
 pub use entity_resolver::{EntityIndex, EntityMatch, EntityResolver, FileLocation};
 pub use history_files::{HistoryConfig, HistoryFileManager, HistoryMessage, HistoryWriteResult};
 pub use proactive_gatherer::{GatheredContext, ProactiveGatherer};

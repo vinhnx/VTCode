@@ -34,6 +34,8 @@ pub(crate) struct InputStatusState {
     #[allow(dead_code)]
     pub(crate) semantic_value_per_token: Option<f64>,
     pub(crate) is_cancelling: bool,
+    // Dynamic context discovery status
+    pub(crate) spooled_files_count: Option<usize>,
 }
 
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
@@ -141,12 +143,13 @@ pub(crate) async fn update_input_status_if_changed(
             (None, None)
         }
         StatusLineMode::Auto => {
-            let right = build_model_status_with_context(
+            let right = build_model_status_with_context_and_spooled(
                 trimmed_model,
                 trimmed_reasoning,
                 state.context_utilization,
                 state.context_tokens,
                 state.is_cancelling,
+                state.spooled_files_count,
             );
             (state.git_left.clone(), right)
         }
@@ -195,23 +198,25 @@ pub(crate) async fn update_input_status_if_changed(
                     (state.command_value.clone(), None)
                 } else {
                     state.command_value = None;
-                    let right = build_model_status_with_context(
+                    let right = build_model_status_with_context_and_spooled(
                         trimmed_model,
                         trimmed_reasoning,
                         state.context_utilization,
                         state.context_tokens,
                         state.is_cancelling,
+                        state.spooled_files_count,
                     );
                     (state.git_left.clone(), right)
                 }
             } else {
                 state.command_value = None;
-                let right = build_model_status_with_context(
+                let right = build_model_status_with_context_and_spooled(
                     trimmed_model,
                     trimmed_reasoning,
                     state.context_utilization,
                     state.context_tokens,
                     state.is_cancelling,
+                    state.spooled_files_count,
                 );
                 (state.git_left.clone(), right)
             }
@@ -253,6 +258,7 @@ fn build_model_status_right(model: &str, reasoning: &str) -> Option<String> {
 /// Build status display with context efficiency metrics
 ///
 /// Format: "model | 12.5K tokens | 65% context"
+#[allow(dead_code)]
 pub(crate) fn build_model_status_with_context(
     model: &str,
     reasoning: &str,
@@ -260,10 +266,29 @@ pub(crate) fn build_model_status_with_context(
     total_tokens: Option<usize>,
     is_cancelling: bool,
 ) -> Option<String> {
+    build_model_status_with_context_and_spooled(
+        model,
+        reasoning,
+        context_utilization,
+        total_tokens,
+        is_cancelling,
+        None,
+    )
+}
+
+/// Build model status with all context indicators including spooled files
+pub(crate) fn build_model_status_with_context_and_spooled(
+    model: &str,
+    reasoning: &str,
+    context_utilization: Option<f64>,
+    total_tokens: Option<usize>,
+    is_cancelling: bool,
+    spooled_files: Option<usize>,
+) -> Option<String> {
     let mut parts = Vec::new();
 
     if is_cancelling {
-        parts.push("⚠ CANCELLING...".to_string());
+        parts.push("CANCELLING...".to_string());
     }
 
     parts.push(model.to_string());
@@ -285,11 +310,23 @@ pub(crate) fn build_model_status_with_context(
         parts.push(format!("{:.0}% context", util.min(100.0)));
     }
 
+    // Show spooled files indicator when files have been spooled
+    if let Some(count) = spooled_files
+        && count > 0
+    {
+        parts.push(format!("{} spooled", count));
+    }
+
     if !reasoning.is_empty() {
         parts.push(format!("({})", reasoning));
     }
 
     Some(parts.join(" | "))
+}
+
+/// Update spooled files count in status state
+pub(crate) fn update_spooled_files_count(state: &mut InputStatusState, count: usize) {
+    state.spooled_files_count = Some(count);
 }
 
 async fn run_status_line_command(
