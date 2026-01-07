@@ -64,3 +64,12 @@ default_ceiling_seconds = 180
 pty_ceiling_seconds = 300
 # Maximum duration for streaming API responses in seconds
 streaming_ceiling_seconds = 600
+
+# Context management
+[context]
+max_context_tokens = 90000
+
+# Dynamic Context Discovery
+[context.dynamic]
+enabled = true
+tool_output_threshold = 8192

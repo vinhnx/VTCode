@@ -1097,6 +1097,11 @@ impl ToolRegistry {
         &self.output_spooler
     }
 
+    /// Get the count of currently spooled files (for TUI status)
+    pub async fn spooled_files_count(&self) -> usize {
+        self.output_spooler.list_spooled_files().await.len()
+    }
+
     fn scale_duration(duration: Duration, num: u32, denom: u32) -> Duration {
         if denom == 0 {
             return duration;

@@ -1401,6 +1401,13 @@ impl AgentRunner {
                     if let Err(err) = self.tool_registry.refresh_mcp_tools().await {
                         warn!("Failed to refresh MCP tools: {}", err);
                     }
+
+                    // Sync MCP tools to files for dynamic context discovery
+                    if vt_cfg.context.dynamic.enabled && vt_cfg.context.dynamic.sync_mcp_tools {
+                        if let Err(err) = mcp_client.sync_tools_to_files(&self._workspace).await {
+                            warn!("Failed to sync MCP tools to files: {}", err);
+                        }
+                    }
                 }
                 Ok(Err(err)) => {
                     warn!("MCP client initialization failed: {}", err);
@@ -1408,6 +1415,18 @@ impl AgentRunner {
                 Err(_) => {
                     warn!("MCP client initialization timed out after 30 seconds");
                 }
+            }
+        }
+
+        // Initialize dynamic context discovery directories
+        if vt_cfg.context.dynamic.enabled {
+            if let Err(err) = crate::context::initialize_dynamic_context(
+                &self._workspace,
+                &vt_cfg.context.dynamic,
+            )
+            .await
+            {
+                warn!("Failed to initialize dynamic context directories: {}", err);
             }
         }
 

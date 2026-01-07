@@ -1508,7 +1508,12 @@ impl PtyManager {
         let terminals_dir = self.workspace_root.join(".vtcode").join("terminals");
         tokio::fs::create_dir_all(&terminals_dir)
             .await
-            .with_context(|| format!("Failed to create terminals directory: {}", terminals_dir.display()))?;
+            .with_context(|| {
+                format!(
+                    "Failed to create terminals directory: {}",
+                    terminals_dir.display()
+                )
+            })?;
 
         let sessions = self.list_sessions();
         let mut written_files = Vec::with_capacity(sessions.len());
@@ -1540,7 +1545,9 @@ impl PtyManager {
         let index_path = terminals_dir.join("INDEX.md");
         tokio::fs::write(&index_path, &index_content)
             .await
-            .with_context(|| format!("Failed to write terminals index: {}", index_path.display()))?;
+            .with_context(|| {
+                format!("Failed to write terminals index: {}", index_path.display())
+            })?;
 
         tracing::info!(
             sessions = sessions.len(),

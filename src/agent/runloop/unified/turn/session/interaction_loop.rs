@@ -92,6 +92,13 @@ pub(crate) async fn run_interaction_loop(
     const MCP_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
 
     loop {
+        // Update spooled files count for status line (dynamic context indicator)
+        let spooled_count = ctx.tool_registry.spooled_files_count().await;
+        crate::agent::runloop::unified::status_line::update_spooled_files_count(
+            state.input_status_state,
+            spooled_count,
+        );
+
         // Refresh status line
         if let Err(error) =
             crate::agent::runloop::unified::status_line::update_input_status_if_changed(
@@ -393,6 +400,15 @@ pub(crate) async fn run_interaction_loop(
                 ctx.conversation_history
                     .push(uni::Message::user(input.to_string()));
 
+                // Show spinner while command is running
+                let spinner =
+                    crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::new(
+                        ctx.handle,
+                        state.input_status_state.left.clone(),
+                        state.input_status_state.right.clone(),
+                        format!("Running: {}", bash_command),
+                    );
+
                 // Execute bash command directly
                 let tool_call_id = format!("bash_{}", ctx.conversation_history.len());
 
@@ -400,7 +416,10 @@ pub(crate) async fn run_interaction_loop(
                 let args = serde_json::json!({"command": bash_command});
                 let bash_result = ctx.tool_registry.execute_tool_ref("bash", &args).await;
 
-                match bash_result {
+                // Stop spinner before rendering output
+                spinner.finish();
+
+                let command_succeeded = match bash_result {
                     Ok(result) => {
                         render_tool_output(
                             ctx.renderer,
@@ -415,6 +434,11 @@ pub(crate) async fn run_interaction_loop(
                             tool_call_id.clone(),
                             result_str,
                         ));
+                        result
+                            .get("exit_code")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0)
+                            == 0
                     }
                     Err(err) => {
                         ctx.renderer.line(
@@ -425,12 +449,29 @@ pub(crate) async fn run_interaction_loop(
                             tool_call_id.clone(),
                             format!("{{\"error\": \"{}\"}}", err),
                         ));
+                        false
                     }
-                }
+                };
 
                 ctx.handle.clear_input();
-                ctx.handle.set_placeholder(ctx.default_placeholder.clone());
-                continue;
+                ctx.handle
+                    .set_placeholder(ctx.follow_up_placeholder.clone());
+
+                // Return to trigger LLM follow-up with context about what happened
+                let follow_up_prompt = if command_succeeded {
+                    format!(
+                        "I ran `{}`. Please briefly acknowledge the result and suggest what to do next.",
+                        bash_command
+                    )
+                } else {
+                    format!(
+                        "I ran `{}` but it failed. Please analyze the error and suggest how to fix it.",
+                        bash_command
+                    )
+                };
+                return Ok(InteractionOutcome::Continue {
+                    input: follow_up_prompt,
+                });
             }
         }
 
@@ -442,12 +483,28 @@ pub(crate) async fn run_interaction_loop(
             ctx.conversation_history
                 .push(uni::Message::user(input.to_string()));
 
+            // Show spinner while command is running
+            let command_preview = tool_args
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("command");
+            let spinner = crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::new(
+                ctx.handle,
+                state.input_status_state.left.clone(),
+                state.input_status_state.right.clone(),
+                format!("Running: {}", command_preview),
+            );
+
             let tool_call_id = format!("explicit_run_{}", ctx.conversation_history.len());
-            match ctx
+            let bash_result = ctx
                 .tool_registry
                 .execute_tool_ref(&tool_name, &tool_args)
-                .await
-            {
+                .await;
+
+            // Stop spinner before rendering output
+            spinner.finish();
+
+            let command_succeeded = match bash_result {
                 Ok(result) => {
                     render_tool_output(
                         ctx.renderer,
@@ -462,6 +519,11 @@ pub(crate) async fn run_interaction_loop(
                         tool_call_id.clone(),
                         result_str,
                     ));
+                    result
+                        .get("exit_code")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0)
+                        == 0
                 }
                 Err(err) => {
                     ctx.renderer
@@ -470,12 +532,29 @@ pub(crate) async fn run_interaction_loop(
                         tool_call_id.clone(),
                         format!("{{\"error\": \"{}\"}}", err),
                     ));
+                    false
                 }
-            }
+            };
 
             ctx.handle.clear_input();
-            ctx.handle.set_placeholder(ctx.default_placeholder.clone());
-            continue;
+            ctx.handle
+                .set_placeholder(ctx.follow_up_placeholder.clone());
+
+            // Return to trigger LLM follow-up with context about what happened
+            let follow_up_prompt = if command_succeeded {
+                format!(
+                    "I ran `{}`. Please briefly acknowledge the result and suggest what to do next.",
+                    command_preview
+                )
+            } else {
+                format!(
+                    "I ran `{}` but it failed. Please analyze the error and suggest how to fix it.",
+                    command_preview
+                )
+            };
+            return Ok(InteractionOutcome::Continue {
+                input: follow_up_prompt,
+            });
         }
 
         let processed_content =
