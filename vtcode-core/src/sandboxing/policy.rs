@@ -217,11 +217,11 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_memory_mb: 0,    // Unlimited by default
-            max_pids: 0,         // Unlimited by default
-            max_disk_mb: 0,      // Unlimited by default
-            cpu_time_secs: 0,    // Unlimited by default
-            timeout_secs: 300,   // 5 minute wall clock default
+            max_memory_mb: 0,  // Unlimited by default
+            max_pids: 0,       // Unlimited by default
+            max_disk_mb: 0,    // Unlimited by default
+            cpu_time_secs: 0,  // Unlimited by default
+            timeout_secs: 300, // 5 minute wall clock default
         }
     }
 }
@@ -242,33 +242,33 @@ impl ResourceLimits {
     /// Following field guide: "Resource limits: CPU, memory, disk, timeouts, and PIDs."
     pub fn conservative() -> Self {
         Self {
-            max_memory_mb: 512,     // 512MB memory
-            max_pids: 64,           // 64 processes (prevents fork bombs)
-            max_disk_mb: 1024,      // 1GB disk writes
-            cpu_time_secs: 60,      // 1 minute CPU time
-            timeout_secs: 120,      // 2 minute wall clock
+            max_memory_mb: 512, // 512MB memory
+            max_pids: 64,       // 64 processes (prevents fork bombs)
+            max_disk_mb: 1024,  // 1GB disk writes
+            cpu_time_secs: 60,  // 1 minute CPU time
+            timeout_secs: 120,  // 2 minute wall clock
         }
     }
 
     /// Create moderate limits for semi-trusted code.
     pub fn moderate() -> Self {
         Self {
-            max_memory_mb: 2048,    // 2GB memory
-            max_pids: 256,          // 256 processes
-            max_disk_mb: 4096,      // 4GB disk writes
-            cpu_time_secs: 300,     // 5 minutes CPU time
-            timeout_secs: 600,      // 10 minute wall clock
+            max_memory_mb: 2048, // 2GB memory
+            max_pids: 256,       // 256 processes
+            max_disk_mb: 4096,   // 4GB disk writes
+            cpu_time_secs: 300,  // 5 minutes CPU time
+            timeout_secs: 600,   // 10 minute wall clock
         }
     }
 
     /// Create generous limits for trusted internal code.
     pub fn generous() -> Self {
         Self {
-            max_memory_mb: 8192,    // 8GB memory
-            max_pids: 1024,         // 1024 processes
-            max_disk_mb: 16384,     // 16GB disk writes
-            cpu_time_secs: 0,       // Unlimited CPU time
-            timeout_secs: 3600,     // 1 hour wall clock
+            max_memory_mb: 8192, // 8GB memory
+            max_pids: 1024,      // 1024 processes
+            max_disk_mb: 16384,  // 16GB disk writes
+            cpu_time_secs: 0,    // Unlimited CPU time
+            timeout_secs: 3600,  // 1 hour wall clock
         }
     }
 
@@ -379,13 +379,9 @@ pub const BLOCKED_SYSCALLS: &[&str] = &[
 /// Syscalls that require argument filtering (not fully blocked).
 pub const FILTERED_SYSCALLS: &[&str] = &[
     // clone/clone3: filter to prevent new namespaces
-    "clone",
-    "clone3",
-    // ioctl: filter to block dangerous device ioctls
-    "ioctl",
-    // prctl: filter to block dangerous operations
-    "prctl",
-    // socket: filter to enforce network policy
+    "clone", "clone3", // ioctl: filter to block dangerous device ioctls
+    "ioctl", // prctl: filter to block dangerous operations
+    "prctl", // socket: filter to enforce network policy
     "socket",
 ];
 

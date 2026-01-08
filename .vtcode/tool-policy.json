@@ -71,7 +71,7 @@
     "search": "prompt",
     "send_pty_input": "prompt",
     "unified_file": "prompt",
-    "unified_search": "prompt",
+    "unified_search": "allow",
     "cargo_check": "allow",
     "cargo_test": "allow",
     "git_status": "allow",

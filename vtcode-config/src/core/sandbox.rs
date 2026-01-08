@@ -379,4 +379,3 @@ mod tests {
         assert_eq!(config.profile, SeccompProfilePreset::Strict);
     }
 }
-
