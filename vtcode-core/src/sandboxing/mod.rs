@@ -46,6 +46,7 @@ pub use exec_env::{CommandSpec, ExecEnv, ExecExpiration, SandboxType};
 pub use manager::{SandboxManager, SandboxTransformError};
 pub use permissions::SandboxPermissions;
 pub use policy::{
-    default_sensitive_paths, NetworkAllowlistEntry, ResourceLimits, SandboxPolicy, SeccompProfile,
-    SensitivePath, WritableRoot, BLOCKED_SYSCALLS, DEFAULT_SENSITIVE_PATHS, FILTERED_SYSCALLS,
+    BLOCKED_SYSCALLS, DEFAULT_SENSITIVE_PATHS, FILTERED_SYSCALLS, NetworkAllowlistEntry,
+    ResourceLimits, SandboxPolicy, SeccompProfile, SensitivePath, WritableRoot,
+    default_sensitive_paths,
 };
