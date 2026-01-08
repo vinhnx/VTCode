@@ -278,20 +278,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
         )?;
     }
 
-    // Suppress raw content echo to keep token usage low; only report summary
-    if let Some(content) = get_string(val, "content")
-        && !content.is_empty()
-    {
-        let line_count = content.lines().count();
-        let byte_count = content.len();
-        renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "  content: loaded ({} lines, {} bytes); output suppressed to save tokens",
-                line_count, byte_count
-            ),
-        )?;
-    }
+    // Content is loaded and available via file tools context; no need to echo summary
 
     Ok(())
 }

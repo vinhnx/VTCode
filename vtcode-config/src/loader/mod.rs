@@ -6,7 +6,7 @@ use crate::acp::AgentClientProtocolConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AnthropicConfig, AutomationConfig, CommandsConfig, ModelConfig, PermissionsConfig,
-    PromptCachingConfig, SecurityConfig, SkillsConfig, ToolsConfig,
+    PromptCachingConfig, SandboxConfig, SecurityConfig, SkillsConfig, ToolsConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
@@ -130,6 +130,10 @@ pub struct VTCodeConfig {
     /// Security settings
     #[serde(default)]
     pub security: SecurityConfig,
+
+    /// Sandbox settings for command execution isolation
+    #[serde(default)]
+    pub sandbox: SandboxConfig,
 
     /// UI settings
     #[serde(default)]

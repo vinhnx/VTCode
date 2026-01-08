@@ -418,3 +418,11 @@ Pods/
 !TODO.md
 !AGENTS.md
 !CLAUDE.md
+
+# Explicitly allow VT Code runtime files (agent needs access to these)
+!.vtcode/context/tool_outputs/
+!.vtcode/context/history/
+!.vtcode/mcp/tools/
+!.vtcode/mcp/status.json
+!.vtcode/skills/INDEX.md
+!.vtcode/terminals/

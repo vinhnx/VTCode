@@ -782,9 +782,17 @@ TODO2.md
 .qwen/
 .ruler/
 .cursorignore
+# VT Code runtime files (excluded from git, but accessible to agent)
 .vtcode/index/
 .vtcode/checkpoints/
 .vtcode/skills/
+.vtcode/skills/INDEX.md
+.vtcode/context/tool_outputs/
+.vtcode/context/history/
+.vtcode/mcp/tools/
+.vtcode/mcp/status.json
+.vtcode/terminals/
+
 .claude/
 .agent/
 .pi/

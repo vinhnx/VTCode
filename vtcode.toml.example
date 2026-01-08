@@ -588,6 +588,100 @@ auto_apply_detected_patches = false
 # Play terminal bell notification when HITL approval is required
 hitl_notification_bell = true
 
+# Sandbox configuration - Command execution isolation
+# Implements the AI sandbox field guide's three-question model:
+# - Boundary: What is shared between code and host (Seatbelt/Landlock)
+# - Policy: What can code touch (files, network, syscalls)
+# - Lifecycle: What survives between runs (session-scoped)
+[sandbox]
+# Enable sandboxing for command execution
+enabled = true
+
+# Default sandbox mode: "read_only", "workspace_write", "danger_full_access", "external"
+default_mode = "read_only"
+
+# Network egress configuration
+[sandbox.network]
+# Allow all network access (legacy mode, not recommended)
+allow_all = false
+
+# Block all network access
+block_all = false
+
+# Domain allowlist - only these destinations are permitted when not blocking all
+# Following field guide: "Default-deny outbound network, then allowlist."
+# Example entries:
+# [[sandbox.network.allowlist]]
+# domain = "api.github.com"
+# port = 443
+#
+# [[sandbox.network.allowlist]]
+# domain = "*.npmjs.org"
+# port = 443
+
+# Sensitive paths blocking - prevent credential leakage
+# Following field guide warning about "policy leakage": SSH keys, cloud creds, API tokens
+[sandbox.sensitive_paths]
+# Use default sensitive paths (~/.ssh, ~/.aws, ~/.kube, etc.)
+use_defaults = true
+
+# Additional paths to block (in addition to defaults)
+additional = []
+
+# Paths to explicitly allow (overrides defaults)
+exceptions = []
+
+# Resource limits - prevent fork bombs, memory exhaustion
+# Following field guide: "CPU, memory, disk, timeouts, and PIDs"
+[sandbox.resource_limits]
+# Preset: "unlimited", "conservative", "moderate", "generous", "custom"
+preset = "moderate"
+
+# Custom limits (used when preset = "custom", 0 = use preset value)
+max_memory_mb = 0
+max_pids = 0
+max_disk_mb = 0
+cpu_time_secs = 0
+timeout_secs = 0
+
+# Linux seccomp configuration - syscall filtering
+# Following field guide: "Landlock + seccomp is the recommended Linux pattern"
+[sandbox.seccomp]
+# Enable seccomp filtering (Linux only)
+enabled = true
+
+# Profile preset: "strict", "permissive", "disabled"
+# Strict blocks: ptrace, mount, kexec_load, bpf, perf_event_open, etc.
+profile = "strict"
+
+# Additional syscalls to block
+additional_blocked = []
+
+# Log blocked syscalls instead of killing (for debugging)
+log_only = false
+
+# External sandbox configuration (Docker, MicroVM)
+# For multi-tenant or hostile code scenarios
+[sandbox.external]
+# Type: "none", "docker", "microvm", "gvisor"
+sandbox_type = "none"
+
+# Docker settings (when sandbox_type = "docker")
+[sandbox.external.docker]
+image = "ubuntu:22.04"
+memory_limit = ""
+cpu_limit = ""
+network_mode = "none"
+
+# MicroVM settings (when sandbox_type = "microvm")
+# For stronger isolation boundaries
+[sandbox.external.microvm]
+vmm = ""  # "firecracker" or "cloud-hypervisor"
+kernel_path = ""
+rootfs_path = ""
+memory_mb = 512
+vcpus = 1
+
 # UI configuration - Terminal and display settings
 [ui]
 # Tool output display mode

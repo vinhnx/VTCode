@@ -4,6 +4,7 @@ use crate::agent::runloop::unified::turn::context::{
 use anyhow::Result;
 use std::collections::HashMap;
 use vtcode_core::utils::ansi::MessageStyle;
+use serde_json::Value;
 
 use vtcode_core::config::constants::tools as tool_names;
 
@@ -118,6 +119,69 @@ pub(crate) async fn run_proactive_guards(
     Ok(())
 }
 
+/// Check if a tool signature represents a read-only operation
+/// Signature format: "tool_name:args_json" where args_json is serialized Value
+fn is_readonly_signature(signature: &str) -> bool {
+    // Split signature into tool name and args JSON
+    let Some(colon_pos) = signature.find(':') else {
+        return false;
+    };
+    let tool_name = &signature[..colon_pos];
+    let args_json = &signature[colon_pos + 1..];
+
+    // Always read-only tools (legacy and unified)
+    if matches!(
+        tool_name,
+        tool_names::READ_FILE
+            | tool_names::GREP_FILE
+            | tool_names::LIST_FILES
+            | tool_names::CODE_INTELLIGENCE
+            | tool_names::SEARCH_TOOLS
+            | tool_names::AGENT_INFO
+            | tool_names::UNIFIED_SEARCH
+    ) {
+        return true;
+    }
+
+    // For unified tools, parse JSON args to check action parameter
+    // Try parsing as JSON (Value Display may serialize with varying formats)
+    if let Ok(args) = serde_json::from_str::<Value>(args_json) {
+        // unified_file: read action is read-only
+        if tool_name == tool_names::UNIFIED_FILE {
+            if let Some(action) = args.get("action").and_then(|v| v.as_str()) {
+                return action == "read";
+            }
+            // If no action but has mutating fields, it's not read-only
+            // Default to mutating if unclear
+        }
+        // unified_exec: poll and list actions are read-only
+        if tool_name == tool_names::UNIFIED_EXEC {
+            if let Some(action) = args.get("action").and_then(|v| v.as_str()) {
+                return matches!(action, "poll" | "list");
+            }
+        }
+    } else {
+        // If JSON parsing fails, fall back to string matching for robustness
+        // This handles cases where Value Display might not produce valid JSON
+        if tool_name == tool_names::UNIFIED_FILE {
+            // Check for read action in various JSON formats
+            let lower_json = args_json.to_lowercase();
+            return lower_json.contains(r#""action":"read""#)
+                || lower_json.contains(r#""action": "read""#)
+                || lower_json.contains(r#"'action':'read'"#);
+        }
+        if tool_name == tool_names::UNIFIED_EXEC {
+            let lower_json = args_json.to_lowercase();
+            return lower_json.contains(r#""action":"poll""#)
+                || lower_json.contains(r#""action":"list""#)
+                || lower_json.contains(r#""action": "poll""#)
+                || lower_json.contains(r#""action": "list""#);
+        }
+    }
+
+    false
+}
+
 pub(crate) async fn handle_turn_balancer(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
@@ -127,11 +191,23 @@ pub(crate) async fn handle_turn_balancer(
 ) -> TurnHandlerOutcome {
     use vtcode_core::llm::provider as uni;
     // --- Turn balancer: cap low-signal churn ---
+    // Exclude read-only tools from repeated count (they're legitimate exploration)
+    let max_repeated = repeated_tool_attempts
+        .iter()
+        .filter_map(|(signature, count)| {
+            if is_readonly_signature(signature) {
+                None // Exclude read-only tools
+            } else {
+                Some(*count)
+            }
+        })
+        .max()
+        .unwrap_or(0);
 
     if crate::agent::runloop::unified::turn::utils::should_trigger_turn_balancer(
         step_count,
         max_tool_loops,
-        repeated_tool_attempts.values().copied().max().unwrap_or(0),
+        max_repeated,
         tool_repeat_limit,
     ) {
         ctx.renderer
