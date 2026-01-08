@@ -3,6 +3,27 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.59.2] - 2026-01-08
+
+
+### Features
+    - feat: implement sandboxing configuration and policies
+    - feat: enhance dynamic context discovery and update configuration
+    - feat: implement dynamic context discovery with file spooling for large outputs
+
+
+### Refactors
+    - refactor: update tool policies, enhance subagent cleanup, and improve documentation
+
+
+### Documentation
+    - docs: update changelog for v0.59.1 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.59.1 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.59.0 version =  [skip ci]
 # [Version 0.59.1] - 2026-01-07
 
 
