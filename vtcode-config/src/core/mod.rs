@@ -6,6 +6,7 @@ pub mod permissions;
 pub mod plugins;
 pub mod prompt_cache;
 pub mod provider;
+pub mod sandbox;
 pub mod security;
 pub mod skills;
 pub mod tools;
@@ -23,6 +24,11 @@ pub use prompt_cache::{
     XAIPromptCacheSettings, ZaiPromptCacheSettings,
 };
 pub use provider::AnthropicConfig;
+pub use sandbox::{
+    DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, MicroVMSandboxConfig,
+    NetworkAllowlistEntryConfig, NetworkConfig, ResourceLimitsConfig, ResourceLimitsPreset,
+    SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
+};
 pub use security::SecurityConfig;
 pub use skills::{PromptFormat, SkillsConfig, SkillsRenderMode};
 pub use tools::{ToolPolicy, ToolsConfig, WebFetchConfig};

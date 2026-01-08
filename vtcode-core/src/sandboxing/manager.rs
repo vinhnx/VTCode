@@ -131,6 +131,10 @@ impl SandboxManager {
     }
 
     /// Build a seatbelt profile string.
+    ///
+    /// Implements the field guide's recommendations:
+    /// - "Default-deny outbound network, then allowlist."
+    /// - Block sensitive paths to prevent credential leakage.
     #[cfg(target_os = "macos")]
     fn build_seatbelt_profile(&self, policy: &SandboxPolicy, sandbox_cwd: &Path) -> String {
         let mut profile = String::from("(version 1)\n");
@@ -140,17 +144,33 @@ impl SandboxManager {
         profile.push_str("(allow sysctl-read)\n");
         profile.push_str("(allow mach-lookup)\n");
 
-        // Allow reading from everywhere
+        // Block sensitive paths BEFORE allowing general read access
+        // This ensures deny rules take precedence
+        let sensitive_paths = policy.sensitive_paths();
+        for sp in &sensitive_paths {
+            let expanded = sp.expand_path();
+            let path_str = expanded.display();
+            if sp.block_read {
+                profile.push_str(&format!("(deny file-read* (subpath \"{}\"))\n", path_str));
+            }
+            if sp.block_write {
+                profile.push_str(&format!("(deny file-write* (subpath \"{}\"))\n", path_str));
+            }
+        }
+
+        // Allow reading from everywhere (except denied sensitive paths above)
         profile.push_str("(allow file-read*)\n");
 
         match policy {
             SandboxPolicy::ReadOnly => {
                 // Read-only: only allow writing to /dev/null
                 profile.push_str("(allow file-write* (literal \"/dev/null\"))\n");
+                // No network access for read-only
             }
             SandboxPolicy::WorkspaceWrite {
                 writable_roots,
                 network_access,
+                network_allowlist,
                 ..
             } => {
                 // Allow writing to workspace roots
@@ -164,10 +184,31 @@ impl SandboxManager {
                     sandbox_cwd.display()
                 ));
 
-                // Network access
-                if *network_access {
+                // Network access: allowlist-based or legacy boolean
+                if !network_allowlist.is_empty() {
+                    // Always allow local unix sockets
+                    profile.push_str("(allow network* (local unix))\n");
+
+                    // Add allowlisted network destinations
+                    // Note: Seatbelt's network filtering is limited; we use remote-ip filters
+                    // For domain-based filtering, we rely on the application layer
+                    for entry in network_allowlist {
+                        // Seatbelt supports remote filters with IP addresses and ports
+                        // For domain names, we allow the connection and rely on DNS resolution
+                        // This is a defense-in-depth approach
+                        profile.push_str(&format!(
+                            "(allow network-outbound (remote {} (require-any (port {}))))\n",
+                            entry.protocol, entry.port
+                        ));
+                    }
+                    // Allow DNS resolution for allowlisted domains
+                    profile.push_str("(allow network-outbound (remote udp (port 53)))\n");
+                    profile.push_str("(allow network-outbound (remote tcp (port 53)))\n");
+                } else if *network_access {
+                    // Legacy: full network access
                     profile.push_str("(allow network*)\n");
                 } else {
+                    // No network access except local unix sockets
                     profile.push_str("(allow network* (local unix))\n");
                 }
             }
@@ -178,6 +219,10 @@ impl SandboxManager {
     }
 
     /// Transform for Linux Landlock sandbox.
+    ///
+    /// Following the field guide: "Landlock + seccomp is the recommended Linux pattern."
+    /// The sandbox helper binary receives both the policy (for Landlock filesystem rules)
+    /// and the seccomp profile (for syscall filtering).
     fn transform_landlock(
         &self,
         spec: CommandSpec,
@@ -188,10 +233,28 @@ impl SandboxManager {
         let sandbox_exe =
             sandbox_executable.ok_or(SandboxTransformError::MissingSandboxExecutable)?;
 
-        // Serialize the policy for the sandbox helper
+        // Serialize the policy for the sandbox helper (includes Landlock rules)
         let policy_json = serde_json::to_string(policy).map_err(|e| {
             SandboxTransformError::CreationFailed(format!(
                 "failed to serialize sandbox policy: {}",
+                e
+            ))
+        })?;
+
+        // Serialize seccomp profile separately for explicit syscall filtering
+        let seccomp_profile = policy.seccomp_profile();
+        let seccomp_json = seccomp_profile.to_json().map_err(|e| {
+            SandboxTransformError::CreationFailed(format!(
+                "failed to serialize seccomp profile: {}",
+                e
+            ))
+        })?;
+
+        // Serialize resource limits for cgroup/rlimit enforcement
+        let resource_limits = policy.resource_limits();
+        let limits_json = serde_json::to_string(&resource_limits).map_err(|e| {
+            SandboxTransformError::CreationFailed(format!(
+                "failed to serialize resource limits: {}",
                 e
             ))
         })?;
@@ -203,6 +266,10 @@ impl SandboxManager {
             sandbox_cwd_str,
             "--sandbox-policy".to_string(),
             policy_json,
+            "--seccomp-profile".to_string(),
+            seccomp_json,
+            "--resource-limits".to_string(),
+            limits_json,
             "--".to_string(),
             spec.program.clone(),
         ];
