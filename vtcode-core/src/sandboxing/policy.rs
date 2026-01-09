@@ -380,8 +380,8 @@ pub const BLOCKED_SYSCALLS: &[&str] = &[
 pub const FILTERED_SYSCALLS: &[&str] = &[
     // clone/clone3: filter to prevent new namespaces
     "clone", "clone3", // ioctl: filter to block dangerous device ioctls
-    "ioctl", // prctl: filter to block dangerous operations
-    "prctl", // socket: filter to enforce network policy
+    "ioctl",  // prctl: filter to block dangerous operations
+    "prctl",  // socket: filter to enforce network policy
     "socket",
 ];
 
