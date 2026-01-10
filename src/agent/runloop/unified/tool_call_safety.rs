@@ -125,7 +125,10 @@ impl ToolCallSafetyValidator {
     }
 
     /// Validate a tool call before execution
-    pub fn validate_call(&mut self, tool_name: &str) -> std::result::Result<CallValidation, SafetyError> {
+    pub fn validate_call(
+        &mut self,
+        tool_name: &str,
+    ) -> std::result::Result<CallValidation, SafetyError> {
         // Check if tool is destructive
         let is_destructive = self.destructive_tools.contains(tool_name);
 
@@ -158,7 +161,8 @@ impl ToolCallSafetyValidator {
     /// Enforce rate limiting
     fn enforce_rate_limit(&mut self) -> std::result::Result<(), SafetyError> {
         let now = Instant::now();
-        self.calls_in_window.retain(|&t| now.duration_since(t) <= Duration::from_secs(1));
+        self.calls_in_window
+            .retain(|&t| now.duration_since(t) <= Duration::from_secs(1));
 
         if self.calls_in_window.len() >= self.rate_limit_per_second {
             return Err(SafetyError::RateLimitExceeded {
@@ -179,7 +183,8 @@ impl ToolCallSafetyValidator {
             None => return Ok(()),
         };
 
-        self.calls_in_minute.retain(|&t| now.duration_since(t) <= Duration::from_secs(60));
+        self.calls_in_minute
+            .retain(|&t| now.duration_since(t) <= Duration::from_secs(60));
 
         if self.calls_in_minute.len() >= limit {
             return Err(SafetyError::RateLimitExceeded {

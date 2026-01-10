@@ -356,9 +356,7 @@ impl ModelPickerState {
                     renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                _ => {
-                    Ok(ModelPickerProgress::InProgress)
-                }
+                _ => Ok(ModelPickerProgress::InProgress),
             },
             PickerStep::AwaitApiKey => {
                 renderer.line(

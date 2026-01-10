@@ -12,7 +12,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
     InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
-    WizardStep,
+    WizardModalMode, WizardStep,
 };
 use super::{
     Session,
@@ -148,9 +148,11 @@ impl Session {
         &mut self,
         title: String,
         steps: Vec<WizardStep>,
+        current_step: usize,
         search: Option<InlineListSearchConfig>,
+        mode: WizardModalMode,
     ) {
-        let wizard = WizardModalState::new(title, steps, search);
+        let wizard = WizardModalState::new(title, steps, current_step, search, mode);
         self.wizard_modal = Some(wizard);
         self.input_enabled = false;
         self.cursor_visible = false;
@@ -165,6 +167,13 @@ impl Session {
             if state.secure_prompt.is_some() {
                 // Secure prompt modal closed, don't restore input
             }
+            self.mark_dirty();
+            return;
+        }
+
+        if self.wizard_modal.take().is_some() {
+            self.input_enabled = true;
+            self.cursor_visible = true;
             self.mark_dirty();
         }
     }

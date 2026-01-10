@@ -230,7 +230,7 @@ pub trait ToolExecutor: Send + Sync {
     /// Check if a tool exists
     async fn has_tool(&self, name: &str) -> bool;
 
-    /// Execute multiple tools in batch. 
+    /// Execute multiple tools in batch.
     ///
     /// The default implementation runs them sequentially.
     /// Implementors can override this to provide parallel execution.

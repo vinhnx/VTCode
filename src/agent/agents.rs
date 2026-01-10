@@ -75,8 +75,14 @@ pub async fn run_single_agent_loop(
     apply_runtime_overrides(vt_cfg.as_mut(), config);
 
     let driver = crate::agent::runloop::unified::UnifiedTurnDriver;
-    let params =
-        TurnDriverParams::new(config, vt_cfg, skip_confirmations, full_auto, plan_mode, resume);
+    let params = TurnDriverParams::new(
+        config,
+        vt_cfg,
+        skip_confirmations,
+        full_auto,
+        plan_mode,
+        resume,
+    );
     driver.drive_turn(params).await
 }
 

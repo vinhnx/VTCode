@@ -24,7 +24,7 @@ impl TokenBucket {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_refill).as_secs_f64();
         let new_tokens = elapsed * self.refill_rate;
-        
+
         if new_tokens > 0.0 {
             self.tokens = (self.tokens + new_tokens).min(self.capacity);
             self.last_refill = now;
@@ -79,9 +79,9 @@ impl AdaptiveRateLimiter {
     /// Returns Ok(()) if allowed, or Err(Duration) indicating suggested wait time.
     pub fn try_acquire(&self, tool_name: &str) -> Result<(), Duration> {
         let mut buckets = self.buckets.lock().unwrap();
-        let bucket = buckets.entry(tool_name.to_string()).or_insert_with(|| {
-            TokenBucket::new(self.default_capacity, self.default_refill_rate)
-        });
+        let bucket = buckets
+            .entry(tool_name.to_string())
+            .or_insert_with(|| TokenBucket::new(self.default_capacity, self.default_refill_rate));
 
         let weight = self.priority_weights.get(tool_name).copied().unwrap_or(1.0);
         let cost = 1.0 * weight;

@@ -16,8 +16,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::tools::traits::Tool;
 
@@ -114,7 +114,13 @@ impl EnterPlanModeTool {
                 // Sanitize the name for filesystem
                 name.to_lowercase()
                     .chars()
-                    .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+                    .map(|c| {
+                        if c.is_alphanumeric() || c == '-' {
+                            c
+                        } else {
+                            '-'
+                        }
+                    })
                     .collect()
             }
             None => {
@@ -129,11 +135,10 @@ impl EnterPlanModeTool {
 #[async_trait]
 impl Tool for EnterPlanModeTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let args: EnterPlanModeArgs =
-            serde_json::from_value(args).unwrap_or(EnterPlanModeArgs {
-                plan_name: None,
-                description: None,
-            });
+        let args: EnterPlanModeArgs = serde_json::from_value(args).unwrap_or(EnterPlanModeArgs {
+            plan_name: None,
+            description: None,
+        });
 
         // Check if already in plan mode
         if self.state.is_active() {
@@ -190,7 +195,9 @@ impl Tool for EnterPlanModeTool {
 *Plan created: {}*
 "#,
             plan_name.replace('-', " ").to_uppercase(),
-            args.description.as_deref().unwrap_or("(Describe the goal here)"),
+            args.description
+                .as_deref()
+                .unwrap_or("(Describe the goal here)"),
             chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
         );
 
@@ -373,10 +380,13 @@ mod tests {
         assert!(!state.is_active());
 
         // Enter plan mode
-        let result = tool.execute(json!({
-            "plan_name": "test-plan",
-            "description": "Test planning"
-        })).await.unwrap();
+        let result = tool
+            .execute(json!({
+                "plan_name": "test-plan",
+                "description": "Test planning"
+            }))
+            .await
+            .unwrap();
 
         // Should be in plan mode now
         assert!(state.is_active());
@@ -403,14 +413,22 @@ mod tests {
         let tool = ExitPlanModeTool::new(state.clone());
 
         // Exit plan mode
-        let result = tool.execute(json!({
-            "reason": "planning complete"
-        })).await.unwrap();
+        let result = tool
+            .execute(json!({
+                "reason": "planning complete"
+            }))
+            .await
+            .unwrap();
 
         // Should not be in plan mode now
         assert!(!state.is_active());
         assert_eq!(result["status"], "success");
-        assert!(result["plan_content"].as_str().unwrap().contains("Test Plan"));
+        assert!(
+            result["plan_content"]
+                .as_str()
+                .unwrap()
+                .contains("Test Plan")
+        );
     }
 
     #[tokio::test]

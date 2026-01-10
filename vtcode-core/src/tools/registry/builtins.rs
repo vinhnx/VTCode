@@ -1,5 +1,6 @@
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
+use crate::tools::ask_user_question::AskUserQuestionTool;
 
 use super::registration::ToolRegistration;
 use super::{ToolInventory, ToolRegistry};
@@ -15,6 +16,14 @@ pub(super) fn register_builtin_tools(inventory: &ToolInventory) {
 
 pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
     vec![
+        // ============================================================
+        // HUMAN-IN-THE-LOOP (HITL)
+        // ============================================================
+        ToolRegistration::from_tool_instance(
+            tools::ASK_USER_QUESTION,
+            CapabilityLevel::Basic,
+            AskUserQuestionTool,
+        ),
         // ============================================================
         // SEARCH & DISCOVERY (1 tool - unified)
         // ============================================================

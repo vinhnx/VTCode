@@ -10,7 +10,9 @@ use tokio::time;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
+use super::ask_user_question::execute_ask_user_question_tool;
 use super::progress::ProgressReporter;
+use vtcode_core::config::constants::tools;
 use vtcode_core::exec::cancellation;
 use vtcode_core::tools::registry::ToolErrorType;
 use vtcode_core::tools::registry::{
@@ -246,6 +248,29 @@ pub(crate) async fn run_tool_call(
                 ToolExecutionStatus::Failure { error: e },
             ));
         }
+    }
+
+    // Special-case HITL tool: handled entirely in the TUI/runloop.
+    if name == tools::ASK_USER_QUESTION {
+        let output = execute_ask_user_question_tool(
+            ctx.handle,
+            ctx.session,
+            &args_val,
+            ctrl_c_state,
+            ctrl_c_notify,
+        )
+        .await;
+
+        return Ok(ToolPipelineOutcome::from_status(match output {
+            Ok(value) => ToolExecutionStatus::Success {
+                output: value,
+                stdout: None,
+                modified_files: vec![],
+                command_success: true,
+                has_more: false,
+            },
+            Err(error) => ToolExecutionStatus::Failure { error },
+        }));
     }
 
     // Determine read-only tools for caching

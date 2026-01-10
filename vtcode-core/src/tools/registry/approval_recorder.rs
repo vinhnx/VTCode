@@ -29,7 +29,8 @@ impl Default for ApprovalRecorder {
         // This default implementation creates a temporary directory for the cache.
         // In a real application, you might want a more robust default path or
         // to make `new` take an optional `cache_dir`.
-        let temp_dir = std::env::temp_dir().join(format!("approval_recorder_default_{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("approval_recorder_default_{}", std::process::id()));
         Self::new(temp_dir)
     }
 }

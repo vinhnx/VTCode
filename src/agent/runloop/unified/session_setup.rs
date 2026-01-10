@@ -669,10 +669,16 @@ pub(crate) async fn initialize_session(
         approval_recorder,
         safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
         // Phase 4 Integration: Resilient execution components
-        circuit_breaker: Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::new(vtcode_core::tools::circuit_breaker::CircuitBreakerConfig::default())),
+        circuit_breaker: Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::new(
+            vtcode_core::tools::circuit_breaker::CircuitBreakerConfig::default(),
+        )),
         tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)), // Keep last 50 execution stats per tool
-        rate_limiter: Arc::new(vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default()),
-        validation_cache: Arc::new(vtcode_core::tools::validation_cache::ValidationCache::default()),
+        rate_limiter: Arc::new(
+            vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default(),
+        ),
+        validation_cache: Arc::new(
+            vtcode_core::tools::validation_cache::ValidationCache::default(),
+        ),
     })
 }
 

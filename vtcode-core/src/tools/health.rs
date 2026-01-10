@@ -32,16 +32,17 @@ impl ToolHealthTracker {
     pub fn record_execution(&self, tool_name: &str, success: bool, latency: Duration) {
         if let Ok(mut stats_map) = self.stats.write() {
             let tool_stats = stats_map.entry(tool_name.to_string()).or_default();
-            
+
             tool_stats.total_count += 1;
             let latency_ms = latency.as_secs_f64() * 1000.0;
-            
+
             // Update rolling average latency (simple cumulative average for now)
             if tool_stats.total_count == 1 {
                 tool_stats.avg_latency_ms = latency_ms;
             } else {
                 let n = tool_stats.total_count as f64;
-                tool_stats.avg_latency_ms = tool_stats.avg_latency_ms * ((n - 1.0) / n) + latency_ms / n;
+                tool_stats.avg_latency_ms =
+                    tool_stats.avg_latency_ms * ((n - 1.0) / n) + latency_ms / n;
             }
 
             if success {

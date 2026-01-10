@@ -149,7 +149,9 @@ max_concurrent_requests = 2
         let mcp_client = McpClient::new(mcp_config);
 
         // Add MCP client to registry
-        registry = registry.with_mcp_client(std::sync::Arc::new(mcp_client));
+        registry = registry
+            .with_mcp_client(std::sync::Arc::new(mcp_client))
+            .await;
 
         // Should now have MCP client
         assert!(registry.mcp_client().is_some());

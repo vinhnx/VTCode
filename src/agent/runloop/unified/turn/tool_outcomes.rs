@@ -355,16 +355,20 @@ pub(crate) async fn handle_tool_call(
         .unwrap_or_else(|_| serde_json::json!({}));
 
     // HP-4: Validate tool call safety before execution
-    
+
     // Phase 4 Check: Circuit Breaker
     if !ctx.circuit_breaker.allow_request() {
-        let error_msg = format!("Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).", tool_name);
+        let error_msg = format!(
+            "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
+            tool_name
+        );
         ctx.renderer.line(MessageStyle::Error, &error_msg)?;
-        ctx.working_history.push(uni::Message::tool_response_with_origin(
-            tool_call.id.clone(),
-            serde_json::json!({"error": error_msg}).to_string(),
-            tool_name.clone(),
-        ));
+        ctx.working_history
+            .push(uni::Message::tool_response_with_origin(
+                tool_call.id.clone(),
+                serde_json::json!({"error": error_msg}).to_string(),
+                tool_name.clone(),
+            ));
         return Ok(None);
     }
 
@@ -372,12 +376,12 @@ pub(crate) async fn handle_tool_call(
     // We prioritize keeping the UI responsive, so we'll wait if needed but with a timeout
     // Using a simple blocking check for now for simplicity in the async context
     match ctx.rate_limiter.try_acquire(tool_name) {
-        Ok(_) => {}, // Acquired
+        Ok(_) => {} // Acquired
         Err(wait_time) => {
-             // Rate limit exceeded, wait and proceed (backpressure)
-             if wait_time.as_secs_f64() > 0.0 {
-                 tokio::time::sleep(wait_time).await;
-             }
+            // Rate limit exceeded, wait and proceed (backpressure)
+            if wait_time.as_secs_f64() > 0.0 {
+                tokio::time::sleep(wait_time).await;
+            }
         }
     }
 
@@ -606,7 +610,8 @@ pub(crate) async fn handle_tool_execution_result(
             // Phase 4: Record success
             let duration = tool_start_time.elapsed();
             ctx.circuit_breaker.record_success();
-            ctx.tool_health_tracker.record_execution(tool_name, true, duration);
+            ctx.tool_health_tracker
+                .record_execution(tool_name, true, duration);
 
             // Convert output to string for model
             let content_for_model = if let Some(s) = output.as_str() {
@@ -667,7 +672,8 @@ pub(crate) async fn handle_tool_execution_result(
             // Phase 4: Record failure
             let duration = tool_start_time.elapsed();
             ctx.circuit_breaker.record_failure();
-            ctx.tool_health_tracker.record_execution(tool_name, false, duration);
+            ctx.tool_health_tracker
+                .record_execution(tool_name, false, duration);
 
             // Add error result to history
             let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
@@ -684,7 +690,8 @@ pub(crate) async fn handle_tool_execution_result(
             // Phase 4: Record failure (timeout is a failure)
             let duration = tool_start_time.elapsed();
             ctx.circuit_breaker.record_failure();
-            ctx.tool_health_tracker.record_execution(tool_name, false, duration);
+            ctx.tool_health_tracker
+                .record_execution(tool_name, false, duration);
 
             // Add timeout result to history
             let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
@@ -699,7 +706,7 @@ pub(crate) async fn handle_tool_execution_result(
         }
         ToolExecutionStatus::Cancelled => {
             // Phase 4: Cancelled is neutral, do not record success or failure
-            
+
             // Add cancellation result to history
             let error_msg = format!("Tool '{}' execution cancelled", tool_name);
             ctx.renderer.line(MessageStyle::Info, &error_msg)?;

@@ -43,7 +43,7 @@ impl PromptTemplates {
 
     /// Get tool usage prompt
     pub fn tool_usage_prompt() -> &'static str {
-        "Tools: grep_file (search), list_files (explore), read_file (read), edit_file (modify), run_pty_cmd (shell). Use specific tools over shell ls/find/grep. Scoped paths, max_results≤5, response_format='concise', paginate with page/per_page. Follow truncation guidance."
+           "Tools: grep_file (search), list_files (explore), read_file (read), edit_file (modify), run_pty_cmd (shell), ask_user_question (HITL for structured choices). Use specific tools over shell ls/find/grep. Scoped paths, max_results≤5, response_format='concise', paginate with page/per_page. Follow truncation guidance. When you need structured user input (language/framework choices, multiple options), prefer ask_user_question with tabs + items over text questions."
     }
 
     /// Get workspace context prompt

@@ -1019,6 +1019,12 @@ pub mod tools {
     // ============================================================
     pub const GET_ERRORS: &str = "get_errors";
 
+    // ============================================================
+    // HUMAN-IN-THE-LOOP (HITL)
+    // ============================================================
+    /// Ask the human a question via the interactive UI (TUI) and return the selection.
+    pub const ASK_USER_QUESTION: &str = "ask_user_question";
+
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";
 }

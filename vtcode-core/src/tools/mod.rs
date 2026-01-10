@@ -121,6 +121,7 @@
 //! the monolithic implementation into focused, reusable components.
 
 pub mod apply_patch;
+pub mod ask_user_question;
 pub mod code_intelligence;
 pub mod constants;
 pub mod error_messages;
@@ -173,10 +174,10 @@ pub mod web_fetch;
 pub mod adaptive_rate_limiter;
 pub mod async_pipeline;
 pub mod circuit_breaker; // For Phase 3
-pub mod parallel_executor; // Pre-emptively exporting for next step
 pub mod health; // Pre-emptively exporting for next step
 pub mod optimized_registry;
 pub mod output_spooler;
+pub mod parallel_executor; // Pre-emptively exporting for next step
 
 // Production-grade improvements modules
 pub mod async_middleware;

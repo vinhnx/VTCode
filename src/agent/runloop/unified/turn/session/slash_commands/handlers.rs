@@ -1205,7 +1205,7 @@ pub async fn handle_toggle_plan_mode(
     enable: Option<bool>,
 ) -> Result<SlashCommandControl> {
     use vtcode_core::ui::tui::EditingMode;
-    
+
     let current = ctx.session_stats.is_plan_mode();
     let new_state = match enable {
         Some(value) => value,
@@ -1225,7 +1225,7 @@ pub async fn handle_toggle_plan_mode(
     }
 
     ctx.session_stats.set_plan_mode(new_state);
-    
+
     // Update header display to show editing mode indicator
     let new_mode = if new_state {
         EditingMode::Plan
@@ -1249,7 +1249,7 @@ pub async fn handle_toggle_plan_mode(
         ctx.renderer.line(MessageStyle::Output, "")?;
         ctx.renderer.line(
             MessageStyle::Info,
-            "Allowed tools: read_file, list_files, grep_file, code_intelligence",
+            "Allowed tools: read_file, list_files, grep_file, code_intelligence, ask_user_question",
         )?;
     } else {
         ctx.tool_registry.disable_plan_mode();
