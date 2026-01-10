@@ -244,6 +244,7 @@ pub(crate) async fn handle_tool_calls(
                         let reporter = progress_reporter.clone();
 
                         async move {
+                            let start_time = std::time::Instant::now();
                             let result = execute_tool_with_timeout_ref(
                                 &registry,
                                 &name,
@@ -253,7 +254,7 @@ pub(crate) async fn handle_tool_calls(
                                 Some(&reporter),
                             )
                             .await;
-                            (call_id.clone(), name, args, result)
+                            (call_id.clone(), name, args, result, start_time)
                         }
                     })
                     .collect();
@@ -261,7 +262,7 @@ pub(crate) async fn handle_tool_calls(
                 let results = join_all(futures).await;
 
                 // Handle results sequentially
-                for (call_id, name, args, status) in results {
+                for (call_id, name, args, status, start_time) in results {
                     let outcome = ToolPipelineOutcome::from_status(status);
 
                     // Update attempts
@@ -291,6 +292,9 @@ pub(crate) async fn handle_tool_calls(
                             default_placeholder: ctx.default_placeholder,
                             tool_permission_cache: ctx.tool_permission_cache,
                             safety_validator: ctx.safety_validator,
+                            circuit_breaker: ctx.circuit_breaker,
+                            tool_health_tracker: ctx.tool_health_tracker,
+                            rate_limiter: ctx.rate_limiter,
                         },
                         call_id,
                         &name,
@@ -300,6 +304,7 @@ pub(crate) async fn handle_tool_calls(
                         turn_modified_files,
                         ctx.vt_cfg,
                         traj,
+                        start_time,
                     )
                     .await?;
                 }
@@ -350,6 +355,32 @@ pub(crate) async fn handle_tool_call(
         .unwrap_or_else(|_| serde_json::json!({}));
 
     // HP-4: Validate tool call safety before execution
+    
+    // Phase 4 Check: Circuit Breaker
+    if !ctx.circuit_breaker.allow_request() {
+        let error_msg = format!("Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).", tool_name);
+        ctx.renderer.line(MessageStyle::Error, &error_msg)?;
+        ctx.working_history.push(uni::Message::tool_response_with_origin(
+            tool_call.id.clone(),
+            serde_json::json!({"error": error_msg}).to_string(),
+            tool_name.clone(),
+        ));
+        return Ok(None);
+    }
+
+    // Phase 4 Check: Adaptive Rate Limiter
+    // We prioritize keeping the UI responsive, so we'll wait if needed but with a timeout
+    // Using a simple blocking check for now for simplicity in the async context
+    match ctx.rate_limiter.try_acquire(tool_name) {
+        Ok(_) => {}, // Acquired
+        Err(wait_time) => {
+             // Rate limit exceeded, wait and proceed (backpressure)
+             if wait_time.as_secs_f64() > 0.0 {
+                 tokio::time::sleep(wait_time).await;
+             }
+        }
+    }
+
     loop {
         let validation_result = {
             let mut validator = ctx.safety_validator.write().await;
@@ -460,6 +491,7 @@ pub(crate) async fn handle_tool_call(
                     });
                 }));
 
+            let tool_execution_start = std::time::Instant::now();
             let tool_result = execute_tool_with_timeout_ref(
                 ctx.tool_registry,
                 tool_name,
@@ -497,6 +529,9 @@ pub(crate) async fn handle_tool_call(
                     default_placeholder: ctx.default_placeholder,
                     tool_permission_cache: ctx.tool_permission_cache,
                     safety_validator: ctx.safety_validator,
+                    circuit_breaker: ctx.circuit_breaker,
+                    tool_health_tracker: ctx.tool_health_tracker,
+                    rate_limiter: ctx.rate_limiter,
                 },
                 tool_call.id.clone(),
                 tool_name,
@@ -506,6 +541,7 @@ pub(crate) async fn handle_tool_call(
                 turn_modified_files,
                 ctx.vt_cfg,
                 traj,
+                tool_execution_start,
             )
             .await?;
         }
@@ -557,6 +593,7 @@ pub(crate) async fn handle_tool_execution_result(
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
     vt_cfg: Option<&VTCodeConfig>,
     traj: &vtcode_core::core::trajectory::TrajectoryLogger,
+    tool_start_time: std::time::Instant, // Add tool_start_time parameter
 ) -> Result<()> {
     match &pipeline_outcome.status {
         ToolExecutionStatus::Success {
@@ -566,6 +603,11 @@ pub(crate) async fn handle_tool_execution_result(
             command_success: _,
             has_more: _,
         } => {
+            // Phase 4: Record success
+            let duration = tool_start_time.elapsed();
+            ctx.circuit_breaker.record_success();
+            ctx.tool_health_tracker.record_execution(tool_name, true, duration);
+
             // Convert output to string for model
             let content_for_model = if let Some(s) = output.as_str() {
                 s.to_string()
@@ -622,6 +664,11 @@ pub(crate) async fn handle_tool_execution_result(
             }
         }
         ToolExecutionStatus::Failure { error } => {
+            // Phase 4: Record failure
+            let duration = tool_start_time.elapsed();
+            ctx.circuit_breaker.record_failure();
+            ctx.tool_health_tracker.record_execution(tool_name, false, duration);
+
             // Add error result to history
             let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
             ctx.renderer.line(MessageStyle::Error, &error_msg)?;
@@ -634,6 +681,11 @@ pub(crate) async fn handle_tool_execution_result(
             ));
         }
         ToolExecutionStatus::Timeout { error } => {
+            // Phase 4: Record failure (timeout is a failure)
+            let duration = tool_start_time.elapsed();
+            ctx.circuit_breaker.record_failure();
+            ctx.tool_health_tracker.record_execution(tool_name, false, duration);
+
             // Add timeout result to history
             let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
             ctx.renderer.line(MessageStyle::Error, &error_msg)?;
@@ -646,6 +698,8 @@ pub(crate) async fn handle_tool_execution_result(
             ));
         }
         ToolExecutionStatus::Cancelled => {
+            // Phase 4: Cancelled is neutral, do not record success or failure
+            
             // Add cancellation result to history
             let error_msg = format!("Tool '{}' execution cancelled", tool_name);
             ctx.renderer.line(MessageStyle::Info, &error_msg)?;
@@ -1437,6 +1491,7 @@ pub(crate) async fn handle_text_response(
         .await
         {
             Ok(ToolPermissionFlow::Approved) => {
+                let tool_execution_start = std::time::Instant::now();
                 let tool_result = execute_tool_with_timeout_ref(
                     params.ctx.tool_registry,
                     call_tool_name,
@@ -1471,6 +1526,9 @@ pub(crate) async fn handle_text_response(
                         default_placeholder: params.ctx.default_placeholder,
                         tool_permission_cache: params.ctx.tool_permission_cache,
                         safety_validator: params.ctx.safety_validator,
+                        circuit_breaker: params.ctx.circuit_breaker,
+                        tool_health_tracker: params.ctx.tool_health_tracker,
+                        rate_limiter: params.ctx.rate_limiter,
                     },
                     tool_call.id.clone(),
                     call_tool_name,
@@ -1480,6 +1538,7 @@ pub(crate) async fn handle_text_response(
                     params.turn_modified_files,
                     params.ctx.vt_cfg,
                     params.traj,
+                    tool_execution_start,
                 )
                 .await?;
             }

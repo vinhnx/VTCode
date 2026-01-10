@@ -644,13 +644,12 @@ async fn handle_mcp_updates(
                                         &mcp_tools,
                                     );
                                 registered_tools = new_definitions.len();
-                                let _updated_snapshot = {
+                                {
                                     let mut guard = tools.write().await;
                                     guard.retain(|tool| {
                                         !tool.function.as_ref().unwrap().name.starts_with("mcp_")
                                     });
                                     guard.extend(new_definitions);
-                                    guard.clone()
                                 };
                                 McpToolManager::enumerate_mcp_tools_after_initial_setup(
                                     tool_registry,
@@ -713,13 +712,12 @@ async fn handle_mcp_updates(
                                 crate::agent::runloop::unified::session_setup::build_mcp_tool_definitions(
                                     &new_mcp_tools,
                                 );
-                            let _updated_snapshot = {
+                            {
                                 let mut guard = tools.write().await;
                                 guard.retain(|tool| {
                                     !tool.function.as_ref().unwrap().name.starts_with("mcp_")
                                 });
                                 guard.extend(new_definitions);
-                                guard.clone()
                             };
                             McpToolManager::enumerate_mcp_tools_after_refresh(
                                 tool_registry,

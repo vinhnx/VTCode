@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::tools::validation_cache::ValidationCache;
+use std::sync::Arc;
 
 /// Validates that a textual tool call has required arguments before execution.
 /// Returns `None` if valid, or `Some(missing_params)` if validation fails.
@@ -20,8 +22,38 @@ use vtcode_core::config::constants::tools as tool_names;
 pub(crate) fn validate_tool_args_security(
     name: &str,
     args: &serde_json::Value,
+    validation_cache: Option<&Arc<ValidationCache>>,
 ) -> Option<Vec<String>> {
     use vtcode_core::tools::validation::{commands, paths};
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    // Calculate hash for caching
+    let args_hash = if validation_cache.is_some() {
+        let mut hasher = DefaultHasher::new();
+        name.hash(&mut hasher);
+        // Best-effort stable hashing: serialize to string. 
+        // Note: Map key order might vary, causing cache misses, which is safe.
+        args.to_string().hash(&mut hasher);
+        Some(hasher.finish())
+    } else {
+        None
+    };
+
+    // Check cache
+    if let Some(hash) = args_hash {
+        if let Some(cache) = validation_cache {
+            // ValidationCache has interior mutability, use directly
+            if let Some(is_valid) = cache.check(name, hash) {
+                if is_valid {
+                    return None; // Valid cached
+                }
+                // If invalid (false), we continue to re-validate to generate error messages
+            }
+        }
+    }
+
+    use vtcode_core::config::constants::tools as tool_names;
 
     // Optimization: Early return for tools with no requirements
     static EMPTY_REQUIRED: &[&str] = &[];
@@ -59,6 +91,7 @@ pub(crate) fn validate_tool_args_security(
 
     // Early return if required args are missing
     if failures.is_some() {
+        // Validation failed, no cache update (or cache as invalid if we wanted)
         return failures;
     }
 
@@ -82,6 +115,16 @@ pub(crate) fn validate_tool_args_security(
             .push(format!("Command security check failed: {}", e));
     }
 
+    // Update cache if valid
+    if failures.is_none() {
+        if let Some(hash) = args_hash {
+            if let Some(cache) = validation_cache {
+                // ValidationCache has interior mutability
+                 cache.insert(name, hash, true);
+            }
+        }
+    }
+
     failures
 }
 
@@ -94,7 +137,7 @@ pub(crate) fn validate_required_tool_args(
     // This function is kept for backward compatibility if needed,
     // but the logic is now superset in validate_tool_args_security.
     // We map the new result back to the old signature roughly.
-    let result = validate_tool_args_security(name, args);
+    let result = validate_tool_args_security(name, args, None);
     result.map(|_failures| {
         // Convert dynamic strings to static error messages for compatibility
         // THIS IS A LOSS OF DETAIL but necessary to match signature.

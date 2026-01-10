@@ -163,6 +163,10 @@ pub(crate) async fn run_single_agent_loop_unified(
             custom_prompts,
             custom_slash_commands,
             safety_validator,
+            circuit_breaker,
+            tool_health_tracker,
+            rate_limiter,
+            validation_cache,
             ..
         } = session_state;
 
@@ -176,6 +180,12 @@ pub(crate) async fn run_single_agent_loop_unified(
         );
 
         let mut session_stats = SessionStats::default();
+        // Phase 4 Integration: Populate session stats with resilient execution components
+        session_stats.circuit_breaker = circuit_breaker.clone();
+        session_stats.tool_health_tracker = tool_health_tracker.clone();
+        session_stats.rate_limiter = rate_limiter.clone();
+        session_stats.validation_cache = validation_cache.clone();
+
         // Initialize plan mode from CLI flag
         if plan_mode {
             session_stats.set_plan_mode(true);
@@ -314,6 +324,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                 default_placeholder: &default_placeholder,
                 tool_permission_cache: &tool_permission_cache,
                 safety_validator: &safety_validator,
+                circuit_breaker: &circuit_breaker,
+                tool_health_tracker: &tool_health_tracker,
+                rate_limiter: &rate_limiter,
             };
             let outcome = match crate::agent::runloop::unified::turn::run_turn_loop(
                 &input,
@@ -371,6 +384,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                     )
                     .ok();
             }
+
+            // Phase 4: Memory hygiene
+            // Check global file cache pressure and evict if necessary
+            vtcode_core::tools::cache::FILE_CACHE.check_pressure_and_evict().await;
+            // Check session tool result cache pressure
+            tool_result_cache.write().await.check_pressure_and_evict();
+
             if let Some(archive) = session_archive.as_ref() {
                 let mut recent_messages: Vec<SessionMessage> = conversation_history
                     .iter()
@@ -522,7 +542,11 @@ impl Drop for TerminalCleanupGuard {
 
         // Wait for terminal to finish processing any pending operations
         // This prevents incomplete writes from corrupting the terminal
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        let delay_ms = std::env::var("VT_TERMINAL_CLEANUP_DELAY_MS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(50);
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
     }
 }
 

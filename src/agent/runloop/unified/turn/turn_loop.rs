@@ -72,6 +72,9 @@ pub struct TurnLoopContext<'a> {
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
     pub safety_validator: &'a Arc<RwLock<ToolCallSafetyValidator>>,
+    pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
+    pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
+    pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
 }
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
@@ -143,6 +146,9 @@ pub async fn run_turn_loop(
             break;
         }
 
+        // Clone validation cache arc to avoid borrow conflict
+        let validation_cache = ctx.session_stats.validation_cache.clone();
+
         // Prepare turn processing context
         let mut turn_processing_ctx = TurnProcessingContext::new(
             &mut ctx,
@@ -184,6 +190,7 @@ pub async fn run_turn_loop(
             &response,
             turn_processing_ctx.renderer,
             turn_processing_ctx.working_history.len(),
+            Some(&validation_cache),
         )?;
 
         // Handle the turn processing result (dispatch tool calls or finish turn)

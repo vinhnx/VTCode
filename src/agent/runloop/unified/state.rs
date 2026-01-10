@@ -1,13 +1,25 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use vtcode_core::ui::tui::EditingMode;
+use vtcode_core::tools::ApprovalRecorder;
+use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 
 #[derive(Default)]
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
     /// Current editing mode: Edit, Plan, or Agent
     pub editing_mode: EditingMode,
+    #[allow(dead_code)]
+    pub approval_recorder: Arc<ApprovalRecorder>,
+    #[allow(dead_code)]
+    pub safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,
+    // Phase 4 Integration: Resilient execution components
+    pub circuit_breaker: Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
+    pub tool_health_tracker: Arc<vtcode_core::tools::health::ToolHealthTracker>,
+    pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
+    pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
 }
 
 impl SessionStats {

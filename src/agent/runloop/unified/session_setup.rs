@@ -78,6 +78,11 @@ pub(crate) struct SessionState {
     pub loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
     pub approval_recorder: Arc<ApprovalRecorder>,
     pub safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,
+    // Phase 4 Integration: Resilient execution components
+    pub circuit_breaker: Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
+    pub tool_health_tracker: Arc<vtcode_core::tools::health::ToolHealthTracker>,
+    pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
+    pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
 }
 
 #[allow(dead_code)]
@@ -663,6 +668,11 @@ pub(crate) async fn initialize_session(
         loaded_skills: active_skills_map,
         approval_recorder,
         safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
+        // Phase 4 Integration: Resilient execution components
+        circuit_breaker: Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::new(vtcode_core::tools::circuit_breaker::CircuitBreakerConfig::default())),
+        tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)), // Keep last 50 execution stats per tool
+        rate_limiter: Arc::new(vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default()),
+        validation_cache: Arc::new(vtcode_core::tools::validation_cache::ValidationCache::default()),
     })
 }
 

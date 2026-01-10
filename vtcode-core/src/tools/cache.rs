@@ -154,4 +154,18 @@ impl FileCache {
     pub fn len(&self) -> (usize, usize) {
         (self.file_cache.len(), self.directory_cache.len())
     }
+
+    /// Check memory pressure and enforce limits
+    pub async fn check_pressure_and_evict(&self) {
+        let mut stats = self.stats.lock().await;
+        if stats.total_size_bytes > self.max_size_bytes {
+            // Since quick_cache doesn't support weighted eviction or iteration-based removal
+            // easily, we trigger a full clear when the hard byte limit is exceeded.
+            // This acts as a safety valve to prevent OOM.
+            self.file_cache.clear();
+            self.directory_cache.clear();
+            stats.total_size_bytes = 0;
+            stats.memory_evictions += 1;
+        }
+    }
 }
