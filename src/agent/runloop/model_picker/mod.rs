@@ -328,11 +328,7 @@ impl ModelPickerState {
                     renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Session(_)
-                | InlineListSelection::SlashCommand(_)
-                | InlineListSelection::ToolApproval(_)
-                | InlineListSelection::ToolApprovalSession
-                | InlineListSelection::ToolApprovalPermanent => Ok(ModelPickerProgress::InProgress),
+                _ => Ok(ModelPickerProgress::InProgress),
             },
             PickerStep::AwaitReasoning => match choice {
                 InlineListSelection::Reasoning(level) => {
@@ -360,7 +356,7 @@ impl ModelPickerState {
                     renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Session(_) | InlineListSelection::SlashCommand(_) => {
+                _ => {
                     Ok(ModelPickerProgress::InProgress)
                 }
             },

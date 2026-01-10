@@ -33,10 +33,13 @@ use crate::agent::runloop::unified::shell::{
     derive_recent_tool_output, should_short_circuit_shell,
 };
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
+use crate::agent::runloop::unified::tool_call_safety::SafetyError;
 use crate::agent::runloop::unified::tool_pipeline::{
     ToolExecutionStatus, ToolPipelineOutcome, execute_tool_with_timeout_ref,
 };
-use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
+use crate::agent::runloop::unified::tool_routing::{
+    ToolPermissionFlow, ensure_tool_permission, prompt_session_limit_increase,
+};
 use crate::agent::runloop::unified::tool_summary::render_tool_call_summary_with_status;
 use crate::agent::runloop::unified::turn::ui_sync::{redraw_with_sync, wait_for_redraw_complete};
 use crate::hooks::lifecycle::LifecycleHookEngine;
@@ -347,21 +350,56 @@ pub(crate) async fn handle_tool_call(
         .unwrap_or_else(|_| serde_json::json!({}));
 
     // HP-4: Validate tool call safety before execution
-    {
-        let mut validator = ctx.safety_validator.write().await;
-        if let Err(err) = validator.validate_call(tool_name) {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Safety validation failed: {}", err),
-            )?;
-            ctx.working_history
-                .push(uni::Message::tool_response_with_origin(
-                    tool_call.id.clone(),
-                    serde_json::json!({"error": format!("Safety validation failed: {}", err)})
-                        .to_string(),
-                    tool_name.clone(),
-                ));
-            return Ok(None); // Continue to next tool or break (managed by caller loop)
+    loop {
+        let validation_result = {
+            let mut validator = ctx.safety_validator.write().await;
+            validator.validate_call(tool_name)
+        };
+
+        match validation_result {
+            Ok(_) => break, // Validation passed
+            Err(SafetyError::SessionLimitReached { max }) => {
+                // Prompt user to increase limit
+                match prompt_session_limit_increase(
+                    ctx.handle,
+                    ctx.session,
+                    ctx.ctrl_c_state,
+                    ctx.ctrl_c_notify,
+                    max,
+                )
+                .await
+                {
+                    Ok(Some(increment)) => {
+                        let mut validator = ctx.safety_validator.write().await;
+                        validator.increase_session_limit(increment);
+                        continue; // Retry validation
+                    }
+                    _ => {
+                        // Denied or cancelled
+                        ctx.working_history.push(uni::Message::tool_response_with_origin(
+                            tool_call.id.clone(),
+                            serde_json::json!({"error": "Session tool limit reached and not increased by user"})
+                                .to_string(),
+                            tool_name.clone(),
+                        ));
+                        return Ok(None);
+                    }
+                }
+            }
+            Err(err) => {
+                ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!("Safety validation failed: {}", err),
+                )?;
+                ctx.working_history
+                    .push(uni::Message::tool_response_with_origin(
+                        tool_call.id.clone(),
+                        serde_json::json!({"error": format!("Safety validation failed: {}", err)})
+                            .to_string(),
+                        tool_name.clone(),
+                    ));
+                return Ok(None);
+            }
         }
     }
 
