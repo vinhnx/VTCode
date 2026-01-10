@@ -229,4 +229,16 @@ pub trait ToolExecutor: Send + Sync {
 
     /// Check if a tool exists
     async fn has_tool(&self, name: &str) -> bool;
+
+    /// Execute multiple tools in batch. 
+    ///
+    /// The default implementation runs them sequentially.
+    /// Implementors can override this to provide parallel execution.
+    async fn execute_batch(&self, calls: Vec<(String, Value)>) -> Vec<Result<Value>> {
+        let mut results = Vec::with_capacity(calls.len());
+        for (name, args) in calls {
+            results.push(self.execute_tool(&name, args).await);
+        }
+        results
+    }
 }

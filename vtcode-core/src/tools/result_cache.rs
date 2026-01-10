@@ -194,6 +194,16 @@ impl ToolResultCache {
         self.inner.clear();
     }
 
+    /// Check memory pressure and evict entries if necessary
+    ///
+    /// This is a lightweight version of eviction that triggers when
+    /// the cache size exceeds a heuristic threshold (e.g., 50MB for results).
+    pub fn check_pressure_and_evict(&mut self) {
+        if self.inner.total_memory_bytes() > 50 * 1024 * 1024 {
+            self.inner.evict_under_pressure(30); // Remove 30% of entries
+        }
+    }
+
     /// Get cache statistics
     pub fn stats(&self) -> crate::cache::CacheStats {
         self.inner.stats().clone()

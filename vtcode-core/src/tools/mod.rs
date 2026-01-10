@@ -166,10 +166,15 @@ pub mod traits;
 pub mod tree_sitter;
 pub mod types;
 pub mod validation;
+pub mod validation_cache;
 pub mod web_fetch;
 
 // Production-grade improvements modules
+pub mod adaptive_rate_limiter;
 pub mod async_pipeline;
+pub mod circuit_breaker; // For Phase 3
+pub mod parallel_executor; // Pre-emptively exporting for next step
+pub mod health; // Pre-emptively exporting for next step
 pub mod optimized_registry;
 pub mod output_spooler;
 
@@ -181,7 +186,7 @@ pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
 pub mod middleware;
-pub mod parallel_executor;
+
 pub mod pattern_engine;
 
 #[cfg(test)]

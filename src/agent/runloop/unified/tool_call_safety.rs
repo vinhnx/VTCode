@@ -212,6 +212,12 @@ impl ToolCallSafetyValidator {
     }
 }
 
+impl Default for ToolCallSafetyValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Result of tool call validation
 #[derive(Debug, Clone)]
 pub struct CallValidation {

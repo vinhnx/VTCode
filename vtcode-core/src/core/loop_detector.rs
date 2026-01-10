@@ -129,6 +129,10 @@ impl LoopDetector {
         self.recent_calls.push_back(record);
         *self.tool_counts.entry(tool_name.to_string()).or_insert(0) += 1;
 
+        if let Some(pattern_warning) = self.detect_patterns() {
+             return Some(pattern_warning);
+        }
+
         self.check_for_loops(tool_name)
     }
 
@@ -288,6 +292,44 @@ impl LoopDetector {
                  • Asking for user guidance if stuck"
                 .to_string(),
         }
+    }
+
+    /// Detect complex repetitive patterns (e.g. A -> B -> A -> B)
+    fn detect_patterns(&self) -> Option<String> {
+        let history: Vec<(&str, u64)> = self.recent_calls.iter()
+            .map(|r| (r.tool_name, r.args_hash))
+            .collect();
+        
+        let len = history.len();
+        if len < 4 {
+            return None;
+        }
+
+        // Check for patterns of length K where 2*K <= len
+        // We look for imminent repetition: [.. A, B, A, B]
+        for k in 2..=(len / 2) {
+            let suffix = &history[len - k..];
+            let prev = &history[len - 2 * k..len - k];
+            
+            if suffix == prev {
+                // Determine if this is a meaningful loop or just coincidence
+                // We typically care if the pattern repeats more than once, but for identifying
+                // a "loop" state, seeing A-B-A-B is often enough to warn.
+                
+                // Construct a readable description of the pattern
+                let pattern_desc: Vec<&str> = suffix.iter().map(|(name, _)| *name).collect();
+                let pattern_str = pattern_desc.join(" -> ");
+                
+                return Some(format!(
+                    "Repetitive pattern detected: [{}]\n\
+                     The agent appears to be cycling through the same actions. \
+                     Please pause and reassess the strategy.",
+                    pattern_str
+                ));
+            }
+        }
+        
+        None
     }
 }
 

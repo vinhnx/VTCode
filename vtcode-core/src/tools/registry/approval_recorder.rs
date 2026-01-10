@@ -22,7 +22,19 @@ impl ApprovalRecorder {
             manager: Arc::new(RwLock::new(manager)),
         }
     }
+}
 
+impl Default for ApprovalRecorder {
+    fn default() -> Self {
+        // This default implementation creates a temporary directory for the cache.
+        // In a real application, you might want a more robust default path or
+        // to make `new` take an optional `cache_dir`.
+        let temp_dir = std::env::temp_dir().join(format!("approval_recorder_default_{}", std::process::id()));
+        Self::new(temp_dir)
+    }
+}
+
+impl ApprovalRecorder {
     /// Record a user's approval decision for a tool
     pub async fn record_approval(
         &self,
