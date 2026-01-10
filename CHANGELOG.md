@@ -3,6 +3,28 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.60.2] - 2026-01-10
+
+
+### Features
+    - feat: update tool policies and enhance session limit handling for tool loops
+    - feat: implement plan mode tools for managing planning workflow and enhance code block indentation normalization
+    - feat: implement session limit increase prompt and safety validation enhancements
+
+
+### Refactors
+    - refactor: update tool policies to allow write_file and unified_file actions; remove redundant error logging
+
+
+### Documentation
+    - docs: update changelog for v0.60.1 [skip ci]
+
+
+### Chores
+    - chore: update .gitignore and tool policies; change provider and API key in vtcode.toml
+    - chore: update npm package.json to v0.60.1 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.60.0 version =  [skip ci]
 # [Version 0.60.1] - 2026-01-10
 
 
