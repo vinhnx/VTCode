@@ -40,7 +40,7 @@
     "git_log"
   ],
   "policies": {
-    "apply_patch": "prompt",
+    "apply_patch": "allow",
     "create_file": "prompt",
     "delete_file": "prompt",
     "edit_file": "prompt",
@@ -58,7 +58,7 @@
     "exec_pty_cmd": "prompt",
     "exec": "prompt",
     "shell": "prompt",
-    "unified_exec": "prompt",
+    "unified_exec": "allow",
     "list_pty_sessions": "allow",
     "read_pty_session": "allow",
     "close_pty_session": "prompt",
@@ -70,7 +70,7 @@
     "move_file": "prompt",
     "search": "prompt",
     "send_pty_input": "prompt",
-    "unified_file": "prompt",
+    "unified_file": "allow",
     "unified_search": "allow",
     "cargo_check": "allow",
     "cargo_test": "allow",
