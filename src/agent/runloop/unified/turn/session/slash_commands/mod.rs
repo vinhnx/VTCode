@@ -134,6 +134,10 @@ pub async fn handle_outcome(
         SlashCommandOutcome::TogglePlanMode { enable } => {
             handlers::handle_toggle_plan_mode(ctx, enable).await
         }
+        SlashCommandOutcome::ToggleAgentMode { enable } => {
+            handlers::handle_toggle_agent_mode(ctx, enable).await
+        }
+        SlashCommandOutcome::CycleMode => handlers::handle_cycle_mode(ctx).await,
         SlashCommandOutcome::Exit => handlers::handle_exit(ctx).await,
     }
 }

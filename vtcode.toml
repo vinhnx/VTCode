@@ -9,7 +9,7 @@ provider = "huggingface"
 api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "XiaomiMiMo/MiMo-V2-Flash:novita"
+default_model = "zai-org/GLM-4.7:novita"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"
@@ -25,7 +25,7 @@ ui_surface = "auto"
 max_conversation_turns = 80
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "medium"
+reasoning_effort = "low"
 system_prompt_mode = "default"
 tool_documentation_mode = "full"
 enable_split_tool_results = true
@@ -44,6 +44,7 @@ max_task_retries = 2
 include_temporal_context = true
 temporal_context_use_utc = false
 include_working_directory = true
+default_editing_mode = "edit"
 
 [agent.small_model]
 enabled = true
@@ -189,6 +190,10 @@ task_completion = []
 
 [tools.policies]
 
+[sandbox]
+enabled = true
+default_mode = "read_only"
+
 [tools.web_fetch]
 mode = "restricted"
 dynamic_blocklist_enabled = false
@@ -202,6 +207,11 @@ enable_audit_logging = false
 audit_log_path = "~/.vtcode/web_fetch_audit.log"
 strict_https_only = true
 
+[sandbox.network]
+allow_all = false
+allowlist = []
+block_all = false
+
 [tools.plugins]
 enabled = true
 manifests = []
@@ -209,6 +219,11 @@ default_trust = "sandbox"
 allow = []
 deny = []
 auto_reload = true
+
+[sandbox.sensitive_paths]
+use_defaults = true
+additional = []
+exceptions = []
 
 [commands]
 allow_list = [
@@ -441,6 +456,14 @@ deny_regex = [
     'kubectl\s+(delete|drain|uncordon)',
 ]
 
+[sandbox.resource_limits]
+preset = "moderate"
+max_memory_mb = 0
+max_pids = 0
+max_disk_mb = 0
+cpu_time_secs = 0
+timeout_secs = 0
+
 [permissions]
 enabled = true
 resolve_commands = true
@@ -452,6 +475,12 @@ log_permission_prompts = true
 cache_enabled = true
 cache_ttl_seconds = 300
 
+[sandbox.seccomp]
+enabled = true
+profile = "strict"
+additional_blocked = []
+log_only = false
+
 [ui.keyboard_protocol]
 enabled = true
 mode = "default"
@@ -460,6 +489,9 @@ report_event_types = true
 report_alternate_keys = true
 report_all_keys = false
 
+[sandbox.external]
+sandbox_type = "none"
+
 [debug]
 enable_tracing = false
 trace_level = "info"
@@ -467,10 +499,23 @@ trace_targets = []
 max_debug_log_size_mb = 50
 max_debug_log_age_days = 7
 
+[sandbox.external.docker]
+image = "ubuntu:22.04"
+memory_limit = ""
+cpu_limit = ""
+network_mode = "none"
+
 [context]
 max_context_tokens = 90000
 trim_to_percent = 60
 preserve_recent_turns = 10
+
+[sandbox.external.microvm]
+vmm = ""
+kernel_path = ""
+rootfs_path = ""
+memory_mb = 512
+vcpus = 1
 
 [context.ledger]
 enabled = true

@@ -1,10 +1,13 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use vtcode_core::ui::tui::EditingMode;
+
 #[derive(Default)]
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
-    pub plan_mode: bool,
+    /// Current editing mode: Edit, Plan, or Agent
+    pub editing_mode: EditingMode,
 }
 
 impl SessionStats {
@@ -16,12 +19,39 @@ impl SessionStats {
         self.tools.iter().cloned().collect()
     }
 
+    /// Check if currently in Plan mode (read-only)
     pub(crate) fn is_plan_mode(&self) -> bool {
-        self.plan_mode
+        matches!(self.editing_mode, EditingMode::Plan)
     }
 
+    /// Check if currently in Agent mode (autonomous)
+    pub(crate) fn is_agent_mode(&self) -> bool {
+        matches!(self.editing_mode, EditingMode::Agent)
+    }
+
+    /// Set plan mode (for backward compatibility)
     pub(crate) fn set_plan_mode(&mut self, enabled: bool) {
-        self.plan_mode = enabled;
+        self.editing_mode = if enabled {
+            EditingMode::Plan
+        } else {
+            EditingMode::Edit
+        };
+    }
+
+    /// Get the current editing mode
+    pub(crate) fn editing_mode(&self) -> EditingMode {
+        self.editing_mode
+    }
+
+    /// Set the editing mode directly
+    pub(crate) fn set_editing_mode(&mut self, mode: EditingMode) {
+        self.editing_mode = mode;
+    }
+
+    /// Cycle to the next mode: Edit → Plan → Agent → Edit
+    pub(crate) fn cycle_mode(&mut self) -> EditingMode {
+        self.editing_mode = self.editing_mode.next();
+        self.editing_mode
     }
 }
 

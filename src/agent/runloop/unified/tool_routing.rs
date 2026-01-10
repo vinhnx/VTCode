@@ -60,6 +60,7 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
         Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub hitl_notification_bell: bool,
+    pub editing_mode: vtcode_core::ui::tui::EditingMode,
 }
 
 pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
@@ -311,7 +312,8 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             | InlineEvent::ScrollPageDown
             | InlineEvent::FileSelected(_)
             | InlineEvent::BackgroundOperation
-            | InlineEvent::LaunchEditor => {
+            | InlineEvent::LaunchEditor
+            | InlineEvent::ToggleMode => {
                 ctrl_c_state.disarm_exit();
             }
         }
@@ -337,7 +339,16 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         decision_ledger,
         tool_permission_cache,
         hitl_notification_bell,
+        editing_mode,
     } = ctx;
+
+    // Agent mode auto-approval for safe tools
+    if editing_mode == vtcode_core::ui::tui::EditingMode::Agent {
+        if !tool_registry.is_mutating_tool(tool_name) {
+            tracing::debug!("Auto-approving safe tool '{}' in Agent mode", tool_name);
+            return Ok(ToolPermissionFlow::Approved);
+        }
+    }
 
     // Check tool permission cache for previously granted permissions
     if let Some(cache) = tool_permission_cache {

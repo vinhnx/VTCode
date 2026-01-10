@@ -558,6 +558,10 @@ impl Session {
             | InlineCommand::ClearInputQueue => {
                 // Handled by drive_terminal
             }
+            InlineCommand::SetEditingMode(mode) => {
+                self.header_context.editing_mode = mode;
+                self.needs_redraw = true;
+            }
             InlineCommand::Shutdown => {
                 self.request_exit();
             }
