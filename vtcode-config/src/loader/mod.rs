@@ -362,6 +362,12 @@ instruction_max_bytes = 16384
 # List of additional instruction files to include in context
 instruction_files = []
 
+# Default editing mode on startup: "edit" or "plan"
+# "edit" - Full tool access for file modifications and command execution (default)
+# "plan" - Read-only mode that produces implementation plans without making changes
+# Toggle during session with Shift+Tab or /plan command
+default_editing_mode = "edit"
+
 # Onboarding configuration - Customize the startup experience
 [agent.onboarding]
 # Enable the onboarding welcome message on startup

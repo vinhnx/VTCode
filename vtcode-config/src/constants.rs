@@ -691,7 +691,7 @@ pub mod defaults {
     pub const DEFAULT_API_KEY_ENV: &str = "OPENAI_API_KEY";
     pub const DEFAULT_THEME: &str = "ciapre-dark";
     pub const DEFAULT_FULL_AUTO_MAX_TURNS: usize = 30;
-    pub const DEFAULT_MAX_TOOL_LOOPS: usize = 100;
+    pub const DEFAULT_MAX_TOOL_LOOPS: usize = 200;
     pub const DEFAULT_MAX_REPEATED_TOOL_CALLS: usize = 3;
     pub const DEFAULT_PTY_STDOUT_TAIL_LINES: usize = 20;
     pub const DEFAULT_PTY_SCROLLBACK_LINES: usize = 400;

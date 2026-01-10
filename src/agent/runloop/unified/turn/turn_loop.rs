@@ -116,6 +116,7 @@ pub async fn run_turn_loop(
         .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS);
 
     let mut step_count = 0;
+    let mut current_max_tool_loops = max_tool_loops;
     // Optimization: Pre-allocate HashMap with expected capacity to reduce rehashing
     let mut repeated_tool_attempts: HashMap<String, usize> = HashMap::with_capacity(16);
 
@@ -136,14 +137,35 @@ pub async fn run_turn_loop(
         step_count += 1;
 
         // Check if we've reached the maximum number of tool loops
-        if step_count > max_tool_loops {
+        if step_count > current_max_tool_loops {
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                 ctx.renderer,
-                &format!("Reached maximum tool loops ({})", max_tool_loops),
+                &format!("Reached maximum tool loops ({})", current_max_tool_loops),
             )?;
-            // When hitting max loops, this is still considered a completed turn
-            // (the turn ended normally, just reached the loop limit)
-            break;
+            
+            // Prompt user to continue with more tool loops
+            match crate::agent::runloop::unified::tool_routing::prompt_tool_loop_limit_increase(
+                ctx.handle,
+                ctx.session,
+                ctx.ctrl_c_state,
+                ctx.ctrl_c_notify,
+                current_max_tool_loops,
+            )
+            .await
+            {
+                Ok(Some(increment)) => {
+                    current_max_tool_loops = current_max_tool_loops.saturating_add(increment);
+                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                        ctx.renderer,
+                        &format!("Tool loop limit increased to {}", current_max_tool_loops),
+                    )?;
+                    continue; // Continue the loop with the new limit
+                }
+                _ => {
+                    // User denied or cancelled - end the turn normally
+                    break;
+                }
+            }
         }
 
         // Clone validation cache arc to avoid borrow conflict

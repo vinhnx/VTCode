@@ -703,10 +703,104 @@ pub(crate) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
         },
     ];
 
-    handle.show_list_modal(
+    prompt_limit_increase_modal(
+        handle,
+        session,
+        ctrl_c_state,
+        ctrl_c_notify,
         "Session Limit Reached".to_string(),
         description_lines,
         options,
+    )
+    .await
+}
+
+pub(crate) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
+    handle: &InlineHandle,
+    session: &mut S,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    max_limit: usize,
+) -> Result<Option<usize>> {
+    use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
+
+    let description_lines = vec![
+        format!("Maximum tool loops reached: {}", max_limit),
+        "Would you like to continue with more tool loops?".to_string(),
+        "".to_string(),
+        "Use ↑↓ or Tab to navigate • Enter to select • Esc to stop".to_string(),
+    ];
+
+    let options = vec![
+        InlineListItem {
+            title: "+200 tool loops".to_string(),
+            subtitle: Some("Continue with 200 more tool loops".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::SessionLimitIncrease(200)),
+            search_value: Some("increase 200 two hundred plus more continue".to_string()),
+        },
+        InlineListItem {
+            title: "+100 tool loops".to_string(),
+            subtitle: Some("Continue with 100 more tool loops".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::SessionLimitIncrease(100)),
+            search_value: Some("increase 100 hundred plus more continue".to_string()),
+        },
+        InlineListItem {
+            title: "+50 tool loops".to_string(),
+            subtitle: Some("Continue with 50 more tool loops".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::SessionLimitIncrease(50)),
+            search_value: Some("increase 50 fifty plus more continue".to_string()),
+        },
+        InlineListItem {
+            title: "".to_string(),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: None,
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Stop".to_string(),
+            subtitle: Some("Stop the current turn and wait for input".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApproval(false)),
+            search_value: Some("stop no exit cancel done".to_string()),
+        },
+    ];
+
+    prompt_limit_increase_modal(
+        handle,
+        session,
+        ctrl_c_state,
+        ctrl_c_notify,
+        "Tool Loop Limit Reached".to_string(),
+        description_lines,
+        options,
+    )
+    .await
+}
+
+async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
+    handle: &InlineHandle,
+    session: &mut S,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    title: String,
+    description_lines: Vec<String>,
+    options: Vec<vtcode_core::ui::tui::InlineListItem>,
+) -> Result<Option<usize>> {
+    use vtcode_core::ui::tui::InlineListSelection;
+
+    handle.show_list_modal(
+        title,
+        description_lines,
+        options.clone(),
         Some(InlineListSelection::SessionLimitIncrease(100)),
         None,
     );
