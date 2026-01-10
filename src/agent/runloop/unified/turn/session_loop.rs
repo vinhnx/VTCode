@@ -387,7 +387,9 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             // Phase 4: Memory hygiene
             // Check global file cache pressure and evict if necessary
-            vtcode_core::tools::cache::FILE_CACHE.check_pressure_and_evict().await;
+            vtcode_core::tools::cache::FILE_CACHE
+                .check_pressure_and_evict()
+                .await;
             // Check session tool result cache pressure
             tool_result_cache.write().await.check_pressure_and_evict();
 

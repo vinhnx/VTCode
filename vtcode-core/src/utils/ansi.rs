@@ -749,6 +749,8 @@ impl InlineSink {
             lines,
             Some(SecurePromptConfig {
                 label: prompt_label,
+                placeholder: None,
+                mask_input: true,
             }),
         );
     }

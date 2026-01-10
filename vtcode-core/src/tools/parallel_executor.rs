@@ -20,25 +20,25 @@ impl ParallelToolExecutor {
     }
 
     /// Execute a set of tool calls in parallel.
-    pub async fn execute_parallel(
-        &self,
-        calls: Vec<(String, Value)>,
-    ) -> Vec<Result<Value>> {
+    pub async fn execute_parallel(&self, calls: Vec<(String, Value)>) -> Vec<Result<Value>> {
         let mut results = Vec::with_capacity(calls.len());
-        
-        let handles = calls.into_iter().map(|(name, args)| {
-            let inner = self.inner.clone();
-            let semaphore = self.semaphore.clone();
-            
-            tokio::spawn(async move {
-                // Acquire permit
-                let _permit = semaphore.acquire().await.context("Semaphore closed");
-                if let Err(e) = _permit {
-                    return Err(e);
-                }
-                inner.execute_tool(&name, args).await
+
+        let handles = calls
+            .into_iter()
+            .map(|(name, args)| {
+                let inner = self.inner.clone();
+                let semaphore = self.semaphore.clone();
+
+                tokio::spawn(async move {
+                    // Acquire permit
+                    let _permit = semaphore.acquire().await.context("Semaphore closed");
+                    if let Err(e) = _permit {
+                        return Err(e);
+                    }
+                    inner.execute_tool(&name, args).await
+                })
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
 
         let joined_results = futures::future::join_all(handles).await;
 
@@ -63,7 +63,7 @@ impl ExecutionGroup {
     pub fn len(&self) -> usize {
         self.tool_calls.len()
     }
-    
+
     pub fn is_empty(&self) -> bool {
         self.tool_calls.is_empty()
     }
@@ -85,8 +85,8 @@ impl ParallelExecutionPlanner {
 
     /// Plan execution groups.
     /// Since we don't have access to the registry here to check individual tool safety/policy,
-    /// we aggressively group all calls into a single batch. 
-    /// The caller (e.g., tool_outcomes.rs) is responsible for verifying the safety 
+    /// we aggressively group all calls into a single batch.
+    /// The caller (e.g., tool_outcomes.rs) is responsible for verifying the safety
     /// of the group and falling back to sequential execution if any member is unsafe.
     pub fn plan(&self, calls: &[(String, Arc<Value>, String)]) -> Vec<ExecutionGroup> {
         if calls.is_empty() {

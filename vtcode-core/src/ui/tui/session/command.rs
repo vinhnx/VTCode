@@ -114,12 +114,14 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         InlineCommand::ShowWizardModal {
             title,
             steps,
-            current_step: _,
+            current_step,
             search,
+            mode,
         } => {
             // Note: Wizard modal handling is done through show_wizard_modal in state.rs
             // This command path is for the session-based handling
-            let wizard = super::modal::WizardModalState::new(title, steps, search);
+            let wizard =
+                super::modal::WizardModalState::new(title, steps, current_step, search, mode);
             session.wizard_modal = Some(wizard);
             session.input_enabled = false;
             session.cursor_visible = false;
@@ -262,6 +264,16 @@ fn close_modal(session: &mut Session) {
         // Force full screen clear on next render to remove modal artifacts
         session.needs_full_clear = true;
         // Force transcript cache invalidation to ensure full redraw
+        session.invalidate_transcript_cache();
+        session.mark_line_dirty(0);
+        mark_dirty(session);
+        return;
+    }
+
+    if session.wizard_modal.take().is_some() {
+        session.input_enabled = true;
+        session.cursor_visible = true;
+        session.needs_full_clear = true;
         session.invalidate_transcript_cache();
         session.mark_line_dirty(0);
         mark_dirty(session);

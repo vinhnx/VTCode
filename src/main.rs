@@ -22,8 +22,6 @@ mod hooks;
 mod ide_context;
 mod workspace_trust;
 
-
-
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
     match run().await {

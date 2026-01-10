@@ -2,9 +2,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use vtcode_core::ui::tui::EditingMode;
-use vtcode_core::tools::ApprovalRecorder;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
+use vtcode_core::tools::ApprovalRecorder;
+use vtcode_core::ui::tui::EditingMode;
 
 #[derive(Default)]
 pub(crate) struct SessionStats {

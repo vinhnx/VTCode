@@ -353,7 +353,7 @@ impl Session {
 
     pub fn header_meta_line(&self) -> Line<'static> {
         use super::super::types::EditingMode;
-        
+
         let mut spans = Vec::new();
 
         // Show editing mode badge with color coding

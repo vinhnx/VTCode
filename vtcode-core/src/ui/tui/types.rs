@@ -196,6 +196,12 @@ pub enum InlineListSelection {
     ToolApprovalSession,
     ToolApprovalPermanent,
     SessionLimitIncrease(usize),
+
+    /// Selection returned from the `ask_user_question` HITL tool.
+    AskUserChoice {
+        tab_id: String,
+        choice_id: String,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -217,6 +223,20 @@ pub struct InlineListSearchConfig {
 #[derive(Clone, Debug)]
 pub struct SecurePromptConfig {
     pub label: String,
+
+    /// Optional placeholder shown when input is empty.
+    pub placeholder: Option<String>,
+
+    /// Whether the input should be masked (e.g., API keys).
+    pub mask_input: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WizardModalMode {
+    /// Traditional multi-step wizard behavior (Enter advances/collects answers).
+    MultiStep,
+    /// Tabbed list behavior (tabs switch categories; Enter submits immediately).
+    TabbedList,
 }
 
 /// A single step in a wizard modal flow
@@ -306,6 +326,7 @@ pub enum InlineCommand {
         steps: Vec<WizardStep>,
         current_step: usize,
         search: Option<InlineListSearchConfig>,
+        mode: WizardModalMode,
     },
     CloseModal,
     SetCustomPrompts {
@@ -543,6 +564,39 @@ impl InlineHandle {
         });
     }
 
+    pub fn show_wizard_modal_with_mode(
+        &self,
+        title: String,
+        steps: Vec<WizardStep>,
+        current_step: usize,
+        search: Option<InlineListSearchConfig>,
+        mode: WizardModalMode,
+    ) {
+        let _ = self.sender.send(InlineCommand::ShowWizardModal {
+            title,
+            steps,
+            current_step,
+            search,
+            mode,
+        });
+    }
+
+    pub fn show_tabbed_list_modal(
+        &self,
+        title: String,
+        steps: Vec<WizardStep>,
+        current_step: usize,
+        search: Option<InlineListSearchConfig>,
+    ) {
+        self.show_wizard_modal_with_mode(
+            title,
+            steps,
+            current_step,
+            search,
+            WizardModalMode::TabbedList,
+        );
+    }
+
     /// Show a multi-step wizard modal with tabs for navigation
     pub fn show_wizard_modal(
         &self,
@@ -550,12 +604,7 @@ impl InlineHandle {
         steps: Vec<WizardStep>,
         search: Option<InlineListSearchConfig>,
     ) {
-        let _ = self.sender.send(InlineCommand::ShowWizardModal {
-            title,
-            steps,
-            current_step: 0,
-            search,
-        });
+        self.show_wizard_modal_with_mode(title, steps, 0, search, WizardModalMode::MultiStep);
     }
 
     pub fn close_modal(&self) {

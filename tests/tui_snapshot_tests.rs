@@ -8,7 +8,7 @@
 
 use insta::assert_snapshot;
 use vtcode_core::ui::tui::{
-    InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle,
+    EditingMode, InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle,
 };
 
 /// Test message kind string representation
@@ -47,6 +47,7 @@ fn test_header_context_snapshot() {
         mcp: "disabled".to_string(),
         highlights: vec![],
         version: "0.37.1".to_string(),
+        editing_mode: EditingMode::default(),
     };
     assert_snapshot!("header_context", format!("{:?}", context));
 }

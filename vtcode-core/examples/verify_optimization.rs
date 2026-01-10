@@ -7,7 +7,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Verifying TaskRunState...");
 
     // 1. Verify TaskRunState
-    let mut state = TaskRunState::new(vec![], vec![], 10);
+    let mut state = TaskRunState::new(vec![], vec![], 10, 10000);
     let start = Instant::now();
     let mut recorded = false;
     state.record_turn(&start, &mut recorded);

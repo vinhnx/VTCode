@@ -6,9 +6,9 @@ use serde_json::Value;
 use std::collections::HashMap;
 use vtcode_core::utils::ansi::MessageStyle;
 
+use std::sync::Arc;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::tools::validation_cache::ValidationCache;
-use std::sync::Arc;
 
 /// Validates that a textual tool call has required arguments before execution.
 /// Returns `None` if valid, or `Some(missing_params)` if validation fails.
@@ -24,15 +24,15 @@ pub(crate) fn validate_tool_args_security(
     args: &serde_json::Value,
     validation_cache: Option<&Arc<ValidationCache>>,
 ) -> Option<Vec<String>> {
-    use vtcode_core::tools::validation::{commands, paths};
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
+    use vtcode_core::tools::validation::{commands, paths};
 
     // Calculate hash for caching
     let args_hash = if validation_cache.is_some() {
         let mut hasher = DefaultHasher::new();
         name.hash(&mut hasher);
-        // Best-effort stable hashing: serialize to string. 
+        // Best-effort stable hashing: serialize to string.
         // Note: Map key order might vary, causing cache misses, which is safe.
         args.to_string().hash(&mut hasher);
         Some(hasher.finish())
@@ -120,7 +120,7 @@ pub(crate) fn validate_tool_args_security(
         if let Some(hash) = args_hash {
             if let Some(cache) = validation_cache {
                 // ValidationCache has interior mutability
-                 cache.insert(name, hash, true);
+                cache.insert(name, hash, true);
             }
         }
     }

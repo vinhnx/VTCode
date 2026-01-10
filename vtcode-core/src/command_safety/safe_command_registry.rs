@@ -472,7 +472,7 @@ mod tests {
     fn cat_is_always_safe() {
         let registry = SafeCommandRegistry::new();
         let cmd = vec!["cat".to_string(), "file.txt".to_string()];
-        assert_eq!(registry.is_safe(&cmd), SafetyDecision::Unknown);
+        assert_eq!(registry.is_safe(&cmd), SafetyDecision::Allow);
     }
 
     #[test]

@@ -178,6 +178,10 @@ impl IncrementalSystemPrompt {
                 );
                 let _ = writeln!(
                     prompt,
+                    "- Use ask_user_question for structured clarifications (tabs + multiple choice)"
+                );
+                let _ = writeln!(
+                    prompt,
                     "- Ask clarifying questions to understand requirements"
                 );
                 let _ = writeln!(
@@ -239,10 +243,7 @@ impl IncrementalSystemPrompt {
                     prompt,
                     "2. Keep the plan concise enough to scan quickly but detailed enough to execute"
                 );
-                let _ = writeln!(
-                    prompt,
-                    "3. Include paths of critical files to be modified"
-                );
+                let _ = writeln!(prompt, "3. Include paths of critical files to be modified");
                 let _ = writeln!(prompt, "");
                 let _ = writeln!(prompt, "## Plan File Format");
                 let _ = writeln!(
@@ -257,13 +258,19 @@ impl IncrementalSystemPrompt {
                 let _ = writeln!(prompt, "Brief description of the goal.");
                 let _ = writeln!(prompt, "");
                 let _ = writeln!(prompt, "## Context");
-                let _ = writeln!(prompt, "- Key files: `path/to/file1.rs`, `path/to/file2.rs`");
+                let _ = writeln!(
+                    prompt,
+                    "- Key files: `path/to/file1.rs`, `path/to/file2.rs`"
+                );
                 let _ = writeln!(prompt, "- Dependencies: relevant crates/modules");
                 let _ = writeln!(prompt, "");
                 let _ = writeln!(prompt, "## Implementation Steps");
                 let _ = writeln!(prompt, "1. **Step 1 title**");
                 let _ = writeln!(prompt, "   - Files: `src/foo.rs`");
-                let _ = writeln!(prompt, "   - Functions: `validate_input()`, `process_data()`");
+                let _ = writeln!(
+                    prompt,
+                    "   - Functions: `validate_input()`, `process_data()`"
+                );
                 let _ = writeln!(prompt, "   - Details: Specific implementation notes");
                 let _ = writeln!(prompt, "");
                 let _ = writeln!(prompt, "2. **Step 2 title**");

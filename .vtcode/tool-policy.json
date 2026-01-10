@@ -3,6 +3,7 @@
   "available_tools": [
     "agent_info",
     "apply_patch",
+    "ask_user_question",
     "close_pty_session",
     "code_intelligence",
     "copy_file",
@@ -70,8 +71,9 @@
     "move_file": "prompt",
     "search": "prompt",
     "send_pty_input": "prompt",
-    "unified_file": "allow",
+    "unified_file": "prompt",
     "unified_search": "prompt",
+    "ask_user_question": "prompt",
     "cargo_check": "allow",
     "cargo_test": "allow",
     "git_status": "allow",

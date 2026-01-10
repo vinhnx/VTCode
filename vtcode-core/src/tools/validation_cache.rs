@@ -20,7 +20,8 @@ impl ValidationCache {
     /// Check if a validation result is cached and valid.
     pub fn check(&self, tool: &str, args_hash: u64) -> Option<bool> {
         let cache = self.cache.read().ok()?;
-        cache.get(&(tool.to_string(), args_hash))
+        cache
+            .get(&(tool.to_string(), args_hash))
             .filter(|(_, ts)| ts.elapsed() < self.ttl)
             .map(|(result, _)| *result)
     }

@@ -35,6 +35,15 @@ pub(super) fn handle_event(
                 search.insert(&content);
                 list.apply_search(&search.query);
                 session.mark_dirty();
+            } else if let Some(wizard) = session.wizard_modal.as_mut()
+                && let Some(search) = wizard.search.as_mut()
+            {
+                // Paste into wizard modal search
+                search.insert(&content);
+                if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
+                    step.list.apply_search(&search.query);
+                }
+                session.mark_dirty();
             }
         }
         CrosstermEvent::Resize(_, rows) => {
@@ -57,6 +66,32 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
     if let Some(modal) = session.modal.as_mut() {
         let result = modal.handle_list_key_event(
+            &key,
+            ModalKeyModifiers {
+                control: has_control,
+                alt: has_alt,
+                command: has_command,
+            },
+        );
+
+        match result {
+            ModalListKeyResult::Redraw => {
+                session.mark_dirty();
+                return None;
+            }
+            ModalListKeyResult::HandledNoRedraw => {
+                return None;
+            }
+            ModalListKeyResult::Submit(event) | ModalListKeyResult::Cancel(event) => {
+                session.close_modal();
+                return Some(event);
+            }
+            ModalListKeyResult::NotHandled => {}
+        }
+    }
+
+    if let Some(wizard) = session.wizard_modal.as_mut() {
+        let result = wizard.handle_key_event(
             &key,
             ModalKeyModifiers {
                 control: has_control,

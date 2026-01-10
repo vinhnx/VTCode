@@ -140,10 +140,8 @@ async fn test_optimized_agent_engine() -> Result<()> {
         Duration::from_millis(100),
     ));
 
-    let llm_client = Arc::new(OptimizedLLMClient::new(4, 50, 10.0, 20));
-
     // Create optimized agent engine
-    let _engine = OptimizedAgentEngine::new("test_session".to_string(), tool_pipeline, llm_client);
+    let _engine = OptimizedAgentEngine::new("test_session".to_string(), tool_pipeline);
 
     // Test that engine can be created and started
     // (In a real test, we'd run the engine for a short time)

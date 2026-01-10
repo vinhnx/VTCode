@@ -9,7 +9,7 @@ provider = "huggingface"
 api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "zai-org/GLM-4.7:novita"
+default_model = "XiaomiMiMo/MiMo-V2-Flash:novita"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"

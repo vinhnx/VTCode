@@ -3,7 +3,7 @@ use crate::config::constants::ui;
 use crate::ui::search::{fuzzy_match, normalize_query};
 use crate::ui::tui::types::{
     InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
-    WizardStep,
+    WizardModalMode, WizardStep,
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -41,6 +41,7 @@ pub struct WizardModalState {
     pub steps: Vec<WizardStepState>,
     pub current_step: usize,
     pub search: Option<ModalSearchState>,
+    pub mode: WizardModalMode,
 }
 
 /// State for a single wizard step
@@ -170,14 +171,6 @@ impl ModalState {
                 }
                 KeyCode::Delete => {
                     if search.clear() {
-                        list.apply_search(&search.query);
-                        return ModalListKeyResult::Redraw;
-                    }
-                    return ModalListKeyResult::HandledNoRedraw;
-                }
-                KeyCode::Tab => {
-                    if let Some(best_match) = list.get_best_matching_item(&search.query) {
-                        search.query = best_match;
                         list.apply_search(&search.query);
                         return ModalListKeyResult::Redraw;
                     }
@@ -561,29 +554,43 @@ pub fn render_wizard_modal_body(
         return;
     }
 
-    // Layout: [Tabs Header (1 row)] [Question text] [List]
-    let chunks = Layout::vertical([
-        Constraint::Length(1), // Tabs
-        Constraint::Length(2), // Question with padding
-        Constraint::Min(3),    // List
-    ])
-    .split(area);
+    // Layout: [Tabs (1)] [Search (optional)] [Question (2)] [List]
+    let mut constraints = Vec::new();
+    constraints.push(Constraint::Length(1));
+    if wizard.search.is_some() {
+        constraints.push(Constraint::Length(3));
+    }
+    constraints.push(Constraint::Length(2));
+    constraints.push(Constraint::Min(3));
 
-    // Render tabs
-    render_wizard_tabs(frame, chunks[0], &wizard.steps, wizard.current_step, styles);
+    let chunks = Layout::vertical(constraints).split(area);
 
-    // Render question for current step
+    let mut idx = 0;
+    render_wizard_tabs(
+        frame,
+        chunks[idx],
+        &wizard.steps,
+        wizard.current_step,
+        styles,
+    );
+    idx += 1;
+
+    if let Some(search) = wizard.search.as_ref() {
+        render_modal_search(frame, chunks[idx], search, styles);
+        idx += 1;
+    }
+
     if let Some(step) = wizard.steps.get(wizard.current_step) {
         let question = Paragraph::new(Line::from(Span::styled(
             step.question.clone(),
             styles.header,
         )));
-        frame.render_widget(question, chunks[1]);
+        frame.render_widget(question, chunks[idx]);
     }
+    idx += 1;
 
-    // Render list for current step
     if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
-        render_modal_list(frame, chunks[2], &mut step.list, styles);
+        render_modal_list(frame, chunks[idx], &mut step.list, styles);
     }
 }
 
@@ -1442,7 +1449,9 @@ impl WizardModalState {
     pub fn new(
         title: String,
         steps: Vec<WizardStep>,
+        current_step: usize,
         search: Option<InlineListSearchConfig>,
+        mode: WizardModalMode,
     ) -> Self {
         let step_states: Vec<WizardStepState> = steps
             .into_iter()
@@ -1455,11 +1464,18 @@ impl WizardModalState {
             })
             .collect();
 
+        let clamped_step = if step_states.is_empty() {
+            0
+        } else {
+            current_step.min(step_states.len().saturating_sub(1))
+        };
+
         Self {
             title,
             steps: step_states,
-            current_step: 0,
+            current_step: clamped_step,
             search: search.map(ModalSearchState::from),
+            mode,
         }
     }
 
@@ -1469,6 +1485,50 @@ impl WizardModalState {
         key: &KeyEvent,
         modifiers: ModalKeyModifiers,
     ) -> ModalListKeyResult {
+        // Search handling (if enabled)
+        if let Some(search) = self.search.as_mut() {
+            if let Some(step) = self.steps.get_mut(self.current_step) {
+                match key.code {
+                    KeyCode::Char(ch)
+                        if !modifiers.control && !modifiers.alt && !modifiers.command =>
+                    {
+                        search.push_char(ch);
+                        step.list.apply_search(&search.query);
+                        return ModalListKeyResult::Redraw;
+                    }
+                    KeyCode::Backspace => {
+                        if search.backspace() {
+                            step.list.apply_search(&search.query);
+                            return ModalListKeyResult::Redraw;
+                        }
+                        return ModalListKeyResult::HandledNoRedraw;
+                    }
+                    KeyCode::Delete => {
+                        if search.clear() {
+                            step.list.apply_search(&search.query);
+                            return ModalListKeyResult::Redraw;
+                        }
+                        return ModalListKeyResult::HandledNoRedraw;
+                    }
+                    KeyCode::Tab => {
+                        if let Some(best_match) = step.list.get_best_matching_item(&search.query) {
+                            search.query = best_match;
+                            step.list.apply_search(&search.query);
+                            return ModalListKeyResult::Redraw;
+                        }
+                        return ModalListKeyResult::HandledNoRedraw;
+                    }
+                    KeyCode::Esc => {
+                        if search.clear() {
+                            step.list.apply_search(&search.query);
+                            return ModalListKeyResult::Redraw;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         match key.code {
             // Left arrow: go to previous step if available
             KeyCode::Left => {
@@ -1481,9 +1541,12 @@ impl WizardModalState {
             }
             // Right arrow: go to next step if current is completed
             KeyCode::Right => {
-                if self.current_step_completed()
-                    && self.current_step < self.steps.len().saturating_sub(1)
-                {
+                let can_advance = match self.mode {
+                    WizardModalMode::MultiStep => self.current_step_completed(),
+                    WizardModalMode::TabbedList => true,
+                };
+
+                if can_advance && self.current_step < self.steps.len().saturating_sub(1) {
                     self.current_step += 1;
                     ModalListKeyResult::Redraw
                 } else {
@@ -1493,19 +1556,28 @@ impl WizardModalState {
             // Enter: select current item and mark step complete
             KeyCode::Enter => {
                 if let Some(selection) = self.current_selection() {
-                    self.complete_current_step(selection.clone());
-                    // Advance to next step if available, else submit
-                    if self.current_step < self.steps.len().saturating_sub(1) {
-                        self.current_step += 1;
-                        ModalListKeyResult::Submit(InlineEvent::WizardModalStepComplete {
-                            step: self.current_step.saturating_sub(1),
-                            answer: selection,
-                        })
-                    } else {
-                        // Final step, submit all answers
-                        ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(
-                            self.collect_answers(),
-                        ))
+                    match self.mode {
+                        WizardModalMode::TabbedList => {
+                            ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(vec![
+                                selection,
+                            ]))
+                        }
+                        WizardModalMode::MultiStep => {
+                            self.complete_current_step(selection.clone());
+                            // Advance to next step if available, else submit
+                            if self.current_step < self.steps.len().saturating_sub(1) {
+                                self.current_step += 1;
+                                ModalListKeyResult::Submit(InlineEvent::WizardModalStepComplete {
+                                    step: self.current_step.saturating_sub(1),
+                                    answer: selection,
+                                })
+                            } else {
+                                // Final step, submit all answers
+                                ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(
+                                    self.collect_answers(),
+                                ))
+                            }
+                        }
                     }
                 } else {
                     ModalListKeyResult::HandledNoRedraw
@@ -1534,7 +1606,9 @@ impl WizardModalState {
                             ModalListKeyResult::Redraw
                         }
                         KeyCode::Tab => {
-                            step.list.select_next();
+                            if self.search.is_none() {
+                                step.list.select_next();
+                            }
                             ModalListKeyResult::Redraw
                         }
                         KeyCode::BackTab => {
@@ -1647,6 +1721,104 @@ mod tests {
         }
 
         modal
+    }
+
+    fn make_key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::empty())
+    }
+
+    #[test]
+    fn wizard_tabbed_list_allows_tab_switching_without_completion() {
+        let steps = vec![
+            WizardStep {
+                title: "Tab A".to_owned(),
+                question: "Pick A".to_owned(),
+                items: vec![InlineListItem {
+                    title: "A1".to_owned(),
+                    selection: Some(InlineListSelection::AskUserChoice {
+                        tab_id: "a".to_owned(),
+                        choice_id: "a1".to_owned(),
+                    }),
+                    ..base_item("A1")
+                }],
+                completed: false,
+                answer: None,
+            },
+            WizardStep {
+                title: "Tab B".to_owned(),
+                question: "Pick B".to_owned(),
+                items: vec![InlineListItem {
+                    title: "B1".to_owned(),
+                    selection: Some(InlineListSelection::AskUserChoice {
+                        tab_id: "b".to_owned(),
+                        choice_id: "b1".to_owned(),
+                    }),
+                    ..base_item("B1")
+                }],
+                completed: false,
+                answer: None,
+            },
+        ];
+
+        let mut wizard = WizardModalState::new(
+            "Pick".to_owned(),
+            steps,
+            0,
+            None,
+            WizardModalMode::TabbedList,
+        );
+
+        assert_eq!(wizard.current_step, 0);
+
+        let result =
+            wizard.handle_key_event(&make_key(KeyCode::Right), ModalKeyModifiers::default());
+        assert!(matches!(result, ModalListKeyResult::Redraw));
+        assert_eq!(wizard.current_step, 1);
+
+        let result =
+            wizard.handle_key_event(&make_key(KeyCode::Left), ModalKeyModifiers::default());
+        assert!(matches!(result, ModalListKeyResult::Redraw));
+        assert_eq!(wizard.current_step, 0);
+    }
+
+    #[test]
+    fn wizard_tabbed_list_enter_submits_single_selection() {
+        let steps = vec![WizardStep {
+            title: "Tab".to_owned(),
+            question: "Pick".to_owned(),
+            items: vec![InlineListItem {
+                title: "Choice".to_owned(),
+                selection: Some(InlineListSelection::AskUserChoice {
+                    tab_id: "tab".to_owned(),
+                    choice_id: "choice".to_owned(),
+                }),
+                ..base_item("Choice")
+            }],
+            completed: false,
+            answer: None,
+        }];
+
+        let mut wizard = WizardModalState::new(
+            "Pick".to_owned(),
+            steps,
+            0,
+            None,
+            WizardModalMode::TabbedList,
+        );
+
+        let result =
+            wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
+
+        match result {
+            ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(selections)) => {
+                assert_eq!(selections.len(), 1);
+                assert!(matches!(
+                    selections[0],
+                    InlineListSelection::AskUserChoice { .. }
+                ));
+            }
+            other => panic!("Expected submit, got: {:?}", other),
+        }
     }
 
     fn sample_list_modal_with_count(count: usize) -> ModalState {

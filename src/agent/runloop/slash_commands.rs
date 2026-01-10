@@ -833,10 +833,7 @@ pub async fn handle_slash_command(
                         MessageStyle::Error,
                         "Usage: /plan [on|off] - Toggle Plan Mode (read-only, no edits or commands)",
                     )?;
-                    renderer.line(
-                        MessageStyle::Info,
-                        "  /plan     - Toggle Plan Mode on/off",
-                    )?;
+                    renderer.line(MessageStyle::Info, "  /plan     - Toggle Plan Mode on/off")?;
                     renderer.line(
                         MessageStyle::Info,
                         "  /plan on  - Enable Plan Mode (read-only: analyze codebase, create plans)",

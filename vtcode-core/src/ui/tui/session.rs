@@ -533,10 +533,11 @@ impl Session {
             InlineCommand::ShowWizardModal {
                 title,
                 steps,
-                current_step: _,
+                current_step,
                 search,
+                mode,
             } => {
-                self.show_wizard_modal(title, steps, search);
+                self.show_wizard_modal(title, steps, current_step, search, mode);
             }
             InlineCommand::CloseModal => {
                 self.close_modal();
