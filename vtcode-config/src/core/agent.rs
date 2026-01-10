@@ -181,6 +181,13 @@ pub struct AgentConfig {
     /// Toggle with Shift+Tab or /plan command during a session.
     #[serde(default = "default_editing_mode")]
     pub default_editing_mode: String,
+
+    /// Require user confirmation before executing a plan (Claude Code style HITL)
+    /// When true, exiting plan mode shows the implementation blueprint and
+    /// requires explicit user approval before enabling edit tools.
+    /// Options in confirmation dialog: Execute, Edit Plan, Cancel
+    #[serde(default = "default_require_plan_confirmation")]
+    pub require_plan_confirmation: bool,
 }
 
 impl Default for AgentConfig {
@@ -221,6 +228,7 @@ impl Default for AgentConfig {
             include_working_directory: default_include_working_directory(),
             user_instructions: None,
             default_editing_mode: default_editing_mode(),
+            require_plan_confirmation: default_require_plan_confirmation(),
         }
     }
 }
@@ -351,6 +359,11 @@ const fn default_include_working_directory() -> bool {
 #[inline]
 fn default_editing_mode() -> String {
     "edit".into() // Default to edit mode (full tool access)
+}
+
+#[inline]
+const fn default_require_plan_confirmation() -> bool {
+    true // Default: require confirmation (Claude Code style HITL)
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

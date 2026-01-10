@@ -124,6 +124,11 @@ impl ToolCallSafetyValidator {
         self.rate_limit_per_minute
     }
 
+    /// Get the current session limit
+    pub fn get_session_limit(&self) -> usize {
+        self.max_per_session
+    }
+
     /// Validate a tool call before execution
     pub fn validate_call(
         &mut self,

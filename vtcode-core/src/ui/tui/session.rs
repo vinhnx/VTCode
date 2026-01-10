@@ -563,6 +563,9 @@ impl Session {
                 self.header_context.editing_mode = mode;
                 self.needs_redraw = true;
             }
+            InlineCommand::ShowPlanConfirmation { plan } => {
+                command::show_plan_confirmation_modal(self, *plan);
+            }
             InlineCommand::Shutdown => {
                 self.request_exit();
             }

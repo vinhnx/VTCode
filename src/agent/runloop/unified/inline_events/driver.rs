@@ -157,6 +157,8 @@ impl<'a> InlineEventLoop<'a> {
             InlineLoopAction::Continue => None,
             InlineLoopAction::Submit(_) => None,
             InlineLoopAction::ResumeSession(_) => None,
+            InlineLoopAction::PlanApproved { .. } => None,
+            InlineLoopAction::PlanEditRequested => None,
         }
     }
 }

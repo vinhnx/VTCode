@@ -512,21 +512,56 @@ fn collect_piped_stdin() -> Result<Option<String>> {
     }
 }
 
-async fn initialize_tracing(_args: &Cli) -> Result<bool> {
+async fn initialize_tracing(args: &Cli) -> Result<bool> {
     use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
 
     // Check if RUST_LOG env var is set (takes precedence)
     if std::env::var("RUST_LOG").is_ok() {
         let env_filter = tracing_subscriber::EnvFilter::from_default_env();
-        let fmt_layer = tracing_subscriber::fmt::layer().with_span_events(FmtSpan::FULL);
-        let init_result = tracing_subscriber::registry()
-            .with(env_filter)
-            .with(fmt_layer)
-            .with(make_tui_log_layer())
-            .try_init();
-        if let Err(err) = init_result {
-            tracing::warn!(error = %err, "tracing already initialized; skipping env tracing setup");
+
+        // When running in interactive TUI mode, redirect logs to a file to avoid corrupting the display
+        // Only write to stderr for non-interactive commands (print, ask with piped input, etc.)
+        let is_interactive_tui = args.command.is_none() && std::io::stdin().is_terminal();
+
+        if is_interactive_tui {
+            // Redirect logs to a file instead of stderr to avoid TUI corruption
+            let log_file = std::path::PathBuf::from("/tmp/vtcode-debug.log");
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_file)
+                .context("Failed to open debug log file")?;
+
+            let fmt_layer = tracing_subscriber::fmt::layer()
+                .with_writer(std::sync::Arc::new(file))
+                .with_span_events(FmtSpan::FULL)
+                .with_ansi(false); // No ANSI codes in file
+
+            let init_result = tracing_subscriber::registry()
+                .with(env_filter)
+                .with(fmt_layer)
+                .with(make_tui_log_layer())
+                .try_init();
+
+            if let Err(err) = init_result {
+                tracing::warn!(error = %err, "tracing already initialized; skipping env tracing setup");
+            }
+
+            eprintln!("Debug logging enabled - writing to: {}", log_file.display());
+        } else {
+            // Non-interactive mode: write to stderr as normal
+            let fmt_layer = tracing_subscriber::fmt::layer().with_span_events(FmtSpan::FULL);
+            let init_result = tracing_subscriber::registry()
+                .with(env_filter)
+                .with(fmt_layer)
+                .with(make_tui_log_layer())
+                .try_init();
+
+            if let Err(err) = init_result {
+                tracing::warn!(error = %err, "tracing already initialized; skipping env tracing setup");
+            }
         }
+
         return Ok(true);
     }
     // Note: Config-based tracing initialization is handled in initialize_tracing_from_config()
@@ -551,7 +586,20 @@ fn initialize_tracing_from_config(
 
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&filter_str));
-    let fmt_layer = tracing_subscriber::fmt::layer().with_span_events(FmtSpan::FULL);
+
+    // Always redirect config-based tracing to a file to avoid TUI corruption
+    let log_file = std::path::PathBuf::from("/tmp/vtcode-debug.log");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file)
+        .context("Failed to open debug log file")?;
+
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_writer(std::sync::Arc::new(file))
+        .with_span_events(FmtSpan::FULL)
+        .with_ansi(false);
+
     let init_result = tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt_layer)
@@ -561,9 +609,10 @@ fn initialize_tracing_from_config(
     match init_result {
         Ok(()) => {
             tracing::info!(
-                "Debug tracing enabled: targets={}, level={}",
+                "Debug tracing enabled: targets={}, level={}, log_file={}",
                 targets,
-                debug_cfg.trace_level
+                debug_cfg.trace_level,
+                log_file.display()
             );
         }
         Err(err) => {

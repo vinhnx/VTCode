@@ -1068,9 +1068,8 @@ fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
 
 /// Normalize indentation in code blocks.
 ///
-/// This function only strips common leading indentation when the FIRST non-empty line
-/// has leading whitespace, indicating the entire code block was indented. It preserves
-/// the relative indentation structure within the code block.
+/// This function strips common leading indentation when ALL non-empty lines have at least
+/// that much indentation. It preserves the relative indentation structure within the code block.
 fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
     // Check if we should normalize based on language hint
     let has_language_hint = language.is_some_and(|hint| {
@@ -1103,21 +1102,6 @@ fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
 
     let lines: Vec<&str> = code.lines().collect();
 
-    // Find the first non-empty line
-    let first_non_empty = lines.iter().find(|line| !line.trim().is_empty());
-
-    // Only normalize if the first non-empty line starts with whitespace
-    // This indicates the entire block was indented (e.g., from a nested context)
-    let first_line_indent = first_non_empty
-        .map(|line| line.len() - line.trim_start().len())
-        .unwrap_or(0);
-
-    // If the first non-empty line starts at column 0, the code is already well-formatted
-    // and we should preserve it as-is (including internal indentation)
-    if first_line_indent == 0 {
-        return code.to_string();
-    }
-
     // Get minimum indentation across all non-empty lines
     let min_indent = lines
         .iter()
@@ -1126,21 +1110,16 @@ fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
         .min()
         .unwrap_or(0);
 
-    // If min_indent is 0, some lines start at column 0, so don't strip anything
-    if min_indent == 0 {
-        return code.to_string();
-    }
-
     // Remove the common leading indentation from all lines, preserving relative indentation
     let normalized = lines
         .iter()
         .map(|line| {
             if line.trim().is_empty() {
-                ""
+                line // preserve empty lines as-is
             } else if line.len() >= min_indent {
-                &line[min_indent..]
+                &line[min_indent..] // remove common indentation
             } else {
-                line
+                line // line is shorter than min_indent, return as-is
             }
         })
         .collect::<Vec<_>>()

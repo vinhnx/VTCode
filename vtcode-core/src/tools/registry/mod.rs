@@ -63,6 +63,7 @@ use crate::core::memory_pool::SizeRecommendation;
 use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
+use crate::tools::handlers::PlanModeState;
 use crate::tools::mcp::build_mcp_registration;
 use crate::tools::names::canonical_tool_name;
 use crate::tools::pty::PtyManager;
@@ -161,6 +162,9 @@ pub struct ToolRegistry {
 
     /// Plan mode: read-only enforcement for planning sessions
     plan_read_only_mode: Arc<std::sync::atomic::AtomicBool>,
+
+    /// Shared Plan Mode state (plan file tracking, active flag) for enter/exit tools
+    plan_mode_state: PlanModeState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -204,7 +208,9 @@ impl ToolRegistry {
         policy_manager: Option<ToolPolicyManager>,
     ) -> Self {
         let inventory = ToolInventory::new(workspace_root.clone());
-        register_builtin_tools(&inventory);
+        let plan_mode_state = PlanModeState::new(workspace_root.clone());
+
+        register_builtin_tools(&inventory, &plan_mode_state);
 
         let pty_sessions = pty::PtySessionManager::new(workspace_root.clone(), pty_config);
 
@@ -251,6 +257,9 @@ impl ToolRegistry {
 
             // Plan mode: disabled by default
             plan_read_only_mode: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+
+            // Plan mode state (shared with plan mode tools)
+            plan_mode_state,
         };
 
         registry.sync_policy_catalog().await;
@@ -326,6 +335,11 @@ impl ToolRegistry {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Get the shared Plan Mode state (used by plan mode tools and pipeline transitions)
+    pub fn plan_mode_state(&self) -> PlanModeState {
+        self.plan_mode_state.clone()
+    }
+
     /// Check if a tool is mutating (modifies files or environment)
     ///
     /// Returns true if the tool is mutating or unknown (conservative default).
@@ -344,6 +358,9 @@ impl ToolRegistry {
             tool_names::CODE_INTELLIGENCE,
             tool_names::UNIFIED_SEARCH,
             tool_names::AGENT_INFO,
+            tool_names::ENTER_PLAN_MODE,
+            tool_names::EXIT_PLAN_MODE,
+            tool_names::ASK_USER_QUESTION,
             "get_errors",
             "search_tools",
             "think",
@@ -362,6 +379,83 @@ impl ToolRegistry {
 
         // Conservative default: unknown tools are considered mutating
         true
+    }
+
+    /// Check if a tool operation is targeting the plans directory
+    /// In plan mode, writes to .vtcode/plans/ are allowed for the agent to write its plan
+    fn is_plan_file_operation(&self, tool_name: &str, args: &Value) -> bool {
+        use crate::config::constants::tools as tool_names;
+        use crate::tools::names::canonical_tool_name;
+
+        let canonical = canonical_tool_name(tool_name);
+        let normalized = canonical.as_ref();
+
+        // Only check file-writing tools
+        let file_writing_tools = [
+            tool_names::WRITE_FILE,
+            tool_names::UNIFIED_FILE,
+            tool_names::CREATE_FILE,
+            tool_names::EDIT_FILE,
+            tool_names::SEARCH_REPLACE,
+        ];
+
+        if !file_writing_tools.contains(&normalized) {
+            return false;
+        }
+
+        // Extract file path from arguments
+        let path_str = args
+            .get("path")
+            .or_else(|| args.get("file_path"))
+            .or_else(|| args.get("filePath"))
+            .and_then(|v| v.as_str());
+
+        if let Some(path_str) = path_str {
+            let path = std::path::Path::new(path_str);
+
+            // Check if the path is within .vtcode/plans/
+            // Handle both absolute and relative paths
+            let plans_suffix = std::path::Path::new(".vtcode").join("plans");
+
+            // Check if path contains .vtcode/plans/
+            if path_str.contains(".vtcode/plans/") || path_str.contains(".vtcode\\plans\\") {
+                return true;
+            }
+
+            // Also check if it's a relative path under plans directory
+            if path.starts_with(&plans_suffix) {
+                return true;
+            }
+
+            // Check absolute path against workspace root
+            let workspace = self.inventory.workspace_root();
+            let plans_dir = workspace.join(".vtcode").join("plans");
+            if path.starts_with(&plans_dir) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Check if a unified tool call represents a read-only action.
+    /// Allows `unified_file` with action "read" and `unified_exec` with actions "poll" or "list".
+    fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
+        use crate::config::constants::tools as tool_names;
+        use crate::tools::names::canonical_tool_name;
+
+        let canonical = canonical_tool_name(tool_name);
+        let normalized = canonical.as_ref();
+
+        let action_opt = args.get("action").and_then(|v| v.as_str());
+        match (normalized, action_opt) {
+            (tool_names::UNIFIED_FILE, Some(action)) => action.eq_ignore_ascii_case("read"),
+            (tool_names::UNIFIED_EXEC, Some(action)) => {
+                matches!(action.to_ascii_lowercase().as_str(), "poll" | "list")
+            }
+            (tool_names::UNIFIED_SEARCH, Some(action)) => action.eq_ignore_ascii_case("list"),
+            _ => false,
+        }
     }
 
     async fn sync_policy_catalog(&self) {
@@ -1477,31 +1571,49 @@ impl ToolRegistry {
         }
 
         // Plan mode enforcement: block mutating tools in read-only mode
+        // Exceptions:
+        // - Allow writes to .vtcode/plans/ so the agent can write its plan
+        // - Allow unified tools when their action is read-only (unified_file: read; unified_exec: poll/list)
         if self.is_plan_mode() && self.is_mutating_tool(&tool_name) {
-            let msg = format!(
-                "Tool '{}' is not permitted in Plan Mode because it modifies files or the environment. \
-                 In Plan Mode you may only use read-only tools (e.g., read_file, list_files, grep_file, code_intelligence). \
-                 Use /plan off to exit Plan Mode and enable mutating tools.",
-                display_name
-            );
+            let allowed_plan_write = self.is_plan_file_operation(&tool_name, &args);
+            let allowed_unified_readonly = self.is_readonly_unified_action(&tool_name, &args);
+            // Deny only if neither exception applies
+            if !allowed_plan_write && !allowed_unified_readonly {
+                let msg = format!(
+                    "Tool '{}' execution failed: tool denied by plan mode\n\n\
+                     ACTION REQUIRED: You are in Plan Mode (read-only). To start implementation:\n\
+                     1. Call `exit_plan_mode` tool to show the user your plan for approval\n\
+                     2. Wait for user to confirm (they will see the Implementation Blueprint)\n\
+                     3. After approval, mutating tools will be enabled\n\n\
+                     DO NOT retry this tool or use /plan off. The proper workflow is to call `exit_plan_mode`.",
+                    display_name
+                );
 
-            self.execution_history
-                .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned.clone(),
-                    requested_name.clone(),
-                    false,
-                    None,
-                    args_for_recording.clone(),
-                    msg.clone(),
-                    context_snapshot.clone(),
-                    None,
-                    None,
-                    None,
-                    None,
-                    false,
-                ));
+                self.execution_history
+                    .add_record(ToolExecutionRecord::failure(
+                        tool_name_owned.clone(),
+                        requested_name.clone(),
+                        false,
+                        None,
+                        args_for_recording.clone(),
+                        msg.clone(),
+                        context_snapshot.clone(),
+                        None,
+                        None,
+                        None,
+                        None,
+                        false, // Mark as policy block, not execution failure
+                    ));
 
-            return Err(anyhow::anyhow!(msg).context("tool denied by plan mode"));
+                // Return a structured error that indicates this is a policy block, not a failure
+                // This helps distinguish between actual tool failures and intentional blocks
+                return Err(anyhow::anyhow!(msg).context("tool denied by plan mode"));
+            } else {
+                debug!(
+                    tool = %tool_name,
+                    "Allowing read-only operation in Plan Mode"
+                );
+            }
         }
 
         let timeout_category = self.timeout_category_for(&tool_name).await;

@@ -1,12 +1,16 @@
+use std::path::PathBuf;
+
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tools::ask_user_question::AskUserQuestionTool;
+use crate::tools::handlers::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
 
 use super::registration::ToolRegistration;
 use super::{ToolInventory, ToolRegistry};
 
-pub(super) fn register_builtin_tools(inventory: &ToolInventory) {
-    for registration in builtin_tool_registrations() {
+/// Register all builtin tools into the inventory using the shared plan mode state.
+pub(super) fn register_builtin_tools(inventory: &ToolInventory, plan_mode_state: &PlanModeState) {
+    for registration in builtin_tool_registrations(Some(plan_mode_state)) {
         let tool_name = registration.name();
         if let Err(err) = inventory.register_tool(registration) {
             eprintln!("Warning: Failed to register tool '{}': {}", tool_name, err);
@@ -14,7 +18,15 @@ pub(super) fn register_builtin_tools(inventory: &ToolInventory) {
     }
 }
 
-pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
+/// Build builtin tool registrations. In metadata-only contexts (e.g., declaration building),
+/// callers may pass `None`, and a placeholder PlanModeState will be used.
+pub(super) fn builtin_tool_registrations(
+    plan_mode_state: Option<&PlanModeState>,
+) -> Vec<ToolRegistration> {
+    let plan_state = plan_mode_state
+        .cloned()
+        .unwrap_or_else(|| PlanModeState::new(PathBuf::new()));
+
     vec![
         // ============================================================
         // HUMAN-IN-THE-LOOP (HITL)
@@ -24,6 +36,26 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             CapabilityLevel::Basic,
             AskUserQuestionTool,
         ),
+        // ============================================================
+        // PLAN MODE (enter/exit)
+        // ============================================================
+        ToolRegistration::from_tool_instance(
+            tools::ENTER_PLAN_MODE,
+            CapabilityLevel::Basic,
+            EnterPlanModeTool::new(plan_state.clone()),
+        )
+        .with_aliases(["plan_mode", "enter_plan", "start_planning"]),
+        ToolRegistration::from_tool_instance(
+            tools::EXIT_PLAN_MODE,
+            CapabilityLevel::Basic,
+            ExitPlanModeTool::new(plan_state.clone()),
+        )
+        .with_aliases([
+            "exit_plan",
+            "plan_exit",
+            "start_implementation",
+            "implement_plan",
+        ]),
         // ============================================================
         // SEARCH & DISCOVERY (1 tool - unified)
         // ============================================================

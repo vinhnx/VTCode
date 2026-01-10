@@ -143,7 +143,7 @@ impl ToolRegistry {
             };
 
             return Err(anyhow!(
-                "Could not find text to replace in file.\n\nExpected to replace:\n{}\n\nFile content preview:\n{}",
+                "Could not find text to replace in file.\n\nExpected to replace:\n{}\n\nFile content preview:\n{}\n\nSuggestion: refresh the file view to ensure it is current or use write_file to overwrite the full content when the surrounding context has drifted.",
                 input.old_str,
                 content_preview
             ));

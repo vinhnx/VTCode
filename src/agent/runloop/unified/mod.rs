@@ -14,6 +14,7 @@ mod mcp_support;
 mod mcp_tool_manager;
 mod model_selection;
 mod palettes;
+mod plan_confirmation;
 mod progress;
 mod prompts;
 pub(crate) mod run_loop_context;

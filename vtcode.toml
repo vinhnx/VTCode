@@ -9,7 +9,7 @@ provider = "huggingface"
 api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "XiaomiMiMo/MiMo-V2-Flash:novita"
+default_model = "zai-org/GLM-4.7:novita"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"
@@ -49,6 +49,7 @@ include_working_directory = true
 # "plan" - Read-only mode that produces implementation plans without making changes
 # Toggle during session with Shift+Tab or /plan command
 default_editing_mode = "edit"
+require_plan_confirmation = true
 
 [agent.small_model]
 enabled = true
@@ -510,7 +511,7 @@ cpu_limit = ""
 network_mode = "none"
 
 [context]
-max_context_tokens = 90000
+max_context_tokens = 128000
 trim_to_percent = 60
 preserve_recent_turns = 10
 

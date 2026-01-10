@@ -1237,7 +1237,7 @@ pub async fn handle_toggle_plan_mode(
     if new_state {
         ctx.tool_registry.enable_plan_mode();
         ctx.renderer
-            .line(MessageStyle::Info, "📋 Plan Mode enabled")?;
+            .line(MessageStyle::Info, "Plan Mode enabled")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  The agent will only read/analyze the codebase and produce step-by-step plans.",
@@ -1253,8 +1253,7 @@ pub async fn handle_toggle_plan_mode(
         )?;
     } else {
         ctx.tool_registry.disable_plan_mode();
-        ctx.renderer
-            .line(MessageStyle::Info, "✏️ Edit Mode enabled")?;
+        ctx.renderer.line(MessageStyle::Info, "Edit Mode enabled")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  Mutating tools (edits, commands, tests) are now allowed, subject to normal permissions.",
@@ -1303,7 +1302,7 @@ pub async fn handle_toggle_agent_mode(
 
     if new_state {
         ctx.renderer
-            .line(MessageStyle::Info, "🤖 Agent Mode enabled")?;
+            .line(MessageStyle::Info, "Agent Mode enabled")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  The agent will work more autonomously with fewer confirmation prompts.",
@@ -1313,8 +1312,7 @@ pub async fn handle_toggle_agent_mode(
             "  Safe tools (read/search) are auto-approved. Use with caution.",
         )?;
     } else {
-        ctx.renderer
-            .line(MessageStyle::Info, "✏️ Edit Mode enabled")?;
+        ctx.renderer.line(MessageStyle::Info, "Edit Mode enabled")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  Standard human-in-the-loop prompts are now active for all mutating actions.",
