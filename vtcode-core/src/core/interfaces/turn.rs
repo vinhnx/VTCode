@@ -11,6 +11,7 @@ pub struct TurnDriverParams<'a, Resume> {
     pub vt_config: Option<VTCodeConfig>,
     pub skip_confirmations: bool,
     pub full_auto: bool,
+    pub plan_mode: bool,
     pub resume: Option<Resume>,
 }
 
@@ -21,6 +22,7 @@ impl<'a, Resume> TurnDriverParams<'a, Resume> {
         vt_config: Option<VTCodeConfig>,
         skip_confirmations: bool,
         full_auto: bool,
+        plan_mode: bool,
         resume: Option<Resume>,
     ) -> Self {
         Self {
@@ -28,6 +30,7 @@ impl<'a, Resume> TurnDriverParams<'a, Resume> {
             vt_config,
             skip_confirmations,
             full_auto,
+            plan_mode,
             resume,
         }
     }
@@ -41,6 +44,7 @@ impl<'a, Resume> TurnDriverParams<'a, Resume> {
             vt_config: self.vt_config,
             skip_confirmations: self.skip_confirmations,
             full_auto: self.full_auto,
+            plan_mode: self.plan_mode,
             resume: map(self.resume),
         }
     }

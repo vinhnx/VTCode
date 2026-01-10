@@ -270,11 +270,13 @@ pub async fn handle_chat_command(
     core_cfg: vtcode_core::config::types::AgentConfig,
     skip_confirmations: bool,
     full_auto_requested: bool,
+    plan_mode: bool,
 ) -> Result<()> {
     crate::agent::agents::run_single_agent_loop(
         &core_cfg,
         skip_confirmations,
         full_auto_requested,
+        plan_mode,
         None,
     )
     .await

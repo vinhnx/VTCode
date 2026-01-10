@@ -61,6 +61,7 @@ pub async fn run_single_agent_loop(
     config: &CoreAgentConfig,
     skip_confirmations: bool,
     full_auto: bool,
+    plan_mode: bool,
     resume: Option<ResumeSession>,
 ) -> Result<()> {
     // Cache the workspace path to avoid repeated current_dir calls
@@ -74,7 +75,8 @@ pub async fn run_single_agent_loop(
     apply_runtime_overrides(vt_cfg.as_mut(), config);
 
     let driver = crate::agent::runloop::unified::UnifiedTurnDriver;
-    let params = TurnDriverParams::new(config, vt_cfg, skip_confirmations, full_auto, resume);
+    let params =
+        TurnDriverParams::new(config, vt_cfg, skip_confirmations, full_auto, plan_mode, resume);
     driver.drive_turn(params).await
 }
 

@@ -1198,3 +1198,57 @@ pub async fn handle_manage_agents(
         }
     }
 }
+
+pub async fn handle_toggle_plan_mode(
+    ctx: SlashCommandContext<'_>,
+    enable: Option<bool>,
+) -> Result<SlashCommandControl> {
+    let current = ctx.session_stats.is_plan_mode();
+    let new_state = match enable {
+        Some(value) => value,
+        None => !current,
+    };
+
+    if new_state == current {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            if current {
+                "Plan Mode is already enabled (read-only: no edits or commands)."
+            } else {
+                "Plan Mode is already disabled."
+            },
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    ctx.session_stats.set_plan_mode(new_state);
+
+    if new_state {
+        ctx.tool_registry.enable_plan_mode();
+        ctx.renderer
+            .line(MessageStyle::Info, "Plan Mode enabled")?;
+        ctx.renderer.line(
+            MessageStyle::Output,
+            "  The agent will only read/analyze the codebase and produce step-by-step plans.",
+        )?;
+        ctx.renderer.line(
+            MessageStyle::Output,
+            "  File edits, commands, and tests are disabled until you run /plan off.",
+        )?;
+        ctx.renderer.line(MessageStyle::Output, "")?;
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Allowed tools: read_file, list_files, grep_file, code_intelligence",
+        )?;
+    } else {
+        ctx.tool_registry.disable_plan_mode();
+        ctx.renderer
+            .line(MessageStyle::Info, "✏️ Plan Mode disabled")?;
+        ctx.renderer.line(
+            MessageStyle::Output,
+            "  Mutating tools (edits, commands, tests) are now allowed, subject to normal permissions.",
+        )?;
+    }
+
+    Ok(SlashCommandControl::Continue)
+}

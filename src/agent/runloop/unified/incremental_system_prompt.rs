@@ -163,6 +163,38 @@ impl IncrementalSystemPrompt {
                     "\n# FULL-AUTO: Complete task autonomously until done or blocked."
                 );
             }
+
+            if context.plan_mode {
+                let _ = writeln!(prompt, "\n# PLAN MODE (READ-ONLY)");
+                let _ = writeln!(
+                    prompt,
+                    "You are in Plan Mode. In this mode:"
+                );
+                let _ = writeln!(
+                    prompt,
+                    "- You may freely read files, list files, search, and use code intelligence tools."
+                );
+                let _ = writeln!(
+                    prompt,
+                    "- You MUST NOT edit files, apply patches, run shell commands, or execute tests."
+                );
+                let _ = writeln!(
+                    prompt,
+                    "- Instead, produce a clear, step-by-step implementation plan."
+                );
+                let _ = writeln!(
+                    prompt,
+                    "- Plans should be in structured Markdown (numbered steps) and mention relevant files, functions, and tests."
+                );
+                let _ = writeln!(
+                    prompt,
+                    "- Ask clarifying questions if requirements are ambiguous."
+                );
+                let _ = writeln!(
+                    prompt,
+                    "- The user can exit Plan Mode with /plan off to enable mutating tools."
+                );
+            }
         }
 
         // Unified Instructions (Project Docs, User Inst, Skills)
@@ -252,6 +284,8 @@ pub struct SystemPromptContext {
     pub error_count: usize,
     pub token_usage_ratio: f64,
     pub full_auto: bool,
+    /// Plan mode: read-only mode for exploration and planning
+    pub plan_mode: bool,
     /// Discovered skills for immediate awareness
     pub discovered_skills: Vec<vtcode_core::skills::types::Skill>,
 }
@@ -267,6 +301,7 @@ impl SystemPromptContext {
         self.error_count.hash(&mut hasher);
         ((self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
         self.full_auto.hash(&mut hasher);
+        self.plan_mode.hash(&mut hasher);
         // We use skill names and versions for hashing
         for skill in &self.discovered_skills {
             skill.name().hash(&mut hasher);
@@ -290,6 +325,7 @@ mod tests {
             error_count: 0,
             token_usage_ratio: 0.0,
             full_auto: false,
+            plan_mode: false,
             discovered_skills: Vec::new(),
         };
 
@@ -321,6 +357,7 @@ mod tests {
             error_count: 0,
             token_usage_ratio: 0.0,
             full_auto: false,
+            plan_mode: false,
             discovered_skills: Vec::new(),
         };
         // Build initial prompt

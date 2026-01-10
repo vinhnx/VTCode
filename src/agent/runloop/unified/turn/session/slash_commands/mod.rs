@@ -131,6 +131,9 @@ pub async fn handle_outcome(
         SlashCommandOutcome::RewindToTurn { turn, scope } => {
             handlers::handle_rewind_to_turn(ctx, turn, scope).await
         }
+        SlashCommandOutcome::TogglePlanMode { enable } => {
+            handlers::handle_toggle_plan_mode(ctx, enable).await
+        }
         SlashCommandOutcome::Exit => handlers::handle_exit(ctx).await,
     }
 }

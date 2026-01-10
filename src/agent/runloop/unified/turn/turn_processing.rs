@@ -34,9 +34,10 @@ pub(crate) async fn execute_llm_request(
     // Context trim and compaction has been removed - no pruning or enforcement needed
     // HP-1: Eliminate unnecessary clone - work directly on working_history
 
+    let plan_mode = ctx.session_stats.is_plan_mode();
     let system_prompt = ctx
         .context_manager
-        .build_system_prompt(ctx.working_history, step_count, ctx.full_auto)
+        .build_system_prompt(ctx.working_history, step_count, ctx.full_auto, plan_mode)
         .await?;
 
     let use_streaming = provider_client.supports_streaming();

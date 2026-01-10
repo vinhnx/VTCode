@@ -18,6 +18,7 @@ impl TurnDriver<ResumeSession> for UnifiedTurnDriver {
             params.vt_config,
             params.skip_confirmations,
             params.full_auto,
+            params.plan_mode,
             params.resume,
         )
         .await
