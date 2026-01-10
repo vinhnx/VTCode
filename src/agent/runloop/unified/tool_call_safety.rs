@@ -6,9 +6,27 @@
 //! - Destructive operation confirmation
 //! - Argument validation
 
-use anyhow::{Context as _, Result};
+// No anyhow imports needed since we use thiserror for SafetyError and std::result::Result everywhere.
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
+use thiserror::Error;
+
+/// Safety violation errors
+#[derive(Debug, Error)]
+pub enum SafetyError {
+    #[error("Per-turn tool limit reached (max: {max}). Wait or adjust config.")]
+    TurnLimitReached { max: usize },
+    #[error("Session tool limit reached (max: {max}). End turn or reduce tool calls.")]
+    SessionLimitReached { max: usize },
+    #[error("Rate limit exceeded: {current} calls/{window} (max: {max})")]
+    RateLimitExceeded {
+        current: usize,
+        max: usize,
+        window: &'static str,
+    },
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
 
 /// Safety validation rules for tool calls
 pub struct ToolCallSafetyValidator {
@@ -78,6 +96,12 @@ impl ToolCallSafetyValidator {
         self.max_per_session = max_per_session;
     }
 
+    /// Increase the session tool limit
+    pub fn increase_session_limit(&mut self, increment: usize) {
+        self.max_per_session = self.max_per_session.saturating_add(increment);
+        tracing::info!("Session tool limit increased to {}", self.max_per_session);
+    }
+
     #[allow(dead_code)]
     pub fn rate_limit_per_second(&self) -> usize {
         self.rate_limit_per_second
@@ -101,7 +125,7 @@ impl ToolCallSafetyValidator {
     }
 
     /// Validate a tool call before execution
-    pub fn validate_call(&mut self, tool_name: &str) -> Result<CallValidation> {
+    pub fn validate_call(&mut self, tool_name: &str) -> std::result::Result<CallValidation, SafetyError> {
         // Check if tool is destructive
         let is_destructive = self.destructive_tools.contains(tool_name);
 
@@ -111,16 +135,14 @@ impl ToolCallSafetyValidator {
 
         // Enforce per-turn and session limits
         if self.current_turn_count >= self.max_per_turn {
-            return Err(anyhow::anyhow!(
-                "Per-turn tool limit reached (max: {}). Wait or adjust config.",
-                self.max_per_turn
-            ));
+            return Err(SafetyError::TurnLimitReached {
+                max: self.max_per_turn,
+            });
         }
         if self.session_count >= self.max_per_session {
-            return Err(anyhow::anyhow!(
-                "Session tool limit reached (max: {}). End turn or reduce tool calls.",
-                self.max_per_session
-            ));
+            return Err(SafetyError::SessionLimitReached {
+                max: self.max_per_session,
+            });
         }
 
         self.current_turn_count += 1;
@@ -134,43 +156,37 @@ impl ToolCallSafetyValidator {
     }
 
     /// Enforce rate limiting
-    fn enforce_rate_limit(&mut self) -> Result<()> {
+    fn enforce_rate_limit(&mut self) -> std::result::Result<(), SafetyError> {
         let now = Instant::now();
-
-        // Remove calls older than 1 second
-        self.calls_in_window
-            .retain(|call_time| now.duration_since(*call_time) < Duration::from_secs(1));
+        self.calls_in_window.retain(|&t| now.duration_since(t) <= Duration::from_secs(1));
 
         if self.calls_in_window.len() >= self.rate_limit_per_second {
-            return Err(anyhow::anyhow!(
-                "Tool call rate limit exceeded: {} calls/second (max: {})",
-                self.calls_in_window.len(),
-                self.rate_limit_per_second
-            ))
-            .context("Please wait before making another tool call");
+            return Err(SafetyError::RateLimitExceeded {
+                current: self.calls_in_window.len(),
+                max: self.rate_limit_per_second,
+                window: "1s",
+            });
         }
 
         self.calls_in_window.push(now);
         Ok(())
     }
 
-    /// Enforce per-minute rate limiting
-    fn enforce_minute_rate_limit(&mut self) -> Result<()> {
-        let Some(limit) = self.rate_limit_per_minute else {
-            return Ok(());
+    fn enforce_minute_rate_limit(&mut self) -> std::result::Result<(), SafetyError> {
+        let now = Instant::now();
+        let limit = match self.rate_limit_per_minute {
+            Some(l) => l,
+            None => return Ok(()),
         };
 
-        let now = Instant::now();
-        self.calls_in_minute
-            .retain(|call_time| now.duration_since(*call_time) < Duration::from_secs(60));
+        self.calls_in_minute.retain(|&t| now.duration_since(t) <= Duration::from_secs(60));
 
         if self.calls_in_minute.len() >= limit {
-            return Err(anyhow::anyhow!(
-                "Tool call rate limit exceeded: {} calls/minute (max: {})",
-                self.calls_in_minute.len(),
-                limit
-            ))
-            .context("Please wait before making another tool call");
+            return Err(SafetyError::RateLimitExceeded {
+                current: self.calls_in_minute.len(),
+                max: limit,
+                window: "60s",
+            });
         }
 
         self.calls_in_minute.push(now);

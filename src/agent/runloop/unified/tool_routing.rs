@@ -651,3 +651,107 @@ fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -
 
     Ok(())
 }
+
+pub(crate) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
+    handle: &InlineHandle,
+    session: &mut S,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    max_limit: usize,
+) -> Result<Option<usize>> {
+    use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
+
+    let description_lines = vec![
+        format!("Session tool limit reached: {}", max_limit),
+        "Would you like to increase the limit to continue?".to_string(),
+        "".to_string(),
+        "Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string(),
+    ];
+
+    let options = vec![
+        InlineListItem {
+            title: "+100 tool calls".to_string(),
+            subtitle: Some("Increase the session limit by 100".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::SessionLimitIncrease(100)),
+            search_value: Some("increase 100 hundred plus more".to_string()),
+        },
+        InlineListItem {
+            title: "+50 tool calls".to_string(),
+            subtitle: Some("Increase the session limit by 50".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::SessionLimitIncrease(50)),
+            search_value: Some("increase 50 fifty plus more".to_string()),
+        },
+        InlineListItem {
+            title: "".to_string(),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: None,
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Deny".to_string(),
+            subtitle: Some("Do not increase limit (stops tool execution)".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApproval(false)),
+            search_value: Some("deny no exit stop cancel".to_string()),
+        },
+    ];
+
+    handle.show_list_modal(
+        "Session Limit Reached".to_string(),
+        description_lines,
+        options,
+        Some(InlineListSelection::SessionLimitIncrease(100)),
+        None,
+    );
+
+    loop {
+        if ctrl_c_state.is_cancel_requested() {
+            handle.close_modal();
+            handle.force_redraw();
+            return Ok(None);
+        }
+
+        let notify = ctrl_c_notify.clone();
+        let maybe_event = tokio::select! {
+            _ = notify.notified() => None,
+            event = session.next_event() => event,
+        };
+
+        let Some(event) = maybe_event else {
+            handle.close_modal();
+            handle.force_redraw();
+            return Ok(None);
+        };
+
+        match event {
+            InlineEvent::ListModalSubmit(selection) => {
+                handle.close_modal();
+                handle.force_redraw();
+                match selection {
+                    InlineListSelection::SessionLimitIncrease(inc) => return Ok(Some(inc)),
+                    _ => return Ok(None),
+                }
+            }
+            InlineEvent::ListModalCancel | InlineEvent::Cancel | InlineEvent::Exit => {
+                handle.close_modal();
+                handle.force_redraw();
+                return Ok(None);
+            }
+            InlineEvent::Interrupt => {
+                let _signal = ctrl_c_state.register_signal();
+                ctrl_c_notify.notify_waiters();
+                handle.close_modal();
+                handle.force_redraw();
+                return Ok(None);
+            }
+            _ => continue,
+        }
+    }
+}

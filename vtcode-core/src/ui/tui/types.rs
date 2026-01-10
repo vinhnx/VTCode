@@ -195,6 +195,7 @@ pub enum InlineListSelection {
     ToolApproval(bool),
     ToolApprovalSession,
     ToolApprovalPermanent,
+    SessionLimitIncrease(usize),
 }
 
 #[derive(Clone, Debug)]

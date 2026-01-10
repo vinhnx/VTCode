@@ -169,6 +169,7 @@ serde_yaml = "0.9"
 self_update = { version = "0.42", features = ["archive-tar", "compression-flate2"] }
 reqwest = { version = "0.12", features = ["json", "stream"] }
 semver = "1.0"
+thiserror = { workspace = true }
 
 [features]
 default = ["tool-chat"]
