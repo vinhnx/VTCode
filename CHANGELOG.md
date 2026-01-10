@@ -3,6 +3,27 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.60.0] - 2026-01-10
+
+
+### Features
+    - feat: update tool policies to allow apply_patch, unified_exec, and unified_file actions
+    - feat: add editing modes and commands for toggling between Edit, Plan, and Agent modes
+    - feat: implement Plan Mode for read-only exploration and planning
+    - feat: implement sandboxing configuration and policies
+    - feat: enhance dynamic context discovery and update configuration
+    - feat: implement dynamic context discovery with file spooling for large outputs
+
+
+### Documentation
+    - docs: update changelog for v0.59.2 [skip ci]
+
+
+### Chores
+    - chore: update tool policies and remove unused dependencies
+    - chore: update npm package.json to v0.59.2 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.59.1 version =  [skip ci]
 # [Version 0.59.2] - 2026-01-08
 
 
