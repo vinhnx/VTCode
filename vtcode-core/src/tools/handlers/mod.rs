@@ -57,6 +57,7 @@ pub mod turn_diff_tracker;
 // Handler implementations
 pub mod grep_files_handler;
 pub mod list_dir_handler;
+pub mod plan_mode;
 pub mod read_file;
 pub mod read_file_handler;
 pub mod shell_handler;
@@ -136,6 +137,9 @@ pub use shell_handler::{ShellHandler, ShellOutput, create_shell_tool};
 
 // Spawn subagent
 pub use spawn_subagent::SpawnSubagentTool;
+
+// Plan mode tools
+pub use plan_mode::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
 
 // Core tool handler types
 pub use tool_handler::{
