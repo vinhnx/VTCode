@@ -26,8 +26,7 @@ mod workspace_trust;
 async fn main() -> std::process::ExitCode {
     match run().await {
         Ok(_) => std::process::ExitCode::SUCCESS,
-        Err(err) => {
-            eprintln!("vtcode: error: {:#}", err);
+        Err(_) => {
             std::process::ExitCode::FAILURE
         }
     }
@@ -77,19 +76,15 @@ async fn run() -> Result<()> {
     panic_hook::set_debug_mode(args.debug);
 
     // Load .env (non-fatal if missing)
-    if let Err(err) = load_dotenv()
+    if let Err(_err) = load_dotenv()
         && !args.quiet
     {
-        eprintln!("vtcode: warning: failed to load .env: {err}");
     }
 
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = match initialize_tracing(&args).await {
         Ok(initialized) => initialized,
-        Err(err) => {
-            if !args.quiet {
-                eprintln!("vtcode: warning: failed to initialize tracing from environment: {err}");
-            }
+        Err(_err) => {
             false
         }
     };
@@ -141,9 +136,6 @@ async fn run() -> Result<()> {
         && !env_tracing_initialized
         && let Err(err) = initialize_tracing_from_config(&startup.config)
     {
-        if !args.quiet {
-            eprintln!("vtcode: warning: failed to initialize tracing from config: {err}");
-        }
         tracing::warn!(error = %err, "failed to initialize tracing from config");
     }
 
@@ -156,16 +148,9 @@ async fn run() -> Result<()> {
     if args.ide && args.command.is_none() {
         // Try to auto-detect and connect to available IDE
         if let Some(ide_target) = detect_available_ide()? {
-            eprintln!(
-                "vtcode: automatically connecting to {:?} IDE (--ide flag)",
-                ide_target
-            );
             cli::handle_acp_command(core_cfg, cfg, ide_target).await?;
             return Ok(());
         } else {
-            eprintln!(
-                "vtcode: warning: --ide flag specified but no IDE detected, falling back to interactive mode"
-            );
         }
     }
 
@@ -279,10 +264,6 @@ async fn run() -> Result<()> {
                 "dependencies" => cli::analyze::AnalysisType::Dependencies,
                 "complexity" => cli::analyze::AnalysisType::Complexity,
                 _ => {
-                    eprintln!(
-                        "Warning: Unknown analysis type '{}', using 'full'",
-                        analysis_type
-                    );
                     cli::analyze::AnalysisType::Full
                 }
             };
@@ -456,10 +437,6 @@ fn detect_available_ide() -> Result<Option<AgentClientProtocolTarget>> {
         1 => Ok(Some(available_ides[0])),
         _ => {
             // Multiple IDEs detected, be explicit and don't auto-connect
-            eprintln!(
-                "vtcode: multiple IDEs detected ({}), use 'vtcode acp <target>' instead of --ide",
-                available_ides.len()
-            );
             Ok(None)
         }
     }
@@ -546,8 +523,6 @@ async fn initialize_tracing(args: &Cli) -> Result<bool> {
             if let Err(err) = init_result {
                 tracing::warn!(error = %err, "tracing already initialized; skipping env tracing setup");
             }
-
-            eprintln!("Debug logging enabled - writing to: {}", log_file.display());
         } else {
             // Non-interactive mode: write to stderr as normal
             let fmt_layer = tracing_subscriber::fmt::layer().with_span_events(FmtSpan::FULL);

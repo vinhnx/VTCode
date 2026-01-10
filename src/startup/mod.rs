@@ -482,10 +482,6 @@ async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
             return Err(err.context(format!("Failed to activate theme '{}'", theme_selection)));
         }
         if !args.quiet {
-            eprintln!(
-                "vtcode: warning: {}. Falling back to default theme '{}'.",
-                err, DEFAULT_THEME_ID
-            );
         }
         theme_selection = DEFAULT_THEME_ID.to_owned();
         ui_theme::set_active_theme(&theme_selection)
@@ -574,13 +570,11 @@ fn validate_startup_configuration(
                     Ok(result) => {
                         // Display warnings (errors would have been caught earlier)
                         if !result.warnings.is_empty() && !quiet {
-                            eprintln!("{}", result.format_for_display());
                         }
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         // Non-critical validation error - log but don't fail startup
                         if !quiet {
-                            eprintln!("vtcode: warning: configuration validation failed: {}", e);
                         }
                     }
                 }
@@ -612,71 +606,17 @@ fn check_ripgrep_availability(quiet: bool) {
                 return;
             }
             // Show warning and attempt auto-installation
-            eprintln!(
-                "\n╭──────────────────────────────────────────────────────────────────────────────╮"
-            );
-            eprintln!(
-                "│ Ripgrep not available: Attempting auto-installation for faster file search...│"
-            );
-            eprintln!(
-                "╰──────────────────────────────────────────────────────────────────────────────╯\n"
-            );
 
             // Attempt auto-installation
             match RipgrepStatus::install() {
                 Ok(()) => {
-                    eprintln!(
-                        "\n╭──────────────────────────────────────────────────────────────────────────────╮"
-                    );
-                    eprintln!(
-                        "│ ✓ Ripgrep installed successfully! File search performance enabled.          │"
-                    );
-                    eprintln!(
-                        "╰──────────────────────────────────────────────────────────────────────────────╯\n"
-                    );
                 }
                 Err(e) => {
-                    eprintln!(
-                        "\n╭──────────────────────────────────────────────────────────────────────────────╮"
-                    );
-                    eprintln!(
-                        "│ Ripgrep auto-installation failed: {}                          │",
-                        truncate_error(&e.to_string(), 70)
-                    );
-                    eprintln!(
-                        "│ Falling back to built-in grep (slower). Install manually for better speed:   │"
-                    );
-                    eprintln!(
-                        "│   macOS:  brew install ripgrep                                               │"
-                    );
-                    eprintln!(
-                        "│   Linux:  sudo apt install ripgrep (or your distro's package manager)       │"
-                    );
-                    eprintln!(
-                        "│   Windows: choco install ripgrep (or: scoop install ripgrep)                │"
-                    );
-                    eprintln!(
-                        "│   Any OS: cargo install ripgrep                                              │"
-                    );
-                    eprintln!(
-                        "╰──────────────────────────────────────────────────────────────────────────────╯\n"
-                    );
                     tracing::warn!("Ripgrep installation failed: {}", e);
                 }
             }
         }
         RipgrepStatus::Error { reason } => {
-            eprintln!(
-                "\n╭──────────────────────────────────────────────────────────────────────────────╮"
-            );
-            eprintln!(
-                "│ Ripgrep check failed: {}                                             │",
-                truncate_error(&reason, 68)
-            );
-            eprintln!("│ Falling back to built-in grep (slower).                               │");
-            eprintln!(
-                "╰──────────────────────────────────────────────────────────────────────────────╯\n"
-            );
             tracing::warn!("Ripgrep check error: {}", reason);
         }
     }

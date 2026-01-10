@@ -141,11 +141,6 @@ impl<'de> Deserialize<'de> for SystemPromptMode {
         if let Some(parsed) = Self::parse(&raw) {
             Ok(parsed)
         } else {
-            tracing::warn!(
-                input = raw,
-                allowed = ?Self::allowed_values(),
-                "Invalid system_prompt_mode provided; falling back to default"
-            );
             Ok(Self::default())
         }
     }
@@ -215,11 +210,6 @@ impl<'de> Deserialize<'de> for ToolDocumentationMode {
         if let Some(parsed) = Self::parse(&raw) {
             Ok(parsed)
         } else {
-            tracing::warn!(
-                input = raw,
-                allowed = ?Self::allowed_values(),
-                "Invalid tool_documentation_mode provided; falling back to default"
-            );
             Ok(Self::default())
         }
     }
@@ -282,11 +272,6 @@ impl<'de> Deserialize<'de> for VerbosityLevel {
         if let Some(parsed) = Self::parse(&raw) {
             Ok(parsed)
         } else {
-            tracing::warn!(
-                input = raw,
-                allowed = ?Self::allowed_values(),
-                "Invalid verbosity level provided; falling back to default"
-            );
             Ok(Self::default())
         }
     }
@@ -307,11 +292,6 @@ impl<'de> Deserialize<'de> for ReasoningEffortLevel {
         if let Some(parsed) = Self::parse(&raw) {
             Ok(parsed)
         } else {
-            tracing::warn!(
-                input = raw,
-                allowed = ?Self::allowed_values(),
-                "Invalid reasoning effort level provided; falling back to default"
-            );
             Ok(Self::default())
         }
     }
@@ -376,11 +356,6 @@ impl<'de> Deserialize<'de> for UiSurfacePreference {
         if let Some(parsed) = Self::parse(&raw) {
             Ok(parsed)
         } else {
-            tracing::warn!(
-                input = raw,
-                allowed = ?Self::allowed_values(),
-                "Invalid UI surface preference provided; falling back to default"
-            );
             Ok(Self::default())
         }
     }

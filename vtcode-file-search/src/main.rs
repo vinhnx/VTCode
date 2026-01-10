@@ -48,13 +48,6 @@ async fn main() -> anyhow::Result<()> {
 
     // If no pattern provided, show available options
     if cli.pattern.is_none() {
-        eprintln!("Error: No search pattern provided");
-        eprintln!("Usage: vtcode-file-search <PATTERN> [OPTIONS]");
-        eprintln!();
-        eprintln!("Examples:");
-        eprintln!("  vtcode-file-search 'main.rs'");
-        eprintln!("  vtcode-file-search --cwd /path/to/search 'test'");
-        eprintln!("  vtcode-file-search --json --limit 50 '*.rs'");
         std::process::exit(1);
     }
 
@@ -93,10 +86,6 @@ async fn main() -> anyhow::Result<()> {
         }
 
         if results.total_match_count > cli.limit.get() {
-            eprintln!(
-                "Truncated: {} total matches, showing {}",
-                results.total_match_count, cli.limit
-            );
         }
     }
 

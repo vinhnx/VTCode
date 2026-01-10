@@ -69,8 +69,6 @@ fn harden_linux() -> Result<()> {
     // Disable ptrace attach / mark process non-dumpable.
     let ret_code = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) };
     if ret_code != 0 {
-        let err = std::io::Error::last_os_error();
-        tracing::error!("prctl(PR_SET_DUMPABLE, 0) failed: {err}");
         std::process::exit(PRCTL_FAILED_EXIT_CODE);
     }
 
@@ -86,8 +84,6 @@ fn harden_linux() -> Result<()> {
 fn harden_macos() -> Result<()> {
     let ret_code = unsafe { libc::ptrace(libc::PT_DENY_ATTACH, 0, std::ptr::null_mut(), 0) };
     if ret_code == -1 {
-        let err = std::io::Error::last_os_error();
-        tracing::error!("ptrace(PT_DENY_ATTACH) failed: {err}");
         std::process::exit(PTRACE_DENY_ATTACH_FAILED_EXIT_CODE);
     }
 
@@ -156,15 +152,9 @@ fn apply_mitigation_policy<T>(
 
         match error {
             ERROR_INVALID_PARAMETER | ERROR_NOT_SUPPORTED => {
-                tracing::warn!(
-                    "skipping unsupported Windows {name} process mitigation: {io_error}"
-                );
                 return Ok(());
             }
             ERROR_ACCESS_DENIED | ERROR_PRIVILEGE_NOT_HELD => {
-                tracing::warn!(
-                    "insufficient privileges to enable Windows {name} process mitigation: {io_error}"
-                );
                 return Ok(());
             }
             _ => {
@@ -186,8 +176,6 @@ fn set_core_file_size_limit_to_zero() -> Result<()> {
 
     let ret_code = unsafe { libc::setrlimit(libc::RLIMIT_CORE, &rlim) };
     if ret_code != 0 {
-        let err = std::io::Error::last_os_error();
-        tracing::error!("setrlimit(RLIMIT_CORE) failed: {err}");
         std::process::exit(SET_RLIMIT_CORE_FAILED_EXIT_CODE);
     }
 
