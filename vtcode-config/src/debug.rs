@@ -55,10 +55,6 @@ impl<'de> serde::Deserialize<'de> for TraceLevel {
         if let Some(parsed) = Self::parse(&raw) {
             Ok(parsed)
         } else {
-            tracing::warn!(
-                input = raw,
-                "Invalid trace level; falling back to default (info)"
-            );
             Ok(Self::default())
         }
     }
