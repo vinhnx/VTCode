@@ -79,6 +79,9 @@ pub enum SlashCommandOutcome {
         turn: usize,
         scope: vtcode_core::core::agent::snapshots::RevertScope,
     },
+    TogglePlanMode {
+        enable: Option<bool>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -812,6 +815,35 @@ pub async fn handle_slash_command(
                     Ok(SlashCommandOutcome::Handled)
                 }
             }
+        }
+        "plan" => {
+            let arg = args.trim().to_ascii_lowercase();
+            let enable = match arg.as_str() {
+                "" | "toggle" => None,
+                "on" | "enable" => Some(true),
+                "off" | "disable" => Some(false),
+                _ => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Usage: /plan [on|off] - Toggle Plan Mode (read-only, no edits or commands)",
+                    )?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "  /plan     - Toggle Plan Mode on/off",
+                    )?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "  /plan on  - Enable Plan Mode (read-only: analyze codebase, create plans)",
+                    )?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "  /plan off - Disable Plan Mode (allow edits, commands, tests)",
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            };
+
+            Ok(SlashCommandOutcome::TogglePlanMode { enable })
         }
         "help" => {
             let specific_cmd = if args.trim().is_empty() {

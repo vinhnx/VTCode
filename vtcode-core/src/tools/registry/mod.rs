@@ -158,6 +158,9 @@ pub struct ToolRegistry {
 
     /// Output spooler for dynamic context discovery (large outputs to files)
     output_spooler: Arc<super::output_spooler::ToolOutputSpooler>,
+
+    /// Plan mode: read-only enforcement for planning sessions
+    plan_read_only_mode: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -245,6 +248,9 @@ impl ToolRegistry {
             output_spooler: Arc::new(super::output_spooler::ToolOutputSpooler::new(
                 &workspace_root,
             )),
+
+            // Plan mode: disabled by default
+            plan_read_only_mode: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
 
         registry.sync_policy_catalog().await;
@@ -297,6 +303,65 @@ impl ToolRegistry {
     /// Get the workspace root as an owned PathBuf
     pub fn workspace_root_owned(&self) -> PathBuf {
         self.inventory.workspace_root().clone()
+    }
+
+    /// Enable plan mode (read-only enforcement)
+    ///
+    /// When enabled, mutating tools (write_file, apply_patch, run_pty_cmd, etc.)
+    /// are blocked and the agent can only read/analyze the codebase.
+    pub fn enable_plan_mode(&self) {
+        self.plan_read_only_mode
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Disable plan mode (allow mutating tools again)
+    pub fn disable_plan_mode(&self) {
+        self.plan_read_only_mode
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Check if plan mode is currently enabled
+    pub fn is_plan_mode(&self) -> bool {
+        self.plan_read_only_mode
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Check if a tool is mutating (modifies files or environment)
+    ///
+    /// Returns true if the tool is mutating or unknown (conservative default).
+    pub fn is_mutating_tool(&self, name: &str) -> bool {
+        use crate::config::constants::tools as tool_names;
+        use crate::tools::names::canonical_tool_name;
+
+        let canonical = canonical_tool_name(name);
+        let normalized = canonical.as_ref();
+
+        // Check if it's a known read-only tool
+        let read_only_tools = [
+            tool_names::READ_FILE,
+            tool_names::LIST_FILES,
+            tool_names::GREP_FILE,
+            tool_names::CODE_INTELLIGENCE,
+            tool_names::UNIFIED_SEARCH,
+            tool_names::AGENT_INFO,
+            "get_errors",
+            "search_tools",
+            "think",
+        ];
+
+        if read_only_tools.contains(&normalized) {
+            return false;
+        }
+
+        // Check trait-based tools
+        if let Some(reg) = self.inventory.get_registration(normalized) {
+            if let ToolHandler::TraitObject(tool) = reg.handler() {
+                return tool.is_mutating();
+            }
+        }
+
+        // Conservative default: unknown tools are considered mutating
+        true
     }
 
     async fn sync_policy_catalog(&self) {
@@ -1409,6 +1474,34 @@ impl ToolRegistry {
                 tool_name,
                 errors
             ));
+        }
+
+        // Plan mode enforcement: block mutating tools in read-only mode
+        if self.is_plan_mode() && self.is_mutating_tool(&tool_name) {
+            let msg = format!(
+                "Tool '{}' is not permitted in Plan Mode because it modifies files or the environment. \
+                 In Plan Mode you may only use read-only tools (e.g., read_file, list_files, grep_file, code_intelligence). \
+                 Use /plan off to exit Plan Mode and enable mutating tools.",
+                display_name
+            );
+
+            self.execution_history
+                .add_record(ToolExecutionRecord::failure(
+                    tool_name_owned.clone(),
+                    requested_name.clone(),
+                    false,
+                    None,
+                    args_for_recording.clone(),
+                    msg.clone(),
+                    context_snapshot.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    false,
+                ));
+
+            return Err(anyhow::anyhow!(msg).context("tool denied by plan mode"));
         }
 
         let timeout_category = self.timeout_category_for(&tool_name).await;

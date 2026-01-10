@@ -76,7 +76,6 @@ fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &str) -> Resu
         "auto-approved" => {
             config.security.human_in_the_loop = false;
             config.security.require_write_tool_for_claims = false;
-            // Enable full-auto for allowed tools only (read-only tools)
             config.automation.full_auto.enabled = true;
             config.automation.full_auto.allowed_tools = vec![
                 tools::READ_FILE.to_string(),
@@ -88,12 +87,14 @@ fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &str) -> Resu
             config.security.human_in_the_loop = false;
             config.security.require_write_tool_for_claims = false;
             config.automation.full_auto.enabled = true;
-            // Allow all tools in full auto mode by not restricting allowed_tools
-            config.automation.full_auto.allowed_tools = vec![]; // Empty means all allowed
+            config.automation.full_auto.allowed_tools = vec![];
+        }
+        "plan" => {
+            return Ok(());
         }
         _ => {
             bail!(
-                "Invalid permission mode '{}'. Valid options: ask, suggest, auto-approved, full-auto",
+                "Invalid permission mode '{}'. Valid options: ask, suggest, auto-approved, full-auto, plan",
                 mode
             );
         }
@@ -126,6 +127,7 @@ pub struct StartupContext {
     pub automation_prompt: Option<String>,
     pub session_resume: Option<SessionResumeMode>,
     pub custom_session_id: Option<String>,
+    pub plan_mode_requested: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -210,6 +212,11 @@ impl StartupContext {
         }
 
         // Apply permission mode from CLI if specified
+        let plan_mode_requested = args
+            .permission_mode
+            .as_ref()
+            .is_some_and(|m| m.eq_ignore_ascii_case("plan"));
+
         if let Some(ref permission_mode) = args.permission_mode {
             apply_permission_mode_override(&mut config, permission_mode)?;
         }
@@ -369,6 +376,7 @@ impl StartupContext {
             automation_prompt,
             session_resume,
             custom_session_id,
+            plan_mode_requested,
         })
     }
 }

@@ -78,6 +78,7 @@ impl ContextManager {
         attempt_history: &[uni::Message],
         retry_attempts: usize,
         full_auto: bool,
+        plan_mode: bool,
     ) -> Result<String> {
         if self.base_system_prompt.trim().is_empty() {
             bail!("Base system prompt is empty; cannot build prompt");
@@ -100,6 +101,7 @@ impl ContextManager {
             error_count: self.cached_stats.error_count,
             token_usage_ratio: 0.0,
             full_auto,
+            plan_mode,
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
         };
 
@@ -156,7 +158,7 @@ mod tests {
             None,
         );
 
-        let result = manager.build_system_prompt(&[], 0, false).await;
+        let result = manager.build_system_prompt(&[], 0, false, false).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));
     }

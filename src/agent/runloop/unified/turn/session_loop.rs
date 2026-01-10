@@ -79,6 +79,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     _vt_cfg: Option<VTCodeConfig>,
     skip_confirmations: bool,
     full_auto: bool,
+    plan_mode: bool,
     resume: Option<ResumeSession>,
 ) -> Result<()> {
     // Create a guard that ensures terminal is restored even on early return
@@ -175,6 +176,11 @@ pub(crate) async fn run_single_agent_loop_unified(
         );
 
         let mut session_stats = SessionStats::default();
+        // Initialize plan mode from CLI flag
+        if plan_mode {
+            session_stats.set_plan_mode(true);
+            tool_registry.enable_plan_mode();
+        }
         // Optimization: Pre-allocate with small capacity for typical usage
         let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);
         let mut model_picker_state: Option<ModelPickerState> = None;

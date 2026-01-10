@@ -229,8 +229,13 @@ async fn run() -> Result<()> {
             vtcode_core::cli::models_commands::handle_models_command(&args, command).await?;
         }
         Some(Commands::Chat) => {
-            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested)
-                .await?;
+            cli::handle_chat_command(
+                core_cfg.clone(),
+                skip_confirmations,
+                full_auto_requested,
+                startup.plan_mode_requested,
+            )
+            .await?;
         }
         Some(Commands::Ask {
             prompt,
@@ -259,8 +264,13 @@ async fn run() -> Result<()> {
         }
         Some(Commands::ChatVerbose) => {
             // Reuse chat path; verbose behavior is handled in the module if applicable
-            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested)
-                .await?;
+            cli::handle_chat_command(
+                core_cfg.clone(),
+                skip_confirmations,
+                full_auto_requested,
+                startup.plan_mode_requested,
+            )
+            .await?;
         }
         Some(Commands::Analyze { analysis_type }) => {
             let analysis_type = match analysis_type.as_str() {
@@ -414,8 +424,13 @@ async fn run() -> Result<()> {
         }
         _ => {
             // Default to chat
-            cli::handle_chat_command(core_cfg.clone(), skip_confirmations, full_auto_requested)
-                .await?;
+            cli::handle_chat_command(
+                core_cfg.clone(),
+                skip_confirmations,
+                full_auto_requested,
+                startup.plan_mode_requested,
+            )
+            .await?;
         }
     }
 

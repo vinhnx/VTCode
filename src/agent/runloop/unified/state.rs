@@ -4,6 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[derive(Default)]
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
+    pub plan_mode: bool,
 }
 
 impl SessionStats {
@@ -13,6 +14,14 @@ impl SessionStats {
 
     pub(crate) fn sorted_tools(&self) -> Vec<String> {
         self.tools.iter().cloned().collect()
+    }
+
+    pub(crate) fn is_plan_mode(&self) -> bool {
+        self.plan_mode
+    }
+
+    pub(crate) fn set_plan_mode(&mut self, enabled: bool) {
+        self.plan_mode = enabled;
     }
 }
 
