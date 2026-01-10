@@ -3,6 +3,26 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.60.1] - 2026-01-10
+
+
+### Features
+    - feat: implement plan mode tools for managing planning workflow and enhance code block indentation normalization
+    - feat: implement session limit increase prompt and safety validation enhancements
+    - feat: update tool policies to allow apply_patch, unified_exec, and unified_file actions
+    - feat: add editing modes and commands for toggling between Edit, Plan, and Agent modes
+    - feat: implement Plan Mode for read-only exploration and planning
+
+
+### Documentation
+    - docs: update changelog for v0.60.0 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.60.0 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update tool policies and remove unused dependencies
+    - chore: update npm package.json to v0.59.2 version =  [skip ci]
 # [Version 0.60.0] - 2026-01-10
 
 
