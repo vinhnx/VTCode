@@ -107,6 +107,8 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_unified_search(&self, args: Value) -> Result<Value> {
+        let mut args = args;
+
         let action_str = args
             .get("action")
             .and_then(|v| v.as_str())
@@ -132,6 +134,21 @@ impl ToolRegistry {
 
         let action: UnifiedSearchAction = serde_json::from_value(json!(action_str))
             .with_context(|| format!("Invalid action: {}", action_str))?;
+
+        // Default to workspace root when path is omitted for list/grep actions to reduce friction
+        if matches!(
+            action,
+            UnifiedSearchAction::Grep | UnifiedSearchAction::List
+        ) {
+            let has_path = args
+                .get("path")
+                .and_then(|v| v.as_str())
+                .map(|p| !p.trim().is_empty())
+                .unwrap_or(false);
+            if !has_path {
+                args["path"] = json!(".");
+            }
+        }
 
         match action {
             UnifiedSearchAction::Grep => self.execute_tool_ref("grep_file", &args).await,

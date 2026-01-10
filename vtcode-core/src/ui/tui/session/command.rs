@@ -151,6 +151,9 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
             session.header_context.editing_mode = mode;
             session.needs_redraw = true;
         }
+        InlineCommand::ShowPlanConfirmation { plan } => {
+            show_plan_confirmation_modal(session, *plan);
+        }
         InlineCommand::Shutdown => {
             request_exit(session);
         }
@@ -249,6 +252,73 @@ fn show_list_modal(
         restore_input: session.input_enabled,
         restore_cursor: session.cursor_visible,
         search: search_state,
+    };
+    session.input_enabled = false;
+    session.cursor_visible = false;
+    session.modal = Some(state);
+    mark_dirty(session);
+}
+
+/// Show plan confirmation modal - simplified version
+///
+/// Displays the plan file path and summary.
+/// User can choose: Execute, Edit Plan, or Cancel.
+pub(crate) fn show_plan_confirmation_modal(
+    session: &mut Session,
+    plan: crate::ui::tui::types::PlanContent,
+) {
+    use crate::ui::tui::types::{InlineListItem, InlineListSelection};
+
+    // Build simple display
+    let mut lines = Vec::new();
+
+    if !plan.summary.is_empty() {
+        lines.push(plan.summary.clone());
+    }
+
+    if let Some(ref path) = plan.file_path {
+        lines.push(format!("📁 {}", path));
+    }
+
+    // Simple 3-option menu
+    let items = vec![
+        InlineListItem {
+            title: "Execute Plan".to_string(),
+            subtitle: Some("Start implementing this plan".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::PlanApprovalExecute),
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Edit Plan".to_string(),
+            subtitle: Some("Return to plan mode to revise".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::PlanApprovalEditPlan),
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Cancel".to_string(),
+            subtitle: Some("Discard this plan".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::PlanApprovalCancel),
+            search_value: None,
+        },
+    ];
+
+    let list_state = ModalListState::new(items, Some(InlineListSelection::PlanApprovalExecute));
+
+    let state = ModalState {
+        title: "Plan Ready".to_string(),
+        lines,
+        list: Some(list_state),
+        secure_prompt: None,
+        popup_state: PopupState::default(),
+        restore_input: session.input_enabled,
+        restore_cursor: session.cursor_visible,
+        search: None,
     };
     session.input_enabled = false;
     session.cursor_visible = false;

@@ -10,7 +10,9 @@
 //! - Plan files are written to a dedicated directory
 //! - The agent edits its own plan file during planning
 //! - Exiting plan mode reads the plan file and starts execution
+//! - User confirmation is required before transitioning to execution (HITL)
 
+use crate::config::constants::tools;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -20,6 +22,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::tools::traits::Tool;
+use crate::ui::tui::PlanContent;
 
 /// Shared state for plan mode across tools
 #[derive(Debug, Clone)]
@@ -228,7 +231,7 @@ impl Tool for EnterPlanModeTool {
     }
 
     fn name(&self) -> &'static str {
-        "enter_plan_mode"
+        tools::ENTER_PLAN_MODE
     }
 
     fn description(&self) -> &'static str {
@@ -302,37 +305,81 @@ impl Tool for ExitPlanModeTool {
         let plan_file = self.state.get_plan_file().await;
 
         // Read the plan content if file exists
-        let plan_content = if let Some(ref path) = plan_file {
+        let (plan_content, plan_title) = if let Some(ref path) = plan_file {
+            let title = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Implementation Plan")
+                .to_string();
             match tokio::fs::read_to_string(path).await {
-                Ok(content) => Some(content),
-                Err(_) => None,
+                Ok(content) => (Some(content), title),
+                Err(_) => (None, title),
             }
         } else {
-            None
+            (None, "Implementation Plan".to_string())
         };
 
-        // Disable plan mode
-        self.state.disable();
+        // Parse structured plan content for the confirmation dialog
+        let structured_plan = plan_content.as_ref().map(|content| {
+            PlanContent::from_markdown(
+                plan_title.clone(),
+                content,
+                plan_file.as_ref().map(|p| p.display().to_string()),
+            )
+        });
 
-        // Clear the current plan file reference (but keep the file on disk)
-        self.state.set_plan_file(None).await;
+        // Build plan summary for JSON response
+        let plan_summary = structured_plan.as_ref().map(|p| {
+            json!({
+                "title": p.title,
+                "summary": p.summary,
+                "total_steps": p.total_steps,
+                "completed_steps": p.completed_steps,
+                "progress_percent": p.progress_percent(),
+                "phases": p.phases.iter().map(|phase| {
+                    json!({
+                        "name": phase.name,
+                        "completed": phase.completed,
+                        "steps": phase.steps.iter().map(|step| {
+                            json!({
+                                "number": step.number,
+                                "description": step.description,
+                                "completed": step.completed
+                            })
+                        }).collect::<Vec<_>>()
+                    })
+                }).collect::<Vec<_>>(),
+                "open_questions": p.open_questions
+            })
+        });
+
+        // NOTE: The actual plan mode state transition is now handled by the caller
+        // after the user confirms via the plan confirmation dialog.
+        // We keep plan mode active until confirmation is received.
+        // The caller should:
+        // 1. Display the plan confirmation modal using show_plan_confirmation()
+        // 2. Wait for user approval (PlanApproved action)
+        // 3. Only then disable plan mode and enable edit tools
 
         Ok(json!({
-            "status": "success",
-            "message": "Exited Plan Mode. The user will now review your plan.",
+            "status": "pending_confirmation",
+            "message": "Plan ready for review. Waiting for user confirmation before execution.",
             "reason": args.reason,
             "plan_file": plan_file.map(|p| p.display().to_string()),
             "plan_content": plan_content,
+            "plan_summary": plan_summary,
             "next_steps": [
-                "Wait for user to review and approve the plan",
-                "Once approved, mutating tools (edit, write, shell) will be available",
-                "Execute the plan step by step"
-            ]
+                "User will see the Implementation Blueprint panel",
+                "User can choose: Execute, Edit Plan, or Cancel",
+                "If approved, mutating tools will be enabled",
+                "Execute the plan step by step after approval"
+            ],
+            "requires_confirmation": true
         }))
     }
 
     fn name(&self) -> &'static str {
-        "exit_plan_mode"
+        tools::EXIT_PLAN_MODE
     }
 
     fn description(&self) -> &'static str {
@@ -407,7 +454,7 @@ mod tests {
         let plans_dir = state.plans_dir();
         std::fs::create_dir_all(&plans_dir).unwrap();
         let plan_file = plans_dir.join("test.md");
-        std::fs::write(&plan_file, "# Test Plan\n\nContent here").unwrap();
+        std::fs::write(&plan_file, "# Test Plan\n\n## Summary\nTest summary\n\n## Phase 1: Test\n[ ] Step one\n[x] Step two").unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
         let tool = ExitPlanModeTool::new(state.clone());
@@ -420,15 +467,21 @@ mod tests {
             .await
             .unwrap();
 
-        // Should not be in plan mode now
-        assert!(!state.is_active());
-        assert_eq!(result["status"], "success");
+        // Plan mode should still be active - waiting for user confirmation (HITL)
+        assert!(state.is_active());
+        assert_eq!(result["status"], "pending_confirmation");
+        assert!(result["requires_confirmation"].as_bool().unwrap());
         assert!(
             result["plan_content"]
                 .as_str()
                 .unwrap()
                 .contains("Test Plan")
         );
+        // Verify structured plan summary is included
+        assert!(result["plan_summary"].is_object());
+        let summary = &result["plan_summary"];
+        assert_eq!(summary["total_steps"], 2);
+        assert_eq!(summary["completed_steps"], 1);
     }
 
     #[tokio::test]

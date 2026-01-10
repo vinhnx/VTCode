@@ -80,9 +80,20 @@ pub(crate) struct InteractionState<'a> {
 }
 
 pub(crate) enum InteractionOutcome {
-    Continue { input: String },
-    Exit { reason: SessionEndReason },
-    Resume { resume_session: Box<ResumeSession> },
+    Continue {
+        input: String,
+    },
+    Exit {
+        reason: SessionEndReason,
+    },
+    Resume {
+        resume_session: Box<ResumeSession>,
+    },
+    /// Plan approved by user (Claude Code style HITL) - transition from Plan to Edit mode
+    PlanApproved {
+        /// If true, auto-accept file edits without prompting
+        auto_accept: bool,
+    },
 }
 
 pub(crate) async fn run_interaction_loop(
@@ -161,6 +172,28 @@ pub(crate) async fn run_interaction_loop(
                 InlineLoopAction::Submit(text) => text,
                 InlineLoopAction::Exit(reason) => {
                     return Ok(InteractionOutcome::Exit { reason });
+                }
+                InlineLoopAction::PlanApproved { auto_accept } => {
+                    // User approved the plan - transition from Plan to Edit mode
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        if auto_accept {
+                            "Plan approved with auto-accept. Starting execution..."
+                        } else {
+                            "Plan approved. Starting execution with manual approval..."
+                        },
+                    )?;
+                    // The editing mode transition and auto-accept state should be
+                    // handled by the caller based on this outcome
+                    return Ok(InteractionOutcome::PlanApproved { auto_accept });
+                }
+                InlineLoopAction::PlanEditRequested => {
+                    // User wants to return to plan editing
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "Returning to plan mode. Continue refining your plan.",
+                    )?;
+                    continue;
                 }
                 InlineLoopAction::ResumeSession(session_id) => {
                     ctx.renderer.line(

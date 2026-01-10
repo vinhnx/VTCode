@@ -1025,6 +1025,14 @@ pub mod tools {
     /// Ask the human a question via the interactive UI (TUI) and return the selection.
     pub const ASK_USER_QUESTION: &str = "ask_user_question";
 
+    // ============================================================
+    // PLAN MODE
+    // ============================================================
+    /// Enter plan mode - enables read-only tools and planning workflow.
+    pub const ENTER_PLAN_MODE: &str = "enter_plan_mode";
+    /// Exit plan mode - triggers confirmation modal before execution.
+    pub const EXIT_PLAN_MODE: &str = "exit_plan_mode";
+
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";
 }

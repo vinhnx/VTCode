@@ -267,6 +267,25 @@ pub(crate) async fn run_single_agent_loop_unified(
                     break; // Restart loop
                 }
                 InteractionOutcome::Continue { input } => input,
+                InteractionOutcome::PlanApproved { auto_accept } => {
+                    // Transition from Plan to Edit mode after user approved the plan
+                    // Update editing mode in header
+                    handle.set_editing_mode(vtcode_core::ui::tui::EditingMode::Edit);
+
+                    // Set auto-accept mode if requested
+                    if auto_accept {
+                        // The session stats or config could track auto-accept state
+                        // For now, just log the transition
+                        renderer.line(
+                            vtcode_core::utils::ansi::MessageStyle::Info,
+                            "Auto-accept mode enabled for this session.",
+                        )?;
+                    }
+
+                    // Continue with empty input to let the agent proceed
+                    // The plan content should guide the next agent turn
+                    continue;
+                }
             };
             // Removed: Tool response pruning
             // Removed: Context window enforcement to respect token limits

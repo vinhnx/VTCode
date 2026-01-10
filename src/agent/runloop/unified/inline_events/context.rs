@@ -111,6 +111,20 @@ impl<'a> InlineEventContext<'a> {
                 // Shift+Tab: Cycle editing modes via /mode command
                 self.input_processor().submit("/mode".to_string())
             }
+            InlineEvent::PlanConfirmation(result) => {
+                use vtcode_core::ui::tui::PlanConfirmationResult;
+                // Handle plan confirmation result (Claude Code style HITL)
+                match result {
+                    PlanConfirmationResult::Execute => {
+                        InlineLoopAction::PlanApproved { auto_accept: false }
+                    }
+                    PlanConfirmationResult::AutoAccept => {
+                        InlineLoopAction::PlanApproved { auto_accept: true }
+                    }
+                    PlanConfirmationResult::EditPlan => InlineLoopAction::PlanEditRequested,
+                    PlanConfirmationResult::Cancel => InlineLoopAction::Continue,
+                }
+            }
         };
 
         Ok(action)

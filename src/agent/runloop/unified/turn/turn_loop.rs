@@ -14,6 +14,7 @@ use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 #[allow(unused_imports)]
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use vtcode_core::acp::ToolPermissionCache;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
@@ -136,13 +137,117 @@ pub async fn run_turn_loop(
     loop {
         step_count += 1;
 
+        // Proactive: In Plan mode, if the last user message signals readiness (e.g., "start implement"),
+        // trigger exit_plan_mode immediately to show the confirmation modal, bypassing LLM guesswork.
+        if ctx.session_stats.is_plan_mode() {
+            if let Some(last_user_msg) = working_history
+                .iter()
+                .rev()
+                .find(|msg| msg.role == uni::MessageRole::User)
+            {
+                // Normalize to lower, strip punctuation so paths or extra symbols don't block detection
+                let normalized = last_user_msg
+                    .content
+                    .as_text()
+                    .to_lowercase()
+                    .chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || c.is_whitespace() {
+                            c
+                        } else {
+                            ' '
+                        }
+                    })
+                    .collect::<String>();
+
+                let trigger_phrases = [
+                    "start implement",
+                    "start implementation",
+                    "start implementing",
+                    "begin implement",
+                    "begin implementation",
+                    "proceed to implement",
+                    "proceed with implementation",
+                    "let s implement",
+                    "lets implement",
+                    "go ahead and implement",
+                    "ready to implement",
+                    "exit plan mode",
+                ];
+                let should_exit_plan = trigger_phrases
+                    .iter()
+                    .any(|phrase| normalized.contains(phrase));
+
+                if should_exit_plan {
+                    use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
+                    use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
+                    use vtcode_core::llm::provider as uni;
+
+                    let mut run_ctx = RunLoopContext {
+                        renderer: ctx.renderer,
+                        handle: ctx.handle,
+                        tool_registry: ctx.tool_registry,
+                        tools: ctx.tools,
+                        tool_result_cache: ctx.tool_result_cache,
+                        tool_permission_cache: ctx.tool_permission_cache,
+                        decision_ledger: ctx.decision_ledger,
+                        session_stats: ctx.session_stats,
+                        mcp_panel_state: ctx.mcp_panel_state,
+                        approval_recorder: ctx.approval_recorder,
+                        session: ctx.session,
+                        traj,
+                    };
+
+                    // Build a synthetic tool call for exit_plan_mode
+                    let args = serde_json::json!({
+                        "reason": "user_requested_implementation"
+                    });
+                    let call = uni::ToolCall::function(
+                        format!("call_{}_exit_plan_mode", step_count),
+                        tool_names::EXIT_PLAN_MODE.to_string(),
+                        serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string()),
+                    );
+
+                    let outcome = run_tool_call(
+                        &mut run_ctx,
+                        &call,
+                        ctx.ctrl_c_state,
+                        ctx.ctrl_c_notify,
+                        ctx.default_placeholder.clone(),
+                        ctx.lifecycle_hooks,
+                        true,
+                        vt_cfg,
+                        step_count,
+                    )
+                    .await;
+
+                    match outcome {
+                        Ok(_pipe_outcome) => {
+                            // The tool pipeline handles showing the confirmation modal and
+                            // toggling plan/edit modes based on user choice. End this turn.
+                            result = TurnLoopResult::Completed;
+                            break;
+                        }
+                        Err(err) => {
+                            crate::agent::runloop::unified::turn::turn_helpers::display_error(
+                                ctx.renderer,
+                                "Failed to exit Plan Mode",
+                                &err,
+                            )?;
+                            // Fall through to normal LLM processing if proactive exit failed
+                        }
+                    }
+                }
+            }
+        }
+
         // Check if we've reached the maximum number of tool loops
         if step_count > current_max_tool_loops {
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                 ctx.renderer,
                 &format!("Reached maximum tool loops ({})", current_max_tool_loops),
             )?;
-            
+
             // Prompt user to continue with more tool loops
             match crate::agent::runloop::unified::tool_routing::prompt_tool_loop_limit_increase(
                 ctx.handle,
@@ -154,7 +259,21 @@ pub async fn run_turn_loop(
             .await
             {
                 Ok(Some(increment)) => {
+                    let previous_max_tool_loops = current_max_tool_loops;
                     current_max_tool_loops = current_max_tool_loops.saturating_add(increment);
+                    // Update the safety validator with the new turn limit while preserving the session limit
+                    {
+                        let mut validator = ctx.safety_validator.write().await;
+                        // Get the current session limit to preserve it
+                        let current_session_limit = validator.get_session_limit();
+                        validator.set_limits(current_max_tool_loops, current_session_limit);
+                        tracing::info!(
+                            "Updated safety validator limits: turn={} (was {}), session={}",
+                            current_max_tool_loops,
+                            previous_max_tool_loops,
+                            current_session_limit
+                        );
+                    }
                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
                         ctx.renderer,
                         &format!("Tool loop limit increased to {}", current_max_tool_loops),

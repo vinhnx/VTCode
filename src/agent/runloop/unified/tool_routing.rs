@@ -313,7 +313,8 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             | InlineEvent::FileSelected(_)
             | InlineEvent::BackgroundOperation
             | InlineEvent::LaunchEditor
-            | InlineEvent::ToggleMode => {
+            | InlineEvent::ToggleMode
+            | InlineEvent::PlanConfirmation(_) => {
                 ctrl_c_state.disarm_exit();
             }
         }

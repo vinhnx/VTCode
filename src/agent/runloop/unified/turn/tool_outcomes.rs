@@ -5,6 +5,7 @@
 //! - Execution with caching
 //! - Success/failure/timeout/cancelled handling
 
+use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnOutcomeContext, TurnProcessingContext,
 };
@@ -15,6 +16,7 @@ use futures::future::join_all;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Notify;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::utils::session_archive::SessionMessage;
 
 use vtcode_core::config::constants::tools;
@@ -356,13 +358,14 @@ pub(crate) async fn handle_tool_call(
 
     // HP-4: Validate tool call safety before execution
 
-    // Phase 4 Check: Circuit Breaker
-    if !ctx.circuit_breaker.allow_request() {
+    // Phase 4 Check: Per-tool Circuit Breaker
+    if !ctx.circuit_breaker.allow_request_for_tool(tool_name) {
         let error_msg = format!(
             "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
             tool_name
         );
-        ctx.renderer.line(MessageStyle::Error, &error_msg)?;
+        // Log to tracing but don't show error in TUI - just inform the LLM via history
+        tracing::warn!(tool = %tool_name, "Circuit breaker open, tool disabled");
         ctx.working_history
             .push(uni::Message::tool_response_with_origin(
                 tool_call.id.clone(),
@@ -609,7 +612,7 @@ pub(crate) async fn handle_tool_execution_result(
         } => {
             // Phase 4: Record success
             let duration = tool_start_time.elapsed();
-            ctx.circuit_breaker.record_success();
+            ctx.circuit_breaker.record_success_for_tool(tool_name);
             ctx.tool_health_tracker
                 .record_execution(tool_name, true, duration);
 
@@ -669,15 +672,38 @@ pub(crate) async fn handle_tool_execution_result(
             }
         }
         ToolExecutionStatus::Failure { error } => {
-            // Phase 4: Record failure
+            // Phase 4: Record failure (but skip for plan mode denials which are intentional blocks)
             let duration = tool_start_time.elapsed();
-            ctx.circuit_breaker.record_failure();
-            ctx.tool_health_tracker
-                .record_execution(tool_name, false, duration);
 
-            // Add error result to history
+            // Check if this is a plan mode denial or argument error - don't count these toward circuit breaker
+            // Plan mode denials are intentional policy blocks, not actual execution failures
+            // Argument errors are LLM mistakes, not tool failures
+            let error_str = error.to_string();
+            let is_plan_mode_denial = error_str.contains("tool denied by plan mode");
+            let is_argument_error = error_str.contains("Missing required")
+                || error_str.contains("Invalid arguments")
+                || error_str.contains("required path parameter")
+                || error_str.contains("expected ")
+                || error_str.contains("Expected:");
+
+            if !is_plan_mode_denial {
+                // Record failure with argument error flag - argument errors don't trigger circuit breaker
+                ctx.circuit_breaker
+                    .record_failure_for_tool(tool_name, is_argument_error);
+                ctx.tool_health_tracker
+                    .record_execution(tool_name, false, duration);
+            } else {
+                // Still log the denial but don't affect circuit breaker state
+                tracing::debug!(
+                    tool = %tool_name,
+                    "Plan mode denial - not recording as circuit breaker failure"
+                );
+            }
+
+            // Add error result to history (for LLM to see)
             let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
-            ctx.renderer.line(MessageStyle::Error, &error_msg)?;
+            // Log to tracing for debugging, but don't spam TUI with repetitive tool errors
+            tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
 
             let error_content = serde_json::json!({"error": error_msg});
             working_history.push(uni::Message::tool_response_with_origin(
@@ -685,17 +711,158 @@ pub(crate) async fn handle_tool_execution_result(
                 error_content.to_string(),
                 tool_name.to_string(),
             ));
+
+            // Auto-recovery: If we're in Plan Mode and a mutating tool was denied,
+            // proactively call exit_plan_mode to show the confirmation modal.
+            if is_plan_mode_denial && ctx.session_stats.is_plan_mode() {
+                // Don't print status message - the modal will show the plan
+                // (printing here corrupts the TUI display)
+
+                // Build a synthetic tool call for exit_plan_mode
+                let exit_args = serde_json::json!({
+                    "reason": "auto_trigger_on_plan_denial"
+                });
+                let exit_args_json =
+                    serde_json::to_string(&exit_args).unwrap_or_else(|_| "{}".to_string());
+                let exit_call_id = format!(
+                    "call_auto_exit_plan_mode_{}",
+                    tool_start_time.elapsed().as_millis()
+                );
+                let exit_call = uni::ToolCall::function(
+                    exit_call_id.clone(),
+                    tool_names::EXIT_PLAN_MODE.to_string(),
+                    exit_args_json.clone(),
+                );
+
+                // Reuse the current context to run the exit_plan_mode tool
+                let exit_start = std::time::Instant::now();
+                let exit_outcome = run_tool_call(
+                    &mut crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+                        renderer: ctx.renderer,
+                        handle: ctx.handle,
+                        tool_registry: ctx.tool_registry,
+                        tools: ctx.tools,
+                        tool_result_cache: ctx.tool_result_cache,
+                        tool_permission_cache: ctx.tool_permission_cache,
+                        decision_ledger: ctx.decision_ledger,
+                        session_stats: ctx.session_stats,
+                        mcp_panel_state: ctx.mcp_panel_state,
+                        approval_recorder: ctx.approval_recorder,
+                        session: ctx.session,
+                        traj,
+                    },
+                    &exit_call,
+                    ctx.ctrl_c_state,
+                    ctx.ctrl_c_notify,
+                    ctx.default_placeholder.clone(),
+                    ctx.lifecycle_hooks,
+                    true,
+                    vt_cfg,
+                    0,
+                )
+                .await;
+
+                if let Ok(exit_pipeline_outcome) = exit_outcome {
+                    // Render and record the exit_plan_mode outcome without recursive async call
+                    match &exit_pipeline_outcome.status {
+                        ToolExecutionStatus::Success { output, .. } => {
+                            let duration = exit_start.elapsed();
+                            ctx.circuit_breaker
+                                .record_success_for_tool(tool_names::EXIT_PLAN_MODE);
+                            ctx.tool_health_tracker.record_execution(
+                                tool_names::EXIT_PLAN_MODE,
+                                true,
+                                duration,
+                            );
+
+                            let content_for_model = if let Some(s) = output.as_str() {
+                                s.to_string()
+                            } else {
+                                serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
+                            };
+                            working_history.push(uni::Message::tool_response_with_origin(
+                                exit_call_id.clone(),
+                                content_for_model,
+                                tool_names::EXIT_PLAN_MODE.to_string(),
+                            ));
+
+                            let (_any_write, mod_files, _last_stdout) =
+                                crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
+                                    ctx,
+                                    tool_names::EXIT_PLAN_MODE,
+                                    &exit_args,
+                                    &exit_pipeline_outcome,
+                                    vt_cfg,
+                                    traj,
+                                )
+                                .await?;
+                            for f in mod_files {
+                                turn_modified_files.insert(f);
+                            }
+                        }
+                        ToolExecutionStatus::Failure { error } => {
+                            let duration = exit_start.elapsed();
+                            ctx.circuit_breaker
+                                .record_failure_for_tool(tool_names::EXIT_PLAN_MODE, false);
+                            ctx.tool_health_tracker.record_execution(
+                                tool_names::EXIT_PLAN_MODE,
+                                false,
+                                duration,
+                            );
+
+                            let err_msg = format!(
+                                "Tool '{}' execution failed: {}",
+                                tool_names::EXIT_PLAN_MODE,
+                                error
+                            );
+                            tracing::debug!(tool = tool_names::EXIT_PLAN_MODE, error = %error, "exit_plan_mode failed");
+                            let error_content = serde_json::json!({"error": err_msg});
+                            working_history.push(uni::Message::tool_response_with_origin(
+                                exit_call_id.clone(),
+                                error_content.to_string(),
+                                tool_names::EXIT_PLAN_MODE.to_string(),
+                            ));
+                        }
+                        ToolExecutionStatus::Timeout { error } => {
+                            let duration = exit_start.elapsed();
+                            ctx.circuit_breaker
+                                .record_failure_for_tool(tool_names::EXIT_PLAN_MODE, false);
+                            ctx.tool_health_tracker.record_execution(
+                                tool_names::EXIT_PLAN_MODE,
+                                false,
+                                duration,
+                            );
+                            let err_msg = format!(
+                                "Tool '{}' timed out: {}",
+                                tool_names::EXIT_PLAN_MODE,
+                                error.message
+                            );
+                            tracing::debug!(tool = tool_names::EXIT_PLAN_MODE, error = %error.message, "exit_plan_mode timed out");
+                            let error_content = serde_json::json!({"error": err_msg});
+                            working_history.push(uni::Message::tool_response_with_origin(
+                                exit_call_id.clone(),
+                                error_content.to_string(),
+                                tool_names::EXIT_PLAN_MODE.to_string(),
+                            ));
+                        }
+                        ToolExecutionStatus::Cancelled | ToolExecutionStatus::Progress(_) => {
+                            // No-op
+                        }
+                    }
+                }
+            }
         }
         ToolExecutionStatus::Timeout { error } => {
             // Phase 4: Record failure (timeout is a failure)
             let duration = tool_start_time.elapsed();
-            ctx.circuit_breaker.record_failure();
+            ctx.circuit_breaker
+                .record_failure_for_tool(tool_name, false);
             ctx.tool_health_tracker
                 .record_execution(tool_name, false, duration);
 
-            // Add timeout result to history
+            // Add timeout result to history (for LLM)
             let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
-            ctx.renderer.line(MessageStyle::Error, &error_msg)?;
+            tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
 
             let error_content = serde_json::json!({"error": error_msg});
             working_history.push(uni::Message::tool_response_with_origin(

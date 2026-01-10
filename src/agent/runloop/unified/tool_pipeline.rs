@@ -11,6 +11,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use super::ask_user_question::execute_ask_user_question_tool;
+use super::plan_confirmation::{
+    PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
+};
 use super::progress::ProgressReporter;
 use vtcode_core::config::constants::tools;
 use vtcode_core::exec::cancellation;
@@ -18,6 +21,7 @@ use vtcode_core::tools::registry::ToolErrorType;
 use vtcode_core::tools::registry::{
     ToolExecutionError, ToolRegistry, ToolTimeoutCategory, classify_error,
 };
+use vtcode_core::ui::tui::PlanContent;
 
 use super::run_loop_context::RunLoopContext;
 use super::state::CtrlCState;
@@ -271,6 +275,179 @@ pub(crate) async fn run_tool_call(
             },
             Err(error) => ToolExecutionStatus::Failure { error },
         }));
+    }
+
+    // Special-case enter_plan_mode: execute tool and enable plan mode in registry.
+    // This ensures the registry's plan_read_only_mode flag is set when agent enters plan mode.
+    if name == tools::ENTER_PLAN_MODE {
+        let tool_result = execute_tool_with_timeout_ref(
+            ctx.tool_registry,
+            &name,
+            &args_val,
+            ctrl_c_state,
+            ctrl_c_notify,
+            None,
+        )
+        .await;
+
+        // If tool execution succeeded, enable plan mode in the registry
+        if let ToolExecutionStatus::Success { ref output, .. } = tool_result {
+            let status = output.get("status").and_then(|s| s.as_str());
+            // Enable plan mode unless we were already in plan mode
+            if status == Some("success") {
+                ctx.tool_registry.enable_plan_mode();
+                ctx.session_stats
+                    .set_editing_mode(vtcode_core::ui::EditingMode::Plan);
+                tracing::info!(
+                    target: "vtcode.plan_mode",
+                    "Agent entered Plan Mode (read-only, mutating tools blocked)"
+                );
+            }
+        }
+
+        return Ok(ToolPipelineOutcome::from_status(tool_result));
+    }
+
+    // Special-case exit_plan_mode: execute tool first, then show confirmation modal if needed.
+    // This implements the "Execute After Confirmation (HITL)" pattern from Claude Code.
+    if name == tools::EXIT_PLAN_MODE {
+        // Check if plan confirmation is enabled via config
+        let require_confirmation = vt_cfg
+            .map(|cfg| cfg.agent.require_plan_confirmation)
+            .unwrap_or(true);
+
+        // Execute the exit_plan_mode tool to get the plan summary
+        let tool_result = execute_tool_with_timeout_ref(
+            ctx.tool_registry,
+            &name,
+            &args_val,
+            ctrl_c_state,
+            ctrl_c_notify,
+            None,
+        )
+        .await;
+
+        // If tool execution succeeded, check if confirmation is required
+        if let ToolExecutionStatus::Success { ref output, .. } = tool_result {
+            // Check if the result indicates pending confirmation
+            let status = output.get("status").and_then(|s| s.as_str());
+            let requires_confirmation_from_result = output
+                .get("requires_confirmation")
+                .and_then(|r| r.as_bool())
+                .unwrap_or(false);
+
+            if status == Some("pending_confirmation")
+                && requires_confirmation_from_result
+                && require_confirmation
+            {
+                // Parse the plan content for the modal
+                // Prefer using raw markdown content with PlanContent::from_markdown for better parsing
+                // Fall back to JSON summary if raw content not available
+                let plan_content = if let Some(raw_content) =
+                    output.get("plan_content").and_then(|v| v.as_str())
+                {
+                    let title = output
+                        .get("plan_summary")
+                        .and_then(|s| s.get("title"))
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("Implementation Plan")
+                        .to_string();
+                    let file_path = output
+                        .get("plan_file")
+                        .and_then(|p| p.as_str())
+                        .map(|s| s.to_string());
+                    PlanContent::from_markdown(title, raw_content, file_path)
+                } else {
+                    let plan_summary_json = output.get("plan_summary").cloned().unwrap_or_default();
+                    parse_plan_content_from_json(&plan_summary_json)
+                };
+
+                // Show the confirmation modal and wait for user response
+                let confirmation_outcome = execute_plan_confirmation(
+                    ctx.handle,
+                    ctx.session,
+                    plan_content,
+                    ctrl_c_state,
+                    ctrl_c_notify,
+                )
+                .await;
+
+                let final_output = match confirmation_outcome {
+                    Ok(outcome) => {
+                        // If user approved, we need to actually disable plan mode
+                        if matches!(
+                            outcome,
+                            PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
+                        ) {
+                            // CRITICAL: Disable plan mode in the tool registry to allow mutating tools
+                            ctx.tool_registry.disable_plan_mode();
+                            // Keep shared plan state aligned with registry toggle
+                            let plan_state = ctx.tool_registry.plan_mode_state();
+                            plan_state.disable();
+                            plan_state.set_plan_file(None).await;
+                            // Also update the UI editing mode indicator
+                            ctx.session_stats
+                                .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                            tracing::info!(
+                                target: "vtcode.plan_mode",
+                                "User approved plan execution, transitioning to Edit mode (mutating tools enabled)"
+                            );
+                        } else if matches!(outcome, PlanConfirmationOutcome::EditPlan) {
+                            // User wants to edit the plan - ensure plan mode stays active
+                            tracing::info!(
+                                target: "vtcode.plan_mode",
+                                "User requested plan edit, remaining in Plan mode"
+                            );
+                        }
+                        plan_confirmation_outcome_to_json(&outcome)
+                    }
+                    Err(e) => serde_json::json!({
+                        "status": "error",
+                        "error": format!("Plan confirmation failed: {}", e)
+                    }),
+                };
+
+                return Ok(ToolPipelineOutcome::from_status(
+                    ToolExecutionStatus::Success {
+                        output: final_output,
+                        stdout: None,
+                        modified_files: vec![],
+                        command_success: true,
+                        has_more: false,
+                    },
+                ));
+            } else if !require_confirmation {
+                // Confirmation disabled via config, auto-approve
+                // CRITICAL: Disable plan mode in the tool registry to allow mutating tools
+                ctx.tool_registry.disable_plan_mode();
+                let plan_state = ctx.tool_registry.plan_mode_state();
+                plan_state.disable();
+                plan_state.set_plan_file(None).await;
+                ctx.session_stats
+                    .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                tracing::info!(
+                    target: "vtcode.plan_mode",
+                    "Plan confirmation disabled via config, auto-approving (mutating tools enabled)"
+                );
+                return Ok(ToolPipelineOutcome::from_status(
+                    ToolExecutionStatus::Success {
+                        output: serde_json::json!({
+                            "status": "approved",
+                            "action": "execute",
+                            "auto_accept": true,
+                            "message": "Plan confirmation disabled. Proceeding with implementation."
+                        }),
+                        stdout: None,
+                        modified_files: vec![],
+                        command_success: true,
+                        has_more: false,
+                    },
+                ));
+            }
+        }
+
+        // Fall through: return the original tool result if no special handling needed
+        return Ok(ToolPipelineOutcome::from_status(tool_result));
     }
 
     // Determine read-only tools for caching
@@ -947,6 +1124,122 @@ fn spawn_timeout_warning_task(
             }
         }
     }))
+}
+
+/// Parse PlanContent from JSON returned by exit_plan_mode tool
+fn parse_plan_content_from_json(json: &Value) -> PlanContent {
+    let title = json
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Implementation Plan")
+        .to_string();
+
+    let summary = json
+        .get("summary")
+        .or_else(|| json.get("description"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let file_path = json
+        .get("file_path")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let raw_content = json
+        .get("raw_content")
+        .or_else(|| json.get("content"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let open_questions = json
+        .get("open_questions")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|q| q.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut step_number = 0;
+    let phases: Vec<vtcode_core::ui::tui::PlanPhase> = json
+        .get("phases")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|phase| {
+                    let name = phase.get("name").and_then(|v| v.as_str())?.to_string();
+                    let steps: Vec<vtcode_core::ui::tui::PlanStep> = phase
+                        .get("steps")
+                        .and_then(|v| v.as_array())
+                        .map(|steps_arr| {
+                            steps_arr
+                                .iter()
+                                .filter_map(|step| {
+                                    step_number += 1;
+                                    let step_desc =
+                                        step.get("description").and_then(|v| v.as_str())?;
+                                    let details = step
+                                        .get("details")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string());
+                                    let files = step
+                                        .get("files")
+                                        .and_then(|v| v.as_array())
+                                        .map(|f| {
+                                            f.iter()
+                                                .filter_map(|s| s.as_str().map(|s| s.to_string()))
+                                                .collect()
+                                        })
+                                        .unwrap_or_default();
+                                    let completed = step
+                                        .get("completed")
+                                        .and_then(|v| v.as_bool())
+                                        .unwrap_or(false);
+
+                                    Some(vtcode_core::ui::tui::PlanStep {
+                                        number: step_number,
+                                        description: step_desc.to_string(),
+                                        details,
+                                        files,
+                                        completed,
+                                    })
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    let phase_completed = steps.iter().all(|s| s.completed) && !steps.is_empty();
+
+                    Some(vtcode_core::ui::tui::PlanPhase {
+                        name,
+                        steps,
+                        completed: phase_completed,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let total_steps = phases.iter().map(|p| p.steps.len()).sum();
+    let completed_steps = phases
+        .iter()
+        .flat_map(|p| p.steps.iter())
+        .filter(|s| s.completed)
+        .count();
+
+    PlanContent {
+        title,
+        summary,
+        file_path,
+        phases,
+        open_questions,
+        raw_content,
+        total_steps,
+        completed_steps,
+    }
 }
 
 /// Determine if a tool is cacheable based on tool type and arguments

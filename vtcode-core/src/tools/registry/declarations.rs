@@ -638,11 +638,12 @@ pub fn build_function_declarations_with_mode(
 
 /// Build function declarations filtered by capability level
 pub fn build_function_declarations_for_level(level: CapabilityLevel) -> Vec<FunctionDeclaration> {
-    let tool_capabilities: HashMap<&'static str, CapabilityLevel> = builtin_tool_registrations()
-        .into_iter()
-        .filter(|registration| registration.expose_in_llm())
-        .map(|registration| (registration.name(), registration.capability()))
-        .collect();
+    let tool_capabilities: HashMap<&'static str, CapabilityLevel> =
+        builtin_tool_registrations(None)
+            .into_iter()
+            .filter(|registration| registration.expose_in_llm())
+            .map(|registration| (registration.name(), registration.capability()))
+            .collect();
 
     let mut declarations = build_function_declarations();
     apply_metadata_overrides(&mut declarations);
@@ -658,7 +659,7 @@ pub fn build_function_declarations_for_level(level: CapabilityLevel) -> Vec<Func
         .collect()
 }
 fn apply_metadata_overrides(declarations: &mut [FunctionDeclaration]) {
-    let registrations = builtin_tool_registrations();
+    let registrations = builtin_tool_registrations(None);
     let mut metadata_by_name: HashMap<&str, _> = registrations
         .iter()
         .map(|r| (r.name(), r.metadata()))

@@ -22,7 +22,8 @@ pub use types::{
     EditingMode, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
     InlineHeaderContext, InlineHeaderHighlight, InlineListItem, InlineListSearchConfig,
     InlineListSelection, InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle,
-    InlineTheme, SecurePromptConfig, WizardStep,
+    InlineTheme, PlanConfirmationResult, PlanContent, PlanPhase, PlanStep, SecurePromptConfig,
+    WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

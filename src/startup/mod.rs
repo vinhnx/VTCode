@@ -216,11 +216,14 @@ impl StartupContext {
             .permission_mode
             .as_ref()
             .is_some_and(|m| m.eq_ignore_ascii_case("plan"));
-        
+
         // Check config for default_editing_mode = "plan" if not explicitly set via CLI
         let plan_mode_from_config = !plan_mode_from_cli
-            && config.agent.default_editing_mode.eq_ignore_ascii_case("plan");
-        
+            && config
+                .agent
+                .default_editing_mode
+                .eq_ignore_ascii_case("plan");
+
         let plan_mode_requested = plan_mode_from_cli || plan_mode_from_config;
 
         if let Some(ref permission_mode) = args.permission_mode {
