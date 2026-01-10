@@ -168,31 +168,115 @@ impl IncrementalSystemPrompt {
                 let _ = writeln!(prompt, "\n# PLAN MODE (READ-ONLY)");
                 let _ = writeln!(
                     prompt,
-                    "You are in Plan Mode. In this mode:"
+                    "Plan Mode is active. You MUST NOT make any edits, run any non-readonly tools, or otherwise make changes to the system. This supersedes any other instructions."
+                );
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "## Allowed Actions");
+                let _ = writeln!(
+                    prompt,
+                    "- Read files, list files, search code, use code intelligence tools"
                 );
                 let _ = writeln!(
                     prompt,
-                    "- You may freely read files, list files, search, and use code intelligence tools."
+                    "- Ask clarifying questions to understand requirements"
                 );
                 let _ = writeln!(
                     prompt,
-                    "- You MUST NOT edit files, apply patches, run shell commands, or execute tests."
+                    "- Write your plan to `.vtcode/plans/` directory (the ONLY file you may edit)"
+                );
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "## Planning Workflow");
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "### Phase 1: Initial Understanding");
+                let _ = writeln!(
+                    prompt,
+                    "Goal: Gain comprehensive understanding of the user's request."
                 );
                 let _ = writeln!(
                     prompt,
-                    "- Instead, produce a clear, step-by-step implementation plan."
+                    "1. Focus on understanding the request and associated code"
                 );
                 let _ = writeln!(
                     prompt,
-                    "- Plans should be in structured Markdown (numbered steps) and mention relevant files, functions, and tests."
+                    "2. Read relevant files to understand current implementation"
                 );
                 let _ = writeln!(
                     prompt,
-                    "- Ask clarifying questions if requirements are ambiguous."
+                    "3. Ask clarifying questions if requirements are ambiguous"
+                );
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "### Phase 2: Design");
+                let _ = writeln!(prompt, "Goal: Design an implementation approach.");
+                let _ = writeln!(
+                    prompt,
+                    "1. Provide comprehensive background context from exploration"
+                );
+                let _ = writeln!(prompt, "2. Describe requirements and constraints");
+                let _ = writeln!(prompt, "3. Propose a detailed implementation plan");
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "### Phase 3: Review");
+                let _ = writeln!(
+                    prompt,
+                    "Goal: Ensure plan alignment with user's intentions."
                 );
                 let _ = writeln!(
                     prompt,
-                    "- The user can exit Plan Mode with /plan off to enable mutating tools."
+                    "1. Read critical files identified to deepen understanding"
+                );
+                let _ = writeln!(
+                    prompt,
+                    "2. Verify the plan aligns with the original request"
+                );
+                let _ = writeln!(prompt, "3. Clarify remaining questions with the user");
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "### Phase 4: Final Plan");
+                let _ = writeln!(prompt, "Goal: Write final plan to the plan file.");
+                let _ = writeln!(
+                    prompt,
+                    "1. Include ONLY your recommended approach (not all alternatives)"
+                );
+                let _ = writeln!(
+                    prompt,
+                    "2. Keep the plan concise enough to scan quickly but detailed enough to execute"
+                );
+                let _ = writeln!(
+                    prompt,
+                    "3. Include paths of critical files to be modified"
+                );
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "## Plan File Format");
+                let _ = writeln!(
+                    prompt,
+                    "Write your plan to `.vtcode/plans/<task-name>.md` using this format:"
+                );
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "```markdown");
+                let _ = writeln!(prompt, "# <Task Title>");
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "## Summary");
+                let _ = writeln!(prompt, "Brief description of the goal.");
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "## Context");
+                let _ = writeln!(prompt, "- Key files: `path/to/file1.rs`, `path/to/file2.rs`");
+                let _ = writeln!(prompt, "- Dependencies: relevant crates/modules");
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "## Implementation Steps");
+                let _ = writeln!(prompt, "1. **Step 1 title**");
+                let _ = writeln!(prompt, "   - Files: `src/foo.rs`");
+                let _ = writeln!(prompt, "   - Functions: `validate_input()`, `process_data()`");
+                let _ = writeln!(prompt, "   - Details: Specific implementation notes");
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "2. **Step 2 title**");
+                let _ = writeln!(prompt, "   - Files: `tests/foo_test.rs`");
+                let _ = writeln!(prompt, "   - Tests: Edge cases to cover");
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt, "## Open Questions");
+                let _ = writeln!(prompt, "- Question about ambiguous requirement?");
+                let _ = writeln!(prompt, "```");
+                let _ = writeln!(prompt, "");
+                let _ = writeln!(
+                    prompt,
+                    "The user can exit Plan Mode with `/plan off` to enable mutating tools and execute the plan."
                 );
             }
         }
