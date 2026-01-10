@@ -19,10 +19,10 @@ pub mod widgets;
 pub use style::{convert_style, theme_from_styles};
 pub use theme_parser::ThemeConfigParser;
 pub use types::{
-    InlineCommand, InlineEvent, InlineEventCallback, InlineHandle, InlineHeaderContext,
-    InlineHeaderHighlight, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle, InlineTheme,
-    SecurePromptConfig, WizardStep,
+    EditingMode, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
+    InlineHeaderContext, InlineHeaderHighlight, InlineListItem, InlineListSearchConfig,
+    InlineListSelection, InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle,
+    InlineTheme, SecurePromptConfig, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

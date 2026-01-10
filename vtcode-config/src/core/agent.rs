@@ -174,6 +174,13 @@ pub struct AgentConfig {
     /// Custom instructions provided by the user via configuration
     #[serde(default)]
     pub user_instructions: Option<String>,
+
+    /// Default editing mode: "edit" (default) or "plan"
+    /// In "plan" mode, the agent is read-only and produces implementation plans.
+    /// In "edit" mode, the agent can modify files and execute commands.
+    /// Toggle with Shift+Tab or /plan command during a session.
+    #[serde(default = "default_editing_mode")]
+    pub default_editing_mode: String,
 }
 
 impl Default for AgentConfig {
@@ -213,6 +220,7 @@ impl Default for AgentConfig {
             temporal_context_use_utc: false, // Default to local time
             include_working_directory: default_include_working_directory(),
             user_instructions: None,
+            default_editing_mode: default_editing_mode(),
         }
     }
 }
@@ -338,6 +346,11 @@ const fn default_include_temporal_context() -> bool {
 #[inline]
 const fn default_include_working_directory() -> bool {
     true // Enable by default - minimal overhead (~10 tokens)
+}
+
+#[inline]
+fn default_editing_mode() -> String {
+    "edit".into() // Default to edit mode (full tool access)
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

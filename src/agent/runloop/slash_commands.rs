@@ -82,6 +82,12 @@ pub enum SlashCommandOutcome {
     TogglePlanMode {
         enable: Option<bool>,
     },
+    /// /agent command - toggle Agent mode (autonomous with reduced HITL)
+    ToggleAgentMode {
+        enable: Option<bool>,
+    },
+    /// /mode command - cycle through Edit → Plan → Agent → Edit
+    CycleMode,
 }
 
 #[derive(Clone, Debug)]
@@ -844,6 +850,33 @@ pub async fn handle_slash_command(
             };
 
             Ok(SlashCommandOutcome::TogglePlanMode { enable })
+        }
+        "agent" => {
+            let arg = args.trim().to_ascii_lowercase();
+            let enable = match arg.as_str() {
+                "" | "toggle" => None,
+                "on" | "enable" => Some(true),
+                "off" | "disable" => Some(false),
+                _ => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Usage: /agent [on|off] - Toggle Agent Mode (autonomous, reduced prompts)",
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            };
+
+            Ok(SlashCommandOutcome::ToggleAgentMode { enable })
+        }
+        "mode" => {
+            if !args.trim().is_empty() {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Usage: /mode - Cycle through Edit -> Plan -> Agent modes",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::CycleMode)
         }
         "help" => {
             let specific_cmd = if args.trim().is_empty() {

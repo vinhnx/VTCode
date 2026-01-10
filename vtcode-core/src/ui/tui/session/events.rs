@@ -155,6 +155,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             return None;
         }
+        KeyCode::BackTab => {
+            // Shift+Tab: Toggle editing mode (Edit -> Plan -> Agent -> Edit)
+            session.mark_dirty();
+            Some(InlineEvent::ToggleMode)
+        }
         // External editor launch disabled - use /edit command instead
         // KeyCode::Char('e') | KeyCode::Char('E') if has_control && !has_command => {
         //     session.mark_dirty();

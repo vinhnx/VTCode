@@ -145,6 +145,10 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         | InlineCommand::ClearInputQueue => {
             // Handled by drive_terminal
         }
+        InlineCommand::SetEditingMode(mode) => {
+            session.header_context.editing_mode = mode;
+            session.needs_redraw = true;
+        }
         InlineCommand::Shutdown => {
             request_exit(session);
         }

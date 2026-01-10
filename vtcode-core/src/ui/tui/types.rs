@@ -17,6 +17,8 @@ pub struct InlineHeaderContext {
     pub tools: String,
     pub mcp: String,
     pub highlights: Vec<InlineHeaderHighlight>,
+    /// Current editing mode for display in header
+    pub editing_mode: EditingMode,
 }
 
 impl Default for InlineHeaderContext {
@@ -67,6 +69,7 @@ impl Default for InlineHeaderContext {
             tools,
             mcp,
             highlights: Vec::new(),
+            editing_mode: EditingMode::default(),
         }
     }
 }
@@ -316,7 +319,50 @@ pub enum InlineCommand {
     SuspendEventLoop,
     ResumeEventLoop,
     ClearInputQueue,
+    /// Update editing mode state in header context
+    SetEditingMode(EditingMode),
     Shutdown,
+}
+
+/// Editing mode for the agent session
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EditingMode {
+    /// Full tool access - can edit files and run commands
+    #[default]
+    Edit,
+    /// Read-only mode - produces implementation plans without executing
+    Plan,
+    /// Autonomous agent mode - full tool access with reduced HITL prompts
+    Agent,
+}
+
+impl EditingMode {
+    /// Cycle to the next mode: Edit -> Plan -> Agent -> Edit
+    pub fn next(self) -> Self {
+        match self {
+            Self::Edit => Self::Plan,
+            Self::Plan => Self::Agent,
+            Self::Agent => Self::Edit,
+        }
+    }
+
+    /// Get display name for the mode
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Edit => "Edit",
+            Self::Plan => "Plan",
+            Self::Agent => "Agent",
+        }
+    }
+
+    /// Parse mode from string (case-insensitive)
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "plan" => Self::Plan,
+            "agent" => Self::Agent,
+            _ => Self::Edit, // Default to edit for unknown values
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -345,6 +391,8 @@ pub enum InlineEvent {
     FileSelected(String),
     LaunchEditor,
     ForceCancelPtySession,
+    /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Agent)
+    ToggleMode,
 }
 
 pub type InlineEventCallback = Arc<dyn Fn(&InlineEvent) + Send + Sync + 'static>;
@@ -457,6 +505,11 @@ impl InlineHandle {
 
     pub fn shutdown(&self) {
         let _ = self.sender.send(InlineCommand::Shutdown);
+    }
+
+    /// Update editing mode state in the header display
+    pub fn set_editing_mode(&self, mode: EditingMode) {
+        let _ = self.sender.send(InlineCommand::SetEditingMode(mode));
     }
 
     pub fn show_modal(

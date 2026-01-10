@@ -499,6 +499,7 @@ pub async fn handle_execute_tool(
                 .as_ref()
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
+            editing_mode: ctx.session_stats.editing_mode(),
         },
         &name,
         Some(&args),
@@ -1203,6 +1204,8 @@ pub async fn handle_toggle_plan_mode(
     ctx: SlashCommandContext<'_>,
     enable: Option<bool>,
 ) -> Result<SlashCommandControl> {
+    use vtcode_core::ui::tui::EditingMode;
+    
     let current = ctx.session_stats.is_plan_mode();
     let new_state = match enable {
         Some(value) => value,
@@ -1222,11 +1225,19 @@ pub async fn handle_toggle_plan_mode(
     }
 
     ctx.session_stats.set_plan_mode(new_state);
+    
+    // Update header display to show editing mode indicator
+    let new_mode = if new_state {
+        EditingMode::Plan
+    } else {
+        EditingMode::Edit
+    };
+    ctx.handle.set_editing_mode(new_mode);
 
     if new_state {
         ctx.tool_registry.enable_plan_mode();
         ctx.renderer
-            .line(MessageStyle::Info, "Plan Mode enabled")?;
+            .line(MessageStyle::Info, "📋 Plan Mode enabled")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  The agent will only read/analyze the codebase and produce step-by-step plans.",
@@ -1243,11 +1254,114 @@ pub async fn handle_toggle_plan_mode(
     } else {
         ctx.tool_registry.disable_plan_mode();
         ctx.renderer
-            .line(MessageStyle::Info, "✏️ Plan Mode disabled")?;
+            .line(MessageStyle::Info, "✏️ Edit Mode enabled")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  Mutating tools (edits, commands, tests) are now allowed, subject to normal permissions.",
         )?;
+    }
+
+    Ok(SlashCommandControl::Continue)
+}
+
+pub async fn handle_toggle_agent_mode(
+    ctx: SlashCommandContext<'_>,
+    enable: Option<bool>,
+) -> Result<SlashCommandControl> {
+    use vtcode_core::ui::tui::EditingMode;
+
+    let current = ctx.session_stats.is_agent_mode();
+    let new_state = match enable {
+        Some(value) => value,
+        None => !current,
+    };
+
+    if new_state == current {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            if current {
+                "Agent Mode is already enabled (autonomous: reduced prompts)."
+            } else {
+                "Agent Mode is already disabled."
+            },
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    // Default back to Edit mode if disabling Agent mode
+    let new_mode = if new_state {
+        EditingMode::Agent
+    } else {
+        EditingMode::Edit
+    };
+
+    ctx.session_stats.set_editing_mode(new_mode);
+    ctx.handle.set_editing_mode(new_mode);
+
+    // If we were in plan mode, we need to disable it in the registry
+    ctx.tool_registry.disable_plan_mode();
+
+    if new_state {
+        ctx.renderer
+            .line(MessageStyle::Info, "🤖 Agent Mode enabled")?;
+        ctx.renderer.line(
+            MessageStyle::Output,
+            "  The agent will work more autonomously with fewer confirmation prompts.",
+        )?;
+        ctx.renderer.line(
+            MessageStyle::Output,
+            "  Safe tools (read/search) are auto-approved. Use with caution.",
+        )?;
+    } else {
+        ctx.renderer
+            .line(MessageStyle::Info, "✏️ Edit Mode enabled")?;
+        ctx.renderer.line(
+            MessageStyle::Output,
+            "  Standard human-in-the-loop prompts are now active for all mutating actions.",
+        )?;
+    }
+
+    Ok(SlashCommandControl::Continue)
+}
+
+pub async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    use vtcode_core::ui::tui::EditingMode;
+
+    let new_mode = ctx.session_stats.cycle_mode();
+    ctx.handle.set_editing_mode(new_mode);
+
+    // Handle registry state based on new mode
+    if new_mode == EditingMode::Plan {
+        ctx.tool_registry.enable_plan_mode();
+    } else {
+        ctx.tool_registry.disable_plan_mode();
+    }
+
+    match new_mode {
+        EditingMode::Edit => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Switched to Edit Mode")?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                "  Full tool access with standard confirmation prompts.",
+            )?;
+        }
+        EditingMode::Plan => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Switched to Plan Mode")?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                "  Read-only mode for analysis and planning. Mutating tools disabled.",
+            )?;
+        }
+        EditingMode::Agent => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Switched to Agent Mode")?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                "  Autonomous mode with reduced prompts and auto-approval for safe tools.",
+            )?;
+        }
     }
 
     Ok(SlashCommandControl::Continue)

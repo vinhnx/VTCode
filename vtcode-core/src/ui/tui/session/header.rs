@@ -352,9 +352,40 @@ impl Session {
     }
 
     pub fn header_meta_line(&self) -> Line<'static> {
+        use super::super::types::EditingMode;
+        
         let mut spans = Vec::new();
 
-        let mut first_section = true;
+        // Show editing mode badge with color coding
+        match self.header_context.editing_mode {
+            EditingMode::Plan => {
+                // Yellow badge for Plan mode (read-only)
+                let badge_style = Style::default()
+                    .fg(ratatui::style::Color::Yellow)
+                    .add_modifier(Modifier::BOLD);
+                spans.push(Span::styled("[PLAN]".to_string(), badge_style));
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            EditingMode::Agent => {
+                // Green badge for Agent mode (autonomous)
+                let badge_style = Style::default()
+                    .fg(ratatui::style::Color::Green)
+                    .add_modifier(Modifier::BOLD);
+                spans.push(Span::styled("[AGENT]".to_string(), badge_style));
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            EditingMode::Edit => {
+                // No badge for Edit mode (default)
+            }
+        }
+
+        let mut first_section = spans.is_empty();
         let mode_label = self.header_mode_short_label();
         if !mode_label.trim().is_empty() {
             spans.push(Span::styled(mode_label, self.header_primary_style()));
@@ -371,8 +402,6 @@ impl Session {
             spans.push(Span::styled(value, self.header_primary_style()));
             first_section = false;
         }
-
-        // Plan functionality removed - skipping plan summary in header
 
         if spans.is_empty() {
             spans.push(Span::raw(String::new()));
