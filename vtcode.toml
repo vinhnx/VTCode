@@ -44,6 +44,10 @@ max_task_retries = 2
 include_temporal_context = true
 temporal_context_use_utc = false
 include_working_directory = true
+# Default editing mode on startup: "edit" or "plan"
+# "edit" - Full tool access for file modifications and command execution (default)
+# "plan" - Read-only mode that produces implementation plans without making changes
+# Toggle during session with Shift+Tab or /plan command
 default_editing_mode = "edit"
 
 [agent.small_model]

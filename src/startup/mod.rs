@@ -211,11 +211,17 @@ impl StartupContext {
             validate_full_auto_configuration(&config, &workspace)?;
         }
 
-        // Apply permission mode from CLI if specified
-        let plan_mode_requested = args
+        // Determine plan mode: CLI flag takes precedence, then config default_editing_mode
+        let plan_mode_from_cli = args
             .permission_mode
             .as_ref()
             .is_some_and(|m| m.eq_ignore_ascii_case("plan"));
+        
+        // Check config for default_editing_mode = "plan" if not explicitly set via CLI
+        let plan_mode_from_config = !plan_mode_from_cli
+            && config.agent.default_editing_mode.eq_ignore_ascii_case("plan");
+        
+        let plan_mode_requested = plan_mode_from_cli || plan_mode_from_config;
 
         if let Some(ref permission_mode) = args.permission_mode {
             apply_permission_mode_override(&mut config, permission_mode)?;
