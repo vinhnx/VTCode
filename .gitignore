@@ -785,6 +785,7 @@ TODO2.md
 # VT Code runtime files (excluded from git, but accessible to agent)
 .vtcode/index/
 .vtcode/checkpoints/
+.vtcode/plans/
 .vtcode/skills/
 .vtcode/skills/INDEX.md
 .vtcode/context/tool_outputs/
