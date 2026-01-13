@@ -161,11 +161,12 @@ VT Code implements a **defense-in-depth security model** to protect against prom
 
 -   **Execution Policy**: Command allowlist with per-command argument validation
 -   **Workspace Isolation**: All operations confined to workspace boundaries
+-   **OS-Native Sandboxing**: macOS Seatbelt and Linux Landlock + seccomp for kernel-enforced isolation
 -   **Tool Policies**: Configurable allow/deny/prompt policies for MCP tools
 -   **Human-in-the-Loop**: Configurable approval system for sensitive operations
 -   **Audit Trail**: Comprehensive logging of all command executions
 
-See [Security Model](./docs/SECURITY_MODEL.md) for details.
+See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SANDBOX_DEEP_DIVE.md) for details.
 
 ---
 
