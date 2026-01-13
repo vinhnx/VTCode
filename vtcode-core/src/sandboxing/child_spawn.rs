@@ -155,7 +155,10 @@ pub fn build_sanitized_env(
         }
 
         if !writable_roots.is_empty() {
-            let roots: Vec<String> = writable_roots.iter().map(|p| p.display().to_string()).collect();
+            let roots: Vec<String> = writable_roots
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect();
             sanitized.insert(VTCODE_SANDBOX_WRITABLE_ROOTS.to_string(), roots.join(":"));
         }
     }
@@ -205,7 +208,10 @@ pub fn setup_parent_death_signal() -> std::io::Result<()> {
     if result == -1 {
         Err(Error::new(
             ErrorKind::Other,
-            format!("prctl(PR_SET_PDEATHSIG) failed: {}", std::io::Error::last_os_error()),
+            format!(
+                "prctl(PR_SET_PDEATHSIG) failed: {}",
+                std::io::Error::last_os_error()
+            ),
         ))
     } else {
         Ok(())
@@ -244,13 +250,7 @@ mod tests {
         current.insert("OPENAI_API_KEY".to_string(), "sk-secret".to_string());
         current.insert("RANDOM_VAR".to_string(), "value".to_string());
 
-        let sanitized = build_sanitized_env(
-            &current,
-            true,
-            true,
-            "MacosSeatbelt",
-            &[],
-        );
+        let sanitized = build_sanitized_env(&current, true, true, "MacosSeatbelt", &[]);
 
         // PATH and HOME should be preserved
         assert_eq!(sanitized.get("PATH"), Some(&"/usr/bin".to_string()));
@@ -264,8 +264,14 @@ mod tests {
 
         // Sandbox markers should be set
         assert_eq!(sanitized.get(VTCODE_SANDBOX_ACTIVE), Some(&"1".to_string()));
-        assert_eq!(sanitized.get(VTCODE_SANDBOX_NETWORK_DISABLED), Some(&"1".to_string()));
-        assert_eq!(sanitized.get(VTCODE_SANDBOX_TYPE), Some(&"MacosSeatbelt".to_string()));
+        assert_eq!(
+            sanitized.get(VTCODE_SANDBOX_NETWORK_DISABLED),
+            Some(&"1".to_string())
+        );
+        assert_eq!(
+            sanitized.get(VTCODE_SANDBOX_TYPE),
+            Some(&"MacosSeatbelt".to_string())
+        );
     }
 
     #[test]

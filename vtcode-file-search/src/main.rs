@@ -85,8 +85,7 @@ async fn main() -> anyhow::Result<()> {
             println!("{} (score: {})", m.path, m.score);
         }
 
-        if results.total_match_count > cli.limit.get() {
-        }
+        if results.total_match_count > cli.limit.get() {}
     }
 
     Ok(())

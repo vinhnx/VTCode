@@ -35,7 +35,10 @@ impl SandboxDebugResult {
             success: false,
             exit_code: None,
             stdout: String::new(),
-            stderr: format!("Sandbox type {:?} is not available on this platform", sandbox_type),
+            stderr: format!(
+                "Sandbox type {:?} is not available on this platform",
+                sandbox_type
+            ),
             sandbox_type,
             sandbox_active: false,
         }
@@ -76,7 +79,10 @@ pub async fn debug_sandbox(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    let output = cmd.output().await.context("Failed to execute sandboxed command")?;
+    let output = cmd
+        .output()
+        .await
+        .context("Failed to execute sandboxed command")?;
 
     Ok(SandboxDebugResult {
         success: output.status.success(),
@@ -149,7 +155,10 @@ pub fn sandbox_capabilities_summary() -> String {
     summary.push_str("VT Code Sandbox Capabilities\n");
     summary.push_str("=============================\n\n");
 
-    summary.push_str(&format!("Platform default: {:?}\n\n", SandboxType::platform_default()));
+    summary.push_str(&format!(
+        "Platform default: {:?}\n\n",
+        SandboxType::platform_default()
+    ));
 
     summary.push_str("Available sandbox types:\n");
     for sandbox_type in [
@@ -157,13 +166,18 @@ pub fn sandbox_capabilities_summary() -> String {
         SandboxType::LinuxLandlock,
         SandboxType::WindowsRestrictedToken,
     ] {
-        let available = if sandbox_type.is_available() { "✓" } else { "✗" };
+        let available = if sandbox_type.is_available() {
+            "✓"
+        } else {
+            "✗"
+        };
         summary.push_str(&format!("  {} {:?}\n", available, sandbox_type));
     }
 
     summary.push_str("\nSandbox policies:\n");
     summary.push_str("  - ReadOnly: Read files, no writes except /dev/null, no network\n");
-    summary.push_str("  - WorkspaceWrite: Read all, write to workspace, optional network allowlist\n");
+    summary
+        .push_str("  - WorkspaceWrite: Read all, write to workspace, optional network allowlist\n");
     summary.push_str("  - DangerFullAccess: No restrictions (use with caution)\n");
 
     summary.push_str("\nSecurity features:\n");

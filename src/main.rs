@@ -26,9 +26,7 @@ mod workspace_trust;
 async fn main() -> std::process::ExitCode {
     match run().await {
         Ok(_) => std::process::ExitCode::SUCCESS,
-        Err(_) => {
-            std::process::ExitCode::FAILURE
-        }
+        Err(_) => std::process::ExitCode::FAILURE,
     }
 }
 
@@ -78,15 +76,12 @@ async fn run() -> Result<()> {
     // Load .env (non-fatal if missing)
     if let Err(_err) = load_dotenv()
         && !args.quiet
-    {
-    }
+    {}
 
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = match initialize_tracing(&args).await {
         Ok(initialized) => initialized,
-        Err(_err) => {
-            false
-        }
+        Err(_err) => false,
     };
 
     if args.print.is_some() && args.command.is_some() {
@@ -263,9 +258,7 @@ async fn run() -> Result<()> {
                 "performance" => cli::analyze::AnalysisType::Performance,
                 "dependencies" => cli::analyze::AnalysisType::Dependencies,
                 "complexity" => cli::analyze::AnalysisType::Complexity,
-                _ => {
-                    cli::analyze::AnalysisType::Full
-                }
+                _ => cli::analyze::AnalysisType::Full,
             };
             cli::handle_analyze_command(core_cfg.clone(), analysis_type).await?;
         }
