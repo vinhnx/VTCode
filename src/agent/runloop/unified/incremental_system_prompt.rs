@@ -170,7 +170,7 @@ impl IncrementalSystemPrompt {
                     prompt,
                     "Plan Mode is active. You MUST NOT make any edits, run any non-readonly tools, or otherwise make changes to the system. This supersedes any other instructions."
                 );
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "## Allowed Actions");
                 let _ = writeln!(
                     prompt,
@@ -188,9 +188,9 @@ impl IncrementalSystemPrompt {
                     prompt,
                     "- Write your plan to `.vtcode/plans/` directory (the ONLY file you may edit)"
                 );
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "## Planning Workflow");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "### Phase 1: Initial Understanding");
                 let _ = writeln!(
                     prompt,
@@ -208,7 +208,7 @@ impl IncrementalSystemPrompt {
                     prompt,
                     "3. Ask clarifying questions if requirements are ambiguous"
                 );
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "### Phase 2: Design");
                 let _ = writeln!(prompt, "Goal: Design an implementation approach.");
                 let _ = writeln!(
@@ -217,7 +217,7 @@ impl IncrementalSystemPrompt {
                 );
                 let _ = writeln!(prompt, "2. Describe requirements and constraints");
                 let _ = writeln!(prompt, "3. Propose a detailed implementation plan");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "### Phase 3: Review");
                 let _ = writeln!(
                     prompt,
@@ -232,7 +232,7 @@ impl IncrementalSystemPrompt {
                     "2. Verify the plan aligns with the original request"
                 );
                 let _ = writeln!(prompt, "3. Clarify remaining questions with the user");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "### Phase 4: Final Plan");
                 let _ = writeln!(prompt, "Goal: Write final plan to the plan file.");
                 let _ = writeln!(
@@ -244,26 +244,26 @@ impl IncrementalSystemPrompt {
                     "2. Keep the plan concise enough to scan quickly but detailed enough to execute"
                 );
                 let _ = writeln!(prompt, "3. Include paths of critical files to be modified");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "## Plan File Format");
                 let _ = writeln!(
                     prompt,
                     "Write your plan to `.vtcode/plans/<task-name>.md` using this format:"
                 );
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "```markdown");
                 let _ = writeln!(prompt, "# <Task Title>");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "## Summary");
                 let _ = writeln!(prompt, "Brief description of the goal.");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "## Context");
                 let _ = writeln!(
                     prompt,
                     "- Key files: `path/to/file1.rs`, `path/to/file2.rs`"
                 );
                 let _ = writeln!(prompt, "- Dependencies: relevant crates/modules");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "## Implementation Steps");
                 let _ = writeln!(prompt, "1. **Step 1 title**");
                 let _ = writeln!(prompt, "   - Files: `src/foo.rs`");
@@ -272,15 +272,15 @@ impl IncrementalSystemPrompt {
                     "   - Functions: `validate_input()`, `process_data()`"
                 );
                 let _ = writeln!(prompt, "   - Details: Specific implementation notes");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "2. **Step 2 title**");
                 let _ = writeln!(prompt, "   - Files: `tests/foo_test.rs`");
                 let _ = writeln!(prompt, "   - Tests: Edge cases to cover");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(prompt, "## Open Questions");
                 let _ = writeln!(prompt, "- Question about ambiguous requirement?");
                 let _ = writeln!(prompt, "```");
-                let _ = writeln!(prompt, "");
+                let _ = writeln!(prompt);
                 let _ = writeln!(
                     prompt,
                     "The user can exit Plan Mode with `/plan off` to enable mutating tools and execute the plan."

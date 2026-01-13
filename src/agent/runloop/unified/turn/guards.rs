@@ -41,17 +41,15 @@ pub(crate) fn validate_tool_args_security(
     };
 
     // Check cache
-    if let Some(hash) = args_hash {
-        if let Some(cache) = validation_cache {
+    if let Some(hash) = args_hash
+        && let Some(cache) = validation_cache {
             // ValidationCache has interior mutability, use directly
-            if let Some(is_valid) = cache.check(name, hash) {
-                if is_valid {
+            if let Some(is_valid) = cache.check(name, hash)
+                && is_valid {
                     return None; // Valid cached
                 }
                 // If invalid (false), we continue to re-validate to generate error messages
-            }
         }
-    }
 
     use vtcode_core::config::constants::tools as tool_names;
 
@@ -116,14 +114,12 @@ pub(crate) fn validate_tool_args_security(
     }
 
     // Update cache if valid
-    if failures.is_none() {
-        if let Some(hash) = args_hash {
-            if let Some(cache) = validation_cache {
+    if failures.is_none()
+        && let Some(hash) = args_hash
+            && let Some(cache) = validation_cache {
                 // ValidationCache has interior mutability
                 cache.insert(name, hash, true);
             }
-        }
-    }
 
     failures
 }
@@ -190,19 +186,17 @@ fn is_readonly_signature(signature: &str) -> bool {
     // Try parsing as JSON (Value Display may serialize with varying formats)
     if let Ok(args) = serde_json::from_str::<Value>(args_json) {
         // unified_file: read action is read-only
-        if tool_name == tool_names::UNIFIED_FILE {
-            if let Some(action) = args.get("action").and_then(|v| v.as_str()) {
+        if tool_name == tool_names::UNIFIED_FILE
+            && let Some(action) = args.get("action").and_then(|v| v.as_str()) {
                 return action == "read";
             }
             // If no action but has mutating fields, it's not read-only
             // Default to mutating if unclear
-        }
         // unified_exec: poll and list actions are read-only
-        if tool_name == tool_names::UNIFIED_EXEC {
-            if let Some(action) = args.get("action").and_then(|v| v.as_str()) {
+        if tool_name == tool_names::UNIFIED_EXEC
+            && let Some(action) = args.get("action").and_then(|v| v.as_str()) {
                 return matches!(action, "poll" | "list");
             }
-        }
     } else {
         // If JSON parsing fails, fall back to string matching for robustness
         // This handles cases where Value Display might not produce valid JSON

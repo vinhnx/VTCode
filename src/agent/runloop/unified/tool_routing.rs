@@ -344,12 +344,11 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     } = ctx;
 
     // Agent mode auto-approval for safe tools
-    if editing_mode == vtcode_core::ui::tui::EditingMode::Agent {
-        if !tool_registry.is_mutating_tool(tool_name) {
+    if editing_mode == vtcode_core::ui::tui::EditingMode::Agent
+        && !tool_registry.is_mutating_tool(tool_name) {
             tracing::debug!("Auto-approving safe tool '{}' in Agent mode", tool_name);
             return Ok(ToolPermissionFlow::Approved);
         }
-    }
 
     // Check tool permission cache for previously granted permissions
     if let Some(cache) = tool_permission_cache {
