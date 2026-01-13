@@ -686,8 +686,8 @@ pub(crate) async fn stream_and_render_response(
 
     // Fallback: Some providers only populate `reasoning` (no streamed tokens, no `content`).
     // In that case, render the reasoning as the user-visible response to avoid an empty output.
-    if !emitted_tokens && aggregated.trim().is_empty() && response.content.is_none() {
-        if let Some(reasoning) = response.reasoning.as_deref() {
+    if !emitted_tokens && aggregated.trim().is_empty() && response.content.is_none()
+        && let Some(reasoning) = response.reasoning.as_deref() {
             let reasoning_trimmed = reasoning.trim();
             if !reasoning_trimmed.is_empty() {
                 if supports_streaming_markdown {
@@ -703,7 +703,6 @@ pub(crate) async fn stream_and_render_response(
                 aggregated = reasoning_trimmed.to_string();
             }
         }
-    }
 
     if !supports_streaming_markdown && !aggregated.trim().is_empty() {
         renderer

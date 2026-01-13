@@ -139,8 +139,8 @@ pub async fn run_turn_loop(
 
         // Proactive: In Plan mode, if the last user message signals readiness (e.g., "start implement"),
         // trigger exit_plan_mode immediately to show the confirmation modal, bypassing LLM guesswork.
-        if ctx.session_stats.is_plan_mode() {
-            if let Some(last_user_msg) = working_history
+        if ctx.session_stats.is_plan_mode()
+            && let Some(last_user_msg) = working_history
                 .iter()
                 .rev()
                 .find(|msg| msg.role == uni::MessageRole::User)
@@ -239,7 +239,6 @@ pub async fn run_turn_loop(
                     }
                 }
             }
-        }
 
         // Check if we've reached the maximum number of tool loops
         if step_count > current_max_tool_loops {

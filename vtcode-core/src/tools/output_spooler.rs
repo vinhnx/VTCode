@@ -216,7 +216,9 @@ impl ToolOutputSpooler {
 
     /// Process a tool output, spooling if necessary
     ///
-    /// Returns the original value if below threshold, or a file reference if spooled
+    /// Returns the original value if below threshold, or a file reference if spooled.
+    /// Preserves critical execution metadata (exit_code, success, wall_time) so the
+    /// LLM knows the command completed without needing to read the spooled file.
     pub async fn process_output(
         &self,
         tool_name: &str,
@@ -229,8 +231,23 @@ impl ToolOutputSpooler {
 
         let spool_result = self.spool_output(tool_name, &value, is_mcp).await?;
 
-        // Return a reference to the spooled file
-        Ok(json!({
+        // Extract execution metadata from the original value if present
+        // These fields are critical for the LLM to understand command completion status
+        let exit_code = value.get("exit_code").cloned();
+        let success = value.get("success").cloned();
+        let wall_time = value.get("wall_time").cloned();
+        let error = value.get("error").cloned();
+        let stderr = value.get("stderr").and_then(|v| v.as_str()).map(|s| {
+            // Include truncated stderr for error context
+            if s.len() > 500 {
+                format!("{}... (truncated)", &s[..500])
+            } else {
+                s.to_string()
+            }
+        });
+
+        // Build response with preserved metadata
+        let mut response = json!({
             "spooled_to_file": true,
             "file_path": spool_result.file_path.to_string_lossy(),
             "original_bytes": spool_result.original_bytes,
@@ -246,7 +263,28 @@ impl ToolOutputSpooler {
                 "To view the full output: read_file path=\"{}\"",
                 spool_result.file_path.display()
             )
-        }))
+        });
+
+        // Preserve execution metadata for LLM decision-making
+        if let Some(obj) = response.as_object_mut() {
+            if let Some(code) = exit_code {
+                obj.insert("exit_code".to_string(), code);
+            }
+            if let Some(succ) = success {
+                obj.insert("success".to_string(), succ);
+            }
+            if let Some(time) = wall_time {
+                obj.insert("wall_time".to_string(), time);
+            }
+            if let Some(err) = error {
+                obj.insert("error".to_string(), err);
+            }
+            if let Some(err_output) = stderr {
+                obj.insert("stderr_preview".to_string(), json!(err_output));
+            }
+        }
+
+        Ok(response)
     }
 
     /// Clean up old spooled files
