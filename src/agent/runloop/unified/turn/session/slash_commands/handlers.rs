@@ -1236,8 +1236,7 @@ pub async fn handle_toggle_plan_mode(
 
     if new_state {
         ctx.tool_registry.enable_plan_mode();
-        ctx.renderer
-            .line(MessageStyle::Info, "Plan Mode enabled")?;
+        ctx.renderer.line(MessageStyle::Info, "Plan Mode enabled")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  The agent will only read/analyze the codebase and produce step-by-step plans.",

@@ -481,8 +481,7 @@ async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
         if args.theme.is_some() {
             return Err(err.context(format!("Failed to activate theme '{}'", theme_selection)));
         }
-        if !args.quiet {
-        }
+        if !args.quiet {}
         theme_selection = DEFAULT_THEME_ID.to_owned();
         ui_theme::set_active_theme(&theme_selection)
             .with_context(|| format!("Failed to activate theme '{}'", theme_selection))?;
@@ -569,13 +568,11 @@ fn validate_startup_configuration(
                 match validator.validate(config) {
                     Ok(result) => {
                         // Display warnings (errors would have been caught earlier)
-                        if !result.warnings.is_empty() && !quiet {
-                        }
+                        if !result.warnings.is_empty() && !quiet {}
                     }
                     Err(_e) => {
                         // Non-critical validation error - log but don't fail startup
-                        if !quiet {
-                        }
+                        if !quiet {}
                     }
                 }
             }
@@ -609,8 +606,7 @@ fn check_ripgrep_availability(quiet: bool) {
 
             // Attempt auto-installation
             match RipgrepStatus::install() {
-                Ok(()) => {
-                }
+                Ok(()) => {}
                 Err(e) => {
                     tracing::warn!("Ripgrep installation failed: {}", e);
                 }
