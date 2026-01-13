@@ -173,12 +173,20 @@ impl SandboxManager {
                 network_allowlist,
                 ..
             } => {
-                // Allow writing to workspace roots
+                // Allow writing to workspace roots, but protect .git directories
+                // Following Codex pattern: "Agents can modify your workspace but can't mess up your git history."
                 for root in writable_roots {
                     let path = root.root.display();
+                    // First deny writes to .git within this root
+                    profile.push_str(&format!("(deny file-write* (subpath \"{}/.git\"))\n", path));
+                    // Then allow writes to the rest of the root
                     profile.push_str(&format!("(allow file-write* (subpath \"{}\"))\n", path));
                 }
-                // Always allow writing to cwd
+                // Always allow writing to cwd, but protect .git there too
+                profile.push_str(&format!(
+                    "(deny file-write* (subpath \"{}/.git\"))\n",
+                    sandbox_cwd.display()
+                ));
                 profile.push_str(&format!(
                     "(allow file-write* (subpath \"{}\"))\n",
                     sandbox_cwd.display()
