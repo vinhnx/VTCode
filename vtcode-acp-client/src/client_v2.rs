@@ -566,17 +566,16 @@ impl AcpClientV2 {
                 }
 
                 // Process session/update events
-                if event_type.is_none() || event_type == Some("session/update") {
-                    if !data_lines.is_empty() {
-                        let data = data_lines.join("\n");
-                        if let Ok(notification) =
-                            serde_json::from_str::<SessionUpdateNotification>(&data)
-                        {
-                            if tx.send(notification).await.is_err() {
-                                // Receiver dropped, exit
-                                return Ok(());
-                            }
-                        }
+                if (event_type.is_none() || event_type == Some("session/update"))
+                    && !data_lines.is_empty()
+                {
+                    let data = data_lines.join("\n");
+                    if let Ok(notification) =
+                        serde_json::from_str::<SessionUpdateNotification>(&data)
+                        && tx.send(notification).await.is_err()
+                    {
+                        // Receiver dropped, exit
+                        return Ok(());
                     }
                 }
             }

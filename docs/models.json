@@ -204,6 +204,24 @@
         },
         "context": 400000
       },
+      "gpt-5.2-codex": {
+        "id": "gpt-5.2-codex",
+        "name": "GPT-5.2 Codex",
+        "description": "GPT-5.2 variant optimized for agentic coding tasks in Codex-like environments. Supports low/medium/high/xhigh reasoning effort.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000,
+        "max_output_tokens": 128000,
+        "knowledge_cutoff": "2025-08-31"
+      },
       "gpt-5.1": {
         "id": "gpt-5.1",
         "name": "GPT-5.1",

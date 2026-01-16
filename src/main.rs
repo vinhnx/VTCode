@@ -145,7 +145,7 @@ async fn run() -> Result<()> {
         if let Some(ide_target) = detect_available_ide()? {
             cli::handle_acp_command(core_cfg, cfg, ide_target).await?;
             return Ok(());
-        } 
+        }
     }
 
     if let Some(print_value) = print_mode {
