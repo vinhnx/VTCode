@@ -221,6 +221,38 @@ Understanding these patterns requires reading multiple files across the codebase
 -   **Documentation**: `docs/PROCESS_HARDENING.md`
 -   **Integration**: Called via `#[ctor::ctor]` in `src/main.rs:init()`
 
+### Agent Behavior Configuration (Codex-Inspired)
+
+-   **Location**: `vtcode-config/src/core/agent.rs`, `vtcode-config/src/types/mod.rs`
+-   **Purpose**: Provider-agnostic agent behavior patterns inspired by OpenAI Codex prompting guide
+-   **Key Components**:
+    -   `EditingMode`: Enum (`Edit`, `Plan`, `Agent`) - controls file modification and autonomy
+        -   `Edit`: Full tool access (default)
+        -   `Plan`: Read-only exploration, mutating tools blocked
+        -   `Agent`: Full access + reduced HITL prompts for autonomous operation
+    -   `ToolResponseTruncationConfig`: Token-efficient truncation (middle removed, start/end preserved)
+        -   `truncate()`: Apply Codex middle-out truncation strategy
+        -   `would_truncate()`: Check if content exceeds limit
+        -   `estimate_tokens()`: Approximate token count (bytes/4)
+    -   `parallel_tool_calling`: Enable concurrent independent tool calls
+    -   `bias_for_action`: Proceed with reasonable assumptions rather than asking
+    -   `suppress_plan_preambles`: Focus on outcomes, not verbose status updates
+-   **Configuration in vtcode.toml**:
+    ```toml
+    [agent]
+    default_editing_mode = "edit"  # "edit", "plan", or "agent"
+    parallel_tool_calling = true
+    bias_for_action = true
+    suppress_plan_preambles = true
+    
+    [agent.tool_response_truncation]
+    enabled = true
+    max_response_tokens = 10000
+    beginning_fraction = 0.5
+    ```
+-   **Design**: These patterns work with all providers (Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)
+-   **System Prompts**: See `vtcode-core/src/prompts/system.rs` for Codex-aligned prompts (v5.2)
+
 ## Communication Style
 
 ### Response Guidelines
