@@ -168,7 +168,8 @@ tokio-stream = { version = "0.1", optional = true }
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config", version = "0.60.5" }
 
-[target.'cfg(unix)'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 
 [[example]]
 name = "anstyle_test"
