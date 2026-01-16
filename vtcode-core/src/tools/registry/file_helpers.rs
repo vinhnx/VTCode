@@ -143,7 +143,7 @@ impl ToolRegistry {
             };
 
             return Err(anyhow!(
-                "Could not find text to replace in file.\n\nExpected to replace:\n{}\n\nFile content preview:\n{}\n\nSuggestion: refresh the file view to ensure it is current or use write_file to overwrite the full content when the surrounding context has drifted.",
+                "Could not find text to replace in file.\n\nExpected to replace:\n{}\n\nFile content preview:\n{}\n\nFix: The old_str must EXACTLY match the file content including all whitespace and newlines. Use read_file first to get the exact text, then copy it precisely into old_str. Do NOT add extra newlines or change indentation.",
                 input.old_str,
                 content_preview
             ));

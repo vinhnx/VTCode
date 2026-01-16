@@ -313,11 +313,11 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::UNIFIED_EXEC.to_string(),
-            description: "Unified execution tool. Run shell commands, write to sessions, poll output, or execute Python/JavaScript code.".to_string(),
+            description: "Unified execution tool. Run shell commands via PTY. IMPORTANT: 'command' is the raw command string WITHOUT shell redirections (2>&1, >, |). The tool captures stdout/stderr automatically. For 'run' action, provide 'command' parameter.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "The command to execute (to start a new session)."},
+                    "command": {"type": "string", "description": "The raw command to execute (no shell redirections like 2>&1 or | - tool captures all output automatically)."},
                     "input": {"type": "string", "description": "The input to write to stdin (for an existing session)."},
                     "session_id": {"type": "string", "description": "The session ID to target (required for write, poll, and close)."},
                     "code": {"type": "string", "description": "Python 3 or JavaScript code to execute (for 'code' action)."},
@@ -346,20 +346,20 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         FunctionDeclaration {            name: tools::UNIFIED_FILE.to_string(),
-            description: "Unified file operation tool. Can read, write, edit, patch, or delete files. Supports surgical edits and multi-file patches.".to_owned(),
+            description: "Unified file operation tool. IMPORTANT: For 'edit' action, old_str must EXACTLY match the file (whitespace, newlines). Read the file first to get exact content. For 'patch' action, use '*** Update File' format, NOT unified diff (---/+++ format).".to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
                         "enum": ["read", "write", "edit", "patch", "delete", "move", "copy"],
-                        "description": "Action to perform. If not provided, it's inferred from other parameters."
+                        "description": "Action to perform. If not provided, inferred: 'edit' if old_str present, 'write' if content present, else 'read'."
                     },
                     "path": {"type": "string", "description": "File path (relative to workspace root)."},
                     "content": {"type": "string", "description": "New content for 'write' action."},
-                    "old_str": {"type": "string", "description": "Text to replace for 'edit' action."},
+                    "old_str": {"type": "string", "description": "EXACT text to replace for 'edit' action. Must match file content exactly including whitespace and newlines."},
                     "new_str": {"type": "string", "description": "Replacement text for 'edit' action."},
-                    "patch": {"type": "string", "description": "Unified diff for 'patch' action."},
+                    "patch": {"type": "string", "description": "Patch content for 'patch' action. Use '*** Update File: path' format with @@ hunks, NOT unified diff (---/+++ format)."},
                     "destination": {"type": "string", "description": "Target path for 'move' or 'copy' actions."},
                     "start_line": {"type": "integer", "description": "Start line for 'read' action (1-indexed)."},
                     "end_line": {"type": "integer", "description": "End line for 'read' action (inclusive)."},
@@ -530,7 +530,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::EDIT_FILE.to_string(),
-            description: "Replace existing text in a file by exact string match. Best for surgical updates to preserve surrounding code.".to_string(),
+            description: "Replace existing text in a file by EXACT string match. CRITICAL: old_str must match file content exactly - including whitespace, newlines, and indentation. Read the file first to copy the exact text.".to_string(),
             parameters: {
                 let mut properties = Map::new();
                 insert_string_with_aliases(
@@ -542,7 +542,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                 insert_string_with_aliases(
                     &mut properties,
                     "old_str",
-                    "Exact text to replace",
+                    "EXACT text to replace - must match file content precisely including whitespace/newlines",
                     OLD_STR_ALIASES,
                 );
                 insert_string_with_aliases(
@@ -567,13 +567,13 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::APPLY_PATCH.to_string(),
-            description: "Apply unified diff patches to files. Create, update, or delete content using *** Begin/End Patch markers.".to_string(),
+            description: "Apply patches to files. IMPORTANT: Use VT Code patch format (*** Begin Patch, *** Update File: path, @@ hunks with -/+ lines, *** End Patch), NOT standard unified diff (---/+++ format).".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "input": {"type": "string", "description": "Patch content in unified diff format with *** Begin/End Patch markers"},
-                    "patch": {"type": "string", "description": "Alias for input - unified diff format patch"},
-                    "diff": {"type": "string", "description": "Alias for input - unified diff format patch"}
+                    "input": {"type": "string", "description": "Patch in VT Code format: *** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch"},
+                    "patch": {"type": "string", "description": "Alias for input"},
+                    "diff": {"type": "string", "description": "Alias for input"}
                 },
                 "anyOf": [
                     {"required": ["input"]},
