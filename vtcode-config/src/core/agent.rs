@@ -187,33 +187,8 @@ pub struct AgentConfig {
     /// When true, exiting plan mode shows the implementation blueprint and
     /// requires explicit user approval before enabling edit tools.
     /// Options in confirmation dialog: Execute, Edit Plan, Cancel
-    /// Codex-inspired: Human-in-the-loop approval for safe autonomous operation.
     #[serde(default = "default_require_plan_confirmation")]
     pub require_plan_confirmation: bool,
-
-    /// Tool response truncation configuration (Codex-inspired)
-    /// When tool output exceeds limits, truncate middle and preserve start/end.
-    /// This keeps responses in-distribution for the model while saving tokens.
-    #[serde(default)]
-    pub tool_response_truncation: ToolResponseTruncationConfig,
-
-    /// Enable parallel tool calling when tools are independent (Codex-inspired)
-    /// When true, the agent may issue multiple independent tool calls simultaneously.
-    /// This significantly improves throughput for exploration and verification tasks.
-    #[serde(default = "default_parallel_tool_calling")]
-    pub parallel_tool_calling: bool,
-
-    /// Bias for action over clarification (Codex-inspired)
-    /// When true, the agent proceeds with reasonable assumptions rather than
-    /// asking clarifying questions. Set false for more interactive sessions.
-    #[serde(default = "default_bias_for_action")]
-    pub bias_for_action: bool,
-
-    /// Suppress upfront plan communication in output (Codex-inspired)
-    /// When true, the agent avoids verbose plan preambles and status updates,
-    /// focusing on outcomes. Plans are still tracked internally via update_plan.
-    #[serde(default = "default_suppress_plan_preambles")]
-    pub suppress_plan_preambles: bool,
 }
 
 impl Default for AgentConfig {
@@ -255,10 +230,6 @@ impl Default for AgentConfig {
             user_instructions: None,
             default_editing_mode: EditingMode::default(),
             require_plan_confirmation: default_require_plan_confirmation(),
-            tool_response_truncation: ToolResponseTruncationConfig::default(),
-            parallel_tool_calling: default_parallel_tool_calling(),
-            bias_for_action: default_bias_for_action(),
-            suppress_plan_preambles: default_suppress_plan_preambles(),
         }
     }
 }
@@ -389,146 +360,6 @@ const fn default_include_working_directory() -> bool {
 #[inline]
 const fn default_require_plan_confirmation() -> bool {
     true // Default: require confirmation (HITL pattern)
-}
-
-#[inline]
-const fn default_parallel_tool_calling() -> bool {
-    true // Enable parallel tool calling for independent operations
-}
-
-#[inline]
-const fn default_bias_for_action() -> bool {
-    true // Codex-inspired: proceed with reasonable assumptions
-}
-
-#[inline]
-const fn default_suppress_plan_preambles() -> bool {
-    true // Codex-inspired: focus on outcomes, not verbose status updates
-}
-
-/// Tool response truncation configuration (Codex-inspired)
-///
-/// Controls how tool outputs are truncated when they exceed token limits.
-/// The strategy preserves the beginning and end of output, truncating the middle,
-/// which keeps responses in-distribution for the model.
-///
-/// Reference: OpenAI Codex prompting guide recommends 10k token limit with
-/// half budget for beginning, half for end, middle truncation.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ToolResponseTruncationConfig {
-    /// Enable tool response truncation (default: true)
-    #[serde(default = "default_truncation_enabled")]
-    pub enabled: bool,
-
-    /// Maximum tokens for tool response (default: 10000, Codex recommendation)
-    /// Approximate by bytes/4 for quick estimation
-    #[serde(default = "default_max_response_tokens")]
-    pub max_response_tokens: usize,
-
-    /// Fraction of budget for beginning of output (default: 0.5)
-    /// The remaining fraction goes to the end of output
-    #[serde(default = "default_beginning_fraction")]
-    pub beginning_fraction: f32,
-
-    /// Message to insert at truncation point (default: "…{n} tokens truncated…")
-    #[serde(default = "default_truncation_message")]
-    pub truncation_message: String,
-}
-
-impl Default for ToolResponseTruncationConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_truncation_enabled(),
-            max_response_tokens: default_max_response_tokens(),
-            beginning_fraction: default_beginning_fraction(),
-            truncation_message: default_truncation_message(),
-        }
-    }
-}
-
-impl ToolResponseTruncationConfig {
-    /// Truncate content using the Codex middle-out strategy.
-    ///
-    /// Preserves the beginning and end of the content, removing the middle.
-    /// This keeps responses in-distribution for models that expect to see
-    /// both the start (context) and end (results) of outputs.
-    ///
-    /// # Arguments
-    /// * `content` - The content to potentially truncate
-    ///
-    /// # Returns
-    /// The original content if under limit, or truncated content with message
-    pub fn truncate(&self, content: &str) -> String {
-        if !self.enabled {
-            return content.to_string();
-        }
-
-        // Approximate tokens by bytes/4 (Codex recommendation)
-        let approx_tokens = content.len() / 4;
-        if approx_tokens <= self.max_response_tokens {
-            return content.to_string();
-        }
-
-        // Calculate byte budgets (4 bytes per token approximation)
-        let total_bytes = self.max_response_tokens * 4;
-        let beginning_bytes = (total_bytes as f32 * self.beginning_fraction) as usize;
-        let end_bytes = total_bytes - beginning_bytes;
-
-        // Get character boundaries (avoiding mid-char splits for UTF-8)
-        let chars: Vec<char> = content.chars().collect();
-        let beginning_chars = chars.iter().take(beginning_bytes).count().min(chars.len());
-        let end_chars = chars.len().saturating_sub(end_bytes.min(chars.len()));
-
-        // Ensure we don't overlap
-        if beginning_chars >= end_chars {
-            // Content fits, just return truncated beginning
-            return chars.iter().take(total_bytes).collect();
-        }
-
-        let beginning: String = chars[..beginning_chars].iter().collect();
-        let end: String = chars[end_chars..].iter().collect();
-        let truncated_count = approx_tokens - self.max_response_tokens;
-
-        let message = self
-            .truncation_message
-            .replace("{n}", &truncated_count.to_string());
-
-        format!("{}\n{}\n{}", beginning, message, end)
-    }
-
-    /// Check if content would be truncated
-    pub fn would_truncate(&self, content: &str) -> bool {
-        if !self.enabled {
-            return false;
-        }
-        content.len() / 4 > self.max_response_tokens
-    }
-
-    /// Estimate token count for content
-    pub fn estimate_tokens(content: &str) -> usize {
-        content.len() / 4
-    }
-}
-
-#[inline]
-const fn default_truncation_enabled() -> bool {
-    true
-}
-
-#[inline]
-const fn default_max_response_tokens() -> usize {
-    10_000 // Codex recommendation
-}
-
-#[inline]
-const fn default_beginning_fraction() -> f32 {
-    0.5 // Half for beginning, half for end
-}
-
-#[inline]
-fn default_truncation_message() -> String {
-    "…{n} tokens truncated…".into()
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1055,58 +886,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_tool_response_truncation_no_truncation_needed() {
-        let config = ToolResponseTruncationConfig::default();
-        let short_content = "This is a short response.";
-        assert_eq!(config.truncate(short_content), short_content);
-        assert!(!config.would_truncate(short_content));
-    }
-
-    #[test]
-    fn test_tool_response_truncation_disabled() {
-        let config = ToolResponseTruncationConfig {
-            enabled: false,
-            ..Default::default()
-        };
-        let long_content = "x".repeat(100_000);
-        assert_eq!(config.truncate(&long_content), long_content);
-        assert!(!config.would_truncate(&long_content));
-    }
-
-    #[test]
-    fn test_tool_response_truncation_preserves_beginning_and_end() {
-        let config = ToolResponseTruncationConfig {
-            enabled: true,
-            max_response_tokens: 100, // ~400 bytes
-            beginning_fraction: 0.5,
-            truncation_message: "…{n} tokens truncated…".into(),
-        };
-
-        // Create content that needs truncation: 1000 chars = ~250 tokens
-        let content = format!("BEGIN{}{}", "x".repeat(990), "END");
-        let result = config.truncate(&content);
-
-        assert!(result.starts_with("BEGIN"));
-        assert!(result.ends_with("END"));
-        assert!(result.contains("tokens truncated"));
-    }
-
-    #[test]
-    fn test_tool_response_truncation_token_estimation() {
-        assert_eq!(ToolResponseTruncationConfig::estimate_tokens(""), 0);
-        assert_eq!(ToolResponseTruncationConfig::estimate_tokens("test"), 1);
-        assert_eq!(
-            ToolResponseTruncationConfig::estimate_tokens(&"x".repeat(400)),
-            100
-        );
-    }
-
-    #[test]
     fn test_editing_mode_config_default() {
         let config = AgentConfig::default();
         assert_eq!(config.default_editing_mode, EditingMode::Edit);
-        assert!(config.parallel_tool_calling);
-        assert!(config.bias_for_action);
-        assert!(config.suppress_plan_preambles);
+        assert!(config.require_plan_confirmation);
     }
 }

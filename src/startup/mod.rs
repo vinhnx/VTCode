@@ -8,13 +8,6 @@ mod first_run;
 use crate::tools::RipgrepStatus;
 
 /// Truncate error messages to fit within display width
-fn truncate_error(msg: &str, max_len: usize) -> String {
-    if msg.len() > max_len {
-        format!("{}...", &msg[..max_len.saturating_sub(3)])
-    } else {
-        msg.to_owned()
-    }
-}
 
 /// Validate custom session ID suffix
 fn validate_session_id_suffix(suffix: &str) -> Result<()> {

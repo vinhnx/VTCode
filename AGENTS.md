@@ -230,25 +230,12 @@ Understanding these patterns requires reading multiple files across the codebase
         -   `Edit`: Full tool access (default)
         -   `Plan`: Read-only exploration, mutating tools blocked
         -   `Agent`: Full access + reduced HITL prompts for autonomous operation
-    -   `ToolResponseTruncationConfig`: Token-efficient truncation (middle removed, start/end preserved)
-        -   `truncate()`: Apply Codex middle-out truncation strategy
-        -   `would_truncate()`: Check if content exceeds limit
-        -   `estimate_tokens()`: Approximate token count (bytes/4)
-    -   `parallel_tool_calling`: Enable concurrent independent tool calls
-    -   `bias_for_action`: Proceed with reasonable assumptions rather than asking
-    -   `suppress_plan_preambles`: Focus on outcomes, not verbose status updates
+    -   `require_plan_confirmation`: Human-in-the-loop approval before executing plans
 -   **Configuration in vtcode.toml**:
     ```toml
     [agent]
     default_editing_mode = "edit"  # "edit", "plan", or "agent"
-    parallel_tool_calling = true
-    bias_for_action = true
-    suppress_plan_preambles = true
-    
-    [agent.tool_response_truncation]
-    enabled = true
-    max_response_tokens = 10000
-    beginning_fraction = 0.5
+    require_plan_confirmation = true  # Require user approval before executing plans
     ```
 -   **Design**: These patterns work with all providers (Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)
 -   **System Prompts**: See `vtcode-core/src/prompts/system.rs` for Codex-aligned prompts (v5.2)

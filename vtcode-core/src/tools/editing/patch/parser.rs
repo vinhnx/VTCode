@@ -123,7 +123,7 @@ fn parse_operation(
         Err(invalid_hunk(
             line_number,
             &format!(
-                "invalid hunk header '{header}'. expected '*** Add File', '*** Delete File', or '*** Update File'"
+                "invalid hunk header '{header}'. expected '*** Add File', '*** Delete File', or '*** Update File'. Do NOT use unified diff format (---/+++ style). VT Code patch format example:\n*** Begin Patch\n*** Update File: path/to/file.rs\n@@ optional context\n-old line\n+new line\n*** End Patch"
             ),
         ))
     }
