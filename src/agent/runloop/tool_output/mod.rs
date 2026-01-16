@@ -47,6 +47,16 @@ pub(crate) async fn render_tool_output(
             let ls_styles = LsStyles::from_env();
             return render_write_file_preview(renderer, val, &git_styles, &ls_styles);
         }
+        Some(tools::UNIFIED_FILE) => {
+            if val.get("diff_preview").is_some() {
+                let git_styles = GitStyles::new();
+                let ls_styles = LsStyles::from_env();
+                return render_write_file_preview(renderer, val, &git_styles, &ls_styles);
+            }
+            if val.get("content").is_some() {
+                return render_read_file_output(renderer, val);
+            }
+        }
         Some(tools::RUN_PTY_CMD)
         | Some(tools::READ_PTY_SESSION)
         | Some(tools::CREATE_PTY_SESSION)

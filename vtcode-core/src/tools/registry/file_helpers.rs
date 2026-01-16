@@ -6,6 +6,10 @@
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
+use std::path::PathBuf;
+use tokio::fs;
+
+use crate::utils::path::canonicalize_workspace;
 
 use crate::config::constants::tools;
 use crate::tools::grep_file::GrepSearchResult;
@@ -16,6 +20,72 @@ use super::utils;
 
 const EDIT_FILE_MAX_CHARS: usize = 800;
 const EDIT_FILE_MAX_LINES: usize = 40;
+const EDIT_FILE_MAX_BYTES: u64 = 1_048_576;
+
+fn line_prefix_len(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    if bytes.is_empty() {
+        return None;
+    }
+
+    let mut i = 0;
+    if bytes[i] == b'L' {
+        i += 1;
+    }
+
+    let start_digits = i;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+
+    if i == start_digits || i >= bytes.len() || bytes[i] != b':' {
+        return None;
+    }
+
+    i += 1;
+    if i < bytes.len() && bytes[i] == b' ' {
+        i += 1;
+    }
+
+    Some(i)
+}
+
+fn strip_line_prefixes(text: &str) -> (String, bool) {
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.is_empty() {
+        return (text.to_string(), false);
+    }
+
+    let mut has_prefix = false;
+    let mut all_prefixed = true;
+
+    for line in &lines {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        if line_prefix_len(line).is_some() {
+            has_prefix = true;
+        } else {
+            all_prefixed = false;
+        }
+    }
+
+    if !has_prefix || !all_prefixed {
+        return (text.to_string(), false);
+    }
+
+    let stripped = lines
+        .iter()
+        .map(|line| match line_prefix_len(line) {
+            Some(prefix_len) => &line[prefix_len..],
+            None => *line,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    (stripped, true)
+}
 
 impl ToolRegistry {
     pub async fn read_file(&self, args: Value) -> Result<Value> {
@@ -33,10 +103,13 @@ impl ToolRegistry {
     pub async fn edit_file(&self, args: Value) -> Result<Value> {
         let input: EditInput = serde_json::from_value(args).context("invalid edit_file args")?;
 
-        let old_len = input.old_str.len();
-        let new_len = input.new_str.len();
-        let old_lines = input.old_str.lines().count();
-        let new_lines = input.new_str.lines().count();
+        let (effective_old_str, stripped_old) = strip_line_prefixes(&input.old_str);
+        let (effective_new_str, stripped_new) = strip_line_prefixes(&input.new_str);
+
+        let old_len = effective_old_str.len();
+        let new_len = effective_new_str.len();
+        let old_lines = effective_old_str.lines().count();
+        let new_lines = effective_new_str.lines().count();
 
         if old_len > EDIT_FILE_MAX_CHARS
             || new_len > EDIT_FILE_MAX_CHARS
@@ -50,15 +123,37 @@ impl ToolRegistry {
             ));
         }
 
-        let read_args = json!({
-            "path": input.path,
-            "max_lines": 1000000
-        });
+        let workspace_root = canonicalize_workspace(self.workspace_root());
+        let requested_path = PathBuf::from(&input.path);
+        let resolved_path = if requested_path.is_absolute() {
+            requested_path
+        } else {
+            workspace_root.join(&requested_path)
+        };
+        let canonical_path = std::fs::canonicalize(&resolved_path).with_context(|| {
+            format!("Failed to resolve path: {}", resolved_path.display())
+        })?;
+        if !canonical_path.starts_with(&workspace_root) {
+            return Err(anyhow!(
+                "Path '{}' is outside the workspace root",
+                input.path
+            ));
+        }
 
-        let read_result = self.file_ops_tool().read_file(read_args).await?;
-        let current_content = read_result["content"]
-            .as_str()
-            .ok_or_else(|| anyhow!("Failed to read file content"))?;
+        let metadata = fs::metadata(&canonical_path)
+            .await
+            .with_context(|| format!("Cannot read file metadata: {}", canonical_path.display()))?;
+        if metadata.len() > EDIT_FILE_MAX_BYTES {
+            return Err(anyhow!(
+                "File too large for edit_file: {} bytes (max: {} bytes)",
+                metadata.len(),
+                EDIT_FILE_MAX_BYTES
+            ));
+        }
+
+        let current_content = fs::read_to_string(&canonical_path)
+            .await
+            .with_context(|| format!("Cannot read file: {}", canonical_path.display()))?;
 
         // Track whether the original file had a trailing newline (Unix convention)
         let had_trailing_newline = current_content.ends_with('\n');
@@ -66,13 +161,13 @@ impl ToolRegistry {
         let mut replacement_occurred = false;
         let mut new_content = current_content.to_owned();
 
-        if current_content.contains(&input.old_str) {
-            new_content = current_content.replace(&input.old_str, &input.new_str);
+        if current_content.contains(&effective_old_str) {
+            new_content = current_content.replace(&effective_old_str, &effective_new_str);
             replacement_occurred = new_content != current_content;
         }
 
         if !replacement_occurred {
-            let old_lines: Vec<&str> = input.old_str.lines().collect();
+            let old_lines: Vec<&str> = effective_old_str.lines().collect();
             let content_lines: Vec<&str> = current_content.lines().collect();
 
             // Try multiple matching strategies with increasing leniency
@@ -80,7 +175,7 @@ impl ToolRegistry {
             'outer: for i in 0..=(content_lines.len().saturating_sub(old_lines.len())) {
                 let window = &content_lines[i..i + old_lines.len()];
                 if utils::lines_match(window, &old_lines) {
-                    let replacement_lines: Vec<&str> = input.new_str.lines().collect();
+                    let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
 
                     // Build new content by replacing the matched window
                     let mut result_lines = Vec::with_capacity(
@@ -112,7 +207,7 @@ impl ToolRegistry {
                         .collect();
 
                     if window_normalized == old_normalized {
-                        let replacement_lines: Vec<&str> = input.new_str.lines().collect();
+                        let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
 
                         // Build new content by replacing the matched window
                         let mut result_lines = Vec::with_capacity(
@@ -142,10 +237,17 @@ impl ToolRegistry {
                 current_content.to_owned()
             };
 
+            let numbering_note = if stripped_old || stripped_new {
+                "\n\nNote: line-number prefixes were stripped before matching."
+            } else {
+                ""
+            };
+
             return Err(anyhow!(
-                "Could not find text to replace in file.\n\nExpected to replace:\n{}\n\nFile content preview:\n{}\n\nFix: The old_str must EXACTLY match the file content including all whitespace and newlines. Use read_file first to get the exact text, then copy it precisely into old_str. Do NOT add extra newlines or change indentation.",
-                input.old_str,
-                content_preview
+                "Could not find text to replace in file.\n\nExpected to replace:\n{}\n\nFile content preview:\n{}\n\nFix: The old_str must EXACTLY match the file content including all whitespace and newlines. Use read_file first to get the exact text, then copy it precisely into old_str. Do NOT add extra newlines or change indentation.{}",
+                effective_old_str,
+                content_preview,
+                numbering_note
             ));
         }
 

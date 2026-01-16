@@ -422,7 +422,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::READ_FILE.to_string(),
-            description: "Read file contents. Returns content/status/message JSON. Supports chunked reads. Don't retry if status='success'.".to_string(),
+            description: "Read file contents. Returns content/status/message JSON with line-number prefixes (e.g., '12: ...'). Supports chunked reads. Offsets are 1-indexed. Don't retry if status='success'.".to_string(),
             parameters: {
                 let mut properties = Map::new();
                 insert_string_with_aliases(

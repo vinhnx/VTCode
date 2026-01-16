@@ -16,6 +16,7 @@ pub struct ReadFileHandler;
 const MAX_LINE_LENGTH: usize = 500;
 const TAB_WIDTH: usize = 4;
 const COMMENT_PREFIXES: &[&str] = &["#", "//", "--"];
+const MIN_BATCH_LIMIT: usize = 200;
 
 /// JSON arguments accepted by the `read_file` tool handler.
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -109,7 +110,7 @@ impl ReadFileHandler {
             limit,
             mode,
             indentation,
-            max_tokens: _,
+            max_tokens,
         } = args;
 
         anyhow::ensure!(offset > 0, "offset must be a 1-indexed line number");
@@ -118,8 +119,17 @@ impl ReadFileHandler {
         let path = PathBuf::from(&file_path);
         anyhow::ensure!(path.is_absolute(), "file_path must be an absolute path");
 
+        let effective_limit = if matches!(mode, ReadMode::Slice)
+            && max_tokens.is_none()
+            && limit < MIN_BATCH_LIMIT
+        {
+            MIN_BATCH_LIMIT
+        } else {
+            limit
+        };
+
         let mut collected = match mode {
-            ReadMode::Slice => slice::read(&path, offset, limit).await?,
+            ReadMode::Slice => slice::read(&path, offset, effective_limit).await?,
             ReadMode::Indentation => {
                 let indentation = indentation.unwrap_or_default();
                 indentation::read_block(&path, offset, limit, indentation).await?
@@ -511,7 +521,7 @@ fn condense_collected_lines(lines: &mut Vec<String>) {
 
     // Add omission indicator
     condensed.push(format!(
-        "… [+{} lines omitted; use read_file with offset/limit for full content]",
+        "… [+{} lines omitted; use read_file with offset/limit (1-indexed line numbers) for full content]",
         omitted_count
     ));
 

@@ -148,6 +148,8 @@ pub struct TaskRunState {
     pub modified_files: Vec<String>,
     pub executed_commands: Vec<String>,
     pub warnings: Vec<String>,
+    pub last_file_path: Option<String>,
+    pub last_dir_path: Option<String>,
     pub has_completed: bool,
     pub completion_outcome: TaskOutcome,
     pub turns_executed: usize,
@@ -176,6 +178,8 @@ impl TaskRunState {
             modified_files: Vec::with_capacity(32),   // Typical session modifies ~10-20 files
             executed_commands: Vec::with_capacity(64), // Typical session executes ~20-40 commands
             warnings: Vec::with_capacity(16),         // Typical session has ~5-10 warnings
+            last_file_path: None,
+            last_dir_path: None,
             has_completed: false,
             completion_outcome: TaskOutcome::Unknown,
             turns_executed: 0,

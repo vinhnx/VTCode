@@ -5,7 +5,8 @@ use crate::config::constants::{defaults, tools};
 use crate::config::loader::ConfigManager;
 use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::types::{
-    AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, VerbosityLevel,
+    AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, SystemPromptMode,
+    VerbosityLevel,
 };
 use crate::core::agent::completion::{check_completion_indicators, check_for_response_loop};
 use crate::core::agent::conversation::{
@@ -34,7 +35,7 @@ use anyhow::{Context, Result, anyhow};
 use futures::StreamExt;
 use serde_json::Value;
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::time::{Duration, timeout};
@@ -203,6 +204,36 @@ pub struct AgentRunner {
 }
 
 impl AgentRunner {
+    fn is_simple_task(task: &Task, contexts: &[ContextItem]) -> bool {
+        let title_chars = task.title.chars().count();
+        let description_chars = task.description.chars().count();
+        let instructions_chars = task
+            .instructions
+            .as_ref()
+            .map(|text| text.chars().count())
+            .unwrap_or(0);
+        let total_chars = title_chars + description_chars + instructions_chars;
+
+        let title_words = task.title.split_whitespace().count();
+        let description_words = task.description.split_whitespace().count();
+        let instructions_words = task
+            .instructions
+            .as_ref()
+            .map(|text| text.split_whitespace().count())
+            .unwrap_or(0);
+        let total_words = title_words + description_words + instructions_words;
+
+        let context_chars: usize = contexts
+            .iter()
+            .map(|ctx| ctx.content.chars().count())
+            .sum();
+
+        total_chars <= 240
+            && total_words <= 40
+            && contexts.len() <= 1
+            && context_chars <= 800
+    }
+
     fn config(&self) -> &VTCodeConfig {
         self.config.as_ref()
     }
@@ -678,6 +709,75 @@ impl AgentRunner {
         false
     }
 
+    fn normalize_tool_args(
+        &self,
+        name: &str,
+        args: &Value,
+        task_state: &mut TaskRunState,
+    ) -> Value {
+        let Some(obj) = args.as_object() else {
+            return args.clone();
+        };
+
+        let mut normalized = obj.clone();
+        let workspace_path = self._workspace.to_string_lossy().to_string();
+        let fallback_dir = task_state
+            .last_dir_path
+            .clone()
+            .unwrap_or_else(|| workspace_path.clone());
+
+        if matches!(name, tools::GREP_FILE | tools::LIST_FILES)
+            && !normalized.contains_key("path")
+        {
+            normalized.insert("path".to_string(), Value::String(fallback_dir));
+        }
+
+        if name == tools::READ_FILE && !normalized.contains_key("file_path") {
+            if let Some(last_file) = task_state.last_file_path.clone() {
+                normalized.insert("file_path".to_string(), Value::String(last_file));
+            }
+        }
+
+        if matches!(name, tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE)
+            && !normalized.contains_key("path")
+        {
+            if let Some(last_file) = task_state.last_file_path.clone() {
+                normalized.insert("path".to_string(), Value::String(last_file));
+            }
+        }
+
+        Value::Object(normalized)
+    }
+
+    fn update_last_paths_from_args(
+        &self,
+        name: &str,
+        args: &Value,
+        task_state: &mut TaskRunState,
+    ) {
+        if let Some(path) = args.get("file_path").and_then(|value| value.as_str()) {
+            task_state.last_file_path = Some(path.to_string());
+            if let Some(parent) = Path::new(path).parent() {
+                task_state.last_dir_path = Some(parent.to_string_lossy().to_string());
+            }
+            return;
+        }
+
+        if let Some(path) = args.get("path").and_then(|value| value.as_str()) {
+            if matches!(
+                name,
+                tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
+            ) {
+                task_state.last_file_path = Some(path.to_string());
+                if let Some(parent) = Path::new(path).parent() {
+                    task_state.last_dir_path = Some(parent.to_string_lossy().to_string());
+                }
+            } else {
+                task_state.last_dir_path = Some(path.to_string());
+            }
+        }
+    }
+
     /// Execute multiple tool calls in parallel. Only safe for read-only operations.
     async fn execute_parallel_tool_calls(
         &self,
@@ -689,37 +789,33 @@ impl AgentRunner {
     ) -> Result<()> {
         use futures::future::join_all;
 
-        // Check loops for all calls first
-        for call in &tool_calls {
-            let name = match call.function.as_ref() {
-                Some(func) => &func.name,
-                None => continue,
+        let mut prepared_calls = Vec::with_capacity(tool_calls.len());
+        for call in tool_calls {
+            let Some(func) = call.function.as_ref() else {
+                continue;
             };
+            let name = func.name.clone();
             let args = call
                 .parsed_arguments()
                 .unwrap_or_else(|_| serde_json::json!({}));
-            if self.check_for_loop(name, &args, task_state) {
+            let args = self.normalize_tool_args(&name, &args, task_state);
+            if self.check_for_loop(&name, &args, task_state) {
                 return Ok(());
             }
+            prepared_calls.push((call, name, args));
         }
 
+        let total_calls = prepared_calls.len();
         runner_println!(
             self,
             "{} [{}] Executing {} tools in parallel",
             style("[PARALLEL]").cyan().bold(),
             self.agent_type,
-            tool_calls.len()
+            total_calls
         );
 
-        let mut futures = Vec::with_capacity(tool_calls.len());
-        for call in tool_calls {
-            let name = match call.function.as_ref() {
-                Some(func) => func.name.clone(),
-                None => continue,
-            };
-            let args = call
-                .parsed_arguments()
-                .unwrap_or_else(|_| serde_json::json!({}));
+        let mut futures = Vec::with_capacity(prepared_calls.len());
+        for (call, name, args) in prepared_calls {
             let call_id = call.id.clone();
 
             if !self.is_valid_tool(&name).await {
@@ -736,19 +832,20 @@ impl AgentRunner {
             }
 
             let tool_registry = self.tool_registry.clone();
+            let args_clone = args.clone();
             futures.push(async move {
                 let registry = tool_registry;
                 let result = registry
-                    .execute_tool_ref(&name, &args)
+                    .execute_tool_ref(&name, &args_clone)
                     .await
                     .map_err(|e| anyhow::anyhow!("Tool '{}' failed: {}", name, e));
-                (name, call_id, result)
+                (name, call_id, args_clone, result)
             });
         }
 
         let results = join_all(futures).await;
         let mut halt_turn = false;
-        for (name, call_id, result) in results {
+        for (name, call_id, args, result) in results {
             let command_event = event_recorder.command_started(&name);
             match result {
                 Ok(result) => {
@@ -766,6 +863,8 @@ impl AgentRunner {
                     let optimized_result = self.optimize_tool_result(&name, result).await;
                     let tool_result = serde_json::to_string(&optimized_result)?;
                     let display_text = format_tool_result_for_display(&name, &optimized_result);
+
+                    self.update_last_paths_from_args(&name, &args, task_state);
 
                     task_state.push_tool_result(
                         call_id,
@@ -841,6 +940,7 @@ impl AgentRunner {
             let args = call
                 .parsed_arguments()
                 .unwrap_or_else(|_| serde_json::json!({}));
+            let args = self.normalize_tool_args(&name, &args, task_state);
 
             if self.check_for_loop(&name, &args, task_state) {
                 break;
@@ -892,6 +992,8 @@ impl AgentRunner {
                     let optimized_result = self.optimize_tool_result(&name, result).await;
                     let tool_result = serde_json::to_string(&optimized_result)?;
                     let display_text = format_tool_result_for_display(&name, &optimized_result);
+
+                    self.update_last_paths_from_args(&name, &args, task_state);
 
                     task_state.push_tool_result(
                         call.id.clone(),
@@ -1475,10 +1577,20 @@ impl AgentRunner {
             );
 
             let run_started_at = std::time::Instant::now();
+            let is_simple_task = Self::is_simple_task(task, contexts);
+
+            let system_prompt = if is_simple_task {
+                let mut config = self.config().clone();
+                config.agent.system_prompt_mode = SystemPromptMode::Minimal;
+                compose_system_instruction_text(self._workspace.as_path(), Some(&config), None)
+                    .await
+            } else {
+                self.system_prompt.clone()
+            };
 
             // Prepare conversation with task context
             let system_instruction =
-                compose_system_instruction(&self.system_prompt, task, contexts);
+                compose_system_instruction(&system_prompt, task, contexts);
             let conversation = build_conversation(task, contexts);
 
             // Build available tools for this agent
@@ -1547,7 +1659,17 @@ impl AgentRunner {
                 );
 
                 let turn_model = self.get_selected_model();
-                let turn_reasoning = self.reasoning_effort;
+                let turn_reasoning = if is_simple_task {
+                    Some(ReasoningEffortLevel::Minimal)
+                } else {
+                    self.reasoning_effort
+                };
+                let turn_verbosity = if is_simple_task {
+                    Some(VerbosityLevel::Low)
+                } else {
+                    self.verbosity
+                };
+                let max_tokens = if is_simple_task { Some(800) } else { Some(2000) };
 
                 // Context compaction before the request
                 self.summarize_conversation_if_needed(
@@ -1606,7 +1728,7 @@ impl AgentRunner {
                     system_prompt: Some(system_instruction.clone()),
                     tools: Some(tools.clone()),
                     model: turn_model.clone(),
-                    max_tokens: Some(2000),
+                    max_tokens,
                     temperature: Some(0.7),
                     stream: self.provider_client.supports_streaming(),
                     parallel_tool_config,
@@ -1616,7 +1738,7 @@ impl AgentRunner {
                     } else {
                         None
                     },
-                    verbosity: self.verbosity,
+                    verbosity: turn_verbosity,
                     ..Default::default()
                 };
 
