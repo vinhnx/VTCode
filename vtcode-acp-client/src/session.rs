@@ -15,8 +15,10 @@ use std::collections::HashMap;
 /// Session state enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SessionState {
     /// Session created but not yet active
+    #[default]
     Created,
     /// Session is active and processing
     Active,
@@ -28,12 +30,6 @@ pub enum SessionState {
     Cancelled,
     /// Session failed with error
     Failed,
-}
-
-impl Default for SessionState {
-    fn default() -> Self {
-        Self::Created
-    }
 }
 
 /// ACP Session representation
@@ -92,7 +88,7 @@ impl AcpSession {
 // ============================================================================
 
 /// Parameters for session/new method
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SessionNewParams {
     /// Optional session metadata
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
@@ -105,16 +101,6 @@ pub struct SessionNewParams {
     /// Optional model preferences
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_preferences: Option<ModelPreferences>,
-}
-
-impl Default for SessionNewParams {
-    fn default() -> Self {
-        Self {
-            metadata: HashMap::new(),
-            workspace: None,
-            model_preferences: None,
-        }
-    }
 }
 
 /// Result of session/new method

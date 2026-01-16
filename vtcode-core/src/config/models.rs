@@ -200,6 +200,8 @@ pub enum ModelId {
     GPT5,
     /// GPT-5.2 - Latest flagship general-purpose OpenAI model (2025-12-11)
     GPT52,
+    /// GPT-5.2 Codex - Code-focused GPT-5.2 variant optimized for agentic coding
+    GPT52Codex,
     /// GPT-5 Codex - Code-focused GPT-5 variant using the Responses API
     GPT5Codex,
     /// GPT-5 Mini - Latest efficient OpenAI model (2025-08-07)
@@ -484,6 +486,7 @@ impl ModelId {
             // OpenAI models
             ModelId::GPT5 => models::GPT_5,
             ModelId::GPT52 => models::GPT_5_2,
+            ModelId::GPT52Codex => models::openai::GPT_5_2_CODEX,
             ModelId::GPT5Codex => models::GPT_5_CODEX,
             ModelId::GPT5Mini => models::GPT_5_MINI,
             ModelId::GPT5Nano => models::GPT_5_NANO,
@@ -627,6 +630,7 @@ impl ModelId {
             | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
             | ModelId::GPT52
+            | ModelId::GPT52Codex
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
@@ -792,6 +796,7 @@ impl ModelId {
             ModelId::Gemini25Pro => Some(ModelId::Gemini25Flash),
             ModelId::Gemini3ProPreview => Some(ModelId::Gemini25Flash),
             ModelId::GPT52 => Some(ModelId::GPT5Mini),
+            ModelId::GPT52Codex => Some(ModelId::CodexMiniLatest),
             ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::GPT5Codex => Some(ModelId::CodexMiniLatest),
             ModelId::GPT51 => Some(ModelId::GPT51Mini),
@@ -831,6 +836,7 @@ impl ModelId {
             // OpenAI models
             ModelId::GPT5 => "GPT-5",
             ModelId::GPT52 => "GPT-5.2",
+            ModelId::GPT52Codex => "GPT-5.2 Codex",
             ModelId::GPT5Codex => "GPT-5 Codex",
             ModelId::GPT5Mini => "GPT-5 Mini",
             ModelId::GPT5Nano => "GPT-5 Nano",
@@ -940,6 +946,9 @@ impl ModelId {
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
             ModelId::GPT52 => {
                 "Latest flagship OpenAI model with improved reasoning, xhigh effort, and built-in compaction support"
+            }
+            ModelId::GPT52Codex => {
+                "GPT-5.2 variant optimized for agentic coding tasks with reasoning effort support"
             }
             ModelId::GPT5Codex => {
                 "Code-focused GPT-5 variant optimized for tool calling and structured outputs"
@@ -1189,6 +1198,7 @@ impl ModelId {
             // OpenAI models
             ModelId::GPT5,
             ModelId::GPT52,
+            ModelId::GPT52Codex,
             ModelId::GPT5Codex,
             ModelId::GPT5Mini,
             ModelId::GPT5Nano,
@@ -1480,7 +1490,7 @@ impl ModelId {
             | ModelId::Gemini25Pro => "2.5",
             ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
-            ModelId::GPT52 => "5.2",
+            ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
             ModelId::GPT5
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
@@ -1601,6 +1611,7 @@ impl ModelId {
         matches!(
             self,
             ModelId::GPT52
+                | ModelId::GPT52Codex
                 | ModelId::GPT51
                 | ModelId::GPT51Codex
                 | ModelId::GPT51CodexMax
@@ -1643,6 +1654,7 @@ impl FromStr for ModelId {
             s if s == models::GPT_5 => Ok(ModelId::GPT5),
             s if s == models::openai::GPT_5_2 => Ok(ModelId::GPT52),
             s if s == models::openai::GPT_5_2_ALIAS => Ok(ModelId::GPT52),
+            s if s == models::openai::GPT_5_2_CODEX => Ok(ModelId::GPT52Codex),
             s if s == models::GPT_5_CODEX => Ok(ModelId::GPT5Codex),
             s if s == models::GPT_5_MINI => Ok(ModelId::GPT5Mini),
             s if s == models::GPT_5_NANO => Ok(ModelId::GPT5Nano),

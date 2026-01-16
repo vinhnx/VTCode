@@ -636,14 +636,14 @@ pub(crate) async fn initialize_session(
     // Initialize dynamic context discovery directories
     if let Some(cfg) = vt_cfg
         && cfg.context.dynamic.enabled
-            && let Err(err) = vtcode_core::context::initialize_dynamic_context(
-                &config.workspace,
-                &cfg.context.dynamic,
-            )
-            .await
-            {
-                warn!("Failed to initialize dynamic context directories: {}", err);
-            }
+        && let Err(err) = vtcode_core::context::initialize_dynamic_context(
+            &config.workspace,
+            &cfg.context.dynamic,
+        )
+        .await
+    {
+        warn!("Failed to initialize dynamic context directories: {}", err);
+    }
 
     Ok(SessionState {
         session_bootstrap,
