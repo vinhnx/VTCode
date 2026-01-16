@@ -50,6 +50,59 @@ use super::utils::{render_hook_messages, safe_force_redraw};
 use crate::agent::runloop::unified::display::ensure_turn_bottom_gap;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
 
+fn normalize_signature_args(tool_name: &str, args: &serde_json::Value) -> serde_json::Value {
+    let mut normalized = match args.as_object() {
+        Some(obj) => serde_json::Value::Object(obj.clone()),
+        None => return args.clone(),
+    };
+
+    let remove_paging_keys = |value: &mut serde_json::Value| {
+        if let Some(map) = value.as_object_mut() {
+            for key in [
+                "offset_lines",
+                "limit",
+                "offset",
+                "page_size_lines",
+                "start_line",
+                "end_line",
+                "num_lines",
+                "offset_bytes",
+                "page_size_bytes",
+                "max_bytes",
+                "max_tokens",
+                "max_lines",
+                "chunk_lines",
+            ] {
+                map.remove(key);
+            }
+        }
+    };
+
+    if tool_name == tool_names::READ_FILE {
+        remove_paging_keys(&mut normalized);
+        return normalized;
+    }
+
+    if tool_name == tool_names::UNIFIED_FILE {
+        if let Some(action) = normalized
+            .get("action")
+            .and_then(|value| value.as_str())
+        {
+            if action == "read" {
+                remove_paging_keys(&mut normalized);
+            }
+        }
+    }
+
+    normalized
+}
+
+fn signature_key_for(tool_name: &str, args: &serde_json::Value) -> String {
+    let normalized = normalize_signature_args(tool_name, args);
+    let args_str = serde_json::to_string(&normalized).unwrap_or_else(|_| args.to_string());
+    format!("{}:{}", tool_name, args_str)
+}
+
 pub async fn apply_turn_outcome(
     outcome: &TurnLoopOutcome,
     ctx: TurnOutcomeContext<'_>,
@@ -268,7 +321,7 @@ pub(crate) async fn handle_tool_calls(
                     let outcome = ToolPipelineOutcome::from_status(status);
 
                     // Update attempts
-                    let signature_key = format!("{}:{}", name, args);
+                    let signature_key = signature_key_for(&name, &args);
                     let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
                     *current_count += 1;
 
@@ -468,7 +521,7 @@ pub(crate) async fn handle_tool_call(
     .await
     {
         Ok(ToolPermissionFlow::Approved) => {
-            let signature_key = format!("{}:{}", tool_name, args_val);
+            let signature_key = signature_key_for(tool_name, &args_val);
             let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
             *current_count += 1;
 

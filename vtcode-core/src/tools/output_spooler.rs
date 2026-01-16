@@ -255,9 +255,9 @@ impl ToolOutputSpooler {
             "total_lines": spool_result.total_lines,
             "preview": spool_result.preview,
             "note": if is_mcp {
-                "MCP tool output spooled to file. Use read_file or grep_file to explore."
+                "MCP tool output spooled to file. Use read_file with offset/limit (1-indexed line numbers) or grep_file to explore."
             } else {
-                "Tool output spooled to file. Use read_file or grep_file to explore."
+                "Tool output spooled to file. Use read_file with offset/limit (1-indexed line numbers) or grep_file to explore."
             },
             "tip": format!(
                 "To view the full output: read_file path=\"{}\"",

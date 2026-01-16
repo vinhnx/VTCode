@@ -238,6 +238,50 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                     )
                 })
         }
+        actual_name if actual_name == tool_names::UNIFIED_FILE => {
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    if args.get("old_str").is_some() {
+                        Some("edit")
+                    } else if args.get("patch").is_some() {
+                        Some("patch")
+                    } else if args.get("content").is_some() {
+                        Some("write")
+                    } else if args.get("destination").is_some() {
+                        Some("move")
+                    } else {
+                        Some("read")
+                    }
+                })
+                .unwrap_or("read");
+
+            let (verb, keys): (&str, &[&str]) = match action {
+                "read" => ("Read file", &["path", "file_path", "target_path"]),
+                "write" => ("Write file", &["path", "file_path", "target_path"]),
+                "edit" => ("Edit file", &["path", "file_path", "target_path"]),
+                "patch" => ("Apply patch", &["path", "file_path", "target_path"]),
+                "delete" => ("Delete file", &["path", "file_path", "target_path"]),
+                "move" => ("Move file", &["path", "file_path", "target_path"]),
+                "copy" => ("Copy file", &["path", "file_path", "target_path"]),
+                _ => ("File operation", &["path", "file_path", "target_path"]),
+            };
+
+            describe_path_action(args, verb, keys)
+                .map(|(desc, used)| {
+                    (
+                        format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                        used,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, verb),
+                        HashSet::new(),
+                    )
+                })
+        }
         actual_name if actual_name == tool_names::DELETE_FILE => {
             describe_path_action(args, "Delete file", &["path"])
                 .map(|(desc, used)| {
@@ -416,9 +460,13 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
     if max_len == 0 {
         return String::new();
     }
-    let char_count = text.chars().count();
+    let sanitized: String = text
+        .chars()
+        .map(|c| if matches!(c, '\n' | '\r' | '\t') { ' ' } else { c })
+        .collect();
+    let char_count = sanitized.chars().count();
     if char_count <= max_len {
-        return text.to_string();
+        return sanitized;
     }
     if max_len <= 1 {
         return "…".to_string();
@@ -427,13 +475,13 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
     let tail_len = max_len.saturating_sub(head_len + 1);
 
     // Collect only head and tail characters to avoid allocating the full char vector.
-    let head: String = text.chars().take(head_len).collect();
+    let head: String = sanitized.chars().take(head_len).collect();
     let mut result = String::with_capacity(head.len() + tail_len + 1);
     result.push_str(&head);
     result.push('…');
     if tail_len > 0 {
         // Collect tail in reverse then reverse to restore order.
-        let mut tail_rev: Vec<char> = text.chars().rev().take(tail_len).collect();
+        let mut tail_rev: Vec<char> = sanitized.chars().rev().take(tail_len).collect();
         tail_rev.reverse();
         let tail: String = tail_rev.into_iter().collect();
         result.push_str(&tail);
