@@ -371,6 +371,102 @@ pub enum ModelSelectionSource {
     CliOverride,
 }
 
+/// Default editing mode for agent startup (Codex-inspired workflow)
+///
+/// Controls the initial mode when a session starts. This is a **configuration**
+/// enum for `default_editing_mode` in vtcode.toml. At runtime, the mode can be
+/// cycled (Edit → Plan → Agent → Edit) via Shift+Tab or /plan, /agent commands.
+///
+/// Inspired by OpenAI Codex's emphasis on structured planning before execution,
+/// but provider-agnostic (works with Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum EditingMode {
+    /// Full tool access - can read, write, execute commands (default)
+    /// Use for: Implementation, bug fixes, feature development
+    #[default]
+    Edit,
+    /// Read-only exploration - mutating tools blocked
+    /// Use for: Planning, research, architecture analysis
+    /// Agent can write plans to `.vtcode/plans/` but not modify code
+    Plan,
+    /// Autonomous agent mode - full tool access with reduced HITL prompts
+    /// Use for: Long-running autonomous tasks with minimal interruption
+    Agent,
+}
+
+impl EditingMode {
+    /// Return the textual representation for configuration and display
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Edit => "edit",
+            Self::Plan => "plan",
+            Self::Agent => "agent",
+        }
+    }
+
+    /// Parse editing mode from user configuration input
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("edit") {
+            Some(Self::Edit)
+        } else if normalized.eq_ignore_ascii_case("plan") {
+            Some(Self::Plan)
+        } else if normalized.eq_ignore_ascii_case("agent") {
+            Some(Self::Agent)
+        } else {
+            None
+        }
+    }
+
+    /// Enumerate the allowed configuration values for validation
+    pub fn allowed_values() -> &'static [&'static str] {
+        &["edit", "plan", "agent"]
+    }
+
+    /// Check if this mode allows file modifications
+    pub fn can_modify_files(self) -> bool {
+        matches!(self, Self::Edit | Self::Agent)
+    }
+
+    /// Check if this mode allows command execution
+    pub fn can_execute_commands(self) -> bool {
+        matches!(self, Self::Edit | Self::Agent)
+    }
+
+    /// Check if this is read-only planning mode
+    pub fn is_read_only(self) -> bool {
+        matches!(self, Self::Plan)
+    }
+
+    /// Check if this is autonomous agent mode (reduced HITL)
+    pub fn is_autonomous(self) -> bool {
+        matches!(self, Self::Agent)
+    }
+}
+
+impl fmt::Display for EditingMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for EditingMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        if let Some(parsed) = Self::parse(&raw) {
+            Ok(parsed)
+        } else {
+            Ok(Self::default())
+        }
+    }
+}
+
 /// Configuration for the agent
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
@@ -593,4 +689,70 @@ pub enum CompressionLevel {
     Light,
     Medium,
     Aggressive,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_editing_mode_parse() {
+        assert_eq!(EditingMode::parse("edit"), Some(EditingMode::Edit));
+        assert_eq!(EditingMode::parse("EDIT"), Some(EditingMode::Edit));
+        assert_eq!(EditingMode::parse("Edit"), Some(EditingMode::Edit));
+        assert_eq!(EditingMode::parse("plan"), Some(EditingMode::Plan));
+        assert_eq!(EditingMode::parse("PLAN"), Some(EditingMode::Plan));
+        assert_eq!(EditingMode::parse("Plan"), Some(EditingMode::Plan));
+        assert_eq!(EditingMode::parse("agent"), Some(EditingMode::Agent));
+        assert_eq!(EditingMode::parse("AGENT"), Some(EditingMode::Agent));
+        assert_eq!(EditingMode::parse("Agent"), Some(EditingMode::Agent));
+        assert_eq!(EditingMode::parse("invalid"), None);
+        assert_eq!(EditingMode::parse(""), None);
+    }
+
+    #[test]
+    fn test_editing_mode_as_str() {
+        assert_eq!(EditingMode::Edit.as_str(), "edit");
+        assert_eq!(EditingMode::Plan.as_str(), "plan");
+        assert_eq!(EditingMode::Agent.as_str(), "agent");
+    }
+
+    #[test]
+    fn test_editing_mode_capabilities() {
+        // Edit mode: full access
+        assert!(EditingMode::Edit.can_modify_files());
+        assert!(EditingMode::Edit.can_execute_commands());
+        assert!(!EditingMode::Edit.is_read_only());
+        assert!(!EditingMode::Edit.is_autonomous());
+
+        // Plan mode: read-only
+        assert!(!EditingMode::Plan.can_modify_files());
+        assert!(!EditingMode::Plan.can_execute_commands());
+        assert!(EditingMode::Plan.is_read_only());
+        assert!(!EditingMode::Plan.is_autonomous());
+
+        // Agent mode: full access + autonomous
+        assert!(EditingMode::Agent.can_modify_files());
+        assert!(EditingMode::Agent.can_execute_commands());
+        assert!(!EditingMode::Agent.is_read_only());
+        assert!(EditingMode::Agent.is_autonomous());
+    }
+
+    #[test]
+    fn test_editing_mode_default() {
+        assert_eq!(EditingMode::default(), EditingMode::Edit);
+    }
+
+    #[test]
+    fn test_editing_mode_display() {
+        assert_eq!(format!("{}", EditingMode::Edit), "edit");
+        assert_eq!(format!("{}", EditingMode::Plan), "plan");
+        assert_eq!(format!("{}", EditingMode::Agent), "agent");
+    }
+
+    #[test]
+    fn test_editing_mode_allowed_values() {
+        let values = EditingMode::allowed_values();
+        assert_eq!(values, &["edit", "plan", "agent"]);
+    }
 }

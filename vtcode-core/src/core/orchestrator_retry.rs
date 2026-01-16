@@ -247,9 +247,10 @@ pub fn is_retryable_error(error: &anyhow::Error) -> bool {
             .any(|window| window.eq_ignore_ascii_case(pattern.as_bytes()))
     };
 
-    // Common temporary error patterns (exclude quota/429 errors)
+    // Common temporary error patterns (exclude quota errors which are account limits, not transient)
     (contains_ci("timeout")
         || contains_ci("rate limit")
+        || contains_ci("429")
         || contains_ci("503")
         || contains_ci("502")
         || contains_ci("500")
@@ -259,7 +260,6 @@ pub fn is_retryable_error(error: &anyhow::Error) -> bool {
         || contains_ci("overloaded"))
         && !contains_ci("quota")
         && !contains_ci("insufficient")
-        && !contains_ci("429")
 }
 
 #[cfg(test)]
@@ -293,6 +293,9 @@ mod tests {
         assert!(is_retryable_error(&anyhow!("HTTP 503 Service Unavailable")));
         assert!(is_retryable_error(&anyhow!("Network error")));
 
+        assert!(is_retryable_error(&anyhow!("HTTP 429 Too Many Requests")));
+        assert!(is_retryable_error(&anyhow!("Error 429: rate limited")));
+
         assert!(!is_retryable_error(&anyhow!("Invalid API key")));
         assert!(!is_retryable_error(&anyhow!("Permission denied")));
         assert!(!is_retryable_error(&anyhow!("Invalid model")));
@@ -300,7 +303,7 @@ mod tests {
             "You exceeded your current quota"
         )));
         assert!(!is_retryable_error(&anyhow!("insufficient_quota")));
-        assert!(!is_retryable_error(&anyhow!("HTTP 429")));
+        assert!(!is_retryable_error(&anyhow!("429 quota exceeded")));
     }
 
     #[test]
