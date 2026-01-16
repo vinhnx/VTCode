@@ -3,6 +3,29 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.60.4] - 2026-01-16
+
+
+### Features
+    - feat: update tool policies and agent configuration for improved execution control and user confirmation
+    - feat: enhance agent behavior configuration with Codex-inspired patterns and update tool response truncation settings
+    - feat: add GPT-5.2 Codex model and improve code formatting across multiple files
+    - feat: enhance sandboxing with new documentation and environment handling
+
+
+### Refactors
+    - refactor: streamline code by simplifying conditional checks and improving output handling
+    - refactor: clean up code formatting and improve readability in multiple files
+
+
+### Documentation
+    - docs: update changelog for v0.60.3 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.60.3 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.60.2 version =  [skip ci]
 # [Version 0.60.3] - 2026-01-14
 
 
