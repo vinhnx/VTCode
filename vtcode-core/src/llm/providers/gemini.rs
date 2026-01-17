@@ -1151,6 +1151,7 @@ impl LLMClient for GeminiProvider {
                             cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
                         }),
                         reasoning: response.reasoning,
+                        reasoning_details: response.reasoning_details,
                         request_id: response.request_id,
                         organization_id: response.organization_id,
                     });
@@ -1203,6 +1204,7 @@ impl LLMClient for GeminiProvider {
                 cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
             }),
             reasoning: response.reasoning,
+            reasoning_details: response.reasoning_details,
             request_id: response.request_id,
             organization_id: response.organization_id,
         })

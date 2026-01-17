@@ -9,7 +9,11 @@ use crate::prompts::{generate_lightweight_instruction, generate_system_instructi
 use anyhow::Result;
 
 /// Handle the ask command - single prompt without tools
-pub async fn handle_ask_command(config: AgentConfig, prompt: Vec<String>) -> Result<()> {
+pub async fn handle_ask_command(
+    config: AgentConfig,
+    prompt: Vec<String>,
+    options: crate::cli::AskCommandOptions,
+) -> Result<()> {
     let model_id = config
         .model
         .parse::<ModelId>()
@@ -72,9 +76,23 @@ pub async fn handle_ask_command(config: AgentConfig, prompt: Vec<String>) -> Res
         .join("\n\n");
 
     let response = client.generate(&prompt).await?;
+    let backend_kind = client.backend_kind();
 
-    // Print the response content directly
-    println!("{}", response.content);
+    // Handle output based on format preference
+    if let Some(crate::cli::args::AskOutputFormat::Json) = options.output_format {
+        // Build a comprehensive JSON structure
+        let output = serde_json::json!({
+            "response": response,
+            "provider": {
+                "kind": backend_kind,
+                "model": response.model,
+            }
+        });
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    } else {
+        // Print the response content directly (default behavior)
+        println!("{}", response.content);
+    }
 
     Ok(())
 }
