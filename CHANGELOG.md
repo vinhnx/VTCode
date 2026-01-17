@@ -3,7 +3,7 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
-# [Version 0.61.0] - 2026-01-17
+# [Version 0.62.0] - 2026-01-17
 
 
 ### Features
