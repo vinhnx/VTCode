@@ -3,6 +3,26 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.60.6] - 2026-01-17
+
+
+### Features
+    - feat: add debug logging for subagent parsing and loading; update error messages for context and segment not found
+    - feat: update tool policies, enhance file handling, and modify agent configuration for improved functionality
+
+
+### Refactors
+    - refactor: remove unused LLM provider implementations
+
+
+### Documentation
+    - docs: update changelog for v0.60.5 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.60.5 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.60.4 version =  [skip ci]
 # [Version 0.60.5] - 2026-01-16
 
 
