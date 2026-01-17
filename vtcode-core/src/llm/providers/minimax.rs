@@ -409,6 +409,7 @@ Continuing response."#;
             finish_reason: FinishReason::Stop,
             reasoning: None,
             reasoning_details: None,
+            tool_references: Vec::new(),
         };
 
         let processed = post_process_response(response, Some(&[sample_tool_definition()]));

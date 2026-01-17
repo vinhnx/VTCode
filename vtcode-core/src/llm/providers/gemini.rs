@@ -766,6 +766,7 @@ impl GeminiProvider {
                 finish_reason: FinishReason::Stop,
                 reasoning: None,
                 reasoning_details: None,
+                tool_references: Vec::new(),
             });
         }
 
@@ -867,6 +868,7 @@ impl GeminiProvider {
             finish_reason,
             reasoning: extracted_reasoning,
             reasoning_details: None,
+            tool_references: Vec::new(),
         })
     }
 
@@ -1085,6 +1087,7 @@ impl LLMClient for GeminiProvider {
                                 shell: None,
                                 grammar: None,
                                 strict: None,
+                                defer_loading: None,
                             })
                             .collect::<Vec<_>>()
                     });

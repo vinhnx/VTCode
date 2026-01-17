@@ -539,6 +539,7 @@ impl OllamaProvider {
             finish_reason: finish,
             reasoning,
             reasoning_details: None,
+            tool_references: Vec::new(),
         }
     }
 

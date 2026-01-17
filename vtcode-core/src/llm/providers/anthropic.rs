@@ -227,7 +227,11 @@ impl AnthropicProvider {
 
     /// Combines prompt cache betas with structured outputs beta when requested.
     /// Always includes interleaved-thinking beta for all Anthropic models.
-    fn combined_beta_header_value(&self, include_structured: bool) -> Option<String> {
+    fn combined_beta_header_value(
+        &self,
+        include_structured: bool,
+        include_tool_search: bool,
+    ) -> Option<String> {
         let mut pieces: Vec<String> = Vec::new();
         if let Some(pc) = self.prompt_cache_beta_header_value() {
             for p in pc
@@ -244,10 +248,28 @@ impl AnthropicProvider {
             // Use the correct beta header for structured outputs
             pieces.push("structured-outputs-2025-11-13".to_owned());
         }
+        if include_tool_search {
+            // Add advanced-tool-use beta header for tool search
+            pieces.push("advanced-tool-use-2025-11-20".to_owned());
+        }
         if pieces.is_empty() {
             None
         } else {
             Some(pieces.join(", "))
+        }
+    }
+
+    /// Check if the request contains tool search tools or deferred tools
+    fn requires_tool_search_beta(&self, request: &LLMRequest) -> bool {
+        if !self.anthropic_config.tool_search.enabled {
+            return false;
+        }
+        if let Some(tools) = &request.tools {
+            tools.iter().any(|t| {
+                t.is_tool_search() || t.defer_loading.unwrap_or(false)
+            })
+        } else {
+            false
         }
     }
 
@@ -553,7 +575,8 @@ impl AnthropicProvider {
     #[allow(clippy::result_large_err)]
     fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         use super::anthropic_types::{
-            AnthropicContentBlock, AnthropicMessage, AnthropicRequest, AnthropicTool, CacheControl,
+            AnthropicContentBlock, AnthropicFunctionTool, AnthropicMessage, AnthropicRequest,
+            AnthropicTool, AnthropicToolSearchTool, CacheControl,
         };
 
         let cache_control_template = if self.prompt_cache_enabled {
@@ -578,13 +601,24 @@ impl AnthropicProvider {
             let mut built_tools: Vec<AnthropicTool> = request_tools
                 .iter()
                 .filter_map(|tool| {
+                    // Handle tool search tools specially
+                    if tool.is_tool_search() {
+                        let func = tool.function.as_ref()?;
+                        return Some(AnthropicTool::ToolSearch(AnthropicToolSearchTool {
+                            tool_type: tool.tool_type.clone(),
+                            name: func.name.clone(),
+                        }));
+                    }
+
+                    // Regular function tools
                     let func = tool.function.as_ref()?;
-                    Some(AnthropicTool {
+                    Some(AnthropicTool::Function(AnthropicFunctionTool {
                         name: func.name.clone(),
                         description: func.description.clone(),
                         input_schema: func.parameters.clone(),
                         cache_control: None,
-                    })
+                        defer_loading: tool.defer_loading,
+                    }))
                 })
                 .collect();
 
@@ -592,7 +626,10 @@ impl AnthropicProvider {
                 && let Some(cache_control) = cache_control_template.as_ref()
                 && let Some(last_tool) = built_tools.last_mut()
             {
-                last_tool.cache_control = Some(cache_control.clone());
+                // Only apply cache control to function tools
+                if let AnthropicTool::Function(func_tool) = last_tool {
+                    func_tool.cache_control = Some(cache_control.clone());
+                }
                 breakpoints_remaining -= 1;
             }
 
@@ -792,12 +829,13 @@ impl AnthropicProvider {
         if let Some(schema) = &request.output_format
             && self.supports_structured_output(&request.model)
         {
-            let structured_tool = AnthropicTool {
+            let structured_tool = AnthropicTool::Function(AnthropicFunctionTool {
                 name: "structured_output".to_string(),
                 description: "Forces Claude to respond in a specific JSON format according to the provided schema".to_string(),
                 input_schema: schema.clone(),
                 cache_control: None,
-            };
+                defer_loading: None,
+            });
 
             if let Some(tools_vec) = &mut tools {
                 tools_vec.push(structured_tool);
@@ -860,6 +898,7 @@ impl AnthropicProvider {
         let mut reasoning_parts = Vec::new();
         let mut tool_calls = Vec::new();
         let mut reasoning_details_vec = Vec::new();
+        let mut tool_references = Vec::new();
 
         for block in content {
             match block.get("type").and_then(|t| t.as_str()) {
@@ -907,6 +946,37 @@ impl AnthropicProvider {
                             serde_json::to_string(&input).unwrap_or_else(|_| "{}".to_string());
                         if !id.is_empty() && !name.is_empty() {
                             tool_calls.push(ToolCall::function(id, name, arguments));
+                        }
+                    }
+                }
+                // Handle server-side tool use (tool search execution) - advanced-tool-use beta
+                Some("server_tool_use") => {
+                    // Server tool use is internal; we don't expose it as a tool call
+                    // Silently ignore - used for tool search execution
+                }
+                // Handle tool search results - advanced-tool-use beta
+                Some("tool_search_tool_result") => {
+                    if let Some(content_block) = block.get("content") {
+                        // Extract tool references from successful search results
+                        if content_block.get("type").and_then(|t| t.as_str())
+                            == Some("tool_search_tool_search_result")
+                        {
+                            if let Some(refs) =
+                                content_block.get("tool_references").and_then(|r| r.as_array())
+                            {
+                                for tool_ref in refs {
+                                    if let Some(tool_name) =
+                                        tool_ref.get("tool_name").and_then(|n| n.as_str())
+                                    {
+                                        tool_references.push(tool_name.to_string());
+                                    }
+                                }
+                            }
+                        } else if content_block.get("type").and_then(|t| t.as_str())
+                            == Some("tool_search_tool_result_error")
+                        {
+                            // Tool search errors are silently ignored
+                            // The caller can check if tool_references is empty
                         }
                     }
                 }
@@ -992,6 +1062,7 @@ impl AnthropicProvider {
             } else {
                 Some(reasoning_details_vec)
             },
+            tool_references,
         })
     }
 }
@@ -1054,6 +1125,7 @@ impl LLMProvider for AnthropicProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let include_tool_search = self.requires_tool_search_beta(&request);
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
         let url = format!("{}/messages", self.base_url);
 
@@ -1064,7 +1136,9 @@ impl LLMProvider for AnthropicProvider {
             .header("anthropic-version", urls::ANTHROPIC_API_VERSION);
 
         let include_structured = anthropic_request.get("output_format").is_some();
-        if let Some(beta_header) = self.combined_beta_header_value(include_structured) {
+        if let Some(beta_header) =
+            self.combined_beta_header_value(include_structured, include_tool_search)
+        {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
 

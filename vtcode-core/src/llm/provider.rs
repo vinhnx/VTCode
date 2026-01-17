@@ -891,11 +891,44 @@ impl MessageRole {
     }
 }
 
+/// Tool search algorithm for Anthropic's advanced-tool-use beta
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ToolSearchAlgorithm {
+    /// Regex-based search using Python re.search() syntax
+    #[default]
+    Regex,
+    /// BM25-based natural language search
+    Bm25,
+}
+
+impl std::fmt::Display for ToolSearchAlgorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Regex => write!(f, "regex"),
+            Self::Bm25 => write!(f, "bm25"),
+        }
+    }
+}
+
+impl std::str::FromStr for ToolSearchAlgorithm {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "regex" => Ok(Self::Regex),
+            "bm25" => Ok(Self::Bm25),
+            _ => Err(format!("Unknown tool search algorithm: {}", s)),
+        }
+    }
+}
+
 /// Universal tool definition that matches OpenAI/Anthropic/Gemini specifications
 /// Based on official API documentation from Context7
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDefinition {
     /// The type of tool: "function", "apply_patch" (GPT-5.1), "shell" (GPT-5.1), or "custom" (GPT-5 freeform)
+    /// Also supports Anthropic tool search types: "tool_search_tool_regex_20251119", "tool_search_tool_bm25_20251119"
     #[serde(rename = "type")]
     pub tool_type: String,
 
@@ -912,9 +945,15 @@ pub struct ToolDefinition {
     /// Grammar definition for context-free grammar constraints (GPT-5 specific)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grammar: Option<GrammarDefinition>,
+
     /// When true and using Anthropic, mark the tool as strict for structured tool use validation
     #[serde(skip_serializing_if = "Option::is_none")]
     pub strict: Option<bool>,
+
+    /// When true, the tool is deferred and only loaded when discovered via tool search (Anthropic advanced-tool-use beta)
+    /// This enables dynamic tool discovery for large tool catalogs (10k+ tools)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub defer_loading: Option<bool>,
 }
 
 /// Shell tool definition for GPT-5.1 shell tool type
@@ -1012,6 +1051,7 @@ impl ToolDefinition {
             shell: None,
             grammar: None,
             strict: None,
+            defer_loading: None,
         }
     }
 
@@ -1019,6 +1059,46 @@ impl ToolDefinition {
     pub fn with_strict(mut self, strict: bool) -> Self {
         self.strict = Some(strict);
         self
+    }
+
+    /// Set whether the tool should be deferred (Anthropic tool search)
+    pub fn with_defer_loading(mut self, defer: bool) -> Self {
+        self.defer_loading = Some(defer);
+        self
+    }
+
+    /// Create a tool search tool definition for Anthropic's advanced-tool-use beta
+    /// Supports regex and bm25 search algorithms
+    pub fn tool_search(algorithm: ToolSearchAlgorithm) -> Self {
+        let (tool_type, name) = match algorithm {
+            ToolSearchAlgorithm::Regex => (
+                "tool_search_tool_regex_20251119",
+                "tool_search_tool_regex",
+            ),
+            ToolSearchAlgorithm::Bm25 => ("tool_search_tool_bm25_20251119", "tool_search_tool_bm25"),
+        };
+
+        Self {
+            tool_type: tool_type.to_owned(),
+            function: Some(FunctionDefinition {
+                name: name.to_owned(),
+                description: "Search for tools by name, description, or parameters".to_owned(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query (regex pattern for regex variant, natural language for bm25)"
+                        }
+                    },
+                    "required": ["query"]
+                }),
+            }),
+            shell: None,
+            grammar: None,
+            strict: None,
+            defer_loading: None,
+        }
     }
 
     /// Create a new apply_patch tool definition (GPT-5.1 specific)
@@ -1048,6 +1128,7 @@ impl ToolDefinition {
             shell: None,
             grammar: None,
             strict: None,
+            defer_loading: None,
         }
     }
 
@@ -1065,6 +1146,7 @@ impl ToolDefinition {
             shell: None,
             grammar: None,
             strict: None,
+            defer_loading: None,
         }
     }
 
@@ -1077,6 +1159,7 @@ impl ToolDefinition {
             shell: None,
             grammar: Some(GrammarDefinition { syntax, definition }),
             strict: None,
+            defer_loading: None,
         }
     }
 
@@ -1108,11 +1191,22 @@ impl ToolDefinition {
             "shell" => self.validate_shell(),
             "custom" => self.validate_custom(),
             "grammar" => self.validate_grammar(),
+            "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119" => {
+                self.validate_function()
+            }
             other => Err(format!(
-                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar",
+                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, tool_search_tool_*",
                 other
             )),
         }
+    }
+
+    /// Returns true if this is a tool search tool type
+    pub fn is_tool_search(&self) -> bool {
+        matches!(
+            self.tool_type.as_str(),
+            "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119"
+        )
     }
 
     fn validate_function(&self) -> Result<(), String> {
@@ -1310,6 +1404,9 @@ pub struct LLMResponse {
     pub finish_reason: FinishReason,
     pub reasoning: Option<String>,
     pub reasoning_details: Option<Vec<serde_json::Value>>,
+    /// Tool references discovered via Anthropic's tool search feature
+    /// These tool names should be expanded (defer_loading=false) in the next request
+    pub tool_references: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

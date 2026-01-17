@@ -604,6 +604,7 @@ impl AgentRunner {
                 shell: None,
                 grammar: None,
                 strict: None,
+                defer_loading: None,
             })
             .collect();
 
