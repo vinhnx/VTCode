@@ -233,6 +233,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
 -   [**Development**](./docs/development/README.md)
     -   [Testing](./docs/development/testing.md)
     -   [CI/CD](./docs/development/ci-cd.md)
+    -   [**Empirical Evaluation**](./evals/README.md) - Formal framework for measuring LLM performance across safety, logic, and coding benchmarks.
 -   [**FAQ**](./docs/FAQ.md) - Frequently asked questions about VT Code
 -   [**TUI & Async Guides**](./docs/guides/)
     -   [Event Handling](./docs/guides/tui-event-handling.md) - Terminal event architecture and patterns
