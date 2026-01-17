@@ -6523,6 +6523,7 @@ dependencies = [
  "itertools 0.14.0",
  "json5",
  "jsonschema",
+ "libc",
  "line-clipping",
  "lru 0.16.2",
  "lsp-types",
