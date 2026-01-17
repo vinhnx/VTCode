@@ -1,7 +1,7 @@
 use super::terminal_capabilities;
 use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_style_from_inline};
 use crate::config::constants::ui;
-use crate::ui::tui::types::InlineTextStyle;
+use crate::ui::tui::types::{EditingMode, InlineTextStyle};
 use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
     prelude::*,
@@ -60,11 +60,28 @@ impl Session {
             status_line = Some(line);
         }
 
-        let border_style = self.styles.accent_style();
+        // Determine border styling based on editing mode
+        let base_border_style = self.styles.accent_style();
+        let border_style = match self.header_context.editing_mode {
+            EditingMode::Plan => ratatui::style::Style::default()
+                .fg(ratatui::style::Color::Yellow)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+            EditingMode::Agent => ratatui::style::Style::default()
+                .fg(ratatui::style::Color::Green)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+            EditingMode::Edit => base_border_style, // Use original style for edit mode
+        };
+
+        // Determine border type - use double borders for trust modes
+        let border_type = if self.is_full_auto_trust() || self.is_tools_policy_trust() {
+            ratatui::widgets::BorderType::Double
+        } else {
+            terminal_capabilities::get_border_type()
+        };
 
         let block = Block::new()
             .borders(Borders::TOP | Borders::BOTTOM)
-            .border_type(terminal_capabilities::get_border_type())
+            .border_type(border_type)
             .style(self.styles.default_style())
             .border_style(border_style);
         let inner = block.inner(input_area);
@@ -406,6 +423,19 @@ impl Session {
     /// Build input render data for external widgets
     pub fn build_input_widget_data(&self, width: u16, height: u16) -> InputWidgetData {
         let input_render = self.build_input_render(width, height);
+
+        // Determine border styling based on editing mode
+        let base_border_style = self.styles.accent_style();
+        let border_style = match self.header_context.editing_mode {
+            EditingMode::Plan => ratatui::style::Style::default()
+                .fg(ratatui::style::Color::Yellow)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+            EditingMode::Agent => ratatui::style::Style::default()
+                .fg(ratatui::style::Color::Green)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+            EditingMode::Edit => base_border_style, // Use original style for edit mode
+        };
+
         InputWidgetData {
             text: input_render.text,
             cursor_x: input_render.cursor_x,
@@ -413,7 +443,7 @@ impl Session {
             is_full_auto_trust: self.is_full_auto_trust(),
             is_tools_policy_trust: self.is_tools_policy_trust(),
             cursor_should_be_visible: self.cursor_should_be_visible(),
-            border_style: self.styles.accent_style(),
+            border_style,
             default_style: self.styles.default_style(),
         }
     }

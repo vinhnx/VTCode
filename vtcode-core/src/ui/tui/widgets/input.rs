@@ -1,7 +1,6 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Modifier, Style},
     text::Line,
     widgets::{Block, Borders, Clear, Paragraph, Widget, Wrap},
 };
@@ -69,12 +68,8 @@ impl<'a> Widget for InputWidget<'a> {
         // Create the border block first to get the inner area
         let temp_data = self.session.build_input_widget_data(1, 1); // Temporary data for style access
 
-        // Determine border styling based on trust mode
-        let border_style = if temp_data.is_full_auto_trust {
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-        } else {
-            temp_data.border_style
-        };
+        // Determine border styling based on editing mode (trust mode styling removed, using double borders instead)
+        let border_style = temp_data.border_style;
 
         // Determine the trust mode title for the border
         let trust_title = if temp_data.is_full_auto_trust {
@@ -85,9 +80,16 @@ impl<'a> Widget for InputWidget<'a> {
             ""
         };
 
+        // Determine border type - use double borders for trust modes
+        let border_type = if temp_data.is_full_auto_trust || temp_data.is_tools_policy_trust {
+            ratatui::widgets::BorderType::Double
+        } else {
+            terminal_capabilities::get_border_type()
+        };
+
         let block = Block::new()
             .borders(Borders::TOP | Borders::BOTTOM)
-            .border_type(terminal_capabilities::get_border_type())
+            .border_type(border_type)
             .style(temp_data.default_style)
             .border_style(border_style)
             .title(trust_title);
