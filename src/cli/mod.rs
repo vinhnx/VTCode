@@ -3,10 +3,17 @@ use std::path::PathBuf;
 use anyhow::Result;
 use vtcode_core::config::loader::VTCodeConfig;
 
+/// Skills command options
+#[derive(Debug)]
+pub struct SkillsCommandOptions {
+    pub workspace: PathBuf,
+}
+
 // Re-export the core CLI functions we need
 pub use vtcode_core::mcp::cli::handle_mcp_command;
 
 pub mod analyze;
+pub mod skills;
 pub mod update;
 
 #[allow(dead_code)]
@@ -33,10 +40,6 @@ pub struct BenchmarkCommandOptions {
     pub max_tasks: Option<usize>,
 }
 
-#[allow(dead_code)]
-pub struct SkillsCommandOptions {
-    pub workspace: PathBuf,
-}
 
 // Marketplace command handlers - these are the new functions we're adding
 pub async fn handle_marketplace_add(source: String, id: Option<String>) -> Result<()> {
@@ -409,50 +412,56 @@ pub async fn handle_resume_session_command(
     ))
 }
 
-pub async fn handle_skills_list(_skills_options: &SkillsCommandOptions) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Skills list command not implemented in this stub"
-    ))
+pub async fn handle_skills_list(skills_options: &SkillsCommandOptions) -> Result<()> {
+    // Import and delegate to the actual implementation in the skills module
+    use crate::cli::skills::handle_skills_list as actual_handler;
+    actual_handler(skills_options).await
 }
 
 pub async fn handle_skills_load(
-    _skills_options: &SkillsCommandOptions,
-    _name: &str,
-    _path: PathBuf,
+    skills_options: &SkillsCommandOptions,
+    name: &str,
+    path: PathBuf,
 ) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Skills load command not implemented in this stub"
-    ))
+    // Import and delegate to the actual implementation in the skills module
+    use crate::cli::skills::handle_skills_load as actual_handler;
+    actual_handler(skills_options, name, Some(path)).await
 }
 
-pub async fn handle_skills_info(_skills_options: &SkillsCommandOptions, _name: &str) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Skills info command not implemented in this stub"
-    ))
+pub async fn handle_skills_info(skills_options: &SkillsCommandOptions, name: &str) -> Result<()> {
+    // Import and delegate to the actual implementation in the skills module
+    use crate::cli::skills::handle_skills_info as actual_handler;
+    actual_handler(skills_options, name).await
 }
 
-pub async fn handle_skills_create(_path: &PathBuf) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Skills create command not implemented in this stub"
-    ))
+pub async fn handle_skills_create(path: &PathBuf) -> Result<()> {
+    // Import and delegate to the actual implementation in the skills module
+    use crate::cli::skills::handle_skills_create as actual_handler;
+    actual_handler(path).await
 }
 
-pub async fn handle_skills_validate(_path: &PathBuf) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Skills validate command not implemented in this stub"
-    ))
+pub async fn handle_skills_validate(path: &PathBuf) -> Result<()> {
+    // Import and delegate to the actual implementation in the skills module
+    use crate::cli::skills::handle_skills_validate as actual_handler;
+    actual_handler(path).await
 }
 
-pub async fn handle_skills_validate_all(_skills_options: &SkillsCommandOptions) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Skills validate all command not implemented in this stub"
-    ))
+pub async fn handle_skills_validate_all(skills_options: &SkillsCommandOptions) -> Result<()> {
+    // Import and delegate to the actual implementation in the skills module
+    use crate::cli::skills::handle_skills_validate_all as actual_handler;
+    actual_handler(skills_options).await
 }
 
-pub async fn handle_skills_config(_skills_options: &SkillsCommandOptions) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Skills config command not implemented in this stub"
-    ))
+pub async fn handle_skills_config(skills_options: &SkillsCommandOptions) -> Result<()> {
+    // Import and delegate to the actual implementation in the skills module
+    use crate::cli::skills::handle_skills_config as actual_handler;
+    actual_handler(skills_options).await
+}
+
+pub async fn handle_skills_regenerate_index(skills_options: &SkillsCommandOptions) -> Result<()> {
+    // Import and delegate to the actual implementation in the skills module
+    use crate::cli::skills::handle_skills_regenerate_index as actual_handler;
+    actual_handler(skills_options).await
 }
 
 pub async fn handle_auto_task_command(

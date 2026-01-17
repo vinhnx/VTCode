@@ -344,6 +344,9 @@ async fn run() -> Result<()> {
                 SkillsSubcommand::Config => {
                     cli::handle_skills_config(&skills_options).await?;
                 }
+                SkillsSubcommand::RegenerateIndex => {
+                    cli::handle_skills_regenerate_index(&skills_options).await?;
+                }
                 SkillsSubcommand::Unload { .. } => {
                     println!("Skill unload not yet implemented");
                 }
