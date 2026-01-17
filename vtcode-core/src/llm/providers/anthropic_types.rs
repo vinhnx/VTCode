@@ -197,12 +197,77 @@ pub struct AnthropicToolSearchTool {
     pub name: String,
 }
 
-// Kept for backward compatibility or internal usage if needed, but AnthropicContentBlock::Thinking is preferred
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AnthropicThinkingBlock {
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum AnthropicStreamEvent {
+    #[serde(rename = "message_start")]
+    MessageStart { message: AnthropicMessageResponse },
+    #[serde(rename = "content_block_start")]
+    ContentBlockStart {
+        index: usize,
+        content_block: AnthropicContentBlock,
+    },
+    #[serde(rename = "ping")]
+    Ping,
+    #[serde(rename = "content_block_delta")]
+    ContentBlockDelta {
+        index: usize,
+        delta: AnthropicStreamDelta,
+    },
+    #[serde(rename = "content_block_stop")]
+    ContentBlockStop { index: usize },
+    #[serde(rename = "message_delta")]
+    MessageDelta {
+        delta: AnthropicMessageDelta,
+        usage: Option<AnthropicUsage>,
+    },
+    #[serde(rename = "message_stop")]
+    MessageStop,
+    #[serde(rename = "error")]
+    Error { error: AnthropicErrorBody },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum AnthropicStreamDelta {
+    #[serde(rename = "text_delta")]
+    TextDelta { text: String },
+    #[serde(rename = "input_json_delta")]
+    InputJsonDelta { partial_json: String },
+    #[serde(rename = "thinking_delta")]
+    ThinkingDelta { thinking: String },
+    #[serde(rename = "signature_delta")]
+    SignatureDelta { signature: String },
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnthropicMessageDelta {
+    pub stop_reason: Option<String>,
+    pub stop_sequence: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnthropicMessageResponse {
+    pub id: String,
+    pub role: String,
+    pub content: Vec<AnthropicContentBlock>,
+    pub model: String,
+    pub stop_reason: Option<String>,
+    pub stop_sequence: Option<String>,
+    pub usage: AnthropicUsage,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnthropicUsage {
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub cache_creation_input_tokens: Option<u32>,
+    pub cache_read_input_tokens: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnthropicErrorBody {
     #[serde(rename = "type")]
-    pub block_type: String, // "thinking"
-    pub thinking: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature: Option<String>,
+    pub error_type: String,
+    pub message: String,
 }

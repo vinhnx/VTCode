@@ -64,6 +64,8 @@ impl LLMClient for ProviderClientAdapter {
                 cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
             }),
             reasoning: provider_response.reasoning,
+            request_id: provider_response.request_id,
+            organization_id: provider_response.organization_id,
         })
     }
 

@@ -130,6 +130,8 @@ pub fn parse_response_openai_format(
         reasoning: reasoning_content,
         reasoning_details: None,
         tool_references: Vec::new(),
+        request_id: None,
+        organization_id: None,
     };
 
     // Set content based on function call or regular content

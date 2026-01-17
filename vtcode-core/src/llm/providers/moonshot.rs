@@ -359,6 +359,8 @@ impl LLMProvider for MoonshotProvider {
                     reasoning: if aggregated_reasoning.is_empty() { None } else { Some(aggregated_reasoning) },
                     reasoning_details: None,
                     tool_references: Vec::new(),
+                    request_id: None,
+                    organization_id: None,
                 }
             };
         };
@@ -393,6 +395,8 @@ impl LLMClient for MoonshotProvider {
             model: self.model.clone(),
             usage: response.usage.map(convert_usage_to_llm_types),
             reasoning: response.reasoning,
+            request_id: response.request_id,
+            organization_id: response.organization_id,
         })
     }
 

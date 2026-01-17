@@ -22,6 +22,8 @@ pub struct LLMResponse {
     pub model: String,
     pub usage: Option<Usage>,
     pub reasoning: Option<String>,
+    pub request_id: Option<String>,
+    pub organization_id: Option<String>,
 }
 
 /// Token usage information
@@ -41,6 +43,7 @@ pub struct LLMErrorMetadata {
     pub status: Option<u16>,
     pub code: Option<String>,
     pub request_id: Option<String>,
+    pub organization_id: Option<String>,
     pub retry_after: Option<String>,
     pub message: Option<String>,
 }

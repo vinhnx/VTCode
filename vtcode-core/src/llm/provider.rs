@@ -1409,6 +1409,10 @@ pub struct LLMResponse {
     /// Tool references discovered via Anthropic's tool search feature
     /// These tool names should be expanded (defer_loading=false) in the next request
     pub tool_references: Vec<String>,
+    /// Global request ID for tracing
+    pub request_id: Option<String>,
+    /// Organization ID associated with the request
+    pub organization_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1428,6 +1432,7 @@ pub enum FinishReason {
     ToolCalls,
     ContentFilter,
     Pause,
+    Refusal,
     Error(String),
 }
 
@@ -1514,6 +1519,7 @@ pub struct LLMErrorMetadata {
     pub status: Option<u16>,
     pub code: Option<String>,
     pub request_id: Option<String>,
+    pub organization_id: Option<String>,
     pub retry_after: Option<String>,
     pub message: Option<String>,
 }
@@ -1524,6 +1530,7 @@ impl LLMErrorMetadata {
         status: Option<u16>,
         code: Option<String>,
         request_id: Option<String>,
+        organization_id: Option<String>,
         retry_after: Option<String>,
         message: Option<String>,
     ) -> Self {
@@ -1532,6 +1539,7 @@ impl LLMErrorMetadata {
             status,
             code,
             request_id,
+            organization_id,
             retry_after,
             message,
         }
@@ -1565,7 +1573,6 @@ pub enum LLMError {
     },
 }
 
-// Implement conversion from provider::LLMError to llm::types::LLMError
 impl From<LLMError> for crate::llm::types::LLMError {
     fn from(err: LLMError) -> crate::llm::types::LLMError {
         let convert = |meta: Option<LLMErrorMetadata>| {
@@ -1574,6 +1581,7 @@ impl From<LLMError> for crate::llm::types::LLMError {
                 status: m.status,
                 code: m.code,
                 request_id: m.request_id,
+                organization_id: m.organization_id,
                 retry_after: m.retry_after,
                 message: m.message,
             })

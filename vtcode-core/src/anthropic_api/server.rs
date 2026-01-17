@@ -343,7 +343,13 @@ pub async fn messages_handler(
                             }
                             LLMStreamEvent::Completed { response } => {
                                 // Send message delta with stop reason
-                                let stop_reason = Some("end_turn".to_string()); // Default to end_turn
+                                let stop_reason = match response.finish_reason {
+                                    crate::llm::provider::FinishReason::Stop => Some("end_turn".to_string()),
+                                    crate::llm::provider::FinishReason::Length => Some("max_tokens".to_string()),
+                                    crate::llm::provider::FinishReason::ToolCalls => Some("tool_use".to_string()),
+                                    crate::llm::provider::FinishReason::Refusal => Some("refusal".to_string()),
+                                    _ => Some("end_turn".to_string()),
+                                };
                                 
                                 let usage = response.usage.unwrap_or_default();
                                 let delta = AnthropicDelta {
@@ -597,6 +603,7 @@ fn convert_llm_to_anthropic_response(
             crate::llm::provider::FinishReason::ToolCalls => "tool_use".to_string(),
             crate::llm::provider::FinishReason::ContentFilter => "content_filter".to_string(),
             crate::llm::provider::FinishReason::Pause => "pause_turn".to_string(),
+            crate::llm::provider::FinishReason::Refusal => "refusal".to_string(),
             crate::llm::provider::FinishReason::Error(msg) => msg,
         }),
         stop_sequence: None,

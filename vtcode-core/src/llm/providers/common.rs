@@ -181,6 +181,7 @@ pub fn map_finish_reason_common(reason: &str) -> FinishReason {
         "length" => FinishReason::Length,
         "tool_calls" => FinishReason::ToolCalls,
         "content_filter" | "sensitive" => FinishReason::ContentFilter,
+        "refusal" => FinishReason::Refusal,
         other => FinishReason::Error(other.to_string()),
     }
 }
@@ -586,6 +587,8 @@ where
         reasoning,
         reasoning_details,
         tool_references: Vec::new(),
+        request_id: None,
+        organization_id: None,
     })
 }
 

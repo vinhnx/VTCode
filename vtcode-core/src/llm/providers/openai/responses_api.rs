@@ -235,6 +235,8 @@ pub fn parse_responses_payload(
         reasoning,
         reasoning_details,
         tool_references: Vec::new(),
+        request_id: None,
+        organization_id: None,
     })
 }
 
