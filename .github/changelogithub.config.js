@@ -28,5 +28,6 @@ module.exports = {
   ],
   capitalize: true,
   group: true,
-  emoji: false
+  emoji: false,
+  contributors: true
 }
