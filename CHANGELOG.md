@@ -3,6 +3,26 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.61.0] - 2026-01-17
+
+
+### Features
+    - feat: Refactor API response handling and file search parameters, add conditional Anthropic API compilation, and enable schema generation for core types.
+    - feat: add Anthropic API compatibility server and documentation
+
+
+### Documentation
+    - docs: update changelog for v0.60.9 [skip ci]
+    - docs: update changelog for v0.61.0 [skip ci]
+    - docs: update changelog for v0.60.8 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.60.8 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update logo image to higher resolution
+    - chore: update README layout and add new logo assets
+    - chore: update npm package.json to v0.60.7 version =  [skip ci]
 # [Version 0.60.9] - 2026-01-17
 
 
