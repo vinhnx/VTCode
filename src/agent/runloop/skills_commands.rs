@@ -33,6 +33,8 @@ pub enum SkillCommandAction {
     Use { name: String, input: String },
     /// Show skill details
     Info { name: String },
+    /// Regenerate skills index file
+    RegenerateIndex,
 }
 
 /// Result of a skill command
@@ -169,6 +171,9 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                 Err(anyhow::anyhow!("info: skill name required"))
             }
         }
+        "regenerate-index" | "--regenerate-index" | "regen" | "--regen" => {
+            Ok(Some(SkillCommandAction::RegenerateIndex))
+        }
         cmd => Err(anyhow::anyhow!("unknown skills subcommand: {}", cmd)),
     }
 }
@@ -197,9 +202,10 @@ Management:
   /skills --unload <name>                 Unload skill from session
   /skills --info <name>                   Show skill details
   /skills --use <name> <input>            Execute skill with input
+  /skills --regenerate-index              Regenerate skills index file
 
 Shortcuts:
-  /skills -l [query], /skills -s <query>, /skills -h"#;
+  /skills -l [query], /skills -s <query>, /skills -h, /skills --regen"#;
 
             Ok(SkillCommandOutcome::Handled {
                 message: help_text.to_string(),
@@ -258,6 +264,13 @@ Shortcuts:
         }
 
         SkillCommandAction::List { query } => {
+            // Regenerate the skills index to ensure it's up to date with any newly added skills
+            use vtcode_core::exec::skill_manager::SkillManager;
+            let skill_manager = SkillManager::new(&workspace);
+            if let Err(e) = skill_manager.generate_index().await {
+                eprintln!("Warning: Failed to regenerate skills index: {}", e);
+            }
+
             let discovery_result = loader.discover_all_skills().await?;
             let mut skills = discovery_result.skills;
             let _cli_tools = discovery_result.tools;
@@ -292,63 +305,81 @@ Shortcuts:
             Ok(SkillCommandOutcome::Handled { message: output })
         }
 
-        SkillCommandAction::Load { name } => match loader.get_skill(&name).await {
-            Ok(enhanced_skill) => match enhanced_skill {
-                vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-                    let message = format!(
-                        "✓ Loaded skill: {}\nℹ Instructions are now [ACTIVE] and persistent in the agent prompt.",
-                        skill.name()
-                    );
-                    Ok(SkillCommandOutcome::LoadSkill { skill, message })
-                }
-                vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
-                    Ok(SkillCommandOutcome::Error {
-                        message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
-                    })
-                }
-            },
-            Err(e) => Ok(SkillCommandOutcome::Error {
-                message: format!("Failed to load skill '{}': {}", name, e),
-            }),
+        SkillCommandAction::Load { name } => {
+            // Regenerate the skills index to ensure it's up to date with any newly added skills
+            use vtcode_core::exec::skill_manager::SkillManager;
+            let skill_manager = SkillManager::new(&workspace);
+            if let Err(e) = skill_manager.generate_index().await {
+                eprintln!("Warning: Failed to regenerate skills index: {}", e);
+            }
+
+            match loader.get_skill(&name).await {
+                Ok(enhanced_skill) => match enhanced_skill {
+                    vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                        let message = format!(
+                            "✓ Loaded skill: {}\nℹ Instructions are now [ACTIVE] and persistent in the agent prompt.",
+                            skill.name()
+                        );
+                        Ok(SkillCommandOutcome::LoadSkill { skill, message })
+                    }
+                    vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
+                        Ok(SkillCommandOutcome::Error {
+                            message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
+                        })
+                    }
+                },
+                Err(e) => Ok(SkillCommandOutcome::Error {
+                    message: format!("Failed to load skill '{}': {}", name, e),
+                }),
+            }
         },
 
         SkillCommandAction::Unload { name } => Ok(SkillCommandOutcome::UnloadSkill { name }),
 
-        SkillCommandAction::Info { name } => match loader.get_skill(&name).await {
-            Ok(enhanced_skill) => match enhanced_skill {
-                vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-                    let mut output = String::new();
-                    output.push_str(&format!("Skill: {}\n", skill.name()));
-                    output.push_str(&format!("Description: {}\n", skill.description()));
+        SkillCommandAction::Info { name } => {
+            // Regenerate the skills index to ensure it's up to date with any newly added skills
+            use vtcode_core::exec::skill_manager::SkillManager;
+            let skill_manager = SkillManager::new(&workspace);
+            if let Err(e) = skill_manager.generate_index().await {
+                eprintln!("Warning: Failed to regenerate skills index: {}", e);
+            }
 
-                    if let Some(version) = &skill.manifest.version {
-                        output.push_str(&format!("Version: {}\n", version));
-                    }
+            match loader.get_skill(&name).await {
+                Ok(enhanced_skill) => match enhanced_skill {
+                    vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                        let mut output = String::new();
+                        output.push_str(&format!("Skill: {}\n", skill.name()));
+                        output.push_str(&format!("Description: {}\n", skill.description()));
 
-                    output.push_str("\n--- Instructions ---\n");
-                    output.push_str(&skill.instructions);
-
-                    if !skill.list_resources().is_empty() {
-                        output.push_str("\n\n--- Resources ---\n");
-                        for resource in skill.list_resources() {
-                            output.push_str(&format!("  • {}\n", resource));
+                        if let Some(version) = &skill.manifest.version {
+                            output.push_str(&format!("Version: {}\n", version));
                         }
-                    }
 
-                    Ok(SkillCommandOutcome::Handled { message: output })
-                }
-                vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
-                    let mut output = String::new();
-                    output.push_str(&format!("CLI Tool Skill: {}\n", bridge.config.name));
-                    output.push_str(&format!("Description: {}\n", bridge.config.description));
-                    output.push_str("\n--- Tool Configuration ---\n");
-                    output.push_str("Tool available for execution");
-                    Ok(SkillCommandOutcome::Handled { message: output })
-                }
-            },
-            Err(e) => Ok(SkillCommandOutcome::Error {
-                message: format!("Failed to load skill '{}': {}", name, e),
-            }),
+                        output.push_str("\n--- Instructions ---\n");
+                        output.push_str(&skill.instructions);
+
+                        if !skill.list_resources().is_empty() {
+                            output.push_str("\n\n--- Resources ---\n");
+                            for resource in skill.list_resources() {
+                                output.push_str(&format!("  • {}\n", resource));
+                            }
+                        }
+
+                        Ok(SkillCommandOutcome::Handled { message: output })
+                    }
+                    vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
+                        let mut output = String::new();
+                        output.push_str(&format!("CLI Tool Skill: {}\n", bridge.config.name));
+                        output.push_str(&format!("Description: {}\n", bridge.config.description));
+                        output.push_str("\n--- Tool Configuration ---\n");
+                        output.push_str("Tool available for execution");
+                        Ok(SkillCommandOutcome::Handled { message: output })
+                    }
+                },
+                Err(e) => Ok(SkillCommandOutcome::Error {
+                    message: format!("Failed to load skill '{}': {}", name, e),
+                }),
+            }
         },
 
         SkillCommandAction::Use { name, input } => match loader.get_skill(&name).await {
@@ -366,6 +397,31 @@ Shortcuts:
                 message: format!("Failed to load skill '{}': {}", name, e),
             }),
         },
+
+        SkillCommandAction::RegenerateIndex => {
+            // Use the EnhancedSkillLoader to discover all skills and regenerate the index
+            let discovery_result = loader.discover_all_skills().await?;
+            let total_skills = discovery_result.skills.len() + discovery_result.tools.len();
+
+            // Use the traditional SkillManager to update the index file
+            use vtcode_core::exec::skill_manager::SkillManager;
+            let skill_manager = SkillManager::new(&workspace);
+
+            match skill_manager.generate_index().await {
+                Ok(index_path) => {
+                    let message = format!(
+                        "Skills index regenerated successfully!\nIndex file: {}\nFound {} skills.",
+                        index_path.display(),
+                        total_skills
+                    );
+
+                    Ok(SkillCommandOutcome::Handled { message })
+                }
+                Err(e) => Ok(SkillCommandOutcome::Error {
+                    message: format!("Failed to regenerate skills index: {}", e),
+                }),
+            }
+        }
     }
 }
 

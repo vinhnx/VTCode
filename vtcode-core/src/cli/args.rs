@@ -1127,6 +1127,10 @@ pub enum SkillsSubcommand {
     /// Show skill configuration and search paths
     #[command(name = "config")]
     Config,
+
+    /// Regenerate skills index file
+    #[command(name = "regenerate-index")]
+    RegenerateIndex,
 }
 
 /// Configuration file structure with latest features
