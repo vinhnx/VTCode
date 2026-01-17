@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use tracing::debug;
 
 /// Permission mode for subagent tool execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -205,6 +206,12 @@ impl SubagentConfig {
         source: SubagentSource,
         file_path: Option<PathBuf>,
     ) -> Result<Self, SubagentParseError> {
+        debug!(
+            ?source,
+            ?file_path,
+            content_len = content.len(),
+            "Parsing subagent from markdown"
+        );
         // Extract YAML frontmatter between --- delimiters
         let content = content.trim();
         if !content.starts_with("---") {
@@ -259,9 +266,9 @@ impl SubagentConfig {
             })
             .unwrap_or_default();
 
-        Ok(Self {
-            name: frontmatter.name,
-            description: frontmatter.description,
+        let config = Self {
+            name: frontmatter.name.clone(),
+            description: frontmatter.description.clone(),
             tools,
             model,
             permission_mode,
@@ -269,11 +276,20 @@ impl SubagentConfig {
             system_prompt,
             source,
             file_path,
-        })
+        };
+        debug!(
+            name = %config.name,
+            ?config.model,
+            ?config.permission_mode,
+            tools_count = config.tools.as_ref().map(|t| t.len()),
+            "Parsed subagent config"
+        );
+        Ok(config)
     }
 
     /// Parse subagent from JSON (for CLI --agents flag)
     pub fn from_json(name: &str, value: &serde_json::Value) -> Result<Self, SubagentParseError> {
+        debug!(name, "Parsing subagent from JSON");
         let description = value
             .get("description")
             .and_then(|v| v.as_str())
@@ -434,6 +450,7 @@ pub fn load_subagent_from_file(
     path: &Path,
     source: SubagentSource,
 ) -> Result<SubagentConfig, SubagentParseError> {
+    debug!(?path, ?source, "Loading subagent from file");
     let content = std::fs::read_to_string(path)?;
     SubagentConfig::from_markdown(&content, source, Some(path.to_path_buf()))
 }
@@ -443,9 +460,11 @@ pub fn discover_subagents_in_dir(
     dir: &Path,
     source: SubagentSource,
 ) -> Vec<Result<SubagentConfig, SubagentParseError>> {
+    debug!(?dir, ?source, "Discovering subagents in directory");
     let mut results = Vec::new();
 
     if !dir.exists() || !dir.is_dir() {
+        debug!(?dir, "Directory does not exist or is not a directory");
         return results;
     }
 
@@ -457,6 +476,7 @@ pub fn discover_subagents_in_dir(
             }
         }
     }
+    debug!(count = results.len(), "Found subagent files");
 
     results
 }
