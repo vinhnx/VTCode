@@ -188,6 +188,10 @@ pub async fn execute_skill_with_sub_llm(
             FinishReason::Error(ref msg) => {
                 return Err(anyhow!("LLM error during skill execution: {}", msg));
             }
+            FinishReason::Pause => {
+                // For skill execution, treatment is similar to ToolCalls: we continue the loop
+                // to process whatever triggered the pause (usually server-side tool use).
+            }
         }
     }
 }

@@ -574,6 +574,7 @@ fn convert_llm_to_anthropic_response(
             crate::llm::provider::FinishReason::Length => "max_tokens".to_string(),
             crate::llm::provider::FinishReason::ToolCalls => "tool_use".to_string(),
             crate::llm::provider::FinishReason::ContentFilter => "content_filter".to_string(),
+            crate::llm::provider::FinishReason::Pause => "pause_turn".to_string(),
             crate::llm::provider::FinishReason::Error(msg) => msg,
         }),
         stop_sequence: None,
