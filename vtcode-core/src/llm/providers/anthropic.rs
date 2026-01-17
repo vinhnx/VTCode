@@ -661,27 +661,79 @@ impl AnthropicProvider {
         }
 
         let mut system_value: Option<Value> = None;
-        if let Some(system_prompt) = &request.system_prompt {
+        let mut final_system_prompt = request.system_prompt.clone().unwrap_or_default();
+
+        if let Some(settings) = &request.coding_agent_settings {
+            if let Some(role) = &settings.role_specialization {
+                if final_system_prompt.is_empty() {
+                    final_system_prompt = format!("You are {}.", role);
+                } else {
+                    final_system_prompt = format!("You are {}.\n{}", role, final_system_prompt);
+                }
+            }
+            if settings.force_xml_tags {
+                final_system_prompt.push_str("\nPlease use XML tags to structure your response for consistency.");
+            }
+            if settings.allow_uncertainty {
+                final_system_prompt.push_str("\nIf you are unsure or the information is missing, explicitly state 'I don't know' or 'I am unsure'.");
+            }
+            if settings.strict_grounding {
+                final_system_prompt.push_str("\nOnly use information strictly from the provided documents. Do not rely on external knowledge.");
+            }
+            if settings.force_quote_grounding {
+                final_system_prompt.push_str("\nFind quotes from the provided documents that are relevant to the user request. Place these in <quotes> tags first, and then use them to justify your response.");
+            }
+            if settings.enforce_structured_thought {
+                final_system_prompt.push_str("\nBefore providing your final answer, think through the problem in <thinking> tags. Then, provide your final response in <answer> tags.");
+            }
+        }
+
+        if !final_system_prompt.is_empty() {
             if self.prompt_cache_settings.cache_system_messages && breakpoints_remaining > 0 {
                 if let Some(cache_control) = cache_control_template.as_ref() {
                     let block = json!({
                         "type": "text",
-                        "text": system_prompt,
+                        "text": final_system_prompt.trim(),
                         "cache_control": cache_control
                     });
                     system_value = Some(Value::Array(vec![block]));
                     breakpoints_remaining -= 1;
                 } else {
-                    system_value = Some(Value::String(system_prompt.clone()));
+                    system_value = Some(Value::String(final_system_prompt.trim().to_string()));
                 }
             } else {
-                system_value = Some(Value::String(system_prompt.clone()));
+                system_value = Some(Value::String(final_system_prompt.trim().to_string()));
             }
         }
 
-        let mut messages = Vec::with_capacity(request.messages.len());
+        let mut messages_to_process = request.messages.clone();
 
-        for msg in &request.messages {
+        // Long context optimization: hoist the largest user message to the top
+        if let Some(settings) = &request.coding_agent_settings
+            && settings.long_context_optimization
+            && messages_to_process.len() > 1
+        {
+            let mut max_len = 0;
+            let mut max_idx = None;
+            for (i, msg) in messages_to_process.iter().enumerate() {
+                if msg.role == MessageRole::User {
+                    let len = msg.content.as_text().len();
+                    if len > max_len {
+                        max_len = len;
+                        max_idx = Some(i);
+                    }
+                }
+            }
+
+            if let Some(idx) = max_idx && idx > 0 {
+                let msg = messages_to_process.remove(idx);
+                messages_to_process.insert(0, msg);
+            }
+        }
+
+        let mut messages = Vec::with_capacity(messages_to_process.len());
+
+        for msg in &messages_to_process {
             if msg.role == MessageRole::System {
                 continue;
             }
@@ -818,8 +870,23 @@ impl AnthropicProvider {
             }
         }
 
-        if let Some(prefill) = &request.prefill {
-            let mut text = prefill.clone();
+        let mut prefill_text = String::new();
+
+        if let Some(settings) = &request.coding_agent_settings {
+            if settings.prefill_thought {
+                prefill_text.push_str("<thought>");
+            }
+        }
+
+        if let Some(request_prefill) = &request.prefill {
+            if !prefill_text.is_empty() && !request_prefill.is_empty() {
+                prefill_text.push(' ');
+            }
+            prefill_text.push_str(request_prefill);
+        }
+
+        if !prefill_text.is_empty() {
+            let mut text = prefill_text;
             if request.character_reinforcement {
                 if let Some(name) = &request.character_name {
                     let tag = format!("[{}]", name);
@@ -1677,6 +1744,38 @@ impl AnthropicProvider {
         }
         request
     }
+
+    /// Formats multiple documents into the recommended XML structure for long context.
+    /// as per Anthropic best practices: <documents><document index="1"><source>...</source><document_content>...</document_content></document></documents>
+    pub fn format_documents_xml(&self, documents: Vec<(&str, &str)>) -> String {
+        let mut xml = String::from("<documents>\n");
+        for (i, (source, content)) in documents.iter().enumerate() {
+            xml.push_str(&format!(
+                "  <document index=\"{}\">\n    <source>{}</source>\n    <document_content>\n{}\n    </document_content>\n  </document>\n",
+                i + 1,
+                source,
+                content
+            ));
+        }
+        xml.push_str("</documents>");
+        xml
+    }
+
+    /// Extracts the content within specific XML tags from a response string.
+    /// Useful for prompt chaining workflows.
+    pub fn extract_xml_block(&self, content: &str, tag: &str) -> Option<String> {
+        let start_tag = format!("<{}>", tag);
+        let end_tag = format!("</{}>", tag);
+        
+        let start_pos = content.find(&start_tag)? + start_tag.len();
+        let end_pos = content.find(&end_tag)?;
+        
+        if start_pos < end_pos {
+            Some(content[start_pos..end_pos].trim().to_string())
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2287,7 +2386,7 @@ impl AnthropicProvider {
 #[cfg(test)]
 mod tests_refinement {
     use super::*;
-    use crate::llm::provider::Message;
+    use crate::llm::provider::{CodingAgentSettings, Message};
     use crate::llm::providers::anthropic_types::{AnthropicRequest, ThinkingConfig};
     use serde_json::json;
 
@@ -2615,5 +2714,179 @@ mod tests_refinement {
         
         // Should fail because prefill + thinking is not allowed
         assert!(provider.validate_request(&request).is_err());
+    }
+
+    #[test]
+    fn test_coding_agent_system_prompt_refinement() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        
+        let mut request = LLMRequest::default();
+        request.messages = vec![Message::user("Hello".to_string())];
+        request.system_prompt = Some("You are a coder.".to_string());
+        request.coding_agent_settings = Some(CodingAgentSettings {
+            force_xml_tags: true,
+            allow_uncertainty: true,
+            strict_grounding: true,
+            ..Default::default()
+        });
+        
+        let val = provider.convert_to_anthropic_format(&request).unwrap();
+        let system_val = val.get("system").unwrap().as_str().unwrap();
+        
+        assert!(system_val.contains("use XML tags"));
+        assert!(system_val.contains("I don't know"));
+        assert!(system_val.contains("strictly from the provided documents"));
+    }
+
+    #[test]
+    fn test_coding_agent_thought_prefill() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        
+        let mut request = LLMRequest::default();
+        request.messages = vec![Message::user("Fix this bug.".to_string())];
+        request.coding_agent_settings = Some(CodingAgentSettings {
+            prefill_thought: true,
+            ..Default::default()
+        });
+        
+        let val = provider.convert_to_anthropic_format(&request).unwrap();
+        let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
+        
+        assert_eq!(anthropic_req.messages.len(), 2);
+        let content = &anthropic_req.messages[1].content;
+        if let AnthropicContentBlock::Text { text, .. } = &content[0] {
+            assert_eq!(text, "<thought>");
+        } else {
+            panic!("Expected text block");
+        }
+    }
+
+    #[test]
+    fn test_coding_agent_thought_plus_prefill() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        
+        let mut request = LLMRequest::default();
+        request.messages = vec![Message::user("Refactor this.".to_string())];
+        request.prefill = Some("Certainly.".to_string());
+        request.coding_agent_settings = Some(CodingAgentSettings {
+            prefill_thought: true,
+            ..Default::default()
+        });
+        
+        let val = provider.convert_to_anthropic_format(&request).unwrap();
+        let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
+        
+        assert_eq!(anthropic_req.messages.len(), 2);
+        let content = &anthropic_req.messages[1].content;
+        if let AnthropicContentBlock::Text { text, .. } = &content[0] {
+             assert_eq!(text, "<thought> Certainly.");
+         } else {
+             panic!("Expected text block");
+         }
+     }
+
+    #[test]
+    fn test_long_context_hoisting() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        
+        let mut request = LLMRequest::default();
+        request.messages = vec![
+            Message::user("Short q".to_string()),
+            Message::assistant("Short a".to_string()),
+            Message::user("Extremely long context message for a coding task...".to_string()),
+        ];
+        request.coding_agent_settings = Some(CodingAgentSettings {
+            long_context_optimization: true,
+            ..Default::default()
+        });
+        
+        let val = provider.convert_to_anthropic_format(&request).unwrap();
+        let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
+        
+        // The long message should have been moved to the front (index 0)
+        let first_msg_content = &anthropic_req.messages[0].content[0];
+        if let AnthropicContentBlock::Text { text, .. } = first_msg_content {
+            assert!(text.contains("Extremely long context"));
+        } else {
+            panic!("Expected text block");
+        }
+    }
+
+    #[test]
+    fn test_quote_grounding_instruction() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        
+        let mut request = LLMRequest::default();
+        request.messages = vec![Message::user("Analyze".to_string())];
+        request.system_prompt = Some("You are an analyzer.".to_string());
+        request.coding_agent_settings = Some(CodingAgentSettings {
+            force_quote_grounding: true,
+            ..Default::default()
+        });
+        
+        let val = provider.convert_to_anthropic_format(&request).unwrap();
+        let system_val = val.get("system").unwrap().as_str().unwrap();
+        
+        assert!(system_val.contains("<quotes> tags first"));
+    }
+
+    #[test]
+    fn test_xml_document_formatting() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        let docs = vec![("main.rs", "fn main() {}"), ("lib.rs", "pub mod api;")];
+        let xml = provider.format_documents_xml(docs);
+        
+        assert!(xml.contains("<documents>"));
+        assert!(xml.contains("<document index=\"1\">"));
+        assert!(xml.contains("<source>main.rs</source>"));
+        assert!(xml.contains("<document_content>\nfn main() {}"));
+        assert!(xml.contains("<document index=\"2\">"));
+    }
+
+    #[test]
+    fn test_role_specialization_injection() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        
+        let mut request = LLMRequest::default();
+        request.messages = vec![Message::user("Hello".to_string())];
+        request.system_prompt = Some("Help me.".to_string());
+        request.coding_agent_settings = Some(CodingAgentSettings {
+            role_specialization: Some("Senior Architect".to_string()),
+            ..Default::default()
+        });
+        
+        let val = provider.convert_to_anthropic_format(&request).unwrap();
+        let system_val = val.get("system").unwrap().as_str().unwrap();
+        
+        assert!(system_val.starts_with("You are Senior Architect."));
+        assert!(system_val.contains("Help me."));
+    }
+
+    #[test]
+    fn test_enforce_structured_thought_instruction() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        
+        let mut request = LLMRequest::default();
+        request.messages = vec![Message::user("Analyze".to_string())];
+        request.coding_agent_settings = Some(CodingAgentSettings {
+            enforce_structured_thought: true,
+            ..Default::default()
+        });
+        
+        let val = provider.convert_to_anthropic_format(&request).unwrap();
+        let system_val = val.get("system").unwrap().as_str().unwrap();
+        
+        assert!(system_val.contains("<thinking> tags"));
+        assert!(system_val.contains("<answer> tags"));
+    }
+
+    #[test]
+    fn test_extract_xml_block() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+        let content = "Some preamble <thinking>I should refactor</thinking> <answer>The code is fixed</answer>";
+        
+        assert_eq!(provider.extract_xml_block(content, "thinking").unwrap(), "I should refactor");
+        assert_eq!(provider.extract_xml_block(content, "answer").unwrap(), "The code is fixed");
+        assert!(provider.extract_xml_block(content, "missing").is_none());
     }
 }
