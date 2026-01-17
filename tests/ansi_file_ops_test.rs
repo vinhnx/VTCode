@@ -9,7 +9,7 @@ use vtcode_core::{
 #[tokio::test]
 async fn test_write_and_edit_rendered() -> Result<()> {
     let temp_dir = TempDir::new()?;
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let mut renderer = AnsiRenderer::stdout();
     if let Err(err) = registry.allow_all_tools().await {
         eprintln!("Skipping policy configuration in test: {}", err);

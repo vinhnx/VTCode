@@ -147,9 +147,8 @@ async fn handle_rpc(
 async fn handle_stream(
     State(state): State<A2aServerState>,
     Json(request): Json<JsonRpcRequest>,
-) -> Result<Sse<Box<dyn futures::Stream<Item = Result<Event, Infallible>> + Send>>, A2aErrorResponse>
-{
-    // Validate request
+) -> impl IntoResponse {
+
     if request.jsonrpc != JSONRPC_VERSION {
         return Err(A2aErrorResponse::invalid_request(
             "Invalid JSON-RPC version",

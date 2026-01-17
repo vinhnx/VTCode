@@ -7,7 +7,7 @@ async fn delete_file_tool_removes_file() {
     let file_path = tmp.path().join("to_delete.txt");
     tokio::fs::write(&file_path, b"hello").await.unwrap();
 
-    let mut registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
+    let registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
     // Ensure file exists
@@ -31,7 +31,7 @@ async fn delete_file_tool_removes_directory_recursively() {
     tokio::fs::create_dir_all(&dir_path).await.unwrap();
     tokio::fs::write(&child_path, b"hi").await.unwrap();
 
-    let mut registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
+    let registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
     let args = json!({ "path": "nested", "recursive": true });

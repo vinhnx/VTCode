@@ -1,7 +1,6 @@
 //! Test that verifies the REAL optimizations are integrated into the actual ToolRegistry
 
 use anyhow::Result;
-use std::sync::Arc;
 use vtcode_config::OptimizationConfig;
 use vtcode_core::tools::registry::ToolRegistry;
 

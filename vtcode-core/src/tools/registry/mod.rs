@@ -2869,7 +2869,7 @@ mod tests {
     #[tokio::test]
     async fn allows_registering_custom_tools() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         registry
             .register_tool(ToolRegistration::from_tool_instance(
@@ -2894,7 +2894,7 @@ mod tests {
     #[tokio::test]
     async fn execution_history_records_harness_context() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         registry.set_harness_session("session-history");
         registry.set_harness_task(Some("task-history".to_owned()));
@@ -2928,7 +2928,7 @@ mod tests {
     #[tokio::test]
     async fn full_auto_allowlist_enforced() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         registry
             .enable_full_auto_mode(&vec![tools::READ_FILE.to_string()])

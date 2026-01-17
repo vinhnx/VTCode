@@ -8,7 +8,7 @@ const SAMPLE_PATCH: &str =
 #[tokio::test]
 async fn apply_patch_supports_patch_alias() {
     let temp_dir = TempDir::new().unwrap();
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
     let result = registry
@@ -35,7 +35,7 @@ async fn apply_patch_supports_patch_alias() {
 #[tokio::test]
 async fn apply_patch_supports_diff_alias() {
     let temp_dir = TempDir::new().unwrap();
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
     let result = registry

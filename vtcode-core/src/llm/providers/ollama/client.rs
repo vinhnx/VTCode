@@ -142,7 +142,7 @@ impl OllamaClient {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+
 
     #[test]
     fn test_client_creation_requires_valid_base_url() {

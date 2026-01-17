@@ -1,5 +1,4 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use std::time::Duration;
 use vtcode_core::tools::rate_limiter::{RateLimiter, RateLimiterConfig};
 
 pub fn rate_limiter_benchmark(c: &mut Criterion) {
@@ -12,19 +11,21 @@ pub fn rate_limiter_benchmark(c: &mut Criterion) {
         let mut limiter = RateLimiter::new_with_config(config);
         b.iter(|| {
             // Benchmark token acquisition
-            black_box(limiter.acquire("tool_name"));
+            let _ = black_box(limiter.acquire("tool_name"));
         })
     });
 }
 
 fn simulated_tool_outcome_clone(c: &mut Criterion) {
     // Simulate the ToolPipelineOutcome structure
+    #[allow(dead_code)]
     struct ExecutionStatus {
         output: Option<String>,
         stdout: Option<String>,
         modified_files: Vec<String>,
     }
 
+    #[allow(dead_code)]
     struct PipelineOutcome {
         status: ExecutionStatus,
         stdout: Option<String>,

@@ -124,6 +124,7 @@
 // Public modules
 pub mod a2a; // Agent2Agent Protocol support
 pub mod acp;
+#[cfg(feature = "anthropic-api")]
 pub mod anthropic_api;
 pub mod audit;
 pub mod bash_runner;
@@ -321,7 +322,7 @@ mod tests {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         std::env::set_current_dir(&temp_dir).expect("Failed to change dir");
 
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry
             .initialize_async()
             .await
@@ -344,7 +345,7 @@ mod tests {
     async fn test_pty_basic_command() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace.clone()).await;
+        let registry = ToolRegistry::new(workspace.clone()).await;
         registry
             .initialize_async()
             .await
@@ -373,7 +374,7 @@ mod tests {
     async fn test_pty_session_management() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace.clone()).await;
+        let registry = ToolRegistry::new(workspace.clone()).await;
         registry
             .initialize_async()
             .await

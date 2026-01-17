@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing consolidated grep_file functionality...");
 
     let root = PathBuf::from(".");
-    let mut registry = ToolRegistry::new(root).await;
+    let registry = ToolRegistry::new(root).await;
 
     // Test 1: Basic exact search
     println!("\n1. Testing exact search mode:");

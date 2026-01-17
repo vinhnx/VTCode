@@ -4,7 +4,7 @@ use tempfile::TempDir;
 use vtcode_core::tools::ToolRegistry;
 
 async fn setup_registry(root: &std::path::Path) -> ToolRegistry {
-    let mut registry = ToolRegistry::new(root.to_path_buf()).await;
+    let registry = ToolRegistry::new(root.to_path_buf()).await;
     registry.initialize_async().await.unwrap();
     registry
 }
@@ -31,7 +31,7 @@ async fn test_multiple_chunks_precision() {
  line 10
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -66,7 +66,7 @@ async fn test_fuzzy_matching_whitespace() {
 +line with trailing space modified
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -95,7 +95,7 @@ async fn test_delete_file_operation() {
 *** Delete File: to_delete.txt
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -129,7 +129,7 @@ async fn test_mixed_operations() {
 +updated
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     // We need to skip confirmations because we are deleting and adding in the same patch
     unsafe {
         std::env::set_var("VTCODE_SKIP_CONFIRMATIONS", "true");
@@ -169,7 +169,7 @@ async fn test_eof_handling_no_newline() {
 +line 2 modified
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -200,7 +200,7 @@ async fn test_context_not_found_error() {
 +should fail
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -225,7 +225,7 @@ async fn test_empty_patch_error() {
     let temp_dir = TempDir::new().unwrap();
     let patch_text = "";
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -245,7 +245,7 @@ async fn test_invalid_format_error() {
     let temp_dir = TempDir::new().unwrap();
     let patch_text = "not a patch";
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -270,7 +270,7 @@ async fn test_missing_file_for_update_error() {
 +something
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -296,7 +296,7 @@ async fn test_add_existing_file_error() {
 +new content
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -324,7 +324,7 @@ async fn test_crlf_handling() {
 +line 1 modified
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
@@ -355,7 +355,7 @@ async fn test_diff_preview_correctness() {
 +line 1 modified
 *** End Patch"#;
 
-    let mut registry = setup_registry(temp_dir.path()).await;
+    let registry = setup_registry(temp_dir.path()).await;
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await

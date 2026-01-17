@@ -149,7 +149,7 @@ async fn test_unicode_rendering_scenarios() {
     use std::path::PathBuf;
     use vtcode_core::tools::ToolRegistry;
 
-    let mut registry = ToolRegistry::new(PathBuf::from(".")).await;
+    let registry = ToolRegistry::new(PathBuf::from(".")).await;
     registry.allow_all_tools().await.ok();
 
     // Test 1: Command with unicode output

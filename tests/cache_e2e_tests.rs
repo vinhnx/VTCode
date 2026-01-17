@@ -25,7 +25,7 @@ mod e2e_tests {
         fs::write(&test_file, test_content).expect("Failed to write test file");
 
         // Initialize tool registry
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
 
         // Test 1: First read should cache the file
         let read_args = json!({
@@ -143,7 +143,7 @@ mod e2e_tests {
         fs::write(subdir.join("file1.txt"), "content1").expect("Failed to write file1");
         fs::write(subdir.join("file2.txt"), "content2").expect("Failed to write file2");
 
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
 
         // List directory (should cache result)
         let list_args = json!({
@@ -168,7 +168,7 @@ mod e2e_tests {
         let workspace_root = temp_dir.path().to_path_buf();
 
         let test_file = workspace_root.join("test.txt");
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
 
         // Create and read file
         fs::write(&test_file, "original").expect("Failed to write original content");
@@ -201,7 +201,7 @@ mod e2e_tests {
     async fn test_write_file_overwrite_mode() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Write initial content
@@ -236,7 +236,7 @@ mod e2e_tests {
     async fn test_write_file_append_mode() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Write initial content
@@ -275,7 +275,7 @@ mod e2e_tests {
     async fn test_write_file_skip_if_exists_mode() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Write initial content
@@ -314,7 +314,7 @@ mod e2e_tests {
     async fn test_edit_file_exact_match() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Create initial file
@@ -352,7 +352,7 @@ mod e2e_tests {
     async fn test_edit_file_multiple_occurrences() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Create initial file with multiple occurrences
@@ -390,7 +390,7 @@ mod e2e_tests {
     async fn test_edit_file_with_newlines() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Create initial file
@@ -428,7 +428,7 @@ mod e2e_tests {
     async fn test_write_file_creates_directories() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        let registry = ToolRegistry::new(workspace_root.clone()).await;
         let nested_file = temp_dir.path().join("dir").join("subdir").join("test.txt");
 
         // Write to nested path that doesn't exist
