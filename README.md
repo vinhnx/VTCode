@@ -122,6 +122,33 @@ vtcode a2a get-task https://agent.example.com task-123
 vtcode a2a cancel-task https://agent.example.com task-123
 ```
 
+#### Anthropic API Compatibility
+
+VT Code provides compatibility with the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) to help connect existing applications to VT Code, including tools like Claude Code.
+
+To start the Anthropic API compatibility server:
+
+```bash
+# Start the Anthropic API server (requires anthropic-api feature)
+vtcode anthropic-api --port 11434
+
+# Use with Claude Code or other Anthropic-compatible tools
+export ANTHROPIC_AUTH_TOKEN=ollama  # required but ignored
+export ANTHROPIC_BASE_URL=http://localhost:11434
+export ANTHROPIC_API_KEY=ollama  # required but ignored
+```
+
+The server supports:
+- Messages endpoint at `/v1/messages`
+- Streaming responses
+- Tool calling
+- Vision (image) support
+- Multi-turn conversations
+- System prompts
+- All major Anthropic API features
+
+For more information about Anthropic API compatibility, see [Anthropic API Documentation](./docs/anthropic-api.md).
+
 ### Configuration
 
 VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. Key configuration features include:
@@ -220,6 +247,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
     -   [Security Model](./docs/SECURITY_MODEL.md)
     -   [Security Audit](./docs/SECURITY_AUDIT.md)
     -   [Tool Policies](./docs/vtcode_tools_policy.md)
+-   [**Anthropic API Compatibility**](./docs/anthropic-api.md) - Documentation for Anthropic Messages API compatibility server
 
 ---
 

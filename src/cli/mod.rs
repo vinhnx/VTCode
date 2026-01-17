@@ -490,3 +490,47 @@ pub fn set_additional_dirs_env(additional_dirs: &[PathBuf]) {
         std::env::set_var("VTCODE_ADDITIONAL_DIRS", dirs_str);
     }
 }
+
+pub async fn handle_anthropic_api_command(
+    core_cfg: vtcode_core::config::types::AgentConfig,
+    port: u16,
+    host: String,
+) -> Result<()> {
+    use vtcode_core::anthropic_api::server::{AnthropicApiServerState, create_router};
+    use std::net::SocketAddr;
+
+    // Create the LLM provider based on the configuration
+    let provider = vtcode_core::llm::factory::create_provider_for_model(
+        &core_cfg.model,
+        core_cfg.api_key.clone(),
+        None,
+    ).map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
+
+    // Create server state with the provider
+    let state = AnthropicApiServerState::new(
+        std::sync::Arc::from(provider),
+        core_cfg.model.clone()
+    );
+
+    // Create the router
+    let app = create_router(state);
+
+    // Bind to the specified address
+    let addr = format!("{}:{}", host, port).parse::<SocketAddr>().map_err(|e| {
+        anyhow::anyhow!("Invalid address {}: {}", format!("{}:{}", host, port), e)
+    })?;
+
+    println!("Anthropic API server starting on http://{}", addr);
+    println!("Compatible with Anthropic Messages API at /v1/messages");
+    println!("Press Ctrl+C to stop the server");
+
+    // Run the server with graceful shutdown
+    ::axum::serve(
+        tokio::net::TcpListener::bind(addr).await.map_err(|e| {
+            anyhow::anyhow!("Failed to bind to address {}: {}", addr, e)
+        })?,
+        app,
+    ).await.map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
+
+    Ok(())
+}

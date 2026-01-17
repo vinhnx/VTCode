@@ -43,7 +43,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 async-process = "2.2"
 futures = "0.3"
 futures-lite = "2.3"
-async-stream = "0.3"
+async-stream = { version = "0.3", optional = true }
 base64 = { workspace = true }
 walkdir = "2.5"
 glob = "0.3"
@@ -188,6 +188,7 @@ default = []
 swift = ["dep:tree-sitter-swift"]
 schema = ["dep:schemars"]
 a2a-server = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]
+anthropic-api = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream", "async-stream"]
 desktop-notifications = ["dep:notify-rust"]
 
 [dependencies.tree-sitter-swift]

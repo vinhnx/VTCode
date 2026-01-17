@@ -124,6 +124,7 @@
 // Public modules
 pub mod a2a; // Agent2Agent Protocol support
 pub mod acp;
+pub mod anthropic_api;
 pub mod audit;
 pub mod bash_runner;
 pub mod cache; // Unified caching system

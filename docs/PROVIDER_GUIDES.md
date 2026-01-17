@@ -46,4 +46,18 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   **Catalog:** Also ships with `lmstudio-community/meta-llama-3-8b-instruct`, `lmstudio-community/qwen2.5-7b-instruct`, `lmstudio-community/gemma-2-2b-it`, `lmstudio-community/gemma-2-9b-it`, and `lmstudio-community/phi-3.1-mini-4k-instruct`, plus any custom GGUF models you expose
 -   **Features:** Streaming, tool calling, structured output, and reasoning effort passthrough via the shared OpenAI surface
 
+## Anthropic API Compatibility Server
+
+VT Code provides compatibility with the Anthropic Messages API to help connect existing applications to VT Code, including tools like Claude Code.
+
+- **Feature:** Anthropic API compatibility server
+- **Command:** `vtcode anthropic-api --port 11434`
+- **Endpoint:** `/v1/messages` (mirrors Anthropic Messages API)
+- **Environment variables:**
+  - `ANTHROPIC_AUTH_TOKEN=ollama` (required but ignored)
+  - `ANTHROPIC_BASE_URL=http://localhost:11434`
+  - `ANTHROPIC_API_KEY=ollama` (required but ignored)
+- **Features:** Streaming, tool calling, vision support, multi-turn conversations
+- **Documentation:** [Anthropic API Compatibility](./anthropic-api.md)
+
 > ℹ Additional provider-specific guides will be added as new integrations land in VT Code.

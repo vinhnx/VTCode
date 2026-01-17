@@ -908,6 +908,31 @@ pub enum Commands {
     ///
     /// This command checks for new versions of VT Code and can install updates.
     /// Updates are downloaded from GitHub Releases and verified against checksums.
+    /// Start Anthropic API compatibility server
+    ///
+    /// Provides compatibility with the Anthropic Messages API to help connect existing
+    /// applications to VT Code, including tools like Claude Code.
+    ///
+    /// Features:
+    ///   • Full Anthropic Messages API compatibility
+    ///   • Streaming support
+    ///   • Tool calling support
+    ///   • Vision (image) support
+    ///   • Multi-turn conversations
+    ///
+    /// Usage:
+    ///   • Start server - vtcode anthropic-api
+    ///   • Custom port - vtcode anthropic-api --port 8080
+    #[command(name = "anthropic-api")]
+    AnthropicApi {
+        /// Port to run the server on
+        #[arg(long, default_value = "11434")]
+        port: u16,
+        /// Host address to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+    },
+
     ///
     /// Examples:
     ///   • Check for updates - vtcode self-update
