@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 /// Skills system configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub struct SkillsConfig {
     /// Rendering mode for skills in system prompt
@@ -67,6 +68,7 @@ impl Default for SkillsConfig {
 
 /// Skills rendering mode
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum SkillsRenderMode {
     /// Lean mode (Codex-style): name + description + path only
@@ -78,6 +80,7 @@ pub enum SkillsRenderMode {
 
 /// Prompt format for skills section (Agent Skills spec)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum PromptFormat {
     /// XML wrapping for safety (Claude models default, per Agent Skills spec)

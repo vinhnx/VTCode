@@ -5,7 +5,7 @@ use vtcode_core::tools::ToolRegistry;
 #[tokio::test]
 async fn create_file_succeeds_for_new_path() {
     let temp_dir = TempDir::new().unwrap();
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
     let args = json!({
@@ -34,7 +34,7 @@ async fn create_file_fails_when_file_exists() {
     let existing_path = temp_dir.path().join("main.rs");
     tokio::fs::write(&existing_path, b"initial").await.unwrap();
 
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
     let args = json!({

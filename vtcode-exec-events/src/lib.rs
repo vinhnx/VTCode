@@ -15,6 +15,7 @@ pub const EVENT_SCHEMA_VERSION: &str = "0.1.0";
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct VersionedThreadEvent {
     /// Semantic version describing the schema of the nested event payload.
     pub schema_version: String,
@@ -129,7 +130,7 @@ mod log_support {
         }
     }
 
-    pub(crate) use LogEmitter as PublicLogEmitter;
+    pub use LogEmitter as PublicLogEmitter;
 }
 
 #[cfg(feature = "telemetry-log")]
@@ -202,7 +203,7 @@ mod tracing_support {
         }
     }
 
-    pub(crate) use TracingEmitter as PublicTracingEmitter;
+    pub use TracingEmitter as PublicTracingEmitter;
 }
 
 #[cfg(feature = "telemetry-tracing")]
@@ -227,6 +228,7 @@ pub mod schema {
 
 /// Structured events emitted during autonomous execution.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(tag = "type")]
 pub enum ThreadEvent {
     /// Indicates that a new execution thread has started.
@@ -256,21 +258,25 @@ pub enum ThreadEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ThreadStartedEvent {
     /// Unique identifier for the thread that was started.
     pub thread_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct TurnStartedEvent {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct TurnCompletedEvent {
     /// Token usage summary for the completed turn.
     pub usage: Usage,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct TurnFailedEvent {
     /// Human-readable explanation describing why the turn failed.
     pub message: String,
@@ -280,12 +286,14 @@ pub struct TurnFailedEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ThreadErrorEvent {
     /// Fatal error message associated with the thread.
     pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct Usage {
     /// Number of prompt tokens processed during the turn.
     pub input_tokens: u64,
@@ -296,24 +304,28 @@ pub struct Usage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ItemCompletedEvent {
     /// Snapshot of the thread item that completed.
     pub item: ThreadItem,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ItemStartedEvent {
     /// Snapshot of the thread item that began processing.
     pub item: ThreadItem,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ItemUpdatedEvent {
     /// Snapshot of the thread item after it was updated.
     pub item: ThreadItem,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ThreadItem {
     /// Stable identifier associated with the item.
     pub id: String,
@@ -323,6 +335,7 @@ pub struct ThreadItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ThreadItemDetails {
     /// Message authored by the agent.
@@ -342,18 +355,21 @@ pub enum ThreadItemDetails {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct AgentMessageItem {
     /// Textual content of the agent message.
     pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ReasoningItem {
     /// Free-form reasoning content captured during planning.
     pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum CommandExecutionStatus {
     /// Command finished successfully.
@@ -366,6 +382,7 @@ pub enum CommandExecutionStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct CommandExecutionItem {
     /// Command string executed by the runner.
     pub command: String,
@@ -380,6 +397,7 @@ pub struct CommandExecutionItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct FileChangeItem {
     /// List of individual file updates included in the change set.
     pub changes: Vec<FileUpdateChange>,
@@ -388,6 +406,7 @@ pub struct FileChangeItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct FileUpdateChange {
     /// Path of the file that was updated.
     pub path: String,
@@ -396,6 +415,7 @@ pub struct FileUpdateChange {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum PatchApplyStatus {
     /// Patch successfully applied.
@@ -405,6 +425,7 @@ pub enum PatchApplyStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum PatchChangeKind {
     /// File addition.
@@ -416,6 +437,7 @@ pub enum PatchChangeKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct McpToolCallItem {
     /// Name of the MCP tool invoked by the agent.
     pub tool_name: String,
@@ -431,6 +453,7 @@ pub struct McpToolCallItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum McpToolCallStatus {
     /// Tool invocation has started.
@@ -442,6 +465,7 @@ pub enum McpToolCallStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct WebSearchItem {
     /// Query that triggered the search.
     pub query: String,
@@ -454,6 +478,7 @@ pub struct WebSearchItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ErrorItem {
     /// Error message displayed to the user or logs.
     pub message: String,

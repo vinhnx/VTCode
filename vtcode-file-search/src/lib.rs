@@ -312,16 +312,16 @@ mod tests {
         fs::write(temp.path().join("hello.rs"), "fn main() {}")?;
         fs::write(temp.path().join("world.txt"), "world")?;
 
-        let results = run(
-            "hello",
-            NonZero::new(10).unwrap(),
-            temp.path(),
-            vec![],
-            NonZero::new(1).unwrap(),
-            Arc::new(AtomicBool::new(false)),
-            false,
-            false,
-        )?;
+        let results = run(FileSearchConfig {
+            pattern_text: "hello".to_string(),
+            limit: NonZero::new(10).unwrap(),
+            search_directory: temp.path().to_path_buf(),
+            exclude: vec![],
+            threads: NonZero::new(1).unwrap(),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+            compute_indices: false,
+            respect_gitignore: false,
+        })?;
 
         assert_eq!(results.matches.len(), 1);
         assert!(results.matches[0].path.contains("hello"));
@@ -337,16 +337,16 @@ mod tests {
         fs::write(temp.path().join("test3.rs"), "")?;
         fs::write(temp.path().join("other.txt"), "")?;
 
-        let results = run(
-            "test",
-            NonZero::new(10).unwrap(),
-            temp.path(),
-            vec![],
-            NonZero::new(2).unwrap(),
-            Arc::new(AtomicBool::new(false)),
-            false,
-            false,
-        )?;
+        let results = run(FileSearchConfig {
+            pattern_text: "test".to_string(),
+            limit: NonZero::new(10).unwrap(),
+            search_directory: temp.path().to_path_buf(),
+            exclude: vec![],
+            threads: NonZero::new(2).unwrap(),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+            compute_indices: false,
+            respect_gitignore: false,
+        })?;
 
         assert_eq!(results.matches.len(), 3);
         assert!(results.matches.iter().all(|m| m.path.contains("test")));
@@ -361,16 +361,16 @@ mod tests {
         fs::create_dir(temp.path().join("target"))?;
         fs::write(temp.path().join("target/ignore.rs"), "")?;
 
-        let results = run(
-            "rs",
-            NonZero::new(10).unwrap(),
-            temp.path(),
-            vec!["target/**".to_string()],
-            NonZero::new(2).unwrap(),
-            Arc::new(AtomicBool::new(false)),
-            false,
-            false,
-        )?;
+        let results = run(FileSearchConfig {
+            pattern_text: "rs".to_string(),
+            limit: NonZero::new(10).unwrap(),
+            search_directory: temp.path().to_path_buf(),
+            exclude: vec!["target/**".to_string()],
+            threads: NonZero::new(2).unwrap(),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+            compute_indices: false,
+            respect_gitignore: false,
+        })?;
 
         assert_eq!(results.matches.len(), 1);
         assert!(results.matches[0].path.contains("keep.rs"));
@@ -386,16 +386,16 @@ mod tests {
         }
 
         let cancel_flag = Arc::new(AtomicBool::new(true));
-        let results = run(
-            "file",
-            NonZero::new(10).unwrap(),
-            temp.path(),
-            vec![],
-            NonZero::new(1).unwrap(),
+        let results = run(FileSearchConfig {
+            pattern_text: "file".to_string(),
+            limit: NonZero::new(10).unwrap(),
+            search_directory: temp.path().to_path_buf(),
+            exclude: vec![],
+            threads: NonZero::new(1).unwrap(),
             cancel_flag,
-            false,
-            false,
-        )?;
+            compute_indices: false,
+            respect_gitignore: false,
+        })?;
 
         // Should return early due to cancellation
         assert!(results.matches.is_empty());

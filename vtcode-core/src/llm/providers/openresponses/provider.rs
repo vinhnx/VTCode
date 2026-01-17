@@ -12,9 +12,11 @@ use crate::config::core::PromptCachingConfig;
 use crate::config::TimeoutsConfig;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,
+    FinishReason, LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
     LLMStreamEvent, MessageRole, ToolCall, Usage,
 };
+#[cfg(test)]
+use crate::llm::provider::Message;
 
 use super::streaming::{parse_sse_event, StreamAccumulator};
 
@@ -218,8 +220,8 @@ impl OpenResponsesProvider {
                         json!({
                             "type": "function",
                             "name": &f.name,
-                            "description": f.description.as_deref().unwrap_or(""),
-                            "parameters": f.parameters.clone().unwrap_or(json!({}))
+                            "description": &f.description,
+                            "parameters": &f.parameters
                         })
                     })
                 })
@@ -246,12 +248,16 @@ impl OpenResponsesProvider {
         // Add reasoning effort if specified
         if let Some(ref effort) = request.reasoning_effort {
             let effort_str = match effort {
-                crate::config::types::ReasoningEffortLevel::Low => "low",
-                crate::config::types::ReasoningEffortLevel::Medium => "medium",
-                crate::config::types::ReasoningEffortLevel::High => "high",
-                crate::config::types::ReasoningEffortLevel::Minimal => "minimal",
+                crate::config::types::ReasoningEffortLevel::Low => Some("low"),
+                crate::config::types::ReasoningEffortLevel::Medium => Some("medium"),
+                crate::config::types::ReasoningEffortLevel::High => Some("high"),
+                crate::config::types::ReasoningEffortLevel::Minimal => Some("minimal"),
+                crate::config::types::ReasoningEffortLevel::XHigh => Some("high"),
+                crate::config::types::ReasoningEffortLevel::None => None,
             };
-            payload["reasoning"] = json!({ "effort": effort_str });
+            if let Some(s) = effort_str {
+                payload["reasoning"] = json!({ "effort": s });
+            }
         }
 
         // Add prompt cache retention if configured
@@ -487,11 +493,18 @@ impl LLMProvider for OpenResponsesProvider {
             );
             return Err(LLMError::Provider {
                 message: formatted_error,
-                metadata: Some(json!({ "status": status.as_u16(), "error": error_text })),
+                metadata: Some(LLMErrorMetadata::new(
+                    "openresponses",
+                    Some(status.as_u16()),
+                    None,
+                    None,
+                    None,
+                    Some(error_text),
+                )),
             });
         }
 
-        let response_json: Value = response.json().await.map_err(|e| LLMError::Parse {
+        let response_json: Value = response.json().await.map_err(|e| LLMError::Provider {
             message: format!("Failed to parse response: {}", e),
             metadata: None,
         })?;
@@ -534,7 +547,14 @@ impl LLMProvider for OpenResponsesProvider {
             );
             return Err(LLMError::Provider {
                 message: formatted_error,
-                metadata: Some(json!({ "status": status.as_u16(), "error": error_text })),
+                metadata: Some(LLMErrorMetadata::new(
+                    "openresponses",
+                    Some(status.as_u16()),
+                    None,
+                    None,
+                    None,
+                    Some(error_text),
+                )),
             });
         }
 
@@ -563,7 +583,7 @@ impl LLMProvider for OpenResponsesProvider {
                             if event.event_type == "response.output_text.delta" {
                                 if let super::streaming::StreamEventData::TextDelta(data) = &event.data {
                                     return Some((
-                                        Ok(LLMStreamEvent::ContentDelta(data.delta.clone())),
+                                        Ok(LLMStreamEvent::Token { delta: data.delta.clone() }),
                                         (byte_stream, buffer, accumulator, done),
                                     ));
                                 }

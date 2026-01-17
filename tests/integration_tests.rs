@@ -29,7 +29,7 @@ mod integration_tests {
         std::fs::write(temp_dir.path().join("test2.txt"), "content2").unwrap();
         std::fs::create_dir(temp_dir.path().join("subdir")).unwrap();
 
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let args = json!({
             "path": "."
@@ -51,7 +51,7 @@ mod integration_tests {
         let test_content = "This is test content";
         std::fs::write(temp_dir.path().join("read_test.txt"), test_content).unwrap();
 
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await.unwrap();
 
         let args = json!({
@@ -82,7 +82,7 @@ read_file = "allow"
         std::fs::write(workspace.join("vtcode.toml"), config_contents).unwrap();
         std::fs::write(workspace.join("sample.txt"), "hello world").unwrap();
 
-        let mut registry = ToolRegistry::new(workspace.to_path_buf()).await;
+        let registry = ToolRegistry::new(workspace.to_path_buf()).await;
         registry.initialize_async().await.unwrap();
 
         let cfg_manager = ConfigManager::load_from_workspace(workspace).unwrap();
@@ -110,7 +110,7 @@ read_file = "allow"
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
 
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await.unwrap();
 
         let args = json!({
@@ -148,7 +148,7 @@ fn calculate_sum(a: i32, b: i32) -> i32 {
 }"#;
         std::fs::write(temp_dir.path().join("search_test.rs"), rust_content).unwrap();
 
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let args = json!({
             "pattern": "fn main",

@@ -4,7 +4,7 @@ use vtcode_core::tools::ToolRegistry;
 
 #[tokio::test]
 async fn test_pty_functionality() {
-    let mut registry = ToolRegistry::new(PathBuf::from(".")).await;
+    let registry = ToolRegistry::new(PathBuf::from(".")).await;
     registry.allow_all_tools().await.ok();
 
     // Run an allow-listed command and verify output is captured
@@ -29,7 +29,7 @@ async fn test_pty_functionality() {
 
 #[tokio::test]
 async fn test_pty_functionality_with_exit_code() {
-    let mut registry = ToolRegistry::new(PathBuf::from(".")).await;
+    let registry = ToolRegistry::new(PathBuf::from(".")).await;
     registry.allow_all_tools().await.ok();
 
     // Run an allow-listed command that exits with a non-zero code
@@ -56,7 +56,7 @@ async fn test_pty_functionality_with_exit_code() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_pty_shell_option_runs_through_requested_shell() {
-    let mut registry = ToolRegistry::new(PathBuf::from(".")).await;
+    let registry = ToolRegistry::new(PathBuf::from(".")).await;
     registry.allow_all_tools().await.ok();
 
     let result = registry
@@ -79,7 +79,7 @@ async fn test_pty_shell_option_runs_through_requested_shell() {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_create_pty_session_uses_requested_shell() {
-    let mut registry = ToolRegistry::new(PathBuf::from(".")).await;
+    let registry = ToolRegistry::new(PathBuf::from(".")).await;
     registry.allow_all_tools().await.ok();
 
     let create_result = registry
@@ -112,7 +112,7 @@ async fn test_create_pty_session_uses_requested_shell() {
 
 #[tokio::test]
 async fn test_pty_output_has_no_ansi_codes() {
-    let mut registry = ToolRegistry::new(PathBuf::from(".")).await;
+    let registry = ToolRegistry::new(PathBuf::from(".")).await;
     registry.allow_all_tools().await.ok();
 
     let result = registry
@@ -149,7 +149,7 @@ async fn test_pty_output_has_no_ansi_codes() {
 
 #[tokio::test]
 async fn test_pty_command_not_found_handling() {
-    let mut registry = ToolRegistry::new(PathBuf::from(".")).await;
+    let registry = ToolRegistry::new(PathBuf::from(".")).await;
     registry.allow_all_tools().await.ok();
 
     // Run a command that definitely doesn't exist

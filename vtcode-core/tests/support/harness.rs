@@ -50,7 +50,7 @@ impl TestHarness {
 
     #[allow(dead_code)]
     pub async fn registry(&self) -> ToolRegistry {
-        let mut registry = ToolRegistry::new(self.workspace_path()).await;
+        let registry = ToolRegistry::new(self.workspace_path()).await;
         registry.set_harness_session(self.session_id.clone());
         registry
     }

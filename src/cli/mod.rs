@@ -491,6 +491,7 @@ pub fn set_additional_dirs_env(additional_dirs: &[PathBuf]) {
     }
 }
 
+#[cfg(feature = "anthropic-api")]
 pub async fn handle_anthropic_api_command(
     core_cfg: vtcode_core::config::types::AgentConfig,
     port: u16,
@@ -533,4 +534,13 @@ pub async fn handle_anthropic_api_command(
     ).await.map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(not(feature = "anthropic-api"))]
+pub async fn handle_anthropic_api_command(
+    _core_cfg: vtcode_core::config::types::AgentConfig,
+    _port: u16,
+    _host: String,
+) -> Result<()> {
+    Err(anyhow::anyhow!("Anthropic API server is not enabled. Recompile with --features anthropic-api"))
 }

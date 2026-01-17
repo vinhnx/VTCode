@@ -476,7 +476,7 @@ mod integration_tests {
         let test_file = temp_dir.path().join("test.txt");
         std::fs::write(&test_file, "Test content").unwrap();
 
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         // Allow tools for testing
         let _ = registry.allow_all_tools().await;
@@ -508,7 +508,7 @@ mod integration_tests {
         std::fs::write(temp_dir.path().join("file1.txt"), "content1").unwrap();
         std::fs::write(temp_dir.path().join("file2.txt"), "content2").unwrap();
 
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let _ = registry.allow_all_tools().await;
 
@@ -536,7 +536,7 @@ mod integration_tests {
     #[tokio::test]
     async fn test_write_file_response_language_consistency() {
         let temp_dir = TempDir::new().unwrap();
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let _ = registry.allow_all_tools().await;
 
@@ -565,7 +565,7 @@ mod integration_tests {
     #[tokio::test]
     async fn test_multi_tool_conversation_consistency() {
         let temp_dir = TempDir::new().unwrap();
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let _ = registry.allow_all_tools().await;
 

@@ -4821,6 +4821,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fbf2ae1b8bc8e02df939598064d22402220cd5bbcca1c76f7d6a310974d5615"
 dependencies = [
  "dyn-clone",
+ "indexmap 2.12.1",
  "schemars_derive 0.8.22",
  "serde",
  "serde_json",
@@ -4846,7 +4847,6 @@ checksum = "54e910108742c57a770f492731f99be216a52fadd361b06c8fb59d74ccc267d2"
 dependencies = [
  "chrono",
  "dyn-clone",
- "indexmap 2.12.1",
  "ref-cast",
  "schemars_derive 1.2.0",
  "serde",
@@ -6471,7 +6471,7 @@ dependencies = [
  "indexmap 2.12.1",
  "once_cell",
  "regex",
- "schemars 1.2.0",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -6550,7 +6550,7 @@ dependencies = [
  "ring",
  "rmcp",
  "roff",
- "schemars 1.2.0",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -6605,7 +6605,7 @@ name = "vtcode-exec-events"
 version = "0.60.8"
 dependencies = [
  "log",
- "schemars 1.2.0",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
  "tracing",

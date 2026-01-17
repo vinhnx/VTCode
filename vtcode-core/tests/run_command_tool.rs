@@ -9,7 +9,7 @@ use support::TestHarness;
 async fn run_command_uses_pty_backend() -> Result<()> {
     let harness = TestHarness::new()?;
     harness.write_file("sample.txt", "hello")?;
-    let mut registry = harness.registry().await;
+    let registry = harness.registry().await;
 
     let response = registry
         .execute_tool(
@@ -36,7 +36,7 @@ async fn run_command_uses_pty_backend() -> Result<()> {
 async fn run_command_accepts_indexed_arguments_zero_based() -> Result<()> {
     let harness = TestHarness::new()?;
     harness.write_file("sample.txt", "hello")?;
-    let mut registry = harness.registry().await;
+    let registry = harness.registry().await;
 
     let response = registry
         .execute_tool(
@@ -60,7 +60,7 @@ async fn run_command_accepts_indexed_arguments_zero_based() -> Result<()> {
 async fn run_command_accepts_indexed_arguments_one_based() -> Result<()> {
     let harness = TestHarness::new()?;
     harness.write_file("sample2.txt", "hello2")?;
-    let mut registry = harness.registry().await;
+    let registry = harness.registry().await;
 
     let response = registry
         .execute_tool(

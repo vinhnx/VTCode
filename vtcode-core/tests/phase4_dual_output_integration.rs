@@ -10,7 +10,7 @@ use vtcode_core::tools::registry::ToolRegistry;
 async fn test_grep_dual_output_integration() {
     // Setup: Create a registry with workspace
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut registry = ToolRegistry::new(workspace).await;
+    let registry = ToolRegistry::new(workspace).await;
 
     // Test: Execute grep_file with dual output
     let args = json!({
@@ -75,7 +75,7 @@ async fn test_grep_dual_output_integration() {
 async fn test_list_dual_output_integration() {
     // Setup: Create a registry with workspace
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut registry = ToolRegistry::new(workspace).await;
+    let registry = ToolRegistry::new(workspace).await;
 
     // Test: Execute list_files with dual output
     let args = json!({
@@ -117,7 +117,7 @@ async fn test_list_dual_output_integration() {
 async fn test_read_file_dual_output() {
     // Setup: Create a registry
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut registry = ToolRegistry::new(workspace).await;
+    let registry = ToolRegistry::new(workspace).await;
 
     // Test: Execute read_file with ReadSummarizer
     let args = json!({
@@ -165,7 +165,7 @@ async fn test_read_file_dual_output() {
 async fn test_bash_dual_output() {
     // Setup: Create a registry
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut registry = ToolRegistry::new(workspace).await;
+    let registry = ToolRegistry::new(workspace).await;
 
     // Test: Execute run_pty_cmd with BashSummarizer
     let args = json!({
@@ -216,7 +216,7 @@ async fn test_edit_dual_output() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let test_file = workspace.join("test_temp_write.txt");
 
-    let mut registry = ToolRegistry::new(workspace).await;
+    let registry = ToolRegistry::new(workspace).await;
 
     // Test with write_file which creates a temp file
     use std::fs;
@@ -259,7 +259,7 @@ async fn test_edit_dual_output() {
 async fn test_backward_compatibility() {
     // Verify that old execute_tool() still works alongside execute_tool_dual()
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut registry = ToolRegistry::new(workspace).await;
+    let registry = ToolRegistry::new(workspace).await;
 
     let args = json!({
         "pattern": "pub struct",
