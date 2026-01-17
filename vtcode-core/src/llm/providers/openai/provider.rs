@@ -1303,6 +1303,8 @@ impl OpenAIProvider {
             reasoning,
             reasoning_details: None,
             tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
         })
     }
 
@@ -1501,6 +1503,8 @@ impl OpenAIProvider {
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
         })
     }
 }
@@ -2395,6 +2399,8 @@ impl provider::LLMProvider for OpenAIProvider {
                     reasoning: reasoning_buffer.finalize(),
                     reasoning_details: None,
                     tool_references: Vec::new(),
+                    request_id: None,
+                    organization_id: None,
                 };
 
                 yield provider::LLMStreamEvent::Completed { response };
@@ -3029,17 +3035,10 @@ impl LLMClient for OpenAIProvider {
         Ok(llm_types::LLMResponse {
             content: response.content.unwrap_or_default(),
             model: request_model,
-            usage: response.usage.map(|u| llm_types::Usage {
-                prompt_tokens: u.prompt_tokens.try_into().unwrap_or(usize::MAX),
-                completion_tokens: u.completion_tokens.try_into().unwrap_or(usize::MAX),
-                total_tokens: u.total_tokens.try_into().unwrap_or(usize::MAX),
-                cached_prompt_tokens: u.cached_prompt_tokens.and_then(|v| usize::try_from(v).ok()),
-                cache_creation_tokens: u
-                    .cache_creation_tokens
-                    .and_then(|v| usize::try_from(v).ok()),
-                cache_read_tokens: u.cache_read_tokens.and_then(|v| usize::try_from(v).ok()),
-            }),
+            usage: response.usage.map(crate::llm::providers::common::convert_usage_to_llm_types),
             reasoning: response.reasoning,
+            request_id: response.request_id,
+            organization_id: response.organization_id,
         })
     }
 

@@ -7,24 +7,28 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
-    ParallelToolConfig, ToolCall, ToolChoice, ToolDefinition,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message,
+    MessageRole, ParallelToolConfig, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
+use async_stream::try_stream;
 use async_trait::async_trait;
+use futures::StreamExt;
 use reqwest::Client as HttpClient;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::env;
 
-use super::anthropic_types::ThinkingConfig;
 use super::{
     common::{
         convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url,
         parse_client_prompt_common, resolve_model,
     },
     error_handling::{format_network_error, format_parse_error, handle_anthropic_http_error},
-    extract_reasoning_trace,
+    extract_reasoning_trace, ReasoningBuffer,
+};
+use super::anthropic_types::{
+    AnthropicContentBlock, AnthropicStreamDelta, AnthropicStreamEvent, ThinkingConfig,
 };
 
 pub struct AnthropicProvider {
@@ -1026,6 +1030,7 @@ impl AnthropicProvider {
             "stop_sequence" => FinishReason::Stop,
             "tool_use" => FinishReason::ToolCalls,
             "pause_turn" => FinishReason::Pause,
+            "refusal" => FinishReason::Refusal,
             other => FinishReason::Error(other.to_string()),
         };
 
@@ -1082,6 +1087,8 @@ impl AnthropicProvider {
                 Some(reasoning_details_vec)
             },
             tool_references,
+            request_id: None,
+            organization_id: None,
         })
     }
 }
@@ -1178,12 +1185,198 @@ impl LLMProvider for AnthropicProvider {
 
         let response = handle_anthropic_http_error(response).await?;
 
+        let request_id = response
+            .headers()
+            .get("request-id")
+            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
+        let organization_id = response
+            .headers()
+            .get("anthropic-organization-id")
+            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
+
         let anthropic_response: Value = response
             .json()
             .await
             .map_err(|e| format_parse_error("Anthropic", &e))?;
 
-        self.parse_anthropic_response(anthropic_response)
+        let mut llm_response = self.parse_anthropic_response(anthropic_response)?;
+        llm_response.request_id = request_id;
+        llm_response.organization_id = organization_id;
+        Ok(llm_response)
+    }
+
+    async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
+        let include_tool_search = self.requires_tool_search_beta(&request);
+        let mut anthropic_request = self.convert_to_anthropic_format(&request)?;
+
+        // Ensure stream is set to true in the request payload
+        if let Some(obj) = anthropic_request.as_object_mut() {
+            obj.insert("stream".to_string(), Value::Bool(true));
+        }
+
+        let url = format!("{}/messages", self.base_url);
+
+        let mut request_builder = self
+            .http_client
+            .post(&url)
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", urls::ANTHROPIC_API_VERSION)
+            .header("content-type", "application/json");
+
+        let include_structured = anthropic_request.get("output_format").is_some();
+        if let Some(beta_header) =
+            self.combined_beta_header_value(include_structured, include_tool_search, request.betas.as_ref())
+        {
+            request_builder = request_builder.header("anthropic-beta", beta_header);
+        }
+
+        let response = request_builder
+            .json(&anthropic_request)
+            .send()
+            .await
+            .map_err(|e| format_network_error("Anthropic", &e))?;
+
+        if !response.status().is_success() {
+            return Err(handle_anthropic_http_error(response).await.err().unwrap());
+        }
+
+        let request_id = response
+            .headers()
+            .get("request-id")
+            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
+        let organization_id = response
+            .headers()
+            .get("anthropic-organization-id")
+            .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
+
+        let stream = try_stream! {
+            let mut body_stream = response.bytes_stream();
+            let mut buffer = String::new();
+            let mut aggregated_content = String::new();
+            let mut reasoning_buffer = ReasoningBuffer::default();
+            let mut tool_builders = Vec::<crate::llm::providers::shared::ToolCallBuilder>::new();
+            let mut finish_reason = FinishReason::Stop;
+            let mut accumulated_usage = Usage {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+                cached_prompt_tokens: None,
+                cache_creation_tokens: None,
+                cache_read_tokens: None,
+            };
+
+            while let Some(chunk_result) = body_stream.next().await {
+                let chunk = chunk_result.map_err(|err| {
+                    format_network_error("Anthropic", &anyhow::Error::new(err))
+                })?;
+
+                buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+                while let Some((split_idx, delimiter_len)) = crate::llm::providers::shared::find_sse_boundary(&buffer) {
+                    let event_text = buffer[..split_idx].to_string();
+                    buffer.drain(..split_idx + delimiter_len);
+
+                    if let Some(data_payload) = crate::llm::providers::shared::extract_data_payload(&event_text) {
+                        let trimmed_payload = data_payload.trim();
+                        if trimmed_payload.is_empty() {
+                            continue;
+                        }
+
+                        let event: AnthropicStreamEvent = serde_json::from_str(trimmed_payload).map_err(|err| {
+                            LLMError::Provider {
+                                message: format_parse_error("Anthropic", &anyhow::Error::new(err)).to_string(),
+                                metadata: None,
+                            }
+                        })?;
+
+                        match event {
+                            AnthropicStreamEvent::MessageStart { message } => {
+                                accumulated_usage.prompt_tokens = message.usage.input_tokens;
+                                accumulated_usage.cached_prompt_tokens = message.usage.cache_read_input_tokens;
+                                accumulated_usage.cache_creation_tokens = message.usage.cache_creation_input_tokens;
+                                accumulated_usage.cache_read_tokens = message.usage.cache_read_input_tokens;
+                            }
+                            AnthropicStreamEvent::ContentBlockStart { index, content_block } => {
+                                if let AnthropicContentBlock::ToolUse { id, name, .. } = content_block {
+                                    if tool_builders.len() <= index {
+                                        tool_builders.resize_with(index + 1, crate::llm::providers::shared::ToolCallBuilder::default);
+                                    }
+                                    let mut delta = Map::new();
+                                    delta.insert("id".to_string(), Value::String(id));
+                                    let mut func = Map::new();
+                                    func.insert("name".to_string(), Value::String(name));
+                                    delta.insert("function".to_string(), Value::Object(func));
+                                    tool_builders[index].apply_delta(&Value::Object(delta));
+                                }
+                            }
+                            AnthropicStreamEvent::ContentBlockDelta { index, delta } => {
+                                match delta {
+                                    AnthropicStreamDelta::TextDelta { text } => {
+                                        aggregated_content.push_str(&text);
+                                        yield LLMStreamEvent::Token { delta: text };
+                                    }
+                                    AnthropicStreamDelta::ThinkingDelta { thinking } => {
+                                        if let Some(delta) = reasoning_buffer.push(&thinking) {
+                                            yield LLMStreamEvent::Reasoning { delta };
+                                        }
+                                    }
+                                    AnthropicStreamDelta::InputJsonDelta { partial_json } => {
+                                        if tool_builders.len() <= index {
+                                            tool_builders.resize_with(index + 1, crate::llm::providers::shared::ToolCallBuilder::default);
+                                        }
+                                        let mut delta_map = Map::new();
+                                        let mut func = Map::new();
+                                        func.insert("arguments".to_string(), Value::String(partial_json));
+                                        delta_map.insert("function".to_string(), Value::Object(func));
+                                        tool_builders[index].apply_delta(&Value::Object(delta_map));
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            AnthropicStreamEvent::MessageDelta { delta, usage } => {
+                                if let Some(u) = usage {
+                                    accumulated_usage.completion_tokens = u.output_tokens;
+                                    accumulated_usage.total_tokens = u.input_tokens + u.output_tokens;
+                                }
+                                if let Some(reason) = delta.stop_reason {
+                                    finish_reason = match reason.as_str() {
+                                        "end_turn" => FinishReason::Stop,
+                                        "max_tokens" => FinishReason::Length,
+                                        "stop_sequence" => FinishReason::Stop,
+                                        "tool_use" => FinishReason::ToolCalls,
+                                        "refusal" => FinishReason::Refusal,
+                                        _ => FinishReason::Stop,
+                                    };
+                                }
+                            }
+                            AnthropicStreamEvent::Error { error } => {
+                                Err(LLMError::Provider {
+                                    message: error.message,
+                                    metadata: None,
+                                })?
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            let response = LLMResponse {
+                content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
+                tool_calls: crate::llm::providers::shared::finalize_tool_calls(tool_builders),
+                usage: Some(accumulated_usage),
+                finish_reason,
+                reasoning: reasoning_buffer.finalize(),
+                reasoning_details: None,
+                tool_references: Vec::new(),
+                request_id: request_id.clone(),
+                organization_id: organization_id.clone(),
+            };
+
+            yield LLMStreamEvent::Completed { response };
+        };
+
+        Ok(Box::pin(stream))
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -1672,6 +1865,8 @@ impl LLMClient for AnthropicProvider {
             model: request_model,
             usage: response.usage.map(convert_usage_to_llm_types),
             reasoning: response.reasoning,
+            request_id: response.request_id,
+            organization_id: response.organization_id,
         })
     }
 

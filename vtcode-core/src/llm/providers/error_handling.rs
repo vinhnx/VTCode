@@ -123,7 +123,8 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
                 Some(status.as_u16()),
                 Some("authentication_error".to_string()),
                 request_id,
-                None,
+                None, // organization_id
+                None, // retry_after
                 Some(error_text),
             )),
         });
@@ -137,6 +138,7 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
                 Some(status.as_u16()),
                 Some("rate_limit_error".to_string()),
                 request_id,
+                None, // organization_id
                 retry_after,
                 rate_limit_message,
             )),
@@ -160,6 +162,7 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
             Some(status.as_u16()),
             None,
             request_id,
+            None, // organization_id
             retry_after,
             Some(error_text),
         )),
@@ -317,6 +320,7 @@ pub fn parse_api_error(
                 Some(status_code),
                 Some("authentication_error".to_string()),
                 None,
+                None, // organization_id
                 None,
                 Some(body.to_string()),
             )),
@@ -327,6 +331,7 @@ pub fn parse_api_error(
                 Some(status_code),
                 Some("rate_limit_error".to_string()),
                 None,
+                None, // organization_id
                 None,
                 Some(error_message),
             )),
@@ -337,6 +342,7 @@ pub fn parse_api_error(
                 Some(status_code),
                 Some("quota_exceeded".to_string()),
                 None,
+                None, // organization_id
                 None,
                 Some(error_message),
             )),
@@ -351,6 +357,7 @@ pub fn parse_api_error(
                 Some(status_code),
                 Some("invalid_request".to_string()),
                 None,
+                None, // organization_id
                 None,
                 Some(body.to_string()),
             )),
@@ -365,6 +372,7 @@ pub fn parse_api_error(
                 Some(status_code),
                 None,
                 None,
+                None, // organization_id
                 None,
                 Some(body.to_string()),
             )),

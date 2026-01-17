@@ -639,6 +639,8 @@ fn finalize_stream_response(
         reasoning,
         reasoning_details: None,
         tool_references: Vec::new(),
+        request_id: None,
+        organization_id: None,
     }
 }
 
@@ -1705,6 +1707,8 @@ impl OpenRouterProvider {
                 reasoning,
                 reasoning_details,
                 tool_references: Vec::new(),
+                request_id: None,
+                organization_id: None,
             });
         }
 
@@ -1863,6 +1867,8 @@ impl OpenRouterProvider {
             reasoning,
             reasoning_details,
             tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
         })
     }
 }
@@ -2142,6 +2148,8 @@ impl LLMClient for OpenRouterProvider {
             model: request_model,
             usage: response.usage.map(convert_usage_to_llm_types),
             reasoning: response.reasoning,
+            request_id: response.request_id,
+            organization_id: response.organization_id,
         })
     }
 

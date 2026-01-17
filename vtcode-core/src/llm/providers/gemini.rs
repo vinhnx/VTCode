@@ -767,6 +767,8 @@ impl GeminiProvider {
                 reasoning: None,
                 reasoning_details: None,
                 tool_references: Vec::new(),
+                request_id: None,
+                organization_id: None,
             });
         }
 
@@ -869,6 +871,8 @@ impl GeminiProvider {
             reasoning: extracted_reasoning,
             reasoning_details: None,
             tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
         })
     }
 
@@ -1147,6 +1151,8 @@ impl LLMClient for GeminiProvider {
                             cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
                         }),
                         reasoning: response.reasoning,
+                        request_id: response.request_id,
+                        organization_id: response.organization_id,
                     });
                 }
                 Err(_) => {
@@ -1197,6 +1203,8 @@ impl LLMClient for GeminiProvider {
                 cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
             }),
             reasoning: response.reasoning,
+            request_id: response.request_id,
+            organization_id: response.organization_id,
         })
     }
 

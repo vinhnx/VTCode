@@ -192,6 +192,9 @@ pub async fn execute_skill_with_sub_llm(
                 // For skill execution, treatment is similar to ToolCalls: we continue the loop
                 // to process whatever triggered the pause (usually server-side tool use).
             }
+            FinishReason::Refusal => {
+                return Err(anyhow!("LLM refused to continue generating response due to policy violations"));
+            }
         }
     }
 }

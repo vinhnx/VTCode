@@ -384,6 +384,7 @@ impl ZAIProvider {
                 Some(error_code.to_string())
             },
             Some(request_id.to_string()),
+            None, // organization_id
             retry_after.map(|v| v.to_string()),
             Some(message.to_string()),
         ));
@@ -573,6 +574,7 @@ impl LLMProvider for ZAIProvider {
                     Some(error_code.to_string())
                 },
                 Some(request_id.clone()),
+                None, // organization_id
                 retry_after.clone(),
                 Some(message.clone()),
             ));
@@ -799,6 +801,8 @@ impl LLMProvider for ZAIProvider {
                     reasoning: if aggregated_reasoning.is_empty() { None } else { Some(aggregated_reasoning) },
                     reasoning_details: None,
                     tool_references: Vec::new(),
+                    request_id: None,
+                    organization_id: None,
                 }
             };
         };
@@ -832,6 +836,8 @@ impl LLMClient for ZAIProvider {
             model: request_model,
             usage: response.usage.map(convert_usage_to_llm_types),
             reasoning: response.reasoning,
+            request_id: response.request_id,
+            organization_id: response.organization_id,
         })
     }
 

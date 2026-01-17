@@ -409,6 +409,8 @@ impl OpenResponsesProvider {
             reasoning,
             reasoning_details,
             tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
         })
     }
 
@@ -497,10 +499,11 @@ impl LLMProvider for OpenResponsesProvider {
                 metadata: Some(LLMErrorMetadata::new(
                     "openresponses",
                     Some(status.as_u16()),
-                    None,
-                    None,
-                    None,
-                    Some(error_text),
+                    None, // code
+                    None, // request_id
+                    None, // organization_id
+                    None, // retry_after
+                    Some(error_text), // message
                 )),
             });
         }
@@ -551,10 +554,11 @@ impl LLMProvider for OpenResponsesProvider {
                 metadata: Some(LLMErrorMetadata::new(
                     "openresponses",
                     Some(status.as_u16()),
-                    None,
-                    None,
-                    None,
-                    Some(error_text),
+                    None, // code
+                    None, // request_id
+                    None, // organization_id
+                    None, // retry_after
+                    Some(error_text), // message
                 )),
             });
         }
@@ -634,6 +638,8 @@ impl LLMProvider for OpenResponsesProvider {
                                     },
                                     reasoning_details: None,
                                     tool_references: Vec::new(),
+                                    request_id: None,
+                                    organization_id: None,
                                 };
 
                                 return Some((
@@ -704,6 +710,8 @@ impl LLMProvider for OpenResponsesProvider {
                                     },
                                     reasoning_details: None,
                                     tool_references: Vec::new(),
+                                    request_id: None,
+                                    organization_id: None,
                                 };
 
                                 return Some((

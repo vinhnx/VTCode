@@ -624,14 +624,15 @@ impl HuggingFaceProvider {
         };
 
         LLMError::Provider {
-            message: format_llm_error(PROVIDER_NAME, &message),
+                    message: format_llm_error(PROVIDER_NAME, &message),
             metadata: Some(LLMErrorMetadata::new(
                 PROVIDER_NAME,
                 Some(status.as_u16()),
-                None,
-                None,
-                None,
-                Some(body.to_string()),
+                None, // code
+                None, // request_id
+                None, // organization_id
+                None, // retry_after
+                Some(body.to_string()), // message
             )),
         }
     }
@@ -663,6 +664,8 @@ impl HuggingFaceProvider {
                         reasoning: None,
                         reasoning_details: None,
                         tool_references: Vec::new(),
+                        request_id: None,
+                        organization_id: None,
                     });
                 }
 
@@ -790,6 +793,8 @@ impl HuggingFaceProvider {
             reasoning,
             reasoning_details: None,
             tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
         })
     }
 
@@ -1090,6 +1095,8 @@ impl HuggingFaceProvider {
                                 reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                                 reasoning_details: None,
                                 tool_references: Vec::new(),
+                                request_id: None,
+                                organization_id: None,
                             };
                             yield LLMStreamEvent::Completed { response };
                         }
@@ -1162,6 +1169,8 @@ impl HuggingFaceProvider {
                                                 reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                                                 reasoning_details: None,
                                                 tool_references: Vec::new(),
+                                                request_id: None,
+                                                organization_id: None,
                                             };
                                             completed = true;
                                             yield LLMStreamEvent::Completed { response };
@@ -1181,6 +1190,8 @@ impl HuggingFaceProvider {
                                     reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                                     reasoning_details: None,
                                     tool_references: Vec::new(),
+                                    request_id: None,
+                                    organization_id: None,
                                 };
                                 completed = true;
                                 yield LLMStreamEvent::Completed { response };
@@ -1257,6 +1268,8 @@ impl HuggingFaceProvider {
                                     reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                                     reasoning_details: None,
                                     tool_references: Vec::new(),
+                                    request_id: None,
+                                    organization_id: None,
                                 };
 
                                 completed = true;
@@ -1284,6 +1297,8 @@ impl HuggingFaceProvider {
                     reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                     reasoning_details: None,
                     tool_references: Vec::new(),
+                    request_id: None,
+                    organization_id: None,
                 };
                 yield LLMStreamEvent::Completed { response };
             }
@@ -1311,6 +1326,8 @@ impl LLMClient for HuggingFaceProvider {
             model,
             usage: response.usage.map(convert_usage_to_llm_types),
             reasoning: response.reasoning,
+            request_id: response.request_id,
+            organization_id: response.organization_id,
         })
     }
 
