@@ -65,6 +65,8 @@ pub struct AnthropicMessagesRequest {
     pub tools: Option<Vec<AnthropicTool>>,
     #[serde(default)]
     pub thinking: Option<bool>,
+    #[serde(default)]
+    pub betas: Option<Vec<String>>,
 }
 
 /// Anthropic Message
@@ -213,6 +215,25 @@ pub async fn messages_handler(
         .or_else(|| headers.get("anthropic-version"))
         .map(|val| val.to_str().unwrap_or(""))
         .unwrap_or("");
+    
+    // Extract betas from headers
+    let header_betas = headers
+        .get("anthropic-beta")
+        .and_then(|val| val.to_str().ok())
+        .map(|s| s.split(',').map(|b| b.trim().to_string()).collect::<Vec<String>>());
+
+    let mut request = request;
+    if let Some(hb) = header_betas {
+        if let Some(ref mut rb) = request.betas {
+            for beta in hb {
+                if !rb.contains(&beta) {
+                    rb.push(beta);
+                }
+            }
+        } else {
+            request.betas = Some(hb);
+        }
+    }
 
     // Convert Anthropic request to VT Code LLM request
     let llm_request = match convert_anthropic_to_llm_request(request.clone()) {
@@ -527,6 +548,7 @@ fn convert_anthropic_to_llm_request(
         frequency_penalty: None,
         stop_sequences: request.stop_sequences,
         verbosity: None,
+        betas: request.betas,
     })
 }
 

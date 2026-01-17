@@ -94,6 +94,8 @@ pub struct LLMRequest {
     pub presence_penalty: Option<f32>,
     pub frequency_penalty: Option<f32>,
     pub stop_sequences: Option<Vec<String>>,
+    /// Optional beta headers for Anthropic (and potentially others)
+    pub betas: Option<Vec<String>>,
 }
 
 /// Tool choice configuration that works across different providers

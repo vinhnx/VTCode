@@ -231,6 +231,7 @@ impl AnthropicProvider {
         &self,
         include_structured: bool,
         include_tool_search: bool,
+        request_betas: Option<&Vec<String>>,
     ) -> Option<String> {
         let mut pieces: Vec<String> = Vec::new();
         if let Some(pc) = self.prompt_cache_beta_header_value() {
@@ -259,6 +260,15 @@ impl AnthropicProvider {
         {
             // Add 1M context beta header for Sonnet 4.5
             pieces.push("context-1m-2025-08-07".to_owned());
+        }
+
+        // Add request specific betas if provided, avoiding duplicates
+        if let Some(betas) = request_betas {
+            for b in betas {
+                if !pieces.contains(b) {
+                    pieces.push(b.clone());
+                }
+            }
         }
         if pieces.is_empty() {
             None
@@ -1155,7 +1165,7 @@ impl LLMProvider for AnthropicProvider {
 
         let include_structured = anthropic_request.get("output_format").is_some();
         if let Some(beta_header) =
-            self.combined_beta_header_value(include_structured, include_tool_search)
+            self.combined_beta_header_value(include_structured, include_tool_search, request.betas.as_ref())
         {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
@@ -1227,7 +1237,7 @@ impl LLMProvider for AnthropicProvider {
             let formatted_error = error_display::format_llm_error(
                 "Anthropic",
                 &format!(
-                    "Structured output is not supported for model '{}'. Structured outputs are only available for Claude Sonnet 4.5 and Claude Opus 4.1 models.",
+                    "Structured output is not supported for model '{}'. Structured outputs are only available for Claude Sonnet 4.5, Claude Opus 4.1, Claude 3.7 Sonnet, and Claude 3.5 Sonnet models.",
                     request.model
                 ),
             );
