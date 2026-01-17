@@ -50,9 +50,6 @@ include_working_directory = true
 # Toggle during session with Shift+Tab or /plan command
 default_editing_mode = "edit"
 require_plan_confirmation = true
-parallel_tool_calling = true
-bias_for_action = true
-suppress_plan_preambles = true
 
 [agent.small_model]
 enabled = true
@@ -126,12 +123,6 @@ enabled = false
 directory = ""
 extra_directories = []
 max_file_size_kb = 0
-
-[agent.tool_response_truncation]
-enabled = true
-max_response_tokens = 10000
-beginning_fraction = 0.5
-truncation_message = "…{n} tokens truncated…"
 
 # Status line configuration
 [ui.status_line]
