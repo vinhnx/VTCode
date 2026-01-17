@@ -94,6 +94,10 @@ pub struct LLMRequest {
     pub presence_penalty: Option<f32>,
     pub frequency_penalty: Option<f32>,
     pub stop_sequences: Option<Vec<String>>,
+    /// Optional budget for extended thinking (Anthropic specific)
+    /// Minimum value: 1024
+    pub thinking_budget: Option<u32>,
+
     /// Optional beta headers for Anthropic (and potentially others)
     pub betas: Option<Vec<String>>,
 }

@@ -410,6 +410,8 @@ Continuing response."#;
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
         };
 
         let processed = post_process_response(response, Some(&[sample_tool_definition()]));
