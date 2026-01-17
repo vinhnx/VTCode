@@ -1,88 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::fs;
 
 use anyhow::{Context, Result, anyhow, bail};
 
 mod first_run;
 
 use crate::tools::RipgrepStatus;
-
-/// Create a minimal configuration file if none exists
-fn ensure_minimal_config(workspace: &Path) -> Result<()> {
-    let config_path = workspace.join("vtcode.toml");
-
-    if !config_path.exists() {
-        let minimal_config = r#"# VT Code Minimal Configuration
-# Auto-generated to enable basic functionality without API keys
-# You can customize this file to suit your needs
-
-[agent]
-# Use a local model to avoid API key requirements
-model = "gpt-oss:20b"
-provider = "ollama"
-default_model = "gpt-oss:20b"
-theme = "ciapre-dark"
-
-# Security settings - balanced for usability while maintaining safety
-[security]
-# Keep human in the loop for safety, but provide clear instructions
-human_in_the_loop = true
-require_write_tool_for_claims = true
-
-# Automation settings - disabled by default for safety
-[automation.full_auto]
-enabled = false
-
-# Service configurations - disabled to avoid dependency issues
-[prompt_cache.providers.openai]
-enabled = false
-
-[acp]
-enabled = false
-
-[mcp]
-enabled = false
-
-# UI settings for better experience
-[ui]
-tool_output_mode = "compact"
-
-# PTY settings for command execution
-[pty]
-enabled = true
-command_timeout_seconds = 120
-
-# Context settings to manage memory usage
-[context]
-max_context_tokens = 50000
-preserve_recent_turns = 3
-
-# Tool settings for basic functionality
-[tools]
-max_tool_loops = 10
-max_repeated_tool_calls = 2
-
-# Default tool policies for safety
-[tools.policies]
-read_file = "allow"
-list_files = "allow"
-grep_file = "allow"
-edit_file = "prompt"
-write_file = "prompt"
-run_pty_cmd = "prompt"
-"#;
-
-        fs::write(&config_path, minimal_config)
-            .with_context(|| format!("Failed to create config file: {}", config_path.display()))?;
-
-        println!("Created minimal vtcode.toml configuration at: {}", config_path.display());
-        println!("Tip: You can customize this file to change model, API keys, and settings");
-        println!("For API key setup, edit the config file or set environment variables like GEMINI_API_KEY");
-    }
-
-    Ok(())
-}
 
 /// Truncate error messages to fit within display width
 
@@ -226,9 +149,6 @@ impl StartupContext {
                 path.display()
             );
         }
-
-        // Auto-generate minimal configuration if none exists
-        ensure_minimal_config(&workspace)?;
 
         // Validate and resolve additional directories
         let additional_dirs = validate_additional_directories(&args.additional_dirs)?;
