@@ -2887,6 +2887,485 @@
           "generation": "GLM-4.6",
           "doc_comment": "GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model"
         }
+      },
+      "amazon/nova-2-lite-v1": {
+        "id": "amazon/nova-2-lite-v1",
+        "name": "Amazon: Nova 2 Lite",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 307200,
+        "max_output_tokens": 5000,
+        "cost": {
+          "input": 8e-07,
+          "output": 2.4e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterAmazonNova2LiteV1",
+          "constant": "AMAZON_NOVA_2_LITE_V1",
+          "vendor": "amazon",
+          "display": "Amazon Nova 2 Lite",
+          "description": "Amazon Nova 2 Lite model via OpenRouter",
+          "efficient": true,
+          "top_tier": false,
+          "generation": "Nova-2",
+          "doc_comment": "Amazon Nova 2 Lite - Amazon Nova 2 Lite model via OpenRouter"
+        }
+      },
+      "mistralai/mistral-large-2512": {
+        "id": "mistralai/mistral-large-2512",
+        "name": "Mistral: Mistral Large 3 2512",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 8192,
+        "cost": {
+          "input": 2e-06,
+          "output": 6e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterMistralaiMistralLarge2512",
+          "constant": "MISTRALAI_MISTRAL_LARGE_2512",
+          "vendor": "mistralai",
+          "display": "Mistral Large 3 2512",
+          "description": "Mistral Large 3 2512 model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "Mistral-Large-3",
+          "doc_comment": "Mistral Large 3 2512 - Mistral Large 3 2512 model via OpenRouter"
+        }
+      },
+      "nex-agi/deepseek-v3.1-nex-n1": {
+        "id": "nex-agi/deepseek-v3.1-nex-n1",
+        "name": "Nex AGI: DeepSeek V3.1 Nex N1",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 163840,
+        "max_output_tokens": 163840,
+        "cost": {
+          "input": 2e-07,
+          "output": 8e-07
+        },
+        "vtcode": {
+          "variant": "OpenRouterNexAgiDeepseekV31NexN1",
+          "constant": "NEX_AGI_DEEPSEEK_V3_1_NEX_N1",
+          "vendor": "nex-agi",
+          "display": "DeepSeek V3.1 Nex N1",
+          "description": "Nex AGI DeepSeek V3.1 Nex N1 model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "V3.1-Nex",
+          "doc_comment": "DeepSeek V3.1 Nex N1 - Nex AGI DeepSeek V3.1 Nex N1 model via OpenRouter"
+        }
+      },
+      "openai/gpt-5.1": {
+        "id": "openai/gpt-5.1",
+        "name": "OpenAI: GPT-5.1",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "file"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000,
+        "max_output_tokens": 128000,
+        "cost": {
+          "input": 1.25e-06,
+          "output": 1e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGpt51",
+          "constant": "OPENAI_GPT_5_1",
+          "vendor": "openai",
+          "display": "OpenAI GPT-5.1",
+          "description": "OpenAI GPT-5.1 model accessed through OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "2025-11-20",
+          "doc_comment": "OpenAI GPT-5.1 - OpenAI GPT-5.1 model accessed through OpenRouter"
+        }
+      },
+      "openai/gpt-5.1-codex": {
+        "id": "openai/gpt-5.1-codex",
+        "name": "OpenAI: GPT-5.1-Codex",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000,
+        "max_output_tokens": 128000,
+        "cost": {
+          "input": 1.25e-06,
+          "output": 1e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGpt51Codex",
+          "constant": "OPENAI_GPT_5_1_CODEX",
+          "vendor": "openai",
+          "display": "OpenAI GPT-5.1-Codex",
+          "description": "OpenRouter listing for GPT-5.1 Codex",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "2025-11-20",
+          "doc_comment": "OpenAI GPT-5.1-Codex - OpenRouter listing for GPT-5.1 Codex"
+        }
+      },
+      "openai/gpt-5.1-codex-max": {
+        "id": "openai/gpt-5.1-codex-max",
+        "name": "OpenAI: GPT-5.1-Codex-Max",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000,
+        "max_output_tokens": 128000,
+        "cost": {
+          "input": 1.5e-06,
+          "output": 1.2e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGpt51CodexMax",
+          "constant": "OPENAI_GPT_5_1_CODEX_MAX",
+          "vendor": "openai",
+          "display": "OpenAI GPT-5.1-Codex-Max",
+          "description": "OpenRouter listing for GPT-5.1 Codex Max",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "2025-11-25",
+          "doc_comment": "OpenAI GPT-5.1-Codex-Max - OpenRouter listing for GPT-5.1 Codex Max"
+        }
+      },
+      "openai/gpt-5.1-codex-mini": {
+        "id": "openai/gpt-5.1-codex-mini",
+        "name": "OpenAI: GPT-5.1-Codex-Mini",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 64000,
+        "cost": {
+          "input": 8e-07,
+          "output": 6e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGpt51CodexMini",
+          "constant": "OPENAI_GPT_5_1_CODEX_MINI",
+          "vendor": "openai",
+          "display": "OpenAI GPT-5.1-Codex-Mini",
+          "description": "OpenRouter listing for GPT-5.1 Codex Mini",
+          "efficient": true,
+          "top_tier": false,
+          "generation": "2025-11-15",
+          "doc_comment": "OpenAI GPT-5.1-Codex-Mini - OpenRouter listing for GPT-5.1 Codex Mini"
+        }
+      },
+      "openai/gpt-5.1-chat": {
+        "id": "openai/gpt-5.1-chat",
+        "name": "OpenAI: GPT-5.1 Chat",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "file",
+            "image",
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 16384,
+        "cost": {
+          "input": 1.25e-06,
+          "output": 1e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGpt51Chat",
+          "constant": "OPENAI_GPT_5_1_CHAT",
+          "vendor": "openai",
+          "display": "OpenAI GPT-5.1 Chat",
+          "description": "Chat optimised GPT-5.1 endpoint without tool use",
+          "efficient": false,
+          "top_tier": false,
+          "generation": "2025-11-20",
+          "doc_comment": "OpenAI GPT-5.1 Chat - Chat optimised GPT-5.1 endpoint without tool use"
+        }
+      },
+      "openai/gpt-5.2": {
+        "id": "openai/gpt-5.2",
+        "name": "OpenAI: GPT-5.2",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "file"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000,
+        "max_output_tokens": 128000,
+        "cost": {
+          "input": 1.3e-06,
+          "output": 1.05e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGpt52",
+          "constant": "OPENAI_GPT_5_2",
+          "vendor": "openai",
+          "display": "OpenAI GPT-5.2",
+          "description": "OpenAI GPT-5.2 model accessed through OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "2025-12-15",
+          "doc_comment": "OpenAI GPT-5.2 - OpenAI GPT-5.2 model accessed through OpenRouter"
+        }
+      },
+      "openai/gpt-5.2-chat": {
+        "id": "openai/gpt-5.2-chat",
+        "name": "OpenAI: GPT-5.2 Chat",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "file",
+            "image",
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 128000,
+        "max_output_tokens": 16384,
+        "cost": {
+          "input": 1.3e-06,
+          "output": 1.05e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGpt52Chat",
+          "constant": "OPENAI_GPT_5_2_CHAT",
+          "vendor": "openai",
+          "display": "OpenAI GPT-5.2 Chat",
+          "description": "Chat optimised GPT-5.2 endpoint without tool use",
+          "efficient": false,
+          "top_tier": false,
+          "generation": "2025-12-20",
+          "doc_comment": "OpenAI GPT-5.2 Chat - Chat optimised GPT-5.2 endpoint without tool use"
+        }
+      },
+      "openai/gpt-5.2-codex": {
+        "id": "openai/gpt-5.2-codex",
+        "name": "OpenAI: GPT-5.2-Codex",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000,
+        "max_output_tokens": 128000,
+        "cost": {
+          "input": 1.3e-06,
+          "output": 1.05e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGpt52Codex",
+          "constant": "OPENAI_GPT_5_2_CODEX",
+          "vendor": "openai",
+          "display": "OpenAI GPT-5.2-Codex",
+          "description": "OpenRouter listing for GPT-5.2 Codex",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "2025-12-20",
+          "doc_comment": "OpenAI GPT-5.2-Codex - OpenRouter listing for GPT-5.2 Codex"
+        }
+      },
+      "openai/gpt-5.2-pro": {
+        "id": "openai/gpt-5.2-pro",
+        "name": "OpenAI: GPT-5.2 Pro",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "file"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000,
+        "max_output_tokens": 128000,
+        "cost": {
+          "input": 1.5e-06,
+          "output": 1.2e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGpt52Pro",
+          "constant": "OPENAI_GPT_5_2_PRO",
+          "vendor": "openai",
+          "display": "OpenAI GPT-5.2 Pro",
+          "description": "Professional tier GPT-5.2 model accessed through OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "2025-12-25",
+          "doc_comment": "OpenAI GPT-5.2 Pro - Professional tier GPT-5.2 model accessed through OpenRouter"
+        }
+      },
+      "openai/o1-pro": {
+        "id": "openai/o1-pro",
+        "name": "OpenAI: o1-pro",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 10000,
+        "cost": {
+          "input": 1.5e-05,
+          "output": 6e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIO1Pro",
+          "constant": "OPENAI_O1_PRO",
+          "vendor": "openai",
+          "display": "OpenAI o1-pro",
+          "description": "OpenAI o1-pro advanced reasoning model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "o1-series",
+          "doc_comment": "OpenAI o1-pro - OpenAI o1-pro advanced reasoning model via OpenRouter"
+        }
+      },
+      "z-ai/glm-4.6v": {
+        "id": "z-ai/glm-4.6v",
+        "name": "Z.AI: GLM 4.6V",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 202752,
+        "max_output_tokens": 202752,
+        "cost": {
+          "input": 5.5e-07,
+          "output": 1.8e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterZaiGlm46V",
+          "constant": "Z_AI_GLM_4_6V",
+          "vendor": "zai",
+          "display": "GLM 4.6V",
+          "description": "Z.AI GLM 4.6V enhanced vision model",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "GLM-4.6V",
+          "doc_comment": "GLM 4.6V - Z.AI GLM 4.6V enhanced vision model"
+        }
+      },
+      "z-ai/glm-4.7": {
+        "id": "z-ai/glm-4.7",
+        "name": "Z.AI: GLM 4.7",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 202752,
+        "max_output_tokens": 202752,
+        "cost": {
+          "input": 6e-07,
+          "output": 2e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterZaiGlm47",
+          "constant": "Z_AI_GLM_4_7",
+          "vendor": "zai",
+          "display": "GLM 4.7",
+          "description": "Z.AI GLM 4.7 next-generation reasoning model",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "GLM-4.7",
+          "doc_comment": "GLM 4.7 - Z.AI GLM 4.7 next-generation reasoning model"
+        }
       }
     },
     "default_model": "x-ai/grok-code-fast-1"

@@ -439,6 +439,36 @@ pub enum ModelId {
     OpenRouterAnthropicClaudeHaiku45,
     /// Claude Opus 4.1 - Anthropic Claude Opus 4.1 listing
     OpenRouterAnthropicClaudeOpus41,
+    /// Amazon Nova 2 Lite - Amazon Nova 2 Lite model via OpenRouter
+    OpenRouterAmazonNova2LiteV1,
+    /// Mistral Large 3 2512 - Mistral Large 3 2512 model via OpenRouter
+    OpenRouterMistralaiMistralLarge2512,
+    /// DeepSeek V3.1 Nex N1 - Nex AGI DeepSeek V3.1 Nex N1 model via OpenRouter
+    OpenRouterNexAgiDeepseekV31NexN1,
+    /// OpenAI GPT-5.1 - OpenAI GPT-5.1 model accessed through OpenRouter
+    OpenRouterOpenAIGpt51,
+    /// OpenAI GPT-5.1-Codex - OpenRouter listing for GPT-5.1 Codex
+    OpenRouterOpenAIGpt51Codex,
+    /// OpenAI GPT-5.1-Codex-Max - OpenRouter listing for GPT-5.1 Codex Max
+    OpenRouterOpenAIGpt51CodexMax,
+    /// OpenAI GPT-5.1-Codex-Mini - OpenRouter listing for GPT-5.1 Codex Mini
+    OpenRouterOpenAIGpt51CodexMini,
+    /// OpenAI GPT-5.1 Chat - Chat optimised GPT-5.1 endpoint without tool use
+    OpenRouterOpenAIGpt51Chat,
+    /// OpenAI GPT-5.2 - OpenAI GPT-5.2 model accessed through OpenRouter
+    OpenRouterOpenAIGpt52,
+    /// OpenAI GPT-5.2 Chat - Chat optimised GPT-5.2 endpoint without tool use
+    OpenRouterOpenAIGpt52Chat,
+    /// OpenAI GPT-5.2-Codex - OpenRouter listing for GPT-5.2 Codex
+    OpenRouterOpenAIGpt52Codex,
+    /// OpenAI GPT-5.2 Pro - Professional tier GPT-5.2 model accessed through OpenRouter
+    OpenRouterOpenAIGpt52Pro,
+    /// OpenAI o1-pro - OpenAI o1-pro advanced reasoning model via OpenRouter
+    OpenRouterOpenAIO1Pro,
+    /// GLM 4.6V - Z.AI GLM 4.6V enhanced vision model
+    OpenRouterZaiGlm46V,
+    /// GLM 4.7 - Z.AI GLM 4.7 next-generation reasoning model
+    OpenRouterZaiGlm47,
 }
 
 mod openrouter_generated {
@@ -608,7 +638,22 @@ impl ModelId {
             | ModelId::OpenRouterDeepseekChat
             | ModelId::OpenRouterDeepSeekV32
             | ModelId::OpenRouterDeepseekReasoner
-            | ModelId::OpenRouterDeepSeekV32Speciale => {
+            | ModelId::OpenRouterDeepSeekV32Speciale
+            | ModelId::OpenRouterAmazonNova2LiteV1
+            | ModelId::OpenRouterMistralaiMistralLarge2512
+            | ModelId::OpenRouterNexAgiDeepseekV31NexN1
+            | ModelId::OpenRouterOpenAIGpt51
+            | ModelId::OpenRouterOpenAIGpt51Codex
+            | ModelId::OpenRouterOpenAIGpt51CodexMax
+            | ModelId::OpenRouterOpenAIGpt51CodexMini
+            | ModelId::OpenRouterOpenAIGpt51Chat
+            | ModelId::OpenRouterOpenAIGpt52
+            | ModelId::OpenRouterOpenAIGpt52Chat
+            | ModelId::OpenRouterOpenAIGpt52Codex
+            | ModelId::OpenRouterOpenAIGpt52Pro
+            | ModelId::OpenRouterOpenAIO1Pro
+            | ModelId::OpenRouterZaiGlm46V
+            | ModelId::OpenRouterZaiGlm47 => {
                 // Fallback to a default value for OpenRouter models without metadata
                 // In production, these should have metadata
                 "openrouter-model"
@@ -739,7 +784,22 @@ impl ModelId {
             | ModelId::OpenRouterDeepseekChat
             | ModelId::OpenRouterDeepSeekV32
             | ModelId::OpenRouterDeepseekReasoner
-            | ModelId::OpenRouterDeepSeekV32Speciale => Provider::OpenRouter,
+            | ModelId::OpenRouterDeepSeekV32Speciale
+            | ModelId::OpenRouterAmazonNova2LiteV1
+            | ModelId::OpenRouterMistralaiMistralLarge2512
+            | ModelId::OpenRouterNexAgiDeepseekV31NexN1
+            | ModelId::OpenRouterOpenAIGpt51
+            | ModelId::OpenRouterOpenAIGpt51Codex
+            | ModelId::OpenRouterOpenAIGpt51CodexMax
+            | ModelId::OpenRouterOpenAIGpt51CodexMini
+            | ModelId::OpenRouterOpenAIGpt51Chat
+            | ModelId::OpenRouterOpenAIGpt52
+            | ModelId::OpenRouterOpenAIGpt52Chat
+            | ModelId::OpenRouterOpenAIGpt52Codex
+            | ModelId::OpenRouterOpenAIGpt52Pro
+            | ModelId::OpenRouterOpenAIO1Pro
+            | ModelId::OpenRouterZaiGlm46V
+            | ModelId::OpenRouterZaiGlm47 => Provider::OpenRouter,
         }
     }
 
@@ -1172,7 +1232,22 @@ impl ModelId {
             | ModelId::OpenRouterDeepseekReasoner
             | ModelId::OpenRouterDeepSeekV32Speciale
             | ModelId::OpenRouterMoonshotaiKimiK20905
-            | ModelId::OpenRouterMoonshotaiKimiK2Thinking => {
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterAmazonNova2LiteV1
+            | ModelId::OpenRouterMistralaiMistralLarge2512
+            | ModelId::OpenRouterNexAgiDeepseekV31NexN1
+            | ModelId::OpenRouterOpenAIGpt51
+            | ModelId::OpenRouterOpenAIGpt51Codex
+            | ModelId::OpenRouterOpenAIGpt51CodexMax
+            | ModelId::OpenRouterOpenAIGpt51CodexMini
+            | ModelId::OpenRouterOpenAIGpt51Chat
+            | ModelId::OpenRouterOpenAIGpt52
+            | ModelId::OpenRouterOpenAIGpt52Chat
+            | ModelId::OpenRouterOpenAIGpt52Codex
+            | ModelId::OpenRouterOpenAIGpt52Pro
+            | ModelId::OpenRouterOpenAIO1Pro
+            | ModelId::OpenRouterZaiGlm46V
+            | ModelId::OpenRouterZaiGlm47 => {
                 // Fallback description for OpenRouter models
                 // In production, these should have metadata
                 "Model available via OpenRouter marketplace"
@@ -1602,7 +1677,22 @@ impl ModelId {
             | ModelId::OpenRouterDeepseekChat
             | ModelId::OpenRouterDeepSeekV32
             | ModelId::OpenRouterDeepseekReasoner
-            | ModelId::OpenRouterDeepSeekV32Speciale => "unknown", // fallback generation for OpenRouter models
+            | ModelId::OpenRouterDeepSeekV32Speciale
+            | ModelId::OpenRouterAmazonNova2LiteV1
+            | ModelId::OpenRouterMistralaiMistralLarge2512
+            | ModelId::OpenRouterNexAgiDeepseekV31NexN1
+            | ModelId::OpenRouterOpenAIGpt51
+            | ModelId::OpenRouterOpenAIGpt51Codex
+            | ModelId::OpenRouterOpenAIGpt51CodexMax
+            | ModelId::OpenRouterOpenAIGpt51CodexMini
+            | ModelId::OpenRouterOpenAIGpt51Chat
+            | ModelId::OpenRouterOpenAIGpt52
+            | ModelId::OpenRouterOpenAIGpt52Chat
+            | ModelId::OpenRouterOpenAIGpt52Codex
+            | ModelId::OpenRouterOpenAIGpt52Pro
+            | ModelId::OpenRouterOpenAIO1Pro
+            | ModelId::OpenRouterZaiGlm46V
+            | ModelId::OpenRouterZaiGlm47 => "unknown", // fallback generation for OpenRouter models
         }
     }
 
