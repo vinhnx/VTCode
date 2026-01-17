@@ -1,4 +1,8 @@
-<h1 align="center">VT Code</h1>
+<p align="center">
+  <img src="./resources/logo/vtcode_logo_256.png" alt="VT Code"/>
+  <h1 align="center">VT Code</h1>
+</p>
+
 <p align="center">
   <a href="./docs/guides/mcp-integration.md">
     <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
@@ -216,7 +220,6 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
     -   [Security Model](./docs/SECURITY_MODEL.md)
     -   [Security Audit](./docs/SECURITY_AUDIT.md)
     -   [Tool Policies](./docs/vtcode_tools_policy.md)
-
 
 ---
 
