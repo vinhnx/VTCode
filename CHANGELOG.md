@@ -3,6 +3,20 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.60.8] - 2026-01-17
+
+
+### Documentation
+    - docs: update changelog for v0.60.7 [skip ci]
+
+
+### Chores
+    - chore: update logo image to higher resolution
+    - chore: update README layout and add new logo assets
+    - chore: update npm package.json to v0.60.7 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: enable contributors in changelog configuration
+    - chore: update npm package.json to v0.60.6 version =  [skip ci]
 # [Version 0.60.7] - 2026-01-17
 
 
