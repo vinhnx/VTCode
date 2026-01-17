@@ -408,6 +408,7 @@ impl OpenResponsesProvider {
             finish_reason,
             reasoning,
             reasoning_details,
+            tool_references: Vec::new(),
         })
     }
 
@@ -632,6 +633,7 @@ impl LLMProvider for OpenResponsesProvider {
                                         Some(accumulator.reasoning_content.clone())
                                     },
                                     reasoning_details: None,
+                                    tool_references: Vec::new(),
                                 };
 
                                 return Some((
@@ -701,6 +703,7 @@ impl LLMProvider for OpenResponsesProvider {
                                         Some(accumulator.reasoning_content.clone())
                                     },
                                     reasoning_details: None,
+                                    tool_references: Vec::new(),
                                 };
 
                                 return Some((

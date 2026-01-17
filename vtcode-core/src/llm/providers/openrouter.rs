@@ -638,6 +638,7 @@ fn finalize_stream_response(
         finish_reason,
         reasoning,
         reasoning_details: None,
+        tool_references: Vec::new(),
     }
 }
 
@@ -1703,6 +1704,7 @@ impl OpenRouterProvider {
                 finish_reason,
                 reasoning,
                 reasoning_details,
+                tool_references: Vec::new(),
             });
         }
 
@@ -1860,6 +1862,7 @@ impl OpenRouterProvider {
             finish_reason,
             reasoning,
             reasoning_details,
+            tool_references: Vec::new(),
         })
     }
 }

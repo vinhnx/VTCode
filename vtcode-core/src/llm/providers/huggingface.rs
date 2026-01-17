@@ -662,6 +662,7 @@ impl HuggingFaceProvider {
                         finish_reason: crate::llm::provider::FinishReason::Stop,
                         reasoning: None,
                         reasoning_details: None,
+                        tool_references: Vec::new(),
                     });
                 }
 
@@ -788,6 +789,7 @@ impl HuggingFaceProvider {
             finish_reason,
             reasoning,
             reasoning_details: None,
+            tool_references: Vec::new(),
         })
     }
 
@@ -1087,6 +1089,7 @@ impl HuggingFaceProvider {
                                 finish_reason,
                                 reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                                 reasoning_details: None,
+                                tool_references: Vec::new(),
                             };
                             yield LLMStreamEvent::Completed { response };
                         }
@@ -1158,6 +1161,7 @@ impl HuggingFaceProvider {
                                                 finish_reason,
                                                 reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                                                 reasoning_details: None,
+                                                tool_references: Vec::new(),
                                             };
                                             completed = true;
                                             yield LLMStreamEvent::Completed { response };
@@ -1176,6 +1180,7 @@ impl HuggingFaceProvider {
                                     finish_reason,
                                     reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                                     reasoning_details: None,
+                                    tool_references: Vec::new(),
                                 };
                                 completed = true;
                                 yield LLMStreamEvent::Completed { response };
@@ -1251,6 +1256,7 @@ impl HuggingFaceProvider {
                                     finish_reason,
                                     reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                                     reasoning_details: None,
+                                    tool_references: Vec::new(),
                                 };
 
                                 completed = true;
@@ -1277,6 +1283,7 @@ impl HuggingFaceProvider {
                     finish_reason,
                     reasoning: if reasoning_buffer.is_empty() { None } else { Some(reasoning_buffer.clone()) },
                     reasoning_details: None,
+                    tool_references: Vec::new(),
                 };
                 yield LLMStreamEvent::Completed { response };
             }

@@ -234,6 +234,7 @@ pub fn parse_responses_payload(
         finish_reason,
         reasoning,
         reasoning_details,
+        tool_references: Vec::new(),
     })
 }
 

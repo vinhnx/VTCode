@@ -798,6 +798,7 @@ impl LLMProvider for ZAIProvider {
                     finish_reason,
                     reasoning: if aggregated_reasoning.is_empty() { None } else { Some(aggregated_reasoning) },
                     reasoning_details: None,
+                    tool_references: Vec::new(),
                 }
             };
         };

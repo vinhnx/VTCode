@@ -1302,6 +1302,7 @@ impl OpenAIProvider {
             finish_reason,
             reasoning,
             reasoning_details: None,
+            tool_references: Vec::new(),
         })
     }
 
@@ -1499,6 +1500,7 @@ impl OpenAIProvider {
             finish_reason: crate::llm::provider::FinishReason::Stop,
             reasoning: None,
             reasoning_details: None,
+            tool_references: Vec::new(),
         })
     }
 }
@@ -2392,6 +2394,7 @@ impl provider::LLMProvider for OpenAIProvider {
                     finish_reason,
                     reasoning: reasoning_buffer.finalize(),
                     reasoning_details: None,
+                    tool_references: Vec::new(),
                 };
 
                 yield provider::LLMStreamEvent::Completed { response };

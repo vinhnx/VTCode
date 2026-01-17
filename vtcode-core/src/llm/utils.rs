@@ -129,6 +129,7 @@ pub fn parse_response_openai_format(
         finish_reason: crate::llm::provider::FinishReason::Stop,
         reasoning: reasoning_content,
         reasoning_details: None,
+        tool_references: Vec::new(),
     };
 
     // Set content based on function call or regular content

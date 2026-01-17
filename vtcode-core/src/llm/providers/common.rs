@@ -585,6 +585,7 @@ where
         finish_reason,
         reasoning,
         reasoning_details,
+        tool_references: Vec::new(),
     })
 }
 

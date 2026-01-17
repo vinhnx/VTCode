@@ -1127,6 +1127,32 @@ interleaved_thinking_budget_tokens = 12000
 # Default: "enabled"
 interleaved_thinking_type_enabled = "enabled"
 
+# Tool Search Configuration (advanced-tool-use beta)
+# Enables dynamic tool discovery for large tool catalogs (up to 10k tools)
+# See docs/TOOL_SEARCH.md for detailed documentation
+[provider.anthropic.tool_search]
+# Enable tool search feature (requires Claude Sonnet 4.5+ or Opus 4.5+)
+# Default: false
+enabled = false
+
+# Search algorithm: "regex" (Python regex patterns) or "bm25" (natural language)
+# Default: "regex"
+algorithm = "regex"
+
+# Automatically defer loading of all tools except core tools
+# When true, most tools are only loaded when discovered via search
+# Default: true
+defer_by_default = true
+
+# Maximum number of tool search results to return (3-5 recommended)
+# Default: 5
+max_results = 5
+
+# Tool names that should never be deferred (always available in context)
+# These tools are loaded immediately without needing to be discovered
+# Default: []
+always_available_tools = []
+
 # Model-specific behavior configuration
 [model]
 # Enable loop hang detection to identify when model is stuck in repetitive behavior

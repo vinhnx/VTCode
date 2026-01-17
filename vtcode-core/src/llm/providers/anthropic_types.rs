@@ -81,6 +81,41 @@ pub enum AnthropicContentBlock {
         #[serde(skip_serializing_if = "Option::is_none")]
         cache_control: Option<CacheControl>,
     },
+    /// Server-side tool use (e.g., tool search execution) - advanced-tool-use beta
+    #[serde(rename = "server_tool_use")]
+    ServerToolUse {
+        id: String,
+        name: String,
+        input: Value,
+    },
+    /// Tool search result containing discovered tool references - advanced-tool-use beta
+    #[serde(rename = "tool_search_tool_result")]
+    ToolSearchToolResult {
+        tool_use_id: String,
+        content: ToolSearchResultContent,
+    },
+}
+
+/// Content of a tool search result
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum ToolSearchResultContent {
+    #[serde(rename = "tool_search_tool_search_result")]
+    SearchResult {
+        tool_references: Vec<ToolReference>,
+    },
+    #[serde(rename = "tool_search_tool_result_error")]
+    Error {
+        error_code: String,
+    },
+}
+
+/// A reference to a discovered tool from tool search
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ToolReference {
+    #[serde(rename = "type")]
+    pub ref_type: Option<String>, // "tool_reference"
+    pub tool_name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -128,13 +163,38 @@ pub struct CacheControl {
     pub ttl: Option<String>, // "5m" or "1h"
 }
 
+/// Anthropic tool definition
+/// Supports both regular function tools and tool search tools (advanced-tool-use beta)
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AnthropicTool {
+#[serde(untagged)]
+pub enum AnthropicTool {
+    /// Tool search tool (regex or bm25)
+    ToolSearch(AnthropicToolSearchTool),
+    /// Regular function tool
+    Function(AnthropicFunctionTool),
+}
+
+/// Regular function tool definition for Anthropic API
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicFunctionTool {
     pub name: String,
     pub description: String,
     pub input_schema: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<CacheControl>,
+    /// When true, the tool is deferred and only loaded when discovered via tool search
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub defer_loading: Option<bool>,
+}
+
+/// Tool search tool definition for Anthropic's advanced-tool-use beta
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicToolSearchTool {
+    /// The type of tool search: "tool_search_tool_regex_20251119" or "tool_search_tool_bm25_20251119"
+    #[serde(rename = "type")]
+    pub tool_type: String,
+    /// Tool name (e.g., "tool_search_tool_regex" or "tool_search_tool_bm25")
+    pub name: String,
 }
 
 // Kept for backward compatibility or internal usage if needed, but AnthropicContentBlock::Thinking is preferred
