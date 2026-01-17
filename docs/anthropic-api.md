@@ -10,6 +10,10 @@ The Anthropic API compatibility server allows existing applications that expect 
 - Support for Anthropic's rich feature set including tool calling, streaming, and vision
 - Multi-provider LLM support through VT Code's unified interface
 
+## Quick Links
+- [Reducing Latency with Claude](./anthropic-latency.md)
+- [Anthropic API Documentation](https://docs.anthropic.com/en/api/messages)
+
 ## Getting Started
 
 ### Prerequisites
