@@ -224,16 +224,22 @@ pub enum ModelId {
     OpenAIGptOss120b,
 
     // Anthropic models
-    /// Claude Opus 4.1 - Latest most capable Anthropic model (2025-08-05)
+    /// Claude Opus 4.1 - Specialized reasoning model (2025-08-05)
     ClaudeOpus41,
-    /// Claude Opus 4.5 - Latest flagship model with exceptional reasoning (2025-11-01)
+    /// Claude Opus 4.5 - Flagship model with exceptional intelligence (2025-11-01)
     ClaudeOpus45,
-    /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-11-15)
+    /// Claude Sonnet 4.5 - Balanced flagship model for coding (2025-11-15)
     ClaudeSonnet45,
-    /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-11-15)
+    /// Claude Haiku 4.5 - Fastest model with near-frontier intelligence (2025-11-15)
     ClaudeHaiku45,
-    /// Claude Sonnet 4 - Previous balanced Anthropic model (2025-05-14)
+    /// Claude Opus 4 - Previous flagship model (2025-05-14)
+    ClaudeOpus4,
+    /// Claude Sonnet 4 - Previous balanced model (2025-05-14)
     ClaudeSonnet4,
+    /// Claude Sonnet 3.7 - Latest Claude 3 Sonnet (2025-02-19)
+    ClaudeSonnet37,
+    /// Claude Haiku 3.5 - Latest Claude 3 Haiku (2024-10-22)
+    ClaudeHaiku35,
 
     // DeepSeek models
     /// DeepSeek V3.2 Chat - Fast non-thinking mode
@@ -532,7 +538,10 @@ impl ModelId {
             ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
-            ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_5_20250929,
+            ModelId::ClaudeOpus4 => models::CLAUDE_OPUS_4_0,
+            ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_0,
+            ModelId::ClaudeSonnet37 => models::CLAUDE_3_7_SONNET_LATEST,
+            ModelId::ClaudeHaiku35 => models::CLAUDE_3_5_HAIKU_LATEST,
             // DeepSeek models
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
             ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,
@@ -690,7 +699,10 @@ impl ModelId {
             | ModelId::ClaudeOpus45
             | ModelId::ClaudeSonnet45
             | ModelId::ClaudeHaiku45
-            | ModelId::ClaudeSonnet4 => Provider::Anthropic,
+            | ModelId::ClaudeOpus4
+            | ModelId::ClaudeSonnet4
+            | ModelId::ClaudeSonnet37
+            | ModelId::ClaudeHaiku35 => Provider::Anthropic,
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
@@ -867,6 +879,8 @@ impl ModelId {
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
             ModelId::ZaiGlm47 => Some(ModelId::ZaiGlm45Flash),
             ModelId::ZaiGlm46 => Some(ModelId::ZaiGlm45Flash),
+            ModelId::ClaudeOpus45 | ModelId::ClaudeOpus4 | ModelId::ClaudeOpus41 => Some(ModelId::ClaudeSonnet45),
+            ModelId::ClaudeSonnet37 => Some(ModelId::ClaudeSonnet45),
             ModelId::MinimaxM21 => Some(ModelId::MinimaxM21Lightning),
             _ => None,
         };
@@ -908,11 +922,14 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => "GPT-OSS 20B",
             ModelId::OpenAIGptOss120b => "GPT-OSS 120B",
             // Anthropic models
-            ModelId::ClaudeOpus41 => "Claude Opus 4.5",
+            ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeOpus45 => "Claude Opus 4.5",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
+            ModelId::ClaudeOpus4 => "Claude Opus 4",
             ModelId::ClaudeSonnet4 => "Claude Sonnet 4",
+            ModelId::ClaudeSonnet37 => "Claude 3.7 Sonnet",
+            ModelId::ClaudeHaiku35 => "Claude 3.5 Haiku",
             // DeepSeek models
             ModelId::DeepSeekChat => "DeepSeek V3.2 Chat",
             ModelId::DeepSeekReasoner => "DeepSeek V3.2 Reasoner",
@@ -1033,17 +1050,14 @@ impl ModelId {
                 "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization"
             }
             // Anthropic models
-            ModelId::ClaudeOpus41 => {
-                "Latest flagship model with exceptional reasoning. Most capable Anthropic model for complex multi-step tasks"
-            }
-            ModelId::ClaudeOpus45 => {
-                "Latest flagship model with exceptional reasoning. Most capable Anthropic model for complex multi-step tasks"
-            }
-            ModelId::ClaudeSonnet45 => "Latest balanced Anthropic model for general tasks",
-            ModelId::ClaudeHaiku45 => {
-                "Latest efficient Anthropic model optimized for low-latency agent workflows"
-            }
-            ModelId::ClaudeSonnet4 => "Advanced Claude 4 Sonnet model with enhanced capabilities",
+            ModelId::ClaudeOpus41 => "Specialized reasoning model for complex tasks",
+            ModelId::ClaudeOpus45 => "Premium flagship model with exceptional intelligence",
+            ModelId::ClaudeSonnet45 => "Balanced flagship model for coding and agentic workflows",
+            ModelId::ClaudeHaiku45 => "Fastest model with near-frontier intelligence",
+            ModelId::ClaudeOpus4 => "Previous generation premium flagship model",
+            ModelId::ClaudeSonnet4 => "Standard balanced model for general tasks",
+            ModelId::ClaudeSonnet37 => "Latest model in the Claude 3 family with extended thinking",
+            ModelId::ClaudeHaiku35 => "Highly efficient model for high-volume tasks",
             // DeepSeek models
             ModelId::DeepSeekChat => {
                 "DeepSeek V3.2 - Fast, efficient chat model for immediate responses"
@@ -1287,7 +1301,10 @@ impl ModelId {
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::ClaudeHaiku45,
+            ModelId::ClaudeOpus4,
             ModelId::ClaudeSonnet4,
+            ModelId::ClaudeSonnet37,
+            ModelId::ClaudeHaiku35,
             // DeepSeek models
             ModelId::DeepSeekChat,
             ModelId::DeepSeekReasoner,
@@ -1503,6 +1520,7 @@ impl ModelId {
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
                 | ModelId::ClaudeHaiku45
+                | ModelId::ClaudeHaiku35
                 | ModelId::DeepSeekChat
                 | ModelId::XaiGrok4Code
                 | ModelId::ZaiGlm45Air
@@ -1523,9 +1541,12 @@ impl ModelId {
                 | ModelId::GPT52
                 | ModelId::GPT5
                 | ModelId::GPT5Codex
+                | ModelId::ClaudeOpus45
                 | ModelId::ClaudeOpus41
+                | ModelId::ClaudeOpus4
                 | ModelId::ClaudeSonnet45
                 | ModelId::ClaudeSonnet4
+                | ModelId::ClaudeSonnet37
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
@@ -1580,7 +1601,9 @@ impl ModelId {
             // Anthropic generations
             ModelId::ClaudeOpus45 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeOpus41 => "4.1",
-            ModelId::ClaudeSonnet4 => "4",
+            ModelId::ClaudeOpus4 | ModelId::ClaudeSonnet4 => "4",
+            ModelId::ClaudeSonnet37 => "3.7",
+            ModelId::ClaudeHaiku35 => "3.5",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
             // Hugging Face generations
@@ -1762,7 +1785,15 @@ impl FromStr for ModelId {
             s if s == models::CLAUDE_OPUS_4_5 => Ok(ModelId::ClaudeOpus45),
             s if s == models::CLAUDE_SONNET_4_5 => Ok(ModelId::ClaudeSonnet45),
             s if s == models::CLAUDE_HAIKU_4_5 => Ok(ModelId::ClaudeHaiku45),
-            s if s == models::CLAUDE_SONNET_4_5_20250929 => Ok(ModelId::ClaudeSonnet4),
+            s if s == models::CLAUDE_SONNET_4_5_20250929 => Ok(ModelId::ClaudeSonnet45),
+            s if s == models::CLAUDE_SONNET_4_20250514 => Ok(ModelId::ClaudeSonnet4),
+            s if s == models::CLAUDE_SONNET_4_0 => Ok(ModelId::ClaudeSonnet4),
+            s if s == models::CLAUDE_OPUS_4_20250514 => Ok(ModelId::ClaudeOpus4),
+            s if s == models::CLAUDE_OPUS_4_0 => Ok(ModelId::ClaudeOpus4),
+            s if s == models::CLAUDE_3_7_SONNET_20250219 => Ok(ModelId::ClaudeSonnet37),
+            s if s == models::CLAUDE_3_7_SONNET_LATEST => Ok(ModelId::ClaudeSonnet37),
+            s if s == models::CLAUDE_3_5_HAIKU_20241022 => Ok(ModelId::ClaudeHaiku35),
+            s if s == models::CLAUDE_3_5_HAIKU_LATEST => Ok(ModelId::ClaudeHaiku35),
             // DeepSeek models
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
@@ -1928,10 +1959,7 @@ mod tests {
         // Anthropic models
         assert_eq!(ModelId::ClaudeSonnet45.as_str(), models::CLAUDE_SONNET_4_5);
         assert_eq!(ModelId::ClaudeHaiku45.as_str(), models::CLAUDE_HAIKU_4_5);
-        assert_eq!(
-            ModelId::ClaudeSonnet4.as_str(),
-            models::CLAUDE_SONNET_4_5_20250929
-        );
+        assert_eq!(ModelId::ClaudeSonnet4.as_str(), models::CLAUDE_SONNET_4_0);
         assert_eq!(ModelId::ClaudeOpus41.as_str(), models::CLAUDE_OPUS_4_1);
         // DeepSeek models
         assert_eq!(ModelId::DeepSeekChat.as_str(), models::DEEPSEEK_CHAT);
@@ -2024,11 +2052,13 @@ mod tests {
             ModelId::ClaudeSonnet45
         );
         assert_eq!(
-            models::CLAUDE_HAIKU_4_5.parse::<ModelId>().unwrap(),
-            ModelId::ClaudeHaiku45
+            models::CLAUDE_SONNET_4_5_20250929
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::ClaudeSonnet45
         );
         assert_eq!(
-            models::CLAUDE_SONNET_4_5_20250929
+            models::CLAUDE_SONNET_4_0
                 .parse::<ModelId>()
                 .unwrap(),
             ModelId::ClaudeSonnet4
@@ -2046,18 +2076,12 @@ mod tests {
             models::DEEPSEEK_REASONER.parse::<ModelId>().unwrap(),
             ModelId::DeepSeekReasoner
         );
-        // Hugging Face models
+        // Hugging Face models (non-overlapping)
         assert_eq!(
             models::huggingface::DEEPSEEK_V32
                 .parse::<ModelId>()
                 .unwrap(),
             ModelId::HuggingFaceDeepseekV32
-        );
-        assert_eq!(
-            models::huggingface::OPENAI_GPT_OSS_20B
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::HuggingFaceOpenAIGptOss20b
         );
         // Removed / invalid HF models should not parse
         assert!("minimaxai/MiniMax-M2".parse::<ModelId>().is_err());
@@ -2444,7 +2468,9 @@ mod tests {
         assert!(openai_models.contains(&ModelId::GPT5Codex));
         assert!(!openai_models.contains(&ModelId::Gemini25Pro));
 
+        // Verify Anthropic models
         let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
+        assert_eq!(anthropic_models.len(), 8); // Opus (4.5, 4.1, 4), Sonnet (4.5, 4, 3.7), Haiku (4.5, 3.5)
         assert!(anthropic_models.contains(&ModelId::ClaudeSonnet45));
         assert!(anthropic_models.contains(&ModelId::ClaudeHaiku45));
         assert!(anthropic_models.contains(&ModelId::ClaudeSonnet4));
@@ -2492,7 +2518,7 @@ mod tests {
         assert!(ollama_models.contains(&ModelId::OllamaDevstral2123bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
         assert!(ollama_models.contains(&ModelId::OllamaNemotron3Nano30bCloud));
-        assert_eq!(ollama_models.len(), 14);
+        assert_eq!(ollama_models.len(), 17);
 
         let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
         assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));

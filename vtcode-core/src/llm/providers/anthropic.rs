@@ -252,6 +252,14 @@ impl AnthropicProvider {
             // Add advanced-tool-use beta header for tool search
             pieces.push("advanced-tool-use-2025-11-20".to_owned());
         }
+        // Add 64k output beta header for all models to support higher limits
+        pieces.push("output-64k-2025-02-19".to_owned());
+        if self.model == models::anthropic::CLAUDE_SONNET_4_5 
+            || self.model == models::anthropic::CLAUDE_SONNET_4_5_20250929 
+        {
+            // Add 1M context beta header for Sonnet 4.5
+            pieces.push("context-1m-2025-08-07".to_owned());
+        }
         if pieces.is_empty() {
             None
         } else {
@@ -1007,6 +1015,7 @@ impl AnthropicProvider {
             "max_tokens" => FinishReason::Length,
             "stop_sequence" => FinishReason::Stop,
             "tool_use" => FinishReason::ToolCalls,
+            "pause_turn" => FinishReason::Pause,
             other => FinishReason::Error(other.to_string()),
         };
 
@@ -1115,13 +1124,22 @@ impl LLMProvider for AnthropicProvider {
             model
         };
 
-        // Structured outputs are available for Claude 4.5 models and their aliases
+        // Structured outputs are available for Claude 4 and Claude 4.5 models
+        // Also enable via tool-forcing for capable Claude 3.x models
         requested == models::anthropic::CLAUDE_SONNET_4_5
             || requested == models::anthropic::CLAUDE_SONNET_4_5_20250929
+            || requested == models::anthropic::CLAUDE_OPUS_4_5
+            || requested == models::anthropic::CLAUDE_OPUS_4_5_20251101
             || requested == models::anthropic::CLAUDE_OPUS_4_1
             || requested == models::anthropic::CLAUDE_OPUS_4_1_20250805
             || requested == models::anthropic::CLAUDE_HAIKU_4_5
             || requested == models::anthropic::CLAUDE_HAIKU_4_5_20251001
+            || requested == models::anthropic::CLAUDE_SONNET_4_0
+            || requested == models::anthropic::CLAUDE_SONNET_4_20250514
+            || requested == models::anthropic::CLAUDE_OPUS_4_0
+            || requested == models::anthropic::CLAUDE_OPUS_4_20250514
+            || requested.contains("claude-3-7-sonnet")
+            || requested.contains("claude-3-5-sonnet")
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -1229,6 +1247,27 @@ impl LLMProvider for AnthropicProvider {
             && self.supports_structured_output(&request.model)
         {
             self.validate_anthropic_schema(schema)?;
+        }
+
+        // Validate max_tokens vs budget_tokens for thinking (non-interleaved)
+        // Note: Interleaved thinking allows budget_tokens > max_tokens, but we keep a reasonable check
+        // unless interleaved beta is explicitly disabled (which it isn't in our current setup).
+        if let Some(_reasoning_effort) = request.reasoning_effort {
+            let budget = self.anthropic_config.interleaved_thinking_budget_tokens;
+            let max_tokens = request.max_tokens.unwrap_or(4096);
+            if budget >= max_tokens && !self.supports_reasoning_effort(&request.model) {
+                let formatted_error = error_display::format_llm_error(
+                    "Anthropic",
+                    &format!(
+                        "The value of max_tokens ({}) must be strictly greater than budget_tokens ({}) when extended thinking is enabled without interleaved-thinking support.",
+                        max_tokens, budget
+                    ),
+                );
+                return Err(LLMError::InvalidRequest {
+                    message: formatted_error,
+                    metadata: None,
+                });
+            }
         }
 
         for message in &request.messages {

@@ -1425,6 +1425,7 @@ pub enum FinishReason {
     Length,
     ToolCalls,
     ContentFilter,
+    Pause,
     Error(String),
 }
 
