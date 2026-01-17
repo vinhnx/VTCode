@@ -31,6 +31,7 @@ Complete analysis and implementation guide for adopting OpenAI Codex's conversat
 - **[MCP_INTEGRATION_GUIDE.md](./MCP_INTEGRATION_GUIDE.md)** - Model Context Protocol integration
 - **[MCP_IMPROVEMENTS.md](./MCP_IMPROVEMENTS.md)** - Planned MCP enhancements
 - **[MCP_ROADMAP.md](./MCP_ROADMAP.md)** - MCP implementation roadmap
+- **[anthropic-api.md](./anthropic-api.md)** - Anthropic API compatibility server
 
 ### Configuration
 - **[config/CONFIGURATION_PRECEDENCE.md](./config/CONFIGURATION_PRECEDENCE.md)** - Config loading order
