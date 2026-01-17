@@ -3037,6 +3037,7 @@ impl LLMClient for OpenAIProvider {
             model: request_model,
             usage: response.usage.map(crate::llm::providers::common::convert_usage_to_llm_types),
             reasoning: response.reasoning,
+            reasoning_details: response.reasoning_details,
             request_id: response.request_id,
             organization_id: response.organization_id,
         })

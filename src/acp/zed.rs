@@ -514,7 +514,10 @@ impl ZedAgent {
         match finish {
             FinishReason::Stop | FinishReason::ToolCalls => acp::StopReason::EndTurn,
             FinishReason::Length => acp::StopReason::MaxTokens,
-            FinishReason::ContentFilter | FinishReason::Error(_) => acp::StopReason::Refusal,
+            FinishReason::ContentFilter | FinishReason::Refusal | FinishReason::Error(_) => {
+                acp::StopReason::Refusal
+            }
+            FinishReason::Pause => acp::StopReason::EndTurn, // Map Pause to EndTurn as a fallback for ACP
         }
     }
 

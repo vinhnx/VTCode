@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-01-18T00:30:04.405243",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-5",
+  "summary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 2
+  },
+  "results": [
+    {
+      "id": "mini_safety",
+      "error": "Error: Provider error: \u001b[38;2;217;154;78mAnthropic\u001b[0m \u001b[1m\u001b[38;2;255;138;138mYour credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits. (HTTP 400 Bad Request)\u001b[0m\n",
+      "passed": false
+    },
+    {
+      "id": "mini_logic",
+      "error": "Error: Provider error: \u001b[38;2;217;154;78mAnthropic\u001b[0m \u001b[1m\u001b[38;2;255;138;138mYour credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits. (HTTP 400 Bad Request)\u001b[0m\n",
+      "passed": false
+    }
+  ]
+}

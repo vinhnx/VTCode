@@ -26,7 +26,10 @@ mod workspace_trust;
 async fn main() -> std::process::ExitCode {
     match run().await {
         Ok(_) => std::process::ExitCode::SUCCESS,
-        Err(_) => std::process::ExitCode::FAILURE,
+        Err(e) => {
+            eprintln!("Error: {:?}", e);
+            std::process::ExitCode::FAILURE
+        }
     }
 }
 

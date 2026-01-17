@@ -16,14 +16,7 @@ pub mod analyze;
 pub mod skills;
 pub mod update;
 
-#[allow(dead_code)]
-#[derive(Default)]
-pub struct AskCommandOptions {
-    pub output_format: Option<vtcode_core::cli::args::AskOutputFormat>,
-    pub allowed_tools: Vec<String>,
-    pub disallowed_tools: Vec<String>,
-    pub skip_confirmations: bool,
-}
+pub use vtcode_core::cli::args::AskCommandOptions;
 
 #[allow(dead_code)]
 pub struct ExecCommandOptions {
@@ -266,7 +259,7 @@ pub async fn handle_ask_single_command(
     } else {
         vec![]
     };
-    vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec).await
+    vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec, _options).await
 }
 
 pub async fn handle_chat_command(

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Backend kind for LLM providers
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BackendKind {
     Gemini,
     OpenAI,
@@ -22,6 +22,7 @@ pub struct LLMResponse {
     pub model: String,
     pub usage: Option<Usage>,
     pub reasoning: Option<String>,
+    pub reasoning_details: Option<Vec<serde_json::Value>>,
     pub request_id: Option<String>,
     pub organization_id: Option<String>,
 }
