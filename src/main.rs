@@ -47,7 +47,7 @@ async fn run() -> Result<()> {
             std::env::set_var("MallocCheckHeapSleep", "0");
             std::env::set_var("MallocErrorAbort", "0");
             std::env::set_var("MallocCorruptionAbort", "0");
-            std::env::set_var("MallocStackLoggingNoCompact", "0");
+            std::env::set_var("MallocCheckHeapNoCompact", "0");
         }
     }
 
