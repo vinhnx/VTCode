@@ -1,6 +1,6 @@
 {
   "name": "@vinhnx/vtcode",
-  "version": "0.60.8\nversion = ",
+  "version": "0.65.0\nversion = ",
   "description": "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers",
   "keywords": [
     "ai",
