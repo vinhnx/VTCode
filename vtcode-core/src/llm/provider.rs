@@ -110,6 +110,32 @@ pub struct LLMRequest {
 
     /// Optional character name for reinforcement
     pub character_name: Option<String>,
+
+    /// Optional coding agent specific settings
+    pub coding_agent_settings: Option<CodingAgentSettings>,
+}
+
+/// Settings to refine model behavior for coding agent tasks
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CodingAgentSettings {
+    /// Encourage the model to use XML tags for structured responses
+    pub force_xml_tags: bool,
+    /// Automatically prefill with <thought> to encourage reasoning
+    pub prefill_thought: bool,
+    /// Explicitly allow the model to say "I don't know" or "I am unsure"
+    pub allow_uncertainty: bool,
+    /// Enforce strict grounding to provided documents
+    pub strict_grounding: bool,
+    /// Optimize for long context by hoisting large messages and grounding in quotes
+    pub long_context_optimization: bool,
+    /// Wrap multiple file contexts in structured XML tags
+    pub use_xml_document_format: bool,
+    /// Inject instructions to find quotes before carrying out the task
+    pub force_quote_grounding: bool,
+    /// Optional specialized role for Claude (e.g., "Senior Software Architect")
+    pub role_specialization: Option<String>,
+    /// Enforce the use of <thinking> and <answer> tags for manual chain-of-thought
+    pub enforce_structured_thought: bool,
 }
 
 /// Tool choice configuration that works across different providers
