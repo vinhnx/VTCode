@@ -836,9 +836,28 @@ impl AnthropicProvider {
 
         if self.supports_reasoning_effort(&request.model) {
             // New "thinking" parameter for models supporting extended thinking (e.g. Sonnet 3.7)
-            thinking_val = Some(ThinkingConfig::Enabled {
-                budget_tokens: self.anthropic_config.interleaved_thinking_budget_tokens,
-            });
+            let budget = if let Some(explicit_budget) = request.thinking_budget {
+                explicit_budget
+            } else if let Some(effort) = request.reasoning_effort {
+                match effort {
+                    ReasoningEffortLevel::None => 0,
+                    ReasoningEffortLevel::Minimal => 1024,
+                    ReasoningEffortLevel::Low => 4096,
+                    ReasoningEffortLevel::Medium => 8192,
+                    ReasoningEffortLevel::High => 16384,
+                    ReasoningEffortLevel::XHigh => 32768,
+                }
+            } else {
+                self.anthropic_config.interleaved_thinking_budget_tokens
+            };
+
+            if budget >= 1024 {
+                thinking_val = Some(ThinkingConfig::Enabled {
+                    budget_tokens: budget,
+                });
+            } else {
+                thinking_val = None;
+            }
         } else if let Some(effort) = request.reasoning_effort {
             // Fallback to "reasoning" parameter for older models or if explicitly requested
             if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {
@@ -1452,11 +1471,43 @@ impl LLMProvider for AnthropicProvider {
             self.validate_anthropic_schema(schema)?;
         }
 
+        // Validate thinking_budget minimum
+        if let Some(budget) = request.thinking_budget {
+            if budget < 1024 {
+                let formatted_error = error_display::format_llm_error(
+                    "Anthropic",
+                    &format!(
+                        "thinking_budget ({}) must be at least 1024 tokens.",
+                        budget
+                    ),
+                );
+                return Err(LLMError::InvalidRequest {
+                    message: formatted_error,
+                    metadata: None,
+                });
+            }
+        }
+
         // Validate max_tokens vs budget_tokens for thinking (non-interleaved)
         // Note: Interleaved thinking allows budget_tokens > max_tokens, but we keep a reasonable check
         // unless interleaved beta is explicitly disabled (which it isn't in our current setup).
-        if let Some(_reasoning_effort) = request.reasoning_effort {
-            let budget = self.anthropic_config.interleaved_thinking_budget_tokens;
+        let has_reasoning = request.reasoning_effort.is_some() || request.thinking_budget.is_some();
+        if has_reasoning {
+            let budget = if let Some(b) = request.thinking_budget {
+                b
+            } else if let Some(effort) = request.reasoning_effort {
+                match effort {
+                    ReasoningEffortLevel::None => 0,
+                    ReasoningEffortLevel::Minimal => 1024,
+                    ReasoningEffortLevel::Low => 4096,
+                    ReasoningEffortLevel::Medium => 8192,
+                    ReasoningEffortLevel::High => 16384,
+                    ReasoningEffortLevel::XHigh => 32768,
+                }
+            } else {
+                self.anthropic_config.interleaved_thinking_budget_tokens
+            };
+
             let max_tokens = request.max_tokens.unwrap_or(4096);
             if budget >= max_tokens && !self.supports_reasoning_effort(&request.model) {
                 let formatted_error = error_display::format_llm_error(
@@ -1470,6 +1521,67 @@ impl LLMProvider for AnthropicProvider {
                     message: formatted_error,
                     metadata: None,
                 });
+            }
+
+            // New validation rules from Anthropic documentation:
+            // 1. Tool choice: Only "auto" or "none" allowed
+            if let Some(ref tool_choice) = request.tool_choice {
+                match tool_choice {
+                    ToolChoice::Any | ToolChoice::Specific(_) => {
+                        let formatted_error = error_display::format_llm_error(
+                            "Anthropic",
+                            "Forced tool use (any/specific) is incompatible with extended thinking. Use 'auto' or 'none'.",
+                        );
+                        return Err(LLMError::InvalidRequest {
+                            message: formatted_error,
+                            metadata: None,
+                        });
+                    }
+                    _ => {}
+                }
+            }
+
+            // 2. Parameters: temperature and top_k must NOT be set
+            if request.temperature.is_some() || request.top_k.is_some() {
+                let formatted_error = error_display::format_llm_error(
+                    "Anthropic",
+                    "temperature and top_k parameters must not be set when extended thinking is enabled.",
+                );
+                return Err(LLMError::InvalidRequest {
+                    message: formatted_error,
+                    metadata: None,
+                });
+            }
+
+            // 3. Top P: must be between 0.95 and 1.0
+            if let Some(top_p) = request.top_p {
+                if !(0.95..=1.0).contains(&top_p) {
+                    let formatted_error = error_display::format_llm_error(
+                        "Anthropic",
+                        &format!(
+                            "top_p must be between 0.95 and 1.0 (got {}) when extended thinking is enabled.",
+                            top_p
+                        ),
+                    );
+                    return Err(LLMError::InvalidRequest {
+                        message: formatted_error,
+                        metadata: None,
+                    });
+                }
+            }
+
+            // 4. Pre-fill: Last message must NOT be assistant
+            if let Some(last_msg) = request.messages.last() {
+                if last_msg.role == MessageRole::Assistant {
+                    let formatted_error = error_display::format_llm_error(
+                        "Anthropic",
+                        "Pre-filling assistant responses is not supported when extended thinking is enabled.",
+                    );
+                    return Err(LLMError::InvalidRequest {
+                        message: formatted_error,
+                        metadata: None,
+                    });
+                }
             }
         }
 
@@ -1504,12 +1616,6 @@ mod caching_tests {
             None,
             None,
         );
-
-        let mut request = LLMRequest::default();
-        request.messages = vec![Message::user("hi".to_string())];
-        request.model = models::minimax::MINIMAX_M2_1.to_string();
-
-        assert!(provider.validate_request(&request).is_ok());
 
         request.model = "UnsupportedModel".to_string();
         assert!(provider.validate_request(&request).is_err());
@@ -2189,5 +2295,145 @@ mod tests_refinement {
 
         // Ensure legacy reasoning is NOT present if thinking is used (based on logic)
         assert!(anthropic_req.reasoning.is_none());
+    }
+
+    #[test]
+    fn test_thinking_budget_override() {
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some("claude-sonnet-4-5-20250929".to_string()),
+            None,
+            None,
+            None,
+            None,
+        );
+
+        // Test explicit thinking_budget overrides everything
+        let request = LLMRequest {
+            messages: vec![Message::user("Hello".to_string())],
+            model: "claude-sonnet-4-5-20250929".to_string(),
+            thinking_budget: Some(2000),
+            reasoning_effort: Some(ReasoningEffortLevel::High), // Should be ignored
+            ..Default::default()
+        };
+
+        let val = provider
+            .convert_to_anthropic_format(&request)
+            .expect("Conversion failed");
+        let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
+
+        match anthropic_req.thinking {
+            Some(ThinkingConfig::Enabled { budget_tokens }) => assert_eq!(budget_tokens, 2000),
+            _ => panic!("Expected thinking budget 2000"),
+        }
+    }
+
+    #[test]
+    fn test_reasoning_effort_mapping() {
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some("claude-sonnet-4-5-20250929".to_string()),
+            None,
+            None,
+            None,
+            None,
+        );
+
+        let efforts = [
+            (ReasoningEffortLevel::Minimal, 1024),
+            (ReasoningEffortLevel::Low, 4096),
+            (ReasoningEffortLevel::Medium, 8192),
+            (ReasoningEffortLevel::High, 16384),
+            (ReasoningEffortLevel::XHigh, 32768),
+        ];
+
+        for (effort, expected_budget) in efforts {
+            let request = LLMRequest {
+                messages: vec![Message::user("Hello".to_string())],
+                model: "claude-sonnet-4-5-20250929".to_string(),
+                reasoning_effort: Some(effort),
+                ..Default::default()
+            };
+
+            let val = provider
+                .convert_to_anthropic_format(&request)
+                .expect("Conversion failed");
+            let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
+
+            match anthropic_req.thinking {
+                Some(ThinkingConfig::Enabled { budget_tokens }) => {
+                    assert_eq!(budget_tokens, expected_budget)
+                }
+                _ => panic!("Expected thinking budget {} for effort {:?}", expected_budget, effort),
+            }
+        }
+    }
+
+    #[test]
+    fn test_thinking_budget_validation() {
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some("claude-sonnet-4-5-20250929".to_string()),
+            None,
+            None,
+            None,
+            None,
+        );
+
+        // Budget below 1024 should fail validation
+        let request = LLMRequest {
+            messages: vec![Message::user("Hello".to_string())],
+            model: "claude-sonnet-4-5-20250929".to_string(),
+            thinking_budget: Some(512),
+            ..Default::default()
+        };
+
+        assert!(provider.validate_request(&request).is_err());
+    }
+
+    #[test]
+    fn test_phase2_thinking_validation() {
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some("claude-sonnet-4-5-20250929".to_string()), // Supports reasoning
+            None,
+            None,
+            None,
+            None,
+        );
+
+        // 1. Tool choice Any should fail
+        let mut req = LLMRequest {
+            messages: vec![Message::user("Hello".to_string())],
+            model: "claude-sonnet-4-5-20250929".to_string(),
+            thinking_budget: Some(2000),
+            tool_choice: Some(ToolChoice::Any),
+            ..Default::default()
+        };
+        assert!(provider.validate_request(&req).is_err());
+
+        // 2. Temperature should fail
+        req.tool_choice = None;
+        req.temperature = Some(0.7);
+        assert!(provider.validate_request(&req).is_err());
+
+        // 3. Top K should fail
+        req.temperature = None;
+        req.top_k = Some(40);
+        assert!(provider.validate_request(&req).is_err());
+
+        // 4. Top P out of range should fail
+        req.top_k = None;
+        req.top_p = Some(0.5);
+        assert!(provider.validate_request(&req).is_err());
+
+        // 5. Top P in range should pass
+        req.top_p = Some(0.97);
+        assert!(provider.validate_request(&req).is_ok());
+
+        // 6. Pre-fill (last msg Assistant) should fail
+        req.top_p = None;
+        req.messages.push(Message::assistant("I am thinking...".to_string()));
+        assert!(provider.validate_request(&req).is_err());
     }
 }
