@@ -3,6 +3,28 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.65.5] - 2026-01-19
+
+
+### Features
+    - feat: add effort parameter for Claude Opus 4.5 to control token usage
+    - feat: implement autonomous mode with reduced HITL prompts and update related configurations
+    - feat: enhance output spooling for read_file and unified_file with raw content extraction
+    - feat: enhance context awareness with token usage tracking and context window size
+
+
+### Bug Fixes
+    - fix: prevent duplicate reasoning output during finalization
+
+
+### Documentation
+    - docs: update changelog for v0.65.4 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.65.4 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.65.3 version =  [skip ci]
 # [Version 0.65.4] - 2026-01-18
 
 
