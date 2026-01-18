@@ -1,6 +1,7 @@
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::state::SessionStats;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::Instant;
 use tokio::sync::Notify;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -98,6 +99,8 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
+    pub error_recovery:
+        &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
 }
 
 impl<'a> TurnProcessingContext<'a> {
@@ -138,6 +141,7 @@ impl<'a> TurnProcessingContext<'a> {
             rate_limiter: ctx.rate_limiter,
             telemetry: ctx.telemetry,
             autonomous_executor: ctx.autonomous_executor,
+            error_recovery: ctx.error_recovery,
         }
     }
 }

@@ -49,6 +49,9 @@ use crate::hooks::lifecycle::LifecycleHookEngine;
 use super::utils::{render_hook_messages, safe_force_redraw};
 use crate::agent::runloop::unified::display::ensure_turn_bottom_gap;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
+use crate::agent::runloop::unified::turn::recovery_flow::{
+    RecoveryAction, build_recovery_prompt_from_diagnostics, parse_recovery_response,
+};
 
 fn normalize_signature_args(tool_name: &str, args: &serde_json::Value) -> serde_json::Value {
     let mut normalized = match args.as_object() {
@@ -97,6 +100,26 @@ fn signature_key_for(tool_name: &str, args: &serde_json::Value) -> String {
     let normalized = normalize_signature_args(tool_name, args);
     let args_str = serde_json::to_string(&normalized).unwrap_or_else(|_| args.to_string());
     format!("{}:{}", tool_name, args_str)
+}
+
+fn classify_error_type(error_message: &str) -> vtcode_core::core::agent::error_recovery::ErrorType {
+    let error_lower = error_message.to_lowercase();
+    if error_lower.contains("timeout") || error_lower.contains("timed out") {
+        vtcode_core::core::agent::error_recovery::ErrorType::Timeout
+    } else if error_lower.contains("permission") || error_lower.contains("denied") {
+        vtcode_core::core::agent::error_recovery::ErrorType::PermissionDenied
+    } else if error_lower.contains("invalid")
+        || error_lower.contains("argument")
+        || error_lower.contains("missing")
+    {
+        vtcode_core::core::agent::error_recovery::ErrorType::InvalidArguments
+    } else if error_lower.contains("not found") || error_lower.contains("no such") {
+        vtcode_core::core::agent::error_recovery::ErrorType::ResourceNotFound
+    } else if error_lower.contains("circuit") || error_lower.contains("breaker") {
+        vtcode_core::core::agent::error_recovery::ErrorType::CircuitBreaker
+    } else {
+        vtcode_core::core::agent::error_recovery::ErrorType::Other
+    }
 }
 
 pub async fn apply_turn_outcome(
@@ -348,6 +371,7 @@ pub(crate) async fn handle_tool_calls(
                             rate_limiter: ctx.rate_limiter,
                             telemetry: ctx.telemetry,
                             autonomous_executor: ctx.autonomous_executor,
+                            error_recovery: ctx.error_recovery,
                         },
                         call_id,
                         &name,
@@ -628,6 +652,7 @@ pub(crate) async fn handle_tool_call(
                     rate_limiter: ctx.rate_limiter,
                     telemetry: ctx.telemetry,
                     autonomous_executor: ctx.autonomous_executor,
+                    error_recovery: ctx.error_recovery,
                 },
                 tool_call.id.clone(),
                 tool_name,
@@ -1796,6 +1821,7 @@ pub(crate) async fn handle_text_response(
                         rate_limiter: params.ctx.rate_limiter,
                         telemetry: params.ctx.telemetry,
                         autonomous_executor: params.ctx.autonomous_executor,
+                        error_recovery: params.ctx.error_recovery,
                     },
                     tool_call.id.clone(),
                     call_tool_name,

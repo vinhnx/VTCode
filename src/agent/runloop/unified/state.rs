@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
+use vtcode_core::core::agent::error_recovery::ErrorRecoveryState;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::ui::tui::EditingMode;
 
@@ -22,6 +23,8 @@ pub(crate) struct SessionStats {
     pub tool_health_tracker: Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
+    /// Error recovery state for circuit breaker recovery flow
+    pub error_recovery: Arc<RwLock<ErrorRecoveryState>>,
 }
 
 impl SessionStats {

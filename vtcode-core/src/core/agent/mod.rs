@@ -8,6 +8,7 @@ pub mod config;
 pub mod conversation;
 pub mod core;
 pub mod display;
+pub mod error_recovery;
 pub mod events;
 pub mod examples;
 

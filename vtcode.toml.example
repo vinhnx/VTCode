@@ -152,6 +152,24 @@ extra_directories = []
 # Maximum file size for custom prompts (in kilobytes)
 max_file_size_kb = 64
 
+# Circuit breaker configuration for resilient tool execution
+# Controls when the agent should pause and ask for user guidance due to repeated failures
+[agent.circuit_breaker]
+# Enable circuit breaker functionality
+enabled = true
+
+# Number of consecutive failures before opening circuit
+failure_threshold = 5
+
+# Pause and ask user when circuit opens (vs auto-backoff only)
+pause_on_open = true
+
+# Number of open circuits before triggering pause
+max_open_circuits = 3
+
+# Cooldown period between recovery prompts (seconds)
+recovery_cooldown = 60
+
 [agent.custom_api_keys]
 # Moonshot AI API key (for specific provider access)
 moonshot = "sk-sDj3JUXDbfARCYKNL4q7iGWRtWuhL1M4O6zzgtDpN3Yxt9EA"
