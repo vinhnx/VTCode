@@ -266,6 +266,7 @@ impl AgentRunner {
             checkpointing_storage_dir: checkpoint_dir,
             checkpointing_max_snapshots: cfg.agent.checkpointing.max_snapshots,
             checkpointing_max_age_days: cfg.agent.checkpointing.max_age_days,
+            max_conversation_turns: 50,
         }
     }
 

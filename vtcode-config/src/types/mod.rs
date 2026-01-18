@@ -487,6 +487,7 @@ pub struct AgentConfig {
     pub checkpointing_storage_dir: Option<PathBuf>,
     pub checkpointing_max_snapshots: usize,
     pub checkpointing_max_age_days: Option<u64>,
+    pub max_conversation_turns: usize,
 }
 
 /// Workshop agent capability levels

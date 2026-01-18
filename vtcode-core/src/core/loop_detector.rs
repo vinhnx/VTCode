@@ -58,6 +58,7 @@ pub struct LoopDetector {
     tool_counts: HashMap<String, usize>,
     last_warning: Option<Instant>,
     max_identical_call_limit: Option<usize>,
+    custom_limits: HashMap<String, usize>,
 }
 
 impl LoopDetector {
@@ -72,7 +73,14 @@ impl LoopDetector {
             tool_counts: HashMap::new(),
             last_warning: None,
             max_identical_call_limit: normalized_limit,
+            custom_limits: HashMap::new(),
         }
+    }
+    
+    /// Set a custom limit for a specific tool.
+    /// This overrides the default category-based limits.
+    pub fn set_tool_limit(&mut self, tool_name: &str, limit: usize) {
+        self.custom_limits.insert(tool_name.to_string(), limit);
     }
 
     pub fn record_call(&mut self, tool_name: &str, args: &serde_json::Value) -> Option<String> {
@@ -102,7 +110,7 @@ impl LoopDetector {
 
                 if identical {
                     // Escalate to hard limit so callers halt immediately.
-                    let hard_limit = Self::get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
+                    let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
                     self.tool_counts.insert(tool_name.to_string(), hard_limit);
 
                     return Some(format!(
@@ -140,7 +148,7 @@ impl LoopDetector {
         let count = self.tool_counts.get(tool_name).copied().unwrap_or(0);
 
         // Determine tool-specific limits
-        let max_calls = Self::get_limit_for_tool(tool_name);
+        let max_calls = self.get_limit_for_tool(tool_name);
 
         // Hard limit check - immediate halt
         let hard_limit = max_calls * HARD_LIMIT_MULTIPLIER;
@@ -179,12 +187,7 @@ impl LoopDetector {
     /// Check if hard limit is exceeded (should halt execution)
     pub fn is_hard_limit_exceeded(&self, tool_name: &str) -> bool {
         let count = self.tool_counts.get(tool_name).copied().unwrap_or(0);
-        let max_calls = match tool_name {
-            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => MAX_READONLY_TOOL_CALLS,
-            tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
-            tools::RUN_PTY_CMD | "shell" => MAX_COMMAND_TOOL_CALLS,
-            _ => MAX_OTHER_TOOL_CALLS,
-        };
+        let max_calls = self.get_limit_for_tool(tool_name);
         count >= max_calls * HARD_LIMIT_MULTIPLIER
     }
 
@@ -251,9 +254,14 @@ impl LoopDetector {
         self.last_warning = None;
     }
 
-    /// Get limit for a specific tool (extracted to static method for efficiency)
+    /// Get limit for a specific tool.
+    /// Checks custom limits first, then falls back to category defaults.
     #[inline]
-    fn get_limit_for_tool(tool_name: &str) -> usize {
+    fn get_limit_for_tool(&self, tool_name: &str) -> usize {
+        if let Some(&limit) = self.custom_limits.get(tool_name) {
+            return limit;
+        }
+
         match tool_name {
             tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => MAX_READONLY_TOOL_CALLS,
             tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,

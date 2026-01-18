@@ -140,5 +140,34 @@ pub(super) async fn finalize_session(
         std::env::remove_var("VTCODE_TUI_MODE");
     }
 
+    // Phase 4 Telemetry: Report Resilience Metrics
+    let open_circuits = session_stats.circuit_breaker.get_open_circuits();
+    if !open_circuits.is_empty() {
+        renderer.line(MessageStyle::Warning, &format!("Open Circuit Breakers ({}):", open_circuits.len()))?;
+        for tool in &open_circuits {
+            renderer.line(MessageStyle::Warning, &format!("  - {}", tool))?;
+        }
+        renderer.line_if_not_empty(MessageStyle::Output)?;
+    }
+
+    let all_stats = session_stats.tool_health_tracker.get_all_tool_stats();
+    let mut unhealthy_tools: Vec<_> = all_stats.iter()
+        .filter(|(name, _)| !session_stats.tool_health_tracker.is_healthy(name))
+        .collect();
+    
+    // Sort for stable output
+    unhealthy_tools.sort_by(|a, b| a.0.cmp(b.0));
+
+    if !unhealthy_tools.is_empty() {
+        renderer.line(MessageStyle::Warning, &format!("Unhealthy Tools ({}):", unhealthy_tools.len()))?;
+        for (name, _) in unhealthy_tools {
+            let (_, reason) = session_stats.tool_health_tracker.check_health(name);
+            if let Some(r) = reason {
+                renderer.line(MessageStyle::Warning, &format!("  - {}: {}", name, r))?;
+            }
+        }
+        renderer.line_if_not_empty(MessageStyle::Output)?;
+    }
+
     Ok(())
 }

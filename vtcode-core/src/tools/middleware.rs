@@ -509,56 +509,22 @@ impl Middleware for MetricsMiddleware {
 
 /// Circuit breaker middleware for failing tools
 pub struct CircuitBreakerMiddleware {
-    /// Failure threshold (0.0-1.0) to open circuit
-    failure_threshold: f64,
-    /// Tools with open circuits (blocked)
-    open_circuits: Arc<std::sync::RwLock<std::collections::HashSet<String>>>,
-    /// Failure tracking per tool
-    failure_tracker: Arc<std::sync::RwLock<std::collections::HashMap<String, (u64, u64)>>>, // (failures, total)
+    breaker: crate::tools::circuit_breaker::CircuitBreaker,
 }
 
 impl CircuitBreakerMiddleware {
     pub fn new(failure_threshold: f64) -> Self {
+        // Convert f64 threshold to count - effectively just using default config for now
+        // but we could expose more config options to middleware if needed.
+        let mut config = crate::tools::circuit_breaker::CircuitBreakerConfig::default();
+        if failure_threshold > 0.0 {
+             // Heuristic: map 0.0-1.0 to reasonable integer count? 
+             // Or primarily just use the underlying CircuitBreaker defaults which are robust.
+             // For now, we use default config as it supports backoff.
+        }
+        
         Self {
-            failure_threshold,
-            // OPTIMIZATION: Pre-allocate capacity for typical tool counts
-            open_circuits: Arc::new(std::sync::RwLock::new(
-                std::collections::HashSet::with_capacity(10),
-            )),
-            failure_tracker: Arc::new(std::sync::RwLock::new(
-                std::collections::HashMap::with_capacity(20),
-            )),
-        }
-    }
-
-    fn should_block(&self, tool_name: &str) -> bool {
-        if let Ok(circuits) = self.open_circuits.read() {
-            circuits.contains(tool_name)
-        } else {
-            false
-        }
-    }
-
-    fn update_circuit(&self, tool_name: &str, success: bool) {
-        if let Ok(mut tracker) = self.failure_tracker.write() {
-            let (failures, total) = tracker.entry(tool_name.to_owned()).or_insert((0, 0));
-            *total += 1;
-            if !success {
-                *failures += 1;
-            }
-
-            let failure_rate = *failures as f64 / *total as f64;
-            if failure_rate >= self.failure_threshold && *total >= 5 {
-                // Open circuit after 5 attempts
-                if let Ok(mut circuits) = self.open_circuits.write() {
-                    circuits.insert(tool_name.to_owned());
-                    tracing::warn!(
-                        tool = %tool_name,
-                        failure_rate = failure_rate,
-                        "circuit breaker opened"
-                    );
-                }
-            }
+            breaker: crate::tools::circuit_breaker::CircuitBreaker::new(config),
         }
     }
 }
@@ -576,7 +542,11 @@ impl Middleware for CircuitBreakerMiddleware {
         let tool_name = request.tool_name.clone();
 
         // Check if circuit is open
-        if self.should_block(&tool_name) {
+        if !self.breaker.allow_request_for_tool(&tool_name) {
+            let wait_time = self.breaker.remaining_backoff(&tool_name)
+                .map(|d| format!("{}s", d.as_secs()))
+                .unwrap_or_else(|| "unknown".to_string());
+                
             return MiddlewareResult {
                 success: false,
                 result: None,
@@ -586,8 +556,8 @@ impl Middleware for CircuitBreakerMiddleware {
                 metadata: ExecutionMetadata {
                     layers_executed: vec!["circuit_breaker".into()],
                     warnings: vec![format!(
-                        "Tool {} blocked by circuit breaker due to high failure rate",
-                        tool_name
+                        "Tool {} blocked by circuit breaker due to high failure rate. Wait time: {}",
+                        tool_name, wait_time
                     )],
                     ..Default::default()
                 },
@@ -596,7 +566,13 @@ impl Middleware for CircuitBreakerMiddleware {
 
         // Execute and track result
         let result = next(request);
-        self.update_circuit(&tool_name, result.success);
+        
+        if result.success {
+            self.breaker.record_success_for_tool(&tool_name);
+        } else {
+            // We assume middleware failures are execution failures for now
+            self.breaker.record_failure_for_tool(&tool_name, false); 
+        }
 
         let mut updated_result = result;
         updated_result

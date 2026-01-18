@@ -30,6 +30,7 @@ pub enum MessageStyle {
     McpStatus,
     User,
     Reasoning,
+    Warning,
 }
 
 impl MessageStyle {
@@ -47,6 +48,7 @@ impl MessageStyle {
             Self::McpStatus => styles.mcp,
             Self::User => styles.user,
             Self::Reasoning => styles.reasoning,
+            Self::Warning => styles.error,
         }
     }
 
@@ -126,6 +128,7 @@ impl AnsiRenderer {
             MessageStyle::Status | MessageStyle::McpStatus => InlineMessageKind::Info,
             MessageStyle::User => InlineMessageKind::User,
             MessageStyle::Reasoning => InlineMessageKind::Policy,
+            MessageStyle::Warning => InlineMessageKind::Error,
         }
     }
 

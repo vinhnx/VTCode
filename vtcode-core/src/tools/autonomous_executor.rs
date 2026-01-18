@@ -117,6 +117,21 @@ impl AutonomousExecutor {
         self.workspace_dir = Some(dir);
     }
 
+    /// Configure loop detection thresholds
+    pub async fn configure_loop_limits(&self, limits: &HashMap<String, usize>) {
+        if let Ok(mut detector) = self.loop_detector.write() {
+            for (tool, limit) in limits {
+                detector.set_tool_limit(tool, *limit);
+            }
+        } else {
+             tracing::warn!("Failed to acquire loop detector lock for configuration");
+        }
+    }
+
+    pub fn loop_detector(&self) -> Arc<RwLock<LoopDetector>> {
+        self.loop_detector.clone()
+    }
+
     /// Determine execution policy for a tool
     pub fn get_policy(&self, tool_name: &str, args: &Value) -> AutonomousPolicy {
         // Check for destructive patterns in arguments

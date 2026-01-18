@@ -238,6 +238,22 @@ pub(crate) async fn run_single_agent_loop_unified(
                 checkpoint_manager: checkpoint_manager.as_ref(),
             };
 
+            // Phase 3 Optimization: Session Memory Bounds
+            // Check if we've exceeded the maximum allowed turns/messages
+            // We approximate turns as history/2 for safety
+            if interaction_ctx.conversation_history.len() > interaction_ctx.config.max_conversation_turns * 2 {
+                 // Double check specific turn count if we had it, but history length is the main memory driver
+                 interaction_ctx.renderer.line(
+                    vtcode_core::utils::ansi::MessageStyle::Warning,
+                    &format!(
+                        "Session reached maximum conversation limit ({} turns). Ending session to prevent performance degradation.",
+                        interaction_ctx.config.max_conversation_turns
+                    )
+                )?;
+                session_end_reason = SessionEndReason::Exit;
+                break;
+            }
+
             let mut interaction_state =
                 crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
                     input_status_state: &mut input_status_state,
