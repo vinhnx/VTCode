@@ -3,6 +3,47 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.65.3] - 2026-01-18
+
+
+### Features
+    - feat: Add max_conversation_turns configuration to various components and update tests
+    - feat: Implement autonomous loop detection with TUI warnings, integrate into agent runloop, and add project TODO documentation.
+    - feat: Enhance agent robustness with exponential backoff for circuit breakers, custom tool loop limits, and conversation turn limits.
+    - feat: Implement priority-based adaptive rate limiting, tiered cache eviction, and sliding window tool health tracking.
+    - feat: Update session limit messages to recommend persisting progress via artifacts like task.md/docs.
+    - feat: Dynamically configure conversation message and session turn limits, and remove telemetry from interaction loop parameters.
+    - feat: Implement adaptive rate limiting with priority-based scaling and integrate telemetry for tool usage tracking.
+    - feat: Enhance tool execution with circuit breakers, adaptive rate limiting, and health-based delegation, and introduce session telemetry and dynamic cache capacity management.
+    - feat: introduce dedicated modules for MCP lifecycle, slash command handling, and tool dispatch, and parallelize tool batch execution.
+    - feat: improve code block indentation normalization to handle mixed whitespace and refine markdown table rendering separators.
+    - feat: Add an empirical evaluation framework for measuring LLM performance and link it in the main README.
+    - feat: implement a new evaluation framework with test cases, metrics, and report generation, and update LLM provider integrations to support it.
+    - feat: Introduce coding agent settings to LLM requests to refine model behavior, implementing their application in the Anthropic provider for system prompt adjustments, prefill, message reordering, and XML document handling.
+    - feat: Add prefill and character reinforcement options to LLMRequest, implement Anthropic-specific handling, safety screening, and leak protection.
+    - feat: Add `thinking_budget` to `LLMRequest` and implement Anthropic extended thinking logic and validation.
+    - feat: Implement request and organization IDs for LLM responses and error metadata, enhance Anthropic error handling, and add `Refusal` finish reason.
+    - feat: Implement support for request-specific Anthropic beta headers and update structured output model list.
+    - feat: Add support for new Anthropic Claude 4 and 3.x models, enable new beta features, and refine reasoning parameter validation.
+
+
+### Refactors
+    - refactor: Simplify tracing initialization with unwrap_or_default
+    - refactor: Replace map_or with is_none_or for improved clarity in MCP tool filtering
+    - refactor: Remove unnecessary cloning and assignment of `_updated_snapshot`.
+    - refactor: Inline table row rendering logic, remove duplicate parameters, and clean up the TODO list.
+    - refactor: update reasoning color and style for improved readability and placeholder effect
+
+
+### Documentation
+    - docs: update changelog for v0.65.2 [skip ci]
+    - docs: Add a new document detailing strategies for reducing Anthropic latency and link it from the Anthropic API overview.
+
+
+### Chores
+    - chore: update npm package.json to v0.65.2 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.65.1 version =  [skip ci]
 # [Version 0.65.2] - 2026-01-18
 
 
