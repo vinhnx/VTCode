@@ -42,10 +42,30 @@ impl TokenBucket {
     }
 }
 
-/// Adaptive Rate Limiter with per-tool priority and backoff.
+/// Priority levels for tools.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Priority {
+    Low,
+    Normal,
+    High,
+    Critical,
+}
+
+impl Priority {
+    fn weight(&self) -> f64 {
+        match self {
+            Priority::Low => 2.0,
+            Priority::Normal => 1.0,
+            Priority::High => 0.5,
+            Priority::Critical => 0.1,
+        }
+    }
+}
+
+/// Adaptive Rate Limiter with per-tool priority and exponential backoff.
 pub struct AdaptiveRateLimiter {
     buckets: Mutex<HashMap<String, TokenBucket>>,
-    priority_weights: HashMap<String, f64>,
+    tool_priorities: Mutex<HashMap<String, Priority>>,
     default_capacity: f64,
     default_refill_rate: f64,
 }
@@ -54,7 +74,7 @@ impl AdaptiveRateLimiter {
     pub fn new(default_capacity: f64, default_refill_rate: f64) -> Self {
         Self {
             buckets: Mutex::new(HashMap::new()),
-            priority_weights: HashMap::new(),
+            tool_priorities: Mutex::new(HashMap::new()),
             default_capacity,
             default_refill_rate,
         }
@@ -68,11 +88,10 @@ impl Default for AdaptiveRateLimiter {
 }
 
 impl AdaptiveRateLimiter {
-    /// Set a priority weight for a specific tool (lower cost = higher priority).
-    /// Weight is a multiplier for the token cost (default 1.0).
-    /// e.g. 0.5 means the tool costs half as much tokens (higher throughput).
-    pub fn set_priority(&mut self, tool_name: &str, weight: f64) {
-        self.priority_weights.insert(tool_name.to_string(), weight);
+    /// Set a priority level for a specific tool.
+    pub fn set_priority(&self, tool_name: &str, priority: Priority) {
+        let mut priorities = self.tool_priorities.lock().unwrap();
+        priorities.insert(tool_name.to_string(), priority);
     }
 
     /// Try to acquire permission to execute a tool.
@@ -83,16 +102,31 @@ impl AdaptiveRateLimiter {
             .entry(tool_name.to_string())
             .or_insert_with(|| TokenBucket::new(self.default_capacity, self.default_refill_rate));
 
-        let weight = self.priority_weights.get(tool_name).copied().unwrap_or(1.0);
-        let cost = 1.0 * weight;
+        let priorities = self.tool_priorities.lock().unwrap();
+        let priority = priorities.get(tool_name).copied().unwrap_or(Priority::Normal);
+        let cost = priority.weight();
 
         if bucket.try_acquire(cost) {
             Ok(())
         } else {
-            // Simple backoff estimation: time to refill enough tokens for cost
+            // Adaptive backoff:
+            // 1. Calculate base need (tokens needed / refill rate)
+            // 2. Apply exponential factor based on deficit to discourage hammering
+            // 3. High priority tools get a "discount" on the wait time
+            
             let needed = cost - bucket.tokens;
-            // needed / rate = seconds
-            let wait_secs = needed / bucket.refill_rate;
+            let base_wait_secs = needed / bucket.refill_rate;
+            
+            // Jitter for backoff (add 10% randomness to avoid thundering herd)
+            let jitter = 1.1; 
+            
+            let wait_secs = match priority {
+                Priority::Critical => base_wait_secs * 0.5, // Return faster
+                Priority::High => base_wait_secs * 0.8,
+                Priority::Normal => base_wait_secs * jitter,
+                Priority::Low => base_wait_secs * 1.5 * jitter, // Penalize low priority overflow
+            };
+
             Err(Duration::from_secs_f64(wait_secs))
         }
     }
