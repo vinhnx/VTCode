@@ -435,10 +435,6 @@ impl StreamingReasoningState {
         }
 
         // For inline rendering: stream reasoning like response tokens
-        if !self.started {
-            renderer.inline_with_style(MessageStyle::Reasoning, "Thinking: ")?;
-            self.started = true;
-        }
         renderer.inline_with_style(MessageStyle::Reasoning, delta)?;
         Ok(())
     }

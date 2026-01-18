@@ -97,15 +97,15 @@ impl ThemePalette {
                 fallback_light,
             ],
         );
-        // Reasoning color: Use slightly dimmed text color for readability
+        // Reasoning color: Use text color with dimmed effect for placeholder-like appearance
         let reasoning_color = ensure_contrast(
-            lighten(text_color, 0.05), // Slightly lighter than main text but still readable
+            lighten(text_color, 0.25), // Lighter for placeholder-like appearance
             background,
             MIN_CONTRAST,
-            &[text_color, lighten(primary, 0.1), fallback_light],
+            &[lighten(text_color, 0.15), text_color, fallback_light],
         );
-        // Reasoning style: Italic only (no bold) for thinking/reasoning output
-        let reasoning_style = Self::style_from(reasoning_color, false).effects(Effects::ITALIC);
+        // Reasoning style: Dimmed and italic for placeholder-like thinking output
+        let reasoning_style = Self::style_from(reasoning_color, false).effects(Effects::DIMMED | Effects::ITALIC);
         // Make user messages more distinct using secondary accent color
         let user_color = ensure_contrast(
             lighten(secondary, ui::THEME_USER_COLOR_LIGHTEN_RATIO),
