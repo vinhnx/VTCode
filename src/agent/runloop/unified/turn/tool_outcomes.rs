@@ -85,9 +85,10 @@ fn normalize_signature_args(tool_name: &str, args: &serde_json::Value) -> serde_
 
     if tool_name == tool_names::UNIFIED_FILE
         && let Some(action) = normalized.get("action").and_then(|value| value.as_str())
-            && action == "read" {
-                remove_paging_keys(&mut normalized);
-            }
+        && action == "read"
+    {
+        remove_paging_keys(&mut normalized);
+    }
 
     normalized
 }

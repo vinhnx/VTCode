@@ -1251,6 +1251,24 @@ impl LLMProvider for AnthropicProvider {
         true
     }
 
+    /// Get the effective context window size for a model
+    fn effective_context_size(&self, model: &str) -> usize {
+        // Claude Sonnet 4 and 4.5 support 1M context window (with beta header)
+        // Claude Haiku 4.5 supports context awareness
+        // Other Claude models default to 200K context window
+        match model {
+            m if m.contains("claude-sonnet-4-5")
+                || m.contains("claude-sonnet-4")
+                || m.contains("claude-opus-4-5")
+                || m.contains("claude-opus-4")
+                || m.contains("claude-haiku-4-5") =>
+            {
+                1_000_000
+            }
+            _ => 200_000,
+        }
+    }
+
     /// Check if the Anthropic provider supports structured outputs for the given model.
     ///
     /// According to Anthropic documentation, structured outputs are available

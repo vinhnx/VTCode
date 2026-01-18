@@ -462,9 +462,10 @@ impl StreamingReasoningState {
 
         // If final reasoning provided (non-streaming), render it
         if let Some(reasoning_text) = final_reasoning
-            && !reasoning_text.trim().is_empty() {
-                renderer.line(MessageStyle::Reasoning, reasoning_text)?;
-            }
+            && !reasoning_text.trim().is_empty()
+        {
+            renderer.line(MessageStyle::Reasoning, reasoning_text)?;
+        }
         Ok(())
     }
 

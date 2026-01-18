@@ -355,6 +355,9 @@ pub async fn run_turn_loop(
             }
         };
 
+        // Track token usage for context awareness before any borrows occur
+        let response_usage = response.usage.clone();
+
         // Process the LLM response
         let processing_result = process_llm_response(
             &response,
@@ -379,9 +382,13 @@ pub async fn run_turn_loop(
         .await?
         {
             TurnHandlerOutcome::Continue => {
+                // Update token usage before continuing loop
+                ctx.context_manager.update_token_usage(&response_usage);
                 continue;
             }
             TurnHandlerOutcome::Break(outcome_result) => {
+                // Update token usage before breaking
+                ctx.context_manager.update_token_usage(&response_usage);
                 result = outcome_result;
                 break;
             }

@@ -35,9 +35,16 @@ pub(crate) async fn execute_llm_request(
     // HP-1: Eliminate unnecessary clone - work directly on working_history
 
     let plan_mode = ctx.session_stats.is_plan_mode();
+    let context_window_size = provider_client.effective_context_size(active_model);
     let system_prompt = ctx
         .context_manager
-        .build_system_prompt(ctx.working_history, step_count, ctx.full_auto, plan_mode)
+        .build_system_prompt(
+            ctx.working_history,
+            step_count,
+            ctx.full_auto,
+            plan_mode,
+            Some(context_window_size),
+        )
         .await?;
 
     let use_streaming = provider_client.supports_streaming();

@@ -15,6 +15,7 @@ struct ContextStats {
     tool_usage_count: usize,
     error_count: usize,
     last_history_len: usize,
+    total_token_usage: usize,
 }
 
 /// Simplified ContextManager without context trim and compaction functionality
@@ -95,12 +96,20 @@ impl ContextManager {
         self.cached_stats.last_history_len = new_len;
     }
 
+    /// Update token usage from LLM response
+    pub(crate) fn update_token_usage(&mut self, usage: &Option<uni::Usage>) {
+        if let Some(usage) = usage {
+            self.cached_stats.total_token_usage += usage.total_tokens as usize;
+        }
+    }
+
     pub(crate) async fn build_system_prompt(
         &mut self,
         attempt_history: &[uni::Message],
         retry_attempts: usize,
         full_auto: bool,
         plan_mode: bool,
+        context_window_size: Option<usize>,
     ) -> Result<String> {
         if self.base_system_prompt.trim().is_empty() {
             bail!("Base system prompt is empty; cannot build prompt");
@@ -117,6 +126,9 @@ impl ContextManager {
             max_retry_attempts: 3, // This could be configurable
         };
 
+        // Determine if model supports context awareness (Claude 4.5+)
+        let supports_context_awareness = context_window_size.is_some();
+
         let context = SystemPromptContext {
             conversation_length: attempt_history.len(),
             tool_usage_count: self.cached_stats.tool_usage_count,
@@ -125,6 +137,13 @@ impl ContextManager {
             full_auto,
             plan_mode,
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
+            context_window_size,
+            current_token_usage: if supports_context_awareness {
+                Some(self.cached_stats.total_token_usage)
+            } else {
+                None
+            },
+            supports_context_awareness,
         };
 
         // Use incremental builder to avoid redundant cloning and processing
@@ -204,7 +223,9 @@ mod tests {
             None,
         );
 
-        let result = manager.build_system_prompt(&[], 0, false, false).await;
+        let result = manager
+            .build_system_prompt(&[], 0, false, false, None)
+            .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));
     }
