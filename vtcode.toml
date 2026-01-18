@@ -152,6 +152,8 @@ enabled = true
 max_snapshots = 50
 max_age_days = 30
 
+[tools.loop_thresholds]
+
 # Timeouts
 [timeouts]
 # Maximum duration for standard (non-PTY) tools in seconds
