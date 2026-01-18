@@ -158,8 +158,16 @@ impl ToolOutputSpooler {
         let filename = format!("{}_{}.txt", sanitize_tool_name(tool_name), timestamp);
         let file_path = self.output_dir.join(&filename);
 
-        // Serialize the value
-        let content = if let Some(s) = value.as_str() {
+        // For read_file/unified_file, extract raw content so the spooled file is directly usable
+        // This allows grep_file to work on the spooled output and makes reading more intuitive
+        let content = if (tool_name == "read_file" || tool_name == "unified_file") && !is_mcp {
+            if let Some(raw_content) = value.get("content").and_then(|v| v.as_str()) {
+                raw_content.to_string()
+            } else {
+                // Fallback to JSON serialization if no content field
+                serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
+            }
+        } else if let Some(s) = value.as_str() {
             s.to_string()
         } else {
             serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
@@ -246,7 +254,15 @@ impl ToolOutputSpooler {
             }
         });
 
+        // For read_file, include the original source path so agent knows what was read
+        let source_path = if tool_name == "read_file" || tool_name == "unified_file" {
+            value.get("path").and_then(|v| v.as_str()).map(String::from)
+        } else {
+            None
+        };
+
         // Build response with preserved metadata
+        // Use clearer instructions that guide the agent to read the spooled file directly
         let mut response = json!({
             "spooled_to_file": true,
             "file_path": spool_result.file_path.to_string_lossy(),
@@ -254,16 +270,20 @@ impl ToolOutputSpooler {
             "approx_tokens": spool_result.approx_tokens,
             "total_lines": spool_result.total_lines,
             "preview": spool_result.preview,
-            "note": if is_mcp {
-                "MCP tool output spooled to file. Use read_file with offset/limit (1-indexed line numbers) or grep_file to explore."
-            } else {
-                "Tool output spooled to file. Use read_file with offset/limit (1-indexed line numbers) or grep_file to explore."
-            },
-            "tip": format!(
-                "To view the full output: read_file path=\"{}\"",
+            "note": format!(
+                "Full output saved to spooled file. Read it with: read_file path=\"{}\"",
                 spool_result.file_path.display()
-            )
+            ),
+            "tip": "The spooled file contains the raw content. Use read_file or grep_file on it directly.",
+            "success": true
         });
+
+        // Add source path for read_file so agent knows what file was read
+        if let Some(src) = source_path {
+            if let Some(obj) = response.as_object_mut() {
+                obj.insert("source_path".to_string(), json!(src));
+            }
+        }
 
         // Preserve execution metadata for LLM decision-making
         if let Some(obj) = response.as_object_mut() {
@@ -517,5 +537,42 @@ mod tests {
         assert!(preview.contains("Line 2"));
         assert!(preview.contains("Line 3"));
         assert!(preview.contains("...[truncated]"));
+    }
+
+    #[tokio::test]
+    async fn test_read_file_spools_raw_content() {
+        let temp = tempdir().unwrap();
+        let mut config = SpoolerConfig::default();
+        config.threshold_bytes = 50;
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+
+        let file_content = "fn main() {\n    println!(\"Hello, world!\");\n}\n// More code here...";
+
+        // Simulate a read_file response with content field
+        let read_file_response = json!({
+            "success": true,
+            "content": file_content,
+            "path": "test.rs"
+        });
+
+        let result = spooler
+            .process_output("read_file", read_file_response, false)
+            .await
+            .unwrap();
+
+        // Should include source_path for read_file
+        let source_path = result.get("source_path").and_then(|v| v.as_str()).unwrap();
+        assert_eq!(source_path, "test.rs");
+
+        // Preview should show raw code, not JSON wrapper
+        let preview = result.get("preview").and_then(|v| v.as_str()).unwrap();
+        assert!(preview.contains("fn main()"));
+        assert!(!preview.contains("\"success\"")); // Should not show JSON structure
+
+        // Verify spooled file contains raw content, not JSON
+        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
+        assert_eq!(spooled_content, file_content);
+        assert!(!spooled_content.contains("\"success\"")); // Raw content, not JSON
     }
 }
