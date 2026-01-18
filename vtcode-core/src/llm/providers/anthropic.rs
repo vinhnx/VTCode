@@ -237,6 +237,7 @@ impl AnthropicProvider {
         include_structured: bool,
         include_tool_search: bool,
         request_betas: Option<&Vec<String>>,
+        include_effort: bool,
     ) -> Option<String> {
         let mut pieces: Vec<String> = Vec::new();
         if let Some(pc) = self.prompt_cache_beta_header_value() {
@@ -257,6 +258,10 @@ impl AnthropicProvider {
         if include_tool_search {
             // Add advanced-tool-use beta header for tool search
             pieces.push("advanced-tool-use-2025-11-20".to_owned());
+        }
+        if include_effort {
+            // Add effort beta header for Claude Opus 4.5
+            pieces.push("effort-2025-11-24".to_owned());
         }
         // Add 64k output beta header for all models to support higher limits
         pieces.push("output-64k-2025-02-19".to_owned());
@@ -1000,6 +1005,17 @@ impl AnthropicProvider {
             }));
         }
 
+        let effort_value = request.effort.as_ref().or({
+            let eff = &self.anthropic_config.effort;
+            if eff == "high" { None } else { Some(eff) }
+        });
+        let output_config = effort_value.map(|effort| {
+            use super::anthropic_types::AnthropicOutputConfig;
+            AnthropicOutputConfig::Effort {
+                effort: effort.clone(),
+            }
+        });
+
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             max_tokens: request.max_tokens.unwrap_or(4096), // Default to 4096 tokens if not specified
@@ -1014,6 +1030,7 @@ impl AnthropicProvider {
             tool_choice: final_tool_choice,
             thinking: thinking_val,
             reasoning: reasoning_val,
+            output_config,
             stream: request.stream,
         };
 
@@ -1313,10 +1330,12 @@ impl LLMProvider for AnthropicProvider {
             .header("anthropic-version", urls::ANTHROPIC_API_VERSION);
 
         let include_structured = anthropic_request.get("output_format").is_some();
+        let include_effort = anthropic_request.get("output_config").is_some();
         if let Some(beta_header) = self.combined_beta_header_value(
             include_structured,
             include_tool_search,
             request.betas.as_ref(),
+            include_effort,
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
@@ -1368,10 +1387,12 @@ impl LLMProvider for AnthropicProvider {
             .header("content-type", "application/json");
 
         let include_structured = anthropic_request.get("output_format").is_some();
+        let include_effort = anthropic_request.get("output_config").is_some();
         if let Some(beta_header) = self.combined_beta_header_value(
             include_structured,
             include_tool_search,
             request.betas.as_ref(),
+            include_effort,
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
