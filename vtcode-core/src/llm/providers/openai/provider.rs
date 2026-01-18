@@ -115,8 +115,23 @@ impl OpenAIProvider {
                         })
                     }
                     "apply_patch" | "shell" | "custom" | "grammar" => {
-                        // For GPT-5.1 native tool types and GPT-5 features, use direct serialization
-                        json!(tool)
+                        // For GPT-5.x models, use native tool types directly
+                        // For other models, normalize to function type for compatibility
+                        if Self::is_gpt5_or_newer(&self.model) {
+                            json!(tool)
+                        } else if let Some(func) = &tool.function {
+                            // Normalize to function type for non-GPT-5.x models
+                            json!({
+                                "type": "function",
+                                "function": {
+                                    "name": func.name,
+                                    "description": func.description,
+                                    "parameters": func.parameters
+                                }
+                            })
+                        } else {
+                            return None;
+                        }
                     }
                     _ => {
                         // Fallback for unknown tool types
@@ -178,14 +193,17 @@ impl OpenAIProvider {
                             Some(json!({
                                 "type": "function",
                                 "name": "apply_patch",
-                                "description": "Apply a unified diff patch to a file.",
+                                "description": "Apply VT Code patches. Use format: *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++).",
                                 "parameters": json!({
                                     "type": "object",
                                     "properties": {
-                                        "file_path": { "type": "string" },
-                                        "patch": { "type": "string" }
+                                        "input": { "type": "string", "description": "Patch in VT Code format" },
+                                        "patch": { "type": "string", "description": "Alias for input" }
                                     },
-                                    "required": ["file_path", "patch"]
+                                    "anyOf": [
+                                        {"required": ["input"]},
+                                        {"required": ["patch"]}
+                                    ]
                                 })
                             }))
                         }
@@ -262,6 +280,17 @@ impl OpenAIProvider {
         model == models::openai::GPT_5_CODEX
             || model == models::openai::GPT_5_1_CODEX
             || model == models::openai::GPT_5_1_CODEX_MAX
+    }
+
+    /// Check if model is GPT-5 or newer (supports native apply_patch, shell, custom tool types)
+    fn is_gpt5_or_newer(model: &str) -> bool {
+        let normalized = model.to_lowercase();
+        normalized.contains("gpt-5")
+            || normalized.contains("gpt5")
+            || normalized.contains("o1")
+            || normalized.contains("o3")
+            || normalized.contains("o4")
+            || Self::is_gpt5_codex_model(model)
     }
 
     fn is_responses_api_model(model: &str) -> bool {

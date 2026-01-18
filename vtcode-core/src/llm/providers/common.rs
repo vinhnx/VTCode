@@ -9,12 +9,36 @@ use serde_json::Value;
 /// Serializes tool definitions to OpenAI-compatible JSON format.
 /// Used by DeepSeek, ZAI, Moonshot, and other OpenAI-compatible providers.
 /// For OpenAI-specific features (GPT-5.1 native tools), use OpenAIProvider's serialize_tools.
+///
+/// This function normalizes all tool types to "function" type for compatibility with
+/// OpenAI-compatible APIs that don't support special tool types like "apply_patch".
 #[inline]
 pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Value>> {
     if tools.is_empty() {
         return None;
     }
-    Some(tools.iter().map(|tool| serde_json::json!(tool)).collect())
+    Some(
+        tools
+            .iter()
+            .filter_map(|tool| {
+                // For OpenAI-compatible APIs, normalize all tools to function type
+                // Special types like "apply_patch", "shell", "custom" are GPT-5.x specific
+                if let Some(func) = &tool.function {
+                    Some(serde_json::json!({
+                        "type": "function",
+                        "function": {
+                            "name": func.name,
+                            "description": func.description,
+                            "parameters": func.parameters
+                        }
+                    }))
+                } else {
+                    // Skip tools without function definition (e.g., pure grammar tools)
+                    None
+                }
+            })
+            .collect(),
+    )
 }
 
 pub fn resolve_model(model: Option<String>, default_model: &str) -> String {

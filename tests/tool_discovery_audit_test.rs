@@ -33,7 +33,7 @@ fn audit_tool_system_completeness() {
         ("edit_file", "Edit file with old_str/new_str replacement"),
         ("create_file", "Create new file"),
         ("delete_file", "Delete file"),
-        ("apply_patch", "Apply unified diff patch"),
+        ("apply_patch", "Apply VT Code patch (*** Begin/End Patch format)"),
         // PTY/Terminal operations
         ("run_pty_cmd", "Execute shell command"),
         ("create_pty_session", "Create persistent PTY session"),

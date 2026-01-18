@@ -210,7 +210,7 @@ pub(crate) async fn initialize_session(
     {
         // Add apply_patch tool for GPT-5.1's structured diff editing
         tool_definitions.push(uni::ToolDefinition::apply_patch(
-                "Apply structured diffs to modify files. Use this tool to create, update, or delete file content using unified diff format. The tool enables iterative, multi-step code editing workflows by applying patches and reporting results back.".to_string()
+                "Apply VT Code patches to modify files. IMPORTANT: Use VT Code format (*** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch), NOT unified diff (---/+++) format. The tool creates, updates, or deletes file content.".to_string()
             ));
     }
 
