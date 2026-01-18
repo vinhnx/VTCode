@@ -38,7 +38,7 @@ pub(crate) async fn handle_mcp_updates(
                                     guard.retain(|tool| {
                                         tool.function
                                             .as_ref()
-                                            .map_or(true, |f| !f.name.starts_with("mcp_"))
+                                            .is_none_or(|f| !f.name.starts_with("mcp_"))
                                     });
                                     guard.extend(new_definitions);
                                 };
@@ -108,7 +108,7 @@ pub(crate) async fn handle_mcp_updates(
                                 guard.retain(|tool| {
                                     tool.function
                                         .as_ref()
-                                        .map_or(true, |f| !f.name.starts_with("mcp_"))
+                                        .is_none_or(|f| !f.name.starts_with("mcp_"))
                                 });
                                 guard.extend(new_definitions);
                             };

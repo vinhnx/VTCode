@@ -563,14 +563,13 @@ pub async fn generate_comprehensive_skills_index(
             let _ = writeln!(content, "{}\n", manifest.description);
             let _ = writeln!(
                 content,
-                "- **Type**: {}\n- **Path**: `~/.vtcode/skills/{}/{}`\n",
+                "- **Type**: {}\n- **Path**: `~/.vtcode/skills/{}/SKILL.md`\n",
                 if manifest.mode.unwrap_or(false) {
                     "Mode"
                 } else {
                     "Skill"
                 },
-                manifest.name,
-                "SKILL.md"
+                manifest.name
             );
         }
 
