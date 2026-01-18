@@ -64,6 +64,27 @@ impl ToolHealthTracker {
         }
         true // Assume healthy if unknown
     }
+
+    /// Determine if execution should be delegated to this tool based on health metrics.
+    /// Returns true if the tool is healthy enough to attempt execution.
+    ///
+    /// Criteria:
+    /// - Consecutive failures < 3 (hard limit for immediate fast-fail)
+    /// - Success rate > 0.7 (if enough data points exist)
+    pub fn should_delegate(&self, tool: &str) -> bool {
+        let health = self.stats.read().unwrap();
+        if let Some(h) = health.get(tool) {
+            // Relaxed check for very few attempts
+            if h.total_count < 5 {
+                return h.consecutive_failures < 3;
+            }
+            
+            let success_rate = h.success_count as f64 / h.total_count as f64;
+            h.consecutive_failures < 3 && success_rate > 0.7
+        } else {
+            true // No data = optimistic delegation
+        }
+    }
 }
 
 impl Default for ToolHealthTracker {

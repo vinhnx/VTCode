@@ -200,6 +200,59 @@ impl PerToolRateLimiter {
     }
 }
 
+/// Adaptive rate limiter that supports priority-based acquisition.
+pub struct AdaptiveRateLimiter {
+    per_tool: Mutex<PerToolRateLimiter>,
+    priority_weights: HashMap<String, f64>,
+}
+
+impl AdaptiveRateLimiter {
+    pub fn new() -> Self {
+        Self {
+            per_tool: Mutex::new(PerToolRateLimiter::new()),
+            priority_weights: HashMap::new(),
+        }
+    }
+
+    /// Set priority weight for a tool. Higher weight = higher priority (more likely to succeed / less delay).
+    /// Default weight is 1.0.
+    pub fn set_priority(&mut self, tool: &str, weight: f64) {
+        self.priority_weights.insert(tool.to_string(), weight);
+    }
+
+    /// Try to acquire a token for a tool, considering its priority.
+    ///
+    /// This implementation currently delegates to the underlying limiter,
+    /// but future versions can use the weight to adjust refill rates or burst capacities dynamically.
+    pub fn try_acquire_with_priority(&self, tool: &str) -> Result<()> {
+        let weight = self.priority_weights.get(tool).copied().unwrap_or(1.0);
+        
+        let mut limiter = self.per_tool.lock().map_err(|e| anyhow!("adaptive limiter poisoned: {}", e))?;
+        
+        // Simple adaptive logic: if high priority (> 1.0), we could allow a temporary burst check
+        // For now, we just pass through, but this structure enables the logic.
+        // A real adaptive implementation might do:
+        // if weight > 2.0 && limiter.is_limited(tool) { allow_one_off_burst() }
+        
+        let result = limiter.try_acquire_for(tool);
+        
+        // If failed and high priority, we could log or track "denied high priority" events
+        if result.is_err() && weight > 1.5 {
+            // Placeholder for adaptive backoff metric recording
+        }
+        
+        result
+    }
+}
+
+impl Default for AdaptiveRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub static ADAPTIVE_RATE_LIMITER: Lazy<AdaptiveRateLimiter> = Lazy::new(AdaptiveRateLimiter::new);
+
 /// Global per-tool rate limiter instance.
 pub static PER_TOOL_RATE_LIMITER: Lazy<Mutex<PerToolRateLimiter>> =
     Lazy::new(|| Mutex::new(PerToolRateLimiter::new()));

@@ -67,6 +67,8 @@ impl ToolStats {
     }
 }
 
+use crate::tools::circuit_breaker::CircuitBreaker;
+
 /// Autonomous tool executor with safety checks
 pub struct AutonomousExecutor {
     safe_tools: HashSet<String>,
@@ -78,6 +80,7 @@ pub struct AutonomousExecutor {
     rate_limit_window: Duration,
     rate_limit_max_calls: usize,
     rate_history: Arc<RwLock<HashMap<String, VecDeque<Instant>>>>,
+    circuit_breaker: CircuitBreaker,
 }
 
 impl AutonomousExecutor {
@@ -105,6 +108,7 @@ impl AutonomousExecutor {
             rate_limit_window: Duration::from_secs(10),
             rate_limit_max_calls: 5,
             rate_history: Arc::new(RwLock::new(HashMap::new())),
+            circuit_breaker: CircuitBreaker::default(),
         }
     }
 
@@ -134,9 +138,18 @@ impl AutonomousExecutor {
         AutonomousPolicy::RequireConfirmation
     }
 
-    /// Check if tool should be blocked due to loop detection
+    /// Check if tool should be blocked due to loop detection or circuit breaker
     /// Returns Some(message) if blocked, None if allowed
     pub fn should_block(&self, tool_name: &str, _args: &Value) -> Option<String> {
+        // Check circuit breaker first (fail fast)
+        if !self.circuit_breaker.allow_request_for_tool(tool_name) {
+            return Some(format!(
+                "Tool '{}' blocked by circuit breaker due to repeated failures. \
+                 Cooling down before retrying.",
+                tool_name
+            ));
+        }
+
         if self.is_rate_limited(tool_name) {
             return Some(format!(
                 "Tool '{}' temporarily blocked: rate limit exceeded ({} calls in {:?}).",
@@ -187,6 +200,16 @@ impl AutonomousExecutor {
             None
         }
     }
+
+    // ... (is_destructive_operation, is_destructive_command, validate_args, validate_file_path, validate_command, validate_list_files_args, generate_preview ommited for brevity match) ...
+
+    // Note: Since I can't match scattered method implementation easily with replace_file_content on a large file without full content in block, 
+    // I will assume I need to find the `should_block` and `record_execution` blocks separately if they are far apart. 
+    // But wait, `should_block` is earlier. Let me just replace `should_block` first in this call.
+    // Actually, I'll split this. First replacement handles `should_block`.
+
+
+
 
     /// Check if operation is destructive based on tool and arguments
     fn is_destructive_operation(&self, tool_name: &str, args: &Value) -> bool {
@@ -425,8 +448,17 @@ impl AutonomousExecutor {
         }
     }
 
-    /// Record execution result for statistics tracking
+    /// Record execution result for statistics tracking and circuit breaker
     pub fn record_execution(&self, tool_name: &str, success: bool) {
+        // Update circuit breaker
+        if success {
+            self.circuit_breaker.record_success_for_tool(tool_name);
+        } else {
+            // Note: We blindly treat all failures as circuit-breaking for now.
+            // Ideally, the caller should specify if it's an arg error or system error.
+            self.circuit_breaker.record_failure_for_tool(tool_name, false); 
+        }
+
         if let Ok(mut stats) = self.execution_stats.write() {
             let entry = stats.entry(tool_name.to_string()).or_default();
             entry.total_attempts += 1;
