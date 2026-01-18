@@ -3,6 +3,35 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.65.2] - 2026-01-18
+
+
+### Features
+    - feat: Add an empirical evaluation framework for measuring LLM performance and link it in the main README.
+    - feat: implement a new evaluation framework with test cases, metrics, and report generation, and update LLM provider integrations to support it.
+    - feat: Introduce coding agent settings to LLM requests to refine model behavior, implementing their application in the Anthropic provider for system prompt adjustments, prefill, message reordering, and XML document handling.
+    - feat: Add prefill and character reinforcement options to LLMRequest, implement Anthropic-specific handling, safety screening, and leak protection.
+    - feat: Add `thinking_budget` to `LLMRequest` and implement Anthropic extended thinking logic and validation.
+    - feat: Implement request and organization IDs for LLM responses and error metadata, enhance Anthropic error handling, and add `Refusal` finish reason.
+    - feat: Implement support for request-specific Anthropic beta headers and update structured output model list.
+    - feat: Add support for new Anthropic Claude 4 and 3.x models, enable new beta features, and refine reasoning parameter validation.
+    - feat: add tool search configuration and integration for Anthropic provider
+
+
+### Refactors
+    - refactor: update reasoning color and style for improved readability and placeholder effect
+
+
+### Documentation
+    - docs: Add a new document detailing strategies for reducing Anthropic latency and link it from the Anthropic API overview.
+    - docs: update changelog for v0.65.1 [skip ci]
+    - docs: update changelog for v0.65.1 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.65.1 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.65.0 version =  [skip ci]
 # [Version 0.65.1] - 2026-01-17
 
 
