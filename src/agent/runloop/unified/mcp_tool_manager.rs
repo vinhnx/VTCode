@@ -20,7 +20,7 @@ impl McpToolManager {
                     guard.retain(|tool| {
                         tool.function
                             .as_ref()
-                            .map_or(true, |f| !f.name.starts_with("mcp_"))
+                            .is_none_or(|f| !f.name.starts_with("mcp_"))
                     });
                     guard.extend(new_definitions);
                 };
@@ -56,7 +56,7 @@ impl McpToolManager {
             guard.retain(|tool| {
                 tool.function
                     .as_ref()
-                    .map_or(true, |f| !f.name.starts_with("mcp_"))
+                    .is_none_or(|f| !f.name.starts_with("mcp_"))
             });
             guard.extend(new_definitions);
         };
