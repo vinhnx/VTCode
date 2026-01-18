@@ -350,6 +350,7 @@ pub(crate) async fn handle_tool_calls(
                             circuit_breaker: ctx.circuit_breaker,
                             tool_health_tracker: ctx.tool_health_tracker,
                             rate_limiter: ctx.rate_limiter,
+                            telemetry: ctx.telemetry,
                         },
                         call_id,
                         &name,
@@ -592,6 +593,7 @@ pub(crate) async fn handle_tool_call(
                     circuit_breaker: ctx.circuit_breaker,
                     tool_health_tracker: ctx.tool_health_tracker,
                     rate_limiter: ctx.rate_limiter,
+                    telemetry: ctx.telemetry,
                 },
                 tool_call.id.clone(),
                 tool_name,
@@ -668,6 +670,7 @@ pub(crate) async fn handle_tool_execution_result(
             ctx.circuit_breaker.record_success_for_tool(tool_name);
             ctx.tool_health_tracker
                 .record_execution(tool_name, true, duration);
+            ctx.telemetry.record_tool_usage(tool_name, true);
 
             // Convert output to string for model
             let content_for_model = if let Some(s) = output.as_str() {
@@ -745,6 +748,7 @@ pub(crate) async fn handle_tool_execution_result(
                     .record_failure_for_tool(tool_name, is_argument_error);
                 ctx.tool_health_tracker
                     .record_execution(tool_name, false, duration);
+                ctx.telemetry.record_tool_usage(tool_name, false);
             } else {
                 // Still log the denial but don't affect circuit breaker state
                 tracing::debug!(
@@ -1756,6 +1760,7 @@ pub(crate) async fn handle_text_response(
                         circuit_breaker: params.ctx.circuit_breaker,
                         tool_health_tracker: params.ctx.tool_health_tracker,
                         rate_limiter: params.ctx.rate_limiter,
+                        telemetry: params.ctx.telemetry,
                     },
                     tool_call.id.clone(),
                     call_tool_name,

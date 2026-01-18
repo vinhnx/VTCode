@@ -76,6 +76,7 @@ pub struct TurnLoopContext<'a> {
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
+    pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
 }
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
@@ -102,6 +103,7 @@ pub async fn run_turn_loop(
         process_llm_response,
     };
     use vtcode_core::llm::provider as uni;
+    use crate::agent::runloop::unified::context_manager::PreRequestAction;
 
     // Initialize the outcome result
     let mut result = TurnLoopResult::Completed;
@@ -136,6 +138,30 @@ pub async fn run_turn_loop(
 
     loop {
         step_count += 1;
+        ctx.telemetry.record_turn();
+
+        // Check session boundaries
+        match ctx.context_manager.pre_request_check(&working_history) {
+            PreRequestAction::Stop(msg) => {
+                 crate::agent::runloop::unified::turn::turn_helpers::display_error(
+                    ctx.renderer,
+                    "Session Limit Reached",
+                    &anyhow::anyhow!("{}", msg)
+                 )?;
+                 result = TurnLoopResult::Aborted; // Or completed?
+                 *session_end_reason = crate::hooks::lifecycle::SessionEndReason::Error; 
+                 break;
+            }
+            PreRequestAction::Warn(msg) => {
+                 crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                    ctx.renderer,
+                    &format!("Warning: {}", msg)
+                 )?;
+                 // Inject warning into history?
+                 working_history.push(uni::Message::system(format!("SYSTEM ALERT: {}", msg)));
+            }
+            PreRequestAction::Proceed => {}
+        }
 
         // Proactive: In Plan mode, if the last user message signals readiness (e.g., "start implement"),
         // trigger exit_plan_mode immediately to show the confirmation modal, bypassing LLM guesswork.

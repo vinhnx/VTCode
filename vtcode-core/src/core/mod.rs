@@ -47,6 +47,7 @@ pub mod orchestrator_retry;
 pub mod performance_profiler;
 pub mod prompt_caching;
 pub mod timeout_detector;
+pub mod telemetry;
 pub mod trajectory;
 
 // Re-export main types

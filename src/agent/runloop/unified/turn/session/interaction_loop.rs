@@ -64,6 +64,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub default_placeholder: &'a mut Option<String>,
     pub follow_up_placeholder: &'a mut Option<String>,
     pub checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
+    pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
 }
 
 pub(crate) struct InteractionState<'a> {
