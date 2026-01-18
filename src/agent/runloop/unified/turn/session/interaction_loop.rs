@@ -243,6 +243,9 @@ pub(crate) async fn run_interaction_loop(
                         }
                     }
                 }
+                InlineLoopAction::DiffApproved | InlineLoopAction::DiffRejected => {
+                    continue;
+                }
             };
 
         if input_owned.is_empty() {

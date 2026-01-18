@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::io::{self, Write};
 use std::path::Path;
+use vtcode_core::ui::tui::{DiffHunk, InlineEvent, InlineHandle, InlineSession};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GitStatusSummary {
@@ -110,4 +111,34 @@ pub(crate) async fn confirm_changes_with_git_diff(
         }
     }
     Ok(true)
+}
+
+/// Show a TUI diff preview for file changes and wait for user approval
+#[allow(dead_code)]
+pub(crate) async fn confirm_with_diff_preview(
+    handle: &InlineHandle,
+    session: &mut InlineSession,
+    file_path: &str,
+    before: &str,
+    after: &str,
+) -> Result<bool> {
+    let hunks: Vec<DiffHunk> = vec![];
+    
+    handle.show_diff_preview(
+        file_path.to_string(),
+        before.to_string(),
+        after.to_string(),
+        hunks,
+        0,
+    );
+    
+    while let Some(event) = session.next_event().await {
+        match event {
+            InlineEvent::DiffPreviewApply => return Ok(true),
+            InlineEvent::DiffPreviewReject => return Ok(false),
+            _ => continue,
+        }
+    }
+    
+    Ok(false)
 }

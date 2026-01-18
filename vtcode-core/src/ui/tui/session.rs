@@ -59,6 +59,8 @@ mod spinner;
 mod state;
 pub mod terminal_capabilities;
 mod tool_renderer;
+mod diff_preview;
+mod trust;
 
 use self::config_palette::ConfigPalette;
 use self::file_palette::FilePalette;
@@ -173,6 +175,9 @@ pub struct Session {
     // --- Clipboard for yank/paste operations ---
     #[allow(dead_code)]
     pub(crate) clipboard: String,
+
+    // --- Diff Preview Modal ---
+    pub(crate) diff_preview: Option<crate::ui::tui::types::DiffPreviewState>,
 }
 
 impl Session {
@@ -300,6 +305,9 @@ impl Session {
 
             // --- Clipboard for yank/paste operations ---
             clipboard: String::new(),
+
+            // --- Diff Preview Modal ---
+            diff_preview: None,
         };
         session.ensure_prompt_style_color();
         session
@@ -566,6 +574,15 @@ impl Session {
             InlineCommand::ShowPlanConfirmation { plan } => {
                 command::show_plan_confirmation_modal(self, *plan);
             }
+            InlineCommand::ShowDiffPreview {
+                file_path,
+                before,
+                after,
+                hunks,
+                current_hunk,
+            } => {
+                command::show_diff_preview(self, file_path, before, after, hunks, current_hunk);
+            }
             InlineCommand::Shutdown => {
                 self.request_exit();
             }
@@ -717,6 +734,11 @@ impl Session {
         render::render_config_palette(self, frame, viewport);
         render::render_file_palette(self, frame, viewport);
         render::render_prompt_palette(self, frame, viewport);
+        
+        // Render diff preview modal if active
+        if self.diff_preview.is_some() {
+            diff_preview::render_diff_preview(self, frame, viewport);
+        }
     }
 
     pub fn apply_view_rows(&mut self, rows: u16) {

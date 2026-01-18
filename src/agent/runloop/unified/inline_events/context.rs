@@ -125,6 +125,18 @@ impl<'a> InlineEventContext<'a> {
                     PlanConfirmationResult::Cancel => InlineLoopAction::Continue,
                 }
             }
+            InlineEvent::DiffPreviewApply => {
+                self.state.reset_interrupt_state();
+                InlineLoopAction::DiffApproved
+            }
+            InlineEvent::DiffPreviewReject => {
+                self.state.reset_interrupt_state();
+                InlineLoopAction::DiffRejected
+            }
+            InlineEvent::DiffPreviewTrustChanged { .. } => {
+                self.state.reset_interrupt_state();
+                self.input_processor().passive()
+            }
         };
 
         Ok(action)

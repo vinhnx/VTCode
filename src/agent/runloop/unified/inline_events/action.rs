@@ -12,4 +12,8 @@ pub(crate) enum InlineLoopAction {
     },
     /// User wants to return to plan mode to edit the plan
     PlanEditRequested,
+    /// Diff preview approved - apply the edit changes
+    DiffApproved,
+    /// Diff preview rejected - cancel the edit changes
+    DiffRejected,
 }

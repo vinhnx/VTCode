@@ -19,11 +19,11 @@ pub mod widgets;
 pub use style::{convert_style, theme_from_styles};
 pub use theme_parser::ThemeConfigParser;
 pub use types::{
-    EditingMode, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
-    InlineHeaderContext, InlineHeaderHighlight, InlineListItem, InlineListSearchConfig,
-    InlineListSelection, InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle,
-    InlineTheme, PlanConfirmationResult, PlanContent, PlanPhase, PlanStep, SecurePromptConfig,
-    WizardStep,
+    DiffHunk, DiffPreviewState, EditingMode, InlineCommand, InlineEvent, InlineEventCallback,
+    InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineListItem,
+    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineSession,
+    InlineTextStyle, InlineTheme, PlanConfirmationResult, PlanContent, PlanPhase, PlanStep,
+    SecurePromptConfig, TrustMode, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

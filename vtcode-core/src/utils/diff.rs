@@ -336,9 +336,6 @@ pub fn compute_diff(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundl
     let old_lines_owned = split_lines_with_terminator(old);
     let new_lines_owned = split_lines_with_terminator(new);
 
-    eprintln!("Old lines: {:?}", old_lines_owned);
-    eprintln!("New lines: {:?}", new_lines_owned);
-
     let mut old_refs: Vec<&str> = Vec::with_capacity(old_lines_owned.len());
     for s in &old_lines_owned {
         old_refs.push(s.as_str());

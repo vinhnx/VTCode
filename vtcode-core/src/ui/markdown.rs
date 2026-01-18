@@ -1343,6 +1343,29 @@ fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
     }
 }
 
+/// Highlight a single line of code for diff preview.
+/// Returns a vector of (style, text) segments, or None if highlighting fails.
+pub fn highlight_line_for_diff(
+    line: &str,
+    language: Option<&str>,
+) -> Option<Vec<(Style, String)>> {
+    let syntax = select_syntax(language);
+    let theme = load_theme("base16-ocean.dark", true);
+    let mut highlighter = HighlightLines::new(syntax, &theme);
+
+    let ranges = highlighter.highlight_line(line, &SYNTAX_SET).ok()?;
+    let mut segments = Vec::new();
+    for (style, part) in ranges {
+        if part.is_empty() {
+            continue;
+        }
+        let mut anstyle = to_anstyle(style);
+        anstyle = anstyle.bg_color(None);
+        segments.push((anstyle, part.to_owned()));
+    }
+    Some(segments)
+}
+
 fn try_highlight(
     code: &str,
     language: Option<&str>,

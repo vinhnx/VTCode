@@ -2,6 +2,7 @@ use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
+use crate::ui::tui::types::InlineListSelection;
 
 #[allow(dead_code)]
 pub(super) fn handle_event(
@@ -136,6 +137,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         has_command,
     ) {
         return None;
+    }
+
+    if let Some(event) = handle_diff_preview_key(session, &key) {
+        return Some(event);
     }
 
     // Handle reverse search (Ctrl+R)
@@ -470,6 +475,72 @@ pub(super) fn handle_scroll_up(
     session.scroll_line_up();
     session.mark_dirty();
     emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
+}
+
+#[allow(dead_code)]
+pub(super) fn handle_diff_preview_key(
+    session: &mut Session,
+    key: &KeyEvent,
+) -> Option<InlineEvent> {
+    if session.diff_preview.is_none() {
+        return None;
+    }
+
+    let Some(ref mut diff_state) = session.diff_preview else {
+        return None;
+    };
+
+    match key.code {
+        KeyCode::Tab => {
+            if diff_state.current_hunk + 1 < diff_state.hunk_count() {
+                diff_state.current_hunk += 1;
+            }
+            session.mark_dirty();
+            None
+        }
+        KeyCode::BackTab => {
+            if diff_state.current_hunk > 0 {
+                diff_state.current_hunk -= 1;
+            }
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Enter => {
+            session.diff_preview = None;
+            session.input_enabled = true;
+            session.cursor_visible = true;
+            session.mark_dirty();
+            Some(InlineEvent::DiffPreviewApply)
+        }
+        KeyCode::Esc => {
+            session.diff_preview = None;
+            session.input_enabled = true;
+            session.cursor_visible = true;
+            session.mark_dirty();
+            Some(InlineEvent::DiffPreviewReject)
+        }
+        KeyCode::Char('1') => {
+            diff_state.trust_mode = crate::ui::tui::types::TrustMode::Once;
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('2') => {
+            diff_state.trust_mode = crate::ui::tui::types::TrustMode::Session;
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('3') => {
+            diff_state.trust_mode = crate::ui::tui::types::TrustMode::Always;
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char('4') => {
+            diff_state.trust_mode = crate::ui::tui::types::TrustMode::AutoTrust;
+            session.mark_dirty();
+            None
+        }
+        _ => None,
+    }
 }
 
 #[allow(dead_code)]
