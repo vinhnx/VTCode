@@ -58,14 +58,14 @@ impl ContextManager {
         
         if msg_count > hard_limit {
              return PreRequestAction::Stop(format!(
-                "Session limit reached ({} messages). Please summarize progress and start a new session.",
+                "Session limit reached ({} messages). Please update artifacts (task.md/docs) to persist progress, then start a new session.",
                 msg_count
             ));
         }
         
         if msg_count > soft_limit {
              return PreRequestAction::Warn(format!(
-                "Session is getting long ({} messages). Consider summarizing key points soon.",
+                "Session is getting long ({} messages). Consider updating key artifacts (task.md/docs) to persist context soon.",
                 msg_count
             ));
         }
