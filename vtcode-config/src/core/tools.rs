@@ -46,6 +46,12 @@ pub struct ToolsConfig {
     /// Dynamic plugin runtime configuration
     #[serde(default)]
     pub plugins: PluginRuntimeConfig,
+
+    /// Tool-specific loop thresholds (Adaptive Loop Detection)
+    /// Allows setting higher loop limits for read-only tools (e.g., ls, grep)
+    /// and lower limits for mutating tools.
+    #[serde(default)]
+    pub loop_thresholds: IndexMap<String, usize>,
 }
 
 /// Web Fetch tool security configuration
@@ -111,6 +117,7 @@ impl Default for ToolsConfig {
             max_tool_rate_per_second: default_max_tool_rate_per_second(),
             web_fetch: WebFetchConfig::default(),
             plugins: PluginRuntimeConfig::default(),
+            loop_thresholds: IndexMap::new(),
         }
     }
 }

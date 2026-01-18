@@ -12,7 +12,10 @@ pub enum CircuitState {
 #[derive(Clone)]
 pub struct CircuitBreakerConfig {
     pub failure_threshold: u32,
-    pub reset_timeout: Duration,
+    pub reset_timeout: Duration, // Initial/Base timeout
+    pub min_backoff: Duration,   // Minimum wait time
+    pub max_backoff: Duration,   // Maximum wait time
+    pub backoff_factor: f64,     // Multiplier (e.g., 2.0 for exponential)
 }
 
 impl Default for CircuitBreakerConfig {
@@ -20,6 +23,9 @@ impl Default for CircuitBreakerConfig {
         Self {
             failure_threshold: 5,
             reset_timeout: Duration::from_secs(60),
+            min_backoff: Duration::from_secs(10), // Start with 10s
+            max_backoff: Duration::from_secs(300), // Cap at 5m
+            backoff_factor: 2.0,
         }
     }
 }
@@ -29,6 +35,7 @@ struct ToolCircuitState {
     status: CircuitState,
     failure_count: u32,
     last_failure_time: Option<Instant>,
+    current_backoff: Duration, // Current backoff duration for this tool
 }
 
 impl Default for CircuitState {
@@ -63,21 +70,42 @@ impl CircuitBreaker {
         match state.status {
             CircuitState::Closed => true,
             CircuitState::Open => {
-                // Check if timeout has elapsed to try HalfOpen
+                // Check if backoff period has elapsed
                 if let Some(last_failure) = state.last_failure_time {
-                    if last_failure.elapsed() >= self.config.reset_timeout {
+                    // Use the calculated backoff for this specific failure instance
+                    let backoff = if state.current_backoff.as_secs() == 0 {
+                          self.config.reset_timeout // Fallback if not set
+                    } else {
+                          state.current_backoff
+                    };
+
+                    if last_failure.elapsed() >= backoff {
                         state.status = CircuitState::HalfOpen;
-                        return true; // Use this request as the probe
+                        return true; // Probe allowed
                     }
                 }
                 false
             }
             CircuitState::HalfOpen => {
-                // In a real implementation, we might limit concurrent HalfOpen probes.
-                // For simplicity, we allow it; success/failure will decide next state.
+                // Allow probe
                 true
             }
         }
+    }
+    
+    /// Get remaining backoff time for a tool (if Open)
+    pub fn remaining_backoff(&self, tool_name: &str) -> Option<Duration> {
+        let states = self.tool_states.lock().unwrap();
+        let state = states.get(tool_name)?;
+        
+        if state.status == CircuitState::Open {
+             if let Some(last) = state.last_failure_time {
+                 let backoff = state.current_backoff;
+                 let elapsed = last.elapsed();
+                 return backoff.checked_sub(elapsed);
+             }
+        }
+        None
     }
 
     /// Legacy method for backwards compatibility - always returns true (global check disabled).
@@ -140,19 +168,33 @@ impl CircuitBreaker {
                 state.failure_count += 1;
                 if state.failure_count >= self.config.failure_threshold {
                     state.status = CircuitState::Open;
+                    state.current_backoff = self.config.min_backoff; // Start with min backoff
+                    
                     tracing::warn!(
                         tool = %tool_name,
                         failures = state.failure_count,
+                        backoff_sec = state.current_backoff.as_secs(),
                         "Circuit breaker OPEN for tool"
                     );
                 }
             }
             CircuitState::HalfOpen => {
-                // Probe failed, revert to Open
+                // Probe failed, revert to Open and increase backoff
                 state.status = CircuitState::Open;
+                // Exponential backoff
+                let next_backoff = state.current_backoff.as_secs_f64() * self.config.backoff_factor;
+                state.current_backoff = Duration::from_secs_f64(next_backoff)
+                    .min(self.config.max_backoff)
+                    .max(self.config.min_backoff);
+                    
+                tracing::warn!(
+                    tool = %tool_name,
+                    backoff_sec = state.current_backoff.as_secs(),
+                    "Circuit breaker re-OPENED (probe failed)"
+                );
             }
             CircuitState::Open => {
-                // Already open, just update time
+                // Already open, just update time - backoff stays same until probe attempt
             }
         }
     }
@@ -188,6 +230,15 @@ impl CircuitBreaker {
     pub fn reset_all(&self) {
         let mut states = self.tool_states.lock().unwrap();
         states.clear();
+    }
+    /// Get list of tools with currently OPEN circuits
+    pub fn get_open_circuits(&self) -> Vec<String> {
+        let states = self.tool_states.lock().unwrap();
+        states
+            .iter()
+            .filter(|(_, state)| matches!(state.status, CircuitState::Open))
+            .map(|(name, _)| name.clone())
+            .collect()
     }
 }
 
