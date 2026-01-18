@@ -19,6 +19,13 @@ pub struct AnthropicConfig {
     /// Tool search configuration for dynamic tool discovery (advanced-tool-use beta)
     #[serde(default)]
     pub tool_search: ToolSearchConfig,
+
+    /// Effort level for token usage (high, medium, low)
+    /// Controls how many tokens Claude uses when responding, trading off between
+    /// response thoroughness and token efficiency.
+    /// Only supported by Claude Opus 4.5 (claude-opus-4-5-20251101)
+    #[serde(default = "default_effort")]
+    pub effort: String,
 }
 
 impl Default for AnthropicConfig {
@@ -28,6 +35,7 @@ impl Default for AnthropicConfig {
             interleaved_thinking_budget_tokens: default_interleaved_thinking_budget_tokens(),
             interleaved_thinking_type_enabled: default_interleaved_thinking_type(),
             tool_search: ToolSearchConfig::default(),
+            effort: default_effort(),
         }
     }
 }
@@ -98,4 +106,9 @@ fn default_interleaved_thinking_budget_tokens() -> u32 {
 #[inline]
 fn default_interleaved_thinking_type() -> String {
     "enabled".to_string()
+}
+
+#[inline]
+fn default_effort() -> String {
+    "low".to_string()
 }

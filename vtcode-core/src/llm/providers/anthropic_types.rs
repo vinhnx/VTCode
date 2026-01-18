@@ -18,6 +18,8 @@ pub struct AnthropicRequest {
     pub thinking: Option<ThinkingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<Value>, // Deprecated in favor of thinking, but kept for backward compat or direct effort passing
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_config: Option<AnthropicOutputConfig>,
     pub stream: bool,
 }
 
@@ -266,4 +268,12 @@ pub struct AnthropicErrorBody {
     #[serde(rename = "type")]
     pub error_type: String,
     pub message: String,
+}
+
+/// Output configuration for Anthropic API (e.g., effort parameter)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum AnthropicOutputConfig {
+    #[serde(rename = "effort")]
+    Effort { effort: String },
 }

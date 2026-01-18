@@ -860,6 +860,7 @@
         "name": "Claude Opus 4.5",
         "description": "Latest flagship model with exceptional reasoning. Most capable Anthropic model for complex multi-step tasks.",
         "reasoning": true,
+        "effort": true,
         "tool_call": true,
         "modalities": {
           "input": [

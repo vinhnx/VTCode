@@ -84,6 +84,12 @@ pub struct LLMRequest {
     /// Applies to: Claude, GPT-5, GPT-5.1, Gemini, Qwen3, DeepSeek with reasoning capability
     pub reasoning_effort: Option<ReasoningEffortLevel>,
 
+    /// Effort level for overall token usage (high, medium, low)
+    /// Applies to: Claude Opus 4.5 (claude-opus-4-5-20251101) with effort-2025-11-24 beta
+    /// Controls how many tokens Claude uses when responding, trading off between
+    /// response thoroughness and token efficiency.
+    pub effort: Option<String>,
+
     /// Verbosity level for output text (low, medium, high)
     /// Applies to: GPT-5.1 and other models that support verbosity control
     pub verbosity: Option<VerbosityLevel>,
