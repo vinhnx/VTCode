@@ -92,7 +92,7 @@ impl Session {
 
         // Add a line break after Error, Info, and Policy messages
         match message.kind {
-            InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Policy => {
+            InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Policy | InlineMessageKind::Warning => {
                 wrapped.push(Line::default());
             }
             _ => {}

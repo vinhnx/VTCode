@@ -172,6 +172,7 @@ impl SessionStyles {
                 self.theme.primary.or(self.theme.foreground)
             }
             InlineMessageKind::Info => self.theme.foreground,
+            InlineMessageKind::Warning => Some(AnsiColor::Yellow.into()),
         }
     }
 

@@ -14,14 +14,14 @@ use vtcode_core::utils::session_archive::find_session_by_identifier;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
-use crate::agent::runloop::slash_commands::handle_slash_command;
-use crate::agent::runloop::tool_output::render_tool_output;
-use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
+
+
+use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
-use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
+
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};

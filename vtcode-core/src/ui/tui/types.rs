@@ -452,6 +452,7 @@ pub enum InlineMessageKind {
     Pty,
     Tool,
     User,
+    Warning,
 }
 
 pub enum InlineCommand {
