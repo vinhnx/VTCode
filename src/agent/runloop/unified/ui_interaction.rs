@@ -439,7 +439,6 @@ impl StreamingReasoningState {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
         if !self.buffered.is_empty() {
             // If we have buffered content and are rendering inline, add newline first
@@ -456,15 +455,19 @@ impl StreamingReasoningState {
         &mut self,
         renderer: &mut AnsiRenderer,
         final_reasoning: Option<&str>,
+        reasoning_already_emitted: bool,
     ) -> Result<()> {
         // Flush any buffered reasoning first
         self.flush_pending(renderer)?;
 
-        // If final reasoning provided (non-streaming), render it
-        if let Some(reasoning_text) = final_reasoning
-            && !reasoning_text.trim().is_empty()
-        {
-            renderer.line(MessageStyle::Reasoning, reasoning_text)?;
+        // Only render final reasoning if it wasn't already emitted during streaming
+        // This prevents duplicate reasoning output
+        if !reasoning_already_emitted {
+            if let Some(reasoning_text) = final_reasoning
+                && !reasoning_text.trim().is_empty()
+            {
+                renderer.line(MessageStyle::Reasoning, reasoning_text)?;
+            }
         }
         Ok(())
     }
@@ -627,6 +630,8 @@ pub(crate) async fn stream_and_render_response(
                 reasoning_state
                     .handle_delta(renderer, &delta)
                     .map_err(|err| map_render_error(provider_name, err))?;
+                // Mark reasoning as emitted to prevent duplicate rendering in finalize()
+                reasoning_emitted = true;
             }
             Ok(LLMStreamEvent::Completed { response }) => {
                 final_response = Some(response);
@@ -674,7 +679,7 @@ pub(crate) async fn stream_and_render_response(
                 // Content wasn't rendered yet - render it now
                 // First, flush any pending reasoning
                 reasoning_state
-                    .finalize(renderer, response.reasoning.as_deref())
+                    .finalize(renderer, response.reasoning.as_deref(), reasoning_emitted)
                     .map_err(|err| map_render_error(provider_name, err))?;
 
                 // Now render the actual content
@@ -708,7 +713,7 @@ pub(crate) async fn stream_and_render_response(
     // Finalize reasoning display (only if we haven't already in the content block above)
     if response.content.is_none() || aggregated.trim().is_empty() {
         reasoning_state
-            .finalize(renderer, response.reasoning.as_deref())
+            .finalize(renderer, response.reasoning.as_deref(), reasoning_emitted)
             .map_err(|err| map_render_error(provider_name, err))?;
     }
 
