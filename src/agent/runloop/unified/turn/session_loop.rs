@@ -236,7 +236,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 default_placeholder: &mut default_placeholder,
                 follow_up_placeholder: &mut follow_up_placeholder,
                 checkpoint_manager: checkpoint_manager.as_ref(),
-                telemetry: &telemetry,
             };
 
             let mut interaction_state =
