@@ -82,10 +82,7 @@ async fn run() -> Result<()> {
     {}
 
     // Initialize tracing based on both RUST_LOG env var and config
-    let env_tracing_initialized = match initialize_tracing(&args).await {
-        Ok(initialized) => initialized,
-        Err(_err) => false,
-    };
+    let env_tracing_initialized = initialize_tracing(&args).await.unwrap_or_default();
 
     if args.print.is_some() && args.command.is_some() {
         anyhow::bail!(
