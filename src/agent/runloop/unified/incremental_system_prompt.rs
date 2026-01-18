@@ -122,6 +122,17 @@ impl IncrementalSystemPrompt {
         let mut prompt = String::with_capacity(base_system_prompt.len() + 1024);
         prompt.push_str(base_system_prompt);
 
+        // Inject context budget for models with context awareness (Claude 4.5+)
+        if context.supports_context_awareness {
+            if let Some(context_size) = context.context_window_size {
+                let _ = writeln!(
+                    prompt,
+                    "\n<budget:token_budget>{}</budget:token_budget>",
+                    context_size
+                );
+            }
+        }
+
         // ...
 
         // Concise retry/error context
@@ -156,6 +167,20 @@ impl IncrementalSystemPrompt {
                 context.token_usage_ratio * 100.0
             );
             let _ = writeln!(prompt, "- full_auto: {}", context.full_auto);
+
+            // Add system warning for context awareness models with token tracking
+            if context.supports_context_awareness {
+                if let (Some(context_size), Some(used)) =
+                    (context.context_window_size, context.current_token_usage)
+                {
+                    let remaining = context_size.saturating_sub(used);
+                    let _ = writeln!(
+                        prompt,
+                        "<system_warning>Token usage: {}/{}; {} remaining</system_warning>",
+                        used, context_size, remaining
+                    );
+                }
+            }
 
             if context.full_auto {
                 let _ = writeln!(
@@ -379,6 +404,12 @@ pub struct SystemPromptContext {
     pub plan_mode: bool,
     /// Discovered skills for immediate awareness
     pub discovered_skills: Vec<vtcode_core::skills::types::Skill>,
+    /// Total context window size for the current model (e.g., 200000, 1000000)
+    pub context_window_size: Option<usize>,
+    /// Current tokens used in the conversation
+    pub current_token_usage: Option<usize>,
+    /// Whether the model supports context awareness (Claude 4.5+)
+    pub supports_context_awareness: bool,
 }
 
 impl SystemPromptContext {
@@ -393,6 +424,9 @@ impl SystemPromptContext {
         ((self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
         self.full_auto.hash(&mut hasher);
         self.plan_mode.hash(&mut hasher);
+        self.context_window_size.hash(&mut hasher);
+        self.current_token_usage.hash(&mut hasher);
+        self.supports_context_awareness.hash(&mut hasher);
         // We use skill names and versions for hashing
         for skill in &self.discovered_skills {
             skill.name().hash(&mut hasher);
@@ -418,6 +452,9 @@ mod tests {
             full_auto: false,
             plan_mode: false,
             discovered_skills: Vec::new(),
+            context_window_size: None,
+            current_token_usage: None,
+            supports_context_awareness: false,
         };
 
         // First call - should build from scratch
@@ -450,6 +487,9 @@ mod tests {
             full_auto: false,
             plan_mode: false,
             discovered_skills: Vec::new(),
+            context_window_size: None,
+            current_token_usage: None,
+            supports_context_awareness: false,
         };
         // Build initial prompt
         let _ = prompt_builder
