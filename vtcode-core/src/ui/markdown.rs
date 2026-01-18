@@ -13,6 +13,7 @@ use syntect::highlighting::{Theme, ThemeSet};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 use tracing::warn;
+use unicode_width::UnicodeWidthStr;
 
 const LIST_INDENT_WIDTH: usize = 2;
 const CODE_EXTRA_INDENT: &str = "    ";
@@ -226,6 +227,21 @@ impl MarkdownLine {
             .iter()
             .all(|segment| segment.text.trim().is_empty())
     }
+
+    fn width(&self) -> usize {
+        self.segments
+            .iter()
+            .map(|seg| UnicodeWidthStr::width(seg.text.as_str()))
+            .sum()
+    }
+}
+
+#[derive(Debug, Default)]
+struct TableBuffer {
+    headers: Vec<MarkdownLine>,
+    rows: Vec<Vec<MarkdownLine>>,
+    current_row: Vec<MarkdownLine>,
+    in_head: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -285,6 +301,7 @@ pub fn render_markdown_to_lines(
     let mut list_stack: Vec<ListState> = Vec::new();
     let mut pending_list_prefix: Option<String> = None;
     let mut code_block: Option<CodeBlockState> = None;
+    let mut active_table: Option<TableBuffer> = None;
     let mut table_cell_index: usize = 0;
 
     for event in events {
@@ -339,6 +356,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    active_table: &mut active_table,
                     table_cell_index: &mut table_cell_index,
                 };
                 handle_start_tag(tag, &mut context);
@@ -354,6 +372,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    active_table: &mut active_table,
                     table_cell_index: &mut table_cell_index,
                 };
                 handle_end_tag(tag, &mut context);
@@ -369,6 +388,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    active_table: &mut active_table,
                     table_cell_index: &mut table_cell_index,
                 };
                 append_text(&text, &mut context);
@@ -395,6 +415,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    active_table: &mut active_table,
                     table_cell_index: &mut table_cell_index,
                 };
                 append_text(" ", &mut context);
@@ -449,6 +470,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    active_table: &mut active_table,
                     table_cell_index: &mut table_cell_index,
                 };
                 append_text(&html, &mut context);
@@ -464,6 +486,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    active_table: &mut active_table,
                     table_cell_index: &mut table_cell_index,
                 };
                 append_text(&format!("[^{}]", reference), &mut context);
@@ -549,7 +572,10 @@ struct MarkdownContext<'a> {
     current_line: &'a mut MarkdownLine,
     theme_styles: &'a ThemeStyles,
     base_style: Style,
+    theme_styles: &'a ThemeStyles,
+    base_style: Style,
     code_block: &'a mut Option<CodeBlockState>,
+    active_table: &'a mut Option<TableBuffer>,
     table_cell_index: &'a mut usize,
 }
 
@@ -655,7 +681,8 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
             });
         }
         MarkdownTag::Table => {
-            // Begin table rendering
+            // Begin table rendering - initialize buffer
+            // First flush any pending content
             flush_current_line(
                 context.lines,
                 context.current_line,
@@ -666,40 +693,49 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
                 context.base_style,
             );
             push_blank_line(context.lines);
+            *context.active_table = Some(TableBuffer::default());
             *context.table_cell_index = 0;
         }
         MarkdownTag::TableRow => {
-            // Ensure we're on a fresh line for each row
-            flush_current_line(
-                context.lines,
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
+            // New row
+            if let Some(table) = context.active_table {
+                table.current_row.clear();
+            } else {
+                // Fallback if not in table mode (shouldn't happen with valid markdown)
+                flush_current_line(
+                    context.lines,
+                    context.current_line,
+                    *context.blockquote_depth,
+                    context.list_stack,
+                    context.pending_list_prefix,
+                    context.theme_styles,
+                    context.base_style,
+                );
+            }
             *context.table_cell_index = 0;
         }
-        MarkdownTag::TableHead | MarkdownTag::TableCell => {
-            ensure_prefix(
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
-
-            let separator = if *context.table_cell_index == 0 {
-                "- "
+        MarkdownTag::TableHead => {
+             if let Some(table) = context.active_table {
+                table.in_head = true;
+            }
+        }
+        MarkdownTag::TableCell => {
+            // Ensure current line is clear for capturing cell content
+            // We do NOT write separators here anymore, we do it in render_table
+            if context.active_table.is_none() {
+                 ensure_prefix(
+                    context.current_line,
+                    *context.blockquote_depth,
+                    context.list_stack,
+                    context.pending_list_prefix,
+                    context.theme_styles,
+                    context.base_style,
+                );
             } else {
-                " | "
-            };
-            context
-                .current_line
-                .segments
-                .push(MarkdownSegment::new(context.base_style, separator));
+                // Just clear the line so we capture fresh content
+                // If there's garbage in current_line, it should have been flushed by previous tags
+                context.current_line.segments.clear();
+            }
             *context.table_cell_index += 1;
         }
         MarkdownTag::FootnoteDefinition | MarkdownTag::HtmlBlock => {}
@@ -795,37 +831,170 @@ fn handle_end_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
         }
         MarkdownTag::CodeBlock(_) => {}
         MarkdownTag::Table => {
-            // End table rendering
-            flush_current_line(
-                context.lines,
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
+            // End table rendering - render buffered table
+            if let Some(mut table) = context.active_table.take() {
+                // Validate if current_row has data (unlikely for Table end, usually TableRow end)
+                if !table.current_row.is_empty() {
+                    table.rows.push(std::mem::take(&mut table.current_row));
+                }
+                
+                let rendered_lines = render_table(&table, context.theme_styles, context.base_style, *context.blockquote_depth, context.list_stack, context.pending_list_prefix.clone());
+                 context.lines.extend(rendered_lines);
+            }
+            
             push_blank_line(context.lines);
             *context.table_cell_index = 0;
         }
         MarkdownTag::TableRow => {
             // End of row
-            flush_current_line(
-                context.lines,
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
+            if let Some(table) = context.active_table {
+                 if table.in_head {
+                    // Collect into headers
+                    // We assume table head has only one row usually, but if multiple, we might overwrite or append?
+                    // Standard markdown table has one header row.
+                    // If current_row is not empty, move it to headers
+                    table.headers = std::mem::take(&mut table.current_row);
+                } else {
+                    table.rows.push(std::mem::take(&mut table.current_row));
+                }
+            } else {
+                flush_current_line(
+                    context.lines,
+                    context.current_line,
+                    *context.blockquote_depth,
+                    context.list_stack,
+                    context.pending_list_prefix,
+                    context.theme_styles,
+                    context.base_style,
+                );
+            }
             *context.table_cell_index = 0;
         }
-        MarkdownTag::TableHead | MarkdownTag::TableCell => {
-            // Cell styling handled in start tag, just mark end
+        MarkdownTag::TableCell => {
+            // End of cell - capture content
+            if let Some(table) = context.active_table {
+                 table.current_row.push(std::mem::take(context.current_line));
+            }
+        }
+        MarkdownTag::TableHead => {
+             if let Some(table) = context.active_table {
+                table.in_head = false;
+            }
         }
         MarkdownTag::FootnoteDefinition | MarkdownTag::HtmlBlock => {}
     }
+}
+
+fn render_table(
+    table: &TableBuffer,
+    theme_styles: &ThemeStyles,
+    base_style: Style,
+    blockquote_depth: usize,
+    list_stack: &[ListState],
+    pending_list_prefix: Option<String>,
+) -> Vec<MarkdownLine> {
+    let mut lines = Vec::new();
+    let mut pending_prefix = pending_list_prefix; // local mutable copy
+
+    if table.headers.is_empty() && table.rows.is_empty() {
+        return lines;
+    }
+
+    // Calculate column widths
+    let mut col_widths: Vec<usize> = Vec::new();
+    
+    // Check headers
+    for (i, cell) in table.headers.iter().enumerate() {
+        if i >= col_widths.len() {
+            col_widths.push(0);
+        }
+        col_widths[i] = max(col_widths[i], cell.width());
+    }
+
+    // Check rows
+    for row in &table.rows {
+        for (i, cell) in row.iter().enumerate() {
+            if i >= col_widths.len() {
+                col_widths.push(0);
+            }
+            col_widths[i] = max(col_widths[i], cell.width());
+        }
+    }
+
+    let border_style = theme_styles.secondary.dimmed(); // faint-ish border
+    
+    // Helper to create a renderable row
+    let mut create_row = |cells: &[MarkdownLine], is_header: bool| {
+        let mut line = MarkdownLine::default();
+        
+        // Add blockquote/list prefix
+        ensure_prefix(
+            &mut line,
+            blockquote_depth,
+            list_stack,
+            &mut pending_prefix,
+            theme_styles,
+            base_style,
+        );
+
+        line.push_segment(border_style, "│ ");
+        
+        for (i, width) in col_widths.iter().enumerate() {
+            let cell = cells.get(i);
+            let cell_width = cell.map(|c| c.width()).unwrap_or(0);
+            let padding = width.saturating_sub(cell_width);
+            
+            if let Some(c) = cell {
+                for seg in &c.segments {
+                    line.push_segment(if is_header { seg.style.bold() } else { seg.style }, &seg.text);
+                }
+            }
+            
+            if padding > 0 {
+                line.push_segment(base_style, &" ".repeat(padding));
+            }
+            
+            line.push_segment(border_style, " │ ");
+        }
+        lines.push(line);
+    };
+
+    // Render Headers
+    if !table.headers.is_empty() {
+        create_row(&table.headers, true);
+        
+        // Render Separator
+        let mut sep_line = MarkdownLine::default();
+        ensure_prefix(
+            &mut sep_line,
+            blockquote_depth,
+            list_stack,
+            &mut pending_prefix,
+            theme_styles,
+            base_style,
+        );
+        
+        sep_line.push_segment(border_style, "├─");
+        for (i, width) in col_widths.iter().enumerate() {
+            let dash_count = *width;
+            // We use ─ for dashes. 
+            sep_line.push_segment(border_style, &"─".repeat(dash_count));
+            
+            if i < col_widths.len() - 1 {
+                sep_line.push_segment(border_style, "─┼─");
+            } else {
+                sep_line.push_segment(border_style, "─┤");
+            }
+        }
+        lines.push(sep_line);
+    }
+
+    // Render Rows
+    for row in &table.rows {
+        create_row(row, false);
+    }
+
+    lines
 }
 
 fn append_text(text: &str, context: &mut MarkdownContext<'_>) {
@@ -1103,11 +1272,22 @@ fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
     let lines: Vec<&str> = code.lines().collect();
 
     // Get minimum indentation across all non-empty lines
+    // Find the longest common leading whitespace prefix across all non-empty lines
     let min_indent = lines
         .iter()
         .filter(|line| !line.trim().is_empty())
-        .map(|line| line.len() - line.trim_start().len())
-        .min()
+        .map(|line| &line[..line.len() - line.trim_start().len()])
+        .reduce(|acc, p| {
+            let mut len = 0;
+            for (c1, c2) in acc.chars().zip(p.chars()) {
+                if c1 != c2 {
+                    break;
+                }
+                len += c1.len_utf8();
+            }
+            &acc[..len]
+        })
+        .map(|s| s.len())
         .unwrap_or(0);
 
     // Remove the common leading indentation from all lines, preserving relative indentation
@@ -1314,6 +1494,24 @@ mod tests {
         let code = "    line1\n        line2\n    line3";
         let expected = "line1\n    line2\nline3";
         let result = normalize_code_indentation(code, Some("python"));
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_code_indentation_mixed_whitespace_preserves_indent() {
+        // Mixed tabs and spaces - common prefix should be empty if they differ
+        let code = "    line1\n\tline2";
+        let result = normalize_code_indentation(code, None);
+        // Should preserve original content rather than stripping incorrectly
+        assert_eq!(result, code);
+    }
+
+    #[test]
+    fn test_code_indentation_common_prefix_mixed() {
+        // Common prefix is present ("    ")
+        let code = "    line1\n    \tline2";
+        let expected = "line1\n\tline2";
+        let result = normalize_code_indentation(code, None);
         assert_eq!(result, expected);
     }
 }
