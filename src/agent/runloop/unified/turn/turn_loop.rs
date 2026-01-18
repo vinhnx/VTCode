@@ -125,8 +125,11 @@ pub async fn run_turn_loop(
 
     // Reset safety validator for a new turn
     {
+        let max_session_turns = vt_cfg
+            .map(|c| c.agent.max_conversation_turns)
+            .unwrap_or(150);
         let mut validator = ctx.safety_validator.write().await;
-        validator.set_limits(max_tool_loops, 100); // Session limit 100 as default
+        validator.set_limits(max_tool_loops, max_session_turns);
         validator.start_turn();
     }
 
