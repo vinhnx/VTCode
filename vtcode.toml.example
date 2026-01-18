@@ -704,6 +704,12 @@ allow_tool_ansi = true
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
 
+# Reasoning display mode for chat UI: "always", "toggle", or "hidden"
+reasoning_display_mode = "toggle"
+
+# Default visibility for reasoning when display mode is "toggle"
+reasoning_visible_default = false
+
 
 # Status line configuration
 [ui.status_line]

@@ -13,6 +13,17 @@ pub enum ToolOutputMode {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum ReasoningDisplayMode {
+    Always,
+    #[default]
+    Toggle,
+    Hidden,
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UiConfig {
     #[serde(default = "default_tool_output_mode")]
@@ -27,6 +38,10 @@ pub struct UiConfig {
     pub allow_tool_ansi: bool,
     #[serde(default = "default_inline_viewport_rows")]
     pub inline_viewport_rows: u16,
+    #[serde(default = "default_reasoning_display_mode")]
+    pub reasoning_display_mode: ReasoningDisplayMode,
+    #[serde(default = "default_reasoning_visible_default")]
+    pub reasoning_visible_default: bool,
     #[serde(default)]
     pub status_line: StatusLineConfig,
     #[serde(default)]
@@ -42,6 +57,8 @@ impl Default for UiConfig {
             tool_output_spool_dir: None,
             allow_tool_ansi: default_allow_tool_ansi(),
             inline_viewport_rows: default_inline_viewport_rows(),
+            reasoning_display_mode: default_reasoning_display_mode(),
+            reasoning_visible_default: default_reasoning_visible_default(),
             status_line: StatusLineConfig::default(),
             keyboard_protocol: KeyboardProtocolConfig::default(),
         }
@@ -166,6 +183,14 @@ fn default_allow_tool_ansi() -> bool {
 
 fn default_inline_viewport_rows() -> u16 {
     crate::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS
+}
+
+fn default_reasoning_display_mode() -> ReasoningDisplayMode {
+    ReasoningDisplayMode::Toggle
+}
+
+fn default_reasoning_visible_default() -> bool {
+    crate::constants::ui::DEFAULT_REASONING_VISIBLE
 }
 
 /// Kitty keyboard protocol configuration

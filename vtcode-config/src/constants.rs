@@ -754,6 +754,7 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
+    pub const DEFAULT_REASONING_VISIBLE: bool = false;
     pub const SLASH_SUGGESTION_LIMIT: usize = 50; // All commands are scrollable
     pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
     pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;

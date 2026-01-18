@@ -411,38 +411,70 @@ fn stream_plain_response_delta(
 
 #[derive(Default)]
 struct StreamingReasoningState {
-    // DISABLED: Reasoning display is completely turned off.
-    // All methods are no-ops to ensure only tools and content are shown.
-    _phantom: (),
+    // Tracks buffered reasoning delta during streaming
+    buffered: String,
+    // Whether reasoning should be rendered inline during streaming
+    render_inline: bool,
+    // Track whether we've started streaming (for prefix)
+    started: bool,
 }
 
 impl StreamingReasoningState {
-    fn new(_inline_enabled: bool) -> Self {
-        Self::default()
+    fn new(inline_enabled: bool) -> Self {
+        Self {
+            buffered: String::new(),
+            render_inline: inline_enabled,
+            started: false,
+        }
     }
 
-    fn handle_delta(&mut self, _renderer: &mut AnsiRenderer, _delta: &str) -> Result<()> {
-        // DISABLED: Do not render reasoning
+    fn handle_delta(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<()> {
+        if !self.render_inline {
+            self.buffered.push_str(delta);
+            return Ok(());
+        }
+
+        // For inline rendering: stream reasoning like response tokens
+        if !self.started {
+            renderer.inline_with_style(MessageStyle::Reasoning, "Thinking: ")?;
+            self.started = true;
+        }
+        renderer.inline_with_style(MessageStyle::Reasoning, delta)?;
         Ok(())
     }
 
     #[allow(dead_code)]
-    fn flush_pending(&mut self, _renderer: &mut AnsiRenderer) -> Result<()> {
-        // DISABLED: No-op
+    fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        if !self.buffered.is_empty() {
+            // If we have buffered content and are rendering inline, add newline first
+            if self.render_inline && self.started {
+                renderer.inline_with_style(MessageStyle::Reasoning, "\n")?;
+            }
+            renderer.line(MessageStyle::Reasoning, &self.buffered)?;
+            self.buffered.clear();
+        }
         Ok(())
     }
 
     fn finalize(
         &mut self,
-        _renderer: &mut AnsiRenderer,
-        _final_reasoning: Option<&str>,
+        renderer: &mut AnsiRenderer,
+        final_reasoning: Option<&str>,
     ) -> Result<()> {
-        // DISABLED: Do not render final reasoning
+        // Flush any buffered reasoning first
+        self.flush_pending(renderer)?;
+
+        // If final reasoning provided (non-streaming), render it
+        if let Some(reasoning_text) = final_reasoning {
+            if !reasoning_text.trim().is_empty() {
+                renderer.line(MessageStyle::Reasoning, reasoning_text)?;
+            }
+        }
         Ok(())
     }
 
     fn handle_stream_failure(&mut self, _renderer: &mut AnsiRenderer) -> Result<()> {
-        // DISABLED: No-op
+        self.buffered.clear();
         Ok(())
     }
 }

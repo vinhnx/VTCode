@@ -6,13 +6,15 @@
 
 	// Cache DOM references
 	const elements = {
+		root: document.getElementById('chat-root'),
 		transcript: document.getElementById('transcript'),
 		status: document.getElementById('status'),
 		form: document.getElementById('composer'),
 		input: document.getElementById('message'),
 		sendBtn: document.getElementById('send'),
 		cancelBtn: document.getElementById('cancel'),
-		clearBtn: document.getElementById('clear')
+		clearBtn: document.getElementById('clear'),
+		reasoningToggle: document.getElementById('reasoning-toggle')
 	};
 	if (elements.status) {
 		elements.status.textContent = 'Ready';
@@ -26,7 +28,55 @@
 		reasoningBubble: null,
 		toolStreamingBubble: null,
 		rafId: null,
-		pendingUpdate: null
+		pendingUpdate: null,
+		reasoningDisplayMode: 'toggle',
+		reasoningVisible: false
+	};
+
+	const applyReasoningVisibility = () => {
+		if (!elements.root) return;
+		elements.root.setAttribute(
+			'data-reasoning-visible',
+			state.reasoningVisible ? 'true' : 'false'
+		);
+	};
+
+	const applyReasoningToggleState = () => {
+		if (!elements.reasoningToggle) return;
+		const isToggle = state.reasoningDisplayMode === 'toggle';
+		elements.reasoningToggle.style.display = isToggle ? 'inline-flex' : 'none';
+		elements.reasoningToggle.setAttribute(
+			'aria-pressed',
+			state.reasoningVisible ? 'true' : 'false'
+		);
+		elements.reasoningToggle.classList.toggle(
+			'chat-toggle--active',
+			state.reasoningVisible
+		);
+	};
+
+	const setReasoningConfig = (config = {}) => {
+		const mode = typeof config.reasoningDisplayMode === 'string'
+			? config.reasoningDisplayMode
+			: state.reasoningDisplayMode;
+		const visibleDefault = typeof config.reasoningVisibleDefault === 'boolean'
+			? config.reasoningVisibleDefault
+			: state.reasoningVisible;
+
+		state.reasoningDisplayMode = ['always', 'toggle', 'hidden'].includes(mode)
+			? mode
+			: 'toggle';
+
+		if (state.reasoningDisplayMode === 'always') {
+			state.reasoningVisible = true;
+		} else if (state.reasoningDisplayMode === 'hidden') {
+			state.reasoningVisible = false;
+		} else {
+			state.reasoningVisible = visibleDefault;
+		}
+
+		applyReasoningVisibility();
+		applyReasoningToggleState();
 	};
 
 	// Cache icon HTML to avoid repeated string creation
@@ -242,6 +292,16 @@
 		updateButtonStates();
 	});
 
+	// Reasoning toggle
+	if (elements.reasoningToggle) {
+		elements.reasoningToggle.addEventListener('click', () => {
+			if (state.reasoningDisplayMode !== 'toggle') return;
+			state.reasoningVisible = !state.reasoningVisible;
+			applyReasoningVisibility();
+			applyReasoningToggleState();
+		});
+	}
+
 	// Clear button
 	elements.clearBtn.addEventListener('click', () => {
 		vscode.postMessage({ type: 'clear' });
@@ -253,6 +313,9 @@
 		const message = event.data;
 
 		switch (type || message.type) {
+			case 'config':
+				setReasoningConfig(message);
+				break;
 			case 'transcript':
 				state.messages = message.messages ?? [];
 				state.streamingBubble = null;
@@ -327,4 +390,5 @@
 
 	// Initial message
 	vscode.postMessage({ type: 'ready' });
+	setReasoningConfig();
 })();
