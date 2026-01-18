@@ -314,7 +314,10 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             | InlineEvent::BackgroundOperation
             | InlineEvent::LaunchEditor
             | InlineEvent::ToggleMode
-            | InlineEvent::PlanConfirmation(_) => {
+            | InlineEvent::PlanConfirmation(_)
+            | InlineEvent::DiffPreviewApply
+            | InlineEvent::DiffPreviewReject
+            | InlineEvent::DiffPreviewTrustChanged { .. } => {
                 ctrl_c_state.disarm_exit();
             }
         }

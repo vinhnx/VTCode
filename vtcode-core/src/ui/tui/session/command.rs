@@ -154,6 +154,15 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         InlineCommand::ShowPlanConfirmation { plan } => {
             show_plan_confirmation_modal(session, *plan);
         }
+        InlineCommand::ShowDiffPreview {
+            file_path,
+            before,
+            after,
+            hunks,
+            current_hunk,
+        } => {
+            show_diff_preview(session, file_path, before, after, hunks, current_hunk);
+        }
         InlineCommand::Shutdown => {
             request_exit(session);
         }
@@ -938,4 +947,24 @@ pub fn open_config_palette(session: &mut Session) {
             push_line(session, InlineMessageKind::Error, segments);
         }
     }
+}
+
+/// Show diff preview modal for file edit approval
+pub(super) fn show_diff_preview(
+    session: &mut Session,
+    file_path: String,
+    before: String,
+    after: String,
+    hunks: Vec<crate::ui::tui::types::DiffHunk>,
+    current_hunk: usize,
+) {
+    use crate::ui::tui::types::DiffPreviewState;
+    
+    let mut state = DiffPreviewState::new(file_path, before, after, hunks);
+    state.current_hunk = current_hunk;
+    
+    session.diff_preview = Some(state);
+    session.input_enabled = false;
+    session.cursor_visible = false;
+    mark_dirty(session);
 }
