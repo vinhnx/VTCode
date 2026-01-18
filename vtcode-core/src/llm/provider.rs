@@ -1145,7 +1145,7 @@ impl ToolDefinition {
     }
 
     /// Create a new apply_patch tool definition (GPT-5.1 specific)
-    /// The apply_patch tool lets models create, update, and delete files using structured diffs
+    /// The apply_patch tool lets models create, update, and delete files using VT Code structured diffs
     pub fn apply_patch(description: String) -> Self {
         let sanitized_description = sanitize_tool_description(&description);
         Self {
@@ -1156,16 +1156,19 @@ impl ToolDefinition {
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "file_path": {
+                        "input": {
                             "type": "string",
-                            "description": "The absolute path to the file to modify"
+                            "description": "Patch in VT Code format. MUST use *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++) format."
                         },
                         "patch": {
                             "type": "string",
-                            "description": "Unified diff format patch to apply"
+                            "description": "Alias for input parameter"
                         }
                     },
-                    "required": ["file_path", "patch"]
+                    "anyOf": [
+                        {"required": ["input"]},
+                        {"required": ["patch"]}
+                    ]
                 }),
             }),
             shell: None,

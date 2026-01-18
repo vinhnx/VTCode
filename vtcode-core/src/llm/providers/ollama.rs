@@ -405,7 +405,21 @@ impl OllamaProvider {
 
         let tools = match request.tool_choice {
             Some(ToolChoice::None) => None,
-            _ => request.tools.clone(),
+            _ => request.tools.as_ref().map(|tools| {
+                tools
+                    .iter()
+                    .filter_map(|tool| {
+                        // Normalize all tools to function type for Ollama compatibility
+                        tool.function.as_ref().map(|func| {
+                            ToolDefinition::function(
+                                func.name.clone(),
+                                func.description.clone(),
+                                func.parameters.clone(),
+                            )
+                        })
+                    })
+                    .collect()
+            }),
         };
 
         Ok(OllamaChatRequest {

@@ -200,12 +200,13 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         tools::APPLY_PATCH,
         ToolSignature {
             name: tools::APPLY_PATCH,
-            brief: "Apply unified diff",
+            brief: "Apply VT Code patch (*** Begin/End Patch format)",
             required_params: vec![
-                ("path", "string", "File path"),
-                ("patch", "string", "Unified diff"),
+                ("input", "string", "VT Code patch content"),
             ],
-            common_params: vec![],
+            common_params: vec![
+                ("patch", "string", "Alias for input"),
+            ],
             token_estimate: 35,
         },
     );
