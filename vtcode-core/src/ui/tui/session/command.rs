@@ -151,6 +151,10 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
             session.header_context.editing_mode = mode;
             session.needs_redraw = true;
         }
+        InlineCommand::SetAutonomousMode(enabled) => {
+            session.header_context.autonomous_mode = enabled;
+            session.needs_redraw = true;
+        }
         InlineCommand::ShowPlanConfirmation { plan } => {
             show_plan_confirmation_modal(session, *plan);
         }
@@ -959,10 +963,10 @@ pub(super) fn show_diff_preview(
     current_hunk: usize,
 ) {
     use crate::ui::tui::types::DiffPreviewState;
-    
+
     let mut state = DiffPreviewState::new(file_path, before, after, hunks);
     state.current_hunk = current_hunk;
-    
+
     session.diff_preview = Some(state);
     session.input_enabled = false;
     session.cursor_visible = false;

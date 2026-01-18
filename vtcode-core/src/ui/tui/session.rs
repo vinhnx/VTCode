@@ -49,6 +49,7 @@ mod command;
 pub mod config_palette;
 mod editing;
 
+mod diff_preview;
 mod events;
 mod message_renderer;
 mod messages;
@@ -59,7 +60,6 @@ mod spinner;
 mod state;
 pub mod terminal_capabilities;
 mod tool_renderer;
-mod diff_preview;
 mod trust;
 
 use self::config_palette::ConfigPalette;
@@ -571,6 +571,10 @@ impl Session {
                 self.header_context.editing_mode = mode;
                 self.needs_redraw = true;
             }
+            InlineCommand::SetAutonomousMode(enabled) => {
+                self.header_context.autonomous_mode = enabled;
+                self.needs_redraw = true;
+            }
             InlineCommand::ShowPlanConfirmation { plan } => {
                 command::show_plan_confirmation_modal(self, *plan);
             }
@@ -734,7 +738,7 @@ impl Session {
         render::render_config_palette(self, frame, viewport);
         render::render_file_palette(self, frame, viewport);
         render::render_prompt_palette(self, frame, viewport);
-        
+
         // Render diff preview modal if active
         if self.diff_preview.is_some() {
             diff_preview::render_diff_preview(self, frame, viewport);

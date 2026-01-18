@@ -123,7 +123,7 @@ pub(crate) async fn confirm_with_diff_preview(
     after: &str,
 ) -> Result<bool> {
     let hunks: Vec<DiffHunk> = vec![];
-    
+
     handle.show_diff_preview(
         file_path.to_string(),
         before.to_string(),
@@ -131,7 +131,7 @@ pub(crate) async fn confirm_with_diff_preview(
         hunks,
         0,
     );
-    
+
     while let Some(event) = session.next_event().await {
         match event {
             InlineEvent::DiffPreviewApply => return Ok(true),
@@ -139,6 +139,6 @@ pub(crate) async fn confirm_with_diff_preview(
             _ => continue,
         }
     }
-    
+
     Ok(false)
 }

@@ -499,7 +499,7 @@ pub async fn handle_execute_tool(
                 .as_ref()
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
-            editing_mode: ctx.session_stats.editing_mode(),
+            autonomous_mode: ctx.session_stats.is_autonomous_mode(),
         },
         &name,
         Some(&args),
@@ -1262,13 +1262,11 @@ pub async fn handle_toggle_plan_mode(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_toggle_agent_mode(
+pub async fn handle_toggle_autonomous_mode(
     ctx: SlashCommandContext<'_>,
     enable: Option<bool>,
 ) -> Result<SlashCommandControl> {
-    use vtcode_core::ui::tui::EditingMode;
-
-    let current = ctx.session_stats.is_agent_mode();
+    let current = ctx.session_stats.is_autonomous_mode();
     let new_state = match enable {
         Some(value) => value,
         None => !current,
@@ -1278,30 +1276,20 @@ pub async fn handle_toggle_agent_mode(
         ctx.renderer.line(
             MessageStyle::Info,
             if current {
-                "Agent Mode is already enabled (autonomous: reduced prompts)."
+                "Autonomous Mode is already enabled."
             } else {
-                "Agent Mode is already disabled."
+                "Autonomous Mode is already disabled."
             },
         )?;
         return Ok(SlashCommandControl::Continue);
     }
 
-    // Default back to Edit mode if disabling Agent mode
-    let new_mode = if new_state {
-        EditingMode::Agent
-    } else {
-        EditingMode::Edit
-    };
-
-    ctx.session_stats.set_editing_mode(new_mode);
-    ctx.handle.set_editing_mode(new_mode);
-
-    // If we were in plan mode, we need to disable it in the registry
-    ctx.tool_registry.disable_plan_mode();
+    ctx.session_stats.set_autonomous_mode(new_state);
+    ctx.handle.set_autonomous_mode(new_state);
 
     if new_state {
         ctx.renderer
-            .line(MessageStyle::Info, "Agent Mode enabled")?;
+            .line(MessageStyle::Info, "Autonomous Mode enabled")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  The agent will work more autonomously with fewer confirmation prompts.",
@@ -1311,7 +1299,8 @@ pub async fn handle_toggle_agent_mode(
             "  Safe tools (read/search) are auto-approved. Use with caution.",
         )?;
     } else {
-        ctx.renderer.line(MessageStyle::Info, "Edit Mode enabled")?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Autonomous Mode disabled")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  Standard human-in-the-loop prompts are now active for all mutating actions.",
@@ -1349,14 +1338,6 @@ pub async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashComm
             ctx.renderer.line(
                 MessageStyle::Output,
                 "  Read-only mode for analysis and planning. Mutating tools disabled.",
-            )?;
-        }
-        EditingMode::Agent => {
-            ctx.renderer
-                .line(MessageStyle::Info, "Switched to Agent Mode")?;
-            ctx.renderer.line(
-                MessageStyle::Output,
-                "  Autonomous mode with reduced prompts and auto-approval for safe tools.",
             )?;
         }
     }

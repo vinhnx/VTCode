@@ -60,7 +60,7 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
         Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub hitl_notification_bell: bool,
-    pub editing_mode: vtcode_core::ui::tui::EditingMode,
+    pub autonomous_mode: bool,
 }
 
 pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
@@ -343,14 +343,15 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         decision_ledger,
         tool_permission_cache,
         hitl_notification_bell,
-        editing_mode,
+        autonomous_mode,
     } = ctx;
 
-    // Agent mode auto-approval for safe tools
-    if editing_mode == vtcode_core::ui::tui::EditingMode::Agent
-        && !tool_registry.is_mutating_tool(tool_name)
-    {
-        tracing::debug!("Auto-approving safe tool '{}' in Agent mode", tool_name);
+    // Autonomous mode auto-approval for safe tools
+    if autonomous_mode && !tool_registry.is_mutating_tool(tool_name) {
+        tracing::debug!(
+            "Auto-approving safe tool '{}' in autonomous mode",
+            tool_name
+        );
         return Ok(ToolPermissionFlow::Approved);
     }
 

@@ -547,7 +547,7 @@ pub(crate) async fn handle_tool_call(
                 .vt_cfg
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
-            editing_mode: ctx.session_stats.editing_mode(),
+            autonomous_mode: ctx.session_stats.is_autonomous_mode(),
         },
         tool_name,
         Some(&args_val),
@@ -1748,7 +1748,7 @@ pub(crate) async fn handle_text_response(
                     .vt_cfg
                     .map(|cfg| cfg.security.hitl_notification_bell)
                     .unwrap_or(true),
-                editing_mode: params.ctx.session_stats.editing_mode(),
+                autonomous_mode: params.ctx.session_stats.is_autonomous_mode(),
             },
             call_tool_name,
             Some(&call_args_val),

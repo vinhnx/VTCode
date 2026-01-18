@@ -201,12 +201,8 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         ToolSignature {
             name: tools::APPLY_PATCH,
             brief: "Apply VT Code patch (*** Begin/End Patch format)",
-            required_params: vec![
-                ("input", "string", "VT Code patch content"),
-            ],
-            common_params: vec![
-                ("patch", "string", "Alias for input"),
-            ],
+            required_params: vec![("input", "string", "VT Code patch content")],
+            common_params: vec![("patch", "string", "Alias for input")],
             token_estimate: 35,
         },
     );
