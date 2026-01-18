@@ -105,7 +105,8 @@ impl ThemePalette {
             &[lighten(text_color, 0.15), text_color, fallback_light],
         );
         // Reasoning style: Dimmed and italic for placeholder-like thinking output
-        let reasoning_style = Self::style_from(reasoning_color, false).effects(Effects::DIMMED | Effects::ITALIC);
+        let reasoning_style =
+            Self::style_from(reasoning_color, false).effects(Effects::DIMMED | Effects::ITALIC);
         // Make user messages more distinct using secondary accent color
         let user_color = ensure_contrast(
             lighten(secondary, ui::THEME_USER_COLOR_LIGHTEN_RATIO),

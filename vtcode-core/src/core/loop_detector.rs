@@ -76,7 +76,7 @@ impl LoopDetector {
             custom_limits: HashMap::new(),
         }
     }
-    
+
     /// Set a custom limit for a specific tool.
     /// This overrides the default category-based limits.
     pub fn set_tool_limit(&mut self, tool_name: &str, limit: usize) {
@@ -329,23 +329,23 @@ impl LoopDetector {
                     "Repetitive pattern detected: [{}]\n\
                      The agent appears to be cycling through the same actions. \
                      Please pause and reassess the strategy.",
-                     pattern_str
+                    pattern_str
                 ));
             }
-            
+
             // Fuzzy detection: if tool names match but hashes differ, check semantic similarity?
-            // For now, simpler fuzzy check: ignore edit_file content arguments? 
+            // For now, simpler fuzzy check: ignore edit_file content arguments?
             // Better: Detecting "oscillating" behavior A->B->A->B even if args slightly differ.
             // If tool names match exactly for a sequence of length >= 3
             let suffix_names: Vec<&str> = suffix.iter().map(|(n, _)| *n).collect();
             let prev_names: Vec<&str> = prev.iter().map(|(n, _)| *n).collect();
-            
+
             if suffix_names == prev_names && k >= 2 {
-                 return Some(format!(
+                return Some(format!(
                     "Oscillating tool pattern detected: [{}]\n\
                      The agent is repeating the same sequence of tools. \
                      Ensure you are making actual progress.",
-                     suffix_names.join(" -> ")
+                    suffix_names.join(" -> ")
                 ));
             }
         }

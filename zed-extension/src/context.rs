@@ -39,7 +39,7 @@ impl EditorContext {
 
     /// Check if there's an active selection
     pub fn has_selection(&self) -> bool {
-        self.selection.is_some() && !self.selection.as_ref().unwrap().is_empty()
+        self.selection.as_ref().map_or(false, |s| !s.is_empty())
     }
 
     /// Get file extension from active file

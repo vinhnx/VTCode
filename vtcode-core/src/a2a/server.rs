@@ -148,7 +148,6 @@ async fn handle_stream(
     State(state): State<A2aServerState>,
     Json(request): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
-
     if request.jsonrpc != JSONRPC_VERSION {
         return Err(A2aErrorResponse::invalid_request(
             "Invalid JSON-RPC version",

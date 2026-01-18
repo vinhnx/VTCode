@@ -176,7 +176,7 @@ pub enum OutputContent {
 pub struct UserMessageItemParam {
     #[serde(rename = "type")]
     pub item_type: String, // "message"
-    pub role: String,      // "user"
+    pub role: String, // "user"
     pub content: Vec<InputContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -201,7 +201,7 @@ impl UserMessageItemParam {
 pub struct SystemMessageItemParam {
     #[serde(rename = "type")]
     pub item_type: String, // "message"
-    pub role: String,      // "system"
+    pub role: String, // "system"
     pub content: Vec<InputTextContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -226,7 +226,7 @@ impl SystemMessageItemParam {
 pub struct DeveloperMessageItemParam {
     #[serde(rename = "type")]
     pub item_type: String, // "message"
-    pub role: String,      // "developer"
+    pub role: String, // "developer"
     pub content: Vec<InputTextContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -239,7 +239,7 @@ pub struct DeveloperMessageItemParam {
 pub struct AssistantMessageItemParam {
     #[serde(rename = "type")]
     pub item_type: String, // "message"
-    pub role: String,      // "assistant"
+    pub role: String, // "assistant"
     pub content: Vec<OutputContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,

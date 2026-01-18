@@ -157,54 +157,54 @@ impl FileCache {
 
     /// Check memory pressure and enforce limits with tiered eviction
     pub async fn check_pressure_and_evict(&self) {
-        let mut stats = self.stats.lock().await; 
-        
+        let mut stats = self.stats.lock().await;
+
         let current_size = stats.total_size_bytes;
         let max_size = self.max_size_bytes;
-        
+
         if current_size > max_size {
             // Tier 1: Clear directory cache first (cheaper to rebuild)
             self.directory_cache.clear();
-            
+
             // Re-calculate size (approximate, since we don't iterate to sum remaining)
             // Ideally we'd track directory vs file size separately, but for now we assume
             // a significant portion was directories or we just set a flag.
             // Since we cleared directories, we subtract their contribution if we tracked it,
             // but we track total. For safety/simplicity in this "panic" mode:
-            
+
             // If we are VERY over limit (e.g. 150%), clear everything.
             if current_size as f64 > max_size as f64 * 1.5 {
-                 self.file_cache.clear();
-                 stats.total_size_bytes = 0;
-                 stats.entries = 0;
-                 stats.memory_evictions += 1;
-                 return;
+                self.file_cache.clear();
+                stats.total_size_bytes = 0;
+                stats.entries = 0;
+                stats.memory_evictions += 1;
+                return;
             }
-            
+
             // Tier 2: If just moderately over, we accept that directory clear helped
             // and we rely on the implementation details of quick_cache to handle
             // the file cache eviction over time or we trigger a partial clear.
             // Since we can't easily partially clear quick_cache by size:
-            
+
             // We'll reset the total size tracking if we cleared everything,
             // but here we cleared only directories.
             // Let's rely on a simplified approach:
             // If over limit, clear directory cache.
             // If *still* conceptually over limit (checked next time or if we had separate counters),
             // we'd clear files.
-            
+
             // Improvement: Track File and Dir sizes separately in future.
             // For now, "Hard Limit" means clear all to be safe.
             // But let's try to preserve files if possible.
-            
+
             // Since we can't accurately know how much we freed without separate counters,
             // we will decrement stats based on an estimate or just reset if we clear all.
-            
+
             // Revised Strategy:
             // 1. Clear directories.
             // 2. If valid entries remain, we might still be over.
             // But ensuring stability is key.
-            
+
             self.file_cache.clear(); // For now, safe clear all is better than OOM
             stats.total_size_bytes = 0;
             stats.entries = 0;
@@ -224,8 +224,8 @@ impl FileCache {
     /// target_memory_ratio: 0.0 to 1.0 (fraction of total system memory to use).
     pub fn adjust_capacity(&mut self, target_memory_ratio: f64) {
         // Heuristic: Assume 16GB system if we can't query (conservative default)
-        const ASSUMED_SYSTEM_MEMORY: usize = 16 * 1024 * 1024 * 1024; 
-        
+        const ASSUMED_SYSTEM_MEMORY: usize = 16 * 1024 * 1024 * 1024;
+
         let target_bytes = (ASSUMED_SYSTEM_MEMORY as f64 * target_memory_ratio) as usize;
         self.max_size_bytes = target_bytes;
     }

@@ -119,14 +119,12 @@ impl ReadFileHandler {
         let path = PathBuf::from(&file_path);
         anyhow::ensure!(path.is_absolute(), "file_path must be an absolute path");
 
-        let effective_limit = if matches!(mode, ReadMode::Slice)
-            && max_tokens.is_none()
-            && limit < MIN_BATCH_LIMIT
-        {
-            MIN_BATCH_LIMIT
-        } else {
-            limit
-        };
+        let effective_limit =
+            if matches!(mode, ReadMode::Slice) && max_tokens.is_none() && limit < MIN_BATCH_LIMIT {
+                MIN_BATCH_LIMIT
+            } else {
+                limit
+            };
 
         let mut collected = match mode {
             ReadMode::Slice => slice::read(&path, offset, effective_limit).await?,

@@ -103,7 +103,10 @@ impl AdaptiveRateLimiter {
             .or_insert_with(|| TokenBucket::new(self.default_capacity, self.default_refill_rate));
 
         let priorities = self.tool_priorities.lock().unwrap();
-        let priority = priorities.get(tool_name).copied().unwrap_or(Priority::Normal);
+        let priority = priorities
+            .get(tool_name)
+            .copied()
+            .unwrap_or(Priority::Normal);
         let cost = priority.weight();
 
         if bucket.try_acquire(cost) {
@@ -113,13 +116,13 @@ impl AdaptiveRateLimiter {
             // 1. Calculate base need (tokens needed / refill rate)
             // 2. Apply exponential factor based on deficit to discourage hammering
             // 3. High priority tools get a "discount" on the wait time
-            
+
             let needed = cost - bucket.tokens;
             let base_wait_secs = needed / bucket.refill_rate;
-            
+
             // Jitter for backoff (add 10% randomness to avoid thundering herd)
-            let jitter = 1.1; 
-            
+            let jitter = 1.1;
+
             let wait_secs = match priority {
                 Priority::Critical => base_wait_secs * 0.5, // Return faster
                 Priority::High => base_wait_secs * 0.8,

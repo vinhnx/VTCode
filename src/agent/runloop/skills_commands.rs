@@ -324,7 +324,10 @@ Shortcuts:
                     }
                     vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
                         Ok(SkillCommandOutcome::Error {
-                            message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
+                            message: format!(
+                                "Skill '{}' is a CLI tool, not a traditional skill",
+                                name
+                            ),
                         })
                     }
                 },
@@ -332,7 +335,7 @@ Shortcuts:
                     message: format!("Failed to load skill '{}': {}", name, e),
                 }),
             }
-        },
+        }
 
         SkillCommandAction::Unload { name } => Ok(SkillCommandOutcome::UnloadSkill { name }),
 
@@ -380,7 +383,7 @@ Shortcuts:
                     message: format!("Failed to load skill '{}': {}", name, e),
                 }),
             }
-        },
+        }
 
         SkillCommandAction::Use { name, input } => match loader.get_skill(&name).await {
             Ok(enhanced_skill) => match enhanced_skill {

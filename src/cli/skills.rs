@@ -11,8 +11,6 @@ use vtcode_core::skills::manifest::generate_skill_template;
 
 use crate::cli::SkillsCommandOptions;
 
-
-
 /// Generate a comprehensive validation report
 pub async fn handle_skills_validate_all(options: &SkillsCommandOptions) -> Result<()> {
     let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
@@ -447,10 +445,12 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
 
                     println!("Skills index regenerated successfully!");
                     println!("Index file: {}", index_path.display());
-                    println!("Found {} skills (traditional: {}, CLI tools: {})",
-                            total_skills,
-                            discovery_result.skills.len(),
-                            discovery_result.tools.len());
+                    println!(
+                        "Found {} skills (traditional: {}, CLI tools: {})",
+                        total_skills,
+                        discovery_result.skills.len(),
+                        discovery_result.tools.len()
+                    );
 
                     if !discovery_result.skills.is_empty() {
                         println!("\nTraditional skills:");
@@ -484,10 +484,12 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
 }
 
 /// Generate comprehensive skills index including all types of skills
-pub async fn generate_comprehensive_skills_index(workspace: &PathBuf) -> Result<std::path::PathBuf> {
+pub async fn generate_comprehensive_skills_index(
+    workspace: &PathBuf,
+) -> Result<std::path::PathBuf> {
+    use std::fmt::Write;
     use vtcode_core::exec::skill_manager::SkillManager;
     use vtcode_core::skills::loader::EnhancedSkillLoader;
-    use std::fmt::Write;
 
     let skill_manager = SkillManager::new(workspace);
     let mut loader = EnhancedSkillLoader::new(workspace.clone());
@@ -518,8 +520,16 @@ pub async fn generate_comprehensive_skills_index(workspace: &PathBuf) -> Result<
             for skill_ctx in &discovery_result.skills {
                 let manifest = skill_ctx.manifest();
                 let desc = manifest.description.replace('|', "\\|");
-                let skill_type = if manifest.mode.unwrap_or(false) { "Mode" } else { "Skill" };
-                let _ = writeln!(content, "| `{}` | {} | {} |", manifest.name, desc, skill_type);
+                let skill_type = if manifest.mode.unwrap_or(false) {
+                    "Mode"
+                } else {
+                    "Skill"
+                };
+                let _ = writeln!(
+                    content,
+                    "| `{}` | {} | {} |",
+                    manifest.name, desc, skill_type
+                );
             }
             content.push('\n');
         }
@@ -554,7 +564,11 @@ pub async fn generate_comprehensive_skills_index(workspace: &PathBuf) -> Result<
             let _ = writeln!(
                 content,
                 "- **Type**: {}\n- **Path**: `~/.vtcode/skills/{}/{}`\n",
-                if manifest.mode.unwrap_or(false) { "Mode" } else { "Skill" },
+                if manifest.mode.unwrap_or(false) {
+                    "Mode"
+                } else {
+                    "Skill"
+                },
                 manifest.name,
                 "SKILL.md"
             );
@@ -577,8 +591,14 @@ pub async fn generate_comprehensive_skills_index(workspace: &PathBuf) -> Result<
 
     // Write to the skills index file
     let index_path = skill_manager.index_path();
-    tokio::fs::write(&index_path, &content).await
-        .with_context(|| format!("Failed to write comprehensive skills index: {}", index_path.display()))?;
+    tokio::fs::write(&index_path, &content)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to write comprehensive skills index: {}",
+                index_path.display()
+            )
+        })?;
 
     Ok(index_path)
 }

@@ -26,7 +26,10 @@ impl Session {
             ),
             InlineMessageKind::Agent => None,
             InlineMessageKind::Policy => self.labels.agent.clone(),
-            InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error | InlineMessageKind::Warning => None,
+            InlineMessageKind::Tool
+            | InlineMessageKind::Pty
+            | InlineMessageKind::Error
+            | InlineMessageKind::Warning => None,
             InlineMessageKind::Info => None,
         }
     }

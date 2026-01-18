@@ -30,10 +30,14 @@ pub enum PatchError {
     #[error("file '{path}' not found for update")]
     MissingFile { path: String },
 
-    #[error("failed to locate context '{context}' in '{path}'. Fix: Use read_file to get exact content, then copy the context lines precisely.")]
+    #[error(
+        "failed to locate context '{context}' in '{path}'. Fix: Use read_file to get exact content, then copy the context lines precisely."
+    )]
     ContextNotFound { path: String, context: String },
 
-    #[error("failed to locate expected lines in '{path}':\n{snippet}\n\nFix: The patch context/deletion lines must match file content exactly. Use read_file first, then use those exact lines in your patch.")]
+    #[error(
+        "failed to locate expected lines in '{path}':\n{snippet}\n\nFix: The patch context/deletion lines must match file content exactly. Use read_file first, then use those exact lines in your patch."
+    )]
     SegmentNotFound { path: String, snippet: String },
 
     #[error("I/O error while {action} '{path}': {source}")]

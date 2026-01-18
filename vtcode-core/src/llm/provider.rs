@@ -1113,11 +1113,12 @@ impl ToolDefinition {
     /// Supports regex and bm25 search algorithms
     pub fn tool_search(algorithm: ToolSearchAlgorithm) -> Self {
         let (tool_type, name) = match algorithm {
-            ToolSearchAlgorithm::Regex => (
-                "tool_search_tool_regex_20251119",
-                "tool_search_tool_regex",
-            ),
-            ToolSearchAlgorithm::Bm25 => ("tool_search_tool_bm25_20251119", "tool_search_tool_bm25"),
+            ToolSearchAlgorithm::Regex => {
+                ("tool_search_tool_regex_20251119", "tool_search_tool_regex")
+            }
+            ToolSearchAlgorithm::Bm25 => {
+                ("tool_search_tool_bm25_20251119", "tool_search_tool_bm25")
+            }
         };
 
         Self {

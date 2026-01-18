@@ -242,9 +242,11 @@ pub(crate) async fn run_single_agent_loop_unified(
             // Phase 3 Optimization: Session Memory Bounds
             // Check if we've exceeded the maximum allowed turns/messages
             // We approximate turns as history/2 for safety
-            if interaction_ctx.conversation_history.len() > interaction_ctx.config.max_conversation_turns * 2 {
-                 // Double check specific turn count if we had it, but history length is the main memory driver
-                 interaction_ctx.renderer.line(
+            if interaction_ctx.conversation_history.len()
+                > interaction_ctx.config.max_conversation_turns * 2
+            {
+                // Double check specific turn count if we had it, but history length is the main memory driver
+                interaction_ctx.renderer.line(
                     vtcode_core::utils::ansi::MessageStyle::Warning,
                     &format!(
                         "Session reached maximum conversation limit ({} turns). Ending session to prevent performance degradation.",

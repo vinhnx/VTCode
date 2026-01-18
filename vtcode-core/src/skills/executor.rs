@@ -193,7 +193,9 @@ pub async fn execute_skill_with_sub_llm(
                 // to process whatever triggered the pause (usually server-side tool use).
             }
             FinishReason::Refusal => {
-                return Err(anyhow!("LLM refused to continue generating response due to policy violations"));
+                return Err(anyhow!(
+                    "LLM refused to continue generating response due to policy violations"
+                ));
             }
         }
     }

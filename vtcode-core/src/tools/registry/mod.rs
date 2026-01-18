@@ -531,9 +531,10 @@ impl ToolRegistry {
     /// A `Vec<String>` containing the names of all available tools
     pub async fn available_tools(&self) -> Vec<String> {
         // Use try_read to avoid blocking on contested locks
-        match self.cached_available_tools.try_read() {
-            Ok(cache) if cache.is_some() => return cache.as_ref().unwrap().clone(),
-            _ => {} // Continue with computation if cache miss or lock contested
+        if let Ok(cache) = self.cached_available_tools.try_read() {
+            if let Some(tools) = cache.as_ref() {
+                return tools.clone();
+            }
         }
 
         // HP-7: Inventory tools are already sorted, just convert to Vec

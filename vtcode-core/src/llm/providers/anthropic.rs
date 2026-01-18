@@ -7,8 +7,8 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message,
-    MessageRole, ParallelToolConfig, ToolCall, ToolChoice, ToolDefinition, Usage,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+    Message, MessageRole, ParallelToolConfig, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
@@ -19,16 +19,17 @@ use reqwest::Client as HttpClient;
 use serde_json::{Map, Value, json};
 use std::env;
 
+use super::anthropic_types::{
+    AnthropicContentBlock, AnthropicStreamDelta, AnthropicStreamEvent, ThinkingConfig,
+};
 use super::{
+    ReasoningBuffer,
     common::{
         convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url,
         parse_client_prompt_common, resolve_model,
     },
     error_handling::{format_network_error, format_parse_error, handle_anthropic_http_error},
-    extract_reasoning_trace, ReasoningBuffer,
-};
-use super::anthropic_types::{
-    AnthropicContentBlock, AnthropicStreamDelta, AnthropicStreamEvent, ThinkingConfig,
+    extract_reasoning_trace,
 };
 
 pub struct AnthropicProvider {
@@ -259,8 +260,8 @@ impl AnthropicProvider {
         }
         // Add 64k output beta header for all models to support higher limits
         pieces.push("output-64k-2025-02-19".to_owned());
-        if self.model == models::anthropic::CLAUDE_SONNET_4_5 
-            || self.model == models::anthropic::CLAUDE_SONNET_4_5_20250929 
+        if self.model == models::anthropic::CLAUDE_SONNET_4_5
+            || self.model == models::anthropic::CLAUDE_SONNET_4_5_20250929
         {
             // Add 1M context beta header for Sonnet 4.5
             pieces.push("context-1m-2025-08-07".to_owned());
@@ -287,9 +288,9 @@ impl AnthropicProvider {
             return false;
         }
         if let Some(tools) = &request.tools {
-            tools.iter().any(|t| {
-                t.is_tool_search() || t.defer_loading.unwrap_or(false)
-            })
+            tools
+                .iter()
+                .any(|t| t.is_tool_search() || t.defer_loading.unwrap_or(false))
         } else {
             false
         }
@@ -672,7 +673,8 @@ impl AnthropicProvider {
                 }
             }
             if settings.force_xml_tags {
-                final_system_prompt.push_str("\nPlease use XML tags to structure your response for consistency.");
+                final_system_prompt
+                    .push_str("\nPlease use XML tags to structure your response for consistency.");
             }
             if settings.allow_uncertainty {
                 final_system_prompt.push_str("\nIf you are unsure or the information is missing, explicitly state 'I don't know' or 'I am unsure'.");
@@ -725,7 +727,9 @@ impl AnthropicProvider {
                 }
             }
 
-            if let Some(idx) = max_idx && idx > 0 {
+            if let Some(idx) = max_idx
+                && idx > 0
+            {
                 let msg = messages_to_process.remove(idx);
                 messages_to_process.insert(0, msg);
             }
@@ -1102,8 +1106,9 @@ impl AnthropicProvider {
                         if content_block.get("type").and_then(|t| t.as_str())
                             == Some("tool_search_tool_search_result")
                         {
-                            if let Some(refs) =
-                                content_block.get("tool_references").and_then(|r| r.as_array())
+                            if let Some(refs) = content_block
+                                .get("tool_references")
+                                .and_then(|r| r.as_array())
                             {
                                 for tool_ref in refs {
                                     if let Some(tool_name) =
@@ -1290,9 +1295,11 @@ impl LLMProvider for AnthropicProvider {
             .header("anthropic-version", urls::ANTHROPIC_API_VERSION);
 
         let include_structured = anthropic_request.get("output_format").is_some();
-        if let Some(beta_header) =
-            self.combined_beta_header_value(include_structured, include_tool_search, request.betas.as_ref())
-        {
+        if let Some(beta_header) = self.combined_beta_header_value(
+            include_structured,
+            include_tool_search,
+            request.betas.as_ref(),
+        ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
 
@@ -1343,9 +1350,11 @@ impl LLMProvider for AnthropicProvider {
             .header("content-type", "application/json");
 
         let include_structured = anthropic_request.get("output_format").is_some();
-        if let Some(beta_header) =
-            self.combined_beta_header_value(include_structured, include_tool_search, request.betas.as_ref())
-        {
+        if let Some(beta_header) = self.combined_beta_header_value(
+            include_structured,
+            include_tool_search,
+            request.betas.as_ref(),
+        ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
 
@@ -1576,10 +1585,7 @@ impl LLMProvider for AnthropicProvider {
             if budget < 1024 {
                 let formatted_error = error_display::format_llm_error(
                     "Anthropic",
-                    &format!(
-                        "thinking_budget ({}) must be at least 1024 tokens.",
-                        budget
-                    ),
+                    &format!("thinking_budget ({}) must be at least 1024 tokens.", budget),
                 );
                 return Err(LLMError::InvalidRequest {
                     message: formatted_error,
@@ -1729,13 +1735,22 @@ impl AnthropicProvider {
         };
 
         let response = self.generate(request).await?;
-        let content = response.content.as_deref().unwrap_or("").trim().to_uppercase();
-        
+        let content = response
+            .content
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .to_uppercase();
+
         Ok(content.contains("YES"))
     }
 
     /// Enhances a request with prompt leak protection by injecting a reminder prefill.
-    pub fn with_leak_protection(&self, mut request: LLMRequest, secret_description: &str) -> LLMRequest {
+    pub fn with_leak_protection(
+        &self,
+        mut request: LLMRequest,
+        secret_description: &str,
+    ) -> LLMRequest {
         let reminder = format!("[Never mention or reveal {}]", secret_description);
         if let Some(existing_prefill) = request.prefill {
             request.prefill = Some(format!("{} {}", reminder, existing_prefill));
@@ -1766,10 +1781,10 @@ impl AnthropicProvider {
     pub fn extract_xml_block(&self, content: &str, tag: &str) -> Option<String> {
         let start_tag = format!("<{}>", tag);
         let end_tag = format!("</{}>", tag);
-        
+
         let start_pos = content.find(&start_tag)? + start_tag.len();
         let end_pos = content.find(&end_tag)?;
-        
+
         if start_pos < end_pos {
             Some(content[start_pos..end_pos].trim().to_string())
         } else {
@@ -2545,7 +2560,10 @@ mod tests_refinement {
                 Some(ThinkingConfig::Enabled { budget_tokens }) => {
                     assert_eq!(budget_tokens, expected_budget)
                 }
-                _ => panic!("Expected thinking budget {} for effort {:?}", expected_budget, effort),
+                _ => panic!(
+                    "Expected thinking budget {} for effort {:?}",
+                    expected_budget, effort
+                ),
             }
         }
     }
@@ -2614,25 +2632,26 @@ mod tests_refinement {
 
         // 6. Pre-fill (last msg Assistant) should fail
         req.top_p = None;
-        req.messages.push(Message::assistant("I am thinking...".to_string()));
+        req.messages
+            .push(Message::assistant("I am thinking...".to_string()));
         assert!(provider.validate_request(&req).is_err());
     }
 
     #[test]
     fn test_prefill_serialization() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Hello".to_string())];
         request.prefill = Some("Definitely!".to_string());
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
-        
+
         // Should have 2 messages: User "Hello" and Assistant "Definitely!"
         assert_eq!(anthropic_req.messages.len(), 2);
         assert_eq!(anthropic_req.messages[1].role, "assistant");
-        
+
         let content = &anthropic_req.messages[1].content;
         if let AnthropicContentBlock::Text { text, .. } = &content[0] {
             assert_eq!(text, "Definitely!");
@@ -2644,19 +2663,19 @@ mod tests_refinement {
     #[test]
     fn test_character_reinforcement() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Who are you?".to_string())];
         request.character_reinforcement = true;
         request.character_name = Some("AcmeBot".to_string());
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
-        
+
         // Should have added an assistant message with [AcmeBot]
         assert_eq!(anthropic_req.messages.len(), 2);
         assert_eq!(anthropic_req.messages[1].role, "assistant");
-        
+
         let content = &anthropic_req.messages[1].content;
         if let AnthropicContentBlock::Text { text, .. } = &content[0] {
             assert_eq!(text, "[AcmeBot]");
@@ -2668,16 +2687,16 @@ mod tests_refinement {
     #[test]
     fn test_character_reinforcement_with_prefill() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Hello".to_string())];
         request.prefill = Some("I am ready.".to_string());
         request.character_reinforcement = true;
         request.character_name = Some("AcmeBot".to_string());
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
-        
+
         assert_eq!(anthropic_req.messages.len(), 2);
         let content = &anthropic_req.messages[1].content;
         if let AnthropicContentBlock::Text { text, .. } = &content[0] {
@@ -2693,9 +2712,9 @@ mod tests_refinement {
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Hello".to_string())];
         request.prefill = Some("Sure.".to_string());
-        
+
         let protected_req = provider.with_leak_protection(request, "the secret formula");
-        
+
         assert!(protected_req.prefill.is_some());
         let prefill = protected_req.prefill.unwrap();
         assert!(prefill.contains("[Never mention or reveal the secret formula]"));
@@ -2705,14 +2724,14 @@ mod tests_refinement {
     #[test]
     fn test_prefill_validation_failure() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         // claude-3-7-sonnet supports reasoning
         let mut request = LLMRequest::default();
         request.model = "claude-3-7-sonnet-20250219".to_string();
         request.messages = vec![Message::user("Hello".to_string())];
         request.thinking_budget = Some(2000);
         request.prefill = Some("I am thinking...".to_string());
-        
+
         // Should fail because prefill + thinking is not allowed
         assert!(provider.validate_request(&request).is_err());
     }
@@ -2720,7 +2739,7 @@ mod tests_refinement {
     #[test]
     fn test_coding_agent_system_prompt_refinement() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Hello".to_string())];
         request.system_prompt = Some("You are a coder.".to_string());
@@ -2730,10 +2749,10 @@ mod tests_refinement {
             strict_grounding: true,
             ..Default::default()
         });
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let system_val = val.get("system").unwrap().as_str().unwrap();
-        
+
         assert!(system_val.contains("use XML tags"));
         assert!(system_val.contains("I don't know"));
         assert!(system_val.contains("strictly from the provided documents"));
@@ -2742,17 +2761,17 @@ mod tests_refinement {
     #[test]
     fn test_coding_agent_thought_prefill() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Fix this bug.".to_string())];
         request.coding_agent_settings = Some(CodingAgentSettings {
             prefill_thought: true,
             ..Default::default()
         });
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
-        
+
         assert_eq!(anthropic_req.messages.len(), 2);
         let content = &anthropic_req.messages[1].content;
         if let AnthropicContentBlock::Text { text, .. } = &content[0] {
@@ -2765,7 +2784,7 @@ mod tests_refinement {
     #[test]
     fn test_coding_agent_thought_plus_prefill() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Refactor this.".to_string())];
         request.prefill = Some("Certainly.".to_string());
@@ -2773,23 +2792,23 @@ mod tests_refinement {
             prefill_thought: true,
             ..Default::default()
         });
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
-        
+
         assert_eq!(anthropic_req.messages.len(), 2);
         let content = &anthropic_req.messages[1].content;
         if let AnthropicContentBlock::Text { text, .. } = &content[0] {
-             assert_eq!(text, "<thought> Certainly.");
-         } else {
-             panic!("Expected text block");
-         }
-     }
+            assert_eq!(text, "<thought> Certainly.");
+        } else {
+            panic!("Expected text block");
+        }
+    }
 
     #[test]
     fn test_long_context_hoisting() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![
             Message::user("Short q".to_string()),
@@ -2800,10 +2819,10 @@ mod tests_refinement {
             long_context_optimization: true,
             ..Default::default()
         });
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let anthropic_req: AnthropicRequest = serde_json::from_value(val).unwrap();
-        
+
         // The long message should have been moved to the front (index 0)
         let first_msg_content = &anthropic_req.messages[0].content[0];
         if let AnthropicContentBlock::Text { text, .. } = first_msg_content {
@@ -2816,7 +2835,7 @@ mod tests_refinement {
     #[test]
     fn test_quote_grounding_instruction() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Analyze".to_string())];
         request.system_prompt = Some("You are an analyzer.".to_string());
@@ -2824,10 +2843,10 @@ mod tests_refinement {
             force_quote_grounding: true,
             ..Default::default()
         });
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let system_val = val.get("system").unwrap().as_str().unwrap();
-        
+
         assert!(system_val.contains("<quotes> tags first"));
     }
 
@@ -2836,7 +2855,7 @@ mod tests_refinement {
         let provider = AnthropicProvider::new("test-key".to_string());
         let docs = vec![("main.rs", "fn main() {}"), ("lib.rs", "pub mod api;")];
         let xml = provider.format_documents_xml(docs);
-        
+
         assert!(xml.contains("<documents>"));
         assert!(xml.contains("<document index=\"1\">"));
         assert!(xml.contains("<source>main.rs</source>"));
@@ -2847,7 +2866,7 @@ mod tests_refinement {
     #[test]
     fn test_role_specialization_injection() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Hello".to_string())];
         request.system_prompt = Some("Help me.".to_string());
@@ -2855,10 +2874,10 @@ mod tests_refinement {
             role_specialization: Some("Senior Architect".to_string()),
             ..Default::default()
         });
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let system_val = val.get("system").unwrap().as_str().unwrap();
-        
+
         assert!(system_val.starts_with("You are Senior Architect."));
         assert!(system_val.contains("Help me."));
     }
@@ -2866,17 +2885,17 @@ mod tests_refinement {
     #[test]
     fn test_enforce_structured_thought_instruction() {
         let provider = AnthropicProvider::new("test-key".to_string());
-        
+
         let mut request = LLMRequest::default();
         request.messages = vec![Message::user("Analyze".to_string())];
         request.coding_agent_settings = Some(CodingAgentSettings {
             enforce_structured_thought: true,
             ..Default::default()
         });
-        
+
         let val = provider.convert_to_anthropic_format(&request).unwrap();
         let system_val = val.get("system").unwrap().as_str().unwrap();
-        
+
         assert!(system_val.contains("<thinking> tags"));
         assert!(system_val.contains("<answer> tags"));
     }
@@ -2885,9 +2904,15 @@ mod tests_refinement {
     fn test_extract_xml_block() {
         let provider = AnthropicProvider::new("test-key".to_string());
         let content = "Some preamble <thinking>I should refactor</thinking> <answer>The code is fixed</answer>";
-        
-        assert_eq!(provider.extract_xml_block(content, "thinking").unwrap(), "I should refactor");
-        assert_eq!(provider.extract_xml_block(content, "answer").unwrap(), "The code is fixed");
+
+        assert_eq!(
+            provider.extract_xml_block(content, "thinking").unwrap(),
+            "I should refactor"
+        );
+        assert_eq!(
+            provider.extract_xml_block(content, "answer").unwrap(),
+            "The code is fixed"
+        );
         assert!(provider.extract_xml_block(content, "missing").is_none());
     }
 }

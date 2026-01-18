@@ -240,7 +240,7 @@ impl Session {
             cache.update_row_offsets_from(first_dirty);
             self.first_dirty_line = None;
             self.transcript_cache = Some(cache);
-            return self.transcript_cache.as_mut().unwrap();
+            return self.transcript_cache.as_mut().expect("cache just set");
         }
 
         // Update all messages from the first dirty one onwards
@@ -257,7 +257,7 @@ impl Session {
         cache.update_row_offsets_from(first_dirty);
         self.first_dirty_line = None;
         self.transcript_cache = Some(cache);
-        self.transcript_cache.as_mut().unwrap()
+        self.transcript_cache.as_mut().expect("cache just set")
     }
 
     /// Gets the total number of rows in the transcript for a given width

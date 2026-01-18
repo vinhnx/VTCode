@@ -8,17 +8,17 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::{Value, json};
 use tracing::debug;
 
-use crate::config::core::PromptCachingConfig;
 use crate::config::TimeoutsConfig;
+use crate::config::core::PromptCachingConfig;
 use crate::llm::error_display;
+#[cfg(test)]
+use crate::llm::provider::Message;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
     LLMStreamEvent, MessageRole, ToolCall, Usage,
 };
-#[cfg(test)]
-use crate::llm::provider::Message;
 
-use super::streaming::{parse_sse_event, StreamAccumulator};
+use super::streaming::{StreamAccumulator, parse_sse_event};
 
 /// Default base URL for OpenResponses-compatible APIs.
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
@@ -179,12 +179,13 @@ impl OpenResponsesProvider {
                     }
                 }
                 MessageRole::Tool => {
-                    let call_id = msg.tool_call_id.as_ref().ok_or_else(|| {
-                        LLMError::InvalidRequest {
-                            message: "Tool messages must include tool_call_id".to_string(),
-                            metadata: None,
-                        }
-                    })?;
+                    let call_id =
+                        msg.tool_call_id
+                            .as_ref()
+                            .ok_or_else(|| LLMError::InvalidRequest {
+                                message: "Tool messages must include tool_call_id".to_string(),
+                                metadata: None,
+                            })?;
 
                     input.push(json!({
                         "type": "function_call_output",
@@ -298,7 +299,8 @@ impl OpenResponsesProvider {
                 "message" => {
                     if let Some(content_array) = item.get("content").and_then(|v| v.as_array()) {
                         for entry in content_array {
-                            let entry_type = entry.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                            let entry_type =
+                                entry.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
                             match entry_type {
                                 "text" | "output_text" => {
@@ -309,9 +311,12 @@ impl OpenResponsesProvider {
                                     }
                                 }
                                 "refusal" => {
-                                    if let Some(refusal) = entry.get("refusal").and_then(|v| v.as_str()) {
+                                    if let Some(refusal) =
+                                        entry.get("refusal").and_then(|v| v.as_str())
+                                    {
                                         if !refusal.is_empty() {
-                                            content_fragments.push(format!("[Refusal: {}]", refusal));
+                                            content_fragments
+                                                .push(format!("[Refusal: {}]", refusal));
                                         }
                                     }
                                 }
@@ -372,33 +377,31 @@ impl OpenResponsesProvider {
             Some(tool_calls_vec)
         };
 
-        let usage = response_json.get("usage").map(|usage_value| {
-            Usage {
-                prompt_tokens: usage_value
-                    .get("input_tokens")
-                    .or_else(|| usage_value.get("prompt_tokens"))
-                    .and_then(|v| v.as_u64())
-                    .and_then(|v| u32::try_from(v).ok())
-                    .unwrap_or(0),
-                completion_tokens: usage_value
-                    .get("output_tokens")
-                    .or_else(|| usage_value.get("completion_tokens"))
-                    .and_then(|v| v.as_u64())
-                    .and_then(|v| u32::try_from(v).ok())
-                    .unwrap_or(0),
-                total_tokens: usage_value
-                    .get("total_tokens")
-                    .and_then(|v| v.as_u64())
-                    .and_then(|v| u32::try_from(v).ok())
-                    .unwrap_or(0),
-                cached_prompt_tokens: usage_value
-                    .get("prompt_tokens_details")
-                    .and_then(|d| d.get("cached_tokens"))
-                    .and_then(|v| v.as_u64())
-                    .and_then(|v| u32::try_from(v).ok()),
-                cache_creation_tokens: None,
-                cache_read_tokens: None,
-            }
+        let usage = response_json.get("usage").map(|usage_value| Usage {
+            prompt_tokens: usage_value
+                .get("input_tokens")
+                .or_else(|| usage_value.get("prompt_tokens"))
+                .and_then(|v| v.as_u64())
+                .and_then(|v| u32::try_from(v).ok())
+                .unwrap_or(0),
+            completion_tokens: usage_value
+                .get("output_tokens")
+                .or_else(|| usage_value.get("completion_tokens"))
+                .and_then(|v| v.as_u64())
+                .and_then(|v| u32::try_from(v).ok())
+                .unwrap_or(0),
+            total_tokens: usage_value
+                .get("total_tokens")
+                .and_then(|v| v.as_u64())
+                .and_then(|v| u32::try_from(v).ok())
+                .unwrap_or(0),
+            cached_prompt_tokens: usage_value
+                .get("prompt_tokens_details")
+                .and_then(|d| d.get("cached_tokens"))
+                .and_then(|v| v.as_u64())
+                .and_then(|v| u32::try_from(v).ok()),
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
         });
 
         Ok(LLMResponse {
@@ -499,10 +502,10 @@ impl LLMProvider for OpenResponsesProvider {
                 metadata: Some(LLMErrorMetadata::new(
                     "openresponses",
                     Some(status.as_u16()),
-                    None, // code
-                    None, // request_id
-                    None, // organization_id
-                    None, // retry_after
+                    None,             // code
+                    None,             // request_id
+                    None,             // organization_id
+                    None,             // retry_after
                     Some(error_text), // message
                 )),
             });
@@ -554,10 +557,10 @@ impl LLMProvider for OpenResponsesProvider {
                 metadata: Some(LLMErrorMetadata::new(
                     "openresponses",
                     Some(status.as_u16()),
-                    None, // code
-                    None, // request_id
-                    None, // organization_id
-                    None, // retry_after
+                    None,             // code
+                    None,             // request_id
+                    None,             // organization_id
+                    None,             // retry_after
                     Some(error_text), // message
                 )),
             });
@@ -586,9 +589,13 @@ impl LLMProvider for OpenResponsesProvider {
 
                             // Emit text deltas
                             if event.event_type == "response.output_text.delta" {
-                                if let super::streaming::StreamEventData::TextDelta(data) = &event.data {
+                                if let super::streaming::StreamEventData::TextDelta(data) =
+                                    &event.data
+                                {
                                     return Some((
-                                        Ok(LLMStreamEvent::Token { delta: data.delta.clone() }),
+                                        Ok(LLMStreamEvent::Token {
+                                            delta: data.delta.clone(),
+                                        }),
                                         (byte_stream, buffer, accumulator, done),
                                     ));
                                 }

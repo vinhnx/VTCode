@@ -101,13 +101,9 @@ pub enum AnthropicContentBlock {
 #[serde(tag = "type")]
 pub enum ToolSearchResultContent {
     #[serde(rename = "tool_search_tool_search_result")]
-    SearchResult {
-        tool_references: Vec<ToolReference>,
-    },
+    SearchResult { tool_references: Vec<ToolReference> },
     #[serde(rename = "tool_search_tool_result_error")]
-    Error {
-        error_code: String,
-    },
+    Error { error_code: String },
 }
 
 /// A reference to a discovered tool from tool search

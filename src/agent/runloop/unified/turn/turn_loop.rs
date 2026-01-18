@@ -95,6 +95,7 @@ pub async fn run_turn_loop(
     full_auto: bool,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
+    use crate::agent::runloop::unified::context_manager::PreRequestAction;
     use crate::agent::runloop::unified::turn::context::{
         TurnHandlerOutcome, TurnProcessingContext,
     };
@@ -104,7 +105,6 @@ pub async fn run_turn_loop(
         process_llm_response,
     };
     use vtcode_core::llm::provider as uni;
-    use crate::agent::runloop::unified::context_manager::PreRequestAction;
 
     // Initialize the outcome result
     let mut result = TurnLoopResult::Completed;
@@ -147,22 +147,22 @@ pub async fn run_turn_loop(
         // Check session boundaries
         match ctx.context_manager.pre_request_check(&working_history) {
             PreRequestAction::Stop(msg) => {
-                 crate::agent::runloop::unified::turn::turn_helpers::display_error(
+                crate::agent::runloop::unified::turn::turn_helpers::display_error(
                     ctx.renderer,
                     "Session Limit Reached",
-                    &anyhow::anyhow!("{}", msg)
-                 )?;
-                 result = TurnLoopResult::Aborted; // Or completed?
-                 *session_end_reason = crate::hooks::lifecycle::SessionEndReason::Error; 
-                 break;
+                    &anyhow::anyhow!("{}", msg),
+                )?;
+                result = TurnLoopResult::Aborted; // Or completed?
+                *session_end_reason = crate::hooks::lifecycle::SessionEndReason::Error;
+                break;
             }
             PreRequestAction::Warn(msg) => {
-                 crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                crate::agent::runloop::unified::turn::turn_helpers::display_status(
                     ctx.renderer,
-                    &format!("Warning: {}", msg)
-                 )?;
-                 // Inject warning into history?
-                 working_history.push(uni::Message::system(format!("SYSTEM ALERT: {}", msg)));
+                    &format!("Warning: {}", msg),
+                )?;
+                // Inject warning into history?
+                working_history.push(uni::Message::system(format!("SYSTEM ALERT: {}", msg)));
             }
             PreRequestAction::Proceed => {}
         }

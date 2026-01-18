@@ -33,7 +33,6 @@ pub struct BenchmarkCommandOptions {
     pub max_tasks: Option<usize>,
 }
 
-
 // Marketplace command handlers - these are the new functions we're adding
 pub async fn handle_marketplace_add(source: String, id: Option<String>) -> Result<()> {
     println!("Adding marketplace: {} with id: {:?}", source, id);
@@ -490,29 +489,28 @@ pub async fn handle_anthropic_api_command(
     port: u16,
     host: String,
 ) -> Result<()> {
-    use vtcode_core::anthropic_api::server::{AnthropicApiServerState, create_router};
     use std::net::SocketAddr;
+    use vtcode_core::anthropic_api::server::{AnthropicApiServerState, create_router};
 
     // Create the LLM provider based on the configuration
     let provider = vtcode_core::llm::factory::create_provider_for_model(
         &core_cfg.model,
         core_cfg.api_key.clone(),
         None,
-    ).map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
 
     // Create server state with the provider
-    let state = AnthropicApiServerState::new(
-        std::sync::Arc::from(provider),
-        core_cfg.model.clone()
-    );
+    let state =
+        AnthropicApiServerState::new(std::sync::Arc::from(provider), core_cfg.model.clone());
 
     // Create the router
     let app = create_router(state);
 
     // Bind to the specified address
-    let addr = format!("{}:{}", host, port).parse::<SocketAddr>().map_err(|e| {
-        anyhow::anyhow!("Invalid address {}: {}", format!("{}:{}", host, port), e)
-    })?;
+    let addr = format!("{}:{}", host, port)
+        .parse::<SocketAddr>()
+        .map_err(|e| anyhow::anyhow!("Invalid address {}: {}", format!("{}:{}", host, port), e))?;
 
     println!("Anthropic API server starting on http://{}", addr);
     println!("Compatible with Anthropic Messages API at /v1/messages");
@@ -520,11 +518,13 @@ pub async fn handle_anthropic_api_command(
 
     // Run the server with graceful shutdown
     ::axum::serve(
-        tokio::net::TcpListener::bind(addr).await.map_err(|e| {
-            anyhow::anyhow!("Failed to bind to address {}: {}", addr, e)
-        })?,
+        tokio::net::TcpListener::bind(addr)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to bind to address {}: {}", addr, e))?,
         app,
-    ).await.map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
 
     Ok(())
 }
@@ -535,5 +535,7 @@ pub async fn handle_anthropic_api_command(
     _port: u16,
     _host: String,
 ) -> Result<()> {
-    Err(anyhow::anyhow!("Anthropic API server is not enabled. Recompile with --features anthropic-api"))
+    Err(anyhow::anyhow!(
+        "Anthropic API server is not enabled. Recompile with --features anthropic-api"
+    ))
 }

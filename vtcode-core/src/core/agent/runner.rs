@@ -223,15 +223,9 @@ impl AgentRunner {
             .unwrap_or(0);
         let total_words = title_words + description_words + instructions_words;
 
-        let context_chars: usize = contexts
-            .iter()
-            .map(|ctx| ctx.content.chars().count())
-            .sum();
+        let context_chars: usize = contexts.iter().map(|ctx| ctx.content.chars().count()).sum();
 
-        total_chars <= 240
-            && total_words <= 40
-            && contexts.len() <= 1
-            && context_chars <= 800
+        total_chars <= 240 && total_words <= 40 && contexts.len() <= 1 && context_chars <= 800
     }
 
     fn config(&self) -> &VTCodeConfig {
@@ -728,8 +722,7 @@ impl AgentRunner {
             .clone()
             .unwrap_or_else(|| workspace_path.clone());
 
-        if matches!(name, tools::GREP_FILE | tools::LIST_FILES)
-            && !normalized.contains_key("path")
+        if matches!(name, tools::GREP_FILE | tools::LIST_FILES) && !normalized.contains_key("path")
         {
             normalized.insert("path".to_string(), Value::String(fallback_dir));
         }
@@ -740,8 +733,10 @@ impl AgentRunner {
             }
         }
 
-        if matches!(name, tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE)
-            && !normalized.contains_key("path")
+        if matches!(
+            name,
+            tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
+        ) && !normalized.contains_key("path")
         {
             if let Some(last_file) = task_state.last_file_path.clone() {
                 normalized.insert("path".to_string(), Value::String(last_file));
@@ -751,12 +746,7 @@ impl AgentRunner {
         Value::Object(normalized)
     }
 
-    fn update_last_paths_from_args(
-        &self,
-        name: &str,
-        args: &Value,
-        task_state: &mut TaskRunState,
-    ) {
+    fn update_last_paths_from_args(&self, name: &str, args: &Value, task_state: &mut TaskRunState) {
         if let Some(path) = args.get("file_path").and_then(|value| value.as_str()) {
             task_state.last_file_path = Some(path.to_string());
             if let Some(parent) = Path::new(path).parent() {
@@ -1591,8 +1581,7 @@ impl AgentRunner {
             };
 
             // Prepare conversation with task context
-            let system_instruction =
-                compose_system_instruction(&system_prompt, task, contexts);
+            let system_instruction = compose_system_instruction(&system_prompt, task, contexts);
             let conversation = build_conversation(task, contexts);
 
             // Build available tools for this agent
@@ -1671,7 +1660,11 @@ impl AgentRunner {
                 } else {
                     self.verbosity
                 };
-                let max_tokens = if is_simple_task { Some(800) } else { Some(2000) };
+                let max_tokens = if is_simple_task {
+                    Some(800)
+                } else {
+                    Some(2000)
+                };
 
                 // Context compaction before the request
                 self.summarize_conversation_if_needed(

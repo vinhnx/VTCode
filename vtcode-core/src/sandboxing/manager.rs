@@ -72,7 +72,9 @@ impl SandboxManager {
             SandboxType::WindowsRestrictedToken => {
                 self.transform_windows(spec, policy, sandbox_cwd)
             }
-            SandboxType::None => unreachable!(),
+            SandboxType::None => Err(SandboxTransformError::InvalidPolicy(
+                "Cannot transform with SandboxType::None".into(),
+            )),
         }
     }
 

@@ -624,14 +624,14 @@ impl HuggingFaceProvider {
         };
 
         LLMError::Provider {
-                    message: format_llm_error(PROVIDER_NAME, &message),
+            message: format_llm_error(PROVIDER_NAME, &message),
             metadata: Some(LLMErrorMetadata::new(
                 PROVIDER_NAME,
                 Some(status.as_u16()),
-                None, // code
-                None, // request_id
-                None, // organization_id
-                None, // retry_after
+                None,                   // code
+                None,                   // request_id
+                None,                   // organization_id
+                None,                   // retry_after
                 Some(body.to_string()), // message
             )),
         }

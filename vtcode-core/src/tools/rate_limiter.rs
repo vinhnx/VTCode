@@ -102,7 +102,7 @@ impl RateLimiterInner {
 
         // Fractional refill: (per_sec * multiplier) tokens per 1000ms
         let effective_rate = (self.config.per_sec as f64 * speed_multiplier) as u64;
-        
+
         // Using integer math: tokens = (effective_rate * millis) / 1000
         let added = (effective_rate.saturating_mul(millis) / 1000) as u32;
 
@@ -184,7 +184,7 @@ impl PerToolRateLimiter {
 
     /// Try to acquire a token with a priority multiplier.
     pub fn try_acquire_for_scaled(&mut self, tool_name: &str, multiplier: f64) -> Result<()> {
-         let bucket = self
+        let bucket = self
             .buckets
             .entry(tool_name.to_owned())
             .or_insert_with(|| RateLimiterInner::new_with_config(self.default_config));
@@ -240,9 +240,12 @@ impl AdaptiveRateLimiter {
     /// Priority < 1.0 decreases them.
     pub fn try_acquire_with_priority(&self, tool: &str) -> Result<()> {
         let weight = self.priority_weights.get(tool).copied().unwrap_or(1.0);
-        
-        let mut limiter = self.per_tool.lock().map_err(|e| anyhow!("adaptive limiter poisoned: {}", e))?;
-        
+
+        let mut limiter = self
+            .per_tool
+            .lock()
+            .map_err(|e| anyhow!("adaptive limiter poisoned: {}", e))?;
+
         // Pass the weight as the speed multiplier
         limiter.try_acquire_for_scaled(tool, weight)
     }

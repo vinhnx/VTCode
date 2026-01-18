@@ -683,7 +683,9 @@ pub(crate) async fn initialize_session(
         autonomous_executor: {
             let executor = vtcode_core::tools::autonomous_executor::AutonomousExecutor::new();
             if let Some(cfg) = vt_cfg {
-                let loop_limits: std::collections::HashMap<_, _> = cfg.tools.loop_thresholds
+                let loop_limits: std::collections::HashMap<_, _> = cfg
+                    .tools
+                    .loop_thresholds
                     .iter()
                     .map(|(k, v)| (k.clone(), *v))
                     .collect();

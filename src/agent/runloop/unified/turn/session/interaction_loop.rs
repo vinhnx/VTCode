@@ -15,7 +15,6 @@ use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 
-
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
@@ -27,8 +26,9 @@ use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::welcome::SessionBootstrap;
 
-
-use crate::agent::runloop::unified::turn::session::{mcp_lifecycle, slash_command_handler, tool_dispatch};
+use crate::agent::runloop::unified::turn::session::{
+    mcp_lifecycle, slash_command_handler, tool_dispatch,
+};
 use crate::hooks::lifecycle::SessionEndReason;
 
 #[allow(clippy::too_many_arguments)]
@@ -283,7 +283,8 @@ pub(crate) async fn run_interaction_loop(
             *ctx.default_placeholder = Some(next_placeholder);
         }
 
-        match slash_command_handler::handle_input_commands(input_owned.as_str(), ctx, state).await? {
+        match slash_command_handler::handle_input_commands(input_owned.as_str(), ctx, state).await?
+        {
             slash_command_handler::CommandProcessingResult::Outcome(outcome) => return Ok(outcome),
             slash_command_handler::CommandProcessingResult::ContinueLoop => continue,
             slash_command_handler::CommandProcessingResult::UpdateInput(new_input) => {
@@ -437,4 +438,3 @@ pub(crate) async fn run_interaction_loop(
         });
     }
 }
-

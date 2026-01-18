@@ -449,24 +449,24 @@ pub mod models {
             "claude-opus-4-5-20251101",   // Premium flagship model with exceptional intelligence
             "claude-opus-4-1-20250805",   // Specialized reasoning model
             "claude-sonnet-4-5",          // Alias for latest Claude Sonnet 4.5
-            "claude-haiku-4-5",          // Alias for latest Claude Haiku 4.5
-            "claude-opus-4-5",           // Alias for latest Claude Opus 4.5
-            "claude-opus-4-1",           // Alias for latest Claude Opus 4.1
+            "claude-haiku-4-5",           // Alias for latest Claude Haiku 4.5
+            "claude-opus-4-5",            // Alias for latest Claude Opus 4.5
+            "claude-opus-4-1",            // Alias for latest Claude Opus 4.1
             // Claude 4 series
-            "claude-sonnet-4-20250514",   // Claude 4 Sonnet
-            "claude-opus-4-20250514",     // Claude 4 Opus
-            "claude-sonnet-4-0",          // Alias for Claude 4 Sonnet
-            "claude-opus-4-0",           // Alias for Claude 4 Opus
+            "claude-sonnet-4-20250514", // Claude 4 Sonnet
+            "claude-opus-4-20250514",   // Claude 4 Opus
+            "claude-sonnet-4-0",        // Alias for Claude 4 Sonnet
+            "claude-opus-4-0",          // Alias for Claude 4 Opus
             // Claude 3.x series
             "claude-3-7-sonnet-20250219", // Latest Claude 3.7 Sonnet
-            "claude-3-7-sonnet-latest",  // Alias for Claude 3.7 Sonnet
+            "claude-3-7-sonnet-latest",   // Alias for Claude 3.7 Sonnet
             "claude-3-5-sonnet-20241022", // Latest Claude 3.5 Sonnet
-            "claude-3-5-sonnet-latest",  // Alias for Claude 3.5 Sonnet
+            "claude-3-5-sonnet-latest",   // Alias for Claude 3.5 Sonnet
             "claude-3-5-haiku-20241022",  // Latest Claude 3.5 Haiku
-            "claude-3-5-haiku-latest",   // Alias for Claude 3.5 Haiku
-            "claude-3-opus-20240229",    // Legacy Claude 3 Opus
-            "claude-3-sonnet-20240229",  // Legacy Claude 3 Sonnet
-            "claude-3-haiku-20240307",   // Legacy Claude 3 Haiku
+            "claude-3-5-haiku-latest",    // Alias for Claude 3.5 Haiku
+            "claude-3-opus-20240229",     // Legacy Claude 3 Opus
+            "claude-3-sonnet-20240229",   // Legacy Claude 3 Sonnet
+            "claude-3-haiku-20240307",    // Legacy Claude 3 Haiku
         ];
 
         // Convenience constants for versioned models
