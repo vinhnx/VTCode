@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-file-search"
-version = "0.65.3"
+version = "0.65.4"
 edition = "2021"
 license = "MIT"
 description = "Fast, parallel fuzzy file search library for VT Code"
