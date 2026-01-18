@@ -314,11 +314,6 @@ impl LoopDetector {
             let prev = &history[len - 2 * k..len - k];
 
             if suffix == prev {
-                // Determine if this is a meaningful loop or just coincidence
-                // We typically care if the pattern repeats more than once, but for identifying
-                // a "loop" state, seeing A-B-A-B is often enough to warn.
-
-                // Construct a readable description of the pattern
                 let pattern_desc: Vec<&str> = suffix.iter().map(|(name, _)| *name).collect();
                 let pattern_str = pattern_desc.join(" -> ");
 
@@ -326,7 +321,23 @@ impl LoopDetector {
                     "Repetitive pattern detected: [{}]\n\
                      The agent appears to be cycling through the same actions. \
                      Please pause and reassess the strategy.",
-                    pattern_str
+                     pattern_str
+                ));
+            }
+            
+            // Fuzzy detection: if tool names match but hashes differ, check semantic similarity?
+            // For now, simpler fuzzy check: ignore edit_file content arguments? 
+            // Better: Detecting "oscillating" behavior A->B->A->B even if args slightly differ.
+            // If tool names match exactly for a sequence of length >= 3
+            let suffix_names: Vec<&str> = suffix.iter().map(|(n, _)| *n).collect();
+            let prev_names: Vec<&str> = prev.iter().map(|(n, _)| *n).collect();
+            
+            if suffix_names == prev_names && k >= 2 {
+                 return Some(format!(
+                    "Oscillating tool pattern detected: [{}]\n\
+                     The agent is repeating the same sequence of tools. \
+                     Ensure you are making actual progress.",
+                     suffix_names.join(" -> ")
                 ));
             }
         }

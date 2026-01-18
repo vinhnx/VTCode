@@ -46,9 +46,27 @@ impl ContextManager {
     }
 
     /// Pre-request check that returns recommended action before making an LLM request.
-    /// Token budgeting is disabled, always returns Proceed.
-    #[allow(dead_code)]
-    pub(crate) fn pre_request_check(&self, _history: &[uni::Message]) -> PreRequestAction {
+    /// Checks session boundaries to correct runaway sessions.
+    pub(crate) fn pre_request_check(&self, history: &[uni::Message]) -> PreRequestAction {
+        const SOFT_LIMIT_MESSAGES: usize = 50;
+        const HARD_LIMIT_MESSAGES: usize = 100;
+        
+        let msg_count = history.len();
+        
+        if msg_count > HARD_LIMIT_MESSAGES {
+             return PreRequestAction::Stop(format!(
+                "Session limit reached ({} messages). Please summarize progress and start a new session.",
+                msg_count
+            ));
+        }
+        
+        if msg_count > SOFT_LIMIT_MESSAGES {
+             return PreRequestAction::Warn(format!(
+                "Session is getting long ({} messages). Consider summarizing key points soon.",
+                msg_count
+            ));
+        }
+
         PreRequestAction::Proceed
     }
 
@@ -122,11 +140,15 @@ impl ContextManager {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum PreRequestAction {
     /// Normal operation, proceed with request
     Proceed,
+    /// Proceed but inject a warning/reminder to the agent
+    Warn(String),
+    /// Stop execution and force user intervention or summary
+    Stop(String),
 }
 
 #[cfg(test)]
@@ -147,6 +169,26 @@ mod tests {
             manager.pre_request_check(&history),
             super::PreRequestAction::Proceed
         );
+    }
+
+    #[test]
+    fn test_pre_request_check_limits() {
+        let manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
+
+        let mut history = Vec::new();
+        for _ in 0..60 {
+            history.push(uni::Message::user("test".to_string()));
+        }
+        
+        assert!(matches!(
+            manager.pre_request_check(&history),
+            super::PreRequestAction::Warn(_)
+        ));
     }
 
     #[tokio::test]

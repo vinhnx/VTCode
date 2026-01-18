@@ -157,15 +157,44 @@ impl FileCache {
 
     /// Check memory pressure and enforce limits
     pub async fn check_pressure_and_evict(&self) {
-        let mut stats = self.stats.lock().await;
-        if stats.total_size_bytes > self.max_size_bytes {
+        let mut stats = self.stats.lock().await; // Lock stats *before* clearing to maintain consistency
+        
+        let pressure_ratio = stats.total_size_bytes as f64 / self.max_size_bytes as f64;
+        
+        if pressure_ratio > 1.0 {
+             // Hard limit exceeded: Panic-level eviction (clear all)
             // Since quick_cache doesn't support weighted eviction or iteration-based removal
             // easily, we trigger a full clear when the hard byte limit is exceeded.
-            // This acts as a safety valve to prevent OOM.
             self.file_cache.clear();
             self.directory_cache.clear();
             stats.total_size_bytes = 0;
             stats.memory_evictions += 1;
+        } else if pressure_ratio > 0.9 {
+            // Soft limit exceeded (90%): Proactive pruning could happen here
+            // For now, simpler implementation relies on hard limit, but this hook allows
+            // for smarter strategies (e.g., removing oldest if we tracked LRU externally)
         }
+    }
+
+    /// Adjust cache capacity based on system memory availability.
+    /// target_memory_ratio: 0.0 to 1.0 (fraction of total system memory to use).
+    ///
+    /// Note: This uses a mocked total system memory assumption (e.g. 16GB) if unavailable,
+    /// or relies on `sys-info` if added in future. For now, it resizes based on `max_size_bytes`
+    /// update.
+    pub fn adjust_capacity(&mut self, target_memory_ratio: f64) {
+        // Heuristic: Assume 16GB system if we can't query (conservative default for dev machines)
+        const ASSUMED_SYSTEM_MEMORY: usize = 16 * 1024 * 1024 * 1024; 
+        
+        let target_bytes = (ASSUMED_SYSTEM_MEMORY as f64 * target_memory_ratio) as usize;
+        let _new_capacity = target_bytes / 1024; // Rough average file size assumption (1KB)
+        
+        // Update soft limit
+        self.max_size_bytes = target_bytes;
+        
+        // Note: quick_cache doesn't support dynamic resizing of the underlying map easily
+        // in its current version without rebuilding.
+        // So we mainly update the byte limit which `check_pressure_and_evict` uses.
+        // If we strictly needed to resize the count-based capacity, we'd need to swap the cache instance.
     }
 }
