@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./resources/logo/vtcode_logo_512.png" alt="VT Code"/>
+  <img src="./resources/logo/vtcode_logo_256.png" alt="VT Code"/>
   <h1 align="center">VT Code</h1>
 </p>
 
