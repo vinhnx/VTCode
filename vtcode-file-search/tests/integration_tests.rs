@@ -94,7 +94,7 @@ fn test_fuzzy_matching() -> anyhow::Result<()> {
     })?;
 
     // Both main.rs and maintest.rs should match
-    assert!(results.matches.len() >= 1);
+    assert!(!results.matches.is_empty());
     Ok(())
 }
 

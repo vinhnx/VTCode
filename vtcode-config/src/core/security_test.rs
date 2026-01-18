@@ -3,9 +3,9 @@ use super::SecurityConfig;
 #[test]
 fn test_default_security_config() {
     let config = SecurityConfig::default();
-    assert_eq!(config.human_in_the_loop, true);
-    assert_eq!(config.require_write_tool_for_claims, true);
-    assert_eq!(config.hitl_notification_bell, true);
+    assert!(config.human_in_the_loop);
+    assert!(config.require_write_tool_for_claims);
+    assert!(config.hitl_notification_bell);
 }
 
 #[test]
@@ -14,7 +14,7 @@ fn test_security_config_with_custom_bell_setting() {
         hitl_notification_bell: false,
         ..Default::default()
     };
-    assert_eq!(config.hitl_notification_bell, false);
+    assert!(!config.hitl_notification_bell);
 }
 
 #[test]

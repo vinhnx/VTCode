@@ -779,6 +779,9 @@ mod tests {
                 finish_reason: uni::FinishReason::Stop,
                 reasoning: self.reasoning.clone(),
                 reasoning_details: None,
+                organization_id: None,
+                request_id: None,
+                tool_references: vec![],
             })
         }
 
@@ -818,6 +821,12 @@ mod tests {
             presence_penalty: None,
             frequency_penalty: None,
             stop_sequences: None,
+            thinking_budget: None,
+            betas: None,
+            prefill: None,
+            character_reinforcement: false,
+            character_name: None,
+            coding_agent_settings: None,
         }
     }
 

@@ -182,7 +182,7 @@ This is a test output style."#;
             style.config.description,
             Some("A test output style".to_string())
         );
-        assert_eq!(style.config.keep_coding_instructions, false);
+        assert!(!style.config.keep_coding_instructions);
         assert!(style.content.contains("This is a test output style"));
     }
 

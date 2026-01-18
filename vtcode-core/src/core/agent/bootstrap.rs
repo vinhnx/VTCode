@@ -269,6 +269,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let components = AgentComponentBuilder::new(&agent_config)
@@ -302,6 +303,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let custom_session = SessionInfo {
@@ -377,6 +379,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         }
     }
 }

@@ -451,6 +451,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
@@ -534,6 +535,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let vt_cfg = VTCodeConfig::default();
@@ -597,6 +599,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
