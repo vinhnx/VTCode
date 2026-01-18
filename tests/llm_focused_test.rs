@@ -170,6 +170,12 @@ fn test_anthropic_tool_message_handling() {
         presence_penalty: None,
         frequency_penalty: None,
         stop_sequences: None,
+        thinking_budget: None,
+        betas: None,
+        prefill: None,
+        character_reinforcement: false,
+        character_name: None,
+        coding_agent_settings: None,
     };
 
     // Validate request shape instead of internal conversion

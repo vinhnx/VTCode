@@ -565,6 +565,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let mut vt = VTCodeConfig::default();
@@ -804,6 +805,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let vt_cfg = VTCodeConfig::default(); // vibe_coding disabled by default
@@ -836,6 +838,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let mut vt_cfg = VTCodeConfig::default();
@@ -870,6 +873,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let mut vt_cfg = VTCodeConfig::default();
@@ -907,6 +911,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let mut vt_cfg = VTCodeConfig::default();
@@ -964,6 +969,7 @@ mod tests {
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
+            max_conversation_turns: 1000,
         };
 
         let mut vt_cfg = VTCodeConfig::default();

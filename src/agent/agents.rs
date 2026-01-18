@@ -147,6 +147,7 @@ mod tests {
             checkpointing_storage_dir: None,
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
         };
 
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
@@ -180,6 +181,7 @@ mod tests {
             checkpointing_storage_dir: None,
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
         };
 
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);

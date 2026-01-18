@@ -1335,7 +1335,7 @@ mod tests {
         .expect("failed to write workspace config");
 
         let static_paths =
-            StaticWorkspacePaths::new(workspace_root, &workspace_root.join(".vtcode"));
+            StaticWorkspacePaths::new(workspace_root, workspace_root.join(".vtcode"));
         let provider = WorkspacePathsDefaults::new(Arc::new(static_paths))
             .with_home_paths(vec![user_config_path.clone()]);
 
@@ -1367,7 +1367,7 @@ mod tests {
             .expect("failed to write workspace config");
 
         let static_paths =
-            StaticWorkspacePaths::new(workspace_root, &workspace_root.join(".vtcode"));
+            StaticWorkspacePaths::new(workspace_root, workspace_root.join(".vtcode"));
         let provider = WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![]);
 
         defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {

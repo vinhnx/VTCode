@@ -49,7 +49,8 @@ where
             working_dir: canonical_root,
             shell_kind: default_shell_kind(),
             path_cache: Arc::new(Mutex::new(LruCache::new(
-                std::num::NonZeroUsize::new(256).unwrap(), // Safe: constant > 0
+                #[allow(clippy::expect_used)]
+                std::num::NonZeroUsize::new(256).expect("256 is non-zero"), // Safe: constant > 0
             ))),
         })
     }
