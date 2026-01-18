@@ -2,6 +2,8 @@ use anyhow::Result;
 use ratatui::crossterm::terminal::disable_raw_mode;
 use std::collections::VecDeque;
 use std::io::Write;
+use std::sync::Arc;
+use std::sync::RwLock as StdRwLock;
 
 use std::time::Instant;
 use tokio_util::sync::CancellationToken;
@@ -368,6 +370,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 rate_limiter: &rate_limiter,
                 telemetry: &telemetry,
                 autonomous_executor: &autonomous_executor,
+                error_recovery: &session_state.error_recovery,
             };
             let outcome = match crate::agent::runloop::unified::turn::run_turn_loop(
                 &input,

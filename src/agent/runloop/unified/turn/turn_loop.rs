@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::RwLock as StdRwLock;
 use std::time::Instant;
 use tokio::sync::RwLock;
 
@@ -78,6 +79,8 @@ pub struct TurnLoopContext<'a> {
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
+    pub error_recovery:
+        &'a Arc<StdRwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
 }
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.

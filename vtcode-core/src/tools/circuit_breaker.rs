@@ -36,12 +36,26 @@ struct ToolCircuitState {
     failure_count: u32,
     last_failure_time: Option<Instant>,
     current_backoff: Duration, // Current backoff duration for this tool
+    circuit_opened_at: Option<Instant>, // When circuit first opened (for diagnostics)
+    open_count: u32,           // How many times circuit has opened
 }
 
 impl Default for CircuitState {
     fn default() -> Self {
         CircuitState::Closed
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolCircuitDiagnostics {
+    pub tool_name: String,
+    pub status: CircuitState,
+    pub failure_count: u32,
+    pub current_backoff: Duration,
+    pub remaining_backoff: Option<Duration>,
+    pub opened_at: Option<Instant>,
+    pub open_count: u32,
+    pub is_open: bool,
 }
 
 /// Per-tool circuit breaker that tracks failure state independently for each tool.
@@ -127,6 +141,7 @@ impl CircuitBreaker {
                 state.status = CircuitState::Closed;
                 state.failure_count = 0;
                 state.last_failure_time = None;
+                state.circuit_opened_at = None;
             }
             CircuitState::Closed => {
                 // Reset failure count on success if we want purely consecutive failures
@@ -136,6 +151,7 @@ impl CircuitBreaker {
                 // Should not happen theoretically unless race condition or forced reset
                 state.status = CircuitState::Closed;
                 state.failure_count = 0;
+                state.circuit_opened_at = None;
             }
         }
     }
@@ -169,11 +185,14 @@ impl CircuitBreaker {
                 if state.failure_count >= self.config.failure_threshold {
                     state.status = CircuitState::Open;
                     state.current_backoff = self.config.min_backoff; // Start with min backoff
+                    state.circuit_opened_at = Some(Instant::now());
+                    state.open_count += 1;
 
                     tracing::warn!(
                         tool = %tool_name,
                         failures = state.failure_count,
                         backoff_sec = state.current_backoff.as_secs(),
+                        open_count = state.open_count,
                         "Circuit breaker OPEN for tool"
                     );
                 }
@@ -181,6 +200,8 @@ impl CircuitBreaker {
             CircuitState::HalfOpen => {
                 // Probe failed, revert to Open and increase backoff
                 state.status = CircuitState::Open;
+                state.circuit_opened_at = Some(Instant::now());
+                state.open_count += 1;
                 // Exponential backoff
                 let next_backoff = state.current_backoff.as_secs_f64() * self.config.backoff_factor;
                 state.current_backoff = Duration::from_secs_f64(next_backoff)
@@ -190,6 +211,7 @@ impl CircuitBreaker {
                 tracing::warn!(
                     tool = %tool_name,
                     backoff_sec = state.current_backoff.as_secs(),
+                    open_count = state.open_count,
                     "Circuit breaker re-OPENED (probe failed)"
                 );
             }
@@ -239,6 +261,84 @@ impl CircuitBreaker {
             .filter(|(_, state)| matches!(state.status, CircuitState::Open))
             .map(|(name, _)| name.clone())
             .collect()
+    }
+
+    /// Get diagnostic information for a specific tool
+    pub fn get_diagnostics(&self, tool_name: &str) -> ToolCircuitDiagnostics {
+        let states = self.tool_states.lock().unwrap();
+        let state = states.get(tool_name);
+
+        if let Some(s) = state {
+            ToolCircuitDiagnostics {
+                tool_name: tool_name.to_string(),
+                status: s.status,
+                failure_count: s.failure_count,
+                current_backoff: s.current_backoff,
+                remaining_backoff: if matches!(s.status, CircuitState::Open) {
+                    s.last_failure_time
+                        .and_then(|last| s.current_backoff.checked_sub(last.elapsed()))
+                } else {
+                    None
+                },
+                opened_at: s.circuit_opened_at,
+                open_count: s.open_count,
+                is_open: matches!(s.status, CircuitState::Open),
+            }
+        } else {
+            ToolCircuitDiagnostics {
+                tool_name: tool_name.to_string(),
+                status: CircuitState::Closed,
+                failure_count: 0,
+                current_backoff: Duration::ZERO,
+                remaining_backoff: None,
+                opened_at: None,
+                open_count: 0,
+                is_open: false,
+            }
+        }
+    }
+
+    /// Get diagnostics for all tools
+    pub fn get_all_diagnostics(&self) -> Vec<ToolCircuitDiagnostics> {
+        let states = self.tool_states.lock().unwrap();
+        states
+            .iter()
+            .map(|(name, state)| ToolCircuitDiagnostics {
+                tool_name: name.clone(),
+                status: state.status,
+                failure_count: state.failure_count,
+                current_backoff: state.current_backoff,
+                remaining_backoff: if matches!(state.status, CircuitState::Open) {
+                    state
+                        .last_failure_time
+                        .and_then(|last| state.current_backoff.checked_sub(last.elapsed()))
+                } else {
+                    None
+                },
+                opened_at: state.circuit_opened_at,
+                open_count: state.open_count,
+                is_open: matches!(state.status, CircuitState::Open),
+            })
+            .collect()
+    }
+
+    /// Check if recovery pause should be triggered based on open circuit count
+    pub fn should_pause_for_recovery(&self, max_open_circuits: usize) -> bool {
+        let states = self.tool_states.lock().unwrap();
+        let open_count = states
+            .iter()
+            .filter(|(_, state)| matches!(state.status, CircuitState::Open))
+            .count();
+        open_count >= max_open_circuits
+    }
+
+    /// Get count of currently open circuits
+    pub fn open_circuit_count(&self) -> usize {
+        let states = self.tool_states.lock().unwrap();
+        states
+            .iter()
+            .filter(|(_, state)| matches!(state.status, CircuitState::Open))
+            .count()
     }
 }
 

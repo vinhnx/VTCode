@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::RwLock as StdRwLock;
 use tokio::sync::{Notify, RwLock};
 use tokio::time::{Duration, sleep};
 use tokio_util::sync::CancellationToken;
@@ -85,6 +86,8 @@ pub(crate) struct SessionState {
     pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
     pub telemetry: Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
+    pub error_recovery:
+        Arc<StdRwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
 }
 
 #[allow(dead_code)]
@@ -693,6 +696,9 @@ pub(crate) async fn initialize_session(
             }
             Arc::new(executor)
         },
+        error_recovery: Arc::new(StdRwLock::new(
+            vtcode_core::core::agent::error_recovery::ErrorRecoveryState::new(),
+        )),
     })
 }
 
