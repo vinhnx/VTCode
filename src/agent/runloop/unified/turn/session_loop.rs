@@ -168,6 +168,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             rate_limiter,
             validation_cache,
             telemetry,
+            autonomous_executor,
             ..
         } = session_state;
 
@@ -364,6 +365,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 tool_health_tracker: &tool_health_tracker,
                 rate_limiter: &rate_limiter,
                 telemetry: &telemetry,
+                autonomous_executor: &autonomous_executor,
             };
             let outcome = match crate::agent::runloop::unified::turn::run_turn_loop(
                 &input,

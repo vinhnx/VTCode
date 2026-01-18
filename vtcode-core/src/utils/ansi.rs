@@ -128,7 +128,7 @@ impl AnsiRenderer {
             MessageStyle::Status | MessageStyle::McpStatus => InlineMessageKind::Info,
             MessageStyle::User => InlineMessageKind::User,
             MessageStyle::Reasoning => InlineMessageKind::Policy,
-            MessageStyle::Warning => InlineMessageKind::Error,
+            MessageStyle::Warning => InlineMessageKind::Warning,
         }
     }
 

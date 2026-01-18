@@ -883,7 +883,7 @@ fn prefix_text(session: &Session, kind: InlineMessageKind) -> Option<String> {
         InlineMessageKind::Agent => None,
         InlineMessageKind::Policy => session.labels.agent.clone(),
         InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => None,
-        InlineMessageKind::Info => None,
+        InlineMessageKind::Info | InlineMessageKind::Warning => None,
     }
 }
 

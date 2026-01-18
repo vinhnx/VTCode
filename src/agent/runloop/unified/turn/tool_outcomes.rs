@@ -351,6 +351,7 @@ pub(crate) async fn handle_tool_calls(
                             tool_health_tracker: ctx.tool_health_tracker,
                             rate_limiter: ctx.rate_limiter,
                             telemetry: ctx.telemetry,
+                            autonomous_executor: ctx.autonomous_executor,
                         },
                         call_id,
                         &name,
@@ -439,6 +440,38 @@ pub(crate) async fn handle_tool_call(
             if wait_time.as_secs_f64() > 0.0 {
                 tokio::time::sleep(wait_time).await;
             }
+        }
+    }
+
+    // Phase 4 Check: Adaptive Loop Detection
+    if let Some(warning) = ctx.autonomous_executor.record_tool_call(tool_name, &args_val) {
+        // Check if we should block due to hard limit
+        let should_block = {
+             if let Ok(detector) = ctx.autonomous_executor.loop_detector().read() {
+                 detector.is_hard_limit_exceeded(tool_name)
+             } else {
+                 false
+             }
+        };
+
+        if should_block {
+             let error_msg = format!(
+                "Tool '{}' is blocked due to excessive repetition (Loop Detected).",
+                tool_name
+            );
+             tracing::warn!(tool = %tool_name, "Loop detector blocked tool");
+             ctx.working_history.push(uni::Message::tool_response_with_origin(
+                tool_call.id.clone(),
+                serde_json::json!({"error": error_msg}).to_string(),
+                tool_name.clone(),
+             ));
+             return Ok(None);
+        } else {
+            // Log warning but proceed
+            tracing::warn!(tool = %tool_name, warning = %warning, "Loop detector warning");
+            // Optionally inject warning into history? AgentRunner didn't seems to do it explicitly here, 
+            // but providing feedback to the model is good.
+            // However, avoid spamming content.
         }
     }
 
@@ -594,6 +627,7 @@ pub(crate) async fn handle_tool_call(
                     tool_health_tracker: ctx.tool_health_tracker,
                     rate_limiter: ctx.rate_limiter,
                     telemetry: ctx.telemetry,
+                    autonomous_executor: ctx.autonomous_executor,
                 },
                 tool_call.id.clone(),
                 tool_name,
@@ -1761,6 +1795,7 @@ pub(crate) async fn handle_text_response(
                         tool_health_tracker: params.ctx.tool_health_tracker,
                         rate_limiter: params.ctx.rate_limiter,
                         telemetry: params.ctx.telemetry,
+                        autonomous_executor: params.ctx.autonomous_executor,
                     },
                     tool_call.id.clone(),
                     call_tool_name,

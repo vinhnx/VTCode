@@ -77,6 +77,7 @@ pub struct TurnLoopContext<'a> {
     pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
+    pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
 }
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.

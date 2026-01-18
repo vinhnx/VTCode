@@ -84,6 +84,7 @@ pub(crate) struct SessionState {
     pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
     pub telemetry: Arc<vtcode_core::core::telemetry::TelemetryManager>,
+    pub autonomous_executor: Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
 }
 
 #[allow(dead_code)]
@@ -679,6 +680,17 @@ pub(crate) async fn initialize_session(
             vtcode_core::tools::validation_cache::ValidationCache::default(),
         ),
         telemetry: Arc::new(vtcode_core::core::telemetry::TelemetryManager::new()),
+        autonomous_executor: {
+            let executor = vtcode_core::tools::autonomous_executor::AutonomousExecutor::new();
+            if let Some(cfg) = vt_cfg {
+                let loop_limits: std::collections::HashMap<_, _> = cfg.tools.loop_thresholds
+                    .iter()
+                    .map(|(k, v)| (k.clone(), *v))
+                    .collect();
+                executor.configure_loop_limits(&loop_limits).await;
+            }
+            Arc::new(executor)
+        },
     })
 }
 

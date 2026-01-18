@@ -516,7 +516,7 @@ impl CircuitBreakerMiddleware {
     pub fn new(failure_threshold: f64) -> Self {
         // Convert f64 threshold to count - effectively just using default config for now
         // but we could expose more config options to middleware if needed.
-        let mut config = crate::tools::circuit_breaker::CircuitBreakerConfig::default();
+        let config = crate::tools::circuit_breaker::CircuitBreakerConfig::default();
         if failure_threshold > 0.0 {
              // Heuristic: map 0.0-1.0 to reasonable integer count? 
              // Or primarily just use the underlying CircuitBreaker defaults which are robust.
