@@ -87,7 +87,8 @@ impl RateLimiterInner {
 
     /// Refill tokens based on elapsed time.
     /// Uses fractional refill based on milliseconds for smoother rate limiting.
-    fn refill(&mut self) {
+    /// `speed_multiplier` allows adaptive rate limiting (faster refill for high priority).
+    fn refill(&mut self, speed_multiplier: f64) {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_refill);
 
@@ -99,19 +100,28 @@ impl RateLimiterInner {
             return;
         }
 
-        // Fractional refill: per_sec tokens per 1000ms
-        // Using integer math: tokens = (per_sec * millis) / 1000
-        let added = ((self.config.per_sec as u64).saturating_mul(millis) / 1000) as u32;
+        // Fractional refill: (per_sec * multiplier) tokens per 1000ms
+        let effective_rate = (self.config.per_sec as f64 * speed_multiplier) as u64;
+        
+        // Using integer math: tokens = (effective_rate * millis) / 1000
+        let added = (effective_rate.saturating_mul(millis) / 1000) as u32;
 
         if added > 0 {
-            self.tokens = (self.tokens + added).min(self.config.burst);
+            // Burst is also scaled by multiplier to allow larger spikes for high priority
+            let effective_burst = (self.config.burst as f64 * speed_multiplier.max(1.0)) as u32;
+            self.tokens = (self.tokens + added).min(effective_burst);
             self.last_refill = now;
         }
     }
 
-    /// Attempt to acquire a single token.
+    /// Attempt to acquire a single token with default speed (1.0).
     pub fn try_acquire(&mut self) -> Result<()> {
-        self.refill();
+        self.try_acquire_scaled(1.0)
+    }
+
+    /// Attempt to acquire a single token with a speed multiplier.
+    pub fn try_acquire_scaled(&mut self, speed_multiplier: f64) -> Result<()> {
+        self.refill(speed_multiplier);
         if self.tokens == 0 {
             Err(anyhow!("tool rate limit exceeded"))
         } else {
@@ -169,11 +179,16 @@ impl PerToolRateLimiter {
     /// Try to acquire a token for a specific tool.
     /// Returns `Ok(())` if allowed, `Err` if rate limited.
     pub fn try_acquire_for(&mut self, tool_name: &str) -> Result<()> {
-        let bucket = self
+        self.try_acquire_for_scaled(tool_name, 1.0)
+    }
+
+    /// Try to acquire a token with a priority multiplier.
+    pub fn try_acquire_for_scaled(&mut self, tool_name: &str, multiplier: f64) -> Result<()> {
+         let bucket = self
             .buckets
             .entry(tool_name.to_owned())
             .or_insert_with(|| RateLimiterInner::new_with_config(self.default_config));
-        bucket.try_acquire()
+        bucket.try_acquire_scaled(multiplier)
     }
 
     /// Alias for try_acquire_for (used by benchmarks)
@@ -184,7 +199,7 @@ impl PerToolRateLimiter {
     /// Check if a tool is currently rate limited without consuming a token.
     pub fn is_limited(&mut self, tool_name: &str) -> bool {
         if let Some(bucket) = self.buckets.get_mut(tool_name) {
-            bucket.refill();
+            bucket.refill(1.0); // Assume default refresher for check
             bucket.tokens == 0
         } else {
             false
@@ -221,27 +236,15 @@ impl AdaptiveRateLimiter {
     }
 
     /// Try to acquire a token for a tool, considering its priority.
-    ///
-    /// This implementation currently delegates to the underlying limiter,
-    /// but future versions can use the weight to adjust refill rates or burst capacities dynamically.
+    /// Priority weight > 1.0 increases refill rate and burst capacity.
+    /// Priority < 1.0 decreases them.
     pub fn try_acquire_with_priority(&self, tool: &str) -> Result<()> {
         let weight = self.priority_weights.get(tool).copied().unwrap_or(1.0);
         
         let mut limiter = self.per_tool.lock().map_err(|e| anyhow!("adaptive limiter poisoned: {}", e))?;
         
-        // Simple adaptive logic: if high priority (> 1.0), we could allow a temporary burst check
-        // For now, we just pass through, but this structure enables the logic.
-        // A real adaptive implementation might do:
-        // if weight > 2.0 && limiter.is_limited(tool) { allow_one_off_burst() }
-        
-        let result = limiter.try_acquire_for(tool);
-        
-        // If failed and high priority, we could log or track "denied high priority" events
-        if result.is_err() && weight > 1.5 {
-            // Placeholder for adaptive backoff metric recording
-        }
-        
-        result
+        // Pass the weight as the speed multiplier
+        limiter.try_acquire_for_scaled(tool, weight)
     }
 }
 

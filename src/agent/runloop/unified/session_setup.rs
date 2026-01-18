@@ -83,6 +83,7 @@ pub(crate) struct SessionState {
     pub tool_health_tracker: Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
+    pub telemetry: Arc<vtcode_core::core::telemetry::TelemetryManager>,
 }
 
 #[allow(dead_code)]
@@ -677,6 +678,7 @@ pub(crate) async fn initialize_session(
         validation_cache: Arc::new(
             vtcode_core::tools::validation_cache::ValidationCache::default(),
         ),
+        telemetry: Arc::new(vtcode_core::core::telemetry::TelemetryManager::new()),
     })
 }
 

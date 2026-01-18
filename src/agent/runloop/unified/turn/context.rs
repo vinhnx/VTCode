@@ -96,6 +96,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
+    pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
 }
 
 impl<'a> TurnProcessingContext<'a> {
@@ -134,6 +135,7 @@ impl<'a> TurnProcessingContext<'a> {
             circuit_breaker: ctx.circuit_breaker,
             tool_health_tracker: ctx.tool_health_tracker,
             rate_limiter: ctx.rate_limiter,
+            telemetry: ctx.telemetry,
         }
     }
 }

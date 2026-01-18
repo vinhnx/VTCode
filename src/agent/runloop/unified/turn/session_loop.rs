@@ -167,6 +167,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             tool_health_tracker,
             rate_limiter,
             validation_cache,
+            telemetry,
             ..
         } = session_state;
 
@@ -235,6 +236,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 default_placeholder: &mut default_placeholder,
                 follow_up_placeholder: &mut follow_up_placeholder,
                 checkpoint_manager: checkpoint_manager.as_ref(),
+                telemetry: &telemetry,
             };
 
             let mut interaction_state =
@@ -346,6 +348,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 circuit_breaker: &circuit_breaker,
                 tool_health_tracker: &tool_health_tracker,
                 rate_limiter: &rate_limiter,
+                telemetry: &telemetry,
             };
             let outcome = match crate::agent::runloop::unified::turn::run_turn_loop(
                 &input,
