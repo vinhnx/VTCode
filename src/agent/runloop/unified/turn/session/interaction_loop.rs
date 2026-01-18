@@ -27,10 +27,8 @@ use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::welcome::SessionBootstrap;
 
-use crate::agent::runloop::unified::turn::session::slash_commands;
-use crate::agent::runloop::unified::turn::session::slash_commands::{
-    SlashCommandContext, SlashCommandControl,
-};
+
+use crate::agent::runloop::unified::turn::session::{mcp_lifecycle, slash_command_handler, tool_dispatch};
 use crate::hooks::lifecycle::SessionEndReason;
 
 #[allow(clippy::too_many_arguments)]
@@ -136,8 +134,9 @@ pub(crate) async fn run_interaction_loop(
         let interrupts = InlineInterruptCoordinator::new(ctx.ctrl_c_state.as_ref());
 
         // Handle MCP
+        // Handle MCP
         if let Some(mcp_manager) = ctx.async_mcp_manager {
-            handle_mcp_updates(
+            mcp_lifecycle::handle_mcp_updates(
                 mcp_manager,
                 ctx.tool_registry,
                 ctx.tools,
@@ -284,80 +283,13 @@ pub(crate) async fn run_interaction_loop(
             *ctx.default_placeholder = Some(next_placeholder);
         }
 
-        match input_owned.as_str() {
-            "" => continue,
-            "exit" | "quit" => {
-                ctx.renderer.line(MessageStyle::Info, "✓")?;
-                return Ok(InteractionOutcome::Exit {
-                    reason: SessionEndReason::Exit,
-                });
+        match slash_command_handler::handle_input_commands(input_owned.as_str(), ctx, state).await? {
+            slash_command_handler::CommandProcessingResult::Outcome(outcome) => return Ok(outcome),
+            slash_command_handler::CommandProcessingResult::ContinueLoop => continue,
+            slash_command_handler::CommandProcessingResult::UpdateInput(new_input) => {
+                input_owned = new_input;
             }
-            "help" => {
-                ctx.renderer
-                    .line(MessageStyle::Info, "Commands: exit, help")?;
-                continue;
-            }
-            input if input.starts_with('/') => {
-                if let Some(command_input) = input.strip_prefix('/') {
-                    let outcome = handle_slash_command(
-                        command_input,
-                        ctx.renderer,
-                        ctx.custom_prompts,
-                        Some(ctx.custom_slash_commands),
-                    )
-                    .await?;
-
-                    let command_result = slash_commands::handle_outcome(
-                        outcome,
-                        SlashCommandContext {
-                            renderer: ctx.renderer,
-                            handle: ctx.handle,
-                            session: ctx.session,
-                            config: ctx.config,
-                            vt_cfg: ctx.vt_cfg,
-                            provider_client: ctx.provider_client,
-                            session_bootstrap: ctx.session_bootstrap,
-                            model_picker_state: state.model_picker_state,
-                            palette_state: state.palette_state,
-                            tool_registry: ctx.tool_registry,
-                            conversation_history: ctx.conversation_history,
-                            decision_ledger: ctx.decision_ledger,
-                            context_manager: ctx.context_manager,
-                            session_stats: ctx.session_stats,
-                            tools: ctx.tools,
-                            async_mcp_manager: ctx.async_mcp_manager.as_ref(),
-                            mcp_panel_state: ctx.mcp_panel_state,
-                            linked_directories: ctx.linked_directories,
-                            ctrl_c_state: ctx.ctrl_c_state,
-                            ctrl_c_notify: ctx.ctrl_c_notify,
-                            default_placeholder: ctx.default_placeholder,
-                            lifecycle_hooks: ctx.lifecycle_hooks,
-                            full_auto: ctx.full_auto,
-                            approval_recorder: Some(ctx.approval_recorder),
-                            tool_permission_cache: ctx.tool_permission_cache,
-                            loaded_skills: ctx.loaded_skills,
-                            checkpoint_manager: ctx.checkpoint_manager,
-                        },
-                    )
-                    .await?;
-
-                    match command_result {
-                        SlashCommandControl::SubmitPrompt(prompt) => {
-                            input_owned = prompt;
-                        }
-                        SlashCommandControl::Continue => continue,
-                        SlashCommandControl::BreakWithReason(reason) => {
-                            return Ok(InteractionOutcome::Exit { reason });
-                        }
-                        SlashCommandControl::BreakWithoutReason => {
-                            return Ok(InteractionOutcome::Exit {
-                                reason: SessionEndReason::Exit,
-                            });
-                        }
-                    }
-                }
-            }
-            _ => {}
+            slash_command_handler::CommandProcessingResult::NotHandled => {}
         }
 
         if let Some(hooks) = ctx.lifecycle_hooks {
@@ -425,169 +357,23 @@ pub(crate) async fn run_interaction_loop(
 
         let input = input_owned.as_str();
 
-        // Check for bash mode with '!' prefix
-        if input.starts_with('!') {
-            let bash_command = input.trim_start_matches('!').trim();
-            if !bash_command.is_empty() {
-                display_user_message(ctx.renderer, input)?;
-                ctx.conversation_history
-                    .push(uni::Message::user(input.to_string()));
-
-                // Show spinner while command is running
-                let spinner =
-                    crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::new(
-                        ctx.handle,
-                        state.input_status_state.left.clone(),
-                        state.input_status_state.right.clone(),
-                        format!("Running: {}", bash_command),
-                    );
-
-                // Execute bash command directly
-                let tool_call_id = format!("bash_{}", ctx.conversation_history.len());
-
-                // Find the bash tool in the registry
-                let args = serde_json::json!({"command": bash_command});
-                let bash_result = ctx.tool_registry.execute_tool_ref("bash", &args).await;
-
-                // Stop spinner before rendering output
-                spinner.finish();
-
-                let command_succeeded = match bash_result {
-                    Ok(result) => {
-                        render_tool_output(
-                            ctx.renderer,
-                            Some("bash"),
-                            &result,
-                            ctx.vt_cfg.as_ref(),
-                        )
-                        .await?;
-
-                        let result_str = serde_json::to_string(&result).unwrap_or_default();
-                        ctx.conversation_history.push(uni::Message::tool_response(
-                            tool_call_id.clone(),
-                            result_str,
-                        ));
-                        result
-                            .get("exit_code")
-                            .and_then(|v| v.as_i64())
-                            .unwrap_or(0)
-                            == 0
-                    }
-                    Err(err) => {
-                        ctx.renderer.line(
-                            MessageStyle::Error,
-                            &format!("Bash command failed: {}", err),
-                        )?;
-                        ctx.conversation_history.push(uni::Message::tool_response(
-                            tool_call_id.clone(),
-                            format!("{{\"error\": \"{}\"}}", err),
-                        ));
-                        false
-                    }
-                };
-
-                ctx.handle.clear_input();
-                ctx.handle
-                    .set_placeholder(ctx.follow_up_placeholder.clone());
-
-                // Return to trigger LLM follow-up with context about what happened
-                let follow_up_prompt = if command_succeeded {
-                    format!(
-                        "I ran `{}`. Please briefly acknowledge the result and suggest what to do next.",
-                        bash_command
-                    )
-                } else {
-                    format!(
-                        "I ran `{}` but it failed. Please analyze the error and suggest how to fix it.",
-                        bash_command
-                    )
-                };
-                return Ok(InteractionOutcome::Continue {
-                    input: follow_up_prompt,
-                });
-            }
-        }
-
-        // Check for explicit "run <command>" pattern
-        if let Some((tool_name, tool_args)) =
-            crate::agent::runloop::unified::shell::detect_explicit_run_command(input)
+        // Check for direct tool execution (bash / run)
         {
-            display_user_message(ctx.renderer, input)?;
-            ctx.conversation_history
-                .push(uni::Message::user(input.to_string()));
-
-            // Show spinner while command is running
-            let command_preview = tool_args
-                .get("command")
-                .and_then(|v| v.as_str())
-                .unwrap_or("command");
-            let spinner = crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::new(
-                ctx.handle,
-                state.input_status_state.left.clone(),
-                state.input_status_state.right.clone(),
-                format!("Running: {}", command_preview),
-            );
-
-            let tool_call_id = format!("explicit_run_{}", ctx.conversation_history.len());
-            let bash_result = ctx
-                .tool_registry
-                .execute_tool_ref(&tool_name, &tool_args)
-                .await;
-
-            // Stop spinner before rendering output
-            spinner.finish();
-
-            let command_succeeded = match bash_result {
-                Ok(result) => {
-                    render_tool_output(
-                        ctx.renderer,
-                        Some(&tool_name),
-                        &result,
-                        ctx.vt_cfg.as_ref(),
-                    )
-                    .await?;
-
-                    let result_str = serde_json::to_string(&result).unwrap_or_default();
-                    ctx.conversation_history.push(uni::Message::tool_response(
-                        tool_call_id.clone(),
-                        result_str,
-                    ));
-                    result
-                        .get("exit_code")
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or(0)
-                        == 0
-                }
-                Err(err) => {
-                    ctx.renderer
-                        .line(MessageStyle::Error, &format!("Command failed: {}", err))?;
-                    ctx.conversation_history.push(uni::Message::tool_response(
-                        tool_call_id.clone(),
-                        format!("{{\"error\": \"{}\"}}", err),
-                    ));
-                    false
-                }
+            let mut direct_tool_ctx = tool_dispatch::DirectToolContext {
+                renderer: ctx.renderer,
+                conversation_history: ctx.conversation_history,
+                handle: ctx.handle,
+                input_status_state: state.input_status_state,
+                tool_registry: ctx.tool_registry,
+                vt_cfg: ctx.vt_cfg,
+                follow_up_placeholder: ctx.follow_up_placeholder,
             };
 
-            ctx.handle.clear_input();
-            ctx.handle
-                .set_placeholder(ctx.follow_up_placeholder.clone());
-
-            // Return to trigger LLM follow-up with context about what happened
-            let follow_up_prompt = if command_succeeded {
-                format!(
-                    "I ran `{}`. Please briefly acknowledge the result and suggest what to do next.",
-                    command_preview
-                )
-            } else {
-                format!(
-                    "I ran `{}` but it failed. Please analyze the error and suggest how to fix it.",
-                    command_preview
-                )
-            };
-            return Ok(InteractionOutcome::Continue {
-                input: follow_up_prompt,
-            });
+            if let Some(outcome) =
+                tool_dispatch::handle_direct_tool_execution(input, &mut direct_tool_ctx).await?
+            {
+                return Ok(outcome);
+            }
         }
 
         let processed_content =
@@ -652,124 +438,3 @@ pub(crate) async fn run_interaction_loop(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn handle_mcp_updates(
-    mcp_manager: &AsyncMcpManager,
-    tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
-    tools: &Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
-    renderer: &mut AnsiRenderer,
-    mcp_catalog_initialized: &mut bool,
-    last_mcp_refresh: &mut Instant,
-    last_known_mcp_tools: &mut Vec<String>,
-    refresh_interval: std::time::Duration,
-) -> Result<()> {
-    if !*mcp_catalog_initialized {
-        match mcp_manager.get_status().await {
-            McpInitStatus::Ready { client } => {
-                tool_registry.set_mcp_client(Arc::clone(&client)).await;
-                match tool_registry.refresh_mcp_tools().await {
-                    Ok(()) => {
-                        let mut registered_tools = 0usize;
-                        match tool_registry.list_mcp_tools().await {
-                            Ok(mcp_tools) => {
-                                let new_definitions =
-                                    crate::agent::runloop::unified::session_setup::build_mcp_tool_definitions(
-                                        &mcp_tools,
-                                    );
-                                registered_tools = new_definitions.len();
-                                {
-                                    let mut guard = tools.write().await;
-                                    guard.retain(|tool| {
-                                        !tool.function.as_ref().unwrap().name.starts_with("mcp_")
-                                    });
-                                    guard.extend(new_definitions);
-                                };
-                                McpToolManager::enumerate_mcp_tools_after_initial_setup(
-                                    tool_registry,
-                                    tools,
-                                    mcp_tools,
-                                    last_known_mcp_tools,
-                                )
-                                .await?;
-                            }
-                            Err(err) => {
-                                tracing::warn!(
-                                    "Failed to enumerate MCP tools after refresh: {err}"
-                                );
-                            }
-                        }
-
-                        renderer.line(
-                            MessageStyle::Info,
-                            &format!(
-                                "MCP tools ready ({} registered). Use /mcp tools to inspect the catalog.",
-                                registered_tools
-                            ),
-                        )?;
-                        renderer.line_if_not_empty(MessageStyle::Output)?;
-                    }
-                    Err(err) => {
-                        tracing::warn!("Failed to refresh MCP tools after initialization: {err}");
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to index MCP tools: {}", err),
-                        )?;
-                        renderer.line_if_not_empty(MessageStyle::Output)?;
-                    }
-                }
-                *mcp_catalog_initialized = true;
-            }
-            McpInitStatus::Error { message } => {
-                renderer.line(MessageStyle::Error, &format!("MCP Error: {}", message))?;
-                renderer.line_if_not_empty(MessageStyle::Output)?;
-                *mcp_catalog_initialized = true;
-            }
-            McpInitStatus::Initializing { .. } | McpInitStatus::Disabled => {}
-        }
-    }
-
-    if *mcp_catalog_initialized && last_mcp_refresh.elapsed() >= refresh_interval {
-        *last_mcp_refresh = std::time::Instant::now();
-
-        if let Ok(known_tools) = tool_registry.list_mcp_tools().await {
-            let current_tool_keys: Vec<String> = known_tools
-                .iter()
-                .map(|t| format!("{}-{}", t.provider, t.name))
-                .collect();
-
-            if current_tool_keys != *last_known_mcp_tools {
-                match tool_registry.refresh_mcp_tools().await {
-                    Ok(()) => match tool_registry.list_mcp_tools().await {
-                        Ok(new_mcp_tools) => {
-                            let new_definitions =
-                                crate::agent::runloop::unified::session_setup::build_mcp_tool_definitions(
-                                    &new_mcp_tools,
-                                );
-                            {
-                                let mut guard = tools.write().await;
-                                guard.retain(|tool| {
-                                    !tool.function.as_ref().unwrap().name.starts_with("mcp_")
-                                });
-                                guard.extend(new_definitions);
-                            };
-                            McpToolManager::enumerate_mcp_tools_after_refresh(
-                                tool_registry,
-                                tools,
-                                last_known_mcp_tools,
-                            )
-                            .await?;
-                        }
-                        Err(err) => {
-                            tracing::warn!("Failed to enumerate MCP tools after refresh: {err}");
-                        }
-                    },
-                    Err(err) => {
-                        tracing::warn!("Failed to refresh MCP tools during dynamic update: {err}");
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
-}

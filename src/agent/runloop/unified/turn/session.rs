@@ -1,5 +1,8 @@
 pub mod interaction_loop;
 pub mod slash_commands;
+pub mod tool_dispatch;
+pub mod slash_command_handler;
+pub mod mcp_lifecycle;
 
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use anyhow::Result;
