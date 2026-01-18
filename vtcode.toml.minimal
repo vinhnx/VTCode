@@ -44,6 +44,12 @@ tool_output_mode = "compact"
 # Maximum number of lines to display in tool output (prevents transcript flooding)
 tool_output_max_lines = 50
 
+# Reasoning display mode for chat UI: "always", "toggle", or "hidden"
+reasoning_display_mode = "toggle"
+
+# Default visibility for reasoning when display mode is "toggle"
+reasoning_visible_default = false
+
 # Status line configuration
 [ui.status_line]
 mode = "auto"

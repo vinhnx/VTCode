@@ -32,8 +32,8 @@ body {
 
 .chat-header {
 	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
+	align-items: center;
+	justify-content: flex-start;
 	padding: 0.5rem 1rem;
 	border-bottom: 1px solid var(--vscode-panel-border);
 	background: transparent;
@@ -64,6 +64,12 @@ body {
 	align-items: center;
 	gap: 0.35rem;
 	animation: status-pulse 2s ease-in-out infinite;
+}
+
+.chat-header-actions {
+	display: flex;
+	gap: 0.5rem;
+	margin-left: auto;
 }
 
 .chat-status:empty {
@@ -465,8 +471,33 @@ body {
 	padding: 0.25rem 0;
 	font-size: 11px;
 	font-style: italic;
-	color: var(--vscode-descriptionForeground);
+	color: var(--vscode-disabledForeground);
 	border-left: none;
+}
+
+.chat-root[data-reasoning-visible="false"] .chat-reasoning {
+	display: none;
+}
+
+.chat-toggle {
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	padding: 0.2rem 0.6rem;
+	cursor: pointer;
+	transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.chat-toggle:hover {
+	color: var(--vscode-foreground);
+	border-color: var(--vscode-foreground);
+}
+
+.chat-toggle--active {
+	color: var(--vscode-foreground);
+	border-color: var(--vscode-foreground);
 }
 
 .chat-skeleton {

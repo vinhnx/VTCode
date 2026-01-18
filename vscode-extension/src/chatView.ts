@@ -30,6 +30,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private readonly messages: ChatMessage[] = [];
     private workspaceTrusted = vscode.workspace.isTrusted;
     private lastHumanInLoopSetting: boolean | undefined;
+    private reasoningDisplayMode: "always" | "toggle" | "hidden" = "toggle";
+    private reasoningVisibleDefault = false;
     private participantRegistry: ParticipantRegistry;
     private conversationManager: ConversationManager;
 
@@ -37,7 +39,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         private readonly extensionUri: vscode.Uri,
         private readonly backend: VtcodeBackend,
         private readonly output: vscode.OutputChannel,
-        private readonly context: vscode.ExtensionContext
+        private readonly context: vscode.ExtensionContext,
     ) {
         // Initialize participant registry
         this.participantRegistry = new ParticipantRegistry();
@@ -45,7 +47,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // Initialize conversation manager
         this.conversationManager = new ConversationManager(
             context,
-            this.output
+            this.output,
         );
 
         // Create initial conversation
@@ -70,10 +72,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     public updateConfig(summary: VtcodeConfigSummary | undefined): void {
         const previous = this.lastHumanInLoopSetting;
         this.lastHumanInLoopSetting = summary?.humanInTheLoop ?? undefined;
+        this.reasoningDisplayMode = this.normalizeReasoningDisplayMode(
+            summary?.reasoningDisplayMode,
+        );
+        if (summary?.reasoningVisibleDefault !== undefined) {
+            this.reasoningVisibleDefault = summary.reasoningVisibleDefault;
+        }
+
+        this.postConfig();
 
         if (summary?.humanInTheLoop === false && previous !== false) {
             this.output.appendLine(
-                "[chatView] Configuration disabled human_in_the_loop; VT Code prompts will proceed without extra VS Code confirmations."
+                "[chatView] Configuration disabled human_in_the_loop; VT Code prompts will proceed without extra VS Code confirmations.",
             );
         }
     }
@@ -81,7 +91,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     public resolveWebviewView(
         view: vscode.WebviewView,
         _context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken
+        _token: vscode.CancellationToken,
     ): void {
         this.output.appendLine("[chatView] resolveWebviewView called");
         this.view = view;
@@ -99,6 +109,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         view.webview.onDidReceiveMessage(async (message: WebviewMessage) => {
             if (message.type === "ready") {
                 this.postTranscript();
+                this.postConfig();
                 return;
             }
 
@@ -139,17 +150,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private async handleUserMessage(text: string): Promise<void> {
         if (!(await this.ensureWorkspaceTrusted())) {
             this.addSystemMessage(
-                "Trust this workspace to send prompts to VT Code."
+                "Trust this workspace to send prompts to VT Code.",
             );
             return;
         }
 
         const contextFlushed = await vscode.commands.executeCommand(
-            "vtcode.flushIdeContextSnapshot"
+            "vtcode.flushIdeContextSnapshot",
         );
         if (contextFlushed === false) {
             this.output.appendLine(
-                "[vtcode] IDE context snapshot is unavailable; continuing without supplemental context."
+                "[vtcode] IDE context snapshot is unavailable; continuing without supplemental context.",
             );
         }
 
@@ -159,7 +170,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         if (mentionTypes.length > 0) {
             this.output.appendLine(
-                `[chatView] Detected mentions: ${mentionTypes.join(", ")}`
+                `[chatView] Detected mentions: ${mentionTypes.join(", ")}`,
             );
         }
 
@@ -171,7 +182,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             await this.participantRegistry.resolveContextForMentions(
                 parsedMessage.cleanText,
                 participantContext,
-                mentionTypes
+                mentionTypes,
             );
 
         const userMessage: ChatMessage = {
@@ -236,13 +247,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async handleToolCall(
-        chunk: Extract<VtcodeStreamChunk, { kind: "toolCall" }>
+        chunk: Extract<VtcodeStreamChunk, { kind: "toolCall" }>,
     ): Promise<void> {
         const approved = await this.requestToolApproval(chunk.call);
         if (!approved) {
             chunk.reject("User denied tool execution.");
             this.addSystemMessage(
-                `Tool ${chunk.call.name} cancelled by the user.`
+                `Tool ${chunk.call.name} cancelled by the user.`,
             );
             return;
         }
@@ -260,13 +271,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             this.addToolMessage(
                 chunk.call,
                 result,
-                usesTerminal ? "command" : "tool"
+                usesTerminal ? "command" : "tool",
             );
 
             // Show error if exit code is non-zero
             if (result.exitCode && result.exitCode !== 0) {
                 this.addErrorMessage(
-                    `Tool ${chunk.call.name} exited with code ${result.exitCode}`
+                    `Tool ${chunk.call.name} exited with code ${result.exitCode}`,
                 );
             }
         } catch (error) {
@@ -286,7 +297,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             "VT Code requires a trusted workspace before processing prompts.",
             { modal: true },
             "Trust Workspace",
-            "Cancel"
+            "Cancel",
         );
 
         if (selection === "Trust Workspace") {
@@ -311,7 +322,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async runTerminalCommand(
-        chunk: Extract<VtcodeStreamChunk, { kind: "toolCall" }>
+        chunk: Extract<VtcodeStreamChunk, { kind: "toolCall" }>,
     ): Promise<VtcodeToolExecutionResult> {
         const args = chunk.call.args;
         const command = this.extractShellCommand(args);
@@ -335,7 +346,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private extractShellCommand(
-        args: Record<string, unknown>
+        args: Record<string, unknown>,
     ): string | undefined {
         const candidates = ["command", "cmd", "script", "shell_command", "run"];
         for (const key of candidates) {
@@ -349,7 +360,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     private extractString(
         source: Record<string, unknown>,
-        key: string
+        key: string,
     ): string | undefined {
         const value = source?.[key];
         return typeof value === "string" && value.trim().length > 0
@@ -369,12 +380,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                         : detail,
             },
             { title: "Approve", isCloseAffordance: false },
-            { title: "Deny", isCloseAffordance: true }
+            { title: "Deny", isCloseAffordance: true },
         );
 
         const approved = selection?.title === "Approve";
         this.output.appendLine(
-            `[vtcode] Tool ${call.name} ${approved ? "approved" : "denied"}.`
+            `[vtcode] Tool ${call.name} ${approved ? "approved" : "denied"}.`,
         );
         return approved;
     }
@@ -402,7 +413,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private addToolMessage(
         call: VtcodeToolCall,
         result: VtcodeToolExecutionResult,
-        toolKind: "command" | "tool"
+        toolKind: "command" | "tool",
     ): void {
         const text = result.text.trim();
         const preview = text.length > 0 ? text : "(no output)";
@@ -428,7 +439,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private addToolSummary(
-        summary: Extract<VtcodeStreamChunk, { kind: "toolResult" }>
+        summary: Extract<VtcodeStreamChunk, { kind: "toolResult" }>,
     ): void {
         const label = summary.toolType === "command" ? "Command" : "Tool";
         const normalizedStatus = summary.status.replace(/_/g, " ");
@@ -483,7 +494,7 @@ ${output}`
         if (activeEditor) {
             const document = activeEditor.document;
             const workspaceFolder = vscode.workspace.getWorkspaceFolder(
-                document.uri
+                document.uri,
             );
 
             context.activeFile = {
@@ -543,7 +554,7 @@ ${output}`
                 (message) =>
                     message.role === "user" ||
                     message.role === "assistant" ||
-                    message.role === "tool"
+                    message.role === "tool",
             )
             .slice(-12);
 
@@ -583,17 +594,17 @@ ${output}`
                 const message =
                     error instanceof Error ? error.message : String(error);
                 this.output.appendLine(
-                    `[vtcode] Failed to post chat update: ${message}`
+                    `[vtcode] Failed to post chat update: ${message}`,
                 );
             });
     }
 
     private getHtml(webview: vscode.Webview): string {
         const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, "media", "chat-view.js")
+            vscode.Uri.joinPath(this.extensionUri, "media", "chat-view.js"),
         );
         const styleUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, "media", "chat-view.css")
+            vscode.Uri.joinPath(this.extensionUri, "media", "chat-view.css"),
         );
 
         const nonce = this.createNonce();
@@ -615,6 +626,17 @@ ${output}`
                     <span class="chat-logo">VT</span>
                     <span>VT Code</span>
                 </div>
+                <div class="chat-header-actions">
+                    <button
+                        id="reasoning-toggle"
+                        class="chat-toggle"
+                        type="button"
+                        aria-pressed="false"
+                        title="Toggle reasoning"
+                    >
+                        Reasoning
+                    </button>
+                </div>
                 <div id="status" class="chat-status" aria-live="polite"></div>
             </header>
             <div id="transcript" class="chat-transcript" role="log" aria-live="polite"></div>
@@ -635,5 +657,26 @@ ${output}`
 
     private createNonce(): string {
         return Math.random().toString(36).slice(2, 10);
+    }
+
+    private postConfig(): void {
+        if (!this.view) {
+            return;
+        }
+
+        this.post({
+            type: "config",
+            reasoningDisplayMode: this.reasoningDisplayMode,
+            reasoningVisibleDefault: this.reasoningVisibleDefault,
+        });
+    }
+
+    private normalizeReasoningDisplayMode(
+        mode: string | undefined,
+    ): "always" | "toggle" | "hidden" {
+        if (mode === "always" || mode === "toggle" || mode === "hidden") {
+            return mode;
+        }
+        return "toggle";
     }
 }
