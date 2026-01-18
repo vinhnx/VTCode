@@ -222,7 +222,7 @@ pub(crate) async fn run_tool_call(
             hitl_notification_bell: vt_cfg
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
-            editing_mode: ctx.session_stats.editing_mode(),
+            autonomous_mode: ctx.session_stats.is_autonomous_mode(),
         },
         &name,
         Some(&args_val),

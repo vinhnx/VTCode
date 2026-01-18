@@ -60,16 +60,22 @@ impl Session {
             status_line = Some(line);
         }
 
-        // Determine border styling based on editing mode
+        // Determine border styling based on editing mode and autonomous state
         let base_border_style = self.styles.accent_style();
+        let autonomous_style = ratatui::style::Style::default()
+            .fg(ratatui::style::Color::Green)
+            .add_modifier(ratatui::style::Modifier::BOLD);
         let border_style = match self.header_context.editing_mode {
             EditingMode::Plan => ratatui::style::Style::default()
                 .fg(ratatui::style::Color::Yellow)
                 .add_modifier(ratatui::style::Modifier::BOLD),
-            EditingMode::Agent => ratatui::style::Style::default()
-                .fg(ratatui::style::Color::Green)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-            EditingMode::Edit => base_border_style, // Use original style for edit mode
+            EditingMode::Edit => {
+                if self.header_context.autonomous_mode {
+                    autonomous_style
+                } else {
+                    base_border_style
+                }
+            }
         };
 
         // Determine border type - use double borders for trust modes
@@ -424,16 +430,22 @@ impl Session {
     pub fn build_input_widget_data(&self, width: u16, height: u16) -> InputWidgetData {
         let input_render = self.build_input_render(width, height);
 
-        // Determine border styling based on editing mode
+        // Determine border styling based on editing mode and autonomous state
         let base_border_style = self.styles.accent_style();
+        let autonomous_style = ratatui::style::Style::default()
+            .fg(ratatui::style::Color::Green)
+            .add_modifier(ratatui::style::Modifier::BOLD);
         let border_style = match self.header_context.editing_mode {
             EditingMode::Plan => ratatui::style::Style::default()
                 .fg(ratatui::style::Color::Yellow)
                 .add_modifier(ratatui::style::Modifier::BOLD),
-            EditingMode::Agent => ratatui::style::Style::default()
-                .fg(ratatui::style::Color::Green)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-            EditingMode::Edit => base_border_style, // Use original style for edit mode
+            EditingMode::Edit => {
+                if self.header_context.autonomous_mode {
+                    autonomous_style
+                } else {
+                    base_border_style
+                }
+            }
         };
 
         InputWidgetData {

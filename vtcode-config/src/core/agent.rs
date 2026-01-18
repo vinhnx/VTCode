@@ -189,6 +189,13 @@ pub struct AgentConfig {
     /// Options in confirmation dialog: Execute, Edit Plan, Cancel
     #[serde(default = "default_require_plan_confirmation")]
     pub require_plan_confirmation: bool,
+
+    /// Enable autonomous mode - auto-approve safe tools with reduced HITL prompts
+    /// When true, the agent operates with fewer confirmation prompts for safe tools
+    /// (read operations, grep_file, list_files, etc.) while still blocking dangerous operations.
+    /// Toggle with /agent command during a session.
+    #[serde(default = "default_autonomous_mode")]
+    pub autonomous_mode: bool,
 }
 
 impl Default for AgentConfig {
@@ -230,6 +237,7 @@ impl Default for AgentConfig {
             user_instructions: None,
             default_editing_mode: EditingMode::default(),
             require_plan_confirmation: default_require_plan_confirmation(),
+            autonomous_mode: default_autonomous_mode(),
         }
     }
 }
@@ -360,6 +368,11 @@ const fn default_include_working_directory() -> bool {
 #[inline]
 const fn default_require_plan_confirmation() -> bool {
     true // Default: require confirmation (HITL pattern)
+}
+
+#[inline]
+const fn default_autonomous_mode() -> bool {
+    false // Default: interactive mode with full HITL
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -890,5 +903,6 @@ mod tests {
         let config = AgentConfig::default();
         assert_eq!(config.default_editing_mode, EditingMode::Edit);
         assert!(config.require_plan_confirmation);
+        assert!(!config.autonomous_mode);
     }
 }

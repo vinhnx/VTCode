@@ -375,7 +375,7 @@ pub enum ModelSelectionSource {
 ///
 /// Controls the initial mode when a session starts. This is a **configuration**
 /// enum for `default_editing_mode` in vtcode.toml. At runtime, the mode can be
-/// cycled (Edit → Plan → Agent → Edit) via Shift+Tab or /plan, /agent commands.
+/// cycled (Edit → Plan → Edit) via Shift+Tab or /plan command.
 ///
 /// Inspired by OpenAI Codex's emphasis on structured planning before execution,
 /// but provider-agnostic (works with Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)
@@ -392,9 +392,6 @@ pub enum EditingMode {
     /// Use for: Planning, research, architecture analysis
     /// Agent can write plans to `.vtcode/plans/` but not modify code
     Plan,
-    /// Autonomous agent mode - full tool access with reduced HITL prompts
-    /// Use for: Long-running autonomous tasks with minimal interruption
-    Agent,
 }
 
 impl EditingMode {
@@ -403,7 +400,6 @@ impl EditingMode {
         match self {
             Self::Edit => "edit",
             Self::Plan => "plan",
-            Self::Agent => "agent",
         }
     }
 
@@ -414,8 +410,6 @@ impl EditingMode {
             Some(Self::Edit)
         } else if normalized.eq_ignore_ascii_case("plan") {
             Some(Self::Plan)
-        } else if normalized.eq_ignore_ascii_case("agent") {
-            Some(Self::Agent)
         } else {
             None
         }
@@ -423,27 +417,22 @@ impl EditingMode {
 
     /// Enumerate the allowed configuration values for validation
     pub fn allowed_values() -> &'static [&'static str] {
-        &["edit", "plan", "agent"]
+        &["edit", "plan"]
     }
 
     /// Check if this mode allows file modifications
     pub fn can_modify_files(self) -> bool {
-        matches!(self, Self::Edit | Self::Agent)
+        matches!(self, Self::Edit)
     }
 
     /// Check if this mode allows command execution
     pub fn can_execute_commands(self) -> bool {
-        matches!(self, Self::Edit | Self::Agent)
+        matches!(self, Self::Edit)
     }
 
     /// Check if this is read-only planning mode
     pub fn is_read_only(self) -> bool {
         matches!(self, Self::Plan)
-    }
-
-    /// Check if this is autonomous agent mode (reduced HITL)
-    pub fn is_autonomous(self) -> bool {
-        matches!(self, Self::Agent)
     }
 }
 
@@ -704,9 +693,7 @@ mod tests {
         assert_eq!(EditingMode::parse("plan"), Some(EditingMode::Plan));
         assert_eq!(EditingMode::parse("PLAN"), Some(EditingMode::Plan));
         assert_eq!(EditingMode::parse("Plan"), Some(EditingMode::Plan));
-        assert_eq!(EditingMode::parse("agent"), Some(EditingMode::Agent));
-        assert_eq!(EditingMode::parse("AGENT"), Some(EditingMode::Agent));
-        assert_eq!(EditingMode::parse("Agent"), Some(EditingMode::Agent));
+        assert_eq!(EditingMode::parse("agent"), None);
         assert_eq!(EditingMode::parse("invalid"), None);
         assert_eq!(EditingMode::parse(""), None);
     }
@@ -715,7 +702,6 @@ mod tests {
     fn test_editing_mode_as_str() {
         assert_eq!(EditingMode::Edit.as_str(), "edit");
         assert_eq!(EditingMode::Plan.as_str(), "plan");
-        assert_eq!(EditingMode::Agent.as_str(), "agent");
     }
 
     #[test]
@@ -724,19 +710,11 @@ mod tests {
         assert!(EditingMode::Edit.can_modify_files());
         assert!(EditingMode::Edit.can_execute_commands());
         assert!(!EditingMode::Edit.is_read_only());
-        assert!(!EditingMode::Edit.is_autonomous());
 
         // Plan mode: read-only
         assert!(!EditingMode::Plan.can_modify_files());
         assert!(!EditingMode::Plan.can_execute_commands());
         assert!(EditingMode::Plan.is_read_only());
-        assert!(!EditingMode::Plan.is_autonomous());
-
-        // Agent mode: full access + autonomous
-        assert!(EditingMode::Agent.can_modify_files());
-        assert!(EditingMode::Agent.can_execute_commands());
-        assert!(!EditingMode::Agent.is_read_only());
-        assert!(EditingMode::Agent.is_autonomous());
     }
 
     #[test]
@@ -748,12 +726,11 @@ mod tests {
     fn test_editing_mode_display() {
         assert_eq!(format!("{}", EditingMode::Edit), "edit");
         assert_eq!(format!("{}", EditingMode::Plan), "plan");
-        assert_eq!(format!("{}", EditingMode::Agent), "agent");
     }
 
     #[test]
     fn test_editing_mode_allowed_values() {
         let values = EditingMode::allowed_values();
-        assert_eq!(values, &["edit", "plan", "agent"]);
+        assert_eq!(values, &["edit", "plan"]);
     }
 }

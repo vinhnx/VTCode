@@ -9,8 +9,10 @@ use vtcode_core::ui::tui::EditingMode;
 #[derive(Default)]
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
-    /// Current editing mode: Edit, Plan, or Agent
+    /// Current editing mode: Edit or Plan
     pub editing_mode: EditingMode,
+    /// Autonomous mode - auto-approve safe tools with reduced HITL prompts
+    pub autonomous_mode: bool,
     #[allow(dead_code)]
     pub approval_recorder: Arc<ApprovalRecorder>,
     #[allow(dead_code)]
@@ -36,9 +38,9 @@ impl SessionStats {
         matches!(self.editing_mode, EditingMode::Plan)
     }
 
-    /// Check if currently in Agent mode (autonomous)
-    pub(crate) fn is_agent_mode(&self) -> bool {
-        matches!(self.editing_mode, EditingMode::Agent)
+    /// Check if currently in autonomous mode
+    pub(crate) fn is_autonomous_mode(&self) -> bool {
+        self.autonomous_mode
     }
 
     /// Set plan mode (for backward compatibility)
@@ -50,17 +52,17 @@ impl SessionStats {
         };
     }
 
-    /// Get the current editing mode
-    pub(crate) fn editing_mode(&self) -> EditingMode {
-        self.editing_mode
-    }
-
     /// Set the editing mode directly
     pub(crate) fn set_editing_mode(&mut self, mode: EditingMode) {
         self.editing_mode = mode;
     }
 
-    /// Cycle to the next mode: Edit → Plan → Agent → Edit
+    /// Set autonomous mode
+    pub(crate) fn set_autonomous_mode(&mut self, enabled: bool) {
+        self.autonomous_mode = enabled;
+    }
+
+    /// Cycle to the next mode: Edit → Plan → Edit
     pub(crate) fn cycle_mode(&mut self) -> EditingMode {
         self.editing_mode = self.editing_mode.next();
         self.editing_mode

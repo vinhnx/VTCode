@@ -20,6 +20,8 @@ pub struct InlineHeaderContext {
     pub highlights: Vec<InlineHeaderHighlight>,
     /// Current editing mode for display in header
     pub editing_mode: EditingMode,
+    /// Current autonomous mode status
+    pub autonomous_mode: bool,
 }
 
 impl Default for InlineHeaderContext {
@@ -71,6 +73,7 @@ impl Default for InlineHeaderContext {
             mcp,
             highlights: Vec::new(),
             editing_mode: EditingMode::default(),
+            autonomous_mode: false,
         }
     }
 }
@@ -643,6 +646,8 @@ pub enum InlineCommand {
     ClearInputQueue,
     /// Update editing mode state in header context
     SetEditingMode(EditingMode),
+    /// Update autonomous mode state in header context
+    SetAutonomousMode(bool),
     /// Show plan confirmation dialog (Claude Code style HITL)
     /// Displays Implementation Blueprint and asks user to approve before execution
     ShowPlanConfirmation {
@@ -666,17 +671,14 @@ pub enum EditingMode {
     Edit,
     /// Read-only mode - produces implementation plans without executing
     Plan,
-    /// Autonomous agent mode - full tool access with reduced HITL prompts
-    Agent,
 }
 
 impl EditingMode {
-    /// Cycle to the next mode: Edit -> Plan -> Agent -> Edit
+    /// Cycle to the next mode: Edit -> Plan -> Edit
     pub fn next(self) -> Self {
         match self {
             Self::Edit => Self::Plan,
-            Self::Plan => Self::Agent,
-            Self::Agent => Self::Edit,
+            Self::Plan => Self::Edit,
         }
     }
 
@@ -685,7 +687,6 @@ impl EditingMode {
         match self {
             Self::Edit => "Edit",
             Self::Plan => "Plan",
-            Self::Agent => "Agent",
         }
     }
 
@@ -693,7 +694,6 @@ impl EditingMode {
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "plan" => Self::Plan,
-            "agent" => Self::Agent,
             _ => Self::Edit, // Default to edit for unknown values
         }
     }
@@ -867,6 +867,11 @@ impl InlineHandle {
     /// Update editing mode state in the header display
     pub fn set_editing_mode(&self, mode: EditingMode) {
         let _ = self.sender.send(InlineCommand::SetEditingMode(mode));
+    }
+
+    /// Update autonomous mode state in the header display
+    pub fn set_autonomous_mode(&self, enabled: bool) {
+        let _ = self.sender.send(InlineCommand::SetAutonomousMode(enabled));
     }
 
     pub fn show_modal(

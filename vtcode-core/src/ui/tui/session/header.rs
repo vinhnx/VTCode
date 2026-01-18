@@ -369,20 +369,21 @@ impl Session {
                     self.header_secondary_style(),
                 ));
             }
-            EditingMode::Agent => {
-                // Green badge for Agent mode (autonomous)
-                let badge_style = Style::default()
-                    .fg(ratatui::style::Color::Green)
-                    .add_modifier(Modifier::BOLD);
-                spans.push(Span::styled("[AGENT]".to_string(), badge_style));
-                spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
-                    self.header_secondary_style(),
-                ));
-            }
             EditingMode::Edit => {
                 // No badge for Edit mode (default)
             }
+        }
+
+        // Show autonomous mode indicator
+        if self.header_context.autonomous_mode {
+            let badge_style = Style::default()
+                .fg(ratatui::style::Color::Green)
+                .add_modifier(Modifier::BOLD);
+            spans.push(Span::styled("[AUTO]".to_string(), badge_style));
+            spans.push(Span::styled(
+                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                self.header_secondary_style(),
+            ));
         }
 
         let mut first_section = spans.is_empty();

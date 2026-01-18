@@ -226,15 +226,17 @@ Understanding these patterns requires reading multiple files across the codebase
 -   **Location**: `vtcode-config/src/core/agent.rs`, `vtcode-config/src/types/mod.rs`
 -   **Purpose**: Provider-agnostic agent behavior patterns inspired by OpenAI Codex prompting guide
 -   **Key Components**:
-    -   `EditingMode`: Enum (`Edit`, `Plan`, `Agent`) - controls file modification and autonomy
+    -   `EditingMode`: Enum (`Edit`, `Plan`) - controls file modification
         -   `Edit`: Full tool access (default)
         -   `Plan`: Read-only exploration, mutating tools blocked
-        -   `Agent`: Full access + reduced HITL prompts for autonomous operation
+    -   `autonomous_mode`: Boolean flag - controls HITL behavior independently
+        -   When true: auto-approves safe tools with reduced confirmation prompts
     -   `require_plan_confirmation`: Human-in-the-loop approval before executing plans
 -   **Configuration in vtcode.toml**:
     ```toml
     [agent]
-    default_editing_mode = "edit"  # "edit", "plan", or "agent"
+    default_editing_mode = "edit"  # "edit" or "plan"
+    autonomous_mode = false  # Enable for autonomous operation with reduced HITL
     require_plan_confirmation = true  # Require user approval before executing plans
     ```
 -   **Design**: These patterns work with all providers (Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)

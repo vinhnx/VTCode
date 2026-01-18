@@ -3,11 +3,11 @@
 //! Renders a syntax-highlighted diff preview with permission controls.
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 
 use crate::ui::markdown::highlight_line_for_diff;
@@ -109,7 +109,11 @@ fn anstyle_color_to_ratatui(color: anstyle::Color) -> Color {
     }
 }
 
-fn highlight_line_with_bg(line: &str, language: Option<&str>, bg: Option<Color>) -> Vec<Span<'static>> {
+fn highlight_line_with_bg(
+    line: &str,
+    language: Option<&str>,
+    bg: Option<Color>,
+) -> Vec<Span<'static>> {
     let text = line.trim_end_matches('\n');
     if let Some(segments) = highlight_line_for_diff(text, language) {
         segments
@@ -151,7 +155,7 @@ fn render_diff_content(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewS
         if lines.len() >= max_display {
             break;
         }
-        
+
         lines.push(Line::from(Span::styled(
             format!(
                 "@@ -{},{} +{},{} @@",
@@ -202,7 +206,10 @@ fn render_diff_content(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewS
         )));
     }
 
-    frame.render_widget(Paragraph::new(lines).block(Block::default().borders(Borders::NONE)), area);
+    frame.render_widget(
+        Paragraph::new(lines).block(Block::default().borders(Borders::NONE)),
+        area,
+    );
 }
 
 fn render_controls(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewState) {
@@ -215,9 +222,17 @@ fn render_controls(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewState
 
     let lines = vec![
         Line::from(vec![
-            Span::styled("Enter", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Enter",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" Apply  "),
-            Span::styled("Esc", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Esc",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" Reject  "),
             Span::styled("Tab", Style::default().fg(Color::Yellow)),
             Span::raw("/"),
@@ -233,12 +248,21 @@ fn render_controls(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewState
             Span::raw("-Always "),
             Span::styled("4", Style::default().fg(Color::Cyan)),
             Span::raw("-Auto "),
-            Span::styled(format!("[{}]", trust), Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("[{}]", trust),
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
     ];
 
     frame.render_widget(
-        Paragraph::new(lines).block(Block::default().borders(Borders::TOP).border_style(Style::default().fg(Color::DarkGray))),
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::TOP)
+                .border_style(Style::default().fg(Color::DarkGray)),
+        ),
         area,
     );
 }

@@ -82,11 +82,11 @@ pub enum SlashCommandOutcome {
     TogglePlanMode {
         enable: Option<bool>,
     },
-    /// /agent command - toggle Agent mode (autonomous with reduced HITL)
-    ToggleAgentMode {
+    /// /agent command - toggle autonomous mode (auto-approve safe tools)
+    ToggleAutonomous {
         enable: Option<bool>,
     },
-    /// /mode command - cycle through Edit → Plan → Agent → Edit
+    /// /mode command - cycle through Edit → Plan → Edit
     CycleMode,
 }
 
@@ -857,19 +857,19 @@ pub async fn handle_slash_command(
                 _ => {
                     renderer.line(
                         MessageStyle::Error,
-                        "Usage: /agent [on|off] - Toggle Agent Mode (autonomous, reduced prompts)",
+                        "Usage: /agent [on|off] - Toggle Autonomous Mode (auto-approve safe tools)",
                     )?;
                     return Ok(SlashCommandOutcome::Handled);
                 }
             };
 
-            Ok(SlashCommandOutcome::ToggleAgentMode { enable })
+            Ok(SlashCommandOutcome::ToggleAutonomous { enable })
         }
         "mode" => {
             if !args.trim().is_empty() {
                 renderer.line(
                     MessageStyle::Error,
-                    "Usage: /mode - Cycle through Edit -> Plan -> Agent modes",
+                    "Usage: /mode - Cycle through Edit -> Plan modes",
                 )?;
                 return Ok(SlashCommandOutcome::Handled);
             }
