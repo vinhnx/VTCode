@@ -518,11 +518,11 @@ impl CircuitBreakerMiddleware {
         // but we could expose more config options to middleware if needed.
         let config = crate::tools::circuit_breaker::CircuitBreakerConfig::default();
         if failure_threshold > 0.0 {
-             // Heuristic: map 0.0-1.0 to reasonable integer count? 
-             // Or primarily just use the underlying CircuitBreaker defaults which are robust.
-             // For now, we use default config as it supports backoff.
+            // Heuristic: map 0.0-1.0 to reasonable integer count?
+            // Or primarily just use the underlying CircuitBreaker defaults which are robust.
+            // For now, we use default config as it supports backoff.
         }
-        
+
         Self {
             breaker: crate::tools::circuit_breaker::CircuitBreaker::new(config),
         }
@@ -543,10 +543,12 @@ impl Middleware for CircuitBreakerMiddleware {
 
         // Check if circuit is open
         if !self.breaker.allow_request_for_tool(&tool_name) {
-            let wait_time = self.breaker.remaining_backoff(&tool_name)
+            let wait_time = self
+                .breaker
+                .remaining_backoff(&tool_name)
                 .map(|d| format!("{}s", d.as_secs()))
                 .unwrap_or_else(|| "unknown".to_string());
-                
+
             return MiddlewareResult {
                 success: false,
                 result: None,
@@ -566,12 +568,12 @@ impl Middleware for CircuitBreakerMiddleware {
 
         // Execute and track result
         let result = next(request);
-        
+
         if result.success {
             self.breaker.record_success_for_tool(&tool_name);
         } else {
             // We assume middleware failures are execution failures for now
-            self.breaker.record_failure_for_tool(&tool_name, false); 
+            self.breaker.record_failure_for_tool(&tool_name, false);
         }
 
         let mut updated_result = result;

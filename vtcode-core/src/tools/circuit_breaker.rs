@@ -74,9 +74,9 @@ impl CircuitBreaker {
                 if let Some(last_failure) = state.last_failure_time {
                     // Use the calculated backoff for this specific failure instance
                     let backoff = if state.current_backoff.as_secs() == 0 {
-                          self.config.reset_timeout // Fallback if not set
+                        self.config.reset_timeout // Fallback if not set
                     } else {
-                          state.current_backoff
+                        state.current_backoff
                     };
 
                     if last_failure.elapsed() >= backoff {
@@ -92,18 +92,18 @@ impl CircuitBreaker {
             }
         }
     }
-    
+
     /// Get remaining backoff time for a tool (if Open)
     pub fn remaining_backoff(&self, tool_name: &str) -> Option<Duration> {
         let states = self.tool_states.lock().unwrap();
         let state = states.get(tool_name)?;
-        
+
         if state.status == CircuitState::Open {
-             if let Some(last) = state.last_failure_time {
-                 let backoff = state.current_backoff;
-                 let elapsed = last.elapsed();
-                 return backoff.checked_sub(elapsed);
-             }
+            if let Some(last) = state.last_failure_time {
+                let backoff = state.current_backoff;
+                let elapsed = last.elapsed();
+                return backoff.checked_sub(elapsed);
+            }
         }
         None
     }
@@ -169,7 +169,7 @@ impl CircuitBreaker {
                 if state.failure_count >= self.config.failure_threshold {
                     state.status = CircuitState::Open;
                     state.current_backoff = self.config.min_backoff; // Start with min backoff
-                    
+
                     tracing::warn!(
                         tool = %tool_name,
                         failures = state.failure_count,
@@ -186,7 +186,7 @@ impl CircuitBreaker {
                 state.current_backoff = Duration::from_secs_f64(next_backoff)
                     .min(self.config.max_backoff)
                     .max(self.config.min_backoff);
-                    
+
                 tracing::warn!(
                     tool = %tool_name,
                     backoff_sec = state.current_backoff.as_secs(),

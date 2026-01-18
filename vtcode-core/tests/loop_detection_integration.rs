@@ -8,7 +8,7 @@ use vtcode_core::tools::autonomous_executor::AutonomousExecutor;
 async fn test_adaptive_loop_detection_integration() -> Result<()> {
     // 1. Setup AutonomousExecutor
     let executor = AutonomousExecutor::new();
-    
+
     // 2. Configure Limits
     let mut limits = HashMap::new();
     limits.insert("read_file".to_string(), 3); // Strict limit for read_file
@@ -31,12 +31,18 @@ async fn test_adaptive_loop_detection_integration() -> Result<()> {
     assert!(warning3.is_some(), "Call 3 should warn");
     let msg = warning3.unwrap();
     println!("Warning message: {}", msg);
-    assert!(msg.contains("HARD STOP") || msg.to_lowercase().contains("loop"), "Message should mention Loop or Hard Stop");
+    assert!(
+        msg.contains("HARD STOP") || msg.to_lowercase().contains("loop"),
+        "Message should mention Loop or Hard Stop"
+    );
 
     // Verify hard limit check
     let detector_arc = executor.loop_detector();
     let detector = detector_arc.read().unwrap();
-    assert!(detector.is_hard_limit_exceeded(tool_name), "Hard limit should be exceeded");
+    assert!(
+        detector.is_hard_limit_exceeded(tool_name),
+        "Hard limit should be exceeded"
+    );
 
     // 4. Test "list_files" limit (Should NOT trigger on 3rd attempt)
     let list_tool = "list_files";
@@ -46,7 +52,10 @@ async fn test_adaptive_loop_detection_integration() -> Result<()> {
     executor.record_tool_call(list_tool, &list_args);
     executor.record_tool_call(list_tool, &list_args);
     let warning_list = executor.record_tool_call(list_tool, &list_args);
-    assert!(warning_list.is_none(), "Call 3 for list_files should NOT warn (limit is 5)");
+    assert!(
+        warning_list.is_none(),
+        "Call 3 for list_files should NOT warn (limit is 5)"
+    );
 
     Ok(())
 }

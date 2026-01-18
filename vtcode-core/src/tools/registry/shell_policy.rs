@@ -80,7 +80,7 @@ impl ShellPolicyChecker {
                 deny_globs: compiled_globs,
             };
             self.cache = Some(new_entry);
-            self.cache.as_ref().unwrap()
+            self.cache.as_ref().expect("cache just set")
         };
 
         for (pattern, compiled) in &entry.deny_regexes {

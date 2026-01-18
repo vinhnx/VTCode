@@ -48,23 +48,24 @@ impl ContextManager {
     /// Pre-request check that returns recommended action before making an LLM request.
     /// Checks session boundaries to correct runaway sessions.
     pub(crate) fn pre_request_check(&self, history: &[uni::Message]) -> PreRequestAction {
-        let hard_limit = self.agent_config
+        let hard_limit = self
+            .agent_config
             .as_ref()
             .map(|c| c.max_conversation_turns)
             .unwrap_or(150);
         let soft_limit = hard_limit.saturating_sub(30).max(10);
-        
+
         let msg_count = history.len();
-        
+
         if msg_count > hard_limit {
-             return PreRequestAction::Stop(format!(
+            return PreRequestAction::Stop(format!(
                 "Session limit reached ({} messages). Please update artifacts (task.md/docs) to persist progress, then start a new session.",
                 msg_count
             ));
         }
-        
+
         if msg_count > soft_limit {
-             return PreRequestAction::Warn(format!(
+            return PreRequestAction::Warn(format!(
                 "Session is getting long ({} messages). Consider updating key artifacts (task.md/docs) to persist context soon.",
                 msg_count
             ));
@@ -187,7 +188,7 @@ mod tests {
         for _ in 0..60 {
             history.push(uni::Message::user("test".to_string()));
         }
-        
+
         assert!(matches!(
             manager.pre_request_check(&history),
             super::PreRequestAction::Warn(_)

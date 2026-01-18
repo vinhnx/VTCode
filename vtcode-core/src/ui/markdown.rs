@@ -713,7 +713,7 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
             *context.table_cell_index = 0;
         }
         MarkdownTag::TableHead => {
-             if let Some(table) = context.active_table {
+            if let Some(table) = context.active_table {
                 table.in_head = true;
             }
         }
@@ -721,7 +721,7 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
             // Ensure current line is clear for capturing cell content
             // We do NOT write separators here anymore, we do it in render_table
             if context.active_table.is_none() {
-                 ensure_prefix(
+                ensure_prefix(
                     context.current_line,
                     *context.blockquote_depth,
                     context.list_stack,
@@ -835,18 +835,25 @@ fn handle_end_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
                 if !table.current_row.is_empty() {
                     table.rows.push(std::mem::take(&mut table.current_row));
                 }
-                
-                let rendered_lines = render_table(&table, context.theme_styles, context.base_style, *context.blockquote_depth, context.list_stack, context.pending_list_prefix.clone());
-                 context.lines.extend(rendered_lines);
+
+                let rendered_lines = render_table(
+                    &table,
+                    context.theme_styles,
+                    context.base_style,
+                    *context.blockquote_depth,
+                    context.list_stack,
+                    context.pending_list_prefix.clone(),
+                );
+                context.lines.extend(rendered_lines);
             }
-            
+
             push_blank_line(context.lines);
             *context.table_cell_index = 0;
         }
         MarkdownTag::TableRow => {
             // End of row
             if let Some(table) = context.active_table {
-                 if table.in_head {
+                if table.in_head {
                     // Collect into headers
                     // We assume table head has only one row usually, but if multiple, we might overwrite or append?
                     // Standard markdown table has one header row.
@@ -871,11 +878,11 @@ fn handle_end_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
         MarkdownTag::TableCell => {
             // End of cell - capture content
             if let Some(table) = context.active_table {
-                 table.current_row.push(std::mem::take(context.current_line));
+                table.current_row.push(std::mem::take(context.current_line));
             }
         }
         MarkdownTag::TableHead => {
-             if let Some(table) = context.active_table {
+            if let Some(table) = context.active_table {
                 table.in_head = false;
             }
         }
@@ -900,7 +907,7 @@ fn render_table(
 
     // Calculate column widths
     let mut col_widths: Vec<usize> = Vec::new();
-    
+
     // Check headers
     for (i, cell) in table.headers.iter().enumerate() {
         if i >= col_widths.len() {
@@ -920,12 +927,12 @@ fn render_table(
     }
 
     let border_style = theme_styles.secondary.dimmed(); // faint-ish border
-    
+
     // Render Headers
     if !table.headers.is_empty() {
         let cells = &table.headers;
         let mut line = MarkdownLine::default();
-        
+
         ensure_prefix(
             &mut line,
             blockquote_depth,
@@ -936,26 +943,26 @@ fn render_table(
         );
 
         line.push_segment(border_style, "│ ");
-        
+
         for (i, width) in col_widths.iter().enumerate() {
             let cell = cells.get(i);
             let cell_width = cell.map(|c| c.width()).unwrap_or(0);
             let padding = width.saturating_sub(cell_width);
-            
+
             if let Some(c) = cell {
                 for seg in &c.segments {
                     line.push_segment(seg.style.bold(), &seg.text);
                 }
             }
-            
+
             if padding > 0 {
                 line.push_segment(base_style, &" ".repeat(padding));
             }
-            
+
             line.push_segment(border_style, " │ ");
         }
         lines.push(line);
-        
+
         // Render Separator
         let mut sep_line = MarkdownLine::default();
         ensure_prefix(
@@ -966,12 +973,12 @@ fn render_table(
             theme_styles,
             base_style,
         );
-        
+
         sep_line.push_segment(border_style, "├─");
         for (i, width) in col_widths.iter().enumerate() {
             let dash_count = *width;
             sep_line.push_segment(border_style, &"─".repeat(dash_count));
-            
+
             if i < col_widths.len() - 1 {
                 sep_line.push_segment(border_style, "─┼─");
             } else {
@@ -985,7 +992,7 @@ fn render_table(
     for row in &table.rows {
         let cells = row;
         let mut line = MarkdownLine::default();
-        
+
         ensure_prefix(
             &mut line,
             blockquote_depth,
@@ -996,22 +1003,22 @@ fn render_table(
         );
 
         line.push_segment(border_style, "│ ");
-        
+
         for (i, width) in col_widths.iter().enumerate() {
             let cell = cells.get(i);
             let cell_width = cell.map(|c| c.width()).unwrap_or(0);
             let padding = width.saturating_sub(cell_width);
-            
+
             if let Some(c) = cell {
                 for seg in &c.segments {
                     line.push_segment(seg.style, &seg.text);
                 }
             }
-            
+
             if padding > 0 {
                 line.push_segment(base_style, &" ".repeat(padding));
             }
-            
+
             line.push_segment(border_style, " │ ");
         }
         lines.push(line);

@@ -15,9 +15,13 @@ impl McpToolManager {
             Ok(new_mcp_tools) => {
                 let new_definitions =
                     super::session_setup::build_mcp_tool_definitions(&new_mcp_tools);
-{
+                {
                     let mut guard = tools.write().await;
-                    guard.retain(|tool| !tool.function.as_ref().unwrap().name.starts_with("mcp_"));
+                    guard.retain(|tool| {
+                        tool.function
+                            .as_ref()
+                            .map_or(true, |f| !f.name.starts_with("mcp_"))
+                    });
                     guard.extend(new_definitions);
                 };
 
@@ -47,9 +51,13 @@ impl McpToolManager {
         last_known_mcp_tools: &mut Vec<String>, // This becomes the new current tool list
     ) -> anyhow::Result<()> {
         let new_definitions = super::session_setup::build_mcp_tool_definitions(&mcp_tools);
-{
+        {
             let mut guard = tools.write().await;
-            guard.retain(|tool| !tool.function.as_ref().unwrap().name.starts_with("mcp_"));
+            guard.retain(|tool| {
+                tool.function
+                    .as_ref()
+                    .map_or(true, |f| !f.name.starts_with("mcp_"))
+            });
             guard.extend(new_definitions);
         };
 

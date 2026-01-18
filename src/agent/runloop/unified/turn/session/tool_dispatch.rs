@@ -1,14 +1,13 @@
-
 use anyhow::Result;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
+use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
-use crate::agent::runloop::tool_output::render_tool_output;
 
 pub(crate) struct DirectToolContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
@@ -33,13 +32,12 @@ pub(crate) async fn handle_direct_tool_execution(
                 .push(uni::Message::user(input.to_string()));
 
             // Show spinner while command is running
-            let spinner =
-                crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::new(
-                    ctx.handle,
-                    ctx.input_status_state.left.clone(),
-                    ctx.input_status_state.right.clone(),
-                    format!("Running: {}", bash_command),
-                );
+            let spinner = crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::new(
+                ctx.handle,
+                ctx.input_status_state.left.clone(),
+                ctx.input_status_state.right.clone(),
+                format!("Running: {}", bash_command),
+            );
 
             // Execute bash command directly
             let tool_call_id = format!("bash_{}", ctx.conversation_history.len());
@@ -53,13 +51,8 @@ pub(crate) async fn handle_direct_tool_execution(
 
             let command_succeeded = match bash_result {
                 Ok(result) => {
-                    render_tool_output(
-                        ctx.renderer,
-                        Some("bash"),
-                        &result,
-                        ctx.vt_cfg.as_ref(),
-                    )
-                    .await?;
+                    render_tool_output(ctx.renderer, Some("bash"), &result, ctx.vt_cfg.as_ref())
+                        .await?;
 
                     let result_str = serde_json::to_string(&result).unwrap_or_default();
                     ctx.conversation_history.push(uni::Message::tool_response(
@@ -138,13 +131,8 @@ pub(crate) async fn handle_direct_tool_execution(
 
         let command_succeeded = match bash_result {
             Ok(result) => {
-                render_tool_output(
-                    ctx.renderer,
-                    Some(&tool_name),
-                    &result,
-                    ctx.vt_cfg.as_ref(),
-                )
-                .await?;
+                render_tool_output(ctx.renderer, Some(&tool_name), &result, ctx.vt_cfg.as_ref())
+                    .await?;
 
                 let result_str = serde_json::to_string(&result).unwrap_or_default();
                 ctx.conversation_history.push(uni::Message::tool_response(

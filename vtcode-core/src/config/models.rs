@@ -879,7 +879,9 @@ impl ModelId {
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
             ModelId::ZaiGlm47 => Some(ModelId::ZaiGlm45Flash),
             ModelId::ZaiGlm46 => Some(ModelId::ZaiGlm45Flash),
-            ModelId::ClaudeOpus45 | ModelId::ClaudeOpus4 | ModelId::ClaudeOpus41 => Some(ModelId::ClaudeSonnet45),
+            ModelId::ClaudeOpus45 | ModelId::ClaudeOpus4 | ModelId::ClaudeOpus41 => {
+                Some(ModelId::ClaudeSonnet45)
+            }
             ModelId::ClaudeSonnet37 => Some(ModelId::ClaudeSonnet45),
             ModelId::MinimaxM21 => Some(ModelId::MinimaxM21Lightning),
             _ => None,
@@ -2058,9 +2060,7 @@ mod tests {
             ModelId::ClaudeSonnet45
         );
         assert_eq!(
-            models::CLAUDE_SONNET_4_0
-                .parse::<ModelId>()
-                .unwrap(),
+            models::CLAUDE_SONNET_4_0.parse::<ModelId>().unwrap(),
             ModelId::ClaudeSonnet4
         );
         assert_eq!(

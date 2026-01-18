@@ -84,10 +84,7 @@ fn normalize_signature_args(tool_name: &str, args: &serde_json::Value) -> serde_
     }
 
     if tool_name == tool_names::UNIFIED_FILE {
-        if let Some(action) = normalized
-            .get("action")
-            .and_then(|value| value.as_str())
-        {
+        if let Some(action) = normalized.get("action").and_then(|value| value.as_str()) {
             if action == "read" {
                 remove_paging_keys(&mut normalized);
             }
@@ -444,32 +441,36 @@ pub(crate) async fn handle_tool_call(
     }
 
     // Phase 4 Check: Adaptive Loop Detection
-    if let Some(warning) = ctx.autonomous_executor.record_tool_call(tool_name, &args_val) {
+    if let Some(warning) = ctx
+        .autonomous_executor
+        .record_tool_call(tool_name, &args_val)
+    {
         // Check if we should block due to hard limit
         let should_block = {
-             if let Ok(detector) = ctx.autonomous_executor.loop_detector().read() {
-                 detector.is_hard_limit_exceeded(tool_name)
-             } else {
-                 false
-             }
+            if let Ok(detector) = ctx.autonomous_executor.loop_detector().read() {
+                detector.is_hard_limit_exceeded(tool_name)
+            } else {
+                false
+            }
         };
 
         if should_block {
-             let error_msg = format!(
+            let error_msg = format!(
                 "Tool '{}' is blocked due to excessive repetition (Loop Detected).",
                 tool_name
             );
-             tracing::warn!(tool = %tool_name, "Loop detector blocked tool");
-             ctx.working_history.push(uni::Message::tool_response_with_origin(
-                tool_call.id.clone(),
-                serde_json::json!({"error": error_msg}).to_string(),
-                tool_name.clone(),
-             ));
-             return Ok(None);
+            tracing::warn!(tool = %tool_name, "Loop detector blocked tool");
+            ctx.working_history
+                .push(uni::Message::tool_response_with_origin(
+                    tool_call.id.clone(),
+                    serde_json::json!({"error": error_msg}).to_string(),
+                    tool_name.clone(),
+                ));
+            return Ok(None);
         } else {
             // Log warning but proceed
             tracing::warn!(tool = %tool_name, warning = %warning, "Loop detector warning");
-            // Optionally inject warning into history? AgentRunner didn't seems to do it explicitly here, 
+            // Optionally inject warning into history? AgentRunner didn't seems to do it explicitly here,
             // but providing feedback to the model is good.
             // However, avoid spamming content.
         }

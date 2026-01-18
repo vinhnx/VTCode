@@ -50,9 +50,7 @@ pub fn validate_path_safety(path: &str) -> Result<()> {
 
     // Reject dangerous shell characters in paths (including null byte)
     // Optimization: Check bytes directly for faster character detection
-    static DANGEROUS_CHARS: &[u8] = &[
-        b'$', b'`', b'|', b';', b'&', b'\n', b'\r', b'>', b'<', b'\0',
-    ];
+    static DANGEROUS_CHARS: &[u8] = b"$`|;&\n\r><\0";
     for &c in path.as_bytes() {
         if DANGEROUS_CHARS.contains(&c) {
             bail!("Path contains dangerous shell characters");

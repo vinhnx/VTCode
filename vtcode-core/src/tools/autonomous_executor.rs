@@ -124,7 +124,7 @@ impl AutonomousExecutor {
                 detector.set_tool_limit(tool, *limit);
             }
         } else {
-             tracing::warn!("Failed to acquire loop detector lock for configuration");
+            tracing::warn!("Failed to acquire loop detector lock for configuration");
         }
     }
 
@@ -218,13 +218,10 @@ impl AutonomousExecutor {
 
     // ... (is_destructive_operation, is_destructive_command, validate_args, validate_file_path, validate_command, validate_list_files_args, generate_preview ommited for brevity match) ...
 
-    // Note: Since I can't match scattered method implementation easily with replace_file_content on a large file without full content in block, 
-    // I will assume I need to find the `should_block` and `record_execution` blocks separately if they are far apart. 
+    // Note: Since I can't match scattered method implementation easily with replace_file_content on a large file without full content in block,
+    // I will assume I need to find the `should_block` and `record_execution` blocks separately if they are far apart.
     // But wait, `should_block` is earlier. Let me just replace `should_block` first in this call.
     // Actually, I'll split this. First replacement handles `should_block`.
-
-
-
 
     /// Check if operation is destructive based on tool and arguments
     fn is_destructive_operation(&self, tool_name: &str, args: &Value) -> bool {
@@ -471,7 +468,8 @@ impl AutonomousExecutor {
         } else {
             // Note: We blindly treat all failures as circuit-breaking for now.
             // Ideally, the caller should specify if it's an arg error or system error.
-            self.circuit_breaker.record_failure_for_tool(tool_name, false); 
+            self.circuit_breaker
+                .record_failure_for_tool(tool_name, false);
         }
 
         if let Ok(mut stats) = self.execution_stats.write() {

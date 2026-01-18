@@ -130,9 +130,8 @@ impl ToolRegistry {
         } else {
             workspace_root.join(&requested_path)
         };
-        let canonical_path = std::fs::canonicalize(&resolved_path).with_context(|| {
-            format!("Failed to resolve path: {}", resolved_path.display())
-        })?;
+        let canonical_path = std::fs::canonicalize(&resolved_path)
+            .with_context(|| format!("Failed to resolve path: {}", resolved_path.display()))?;
         if !canonical_path.starts_with(&workspace_root) {
             return Err(anyhow!(
                 "Path '{}' is outside the workspace root",

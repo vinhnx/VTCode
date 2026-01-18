@@ -1,8 +1,9 @@
-
 use anyhow::Result;
 
 use crate::agent::runloop::slash_commands::handle_slash_command as process_slash_command;
-use crate::agent::runloop::unified::turn::session::interaction_loop::{InteractionLoopContext, InteractionState, InteractionOutcome};
+use crate::agent::runloop::unified::turn::session::interaction_loop::{
+    InteractionLoopContext, InteractionOutcome, InteractionState,
+};
 use crate::agent::runloop::unified::turn::session::slash_commands::{
     self, SlashCommandContext, SlashCommandControl,
 };
@@ -32,7 +33,7 @@ pub(crate) async fn handle_input_commands(
         "help" => {
             ctx.renderer
                 .line(MessageStyle::Info, "Commands: exit, help")?;
-            return Ok(CommandProcessingResult::ContinueLoop); 
+            return Ok(CommandProcessingResult::ContinueLoop);
         }
         input if input.starts_with('/') => {
             if let Some(command_input) = input.strip_prefix('/') {
@@ -80,11 +81,15 @@ pub(crate) async fn handle_input_commands(
 
                 match command_result {
                     SlashCommandControl::SubmitPrompt(prompt) => {
-                         return Ok(CommandProcessingResult::UpdateInput(prompt));
+                        return Ok(CommandProcessingResult::UpdateInput(prompt));
                     }
-                    SlashCommandControl::Continue => return Ok(CommandProcessingResult::ContinueLoop),
+                    SlashCommandControl::Continue => {
+                        return Ok(CommandProcessingResult::ContinueLoop);
+                    }
                     SlashCommandControl::BreakWithReason(reason) => {
-                        return Ok(CommandProcessingResult::Outcome(InteractionOutcome::Exit { reason }));
+                        return Ok(CommandProcessingResult::Outcome(InteractionOutcome::Exit {
+                            reason,
+                        }));
                     }
                     SlashCommandControl::BreakWithoutReason => {
                         return Ok(CommandProcessingResult::Outcome(InteractionOutcome::Exit {
@@ -96,6 +101,6 @@ pub(crate) async fn handle_input_commands(
         }
         _ => {}
     }
-    
+
     Ok(CommandProcessingResult::NotHandled)
 }

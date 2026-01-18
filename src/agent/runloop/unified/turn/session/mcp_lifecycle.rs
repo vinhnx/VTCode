@@ -1,4 +1,3 @@
-
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::Instant;
@@ -37,7 +36,9 @@ pub(crate) async fn handle_mcp_updates(
                                 {
                                     let mut guard = tools.write().await;
                                     guard.retain(|tool| {
-                                        !tool.function.as_ref().unwrap().name.starts_with("mcp_")
+                                        tool.function
+                                            .as_ref()
+                                            .map_or(true, |f| !f.name.starts_with("mcp_"))
                                     });
                                     guard.extend(new_definitions);
                                 };
@@ -105,7 +106,9 @@ pub(crate) async fn handle_mcp_updates(
                             {
                                 let mut guard = tools.write().await;
                                 guard.retain(|tool| {
-                                    !tool.function.as_ref().unwrap().name.starts_with("mcp_")
+                                    tool.function
+                                        .as_ref()
+                                        .map_or(true, |f| !f.name.starts_with("mcp_"))
                                 });
                                 guard.extend(new_definitions);
                             };

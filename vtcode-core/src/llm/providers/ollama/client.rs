@@ -143,7 +143,6 @@ impl OllamaClient {
 #[cfg(test)]
 mod tests {
 
-
     #[test]
     fn test_client_creation_requires_valid_base_url() {
         // This would require a running Ollama server to test properly.

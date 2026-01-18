@@ -462,7 +462,13 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
     }
     let sanitized: String = text
         .chars()
-        .map(|c| if matches!(c, '\n' | '\r' | '\t') { ' ' } else { c })
+        .map(|c| {
+            if matches!(c, '\n' | '\r' | '\t') {
+                ' '
+            } else {
+                c
+            }
+        })
         .collect();
     let char_count = sanitized.chars().count();
     if char_count <= max_len {
