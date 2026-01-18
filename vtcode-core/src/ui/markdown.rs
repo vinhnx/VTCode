@@ -572,8 +572,6 @@ struct MarkdownContext<'a> {
     current_line: &'a mut MarkdownLine,
     theme_styles: &'a ThemeStyles,
     base_style: Style,
-    theme_styles: &'a ThemeStyles,
-    base_style: Style,
     code_block: &'a mut Option<CodeBlockState>,
     active_table: &'a mut Option<TableBuffer>,
     table_cell_index: &'a mut usize,
@@ -923,11 +921,11 @@ fn render_table(
 
     let border_style = theme_styles.secondary.dimmed(); // faint-ish border
     
-    // Helper to create a renderable row
-    let mut create_row = |cells: &[MarkdownLine], is_header: bool| {
+    // Render Headers
+    if !table.headers.is_empty() {
+        let cells = &table.headers;
         let mut line = MarkdownLine::default();
         
-        // Add blockquote/list prefix
         ensure_prefix(
             &mut line,
             blockquote_depth,
@@ -946,7 +944,7 @@ fn render_table(
             
             if let Some(c) = cell {
                 for seg in &c.segments {
-                    line.push_segment(if is_header { seg.style.bold() } else { seg.style }, &seg.text);
+                    line.push_segment(seg.style.bold(), &seg.text);
                 }
             }
             
@@ -957,11 +955,6 @@ fn render_table(
             line.push_segment(border_style, " │ ");
         }
         lines.push(line);
-    };
-
-    // Render Headers
-    if !table.headers.is_empty() {
-        create_row(&table.headers, true);
         
         // Render Separator
         let mut sep_line = MarkdownLine::default();
@@ -977,7 +970,6 @@ fn render_table(
         sep_line.push_segment(border_style, "├─");
         for (i, width) in col_widths.iter().enumerate() {
             let dash_count = *width;
-            // We use ─ for dashes. 
             sep_line.push_segment(border_style, &"─".repeat(dash_count));
             
             if i < col_widths.len() - 1 {
@@ -991,7 +983,38 @@ fn render_table(
 
     // Render Rows
     for row in &table.rows {
-        create_row(row, false);
+        let cells = row;
+        let mut line = MarkdownLine::default();
+        
+        ensure_prefix(
+            &mut line,
+            blockquote_depth,
+            list_stack,
+            &mut pending_prefix,
+            theme_styles,
+            base_style,
+        );
+
+        line.push_segment(border_style, "│ ");
+        
+        for (i, width) in col_widths.iter().enumerate() {
+            let cell = cells.get(i);
+            let cell_width = cell.map(|c| c.width()).unwrap_or(0);
+            let padding = width.saturating_sub(cell_width);
+            
+            if let Some(c) = cell {
+                for seg in &c.segments {
+                    line.push_segment(seg.style, &seg.text);
+                }
+            }
+            
+            if padding > 0 {
+                line.push_segment(base_style, &" ".repeat(padding));
+            }
+            
+            line.push_segment(border_style, " │ ");
+        }
+        lines.push(line);
     }
 
     lines
