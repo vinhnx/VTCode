@@ -26,6 +26,12 @@ pub struct AnthropicConfig {
     /// Only supported by Claude Opus 4.5 (claude-opus-4-5-20251101)
     #[serde(default = "default_effort")]
     pub effort: String,
+
+    /// Enable token counting via the count_tokens endpoint
+    /// When enabled, the agent can estimate input token counts before making API calls
+    /// Useful for proactive management of rate limits and costs
+    #[serde(default)]
+    pub count_tokens_enabled: bool,
 }
 
 impl Default for AnthropicConfig {
@@ -36,6 +42,7 @@ impl Default for AnthropicConfig {
             interleaved_thinking_type_enabled: default_interleaved_thinking_type(),
             tool_search: ToolSearchConfig::default(),
             effort: default_effort(),
+            count_tokens_enabled: false,
         }
     }
 }

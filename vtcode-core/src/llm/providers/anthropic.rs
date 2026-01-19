@@ -1040,7 +1040,411 @@ impl AnthropicProvider {
         })
     }
 
+    /// Count tokens in a request using Anthropic's count_tokens endpoint
+    /// https://docs.anthropic.com/en/api/messages-count-tokens
+    ///
+    /// Requires `count_tokens_enabled` to be set in anthropic config (vtcode.toml).
+    /// When disabled, returns an error indicating the feature is not configured.
+    pub async fn count_tokens(&self, request: &LLMRequest) -> Result<u32, LLMError> {
+        if !self.anthropic_config.count_tokens_enabled {
+            let formatted = error_display::format_llm_error(
+                "Anthropic",
+                "Token counting is disabled. Enable 'count_tokens_enabled' in [anthropic] config in vtcode.toml",
+            );
+            return Err(LLMError::InvalidRequest {
+                message: formatted,
+                metadata: None,
+            });
+        }
+
+        use super::anthropic_types::CountTokensResponse;
+
+        let anthropic_request = self.convert_to_count_tokens_format(request)?;
+
+        let url = format!("{}/messages/count_tokens", self.base_url);
+
+        let response = self
+            .http_client
+            .post(&url)
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", urls::ANTHROPIC_API_VERSION)
+            .header("content-type", "application/json")
+            .json(&anthropic_request)
+            .send()
+            .await
+            .map_err(|e| format_network_error("Anthropic", &e))?;
+
+        if !response.status().is_success() {
+            let _ = handle_anthropic_http_error(response).await?;
+            return Err(LLMError::Provider {
+                message: "Unknown error occurred during token counting".to_string(),
+                metadata: None,
+            });
+        }
+
+        let count_response: CountTokensResponse = response
+            .json()
+            .await
+            .map_err(|e| format_parse_error("Anthropic", &e))?;
+
+        Ok(count_response.input_tokens)
+    }
+
     #[allow(clippy::result_large_err)]
+    fn convert_to_count_tokens_format(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<crate::llm::providers::anthropic_types::CountTokensRequest, LLMError> {
+        use super::anthropic_types::{
+            AnthropicContentBlock, AnthropicFunctionTool, AnthropicMessage, AnthropicTool,
+            AnthropicToolSearchTool, ImageSource, ThinkingConfig,
+        };
+        use crate::llm::provider::{ContentPart, MessageContent};
+
+        let mut tools: Option<Vec<AnthropicTool>> = None;
+        if let Some(request_tools) = &request.tools
+            && !request_tools.is_empty()
+        {
+            let built_tools: Vec<AnthropicTool> = request_tools
+                .iter()
+                .filter_map(|tool| {
+                    if tool.is_tool_search() {
+                        let func = tool.function.as_ref()?;
+                        return Some(AnthropicTool::ToolSearch(AnthropicToolSearchTool {
+                            tool_type: tool.tool_type.clone(),
+                            name: func.name.clone(),
+                        }));
+                    }
+
+                    let func = tool.function.as_ref()?;
+                    Some(AnthropicTool::Function(AnthropicFunctionTool {
+                        name: func.name.clone(),
+                        description: func.description.clone(),
+                        input_schema: func.parameters.clone(),
+                        cache_control: None,
+                        defer_loading: tool.defer_loading,
+                    }))
+                })
+                .collect();
+
+            if !built_tools.is_empty() {
+                tools = Some(built_tools);
+            }
+        }
+
+        let system_value: Option<Value> = request
+            .system_prompt
+            .as_ref()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| Value::String(s.trim().to_string()));
+
+        let mut messages = Vec::with_capacity(request.messages.len());
+
+        for msg in &request.messages {
+            if msg.role == MessageRole::System {
+                continue;
+            }
+
+            match &msg.content {
+                MessageContent::Text(content_text) => {
+                    if content_text.trim().is_empty() {
+                        continue;
+                    }
+
+                    match msg.role {
+                        MessageRole::Assistant => {
+                            let mut blocks = Vec::new();
+
+                            if let Some(details) = &msg.reasoning_details {
+                                for detail in details {
+                                    if detail.get("type").and_then(|t| t.as_str())
+                                        == Some("thinking")
+                                    {
+                                        let thinking = detail
+                                            .get("thinking")
+                                            .and_then(|t| t.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        let signature = detail
+                                            .get("signature")
+                                            .and_then(|t| t.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        if !thinking.is_empty() && !signature.is_empty() {
+                                            blocks.push(AnthropicContentBlock::Thinking {
+                                                thinking,
+                                                signature,
+                                                cache_control: None,
+                                            });
+                                        }
+                                    } else if detail.get("type").and_then(|t| t.as_str())
+                                        == Some("redacted_thinking")
+                                    {
+                                        let data = detail
+                                            .get("data")
+                                            .and_then(|d| d.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        blocks.push(AnthropicContentBlock::RedactedThinking {
+                                            data,
+                                            cache_control: None,
+                                        });
+                                    }
+                                }
+                            }
+
+                            if !content_text.is_empty() {
+                                blocks.push(AnthropicContentBlock::Text {
+                                    text: content_text.to_string(),
+                                    citations: None,
+                                    cache_control: None,
+                                });
+                            }
+                            if let Some(tool_calls) = &msg.tool_calls {
+                                for call in tool_calls {
+                                    if let Some(ref func) = call.function {
+                                        let args: Value = serde_json::from_str(&func.arguments)
+                                            .unwrap_or_else(|_| json!({}));
+                                        blocks.push(AnthropicContentBlock::ToolUse {
+                                            id: call.id.clone(),
+                                            name: func.name.clone(),
+                                            input: args,
+                                            cache_control: None,
+                                        });
+                                    }
+                                }
+                            }
+                            if blocks.is_empty() {
+                                blocks.push(AnthropicContentBlock::Text {
+                                    text: String::new(),
+                                    citations: None,
+                                    cache_control: None,
+                                });
+                            }
+                            messages.push(AnthropicMessage {
+                                role: "assistant".to_string(),
+                                content: blocks,
+                            });
+                        }
+                        MessageRole::Tool => {
+                            if let Some(tool_call_id) = &msg.tool_call_id {
+                                let tool_content_blocks = Self::tool_result_blocks(content_text);
+                                let content_val = if tool_content_blocks.len() == 1
+                                    && tool_content_blocks[0]["type"] == "text"
+                                {
+                                    json!(tool_content_blocks[0]["text"])
+                                } else {
+                                    json!(tool_content_blocks)
+                                };
+
+                                messages.push(AnthropicMessage {
+                                    role: "user".to_string(),
+                                    content: vec![AnthropicContentBlock::ToolResult {
+                                        tool_use_id: tool_call_id.clone(),
+                                        content: content_val,
+                                        is_error: None,
+                                        cache_control: None,
+                                    }],
+                                });
+                            } else if !content_text.is_empty() {
+                                messages.push(AnthropicMessage {
+                                    role: "user".to_string(),
+                                    content: vec![AnthropicContentBlock::Text {
+                                        text: content_text.to_string(),
+                                        citations: None,
+                                        cache_control: None,
+                                    }],
+                                });
+                            }
+                        }
+                        _ => {
+                            messages.push(AnthropicMessage {
+                                role: msg.role.as_anthropic_str().to_string(),
+                                content: vec![AnthropicContentBlock::Text {
+                                    text: content_text.to_string(),
+                                    citations: None,
+                                    cache_control: None,
+                                }],
+                            });
+                        }
+                    }
+                }
+                MessageContent::Parts(parts) => {
+                    let mut blocks: Vec<AnthropicContentBlock> = Vec::new();
+
+                    for part in parts {
+                        match part {
+                            ContentPart::Text { text } => {
+                                if !text.is_empty() {
+                                    blocks.push(AnthropicContentBlock::Text {
+                                        text: text.clone(),
+                                        citations: None,
+                                        cache_control: None,
+                                    });
+                                }
+                            }
+                            ContentPart::Image {
+                                data,
+                                mime_type,
+                                content_type: _,
+                            } => {
+                                blocks.push(AnthropicContentBlock::Image {
+                                    source: ImageSource {
+                                        source_type: "base64".to_string(),
+                                        media_type: mime_type.clone(),
+                                        data: data.clone(),
+                                    },
+                                    cache_control: None,
+                                });
+                            }
+                        }
+                    }
+
+                    if !blocks.is_empty() {
+                        match msg.role {
+                            MessageRole::Assistant => {
+                                let mut assistant_blocks = Vec::new();
+
+                                if let Some(details) = &msg.reasoning_details {
+                                    for detail in details {
+                                        if detail.get("type").and_then(|t| t.as_str())
+                                            == Some("thinking")
+                                        {
+                                            let thinking = detail
+                                                .get("thinking")
+                                                .and_then(|t| t.as_str())
+                                                .unwrap_or("")
+                                                .to_string();
+                                            let signature = detail
+                                                .get("signature")
+                                                .and_then(|t| t.as_str())
+                                                .unwrap_or("")
+                                                .to_string();
+                                            if !thinking.is_empty() && !signature.is_empty() {
+                                                assistant_blocks.push(
+                                                    AnthropicContentBlock::Thinking {
+                                                        thinking,
+                                                        signature,
+                                                        cache_control: None,
+                                                    },
+                                                );
+                                            }
+                                        } else if detail.get("type").and_then(|t| t.as_str())
+                                            == Some("redacted_thinking")
+                                        {
+                                            let data = detail
+                                                .get("data")
+                                                .and_then(|d| d.as_str())
+                                                .unwrap_or("")
+                                                .to_string();
+                                            assistant_blocks.push(
+                                                AnthropicContentBlock::RedactedThinking {
+                                                    data,
+                                                    cache_control: None,
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+
+                                assistant_blocks.extend(blocks);
+
+                                if let Some(tool_calls) = &msg.tool_calls {
+                                    for call in tool_calls {
+                                        if let Some(ref func) = call.function {
+                                            let args: Value = serde_json::from_str(&func.arguments)
+                                                .unwrap_or_else(|_| json!({}));
+                                            assistant_blocks.push(AnthropicContentBlock::ToolUse {
+                                                id: call.id.clone(),
+                                                name: func.name.clone(),
+                                                input: args,
+                                                cache_control: None,
+                                            });
+                                        }
+                                    }
+                                }
+
+                                messages.push(AnthropicMessage {
+                                    role: "assistant".to_string(),
+                                    content: assistant_blocks,
+                                });
+                            }
+                            MessageRole::Tool => {
+                                if let Some(tool_call_id) = &msg.tool_call_id {
+                                    let text_content: String = parts
+                                        .iter()
+                                        .filter_map(|p| {
+                                            if let ContentPart::Text { text } = p {
+                                                Some(text.as_str())
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
+                                    let tool_content_blocks =
+                                        Self::tool_result_blocks(&text_content);
+                                    let content_val = if tool_content_blocks.len() == 1
+                                        && tool_content_blocks[0]["type"] == "text"
+                                    {
+                                        json!(tool_content_blocks[0]["text"])
+                                    } else {
+                                        json!(tool_content_blocks)
+                                    };
+
+                                    messages.push(AnthropicMessage {
+                                        role: "user".to_string(),
+                                        content: vec![AnthropicContentBlock::ToolResult {
+                                            tool_use_id: tool_call_id.clone(),
+                                            content: content_val,
+                                            is_error: None,
+                                            cache_control: None,
+                                        }],
+                                    });
+                                }
+                            }
+                            _ => {
+                                messages.push(AnthropicMessage {
+                                    role: msg.role.as_anthropic_str().to_string(),
+                                    content: blocks,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let thinking_val: Option<ThinkingConfig> =
+            if let Some(ref effort) = request.reasoning_effort {
+                let budget = match effort {
+                    ReasoningEffortLevel::None => 0,
+                    ReasoningEffortLevel::Minimal => 1024,
+                    ReasoningEffortLevel::Low => 4096,
+                    ReasoningEffortLevel::Medium => 8192,
+                    ReasoningEffortLevel::High => 16384,
+                    ReasoningEffortLevel::XHigh => 32768,
+                };
+
+                if budget >= 1024 {
+                    Some(ThinkingConfig::Enabled {
+                        budget_tokens: budget,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+        Ok(crate::llm::providers::anthropic_types::CountTokensRequest {
+            model: request.model.clone(),
+            system: system_value,
+            messages,
+            tools,
+            thinking: thinking_val,
+        })
+    }
+
     fn parse_anthropic_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
         let content = response_json
             .get("content")
@@ -2954,4 +3358,153 @@ mod tests_refinement {
         );
         assert!(provider.extract_xml_block(content, "missing").is_none());
     }
+
+    #[test]
+    fn test_count_tokens_disabled_by_default() {
+        let provider = AnthropicProvider::new("test-key".to_string());
+
+        let request = LLMRequest {
+            messages: vec![Message::user("Hello".to_string())],
+            system_prompt: Some("You are a scientist".to_string()),
+            model: models::anthropic::CLAUDE_SONNET_4_5.to_string(),
+            ..Default::default()
+        };
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let result = runtime.block_on(provider.count_tokens(&request));
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        match error {
+            LLMError::InvalidRequest { message, .. } => {
+                assert!(message.contains("Token counting is disabled"));
+            }
+            _ => panic!("Expected InvalidRequest error"),
+        }
+    }
+
+    #[test]
+    fn test_count_tokens_request_format_basic() {
+        use crate::llm::providers::anthropic_types::CountTokensRequest;
+
+        let provider = AnthropicProvider::new("test-key".to_string());
+
+        let request = LLMRequest {
+            messages: vec![Message::user("Hello, Claude".to_string())],
+            system_prompt: Some("You are a scientist".to_string()),
+            model: models::anthropic::CLAUDE_SONNET_4_5.to_string(),
+            ..Default::default()
+        };
+
+        let result = provider.convert_to_count_tokens_format(&request);
+        assert!(result.is_ok());
+
+        let count_request: CountTokensRequest = result.unwrap();
+        assert_eq!(count_request.model, models::anthropic::CLAUDE_SONNET_4_5);
+        assert!(count_request.system.is_some());
+        assert_eq!(count_request.messages.len(), 1);
+        assert!(count_request.tools.is_none());
+    }
+
+    #[test]
+    fn test_count_tokens_request_format_with_tools() {
+        use crate::llm::providers::anthropic_types::CountTokensRequest;
+
+        let provider = AnthropicProvider::new("test-key".to_string());
+
+        let request = LLMRequest {
+            messages: vec![Message::user("What's the weather?".to_string())],
+            model: models::anthropic::CLAUDE_SONNET_4_5.to_string(),
+            tools: Some(vec![ToolDefinition::function(
+                "get_weather".to_string(),
+                "Get the current weather".to_string(),
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city"
+                        }
+                    },
+                    "required": ["location"]
+                }),
+            )]),
+            ..Default::default()
+        };
+
+        let result = provider.convert_to_count_tokens_format(&request);
+        assert!(result.is_ok());
+
+        let count_request: CountTokensRequest = result.unwrap();
+        assert!(count_request.tools.is_some());
+        assert_eq!(count_request.tools.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_count_tokens_request_strips_cache_control() {
+        use crate::llm::providers::anthropic_types::{AnthropicContentBlock, CountTokensRequest};
+
+        let provider = AnthropicProvider::new("test-key".to_string());
+
+        let request = LLMRequest {
+            messages: vec![Message::user("Hello".to_string())],
+            model: models::anthropic::CLAUDE_SONNET_4_5.to_string(),
+            ..Default::default()
+        };
+
+        let result = provider.convert_to_count_tokens_format(&request);
+        assert!(result.is_ok());
+
+        let count_request: CountTokensRequest = result.unwrap();
+        for msg in &count_request.messages {
+            for block in &msg.content {
+                match block {
+                    AnthropicContentBlock::Text {
+                        cache_control, ..
+                    } => {
+                        assert!(cache_control.is_none());
+                    }
+                    AnthropicContentBlock::ToolUse {
+                        cache_control,
+                        ..
+                    } => {
+                        assert!(cache_control.is_none());
+                    }
+                    AnthropicContentBlock::ToolResult {
+                        cache_control,
+                        ..
+                    } => {
+                        assert!(cache_control.is_none());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_count_tokens_request_format_with_thinking() {
+        use crate::llm::providers::anthropic_types::{CountTokensRequest, ThinkingConfig};
+
+        let provider = AnthropicProvider::new("test-key".to_string());
+
+        let request = LLMRequest {
+            messages: vec![Message::user("Solve 2+2".to_string())],
+            model: models::anthropic::CLAUDE_OPUS_4_5.to_string(),
+            reasoning_effort: Some(ReasoningEffortLevel::Medium),
+            ..Default::default()
+        };
+
+        let result = provider.convert_to_count_tokens_format(&request);
+        assert!(result.is_ok());
+
+        let count_request: CountTokensRequest = result.unwrap();
+        assert!(count_request.thinking.is_some());
+        let budget = match count_request.thinking {
+            Some(ThinkingConfig::Enabled { budget_tokens }) => budget_tokens,
+            _ => panic!("Expected ThinkingConfig::Enabled"),
+        };
+        assert_eq!(budget, 8192); // Medium effort
+    }
+
 }
