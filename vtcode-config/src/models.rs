@@ -237,6 +237,8 @@ pub enum ModelId {
     HuggingFaceOpenAIGptOss120b,
     /// Z.AI GLM-4.7 via Hugging Face router
     HuggingFaceGlm47,
+    /// Z.AI GLM-4.7-Flash via Novita on Hugging Face router
+    HuggingFaceGlm47FlashNovita,
     /// MoonshotAI Kimi K2 Thinking via Hugging Face router
     HuggingFaceKimiK2Thinking,
     /// MiniMax M2.1 via Novita on Hugging Face router - Enhanced reasoning
@@ -267,6 +269,8 @@ pub enum ModelId {
     ZaiGlm47,
     /// GLM-4.7 Deep Thinking - GLM-4.7 with forced reasoning
     ZaiGlm47DeepThinking,
+    /// GLM-4.7 Flash - Lightweight GLM-4.7 model optimized for agentic coding
+    ZaiGlm47Flash,
     /// GLM-4.6 - Previous flagship GLM reasoning model
     ZaiGlm46,
     /// GLM-4.6 Deep Thinking - GLM-4.6 with forced reasoning
@@ -465,6 +469,8 @@ pub enum ModelId {
     OpenRouterZaiGlm46V,
     /// GLM 4.7 - Z.AI GLM 4.7 next-generation reasoning model
     OpenRouterZaiGlm47,
+    /// GLM 4.7 Flash - Z.AI GLM-4.7-Flash lightweight model via OpenRouter
+    OpenRouterZaiGlm47Flash,
 }
 
 #[cfg(not(docsrs))]
@@ -597,6 +603,7 @@ impl ModelId {
             ModelId::ZaiGlm4PlusDeepThinking => models::zai::GLM_4_PLUS_DEEP_THINKING,
             ModelId::ZaiGlm47 => models::zai::GLM_4_7,
             ModelId::ZaiGlm47DeepThinking => models::zai::GLM_4_7_DEEP_THINKING,
+            ModelId::ZaiGlm47Flash => models::zai::GLM_4_7_FLASH,
             ModelId::ZaiGlm46 => models::zai::GLM_4_6,
             ModelId::ZaiGlm46DeepThinking => models::zai::GLM_4_6_DEEP_THINKING,
             ModelId::ZaiGlm46V => models::zai::GLM_4_6V,
@@ -643,6 +650,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
             ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
+            ModelId::HuggingFaceGlm47FlashNovita => models::huggingface::ZAI_GLM_47_FLASH_NOVITA,
             ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
             ModelId::HuggingFaceMinimaxM21Novita => models::huggingface::MINIMAX_M2_1_NOVITA,
             ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
@@ -686,6 +694,7 @@ impl ModelId {
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
             | ModelId::HuggingFaceGlm47
+            | ModelId::HuggingFaceGlm47FlashNovita
             | ModelId::HuggingFaceKimiK2Thinking
             | ModelId::HuggingFaceMinimaxM21Novita
             | ModelId::HuggingFaceDeepseekV32Novita
@@ -699,6 +708,7 @@ impl ModelId {
             | ModelId::ZaiGlm4PlusDeepThinking
             | ModelId::ZaiGlm47
             | ModelId::ZaiGlm47DeepThinking
+            | ModelId::ZaiGlm47Flash
             | ModelId::ZaiGlm46
             | ModelId::ZaiGlm46DeepThinking
             | ModelId::ZaiGlm46V
@@ -785,6 +795,7 @@ impl ModelId {
             ModelId::ZaiGlm4PlusDeepThinking => "GLM 4 Plus Deep Thinking",
             ModelId::ZaiGlm47 => "GLM 4.7",
             ModelId::ZaiGlm47DeepThinking => "GLM 4.7 Deep Thinking",
+            ModelId::ZaiGlm47Flash => "GLM 4.7 Flash",
             ModelId::ZaiGlm46 => "GLM 4.6",
             ModelId::ZaiGlm46DeepThinking => "GLM 4.6 Deep Thinking",
             ModelId::ZaiGlm46V => "GLM 4.6V",
@@ -828,6 +839,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
             ModelId::HuggingFaceGlm47 => "GLM-4.7 (HF)",
+            ModelId::HuggingFaceGlm47FlashNovita => "GLM-4.7-Flash (Novita)",
             ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
             ModelId::HuggingFaceMinimaxM21Novita => "MiniMax-M2.1 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
@@ -910,6 +922,9 @@ impl ModelId {
             }
             ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking => {
                 "Latest Z.AI GLM flagship with enhanced reasoning, 200k context and coding strengths"
+            }
+            ModelId::ZaiGlm47Flash => {
+                "Z.AI GLM-4.7-Flash 30B-class SOTA lightweight model - Completely free, high-speed, optimized for agentic coding with enhanced reasoning capabilities"
             }
             ModelId::ZaiGlm46 | ModelId::ZaiGlm46DeepThinking => {
                 "Previous Z.AI GLM flagship with long-context reasoning and coding strengths"
@@ -1008,6 +1023,9 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => "OpenAI GPT-OSS 20B via Hugging Face router",
             ModelId::HuggingFaceOpenAIGptOss120b => "OpenAI GPT-OSS 120B via Hugging Face router",
             ModelId::HuggingFaceGlm47 => "Z.AI GLM-4.7 via Hugging Face router",
+            ModelId::HuggingFaceGlm47FlashNovita => {
+                "Z.AI GLM-4.7-Flash via Novita inference provider on HuggingFace router. Lightweight model optimized for agentic coding."
+            }
             ModelId::HuggingFaceKimiK2Thinking => {
                 "MoonshotAI Kimi K2 Thinking via Hugging Face router"
             }
@@ -1060,6 +1078,7 @@ impl ModelId {
             ModelId::XaiGrok4Vision,
             // Z.AI models
             ModelId::ZaiGlm46,
+            ModelId::ZaiGlm47Flash,
             ModelId::ZaiGlm45,
             ModelId::ZaiGlm45Air,
             ModelId::ZaiGlm45X,
@@ -1100,6 +1119,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
             ModelId::HuggingFaceGlm47,
+            ModelId::HuggingFaceGlm47FlashNovita,
             ModelId::HuggingFaceKimiK2Thinking,
             ModelId::HuggingFaceMinimaxM21Novita,
             ModelId::HuggingFaceDeepseekV32Novita,

@@ -196,6 +196,7 @@ pub mod models {
             ZAI_GLM_46,
             ZAI_GLM_47,
             ZAI_GLM_47_NOVITA,
+            ZAI_GLM_47_FLASH_NOVITA,
             MOONSHOT_KIMI_K2_THINKING,
             // Recommended VLM
             ZAI_GLM_45V,
@@ -221,6 +222,7 @@ pub mod models {
         pub const ZAI_GLM_46: &str = "zai-org/GLM-4.6:zai-org";
         pub const ZAI_GLM_47: &str = "zai-org/GLM-4.7:zai-org";
         pub const ZAI_GLM_47_NOVITA: &str = "zai-org/GLM-4.7:novita";
+        pub const ZAI_GLM_47_FLASH_NOVITA: &str = "zai-org/GLM-4.7-Flash:novita";
         pub const MOONSHOT_KIMI_K2_THINKING: &str = "moonshotai/Kimi-K2-Thinking";
 
         // Recommended VLM
@@ -242,6 +244,7 @@ pub mod models {
             ZAI_GLM_46,
             ZAI_GLM_47,
             ZAI_GLM_47_NOVITA,
+            ZAI_GLM_47_FLASH_NOVITA,
             MOONSHOT_KIMI_K2_THINKING,
             ZAI_GLM_45V,
             DEEPSEEK_V32_NOVITA,
@@ -256,6 +259,7 @@ pub mod models {
         pub const SUPPORTED_MODELS: &[&str] = &[
             "glm-4-plus",
             "glm-4.7",
+            "glm-4.7-flash",
             "glm-4.6",
             "glm-4.6v",
             "glm-4.6v-flash",
@@ -272,6 +276,7 @@ pub mod models {
         pub const REASONING_MODELS: &[&str] = &[
             "glm-4-plus",
             "glm-4.7",
+            "glm-4.7-flash",
             "glm-4.6",
             "glm-4.5",
             "glm-4.5-air",
@@ -284,6 +289,7 @@ pub mod models {
         pub const GLM_4_PLUS_DEEP_THINKING: &str = "glm-4-plus:thinking";
         pub const GLM_4_7: &str = "glm-4.7";
         pub const GLM_4_7_DEEP_THINKING: &str = "glm-4.7:thinking";
+        pub const GLM_4_7_FLASH: &str = "glm-4.7-flash";
         pub const GLM_4_6: &str = "glm-4.6";
         pub const GLM_4_6_DEEP_THINKING: &str = "glm-4.6:thinking";
         pub const GLM_4_6V: &str = "glm-4.6v";
