@@ -607,8 +607,20 @@ loop_detection_threshold = 2
 loop_detection_interactive = true
 
 [provider.anthropic]
+# Extended thinking gives Claude enhanced reasoning capabilities for complex tasks.
+# When enabled, Claude creates internal reasoning blocks before delivering its final answer.
+# Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models.
+# See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
+extended_thinking_enabled = true
+
+# Beta header for interleaved thinking (allows thinking between tool calls)
 interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
+
+# Budget tokens for extended thinking (minimum: 1024, recommended: 10000+)
+# Larger budgets enable more thorough analysis for complex problems.
 interleaved_thinking_budget_tokens = 12000
+
+# Type value for enabling thinking mode
 interleaved_thinking_type_enabled = "enabled"
 
 [skills]

@@ -4,11 +4,21 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnthropicConfig {
+    /// Enable extended thinking feature for Anthropic models
+    /// When enabled, Claude uses internal reasoning before responding, providing
+    /// enhanced reasoning capabilities for complex tasks.
+    /// Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models.
+    /// See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
+    #[serde(default = "default_extended_thinking_enabled")]
+    pub extended_thinking_enabled: bool,
+
     /// Beta header for interleaved thinking feature
     #[serde(default = "default_interleaved_thinking_beta")]
     pub interleaved_thinking_beta: String,
 
-    /// Budget tokens for interleaved thinking
+    /// Budget tokens for extended thinking (minimum: 1024, recommended: 10000+)
+    /// Larger budgets enable more thorough analysis for complex problems.
+    /// The model may not use the entire budget allocated.
     #[serde(default = "default_interleaved_thinking_budget_tokens")]
     pub interleaved_thinking_budget_tokens: u32,
 
@@ -37,6 +47,7 @@ pub struct AnthropicConfig {
 impl Default for AnthropicConfig {
     fn default() -> Self {
         Self {
+            extended_thinking_enabled: default_extended_thinking_enabled(),
             interleaved_thinking_beta: default_interleaved_thinking_beta(),
             interleaved_thinking_budget_tokens: default_interleaved_thinking_budget_tokens(),
             interleaved_thinking_type_enabled: default_interleaved_thinking_type(),
@@ -98,6 +109,11 @@ fn default_defer_by_default() -> bool {
 #[inline]
 fn default_max_results() -> u32 {
     5
+}
+
+#[inline]
+fn default_extended_thinking_enabled() -> bool {
+    true
 }
 
 #[inline]

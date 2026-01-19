@@ -231,7 +231,7 @@ impl AnthropicProvider {
     }
 
     /// Combines prompt cache betas with structured outputs beta when requested.
-    /// Always includes interleaved-thinking beta for all Anthropic models.
+    /// Includes interleaved-thinking beta only when extended thinking is enabled.
     fn combined_beta_header_value(
         &self,
         include_structured: bool,
@@ -249,8 +249,10 @@ impl AnthropicProvider {
                 pieces.push(p);
             }
         }
-        // Always add interleaved-thinking beta header for all Anthropic models
-        pieces.push(self.anthropic_config.interleaved_thinking_beta.clone());
+        // Add interleaved-thinking beta header only when extended thinking is enabled
+        if self.anthropic_config.extended_thinking_enabled {
+            pieces.push(self.anthropic_config.interleaved_thinking_beta.clone());
+        }
         if include_structured {
             // Use the correct beta header for structured outputs
             pieces.push("structured-outputs-2025-11-13".to_owned());
@@ -938,13 +940,20 @@ impl AnthropicProvider {
             });
         }
 
-        // Enable interleaved thinking by default for all Anthropic models
-        // Enable interleaved thinking by default for all Anthropic models
+        // Extended thinking configuration for Anthropic models
+        // Only enable when:
+        // 1. extended_thinking_enabled is true in config
+        // 2. Model supports reasoning/extended thinking (Claude 4, 4.5, or 3.7 Sonnet)
         let mut thinking_val = None;
         let mut reasoning_val = None;
 
-        if self.supports_reasoning_effort(&request.model) {
-            // New "thinking" parameter for models supporting extended thinking (e.g. Sonnet 3.7)
+        let thinking_enabled = self.anthropic_config.extended_thinking_enabled
+            && self.supports_reasoning_effort(&request.model);
+
+        if thinking_enabled {
+            // New "thinking" parameter for models supporting extended thinking
+            // Supported models: Claude 4, Claude 4.5, Claude 3.7 Sonnet
+            // See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
             let budget = if let Some(explicit_budget) = request.thinking_budget {
                 explicit_budget
             } else if let Some(effort) = request.reasoning_effort {
@@ -960,15 +969,22 @@ impl AnthropicProvider {
                 self.anthropic_config.interleaved_thinking_budget_tokens
             };
 
+            // Minimum budget is 1024 tokens per Anthropic API requirements
+            // budget_tokens must be less than max_tokens (except with interleaved thinking)
+            // With interleaved thinking beta, the budget can exceed max_tokens
             if budget >= 1024 {
+                let max_tokens = request.max_tokens.unwrap_or(16000);
+                // Cap budget to max_tokens - 100 to leave room for response,
+                // but never below the minimum of 1024
+                let effective_budget = budget.min(max_tokens.saturating_sub(100)).max(1024);
                 thinking_val = Some(ThinkingConfig::Enabled {
-                    budget_tokens: budget,
+                    budget_tokens: effective_budget,
                 });
             } else {
                 thinking_val = None;
             }
         } else if let Some(effort) = request.reasoning_effort {
-            // Fallback to "reasoning" parameter for older models or if explicitly requested
+            // Fallback to "reasoning" parameter for older models or when extended thinking is disabled
             if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {
                 reasoning_val = Some(payload);
             } else {
@@ -998,11 +1014,32 @@ impl AnthropicProvider {
             .tool_choice
             .as_ref()
             .map(|tc| tc.to_provider_format("anthropic"));
+
+        // When thinking is enabled, tool_choice only supports "auto" or "none"
+        // Using "any" or specific tool forcing is incompatible with extended thinking
+        // See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#extended-thinking-with-tool-use
+        if thinking_val.is_some() {
+            if let Some(ref choice) = final_tool_choice {
+                let choice_type = choice.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                if choice_type != "auto" && choice_type != "none" && !choice_type.is_empty() {
+                    // Force to "auto" when thinking is enabled and incompatible tool_choice is set
+                    final_tool_choice = Some(json!({"type": "auto"}));
+                }
+            }
+        }
+
         if request.output_format.is_some() && self.supports_structured_output(&request.model) {
-            final_tool_choice = Some(json!({
-                "type": "tool",
-                "name": "structured_output"
-            }));
+            // Note: Structured output with tool forcing is incompatible with thinking
+            // When thinking is enabled, we can add the tool but cannot force it
+            // Claude will use it when appropriate based on the prompt
+            if thinking_val.is_none() {
+                // Without thinking, we can force the structured output tool
+                final_tool_choice = Some(json!({
+                    "type": "tool",
+                    "name": "structured_output"
+                }));
+            }
+            // The structured_tool is already added to tools above (line ~1000)
         }
 
         let effort_value = request.effort.as_ref().or({
@@ -1016,16 +1053,22 @@ impl AnthropicProvider {
             }
         });
 
+        // Temperature is not compatible with extended thinking per Anthropic API docs
+        // Only disable temperature when thinking is actually enabled
+        let effective_temperature = if thinking_val.is_some() {
+            None
+        } else {
+            request.temperature
+        };
+
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
-            max_tokens: request.max_tokens.unwrap_or(4096), // Default to 4096 tokens if not specified
+            // Default to 16000 tokens when thinking is enabled (needs more room for thinking + response)
+            // Otherwise default to 4096 tokens
+            max_tokens: request.max_tokens.unwrap_or(if thinking_val.is_some() { 16000 } else { 4096 }),
             messages,
             system: system_value,
-            temperature: if self.supports_reasoning_effort(&request.model) {
-                None
-            } else {
-                request.temperature
-            },
+            temperature: effective_temperature,
             tools,
             tool_choice: final_tool_choice,
             thinking: thinking_val,
