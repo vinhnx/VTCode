@@ -98,45 +98,9 @@ VT Code implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), e
 
 For more information about A2A protocol support, see [A2A Protocol Documentation](./docs/a2a-protocol.md).
 
-### CLI Commands for A2A
-
-```bash
-# Serve VT Code as an A2A agent (requires a2a-server feature)
-vtcode a2a serve --port 8080
-
-# Discover a remote agent
-vtcode a2a discover https://agent.example.com
-
-# Send a task to an agent
-vtcode a2a send-task https://agent.example.com "Help me refactor this code"
-vtcode a2a send-task https://agent.example.com "Help me refactor" --stream
-
-# List tasks
-vtcode a2a list-tasks https://agent.example.com
-vtcode a2a list-tasks https://agent.example.com --context-id my-conversation
-
-# Get task details
-vtcode a2a get-task https://agent.example.com task-123
-
-# Cancel a task
-vtcode a2a cancel-task https://agent.example.com task-123
-```
-
 #### Anthropic API Compatibility
 
 VT Code provides compatibility with the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) to help connect existing applications to VT Code, including tools like Claude Code.
-
-To start the Anthropic API compatibility server:
-
-```bash
-# Start the Anthropic API server (requires anthropic-api feature)
-vtcode anthropic-api --port 11434
-
-# Use with Claude Code or other Anthropic-compatible tools
-export ANTHROPIC_AUTH_TOKEN=ollama  # required but ignored
-export ANTHROPIC_BASE_URL=http://localhost:11434
-export ANTHROPIC_API_KEY=ollama  # required but ignored
-```
 
 The server supports:
 - Messages endpoint at `/v1/messages`
