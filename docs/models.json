@@ -632,6 +632,25 @@
           "structured_output": true
         }
       },
+      "zai-org/GLM-4.7-Flash:novita": {
+        "id": "zai-org/GLM-4.7-Flash:novita",
+        "name": "GLM-4.7-Flash (Novita)",
+        "description": "Z.AI GLM-4.7-Flash lightweight model via Novita inference provider on HuggingFace router. High-speed, completely free, and optimized for agentic coding.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "capabilities": {
+          "structured_output": true
+        }
+      },
       "moonshotai/Kimi-K2-Thinking": {
         "id": "moonshotai/Kimi-K2-Thinking",
         "name": "Kimi K2 Thinking",
@@ -1283,6 +1302,32 @@
         "id": "glm-4.7:thinking",
         "name": "GLM 4.7 (Deep Thinking)",
         "description": "Z.AI GLM 4.7 with forced Deep Thinking mode enabled for maximum reasoning capability.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 131072,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        }
+      },
+      "glm-4.7-flash": {
+        "id": "glm-4.7-flash",
+        "name": "GLM 4.7 Flash",
+        "description": "Z.AI's 30B-class SOTA lightweight model - Completely free, high-speed, and optimized for agentic coding. Enhanced coding capabilities, long-horizon task planning, and tool collaboration.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -3366,6 +3411,33 @@
           "top_tier": true,
           "generation": "GLM-4.7",
           "doc_comment": "GLM 4.7 - Z.AI GLM 4.7 next-generation reasoning model"
+        }
+      },
+      "z-ai/glm-4.7-flash": {
+        "id": "z-ai/glm-4.7-flash",
+        "name": "Z.AI: GLM 4.7 Flash",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 131072,
+        "vtcode": {
+          "variant": "OpenRouterZaiGlm47Flash",
+          "constant": "Z_AI_GLM_4_7_FLASH",
+          "vendor": "zai",
+          "display": "GLM 4.7 Flash",
+          "description": "Z.AI GLM-4.7-Flash lightweight model - Completely free, high-speed, and optimized for agentic coding with enhanced reasoning capabilities",
+          "efficient": true,
+          "top_tier": false,
+          "generation": "GLM-4.7",
+          "doc_comment": "GLM 4.7 Flash - Z.AI GLM-4.7-Flash lightweight model"
         }
       }
     },

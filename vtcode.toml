@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "huggingface"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-oss:120b-cloud"
+default_model = "zai-org/GLM-4.7-Flash:novita"
 
 # Visual theme for the terminal interface
 theme = "vitesse-dark"
@@ -50,6 +50,7 @@ include_working_directory = true
 # Toggle during session with Shift+Tab or /plan command
 default_editing_mode = "edit"
 require_plan_confirmation = true
+autonomous_mode = false
 
 [agent.small_model]
 enabled = true
@@ -125,6 +126,13 @@ enabled = false
 directory = ""
 extra_directories = []
 max_file_size_kb = 0
+
+[agent.circuit_breaker]
+enabled = true
+failure_threshold = 5
+pause_on_open = true
+max_open_circuits = 3
+recovery_cooldown = 60
 
 # Status line configuration
 [ui.status_line]
@@ -653,6 +661,10 @@ extended_ttl_seconds = 3600
 max_breakpoints = 4
 cache_system_messages = true
 cache_user_messages = true
+tools_ttl_seconds = 3600
+messages_ttl_seconds = 300
+cache_tool_definitions = true
+min_message_length_for_cache = 256
 
 [prompt_cache.providers.gemini]
 enabled = true
@@ -758,6 +770,8 @@ interleaved_thinking_budget_tokens = 12000
 
 # Type value for enabling thinking mode
 interleaved_thinking_type_enabled = "enabled"
+effort = "low"
+count_tokens_enabled = false
 
 [provider.anthropic.tool_search]
 enabled = false
