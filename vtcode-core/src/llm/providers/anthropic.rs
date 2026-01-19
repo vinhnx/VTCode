@@ -3599,3 +3599,168 @@ mod tests_refinement {
         assert_eq!(budget, 8192); // Medium effort
     }
 }
+
+#[cfg(test)]
+mod streaming_tests {
+    use super::*;
+    use crate::llm::provider::{LLMRequest, LLMStreamEvent, Message};
+
+    #[tokio::test]
+    async fn test_stream_event_deserialization_message_start() {
+        let event_json = r#"{"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5-20250929","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":25,"output_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}"#;
+
+        let event: AnthropicStreamEvent = serde_json::from_str(event_json).unwrap();
+        match event {
+            AnthropicStreamEvent::MessageStart { message } => {
+                assert_eq!(message.id, "msg_123");
+                assert_eq!(message.usage.input_tokens, 25);
+            }
+            _ => panic!("Expected MessageStart event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_stream_event_deserialization_text_delta() {
+        let event_json = r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}"#;
+
+        let event: AnthropicStreamEvent = serde_json::from_str(event_json).unwrap();
+        match event {
+            AnthropicStreamEvent::ContentBlockDelta { index, delta } => {
+                assert_eq!(index, 0);
+                match delta {
+                    AnthropicStreamDelta::TextDelta { text } => {
+                        assert_eq!(text, "Hello");
+                    }
+                    _ => panic!("Expected TextDelta"),
+                }
+            }
+            _ => panic!("Expected ContentBlockDelta event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_stream_event_deserialization_thinking_delta() {
+        let event_json = r#"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me solve this step by step"}}"#;
+
+        let event: AnthropicStreamEvent = serde_json::from_str(event_json).unwrap();
+        match event {
+            AnthropicStreamEvent::ContentBlockDelta { index, delta } => {
+                assert_eq!(index, 0);
+                match delta {
+                    AnthropicStreamDelta::ThinkingDelta { thinking } => {
+                        assert_eq!(thinking, "Let me solve this step by step");
+                    }
+                    _ => panic!("Expected ThinkingDelta"),
+                }
+            }
+            _ => panic!("Expected ContentBlockDelta event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_stream_event_deserialization_input_json_delta() {
+        let event_json = r#"{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"location\": \"San Fran"}}"#;
+
+        let event: AnthropicStreamEvent = serde_json::from_str(event_json).unwrap();
+        match event {
+            AnthropicStreamEvent::ContentBlockDelta { index, delta } => {
+                assert_eq!(index, 1);
+                match delta {
+                    AnthropicStreamDelta::InputJsonDelta { partial_json } => {
+                        assert!(partial_json.contains("location"));
+                    }
+                    _ => panic!("Expected InputJsonDelta"),
+                }
+            }
+            _ => panic!("Expected ContentBlockDelta event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_stream_event_deserialization_signature_delta() {
+        let event_json = r#"{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"EqQBCgIYAhIM1gbcDa9GJwZA2b3hGgxBdjrkzLoky3dl1pkiMOYds..."}}"#;
+
+        let event: AnthropicStreamEvent = serde_json::from_str(event_json).unwrap();
+        match event {
+            AnthropicStreamEvent::ContentBlockDelta { index, delta } => {
+                assert_eq!(index, 0);
+                match delta {
+                    AnthropicStreamDelta::SignatureDelta { signature } => {
+                        assert!(signature.starts_with("EqQBCgIY"));
+                    }
+                    _ => panic!("Expected SignatureDelta"),
+                }
+            }
+            _ => panic!("Expected ContentBlockDelta event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_stream_event_deserialization_message_delta() {
+        let event_json = r#"{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":25,"output_tokens":15}}"#;
+
+        let event: AnthropicStreamEvent = serde_json::from_str(event_json).unwrap();
+        match event {
+            AnthropicStreamEvent::MessageDelta { delta, usage } => {
+                assert_eq!(delta.stop_reason, Some("end_turn".to_string()));
+                assert_eq!(usage.unwrap().output_tokens, 15);
+            }
+            _ => panic!("Expected MessageDelta event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_stream_event_deserialization_error() {
+        let event_json =
+            r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#;
+
+        let event: AnthropicStreamEvent = serde_json::from_str(event_json).unwrap();
+        match event {
+            AnthropicStreamEvent::Error { error } => {
+                assert_eq!(error.error_type, "overloaded_error");
+                assert_eq!(error.message, "Overloaded");
+            }
+            _ => panic!("Expected Error event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_stream_event_deserialization_ping() {
+        let event_json = r#"{"type":"ping"}"#;
+
+        let event: AnthropicStreamEvent = serde_json::from_str(event_json).unwrap();
+        match event {
+            AnthropicStreamEvent::Ping => {}
+            _ => panic!("Expected Ping event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sse_boundary_detection() {
+        let buffer = "data: hello\n\ndata: world\n\n";
+        let (idx, len) = crate::llm::providers::shared::find_sse_boundary(buffer).unwrap();
+        assert_eq!(idx, 11);
+        assert_eq!(len, 2);
+
+        let remaining = &buffer[idx + len..];
+        let (idx2, len2) = crate::llm::providers::shared::find_sse_boundary(remaining).unwrap();
+        assert_eq!(idx2, 11);
+        assert_eq!(len2, 2);
+    }
+
+    #[tokio::test]
+    async fn test_extract_data_payload() {
+        let event = "event: message_start\ndata: {\"type\":\"message_start\"}\n\n";
+        let data = crate::llm::providers::shared::extract_data_payload(event);
+        assert!(data.is_some());
+        assert_eq!(data.unwrap(), "{\"type\":\"message_start\"}");
+    }
+
+    #[tokio::test]
+    async fn test_extract_data_payload_empty() {
+        let event = "event: ping\ndata: \n\n";
+        let data = crate::llm::providers::shared::extract_data_payload(event);
+        assert!(data.is_some());
+        assert_eq!(data.unwrap(), "");
+    }
+}
