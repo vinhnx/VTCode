@@ -3,6 +3,24 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.66.0] - 2026-01-19
+
+
+### Features
+    - feat: Add Z.AI GLM-4.7-Flash model support and update configuration
+    - feat: Add extended thinking configuration for Anthropic models
+    - feat: Implement Anthropic token counting, allowing estimation of input tokens via a new configurable option.
+    - feat: add effort parameter for Claude Opus 4.5 to control token usage
+
+
+### Documentation
+    - docs: update changelog for v0.65.5 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.65.5 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.65.4 version =  [skip ci]
 # [Version 0.65.5] - 2026-01-19
 
 
