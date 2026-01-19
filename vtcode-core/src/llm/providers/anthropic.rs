@@ -191,19 +191,31 @@ impl AnthropicProvider {
     /// Anthropic only supports "5m" (5 minutes) or "1h" (1 hour).
     ///
     /// Returns:
-    /// - "1h" if extended_ttl_seconds is set and >= 3600 seconds
-    /// - "5m" for default or extended_ttl_seconds < 3600 seconds
-    fn get_cache_ttl(&self) -> &'static str {
-        self.prompt_cache_settings
-            .extended_ttl_seconds
-            .filter(|&ttl| ttl >= 3600)
-            .map(|_| "1h")
-            .unwrap_or("5m")
+    /// - "1h" if ttl_seconds >= 3600 seconds
+    /// - "5m" for ttl_seconds < 3600 seconds
+    fn get_cache_ttl_for_seconds(ttl_seconds: u64) -> &'static str {
+        if ttl_seconds >= 3600 { "1h" } else { "5m" }
+    }
+
+    /// Returns the tools/system cache TTL string (typically 1h for stable content)
+    fn get_tools_cache_ttl(&self) -> &'static str {
+        Self::get_cache_ttl_for_seconds(self.prompt_cache_settings.tools_ttl_seconds)
+    }
+
+    /// Returns the messages cache TTL string (typically 5m for changing content)
+    fn get_messages_cache_ttl(&self) -> &'static str {
+        Self::get_cache_ttl_for_seconds(self.prompt_cache_settings.messages_ttl_seconds)
+    }
+
+    /// Returns true if any breakpoint should use 1h TTL (for beta header inclusion)
+    fn requires_extended_ttl_beta(&self) -> bool {
+        self.prompt_cache_settings.tools_ttl_seconds >= 3600
+            || self.prompt_cache_settings.messages_ttl_seconds >= 3600
     }
 
     /// Returns the beta header value for Anthropic API prompt caching.
     /// - Always includes "prompt-caching-2024-07-31"
-    /// - Adds "extended-cache-ttl-2025-04-11" only when using 1h TTL
+    /// - Adds "extended-cache-ttl-2025-04-11" only when using 1h TTL for any breakpoint
     fn prompt_cache_beta_header_value(&self) -> Option<String> {
         if !self.prompt_cache_enabled {
             return None;
@@ -211,8 +223,8 @@ impl AnthropicProvider {
 
         let mut betas = vec!["prompt-caching-2024-07-31"];
 
-        // Only add extended TTL beta if we're actually using 1h cache
-        if self.get_cache_ttl() == "1h" {
+        // Only add extended TTL beta if we're using 1h cache for any breakpoint
+        if self.requires_extended_ttl_beta() {
             betas.push("extended-cache-ttl-2025-04-11");
         }
 
@@ -609,20 +621,43 @@ impl AnthropicProvider {
             AnthropicTool, AnthropicToolSearchTool, CacheControl,
         };
 
-        let cache_control_template = if self.prompt_cache_enabled {
-            let ttl = self.get_cache_ttl();
-            Some(CacheControl {
-                control_type: "ephemeral".to_string(),
-                ttl: Some(ttl.to_string()),
-            })
+        let tools_ttl = if self.prompt_cache_enabled {
+            self.get_tools_cache_ttl()
         } else {
-            None
+            "5m"
         };
 
-        let mut breakpoints_remaining = cache_control_template
-            .as_ref()
-            .map(|_| self.prompt_cache_settings.max_breakpoints as usize)
-            .unwrap_or(0);
+        let messages_ttl = if self.prompt_cache_enabled {
+            self.get_messages_cache_ttl()
+        } else {
+            "5m"
+        };
+
+        let tools_cache_control =
+            if self.prompt_cache_enabled && self.prompt_cache_settings.cache_tool_definitions {
+                Some(CacheControl {
+                    control_type: "ephemeral".to_string(),
+                    ttl: Some(tools_ttl.to_string()),
+                })
+            } else {
+                None
+            };
+
+        let system_cache_control =
+            if self.prompt_cache_enabled && self.prompt_cache_settings.cache_system_messages {
+                Some(CacheControl {
+                    control_type: "ephemeral".to_string(),
+                    ttl: Some(tools_ttl.to_string()),
+                })
+            } else {
+                None
+            };
+
+        let mut breakpoints_remaining = if self.prompt_cache_enabled {
+            self.prompt_cache_settings.max_breakpoints as usize
+        } else {
+            0
+        };
 
         let mut tools: Option<Vec<AnthropicTool>> = None;
         if let Some(request_tools) = &request.tools
@@ -653,7 +688,7 @@ impl AnthropicProvider {
                 .collect();
 
             if breakpoints_remaining > 0
-                && let Some(cache_control) = cache_control_template.as_ref()
+                && let Some(cache_control) = tools_cache_control.as_ref()
                 && let Some(last_tool) = built_tools.last_mut()
             {
                 // Only apply cache control to function tools
@@ -699,7 +734,7 @@ impl AnthropicProvider {
 
         if !final_system_prompt.is_empty() {
             if self.prompt_cache_settings.cache_system_messages && breakpoints_remaining > 0 {
-                if let Some(cache_control) = cache_control_template.as_ref() {
+                if let Some(cache_control) = system_cache_control.as_ref() {
                     let block = json!({
                         "type": "text",
                         "text": final_system_prompt.trim(),
@@ -714,6 +749,17 @@ impl AnthropicProvider {
                 system_value = Some(Value::String(final_system_prompt.trim().to_string()));
             }
         }
+
+        // Create message-specific cache control (uses messages_ttl for dynamic content)
+        let messages_cache_control =
+            if self.prompt_cache_enabled && self.prompt_cache_settings.cache_user_messages {
+                Some(CacheControl {
+                    control_type: "ephemeral".to_string(),
+                    ttl: Some(messages_ttl.to_string()),
+                })
+            } else {
+                None
+            };
 
         let mut messages_to_process = request.messages.clone();
 
@@ -860,12 +906,14 @@ impl AnthropicProvider {
                     }
 
                     let mut cache_ctrl = None;
-                    if msg.role == MessageRole::User
+                    let should_cache = msg.role == MessageRole::User
                         && self.prompt_cache_settings.cache_user_messages
                         && breakpoints_remaining > 0
-                        && let Some(template) = cache_control_template.as_ref()
-                    {
-                        cache_ctrl = Some(template.clone());
+                        && content_text.len()
+                            >= self.prompt_cache_settings.min_message_length_for_cache;
+
+                    if should_cache && let Some(cc) = messages_cache_control.as_ref() {
+                        cache_ctrl = Some(cc.clone());
                         breakpoints_remaining -= 1;
                     }
 
@@ -1065,7 +1113,11 @@ impl AnthropicProvider {
             model: request.model.clone(),
             // Default to 16000 tokens when thinking is enabled (needs more room for thinking + response)
             // Otherwise default to 4096 tokens
-            max_tokens: request.max_tokens.unwrap_or(if thinking_val.is_some() { 16000 } else { 4096 }),
+            max_tokens: request.max_tokens.unwrap_or(if thinking_val.is_some() {
+                16000
+            } else {
+                4096
+            }),
             messages,
             system: system_value,
             temperature: effective_temperature,
@@ -2342,7 +2394,10 @@ mod caching_tests {
         config.providers.anthropic.enabled = true;
         config.providers.anthropic.max_breakpoints = 3;
         config.providers.anthropic.cache_user_messages = true;
-        config.providers.anthropic.extended_ttl_seconds = Some(3600);
+        config.providers.anthropic.cache_tool_definitions = true;
+        config.providers.anthropic.cache_system_messages = true;
+        config.providers.anthropic.tools_ttl_seconds = 3600; // 1h for tools/system
+        config.providers.anthropic.messages_ttl_seconds = 300; // 5m for messages
         config
     }
 
@@ -2436,10 +2491,9 @@ mod caching_tests {
         let provider = AnthropicProvider::new("test-key".to_string());
         assert_eq!(provider.prompt_cache_beta_header_value(), None);
 
-        // Test 2: Caching enabled, default TTL (explicitly disable extended to ensure 5m behavior)
-        let mut config = PromptCachingConfig::default();
-        config.enabled = true;
-        config.providers.anthropic.extended_ttl_seconds = None;
+        // Test 2: Caching enabled, default TTL (5m for messages, 1h for tools)
+        // Should include extended TTL header because tools_ttl_seconds >= 3600
+        let config = PromptCachingConfig::default();
 
         let provider = AnthropicProvider::from_config(
             Some("key".into()),
@@ -2449,13 +2503,16 @@ mod caching_tests {
             None,
             None,
         );
-        assert_eq!(
-            provider.prompt_cache_beta_header_value(),
-            Some("prompt-caching-2024-07-31".to_string())
-        );
+        // Default config has tools_ttl_seconds = 3600, so extended header should be present
+        let header = provider.prompt_cache_beta_header_value().unwrap();
+        assert!(header.contains("prompt-caching-2024-07-31"));
+        assert!(header.contains("extended-cache-ttl-2025-04-11"));
 
-        // Test 3: Caching enabled, 1h TTL (requires extended header)
-        config.providers.anthropic.extended_ttl_seconds = Some(3600);
+        // Test 3: Caching enabled, both TTLs set to 5m (no extended header needed)
+        let mut config = PromptCachingConfig::default();
+        config.providers.anthropic.tools_ttl_seconds = 300; // 5m
+        config.providers.anthropic.messages_ttl_seconds = 300; // 5m
+
         let provider = AnthropicProvider::from_config(
             Some("key".into()),
             None,
@@ -2466,7 +2523,7 @@ mod caching_tests {
         );
         let header = provider.prompt_cache_beta_header_value().unwrap();
         assert!(header.contains("prompt-caching-2024-07-31"));
-        assert!(header.contains("extended-cache-ttl-2025-04-11"));
+        assert!(!header.contains("extended-cache-ttl-2025-04-11"));
     }
 
     #[test]
@@ -3502,21 +3559,13 @@ mod tests_refinement {
         for msg in &count_request.messages {
             for block in &msg.content {
                 match block {
-                    AnthropicContentBlock::Text {
-                        cache_control, ..
-                    } => {
+                    AnthropicContentBlock::Text { cache_control, .. } => {
                         assert!(cache_control.is_none());
                     }
-                    AnthropicContentBlock::ToolUse {
-                        cache_control,
-                        ..
-                    } => {
+                    AnthropicContentBlock::ToolUse { cache_control, .. } => {
                         assert!(cache_control.is_none());
                     }
-                    AnthropicContentBlock::ToolResult {
-                        cache_control,
-                        ..
-                    } => {
+                    AnthropicContentBlock::ToolResult { cache_control, .. } => {
                         assert!(cache_control.is_none());
                     }
                     _ => {}
@@ -3549,5 +3598,4 @@ mod tests_refinement {
         };
         assert_eq!(budget, 8192); // Medium effort
     }
-
 }

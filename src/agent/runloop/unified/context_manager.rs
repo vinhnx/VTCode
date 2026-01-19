@@ -3,6 +3,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use anyhow::{Result, bail};
+use vtcode_config::constants::context::{
+    TOKEN_BUDGET_CRITICAL_THRESHOLD, TOKEN_BUDGET_HIGH_THRESHOLD, TOKEN_BUDGET_WARNING_THRESHOLD,
+};
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
@@ -16,6 +19,19 @@ struct ContextStats {
     error_count: usize,
     last_history_len: usize,
     total_token_usage: usize,
+}
+
+/// Token budget status for proactive context management
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenBudgetStatus {
+    /// Below 70% - normal operation
+    Normal,
+    /// 70-85% - start preparing for context handoff
+    Warning,
+    /// 85-90% - active context management needed
+    High,
+    /// Above 90% - immediate action required
+    Critical,
 }
 
 /// Simplified ContextManager without context trim and compaction functionality
@@ -97,10 +113,91 @@ impl ContextManager {
     }
 
     /// Update token usage from LLM response
+    /// Uses completion_tokens (new output) to track growth rate
+    /// since prompt_tokens includes all history and would double-count
     pub(crate) fn update_token_usage(&mut self, usage: &Option<uni::Usage>) {
         if let Some(usage) = usage {
-            self.cached_stats.total_token_usage += usage.total_tokens as usize;
+            self.cached_stats.total_token_usage += usage.completion_tokens as usize;
         }
+    }
+
+    /// Get guidance message based on token budget status
+    /// Returns actionable guidance for context management
+    pub(crate) fn get_token_budget_guidance(&self, context_window_size: usize) -> &'static str {
+        if context_window_size == 0 {
+            return "";
+        }
+
+        let usage_ratio = self.cached_stats.total_token_usage as f64 / context_window_size as f64;
+
+        if usage_ratio >= TOKEN_BUDGET_CRITICAL_THRESHOLD {
+            "CRITICAL: Update artifacts (task.md/docs) and consider starting a new session."
+        } else if usage_ratio >= TOKEN_BUDGET_HIGH_THRESHOLD {
+            "HIGH: Start summarizing key findings and preparing for context handoff."
+        } else if usage_ratio >= TOKEN_BUDGET_WARNING_THRESHOLD {
+            "WARNING: Consider updating progress docs to preserve important context."
+        } else {
+            ""
+        }
+    }
+
+    /// Get token budget status and guidance together
+    pub(crate) fn get_token_budget_status_and_guidance(
+        &self,
+        context_window_size: usize,
+    ) -> (TokenBudgetStatus, &'static str) {
+        if context_window_size == 0 {
+            return (TokenBudgetStatus::Normal, "");
+        }
+
+        let usage_ratio = self.cached_stats.total_token_usage as f64 / context_window_size as f64;
+
+        if usage_ratio >= TOKEN_BUDGET_CRITICAL_THRESHOLD {
+            (
+                TokenBudgetStatus::Critical,
+                "CRITICAL: Update artifacts (task.md/docs) and consider starting a new session.",
+            )
+        } else if usage_ratio >= TOKEN_BUDGET_HIGH_THRESHOLD {
+            (
+                TokenBudgetStatus::High,
+                "HIGH: Start summarizing key findings and preparing for context handoff.",
+            )
+        } else if usage_ratio >= TOKEN_BUDGET_WARNING_THRESHOLD {
+            (
+                TokenBudgetStatus::Warning,
+                "WARNING: Consider updating progress docs to preserve important context.",
+            )
+        } else {
+            (TokenBudgetStatus::Normal, "")
+        }
+    }
+
+    /// Get current token budget status based on usage ratio
+    /// Uses thresholds from Anthropic context window documentation:
+    /// - 70%: Warning - prepare for handoff
+    /// - 85%: High - active management needed
+    /// - 90%: Critical - immediate action required
+    pub(crate) fn get_token_budget_status(&self, context_window_size: usize) -> TokenBudgetStatus {
+        if context_window_size == 0 {
+            return TokenBudgetStatus::Normal;
+        }
+
+        let usage_ratio = self.cached_stats.total_token_usage as f64 / context_window_size as f64;
+
+        if usage_ratio >= TOKEN_BUDGET_CRITICAL_THRESHOLD {
+            TokenBudgetStatus::Critical
+        } else if usage_ratio >= TOKEN_BUDGET_HIGH_THRESHOLD {
+            TokenBudgetStatus::High
+        } else if usage_ratio >= TOKEN_BUDGET_WARNING_THRESHOLD {
+            TokenBudgetStatus::Warning
+        } else {
+            TokenBudgetStatus::Normal
+        }
+    }
+
+    /// Get current token usage
+    pub(crate) fn current_token_usage(&self) -> usize {
+        self.cached_stats.total_token_usage
     }
 
     pub(crate) async fn build_system_prompt(
@@ -129,6 +226,13 @@ impl ContextManager {
         // Determine if model supports context awareness (Claude 4.5+)
         let supports_context_awareness = context_window_size.is_some();
 
+        // Get token budget guidance if context awareness is supported
+        let token_budget_guidance = if supports_context_awareness {
+            self.get_token_budget_guidance(context_window_size.unwrap_or(0))
+        } else {
+            ""
+        };
+
         let context = SystemPromptContext {
             conversation_length: attempt_history.len(),
             tool_usage_count: self.cached_stats.tool_usage_count,
@@ -144,6 +248,7 @@ impl ContextManager {
                 None
             },
             supports_context_awareness,
+            token_budget_guidance,
         };
 
         // Use incremental builder to avoid redundant cloning and processing
@@ -214,6 +319,41 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn test_token_budget_status_thresholds() {
+        let manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
+
+        // Context window of 200K tokens
+        let context_size = 200_000;
+
+        // Zero usage should be Normal
+        assert_eq!(
+            manager.get_token_budget_status(context_size),
+            TokenBudgetStatus::Normal
+        );
+    }
+
+    #[test]
+    fn test_token_budget_status_with_zero_context() {
+        let manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
+
+        // Zero context window should return Normal (avoid division by zero)
+        assert_eq!(
+            manager.get_token_budget_status(0),
+            TokenBudgetStatus::Normal
+        );
+    }
+
     #[tokio::test]
     async fn build_system_prompt_with_empty_base_prompt_fails() {
         let mut manager = ContextManager::new(
@@ -228,5 +368,159 @@ mod tests {
             .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));
+    }
+
+    #[test]
+    fn test_token_budget_status_warning_threshold() {
+        let mut manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
+
+        // Set token usage to 70% (140000/200000)
+        manager.cached_stats.total_token_usage = 140_000;
+
+        assert_eq!(
+            manager.get_token_budget_status(200_000),
+            TokenBudgetStatus::Warning
+        );
+        assert_eq!(
+            manager.get_token_budget_guidance(200_000),
+            "WARNING: Consider updating progress docs to preserve important context."
+        );
+    }
+
+    #[test]
+    fn test_token_budget_status_high_threshold() {
+        let mut manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
+
+        // Set token usage to 85% (170000/200000)
+        manager.cached_stats.total_token_usage = 170_000;
+
+        assert_eq!(
+            manager.get_token_budget_status(200_000),
+            TokenBudgetStatus::High
+        );
+        assert_eq!(
+            manager.get_token_budget_guidance(200_000),
+            "HIGH: Start summarizing key findings and preparing for context handoff."
+        );
+    }
+
+    #[test]
+    fn test_token_budget_status_critical_threshold() {
+        let mut manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
+
+        // Set token usage to 90% (180000/200000)
+        manager.cached_stats.total_token_usage = 180_000;
+
+        assert_eq!(
+            manager.get_token_budget_status(200_000),
+            TokenBudgetStatus::Critical
+        );
+        assert_eq!(
+            manager.get_token_budget_guidance(200_000),
+            "CRITICAL: Update artifacts (task.md/docs) and consider starting a new session."
+        );
+    }
+
+    #[test]
+    fn test_token_budget_status_normal() {
+        let mut manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
+
+        // Set token usage to 50% (100000/200000)
+        manager.cached_stats.total_token_usage = 100_000;
+
+        assert_eq!(
+            manager.get_token_budget_status(200_000),
+            TokenBudgetStatus::Normal
+        );
+        assert_eq!(manager.get_token_budget_guidance(200_000), "");
+    }
+
+    #[test]
+    fn test_token_budget_status_and_guidance_together() {
+        let mut manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
+
+        // Test critical threshold
+        manager.cached_stats.total_token_usage = 185_000;
+        let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
+        assert_eq!(status, TokenBudgetStatus::Critical);
+        assert!(guidance.contains("CRITICAL"));
+
+        // Test high threshold
+        manager.cached_stats.total_token_usage = 175_000;
+        let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
+        assert_eq!(status, TokenBudgetStatus::High);
+        assert!(guidance.contains("HIGH"));
+
+        // Test warning threshold
+        manager.cached_stats.total_token_usage = 145_000;
+        let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
+        assert_eq!(status, TokenBudgetStatus::Warning);
+        assert!(guidance.contains("WARNING"));
+
+        // Test normal
+        manager.cached_stats.total_token_usage = 50_000;
+        let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
+        assert_eq!(status, TokenBudgetStatus::Normal);
+        assert!(guidance.is_empty());
+    }
+
+    #[test]
+    fn test_update_token_usage_with_completion_tokens() {
+        let mut manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
+
+        // Initial state
+        assert_eq!(manager.current_token_usage(), 0);
+
+        // Update with first response (500 completion tokens)
+        manager.update_token_usage(&Some(uni::Usage {
+            prompt_tokens: 1000,
+            completion_tokens: 500,
+            total_tokens: 1500,
+            cached_prompt_tokens: None,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
+        }));
+        assert_eq!(manager.current_token_usage(), 500);
+
+        // Update with second response (800 completion tokens)
+        manager.update_token_usage(&Some(uni::Usage {
+            prompt_tokens: 2500,
+            completion_tokens: 800,
+            total_tokens: 3300,
+            cached_prompt_tokens: None,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
+        }));
+        assert_eq!(manager.current_token_usage(), 1300);
     }
 }

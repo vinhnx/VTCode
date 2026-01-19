@@ -287,6 +287,19 @@ pub(crate) async fn handle_tool_calls(
             }
 
             if can_run_parallel && !execution_items.is_empty() {
+                // Show pre-execution indicators for file modification operations in the batch
+                for (_, name, args) in &execution_items {
+                    if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(
+                        name, args,
+                    ) {
+                        crate::agent::runloop::unified::tool_summary::render_file_operation_indicator(
+                            ctx.renderer,
+                            name,
+                            args,
+                        )?;
+                    }
+                }
+
                 let tool_names: Vec<_> = execution_items
                     .iter()
                     .map(|(_, name, _)| name.as_str())
@@ -582,6 +595,17 @@ pub(crate) async fn handle_tool_call(
             let signature_key = signature_key_for(tool_name, &args_val);
             let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
             *current_count += 1;
+
+            // Show pre-execution indicator for file modification operations
+            if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(
+                tool_name, &args_val,
+            ) {
+                crate::agent::runloop::unified::tool_summary::render_file_operation_indicator(
+                    ctx.renderer,
+                    tool_name,
+                    &args_val,
+                )?;
+            }
 
             let progress_reporter = ProgressReporter::new();
             let _spinner =
