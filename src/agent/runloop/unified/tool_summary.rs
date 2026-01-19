@@ -7,6 +7,120 @@ use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
+/// Pre-execution indicators for file modification operations
+/// These provide visual feedback before the actual edit/write/patch is applied
+pub(crate) fn render_file_operation_indicator(
+    renderer: &mut AnsiRenderer,
+    tool_name: &str,
+    args: &Value,
+) -> Result<()> {
+    let palette = ColorPalette::default();
+
+    // Only show indicators for file modification tools
+    let (indicator_icon, action_verb) = match tool_name {
+        name if name == tool_names::WRITE_FILE || name == tool_names::CREATE_FILE => {
+            (">", "Writing")
+        }
+        name if name == tool_names::EDIT_FILE => (">", "Editing"),
+        name if name == tool_names::APPLY_PATCH => (">", "Applying patch to"),
+        name if name == tool_names::SEARCH_REPLACE => (">", "Search/replace in"),
+        name if name == tool_names::DELETE_FILE => (">", "Deleting"),
+        name if name == tool_names::UNIFIED_FILE => {
+            // Determine action from unified_file parameters
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    if args.get("old_str").is_some() {
+                        Some("edit")
+                    } else if args.get("patch").is_some() {
+                        Some("patch")
+                    } else if args.get("content").is_some() {
+                        Some("write")
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or("read");
+
+            match action {
+                "write" | "create" => (">", "Writing"),
+                "edit" => (">", "Editing"),
+                "patch" | "apply_patch" => (">", "Applying patch to"),
+                "delete" => (">", "Deleting"),
+                _ => return Ok(()), // Skip indicator for read operations
+            }
+        }
+        _ => return Ok(()), // No indicator for non-file-modification tools
+    };
+
+    // Extract file path from arguments
+    let file_path = args
+        .get("path")
+        .or_else(|| args.get("file_path"))
+        .or_else(|| args.get("filename"))
+        .and_then(Value::as_str)
+        .map(|p| truncate_middle(p, 60))
+        .unwrap_or_else(|| "file".to_string());
+
+    let mut line = String::new();
+
+    // Icon
+    line.push_str(indicator_icon);
+    line.push(' ');
+
+    // Action verb in info color
+    line.push_str(&render_styled(action_verb, palette.info, None));
+    line.push(' ');
+
+    // File path in primary color (dim for subtlety)
+    line.push_str(&render_styled(&file_path, palette.muted, None));
+    line.push_str(&render_styled("...", palette.muted, None));
+
+    renderer.line(MessageStyle::Info, &line)?;
+
+    Ok(())
+}
+
+/// Check if a tool is a file modification tool that should show a pre-execution indicator
+pub(crate) fn is_file_modification_tool(tool_name: &str, args: &Value) -> bool {
+    match tool_name {
+        name if name == tool_names::WRITE_FILE
+            || name == tool_names::CREATE_FILE
+            || name == tool_names::EDIT_FILE
+            || name == tool_names::APPLY_PATCH
+            || name == tool_names::SEARCH_REPLACE
+            || name == tool_names::DELETE_FILE =>
+        {
+            true
+        }
+        name if name == tool_names::UNIFIED_FILE => {
+            // Check if unified_file is doing a write operation
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    if args.get("old_str").is_some() {
+                        Some("edit")
+                    } else if args.get("patch").is_some() {
+                        Some("patch")
+                    } else if args.get("content").is_some() {
+                        Some("write")
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or("read");
+
+            matches!(
+                action,
+                "write" | "create" | "edit" | "patch" | "apply_patch" | "delete"
+            )
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn render_tool_call_summary_with_status(
     renderer: &mut AnsiRenderer,
     tool_name: &str,
@@ -591,5 +705,53 @@ mod tests {
 
         let (description, _used) = result.unwrap();
         assert!(description.contains("…")); // Should be truncated
+    }
+
+    #[test]
+    fn test_is_file_modification_tool_write_file() {
+        let args = json!({"path": "/tmp/test.txt", "content": "hello"});
+        assert!(is_file_modification_tool("write_file", &args));
+    }
+
+    #[test]
+    fn test_is_file_modification_tool_edit_file() {
+        let args = json!({"path": "/tmp/test.txt", "old_str": "foo", "new_str": "bar"});
+        assert!(is_file_modification_tool("edit_file", &args));
+    }
+
+    #[test]
+    fn test_is_file_modification_tool_apply_patch() {
+        let args = json!({"path": "/tmp/test.txt", "patch": "diff content"});
+        assert!(is_file_modification_tool("apply_patch", &args));
+    }
+
+    #[test]
+    fn test_is_file_modification_tool_unified_file_write() {
+        let args = json!({"path": "/tmp/test.txt", "content": "hello"});
+        assert!(is_file_modification_tool("unified_file", &args));
+    }
+
+    #[test]
+    fn test_is_file_modification_tool_unified_file_edit() {
+        let args = json!({"path": "/tmp/test.txt", "old_str": "foo", "new_str": "bar"});
+        assert!(is_file_modification_tool("unified_file", &args));
+    }
+
+    #[test]
+    fn test_is_file_modification_tool_unified_file_read() {
+        let args = json!({"path": "/tmp/test.txt", "action": "read"});
+        assert!(!is_file_modification_tool("unified_file", &args));
+    }
+
+    #[test]
+    fn test_is_file_modification_tool_read_file() {
+        let args = json!({"path": "/tmp/test.txt"});
+        assert!(!is_file_modification_tool("read_file", &args));
+    }
+
+    #[test]
+    fn test_is_file_modification_tool_grep_file() {
+        let args = json!({"pattern": "test", "path": "/tmp"});
+        assert!(!is_file_modification_tool("grep_file", &args));
     }
 }

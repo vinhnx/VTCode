@@ -145,19 +145,18 @@ pub struct AnthropicPromptCacheSettings {
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    /// Default TTL in seconds (maps to "5m" in API).
-    /// Default: 300 seconds (5 minutes)
-    /// Note: Anthropic only supports "5m" or "1h" TTL formats.
-    #[serde(default = "default_anthropic_default_ttl")]
-    pub default_ttl_seconds: u64,
+    /// Default TTL in seconds for the first cache breakpoint (tools/system).
+    /// Anthropic only supports "5m" (300s) or "1h" (3600s) TTL formats.
+    /// Set to >= 3600 for 1-hour cache on tools and system prompts.
+    /// Default: 3600 (1 hour) - recommended for stable tool definitions
+    #[serde(default = "default_anthropic_tools_ttl")]
+    pub tools_ttl_seconds: u64,
 
-    /// Optional extended TTL in seconds (maps to "1h" in API if >= 3600).
-    /// Set to 3600 or higher to use 1-hour caching.
-    /// Set to None or < 3600 to use default 5-minute caching.
-    /// Default: Some(3600) for 1-hour caching
-    /// Note: Using 1h requires the "extended-cache-ttl-2025-04-11" beta header.
-    #[serde(default = "default_anthropic_extended_ttl")]
-    pub extended_ttl_seconds: Option<u64>,
+    /// TTL for subsequent cache breakpoints (messages).
+    /// Set to >= 3600 for 1-hour cache on messages.
+    /// Default: 300 (5 minutes) - recommended for frequently changing messages
+    #[serde(default = "default_anthropic_messages_ttl")]
+    pub messages_ttl_seconds: u64,
 
     /// Maximum number of cache breakpoints to use (max 4 per Anthropic spec).
     /// Default: 4
@@ -171,17 +170,30 @@ pub struct AnthropicPromptCacheSettings {
     /// Apply cache control to user messages exceeding threshold
     #[serde(default = "default_true")]
     pub cache_user_messages: bool,
+
+    /// Apply cache control to tool definitions by default
+    /// Default: true (tools are typically stable and benefit from longer caching)
+    #[serde(default = "default_true")]
+    pub cache_tool_definitions: bool,
+
+    /// Minimum message length (in characters) before applying cache control
+    /// to avoid caching very short messages that don't benefit from caching.
+    /// Default: 256 characters (~64 tokens)
+    #[serde(default = "default_min_message_length")]
+    pub min_message_length_for_cache: usize,
 }
 
 impl Default for AnthropicPromptCacheSettings {
     fn default() -> Self {
         Self {
             enabled: default_true(),
-            default_ttl_seconds: default_anthropic_default_ttl(),
-            extended_ttl_seconds: default_anthropic_extended_ttl(),
+            tools_ttl_seconds: default_anthropic_tools_ttl(),
+            messages_ttl_seconds: default_anthropic_messages_ttl(),
             max_breakpoints: default_anthropic_max_breakpoints(),
             cache_system_messages: default_true(),
             cache_user_messages: default_true(),
+            cache_tool_definitions: default_true(),
+            min_message_length_for_cache: default_min_message_length(),
         }
     }
 }
@@ -366,8 +378,21 @@ fn default_anthropic_extended_ttl() -> Option<u64> {
     Some(prompt_cache::ANTHROPIC_EXTENDED_TTL_SECONDS)
 }
 
+fn default_anthropic_tools_ttl() -> u64 {
+    prompt_cache::ANTHROPIC_TOOLS_TTL_SECONDS
+}
+
+fn default_anthropic_messages_ttl() -> u64 {
+    prompt_cache::ANTHROPIC_MESSAGES_TTL_SECONDS
+}
+
 fn default_anthropic_max_breakpoints() -> u8 {
     prompt_cache::ANTHROPIC_MAX_BREAKPOINTS
+}
+
+#[allow(dead_code)]
+fn default_min_message_length() -> usize {
+    prompt_cache::ANTHROPIC_MIN_MESSAGE_LENGTH_FOR_CACHE
 }
 
 fn default_gemini_min_prefix_tokens() -> u32 {

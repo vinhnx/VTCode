@@ -38,6 +38,48 @@ pub struct Usage {
     pub cache_read_tokens: Option<usize>,
 }
 
+impl Usage {
+    #[inline]
+    pub fn cache_hit_rate(&self) -> Option<f64> {
+        let read = self.cache_read_tokens? as f64;
+        let creation = self.cache_creation_tokens? as f64;
+        let total = read + creation;
+        if total > 0.0 {
+            Some((read / total) * 100.0)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn is_cache_hit(&self) -> Option<bool> {
+        Some(self.cache_read_tokens? > 0)
+    }
+
+    #[inline]
+    pub fn is_cache_miss(&self) -> Option<bool> {
+        Some(self.cache_creation_tokens? > 0 && self.cache_read_tokens? == 0)
+    }
+
+    #[inline]
+    pub fn total_cache_tokens(&self) -> usize {
+        let read = self.cache_read_tokens.unwrap_or(0);
+        let creation = self.cache_creation_tokens.unwrap_or(0);
+        read + creation
+    }
+
+    #[inline]
+    pub fn cache_savings_ratio(&self) -> Option<f64> {
+        let read = self.cache_read_tokens? as f64;
+        let prompt = self.prompt_tokens as f64;
+        if prompt > 0.0 {
+            Some(read / prompt)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LLMErrorMetadata {
     pub provider: Option<String>,

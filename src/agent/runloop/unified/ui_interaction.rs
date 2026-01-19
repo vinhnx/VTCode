@@ -820,6 +820,7 @@ mod tests {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            effort: None,
             verbosity: None,
             top_p: None,
             top_k: None,

@@ -242,6 +242,32 @@ Understanding these patterns requires reading multiple files across the codebase
 -   **Design**: These patterns work with all providers (Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)
 -   **System Prompts**: See `vtcode-core/src/prompts/system.rs` for Codex-aligned prompts (v5.2)
 
+### Context Window Management
+
+-   **Location**: `src/agent/runloop/unified/context_manager.rs`, `vtcode-config/src/constants.rs`
+-   **Purpose**: Proactive token budget tracking based on Anthropic context window documentation
+-   **Key Components**:
+    -   `ContextManager`: Tracks token usage and manages context limits
+    -   `TokenBudgetStatus`: Enum (Normal, Warning, High, Critical)
+    -   `IncrementalSystemPrompt`: Injects context awareness for supported models
+-   **Context Window Sizes**:
+    -   Standard: 200K tokens (all models)
+    -   Enterprise: 500K tokens (Claude.ai Enterprise)
+    -   Extended: 1M tokens (beta, Claude Sonnet 4/4.5, tier 4 only)
+-   **Token Budget Thresholds**:
+    -   70% (Warning): Start preparing for context handoff
+    -   85% (High): Active context management needed
+    -   90% (Critical): Force context handoff or summary
+-   **Context Awareness** (Claude 4.5+):
+    -   Models track remaining token budget throughout conversation
+    -   System prompt includes `<budget:token_budget>` and `<system_warning>` tags
+    -   Supported models: Claude Sonnet 4.5, Claude Haiku 4.5
+-   **Extended Thinking**:
+    -   Thinking tokens are stripped from subsequent turns automatically
+    -   Minimum budget: 1,024 tokens; Recommended: 10,000+ tokens
+    -   When using with tool use, thinking blocks must be preserved until cycle completes
+-   **Documentation**: `docs/CONTEXT_WINDOWS.md`
+
 ## Communication Style
 
 ### Response Guidelines
