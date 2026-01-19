@@ -66,9 +66,9 @@
     "code_intelligence": "prompt",
     "agent_info": "prompt",
     "exec_pty_cmd": "prompt",
-    "exec": "allow",
+    "exec": "prompt",
     "shell": "prompt",
-    "unified_exec": "allow",
+    "unified_exec": "prompt",
     "list_pty_sessions": "allow",
     "read_pty_session": "allow",
     "close_pty_session": "prompt",
@@ -80,8 +80,8 @@
     "move_file": "prompt",
     "search": "prompt",
     "send_pty_input": "prompt",
-    "unified_file": "allow",
-    "unified_search": "allow",
+    "unified_file": "prompt",
+    "unified_search": "prompt",
     "ask_user_question": "prompt",
     "enter_plan": "prompt",
     "enter_plan_mode": "prompt",
@@ -97,7 +97,7 @@
     "git_status": "allow",
     "git_diff": "allow",
     "git_log": "allow",
-    "": "allow"
+    "list_skills": "allow"
   },
   "constraints": {},
   "mcp": {

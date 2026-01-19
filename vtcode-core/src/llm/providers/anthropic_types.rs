@@ -277,3 +277,23 @@ pub enum AnthropicOutputConfig {
     #[serde(rename = "effort")]
     Effort { effort: String },
 }
+
+/// Request body for Anthropic's count_tokens endpoint
+/// https://docs.anthropic.com/en/api/messages-count-tokens
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CountTokensRequest {
+    pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system: Option<Value>,
+    pub messages: Vec<AnthropicMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<AnthropicTool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<ThinkingConfig>,
+}
+
+/// Response from Anthropic's count_tokens endpoint
+#[derive(Debug, Deserialize)]
+pub struct CountTokensResponse {
+    pub input_tokens: u32,
+}
