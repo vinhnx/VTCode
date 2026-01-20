@@ -462,13 +462,12 @@ impl StreamingReasoningState {
 
         // Only render final reasoning if it wasn't already emitted during streaming
         // This prevents duplicate reasoning output
-        if !reasoning_already_emitted {
-            if let Some(reasoning_text) = final_reasoning
+        if !reasoning_already_emitted
+            && let Some(reasoning_text) = final_reasoning
                 && !reasoning_text.trim().is_empty()
             {
                 renderer.line(MessageStyle::Reasoning, reasoning_text)?;
             }
-        }
         Ok(())
     }
 
