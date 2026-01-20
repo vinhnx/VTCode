@@ -123,15 +123,14 @@ impl IncrementalSystemPrompt {
         prompt.push_str(base_system_prompt);
 
         // Inject context budget for models with context awareness (Claude 4.5+)
-        if context.supports_context_awareness {
-            if let Some(context_size) = context.context_window_size {
+        if context.supports_context_awareness
+            && let Some(context_size) = context.context_window_size {
                 let _ = writeln!(
                     prompt,
                     "\n<budget:token_budget>{}</budget:token_budget>",
                     context_size
                 );
             }
-        }
 
         // ...
 
@@ -169,8 +168,8 @@ impl IncrementalSystemPrompt {
             let _ = writeln!(prompt, "- full_auto: {}", context.full_auto);
 
             // Add system warning for context awareness models with token tracking
-            if context.supports_context_awareness {
-                if let (Some(context_size), Some(used)) =
+            if context.supports_context_awareness
+                && let (Some(context_size), Some(used)) =
                     (context.context_window_size, context.current_token_usage)
                 {
                     let remaining = context_size.saturating_sub(used);
@@ -190,7 +189,6 @@ impl IncrementalSystemPrompt {
                         );
                     }
                 }
-            }
 
             if context.full_auto {
                 let _ = writeln!(
