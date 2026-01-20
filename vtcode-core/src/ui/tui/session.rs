@@ -914,20 +914,24 @@ mod tests {
         assert_eq!(session.input_manager.history().len(), 2);
         assert!(session.input_manager.content().is_empty());
 
-        let up_latest = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
-        assert!(up_latest.is_none());
+        // Plain Up arrow navigates to most recent history entry
+        let up_latest = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert!(matches!(up_latest, Some(InlineEvent::HistoryPrevious)));
         assert_eq!(session.input_manager.content(), "second");
 
-        let up_previous = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
-        assert!(up_previous.is_none());
+        // Another Up navigates to older entry
+        let up_previous = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert!(matches!(up_previous, Some(InlineEvent::HistoryPrevious)));
         assert_eq!(session.input_manager.content(), "first message");
 
-        let down_forward = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
-        assert!(down_forward.is_none());
+        // Down navigates forward in history
+        let down_forward = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert!(matches!(down_forward, Some(InlineEvent::HistoryNext)));
         assert_eq!(session.input_manager.content(), "second");
 
-        let down_restore = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
-        assert!(down_restore.is_none());
+        // Down again restores draft (empty input)
+        let down_restore = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert!(matches!(down_restore, Some(InlineEvent::HistoryNext)));
         assert!(session.input_manager.content().is_empty());
         assert!(session.input_manager.history_index().is_none());
     }

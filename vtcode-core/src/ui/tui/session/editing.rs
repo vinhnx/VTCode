@@ -340,24 +340,47 @@ impl Session {
     /// Remember submitted input in history
     pub(super) fn remember_submitted_input(&mut self, submitted: &str) {
         self.input_manager.add_to_history(submitted.to_owned());
+        tracing::debug!(
+            "Added to history: {:?}, total: {}",
+            submitted,
+            self.input_manager.history().len()
+        );
     }
 
     /// Navigate to previous history entry
     pub(super) fn navigate_history_previous(&mut self) -> bool {
+        let history_len = self.input_manager.history().len();
+        tracing::debug!(
+            "Navigate history previous, history_len: {}, current_index: {:?}",
+            history_len,
+            self.input_manager.history_index()
+        );
         if let Some(previous) = self.input_manager.go_to_previous_history() {
-            self.input_manager.set_content(previous);
+            tracing::debug!("Navigated to previous: {:?}", previous);
+            self.input_manager.set_content_from_history(previous);
+            crate::ui::tui::session::slash::update_slash_suggestions(self);
             true
         } else {
+            tracing::debug!("No previous history entry");
             false
         }
     }
 
     /// Navigate to next history entry
     pub(super) fn navigate_history_next(&mut self) -> bool {
+        let history_len = self.input_manager.history().len();
+        tracing::debug!(
+            "Navigate history next, history_len: {}, current_index: {:?}",
+            history_len,
+            self.input_manager.history_index()
+        );
         if let Some(next) = self.input_manager.go_to_next_history() {
-            self.input_manager.set_content(next);
+            tracing::debug!("Navigated to next: {:?}", next);
+            self.input_manager.set_content_from_history(next);
+            crate::ui::tui::session::slash::update_slash_suggestions(self);
             true
         } else {
+            tracing::debug!("No next history entry");
             false
         }
     }
