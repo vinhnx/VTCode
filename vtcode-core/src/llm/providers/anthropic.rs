@@ -1002,8 +1002,18 @@ impl AnthropicProvider {
             // New "thinking" parameter for models supporting extended thinking
             // Supported models: Claude 4, Claude 4.5, Claude 3.7 Sonnet
             // See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
+
+            // Check for MAX_THINKING_TOKENS environment variable (hidden unlock for 2x budget)
+            // Set to 63999 to get 63,999 thinking tokens on 64K output models
+            // Reference: https://decodeclaude.com/ultrathink-deprecated/
+            let max_thinking_tokens: Option<u32> = env::var(env_vars::MAX_THINKING_TOKENS)
+                .ok()
+                .and_then(|v| v.parse().ok());
+
             let budget = if let Some(explicit_budget) = request.thinking_budget {
                 explicit_budget
+            } else if let Some(env_budget) = max_thinking_tokens {
+                env_budget
             } else if let Some(effort) = request.reasoning_effort {
                 match effort {
                     ReasoningEffortLevel::None => 0,
