@@ -319,14 +319,10 @@ impl Session {
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
 
-        // Build scroll indicator if enabled
-        let scroll_indicator = if ui::SCROLL_INDICATOR_ENABLED {
-            Some(self.build_scroll_indicator())
-        } else {
-            None
-        };
+        // Build history position indicator if navigating history
+        let history_indicator = self.build_history_indicator();
 
-        if left.is_none() && right.is_none() && scroll_indicator.is_none() {
+        if left.is_none() && right.is_none() && history_indicator.is_none() {
             return None;
         }
 
@@ -338,10 +334,10 @@ impl Session {
             spans.extend(self.create_git_status_spans(left_value, dim_style));
         }
 
-        // Build right side spans (scroll indicator + optional right content)
+        // Build right side spans (history indicator + optional right content)
         let mut right_spans: Vec<Span<'static>> = Vec::new();
-        if let Some(scroll) = &scroll_indicator {
-            right_spans.push(Span::styled(scroll.clone(), dim_style));
+        if let Some(history) = &history_indicator {
+            right_spans.push(Span::styled(history.clone(), dim_style));
         }
         if let Some(right_value) = &right {
             if !right_spans.is_empty() {
@@ -373,10 +369,11 @@ impl Session {
         Some(Line::from(spans))
     }
 
-    /// Build scroll indicator string with percentage
-    fn build_scroll_indicator(&self) -> String {
-        let percent = self.scroll_manager.progress_percent();
-        format!("{} {:>3}%", ui::SCROLL_INDICATOR_FORMAT, percent)
+    /// Build history position indicator string
+    fn build_history_indicator(&self) -> Option<String> {
+        self.history_position().map(|(current, total)| {
+            format!("⏱ {}/{}", current, total)
+        })
     }
 
     #[allow(dead_code)]
