@@ -329,10 +329,10 @@ mod tests {
 
         let lean_prompt = generate_skills_prompt_with_mode(&skills, SkillsRenderMode::Lean);
 
-        // Lean mode should include name, description, and path
+        // Lean mode should include name, description, and directory name
         assert!(lean_prompt.contains("test-skill"));
         assert!(lean_prompt.contains("Test skill description"));
-        assert!(lean_prompt.contains("/tmp/test-skill"));
+        assert!(lean_prompt.contains("(dir: test-skill"));
 
         // Lean mode should include usage rules
         assert!(lean_prompt.contains("Usage Rules"));

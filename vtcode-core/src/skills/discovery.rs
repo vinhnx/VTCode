@@ -593,7 +593,7 @@ mod tests {
         let config = DiscoveryConfig::default();
         assert!(!config.skill_paths.is_empty());
         assert!(!config.tool_paths.is_empty());
-        assert!(config.auto_discover_system_tools);
+        assert!(!config.auto_discover_system_tools); // Disabled by default for security
     }
 
     #[tokio::test]
