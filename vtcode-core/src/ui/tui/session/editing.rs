@@ -342,17 +342,32 @@ impl Session {
         self.input_manager.add_to_history(submitted.to_owned());
     }
 
-    /// Navigate to previous history entry (disabled to prevent cursor flickering)
-    #[allow(dead_code)]
+    /// Navigate to previous history entry
     pub(super) fn navigate_history_previous(&mut self) -> bool {
-        // History navigation disabled to prevent cursor flickering
-        false
+        if let Some(previous) = self.input_manager.go_to_previous_history() {
+            self.input_manager.set_content(previous);
+            true
+        } else {
+            false
+        }
     }
 
-    /// Navigate to next history entry (disabled to prevent cursor flickering)
-    #[allow(dead_code)]
+    /// Navigate to next history entry
     pub(super) fn navigate_history_next(&mut self) -> bool {
-        // History navigation disabled to prevent cursor flickering
-        false
+        if let Some(next) = self.input_manager.go_to_next_history() {
+            self.input_manager.set_content(next);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns the current history position for status bar display
+    /// Returns (current_index, total_entries) or None if not navigating history
+    pub fn history_position(&self) -> Option<(usize, usize)> {
+        self.input_manager.history_index().map(|idx| {
+            let total = self.input_manager.history().len();
+            (total - idx, total)
+        })
     }
 }

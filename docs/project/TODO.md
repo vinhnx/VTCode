@@ -1,6 +1,3 @@
-change up/down arrow keyboard to switch between user's messages history.
-
----
 
 build and improve queue messages ui and handling. ref /Users/vinhnguyenxuan/Documents/vtcode-resources/idea/G_EtsqnW4AAwWi1.png
 

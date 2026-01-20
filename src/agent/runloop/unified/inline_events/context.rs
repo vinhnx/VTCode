@@ -102,10 +102,10 @@ impl<'a> InlineEventContext<'a> {
                 self.input_processor().submit("/edit".to_string())
             }
 
-            InlineEvent::ScrollLineUp
-            | InlineEvent::ScrollLineDown
-            | InlineEvent::ScrollPageUp
+            InlineEvent::ScrollPageUp
             | InlineEvent::ScrollPageDown
+            | InlineEvent::HistoryPrevious
+            | InlineEvent::HistoryNext
             | InlineEvent::FileSelected(_) => self.input_processor().passive(),
             InlineEvent::ToggleMode => {
                 // Shift+Tab: Cycle editing modes via /mode command
