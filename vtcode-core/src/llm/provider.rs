@@ -1696,6 +1696,11 @@ pub trait LLMProvider: Send + Sync {
         false
     }
 
+    /// Whether the provider supports vision (image analysis) for given model
+    fn supports_vision(&self, _model: &str) -> bool {
+        false
+    }
+
     /// Get the effective context window size for a model
     fn effective_context_size(&self, _model: &str) -> usize {
         // Default to 128k context window (common baseline)
