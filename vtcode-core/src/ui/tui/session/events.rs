@@ -117,14 +117,17 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     }
 
     if session.handle_file_palette_key(&key) {
+        tracing::debug!("Key {:?} handled by file_palette", key.code);
         return None;
     }
 
     if session.handle_prompt_palette_key(&key) {
+        tracing::debug!("Key {:?} handled by prompt_palette", key.code);
         return None;
     }
 
     if handle_config_palette_key(session, &key) {
+        tracing::debug!("Key {:?} handled by config_palette", key.code);
         return None;
     }
 
@@ -135,6 +138,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         has_alt,
         has_command,
     ) {
+        tracing::debug!("Key {:?} handled by slash_navigation", key.code);
         return None;
     }
 
@@ -247,6 +251,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::ScrollPageDown)
         }
         KeyCode::Up => {
+            tracing::debug!("KeyCode::Up received, input_enabled: {}", session.input_enabled);
             if session.navigate_history_previous() {
                 session.mark_dirty();
                 Some(InlineEvent::HistoryPrevious)
@@ -255,6 +260,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
         }
         KeyCode::Down => {
+            tracing::debug!("KeyCode::Down received, input_enabled: {}", session.input_enabled);
             if session.navigate_history_next() {
                 session.mark_dirty();
                 Some(InlineEvent::HistoryNext)

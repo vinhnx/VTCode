@@ -40,19 +40,14 @@ struct ScrollAccumulator {
 impl ScrollAccumulator {
     /// Try to accumulate a scroll event. Returns true if the event was a scroll event.
     /// IMPORTANT: Only call this when no modal/palette is active, otherwise navigation breaks.
+    /// NOTE: Up/Down arrow keys are reserved for input history navigation, not scroll.
     fn try_accumulate(&mut self, event: &CrosstermEvent) -> bool {
         if let CrosstermEvent::Key(key) = event
             && matches!(key.kind, ratatui::crossterm::event::KeyEventKind::Press)
         {
             match key.code {
-                ratatui::crossterm::event::KeyCode::Up => {
-                    self.line_delta -= 1;
-                    return true;
-                }
-                ratatui::crossterm::event::KeyCode::Down => {
-                    self.line_delta += 1;
-                    return true;
-                }
+                // Up/Down arrow keys are reserved for input history navigation
+                // Only PageUp/PageDown are used for scroll coalescing
                 ratatui::crossterm::event::KeyCode::PageUp => {
                     self.page_delta -= 1;
                     return true;
