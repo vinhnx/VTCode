@@ -485,14 +485,14 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
 
 /// Generate comprehensive skills index including all types of skills
 pub async fn generate_comprehensive_skills_index(
-    workspace: &PathBuf,
+    workspace: &Path,
 ) -> Result<std::path::PathBuf> {
     use std::fmt::Write;
     use vtcode_core::exec::skill_manager::SkillManager;
     use vtcode_core::skills::loader::EnhancedSkillLoader;
 
     let skill_manager = SkillManager::new(workspace);
-    let mut loader = EnhancedSkillLoader::new(workspace.clone());
+    let mut loader = EnhancedSkillLoader::new(workspace.to_path_buf());
 
     // Discover all skills using EnhancedSkillLoader
     let discovery_result = loader.discover_all_skills().await?;

@@ -7,8 +7,6 @@ mod first_run;
 
 use crate::tools::RipgrepStatus;
 
-/// Truncate error messages to fit within display width
-
 /// Validate custom session ID suffix
 fn validate_session_id_suffix(suffix: &str) -> Result<()> {
     if suffix.is_empty() {
