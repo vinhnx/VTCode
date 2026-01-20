@@ -16,12 +16,14 @@ use vtcode_core::ui::tui::{
 
 use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
 
+#[allow(dead_code)]
 pub struct RecoveryPromptBuilder {
     pub title: String,
     pub summary: String,
     pub recommendations: Vec<RecoveryOption>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RecoveryOption {
     pub id: String,
@@ -31,6 +33,7 @@ pub struct RecoveryOption {
     pub action: RecoveryAction,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum RecoveryAction {
     RetryTool { tool_name: String },
@@ -44,6 +47,7 @@ pub enum RecoveryAction {
     Continue,
 }
 
+#[allow(dead_code)]
 impl RecoveryPromptBuilder {
     pub fn new(title: String) -> Self {
         Self {
@@ -107,6 +111,7 @@ impl RecoveryPromptBuilder {
     }
 }
 
+#[allow(dead_code)]
 pub async fn execute_recovery_prompt(
     handle: &InlineHandle,
     session: &mut InlineSession,
@@ -290,9 +295,10 @@ pub async fn execute_recovery_prompt(
     }
 }
 
+#[allow(dead_code)]
 pub fn build_recovery_prompt_from_diagnostics(
     diagnostics: &RecoveryDiagnostics,
-    circuit_diagnostics: &[ToolCircuitDiagnostics],
+    _circuit_diagnostics: &[ToolCircuitDiagnostics],
 ) -> RecoveryPromptBuilder {
     let mut builder = RecoveryPromptBuilder::new("Circuit Breaker Activated".to_string());
 
@@ -383,6 +389,7 @@ pub fn build_recovery_prompt_from_diagnostics(
     builder
 }
 
+#[allow(dead_code)]
 fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
     if diagnostics.recent_errors.is_empty() {
         return "No recent errors recorded.".to_string();
@@ -418,6 +425,7 @@ fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
     summary
 }
 
+#[allow(dead_code)]
 pub fn parse_recovery_response(response: &Value) -> Option<RecoveryAction> {
     let choice_id = response.get("choice_id")?.as_str()?;
     let tab_id = response

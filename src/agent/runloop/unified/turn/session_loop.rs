@@ -2,8 +2,6 @@ use anyhow::Result;
 use ratatui::crossterm::terminal::disable_raw_mode;
 use std::collections::VecDeque;
 use std::io::Write;
-use std::sync::Arc;
-use std::sync::RwLock as StdRwLock;
 
 use std::time::Instant;
 use tokio_util::sync::CancellationToken;

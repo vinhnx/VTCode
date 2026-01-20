@@ -49,9 +49,6 @@ use crate::hooks::lifecycle::LifecycleHookEngine;
 use super::utils::{render_hook_messages, safe_force_redraw};
 use crate::agent::runloop::unified::display::ensure_turn_bottom_gap;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
-use crate::agent::runloop::unified::turn::recovery_flow::{
-    RecoveryAction, build_recovery_prompt_from_diagnostics, parse_recovery_response,
-};
 
 fn normalize_signature_args(tool_name: &str, args: &serde_json::Value) -> serde_json::Value {
     let mut normalized = match args.as_object() {
@@ -102,6 +99,7 @@ fn signature_key_for(tool_name: &str, args: &serde_json::Value) -> String {
     format!("{}:{}", tool_name, args_str)
 }
 
+#[allow(dead_code)]
 fn classify_error_type(error_message: &str) -> vtcode_core::core::agent::error_recovery::ErrorType {
     let error_lower = error_message.to_lowercase();
     if error_lower.contains("timeout") || error_lower.contains("timed out") {

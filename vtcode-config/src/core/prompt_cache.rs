@@ -370,10 +370,12 @@ fn default_openai_idle_expiration() -> u64 {
     prompt_cache::OPENAI_IDLE_EXPIRATION_SECONDS
 }
 
+#[allow(dead_code)]
 fn default_anthropic_default_ttl() -> u64 {
     prompt_cache::ANTHROPIC_DEFAULT_TTL_SECONDS
 }
 
+#[allow(dead_code)]
 fn default_anthropic_extended_ttl() -> Option<u64> {
     Some(prompt_cache::ANTHROPIC_EXTENDED_TTL_SECONDS)
 }

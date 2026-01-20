@@ -2,7 +2,6 @@ use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
-use crate::ui::tui::types::InlineListSelection;
 
 #[allow(dead_code)]
 pub(super) fn handle_event(

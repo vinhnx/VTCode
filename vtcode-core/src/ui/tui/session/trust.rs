@@ -1,17 +1,20 @@
 use crate::ui::tui::types::TrustMode;
 use std::collections::{HashMap, HashSet};
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct TrustSetting {
     pub mode: TrustMode,
     pub updated_at: String,
 }
 
+#[allow(dead_code)]
 pub struct TrustManager {
     settings: HashMap<String, TrustSetting>,
     session_cache: HashSet<String>,
 }
 
+#[allow(dead_code)]
 impl TrustManager {
     pub fn new() -> Self {
         Self {
