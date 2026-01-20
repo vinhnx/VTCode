@@ -32,6 +32,7 @@
 
 use anyhow::{Context, Result};
 use base64::Engine;
+use reqwest::Client;
 use std::path::Path;
 
 /// Represents the data from an image file ready for LLM consumption
@@ -48,6 +49,138 @@ pub struct ImageData {
 
     /// File size in bytes
     pub size: u64,
+}
+
+/// Reads an image from a URL and converts it to base64 format
+///
+/// This function downloads an image from a URL and converts it to base64 format
+/// for use with LLM providers that support image input.
+///
+/// # Arguments
+///
+/// * `url` - URL of the image to download
+///
+/// # Returns
+///
+/// * `ImageData` - Contains base64 data, MIME type, and file metadata
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The URL is invalid
+/// - The HTTP request fails
+/// - The response is not an image
+/// - The image is too large (greater than 20MB)
+pub async fn read_image_from_url(url: &str) -> Result<ImageData> {
+    // Validate URL
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err(anyhow::anyhow!("Invalid URL: {}", url));
+    }
+
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .context("Failed to create HTTP client")?;
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .with_context(|| format!("Failed to fetch image from URL: {}", url))?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "HTTP error when fetching image: {} (status: {})",
+            url,
+            response.status()
+        ));
+    }
+
+    let content_length = response.content_length().unwrap_or(0);
+    if content_length > 20 * 1024 * 1024 {
+        return Err(anyhow::anyhow!(
+            "Image from URL too large: {} bytes (max 20MB)",
+            content_length
+        ));
+    }
+
+    let mime_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|ct| detect_mime_type_from_content_type(ct));
+
+    let file_contents = response
+        .bytes()
+        .await
+        .with_context(|| format!("Failed to read response body from: {}", url))?
+        .to_vec();
+
+    let mime_type = mime_type.unwrap_or_else(|| detect_mime_type_from_data(&file_contents));
+
+    let base64_data = base64::engine::general_purpose::STANDARD.encode(&file_contents);
+
+    Ok(ImageData {
+        base64_data,
+        mime_type,
+        file_path: url.to_string(),
+        size: file_contents.len() as u64,
+    })
+}
+
+/// Detects MIME type from Content-Type header
+fn detect_mime_type_from_content_type(content_type: &str) -> Option<String> {
+    let content_type = content_type.to_lowercase();
+    if content_type.starts_with("image/png") {
+        Some("image/png".to_string())
+    } else if content_type.starts_with("image/jpeg") || content_type.starts_with("image/jpg") {
+        Some("image/jpeg".to_string())
+    } else if content_type.starts_with("image/gif") {
+        Some("image/gif".to_string())
+    } else if content_type.starts_with("image/webp") {
+        Some("image/webp".to_string())
+    } else if content_type.starts_with("image/bmp") {
+        Some("image/bmp".to_string())
+    } else if content_type.starts_with("image/tiff") || content_type.starts_with("image/tif") {
+        Some("image/tiff".to_string())
+    } else if content_type.starts_with("image/svg") {
+        Some("image/svg+xml".to_string())
+    } else {
+        None
+    }
+}
+
+/// Detects MIME type from file data (magic bytes)
+fn detect_mime_type_from_data(data: &[u8]) -> String {
+    // JPEG magic bytes: starts with FF D8
+    if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
+        return "image/jpeg".to_string();
+    }
+
+    // Need at least 8 bytes for other formats
+    if data.len() < 8 {
+        return "image/png".to_string();
+    }
+
+    match &data[..8] {
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] => "image/png".to_string(),
+        [0x47, 0x49, 0x46, 0x38, _, _, _, _] => {
+            if data.len() >= 12 && &data[8..12] == b"WEBP" {
+                "image/webp".to_string()
+            } else {
+                "image/gif".to_string()
+            }
+        }
+        [0x52, 0x49, 0x46, 0x46, _, _, _, _] => {
+            if data.len() >= 12 && &data[8..12] == b"WEBP" {
+                "image/webp".to_string()
+            } else {
+                "image/png".to_string()
+            }
+        }
+        [0x42, 0x4D, _, _] => "image/bmp".to_string(),
+        _ => "image/png".to_string(),
+    }
 }
 
 /// Reads an image file from the local filesystem and converts it to base64 format
@@ -258,6 +391,52 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("Path traversal detected")
+        );
+    }
+
+    #[test]
+    fn test_detect_mime_type_from_content_type() {
+        use super::detect_mime_type_from_content_type;
+
+        assert_eq!(
+            detect_mime_type_from_content_type("image/png"),
+            Some("image/png".to_string())
+        );
+        assert_eq!(
+            detect_mime_type_from_content_type("image/jpeg"),
+            Some("image/jpeg".to_string())
+        );
+        assert_eq!(
+            detect_mime_type_from_content_type("image/gif"),
+            Some("image/gif".to_string())
+        );
+        assert_eq!(
+            detect_mime_type_from_content_type("image/webp"),
+            Some("image/webp".to_string())
+        );
+        assert_eq!(detect_mime_type_from_content_type("text/html"), None);
+    }
+
+    #[test]
+    fn test_detect_mime_type_from_data() {
+        use super::detect_mime_type_from_data;
+
+        let png_magic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        assert_eq!(
+            detect_mime_type_from_data(&png_magic),
+            "image/png".to_string()
+        );
+
+        let jpg_magic = [0xFF, 0xD8, 0xFF, 0xE0];
+        assert_eq!(
+            detect_mime_type_from_data(&jpg_magic),
+            "image/jpeg".to_string()
+        );
+
+        let gif_magic = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x00, 0x00];
+        assert_eq!(
+            detect_mime_type_from_data(&gif_magic),
+            "image/gif".to_string()
         );
     }
 }

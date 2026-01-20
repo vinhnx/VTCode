@@ -1817,6 +1817,29 @@ impl LLMProvider for AnthropicProvider {
             || requested.contains("claude-3-5-sonnet")
     }
 
+    fn supports_vision(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+
+        // Vision is supported by Claude 3, 4, and 4.5 models
+        // This includes all Claude Sonnet, Haiku, and Opus variants
+        requested.contains("claude-3")
+            || requested.contains("claude-4")
+            || requested == models::anthropic::CLAUDE_SONNET_4_5
+            || requested == models::anthropic::CLAUDE_SONNET_4_5_20250929
+            || requested == models::anthropic::CLAUDE_OPUS_4_5
+            || requested == models::anthropic::CLAUDE_OPUS_4_5_20251101
+            || requested == models::anthropic::CLAUDE_HAIKU_4_5
+            || requested == models::anthropic::CLAUDE_HAIKU_4_5_20251001
+            || requested == models::anthropic::CLAUDE_SONNET_4_0
+            || requested == models::anthropic::CLAUDE_SONNET_4_20250514
+            || requested == models::anthropic::CLAUDE_OPUS_4_0
+            || requested == models::anthropic::CLAUDE_OPUS_4_20250514
+    }
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let include_tool_search = self.requires_tool_search_beta(&request);
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
