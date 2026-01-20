@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -432,7 +432,7 @@ pub async fn handle_skills_create(path: &PathBuf) -> Result<()> {
     actual_handler(path).await
 }
 
-pub async fn handle_skills_validate(path: &PathBuf) -> Result<()> {
+pub async fn handle_skills_validate(path: &Path) -> Result<()> {
     // Import and delegate to the actual implementation in the skills module
     use crate::cli::skills::handle_skills_validate as actual_handler;
     actual_handler(path).await
