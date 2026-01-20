@@ -24,6 +24,7 @@ pub(crate) struct SessionStats {
     pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
     /// Error recovery state for circuit breaker recovery flow
+    #[allow(dead_code)]
     pub error_recovery: Arc<RwLock<ErrorRecoveryState>>,
 }
 

@@ -22,6 +22,7 @@ struct ContextStats {
 }
 
 /// Token budget status for proactive context management
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenBudgetStatus {
     /// Below 70% - normal operation
@@ -142,6 +143,7 @@ impl ContextManager {
     }
 
     /// Get token budget status and guidance together
+    #[allow(dead_code)]
     pub(crate) fn get_token_budget_status_and_guidance(
         &self,
         context_window_size: usize,
@@ -177,6 +179,7 @@ impl ContextManager {
     /// - 70%: Warning - prepare for handoff
     /// - 85%: High - active management needed
     /// - 90%: Critical - immediate action required
+    #[allow(dead_code)]
     pub(crate) fn get_token_budget_status(&self, context_window_size: usize) -> TokenBudgetStatus {
         if context_window_size == 0 {
             return TokenBudgetStatus::Normal;
@@ -196,6 +199,7 @@ impl ContextManager {
     }
 
     /// Get current token usage
+    #[allow(dead_code)]
     pub(crate) fn current_token_usage(&self) -> usize {
         self.cached_stats.total_token_usage
     }
