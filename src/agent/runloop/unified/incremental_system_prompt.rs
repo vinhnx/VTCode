@@ -124,13 +124,14 @@ impl IncrementalSystemPrompt {
 
         // Inject context budget for models with context awareness (Claude 4.5+)
         if context.supports_context_awareness
-            && let Some(context_size) = context.context_window_size {
-                let _ = writeln!(
-                    prompt,
-                    "\n<budget:token_budget>{}</budget:token_budget>",
-                    context_size
-                );
-            }
+            && let Some(context_size) = context.context_window_size
+        {
+            let _ = writeln!(
+                prompt,
+                "\n<budget:token_budget>{}</budget:token_budget>",
+                context_size
+            );
+        }
 
         // ...
 
@@ -171,24 +172,33 @@ impl IncrementalSystemPrompt {
             if context.supports_context_awareness
                 && let (Some(context_size), Some(used)) =
                     (context.context_window_size, context.current_token_usage)
-                {
-                    let remaining = context_size.saturating_sub(used);
-                    let guidance = context.token_budget_guidance;
+            {
+                let remaining = context_size.saturating_sub(used);
+                let guidance = context.token_budget_guidance;
 
-                    if guidance.is_empty() {
-                        let _ = writeln!(
-                            prompt,
-                            "<system_warning>Token usage: {}/{}; {} remaining</system_warning>",
-                            used, context_size, remaining
-                        );
+                // Context Anxiety Counter-prompting
+                // Reassure the model to prevent rushing when approaching limits
+                let anxiety_reassurance =
+                    if remaining < context_size / 2 && remaining > context_size / 4 {
+                        " You have sufficient context—focus on quality over speed."
                     } else {
-                        let _ = writeln!(
-                            prompt,
-                            "<system_warning>Token usage: {}/{}; {} remaining. {}</system_warning>",
-                            used, context_size, remaining, guidance
-                        );
-                    }
+                        ""
+                    };
+
+                if guidance.is_empty() {
+                    let _ = writeln!(
+                        prompt,
+                        "<system_warning>Token usage: {}/{}; {} remaining{}</system_warning>",
+                        used, context_size, remaining, anxiety_reassurance
+                    );
+                } else {
+                    let _ = writeln!(
+                        prompt,
+                        "<system_warning>Token usage: {}/{}; {} remaining. {}{}</system_warning>",
+                        used, context_size, remaining, guidance, anxiety_reassurance
+                    );
                 }
+            }
 
             if context.full_auto {
                 let _ = writeln!(

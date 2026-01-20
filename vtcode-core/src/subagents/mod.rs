@@ -62,6 +62,25 @@
 //! Your system prompt here...
 //! ```
 //!
+//! # Skill Library Evolution Pattern
+//!
+//! The skill library implements the Skill Library Evolution pattern from
+//! The Agentic AI Handbook. This enables agents to persist and reuse
+//! working solutions across sessions:
+//!
+//! 1. **Discovery**: Agent writes code to solve an immediate problem
+//! 2. **Persistence**: If solution works, save to `.vtcode/skills/`
+//! 3. **Generalization**: Refactor for reuse (parameterize hard-coded values)
+//! 4. **Documentation**: Add purpose, parameters, returns, examples
+//! 5. **Reuse**: Future agents discover via `list_skills`/`load_skill`
+//!
+//! **Progressive disclosure** achieves 91% token reduction:
+//! - Discovery profile: Names and descriptions via `list_skills`
+//! - Active instructions: Full `SKILL.md` via `load_skill`
+//! - Deep resources: Scripts/docs via `load_skill_resource`
+//!
+//! See: `.vtcode/skills/INDEX.md` for available skills.
+//!
 //! # Usage
 //!
 //! ```rust,ignore

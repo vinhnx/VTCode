@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::progress::{ProgressReporter, ProgressState};
 #[allow(unused_imports)]
-use super::reasoning::{self, get_constructive_reasoning, is_giving_up_reasoning};
+use super::reasoning::{self, analyze_reasoning, is_giving_up_reasoning};
 
 use anyhow::{Error, Result};
 use futures::StreamExt;
@@ -464,10 +464,23 @@ impl StreamingReasoningState {
         // This prevents duplicate reasoning output
         if !reasoning_already_emitted
             && let Some(reasoning_text) = final_reasoning
-                && !reasoning_text.trim().is_empty()
-            {
-                renderer.line(MessageStyle::Reasoning, reasoning_text)?;
+            && !reasoning_text.trim().is_empty()
+        {
+            renderer.line(MessageStyle::Reasoning, reasoning_text)?;
+
+            // Chain-of-Thought Monitoring: Analyze reasoning for concerns
+            // This enables early intervention if the agent is going down a wrong path
+            use super::reasoning::analyze_reasoning;
+            let analysis = analyze_reasoning(reasoning_text);
+            if analysis.has_concerns() {
+                // Log concern for debugging/visibility
+                // In production, this could trigger UI indicators or interrupt
+                tracing::debug!(
+                    concern = ?analysis.priority_concern(),
+                    "Reasoning concern detected in CoT output"
+                );
             }
+        }
         Ok(())
     }
 
