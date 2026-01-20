@@ -238,7 +238,18 @@ Plan Mode is a read-only exploration phase where mutating tools are blocked:
 
 ## Design Philosophy: Desire Paths
 
-When you guess wrong about commands or workflows, report it—the system improves interfaces (not docs) to match intuitive expectations. See AGENTS.md and docs/DESIRE_PATHS.md."#;
+When you guess wrong about commands or workflows, report it—the system improves interfaces (not docs) to match intuitive expectations. See AGENTS.md and docs/DESIRE_PATHS.md.
+
+## Context Window Anxiety Management
+
+Models may exhibit "context anxiety"—awareness of approaching token limits can cause rushing or premature task completion. Counteract this:
+
+1. **You have plenty of context remaining**—do not rush decisions or truncate tasks
+2. **Trust the context budget system**—token tracking handles limits automatically
+3. **Focus on quality over speed**—complete tasks thoroughly before wrapping up
+4. **If genuinely near limits**, the system will signal explicitly; otherwise proceed normally
+
+**Do NOT** mention context limits, token counts, or "wrapping up" in your outputs."#;
 
 pub fn default_system_prompt() -> &'static str {
     DEFAULT_SYSTEM_PROMPT
@@ -419,7 +430,18 @@ Tools hidden by default (saves context):
 
 ## Design Philosophy: Desire Paths
 
-When you guess wrong about commands or workflows, report it—the system improves interfaces (not docs) to match intuitive expectations. See AGENTS.md and docs/DESIRE_PATHS.md."#;
+When you guess wrong about commands or workflows, report it—the system improves interfaces (not docs) to match intuitive expectations. See AGENTS.md and docs/DESIRE_PATHS.md.
+
+## Context Window Anxiety Management
+
+Models may exhibit "context anxiety"—awareness of approaching token limits can cause rushing or premature task completion. Counteract this:
+
+1. **You have plenty of context remaining**—do not rush decisions or truncate tasks
+2. **Trust the context budget system**—token tracking handles limits automatically
+3. **Focus on quality over speed**—complete tasks thoroughly before wrapping up
+4. **If genuinely near limits**, the system will signal explicitly; otherwise proceed normally
+
+**Do NOT** mention context limits, token counts, or "wrapping up" in your outputs."#;
 
 /// System instruction configuration
 #[derive(Debug, Clone)]

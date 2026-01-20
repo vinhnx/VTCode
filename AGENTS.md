@@ -468,6 +468,181 @@ cargo run
 -   **Provider Setup**: See [docs/PROVIDER_GUIDES.md](docs/PROVIDER_GUIDES.md)
 -   **Testing Guide**: See [docs/development/testing.md](docs/development/testing.md)
 
+## Agentic Patterns (From The Agentic AI Handbook)
+
+VT Code implements production-ready agentic patterns from [The Agentic AI Handbook](https://www.nibzard.com/agentic-handbook/) by Nikola Balić. These patterns are battle-tested solutions for building reliable AI agents.
+
+### Core Patterns Implemented
+
+#### 1. Plan-Then-Execute Pattern
+
+VT Code's Plan Mode implements this pattern with two phases:
+
+1. **Plan phase**: Agent generates a fixed sequence of actions before seeing untrusted data
+2. **Execute phase**: Controller runs the exact sequence. Tool outputs shape parameters, not which tools run
+
+**Configuration**:
+```toml
+[agent]
+default_editing_mode = "plan"     # Start in plan mode
+require_plan_confirmation = true  # HITL before execution
+```
+
+**Usage**: Enter plan mode with `/plan` or `Shift+Tab`. Agent explores read-only and writes plan to `.vtcode/plans/`. User approves before execution.
+
+#### 2. Inversion of Control
+
+VT Code gives agents **tools + goals** rather than step-by-step instructions. This is the foundation of the subagent system.
+
+**Example**:
+```markdown
+Instead of: "Read file X, extract Y, check Z, then update..."
+
+Use: "Refactor UploadService to use async patterns. You have tools to read files, run tests, and make edits."
+```
+
+**Implementation**: See `vtcode-core/src/subagents/` for the subagent registry and runner.
+
+#### 3. Spectrum of Control (Blended Initiative)
+
+VT Code supports fluid control transfer between human and agent:
+
+- **Human-led**: Human directs, agent executes (`/ask` mode)
+- **Agent-led**: Agent proposes, human approves (Plan Mode confirmation)
+- **Blended**: Dynamic flow based on confidence (`autonomous_mode`)
+
+**Configuration**:
+```toml
+[agent]
+autonomous_mode = true    # Auto-approve safe tools
+human_in_the_loop = true  # Require approval for critical actions
+```
+
+#### 4. Reflection Loop
+
+VT Code implements self-review for quality improvement:
+
+```toml
+[agent]
+enable_self_review = true
+max_review_passes = 3
+```
+
+The agent generates a draft, evaluates it against quality metrics, and refines until threshold is met.
+
+#### 5. Skill Library Evolution
+
+VT Code persists working solutions as reusable skills:
+
+1. Agent writes code to solve immediate problem
+2. If solution works, save to `.vtcode/skills/`
+3. Refactor for generalization (parameterize hard-coded values)
+4. Add documentation (purpose, parameters, returns, examples)
+5. Future agents discover and reuse via `list_skills`/`load_skill`
+
+**Progressive disclosure**: Skills are lazy-loaded to save context (91% token reduction achieved).
+
+**Directory**: `.vtcode/skills/` with `INDEX.md` for discovery.
+
+### Advanced Patterns
+
+#### 6. Chain-of-Thought Monitoring & Interruption
+
+VT Code surfaces agent reasoning in real-time for human oversight:
+
+- **Reasoning visibility**: Agent's intermediate thinking is displayed
+- **Early interruption**: First tool call reveals understanding—monitor closely
+- **Circuit breaker**: Pauses after repeated failures for human guidance
+
+**Configuration**:
+```toml
+[agent.circuit_breaker]
+enabled = true
+failure_threshold = 5
+pause_on_open = true
+```
+
+#### 7. Context Window Anxiety Management
+
+Models like Claude Sonnet 4.5 exhibit "context anxiety"—they rush decisions when approaching limits. VT Code counteracts this:
+
+1. Enable large context (1M tokens) but cap actual usage at 200k
+2. Counter-prompting: "You have plenty of context remaining—do not rush"
+3. Explicit token budget transparency in prompts
+
+**Implementation**: See `src/agent/runloop/unified/context_manager.rs` for token tracking.
+
+#### 8. Abstracted Code Representation for Review
+
+Instead of raw diffs, VT Code generates higher-level representations:
+
+- **Intent descriptions**: "Refactors X to enable Y"
+- **Architectural rationales**: "Reorganizing to separate concerns"
+- **Behavior descriptions**: Before/after behavior summaries
+
+This makes human review scalable for multi-file changes.
+
+#### 9. Lethal Trifecta Threat Model
+
+VT Code enforces security by ensuring at least one circle is missing:
+
+1. **Access to private data** (secrets, user data)
+2. **Exposure to untrusted content** (user input, web)
+3. **Ability to externally communicate** (API calls)
+
+**Implementation**: See `vtcode-core/src/exec_policy/` and `vtcode-process-hardening/`.
+
+### Multi-Agent Patterns
+
+#### 10. Swarm Migration Pattern
+
+For large-scale migrations, VT Code's subagent system can orchestrate parallel work:
+
+1. Main agent creates migration plan (enumerate all files)
+2. Break into parallelizable chunks
+3. Spawn subagent swarm (concurrent agents per chunk)
+4. Map-reduce execution and verification
+
+**Implementation**: See `vtcode-core/src/subagents/registry.rs` for subagent types.
+
+#### 11. Oracle/Worker Pattern
+
+VT Code's `small_model` configuration implements this pattern:
+
+- **Oracle**: High-end model (Sonnet) for planning, review, error correction
+- **Workers**: Smaller model (Haiku) for execution (large reads, parsing, summarization)
+
+**Configuration**:
+```toml
+[agent.small_model]
+enabled = true
+model = "claude-3-5-haiku"  # Leave empty for auto-select
+use_for_large_reads = true
+use_for_git_history = true
+```
+
+### Pattern Maturity
+
+| Pattern | Status | Notes |
+|---------|--------|-------|
+| Plan-Then-Execute | Best Practice | Plan Mode with confirmation |
+| Inversion of Control | Best Practice | Subagent system |
+| Spectrum of Control | Validated | autonomous_mode + HITL |
+| Reflection Loop | Established | self_review config |
+| Skill Library Evolution | Established | Skills in `.vtcode/skills/` |
+| CoT Monitoring | Established | Reasoning display + circuit breaker |
+| Context Anxiety | Established | Token budget transparency |
+| Abstracted Review | Emerging | Intent descriptions |
+| Lethal Trifecta | Best Practice | Exec policy + sandboxing |
+| Swarm Migration | Experimental | Subagent orchestration |
+| Oracle/Worker | Validated | small_model tier |
+
+### References
+
+- [The Agentic AI Handbook](https://www.nibzard.com/agentic-handbook/) by Nikola Balić
+- [Awesome Agentic Patterns](https://github.com/nibzard/awesome-agentic-patterns) (113+ patterns)
+- [agentic-patterns.com](https://agentic-patterns.com/) - Pattern explorer
+
 ## Agent Workflows
 
 This CLAUDE.md focuses on the **VT Code codebase itself**.

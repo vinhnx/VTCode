@@ -53,6 +53,42 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
 
+/// Convert agent.circuit_breaker config to core CircuitBreakerConfig
+/// Maps user-facing settings to the actual circuit breaker parameters
+#[allow(clippy::unnecessary_cast)]
+fn vtcode_config_circuit_breaker_to_core(
+    vt_cfg: Option<&VTCodeConfig>,
+    _agent_config: &CoreAgentConfig,
+) -> vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
+    // Get circuit breaker config from vtcode.toml if available
+    let default_cfg = vtcode_config::core::agent::CircuitBreakerConfig::default();
+    let cfg = vt_cfg
+        .map(|c| &c.agent.circuit_breaker)
+        .unwrap_or(&default_cfg);
+
+    if !cfg.enabled {
+        // Return a permissive config if disabled
+        return vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
+            failure_threshold: u32::MAX, // Never trip
+            reset_timeout: Duration::from_secs(1),
+            min_backoff: Duration::from_millis(100),
+            max_backoff: Duration::from_secs(1),
+            backoff_factor: 1.0,
+        };
+    }
+
+    // Map to core config
+    // recovery_cooldown (seconds) -> reset_timeout (duration)
+    // failure_threshold -> failure_threshold
+    vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
+        failure_threshold: cfg.failure_threshold,
+        reset_timeout: Duration::from_secs(cfg.recovery_cooldown.max(1) as u64),
+        min_backoff: Duration::from_secs(10),
+        max_backoff: Duration::from_secs(300),
+        backoff_factor: 2.0,
+    }
+}
+
 pub(crate) struct SessionState {
     pub session_bootstrap: SessionBootstrap,
     pub provider_client: Box<dyn uni::LLMProvider>,
@@ -672,8 +708,9 @@ pub(crate) async fn initialize_session(
         approval_recorder,
         safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
         // Phase 4 Integration: Resilient execution components
+        // Use agent.circuit_breaker config if available, otherwise use defaults
         circuit_breaker: Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::new(
-            vtcode_core::tools::circuit_breaker::CircuitBreakerConfig::default(),
+            vtcode_config_circuit_breaker_to_core(vt_cfg, config),
         )),
         tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)), // Keep last 50 execution stats per tool
         rate_limiter: Arc::new(
