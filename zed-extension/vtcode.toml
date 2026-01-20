@@ -610,15 +610,19 @@ loop_detection_interactive = true
 # Extended thinking gives Claude enhanced reasoning capabilities for complex tasks.
 # When enabled, Claude creates internal reasoning blocks before delivering its final answer.
 # Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models.
+# Note: Extended thinking is now auto-enabled by default (31,999 tokens).
+# Set MAX_THINKING_TOKENS=63999 environment variable to get 2x budget on 64K models.
 # See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
 extended_thinking_enabled = true
 
 # Beta header for interleaved thinking (allows thinking between tool calls)
 interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
 
-# Budget tokens for extended thinking (minimum: 1024, recommended: 10000+)
-# Larger budgets enable more thorough analysis for complex problems.
-interleaved_thinking_budget_tokens = 12000
+# Budget tokens for extended thinking (default: 31999 on 64K output models)
+# On 64K models (Opus 4.5, Sonnet 4.5, Haiku 4.5): default 31,999, max 63,999
+# On 32K models (Opus 4): max 31,999
+# Use MAX_THINKING_TOKENS environment variable to override
+interleaved_thinking_budget_tokens = 31999
 
 # Type value for enabling thinking mode
 interleaved_thinking_type_enabled = "enabled"

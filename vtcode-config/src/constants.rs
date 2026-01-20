@@ -987,11 +987,16 @@ pub mod env_vars {
     pub const OPENROUTER_BASE_URL: &str = "OPENROUTER_BASE_URL";
     pub const XAI_BASE_URL: &str = "XAI_BASE_URL";
     pub const DEEPSEEK_BASE_URL: &str = "DEEPSEEK_BASE_URL";
-    pub const Z_AI_BASE_URL: &str = "ZAI_BASE_URL";
+    pub const Z_AI_BASE_URL: &str = "Z_AI_BASE_URL";
     pub const MOONSHOT_BASE_URL: &str = "MOONSHOT_BASE_URL";
     pub const LMSTUDIO_BASE_URL: &str = "LMSTUDIO_BASE_URL";
     pub const OLLAMA_BASE_URL: &str = "OLLAMA_BASE_URL";
     pub const MINIMAX_BASE_URL: &str = "MINIMAX_BASE_URL";
+
+    /// Environment variable for setting maximum thinking budget tokens
+    /// Set to 63999 to get 2x the default thinking budget on 64K output models
+    /// See: https://decodeclaude.com/ultrathink-deprecated/
+    pub const MAX_THINKING_TOKENS: &str = "MAX_THINKING_TOKENS";
 }
 
 /// HTTP header constants for provider integrations
@@ -1621,8 +1626,16 @@ pub mod context {
     /// Recommended budget tokens for complex reasoning tasks
     pub const RECOMMENDED_THINKING_BUDGET: u32 = 10_000;
 
-    /// Default thinking budget for production use
-    pub const DEFAULT_THINKING_BUDGET: u32 = 16_000;
+    /// Default thinking budget for production use (64K output models: Opus 4.5, Sonnet 4.5, Haiku 4.5)
+    /// Extended thinking is now auto-enabled by default as of January 2026
+    pub const DEFAULT_THINKING_BUDGET: u32 = 31_999;
+
+    /// Maximum thinking budget for 64K output models (Opus 4.5, Sonnet 4.5, Haiku 4.5)
+    /// Use MAX_THINKING_TOKENS=63999 environment variable to enable this
+    pub const MAX_THINKING_BUDGET_64K: u32 = 63_999;
+
+    /// Maximum thinking budget for 32K output models (Opus 4)
+    pub const MAX_THINKING_BUDGET_32K: u32 = 31_999;
 
     // =========================================================================
     // Beta Headers

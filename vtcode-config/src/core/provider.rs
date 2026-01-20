@@ -8,6 +8,8 @@ pub struct AnthropicConfig {
     /// When enabled, Claude uses internal reasoning before responding, providing
     /// enhanced reasoning capabilities for complex tasks.
     /// Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models.
+    /// Note: Extended thinking is now auto-enabled by default (31,999 tokens).
+    /// Set MAX_THINKING_TOKENS=63999 environment variable for 2x budget on 64K models.
     /// See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
     #[serde(default = "default_extended_thinking_enabled")]
     pub extended_thinking_enabled: bool,
@@ -16,9 +18,10 @@ pub struct AnthropicConfig {
     #[serde(default = "default_interleaved_thinking_beta")]
     pub interleaved_thinking_beta: String,
 
-    /// Budget tokens for extended thinking (minimum: 1024, recommended: 10000+)
-    /// Larger budgets enable more thorough analysis for complex problems.
-    /// The model may not use the entire budget allocated.
+    /// Budget tokens for extended thinking (minimum: 1024, default: 31999)
+    /// On 64K output models (Opus 4.5, Sonnet 4.5, Haiku 4.5): default 31,999, max 63,999
+    /// On 32K output models (Opus 4): max 31,999
+    /// Use MAX_THINKING_TOKENS environment variable to override.
     #[serde(default = "default_interleaved_thinking_budget_tokens")]
     pub interleaved_thinking_budget_tokens: u32,
 
@@ -123,7 +126,7 @@ fn default_interleaved_thinking_beta() -> String {
 
 #[inline]
 fn default_interleaved_thinking_budget_tokens() -> u32 {
-    12000
+    31999
 }
 
 #[inline]
