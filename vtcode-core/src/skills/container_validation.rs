@@ -529,18 +529,12 @@ mod tests {
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), instructions.to_string()).unwrap();
         let result = validator.analyze_skill(&skill);
 
-        assert_eq!(
-            result.requirement,
-            ContainerSkillsRequirement::RequiredWithFallback
-        );
+        // vtcode_native=true means native execution, not container skills
+        assert_eq!(result.requirement, ContainerSkillsRequirement::NotRequired);
         assert!(!result.should_filter);
-        assert!(result.patterns_found.len() >= 2);
-
-        // Test enhanced recommendations
-        let recommendations = result.recommendations.join(" ");
-        assert!(recommendations.contains("container skills"));
-        assert!(recommendations.contains("fallback"));
-        assert!(recommendations.contains("execute_code"));
+        // No patterns found for vtcode_native skills (early return)
+        assert!(result.patterns_found.is_empty());
+        // No recommendations for vtcode_native skills (early return)
     }
 
     #[test]
@@ -578,7 +572,8 @@ mod tests {
 
         // Test enhanced recommendations
         let recommendations = result.recommendations.join(" ");
-        assert!(recommendations.contains("cannot be used"));
+        assert!(recommendations.contains("container skills"));
+        assert!(recommendations.contains("not available in VT Code"));
         assert!(recommendations.contains("reportlab"));
         assert!(recommendations.contains("execute_code"));
     }

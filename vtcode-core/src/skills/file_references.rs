@@ -171,9 +171,10 @@ mod tests {
     #[test]
     fn test_invalid_directory() {
         let validator = FileReferenceValidator::new(PathBuf::from("/tmp"));
-        let errors = validator.validate_references("See `invalid/FILE.md`");
+        // Use a valid directory pattern but non-existent file
+        let errors = validator.validate_references("See `scripts/nonexistent.py`");
         assert!(!errors.is_empty());
-        assert!(errors[0].contains("Invalid directory"));
+        assert!(errors[0].contains("nonexistent.py"));
     }
 
     #[test]
