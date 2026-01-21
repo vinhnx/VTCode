@@ -115,8 +115,18 @@ where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-        if *event.metadata().level() < tracing::Level::INFO {
+        let level = *event.metadata().level();
+
+        // Always filter out TRACE level
+        if level == tracing::Level::TRACE {
             return;
+        }
+
+        // Only show DEBUG level logs when in debug mode
+        if level == tracing::Level::DEBUG {
+            if !crate::ui::tui::panic_hook::is_debug_mode() {
+                return;
+            }
         }
 
         let mut visitor = FieldVisitor::default();
