@@ -12,6 +12,7 @@ pub mod search;
 pub mod slash;
 pub mod stream_buffer;
 pub mod styled;
+pub mod syntax_highlight;
 pub mod table_formatter;
 pub mod terminal;
 pub mod theme;

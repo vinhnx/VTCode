@@ -1,23 +1,21 @@
 //! Markdown rendering utilities for terminal output with syntax highlighting support.
 
 use crate::config::loader::SyntaxHighlightingConfig;
+use crate::ui::syntax_highlight::{find_syntax_by_token, load_theme, syntax_set};
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 use anstyle_syntect::to_anstyle;
-use once_cell::sync::Lazy;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::cmp::max;
-use std::collections::HashMap;
 use syntect::easy::HighlightLines;
-use syntect::highlighting::{Theme, ThemeSet};
-use syntect::parsing::{SyntaxReference, SyntaxSet};
+use syntect::highlighting::Theme;
+use syntect::parsing::SyntaxReference;
 use syntect::util::LinesWithEndings;
 use tracing::warn;
 use unicode_width::UnicodeWidthStr;
 
 const LIST_INDENT_WIDTH: usize = 2;
 const CODE_EXTRA_INDENT: &str = "    ";
-const MAX_THEME_CACHE_SIZE: usize = 32;
 
 #[derive(Clone, Debug)]
 enum MarkdownEvent {
@@ -149,30 +147,6 @@ fn heading_level_from_u8(level: u8) -> HeadingLevel {
         _ => HeadingLevel::H6,
     }
 }
-
-static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(|| {
-    // Attempt to load default syntaxes, but provide empty fallback if it fails
-    SyntaxSet::load_defaults_newlines()
-});
-static THEME_CACHE: Lazy<parking_lot::RwLock<HashMap<String, Theme>>> = Lazy::new(|| {
-    match ThemeSet::load_defaults() {
-        defaults if !defaults.themes.is_empty() => {
-            let mut entries: Vec<(String, Theme)> = defaults.themes.into_iter().collect();
-            if entries.len() > MAX_THEME_CACHE_SIZE {
-                entries.truncate(MAX_THEME_CACHE_SIZE);
-            }
-            let themes: HashMap<_, _> = entries.into_iter().collect();
-            parking_lot::RwLock::new(themes)
-        }
-        _ => {
-            // If theme loading fails, create empty cache and log warning
-            warn!(
-                "Failed to load default syntax highlighting themes; syntax highlighting will be disabled"
-            );
-            parking_lot::RwLock::new(HashMap::new())
-        }
-    }
-});
 
 /// A styled text segment.
 #[derive(Clone, Debug)]
@@ -1347,10 +1321,10 @@ fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
 /// Returns a vector of (style, text) segments, or None if highlighting fails.
 pub fn highlight_line_for_diff(line: &str, language: Option<&str>) -> Option<Vec<(Style, String)>> {
     let syntax = select_syntax(language);
-    let theme = load_theme("base16-ocean.dark", true);
+    let theme = get_theme("base16-ocean.dark", true);
     let mut highlighter = HighlightLines::new(syntax, &theme);
 
-    let ranges = highlighter.highlight_line(line, &SYNTAX_SET).ok()?;
+    let ranges = highlighter.highlight_line(line, syntax_set()).ok()?;
     let mut segments = Vec::new();
     for (style, part) in ranges {
         if part.is_empty() {
@@ -1384,7 +1358,7 @@ fn try_highlight(
     }
 
     let syntax = select_syntax(language);
-    let theme = load_theme(&config.theme, config.cache_themes);
+    let theme = get_theme(&config.theme, config.cache_themes);
     let mut highlighter = HighlightLines::new(syntax, &theme);
     let mut rendered = Vec::new();
 
@@ -1392,7 +1366,7 @@ fn try_highlight(
     for line in LinesWithEndings::from(code) {
         ends_with_newline = line.ends_with('\n');
         let trimmed = line.trim_end_matches('\n');
-        let ranges = highlighter.highlight_line(trimmed, &SYNTAX_SET).ok()?;
+        let ranges = highlighter.highlight_line(trimmed, syntax_set()).ok()?;
         let mut segments = Vec::new();
         for (style, part) in ranges {
             if part.is_empty() {
@@ -1415,44 +1389,12 @@ fn try_highlight(
 
 fn select_syntax(language: Option<&str>) -> &'static SyntaxReference {
     language
-        .and_then(|lang| SYNTAX_SET.find_syntax_by_token(lang))
-        .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text())
+        .map(|lang| find_syntax_by_token(lang))
+        .unwrap_or_else(|| syntax_set().find_syntax_plain_text())
 }
 
-fn load_theme(theme_name: &str, cache: bool) -> Theme {
-    if let Some(theme) = THEME_CACHE.read().get(theme_name).cloned() {
-        return theme;
-    }
-
-    let defaults = ThemeSet::load_defaults();
-    if let Some(theme) = defaults.themes.get(theme_name).cloned() {
-        if cache {
-            let mut guard = THEME_CACHE.write();
-            if guard.len() >= MAX_THEME_CACHE_SIZE
-                && let Some(first_key) = guard.keys().next().cloned()
-            {
-                guard.remove(&first_key);
-            }
-            guard.insert(theme_name.to_owned(), theme.clone());
-        }
-        theme
-    } else {
-        warn!(
-            theme = theme_name,
-            "Unknown syntax highlighting theme, falling back to first available theme"
-        );
-        if defaults.themes.is_empty() {
-            warn!("No syntax highlighting themes available at all");
-            Theme::default()
-        } else {
-            defaults
-                .themes
-                .into_iter()
-                .next()
-                .map(|(_, theme)| theme)
-                .unwrap_or_default()
-        }
-    }
+fn get_theme(theme_name: &str, cache: bool) -> Theme {
+    load_theme(theme_name, cache)
 }
 
 #[cfg(test)]
