@@ -326,7 +326,6 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
     true
 }
 
-#[allow(dead_code)]
 pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
     let input_content = session.input_manager.content();
     let cursor_pos = session.input_manager.cursor();
@@ -449,33 +448,35 @@ pub(super) fn try_handle_slash_navigation(
         return false;
     }
 
-    // Block Alt modifier for all keys
-    if has_alt {
+    // Block Alt unless combined with Command for Up/Down navigation
+    if has_alt && !matches!(key.code, KeyCode::Up | KeyCode::Down) {
         return false;
     }
 
     let handled = match key.code {
         KeyCode::Up => {
-            // Plain Up/Down reserved for history navigation
-            // Only handle Cmd+Up for first suggestion
+            if has_alt && !has_command {
+                return false;
+            }
             if has_command {
                 select_first_slash_suggestion(session)
             } else {
-                return false;
+                move_slash_selection_up(session)
             }
         }
         KeyCode::Down => {
-            // Plain Up/Down reserved for history navigation
-            // Only handle Cmd+Down for last suggestion
+            if has_alt && !has_command {
+                return false;
+            }
             if has_command {
                 select_last_slash_suggestion(session)
             } else {
-                return false;
+                move_slash_selection_down(session)
             }
         }
         KeyCode::PageUp => page_up_slash_suggestion(session),
         KeyCode::PageDown => page_down_slash_suggestion(session),
-        KeyCode::Tab => move_slash_selection_down(session),
+        KeyCode::Tab => autocomplete_slash_suggestion(session),
         KeyCode::BackTab => move_slash_selection_up(session),
         KeyCode::Enter => apply_selected_slash_suggestion(session),
         _ => return false,
