@@ -179,10 +179,10 @@ async fn send_task_to_agent(
                         }
                         crate::a2a::rpc::StreamingEvent::TaskStatus { status, .. } => {
                             println!("Status: {:?}", status.state);
-                            if let Some(msg) = status.message {
-                                if let Some(text) = msg.parts.iter().find_map(|p| p.as_text()) {
-                                    println!("  Message: {}", text);
-                                }
+                            if let Some(msg) = status.message
+                                && let Some(text) = msg.parts.iter().find_map(|p| p.as_text())
+                            {
+                                println!("  Message: {}", text);
                             }
                         }
                         crate::a2a::rpc::StreamingEvent::TaskArtifact { artifact, .. } => {
@@ -202,10 +202,10 @@ async fn send_task_to_agent(
         println!("Task created: {}", task.id);
         println!("Status: {:?}\n", task.status.state);
 
-        if let Some(msg) = &task.status.message {
-            if let Some(text) = msg.parts.iter().find_map(|p| p.as_text()) {
-                println!("Response: {}", text);
-            }
+        if let Some(msg) = &task.status.message
+            && let Some(text) = msg.parts.iter().find_map(|p| p.as_text())
+        {
+            println!("Response: {}", text);
         }
 
         if !task.artifacts.is_empty() {
@@ -262,10 +262,10 @@ async fn list_agent_tasks(
         if let Some(task_id) = task_value.get("id").and_then(|v| v.as_str()) {
             println!("Task: {}", task_id);
         }
-        if let Some(status) = task_value.get("status") {
-            if let Some(state) = status.get("state").and_then(|v| v.as_str()) {
-                println!("  Status: {}", state);
-            }
+        if let Some(status) = task_value.get("status")
+            && let Some(state) = status.get("state").and_then(|v| v.as_str())
+        {
+            println!("  Status: {}", state);
         }
         if let Some(ctx_id) = task_value.get("contextId").and_then(|v| v.as_str()) {
             println!("  Context: {}", ctx_id);

@@ -138,20 +138,14 @@ impl A2aClient {
                     .map_err(|e| A2aError::Internal(e.to_string()))?;
                 buffer.extend_from_slice(&chunk);
 
-                // Process complete SSE events separated by double newlines
-                loop {
-                    if let Some(pos) = find_double_newline(&buffer) {
-                        let event_bytes = buffer.drain(..pos + 2).collect::<Vec<u8>>();
-                        if let Some(event) = parse_sse_event(&event_bytes)? {
-                            yield event;
-                        }
-                    } else {
-                        break;
+                while let Some(pos) = find_double_newline(&buffer) {
+                    let event_bytes = buffer.drain(..pos + 2).collect::<Vec<u8>>();
+                    if let Some(event) = parse_sse_event(&event_bytes)? {
+                        yield event;
                     }
                 }
             }
 
-            // Process any remaining buffered event
             if !buffer.is_empty() {
                 if let Some(event) = parse_sse_event(&buffer)? {
                     yield event;
@@ -180,7 +174,7 @@ impl A2aClient {
         let result_value = self
             .call_rpc(
                 METHOD_TASKS_LIST,
-                params.map(|p| serde_json::to_value(p)).transpose()?,
+                params.map(serde_json::to_value).transpose()?,
             )
             .await?;
         Ok(result_value)

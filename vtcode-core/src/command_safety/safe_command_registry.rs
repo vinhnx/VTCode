@@ -298,13 +298,12 @@ impl SafeCommandRegistry {
             return SafetyDecision::Unknown;
         }
 
-        // Only allow sed -n {N|M,N}p pattern (e.g., sed -n 10p, sed -n 1,5p)
-        if command.len() <= 4 && command.get(1).map(|s| s.as_str()) == Some("-n") {
-            if let Some(pattern) = command.get(2) {
-                if Self::is_valid_sed_n_arg(pattern) {
-                    return SafetyDecision::Allow;
-                }
-            }
+        if command.len() <= 4
+            && command.get(1).map(|s| s.as_str()) == Some("-n")
+            && let Some(pattern) = command.get(2)
+            && Self::is_valid_sed_n_arg(pattern)
+        {
+            return SafetyDecision::Allow;
         }
 
         SafetyDecision::Deny("sed only allows safe pattern: sed -n {N|M,N}p".to_string())

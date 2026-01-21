@@ -76,12 +76,11 @@ fn parse_with_tree_sitter(script: &str) -> std::result::Result<Vec<Vec<String>>,
     let mut cursor = root.walk();
 
     for child in root.children(&mut cursor) {
-        if is_command_node(child) {
-            if let Some(cmd) = extract_command_from_node(child, script) {
-                if !cmd.is_empty() {
-                    commands.push(cmd);
-                }
-            }
+        if is_command_node(child)
+            && let Some(cmd) = extract_command_from_node(child, script)
+            && !cmd.is_empty()
+        {
+            commands.push(cmd);
         }
     }
 
@@ -160,11 +159,10 @@ fn parse_with_basic_tokenization(script: &str) -> std::result::Result<Vec<Vec<St
                 in_quotes = false;
             }
             '&' | '|' | ';' if !in_quotes => {
-                // End of command
-                if !current_command.trim().is_empty() {
-                    if let Ok(cmd) = tokenize_command(&current_command) {
-                        commands.push(cmd);
-                    }
+                if !current_command.trim().is_empty()
+                    && let Ok(cmd) = tokenize_command(&current_command)
+                {
+                    commands.push(cmd);
                 }
                 current_command.clear();
             }
@@ -172,11 +170,10 @@ fn parse_with_basic_tokenization(script: &str) -> std::result::Result<Vec<Vec<St
         }
     }
 
-    // Don't forget the last command
-    if !current_command.trim().is_empty() {
-        if let Ok(cmd) = tokenize_command(&current_command) {
-            commands.push(cmd);
-        }
+    if !current_command.trim().is_empty()
+        && let Ok(cmd) = tokenize_command(&current_command)
+    {
+        commands.push(cmd);
     }
 
     Ok(commands)

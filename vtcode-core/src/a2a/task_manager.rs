@@ -182,27 +182,25 @@ impl TaskManager {
         let mut result: Vec<Task> = tasks
             .values()
             .filter(|task| {
-                // Filter by context ID
-                if let Some(ref ctx_id) = params.context_id {
-                    if task.context_id.as_ref() != Some(ctx_id) {
-                        return false;
-                    }
+                if let Some(ref ctx_id) = params.context_id
+                    && task.context_id.as_ref() != Some(ctx_id)
+                {
+                    return false;
                 }
 
                 // Filter by status
-                if let Some(ref status) = params.status {
-                    if &task.status.state != status {
-                        return false;
-                    }
+                if let Some(ref status) = params.status
+                    && &task.status.state != status
+                {
+                    return false;
                 }
 
                 // Filter by last updated
-                if let Some(ref after) = params.last_updated_after {
-                    if let Ok(after_time) = chrono::DateTime::parse_from_rfc3339(after) {
-                        if task.status.timestamp < after_time.to_utc() {
-                            return false;
-                        }
-                    }
+                if let Some(ref after) = params.last_updated_after
+                    && let Ok(after_time) = chrono::DateTime::parse_from_rfc3339(after)
+                    && task.status.timestamp < after_time.to_utc()
+                {
+                    return false;
                 }
 
                 true

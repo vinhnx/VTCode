@@ -346,10 +346,11 @@ impl HistoryFileManager {
         if let Ok(entries) = fs::read_dir(&self.history_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name.starts_with(&prefix) && name.ends_with(".jsonl") {
-                        files.push(path);
-                    }
+                if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                    && name.starts_with(&prefix)
+                    && name.ends_with(".jsonl")
+                {
+                    files.push(path);
                 }
             }
         }
@@ -379,10 +380,11 @@ impl HistoryFileManager {
         let mut entries = async_fs::read_dir(&self.history_dir).await?;
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.starts_with(&prefix) && name.ends_with(".jsonl") {
-                    files.push(path);
-                }
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && name.starts_with(&prefix)
+                && name.ends_with(".jsonl")
+            {
+                files.push(path);
             }
         }
 

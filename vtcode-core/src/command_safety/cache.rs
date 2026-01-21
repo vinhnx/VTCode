@@ -34,6 +34,7 @@ impl SafetyDecisionCache {
     }
 
     /// Creates a default cache (1000 entries)
+    #[allow(dead_code)]
     pub fn default() -> Self {
         Self::new(1000)
     }
@@ -52,15 +53,14 @@ impl SafetyDecisionCache {
     pub async fn put(&self, command: String, is_safe: bool, reason: String) {
         let mut cache = self.cache.lock().await;
 
-        // Evict least-used entry if cache is full
-        if cache.len() >= self.max_size && !cache.contains_key(&command) {
-            if let Some(least_used) = cache
+        if cache.len() >= self.max_size
+            && !cache.contains_key(&command)
+            && let Some(least_used) = cache
                 .iter()
                 .min_by_key(|(_, decision)| decision.access_count)
                 .map(|(k, _)| k.clone())
-            {
-                cache.remove(&least_used);
-            }
+        {
+            cache.remove(&least_used);
         }
 
         cache.insert(

@@ -159,14 +159,14 @@ impl SensitivePath {
 
     /// Expand ~ to the user's home directory.
     pub fn expand_path(&self) -> PathBuf {
-        if self.path.starts_with("~/") {
-            if let Some(home) = dirs::home_dir() {
-                return home.join(&self.path[2..]);
-            }
-        } else if self.path == "~" {
-            if let Some(home) = dirs::home_dir() {
-                return home;
-            }
+        if self.path.starts_with("~/")
+            && let Some(home) = dirs::home_dir()
+        {
+            return home.join(&self.path[2..]);
+        } else if self.path == "~"
+            && let Some(home) = dirs::home_dir()
+        {
+            return home;
         }
         PathBuf::from(&self.path)
     }

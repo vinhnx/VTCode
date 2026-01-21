@@ -295,10 +295,10 @@ impl StreamAccumulator {
             }
             "response.completed" => {
                 self.is_complete = true;
-                if let StreamEventData::Response(data) = &event.data {
-                    if let Some(response) = &data.response {
-                        self.usage = response.get("usage").cloned();
-                    }
+                if let StreamEventData::Response(data) = &event.data
+                    && let Some(response) = &data.response
+                {
+                    self.usage = response.get("usage").cloned();
                 }
             }
             "response.failed" => {

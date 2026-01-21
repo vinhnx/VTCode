@@ -727,20 +727,20 @@ impl AgentRunner {
             normalized.insert("path".to_string(), Value::String(fallback_dir));
         }
 
-        if name == tools::READ_FILE && !normalized.contains_key("file_path") {
-            if let Some(last_file) = task_state.last_file_path.clone() {
-                normalized.insert("file_path".to_string(), Value::String(last_file));
-            }
+        if name == tools::READ_FILE
+            && !normalized.contains_key("file_path")
+            && let Some(last_file) = task_state.last_file_path.clone()
+        {
+            normalized.insert("file_path".to_string(), Value::String(last_file));
         }
 
         if matches!(
             name,
             tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
         ) && !normalized.contains_key("path")
+            && let Some(last_file) = task_state.last_file_path.clone()
         {
-            if let Some(last_file) = task_state.last_file_path.clone() {
-                normalized.insert("path".to_string(), Value::String(last_file));
-            }
+            normalized.insert("path".to_string(), Value::String(last_file));
         }
 
         Value::Object(normalized)
