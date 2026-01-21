@@ -15,7 +15,6 @@ use ratatui::crossterm::{
     execute,
     terminal::{LeaveAlternateScreen, disable_raw_mode},
 };
-use tracing;
 
 static TUI_INITIALIZED: AtomicBool = AtomicBool::new(false);
 static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
@@ -60,12 +59,6 @@ pub fn init_panic_hook() {
                 .lineno_suffix(true)
                 .create_panic_handler()(panic_info);
         } else {
-            if !is_tui {
-                // On program CLI show on debug log
-                // We use tracing if available, but also print a simple message
-                tracing::debug!(panic = %panic_info, "VT Code encountered a critical error");
-            }
-
             eprintln!("\nVTCode encountered a critical error and needs to shut down.");
             eprintln!("Error details: {}", panic_info);
             eprintln!("If you encounter this issue, please report it to the VT Code team.");
