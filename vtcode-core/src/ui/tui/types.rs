@@ -737,6 +737,8 @@ pub enum InlineEvent {
     DiffPreviewTrustChanged {
         mode: TrustMode,
     },
+    HistoryPrevious,
+    HistoryNext,
 }
 
 /// Result of plan confirmation dialog

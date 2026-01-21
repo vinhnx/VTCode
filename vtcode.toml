@@ -3,16 +3,16 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "zai-org/GLM-4.7-Flash:novita"
+default_model = "minimax-m2.1:cloud"
 
 # Visual theme for the terminal interface
-theme = "vitesse-light"
+theme = "vitesse-light-soft"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -29,7 +29,7 @@ reasoning_effort = "low"
 system_prompt_mode = "default"
 tool_documentation_mode = "minimal"
 enable_split_tool_results = true
-todo_planning_mode = true
+todo_planning_mode = false
 verbosity = "low"
 refine_temperature = 0.3
 enable_self_review = false
@@ -121,7 +121,7 @@ inline_viewport_rows = 16
 reasoning_display_mode = "toggle"
 reasoning_visible_default = false
 layout_mode = "auto"
-show_message_dividers = false
+show_message_dividers = true
 dim_completed_todos = true
 message_block_spacing = true
 display_mode = "minimal"
@@ -162,7 +162,7 @@ max_scrollback_bytes = 25000000
 large_output_threshold_kb = 5000
 
 [agent.checkpointing]
-enabled = true
+enabled = false
 max_snapshots = 50
 max_age_days = 30
 

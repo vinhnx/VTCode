@@ -564,7 +564,7 @@ pub fn validate_history_invariants(messages: &[Message]) -> HistoryValidationRep
 
     // Find missing outputs (calls without corresponding responses)
     let mut missing_outputs = Vec::new();
-    for (call_id, _role) in &call_map {
+    for call_id in call_map.keys() {
         if !output_ids.contains(call_id) {
             missing_outputs.push(MissingOutput {
                 call_id: ToolCallId(call_id.clone()),

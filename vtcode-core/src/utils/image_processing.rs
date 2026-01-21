@@ -108,7 +108,7 @@ pub async fn read_image_from_url(url: &str) -> Result<ImageData> {
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .and_then(|ct| detect_mime_type_from_content_type(ct));
+        .and_then(detect_mime_type_from_content_type);
 
     let file_contents = response
         .bytes()

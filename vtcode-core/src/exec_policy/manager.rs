@@ -173,10 +173,11 @@ impl ExecPolicyManager {
             }
             if approval.requires_approval() {
                 needs_approval_flag = true;
-                if let ExecApprovalRequirement::NeedsApproval { reason, .. } = &approval {
-                    if let Some(r) = reason {
-                        reasons.push(r.clone());
-                    }
+                if let ExecApprovalRequirement::NeedsApproval {
+                    reason: Some(r), ..
+                } = &approval
+                {
+                    reasons.push(r.clone());
                 }
             }
         }

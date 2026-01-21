@@ -275,11 +275,13 @@ impl Default for CustomizationConfig {
 
 impl SessionConfig {
     /// Creates a new default configuration
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Loads configuration from a file
+    #[allow(dead_code)]
     pub fn load_from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         let config: SessionConfig = toml::from_str(&content)?;
@@ -287,6 +289,7 @@ impl SessionConfig {
     }
 
     /// Saves configuration to a file
+    #[allow(dead_code)]
     pub fn save_to_file(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(self)?;
         std::fs::write(path, content)?;
@@ -294,6 +297,7 @@ impl SessionConfig {
     }
 
     /// Updates a specific configuration value by key
+    #[allow(dead_code)]
     pub fn set_value(&mut self, key: &str, value: &str) -> Result<(), String> {
         // This is a simplified version - in a real implementation, we'd have more sophisticated
         // parsing and validation for different configuration types
@@ -314,6 +318,7 @@ impl SessionConfig {
     }
 
     /// Gets a configuration value by key
+    #[allow(dead_code)]
     pub fn get_value(&self, key: &str) -> Option<String> {
         match key {
             "behavior.max_input_lines" => Some(self.behavior.max_input_lines.to_string()),
@@ -323,6 +328,7 @@ impl SessionConfig {
     }
 
     /// Validates the configuration to ensure all values are within acceptable ranges
+    #[allow(dead_code)]
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
 

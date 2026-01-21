@@ -22,6 +22,12 @@ pub struct OutputStyleManager {
     styles: HashMap<String, OutputStyle>,
 }
 
+impl Default for OutputStyleManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OutputStyleManager {
     pub fn new() -> Self {
         Self {
