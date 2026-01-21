@@ -352,4 +352,30 @@ impl Session {
         }
         let _ = events.send(event.clone());
     }
+
+    /// Handle scroll down event
+    #[inline]
+    #[allow(dead_code)]
+    pub(super) fn handle_scroll_down(
+        &mut self,
+        events: &UnboundedSender<InlineEvent>,
+        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
+    ) {
+        self.scroll_line_down();
+        self.mark_dirty();
+        self.emit_inline_event(&InlineEvent::ScrollLineDown, events, callback);
+    }
+
+    /// Handle scroll up event
+    #[inline]
+    #[allow(dead_code)]
+    pub(super) fn handle_scroll_up(
+        &mut self,
+        events: &UnboundedSender<InlineEvent>,
+        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
+    ) {
+        self.scroll_line_up();
+        self.mark_dirty();
+        self.emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
+    }
 }

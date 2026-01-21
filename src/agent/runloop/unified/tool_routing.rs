@@ -306,10 +306,10 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 // Ignore text input when modal is shown
                 continue;
             }
-            InlineEvent::ScrollPageUp
+            InlineEvent::ScrollLineUp
+            | InlineEvent::ScrollLineDown
+            | InlineEvent::ScrollPageUp
             | InlineEvent::ScrollPageDown
-            | InlineEvent::HistoryPrevious
-            | InlineEvent::HistoryNext
             | InlineEvent::FileSelected(_)
             | InlineEvent::BackgroundOperation
             | InlineEvent::LaunchEditor

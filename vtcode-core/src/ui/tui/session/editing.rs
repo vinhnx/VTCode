@@ -340,57 +340,19 @@ impl Session {
     /// Remember submitted input in history
     pub(super) fn remember_submitted_input(&mut self, submitted: &str) {
         self.input_manager.add_to_history(submitted.to_owned());
-        tracing::debug!(
-            "Added to history: {:?}, total: {}",
-            submitted,
-            self.input_manager.history().len()
-        );
     }
 
-    /// Navigate to previous history entry
+    /// Navigate to previous history entry (disabled to prevent cursor flickering)
+    #[allow(dead_code)]
     pub(super) fn navigate_history_previous(&mut self) -> bool {
-        let history_len = self.input_manager.history().len();
-        tracing::debug!(
-            "Navigate history previous, history_len: {}, current_index: {:?}",
-            history_len,
-            self.input_manager.history_index()
-        );
-        if let Some(previous) = self.input_manager.go_to_previous_history() {
-            tracing::debug!("Navigated to previous: {:?}", previous);
-            self.input_manager.set_content_from_history(previous);
-            crate::ui::tui::session::slash::update_slash_suggestions(self);
-            true
-        } else {
-            tracing::debug!("No previous history entry");
-            false
-        }
+        // History navigation disabled to prevent cursor flickering
+        false
     }
 
-    /// Navigate to next history entry
+    /// Navigate to next history entry (disabled to prevent cursor flickering)
+    #[allow(dead_code)]
     pub(super) fn navigate_history_next(&mut self) -> bool {
-        let history_len = self.input_manager.history().len();
-        tracing::debug!(
-            "Navigate history next, history_len: {}, current_index: {:?}",
-            history_len,
-            self.input_manager.history_index()
-        );
-        if let Some(next) = self.input_manager.go_to_next_history() {
-            tracing::debug!("Navigated to next: {:?}", next);
-            self.input_manager.set_content_from_history(next);
-            crate::ui::tui::session::slash::update_slash_suggestions(self);
-            true
-        } else {
-            tracing::debug!("No next history entry");
-            false
-        }
-    }
-
-    /// Returns the current history position for status bar display
-    /// Returns (current_index, total_entries) or None if not navigating history
-    pub fn history_position(&self) -> Option<(usize, usize)> {
-        self.input_manager.history_index().map(|idx| {
-            let total = self.input_manager.history().len();
-            (total - idx, total)
-        })
+        // History navigation disabled to prevent cursor flickering
+        false
     }
 }
