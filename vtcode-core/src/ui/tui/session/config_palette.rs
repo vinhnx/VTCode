@@ -1,7 +1,8 @@
 use crate::config::ToolOutputMode;
 use crate::config::loader::{ConfigManager, VTCodeConfig};
 use crate::config::{
-    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, ToolPolicy, VerbosityLevel,
+    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, ToolPolicy, UiDisplayMode,
+    VerbosityLevel,
 };
 use ratatui::widgets::ListState;
 
@@ -217,6 +218,65 @@ impl ConfigPalette {
                     .collect(),
             },
             description: Some("UI color theme".to_string()),
+        });
+
+        // UI Display Mode
+        items.push(ConfigItem {
+            key: "ui.display_mode".to_string(),
+            label: "UI Display Mode".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: match config.ui.display_mode {
+                    UiDisplayMode::Full => "full".to_string(),
+                    UiDisplayMode::Minimal => "minimal".to_string(),
+                    UiDisplayMode::Focused => "focused".to_string(),
+                },
+                options: vec![
+                    "full".to_string(),
+                    "minimal".to_string(),
+                    "focused".to_string(),
+                ],
+            },
+            description: Some("UI preset: full (all features), minimal, or focused".to_string()),
+        });
+
+        // Show Sidebar
+        items.push(ConfigItem {
+            key: "ui.show_sidebar".to_string(),
+            label: "Show Sidebar".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.show_sidebar,
+            },
+            description: Some("Show right pane with queue/context/tools".to_string()),
+        });
+
+        // Show Message Dividers
+        items.push(ConfigItem {
+            key: "ui.show_message_dividers".to_string(),
+            label: "Message Dividers".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.show_message_dividers,
+            },
+            description: Some("Show divider lines between conversation turns".to_string()),
+        });
+
+        // Dim Completed Todos
+        items.push(ConfigItem {
+            key: "ui.dim_completed_todos".to_string(),
+            label: "Dim Completed Todos".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.dim_completed_todos,
+            },
+            description: Some("Dim completed todo items (- [x]) in output".to_string()),
+        });
+
+        // Message Block Spacing
+        items.push(ConfigItem {
+            key: "ui.message_block_spacing".to_string(),
+            label: "Message Spacing".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.message_block_spacing,
+            },
+            description: Some("Add blank lines between message blocks".to_string()),
         });
 
         // Tool Output Mode
@@ -556,6 +616,30 @@ impl ConfigPalette {
                         };
                     changed = true;
                 }
+                "ui.display_mode" => {
+                    self.config.ui.display_mode = match self.config.ui.display_mode {
+                        UiDisplayMode::Full => UiDisplayMode::Minimal,
+                        UiDisplayMode::Minimal => UiDisplayMode::Focused,
+                        UiDisplayMode::Focused => UiDisplayMode::Full,
+                    };
+                    changed = true;
+                }
+                "ui.show_sidebar" => {
+                    self.config.ui.show_sidebar = !self.config.ui.show_sidebar;
+                    changed = true;
+                }
+                "ui.show_message_dividers" => {
+                    self.config.ui.show_message_dividers = !self.config.ui.show_message_dividers;
+                    changed = true;
+                }
+                "ui.dim_completed_todos" => {
+                    self.config.ui.dim_completed_todos = !self.config.ui.dim_completed_todos;
+                    changed = true;
+                }
+                "ui.message_block_spacing" => {
+                    self.config.ui.message_block_spacing = !self.config.ui.message_block_spacing;
+                    changed = true;
+                }
                 "ui.inline_viewport_rows"
                 | "pty.default_rows"
                 | "pty.default_cols"
@@ -577,7 +661,7 @@ impl ConfigPalette {
 
     pub fn apply_changes(&mut self) -> anyhow::Result<()> {
         if self.modified {
-            self.config_manager.save_config(&self.config)?;
+            self.config_manager.save_config(&mut self.config)?;
             self.modified = false;
         }
         Ok(())

@@ -313,6 +313,78 @@ pub fn wrap_line(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
     rows
 }
 
+/// Detect if a line is a todo/checkbox item and its state
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TodoState {
+    /// Unchecked: `- [ ]`, `* [ ]`, `[ ]`
+    Pending,
+    /// Checked: `- [x]`, `- [X]`, `* [x]`, `[x]`
+    Completed,
+    /// Not a todo item
+    None,
+}
+
+/// Detect if a line contains a todo/checkbox pattern
+pub fn detect_todo_state(text: &str) -> TodoState {
+    let trimmed = text.trim_start();
+
+    // Common patterns: "- [ ]", "* [ ]", "[ ]", "- [x]", "* [x]", "[x]"
+    let patterns_pending = ["- [ ]", "* [ ]", "+ [ ]", "[ ]"];
+    let patterns_completed = [
+        "- [x]", "- [X]", "* [x]", "* [X]", "+ [x]", "+ [X]", "[x]", "[X]",
+    ];
+
+    for pattern in patterns_completed {
+        if trimmed.starts_with(pattern) {
+            return TodoState::Completed;
+        }
+    }
+
+    for pattern in patterns_pending {
+        if trimmed.starts_with(pattern) {
+            return TodoState::Pending;
+        }
+    }
+
+    // Also check for strikethrough markers (~~text~~)
+    if trimmed.starts_with("~~") && trimmed.contains("~~") {
+        return TodoState::Completed;
+    }
+
+    TodoState::None
+}
+
+/// Check if text appears to be a list item (bullet or numbered)
+#[allow(dead_code)]
+pub fn is_list_item(text: &str) -> bool {
+    let trimmed = text.trim_start();
+
+    // Bullet patterns
+    if trimmed.starts_with("- ")
+        || trimmed.starts_with("* ")
+        || trimmed.starts_with("+ ")
+        || trimmed.starts_with("• ")
+    {
+        return true;
+    }
+
+    // Numbered patterns: "1.", "1)", "a.", "a)"
+    let mut chars = trimmed.chars();
+    if let Some(first) = chars.next() {
+        if first.is_ascii_digit() || first.is_ascii_alphabetic() {
+            if let Some(second) = chars.next() {
+                if second == '.' || second == ')' {
+                    if let Some(third) = chars.next() {
+                        return third == ' ';
+                    }
+                }
+            }
+        }
+    }
+
+    false
+}
+
 /// Justify plain text by distributing spaces evenly
 pub fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
     let trimmed = text.trim();
@@ -393,5 +465,54 @@ mod tests {
 
         assert_eq!(justify_plain_text("Short", 10), None);
         assert_eq!(justify_plain_text("Very long text string", 10), None);
+    }
+
+    #[test]
+    fn test_detect_todo_state_pending() {
+        assert_eq!(detect_todo_state("- [ ] Task"), TodoState::Pending);
+        assert_eq!(detect_todo_state("* [ ] Task"), TodoState::Pending);
+        assert_eq!(detect_todo_state("+ [ ] Task"), TodoState::Pending);
+        assert_eq!(detect_todo_state("[ ] Task"), TodoState::Pending);
+        assert_eq!(
+            detect_todo_state("  - [ ] Indented task"),
+            TodoState::Pending
+        );
+    }
+
+    #[test]
+    fn test_detect_todo_state_completed() {
+        assert_eq!(detect_todo_state("- [x] Done"), TodoState::Completed);
+        assert_eq!(detect_todo_state("- [X] Done"), TodoState::Completed);
+        assert_eq!(detect_todo_state("* [x] Done"), TodoState::Completed);
+        assert_eq!(detect_todo_state("[x] Done"), TodoState::Completed);
+        assert_eq!(
+            detect_todo_state("  - [x] Indented done"),
+            TodoState::Completed
+        );
+        assert_eq!(
+            detect_todo_state("~~Strikethrough text~~"),
+            TodoState::Completed
+        );
+    }
+
+    #[test]
+    fn test_detect_todo_state_none() {
+        assert_eq!(detect_todo_state("Regular text"), TodoState::None);
+        assert_eq!(detect_todo_state("- Regular list item"), TodoState::None);
+        assert_eq!(detect_todo_state("* Bullet point"), TodoState::None);
+        assert_eq!(detect_todo_state("1. Numbered item"), TodoState::None);
+    }
+
+    #[test]
+    fn test_is_list_item() {
+        assert!(is_list_item("- Item"));
+        assert!(is_list_item("* Item"));
+        assert!(is_list_item("+ Item"));
+        assert!(is_list_item("• Item"));
+        assert!(is_list_item("1. Item"));
+        assert!(is_list_item("a) Item"));
+        assert!(is_list_item("  - Indented"));
+        assert!(!is_list_item("Regular text"));
+        assert!(!is_list_item(""));
     }
 }
