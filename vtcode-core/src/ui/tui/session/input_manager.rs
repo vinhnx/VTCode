@@ -47,13 +47,6 @@ impl InputManager {
         self.reset_history_navigation();
     }
 
-    /// Sets the input content without resetting history navigation
-    /// Used when navigating through history entries
-    pub fn set_content_from_history(&mut self, content: String) {
-        self.content = content.clone();
-        self.cursor = content.len();
-    }
-
     /// Returns the current cursor position
     pub fn cursor(&self) -> usize {
         self.cursor
@@ -316,25 +309,5 @@ mod tests {
 
         manager.move_cursor_right();
         assert_eq!(manager.cursor(), 6);
-    }
-
-    #[test]
-    fn set_content_from_history_preserves_navigation() {
-        let mut manager = InputManager::new();
-        manager.add_to_history("first".to_owned());
-        manager.add_to_history("second".to_owned());
-
-        // Navigate to previous
-        let prev = manager.go_to_previous_history();
-        assert_eq!(prev, Some("second".to_owned()));
-        assert!(manager.history_index().is_some());
-
-        // Set content from history should preserve navigation state
-        manager.set_content_from_history("second".to_owned());
-        assert!(manager.history_index().is_some());
-
-        // Can still navigate further
-        let prev2 = manager.go_to_previous_history();
-        assert_eq!(prev2, Some("first".to_owned()));
     }
 }

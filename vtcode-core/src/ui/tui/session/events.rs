@@ -247,14 +247,20 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::ScrollPageDown)
         }
         KeyCode::Up => {
-            session.scroll_line_up();
-            session.mark_dirty();
-            Some(InlineEvent::ScrollLineUp)
+            if session.navigate_history_previous() {
+                session.mark_dirty();
+                Some(InlineEvent::HistoryPrevious)
+            } else {
+                None
+            }
         }
         KeyCode::Down => {
-            session.scroll_line_down();
-            session.mark_dirty();
-            Some(InlineEvent::ScrollLineDown)
+            if session.navigate_history_next() {
+                session.mark_dirty();
+                Some(InlineEvent::HistoryNext)
+            } else {
+                None
+            }
         }
         KeyCode::Enter => {
             if !session.input_enabled {
