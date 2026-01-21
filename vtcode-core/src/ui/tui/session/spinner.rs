@@ -35,7 +35,7 @@ impl ThinkingSpinner {
 
     pub fn update(&mut self) {
         if self.is_active && self.last_update.elapsed().as_millis() >= 80 {
-            self.spinner_index = (self.spinner_index + 1) % 4;
+            self.spinner_index = (self.spinner_index + 1) % SPINNER_FRAMES.len();
             self.last_update = Instant::now();
         }
     }
@@ -44,7 +44,15 @@ impl ThinkingSpinner {
     pub fn is_active(&self) -> bool {
         self.is_active
     }
+
+    /// Get the current spinner frame character
+    pub fn current_frame(&self) -> &'static str {
+        SPINNER_FRAMES[self.spinner_index % SPINNER_FRAMES.len()]
+    }
 }
+
+/// Spinner animation frames (Braille pattern for smooth animation)
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 impl Default for ThinkingSpinner {
     fn default() -> Self {

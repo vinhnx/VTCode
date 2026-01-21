@@ -311,12 +311,8 @@ pub async fn run_tui(
     let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
     let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
     set_log_theme_name(options.log_theme.clone());
-    let mut session = Session::new_with_logs(
-        options.theme,
-        options.placeholder,
-        surface.rows(),
-        options.show_logs,
-    );
+    let mut session = Session::new_with_config(options.theme, options.placeholder, surface.rows())?;
+    session.show_logs = options.show_logs;
     session.set_log_receiver(log_rx);
     session.active_pty_sessions = options.active_pty_sessions;
     register_tui_log_sender(log_tx);

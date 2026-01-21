@@ -19,8 +19,14 @@ pub(super) fn handle_event(
             }
         }
         CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
-            MouseEventKind::ScrollDown => {}
-            MouseEventKind::ScrollUp => {}
+            MouseEventKind::ScrollDown => {
+                session.scroll_line_down();
+                session.mark_dirty();
+            }
+            MouseEventKind::ScrollUp => {
+                session.scroll_line_up();
+                session.mark_dirty();
+            }
             _ => {}
         },
         CrosstermEvent::Paste(content) => {

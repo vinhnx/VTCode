@@ -181,6 +181,11 @@ pub struct AnthropicPromptCacheSettings {
     /// Default: 256 characters (~64 tokens)
     #[serde(default = "default_min_message_length")]
     pub min_message_length_for_cache: usize,
+
+    /// Extended TTL for Anthropic prompt caching (in seconds)
+    /// Set to >= 3600 for 1-hour cache on messages
+    #[serde(default = "default_anthropic_extended_ttl")]
+    pub extended_ttl_seconds: Option<u64>,
 }
 
 impl Default for AnthropicPromptCacheSettings {
@@ -194,6 +199,7 @@ impl Default for AnthropicPromptCacheSettings {
             cache_user_messages: default_true(),
             cache_tool_definitions: default_true(),
             min_message_length_for_cache: default_min_message_length(),
+            extended_ttl_seconds: default_anthropic_extended_ttl(),
         }
     }
 }

@@ -1289,19 +1289,26 @@ pub fn merge_toml_values(base: &mut toml::Value, overlay: &toml::Value) {
 
 impl ConfigManager {
     /// Persist configuration to the manager's associated path or workspace
-    pub fn save_config(&self, config: &VTCodeConfig) -> Result<()> {
+    pub fn save_config(&mut self, config: &VTCodeConfig) -> Result<()> {
         if let Some(path) = &self.config_path {
-            return Self::save_config_to_path(path, config);
-        }
-
-        if let Some(workspace_root) = &self.workspace_root {
+            Self::save_config_to_path(path, config)?;
+        } else if let Some(workspace_root) = &self.workspace_root {
             let path = workspace_root.join(&self.config_file_name);
-            return Self::save_config_to_path(path, config);
+            Self::save_config_to_path(path, config)?;
+        } else {
+            let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
+            let path = cwd.join(&self.config_file_name);
+            Self::save_config_to_path(path, config)?;
         }
 
-        let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
-        let path = cwd.join(&self.config_file_name);
-        Self::save_config_to_path(path, config)
+        self.sync_from_config(config)
+    }
+
+    /// Sync internal config from a saved config
+    /// Call this after save_config to keep internal state in sync
+    pub fn sync_from_config(&mut self, config: &VTCodeConfig) -> Result<()> {
+        self.config = config.clone();
+        Ok(())
     }
 }
 
@@ -1605,5 +1612,66 @@ default_policy = "prompt"
                 vec!["zig".to_string()]
             );
         });
+    }
+
+    #[test]
+    fn save_config_updates_disk_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = temp_dir.path();
+        let config_path = workspace.join("vtcode.toml");
+
+        // Write initial config
+        let initial_config = r#"
+[ui]
+display_mode = "full"
+show_sidebar = true
+"#;
+        fs::write(&config_path, initial_config).expect("failed to write initial config");
+
+        // Load config
+        let mut manager =
+            ConfigManager::load_from_workspace(workspace).expect("failed to load config");
+        assert_eq!(manager.config().ui.display_mode, crate::UiDisplayMode::Full);
+
+        // Modify config (simulating /config palette changes)
+        let mut modified_config = manager.config().clone();
+        modified_config.ui.display_mode = crate::UiDisplayMode::Minimal;
+        modified_config.ui.show_sidebar = false;
+
+        // Save config
+        manager
+            .save_config(&modified_config)
+            .expect("failed to save config");
+
+        // Verify disk file was updated
+        let saved_content = fs::read_to_string(&config_path).expect("failed to read saved config");
+        assert!(
+            saved_content.contains("display_mode = \"minimal\""),
+            "saved config should contain minimal display_mode. Got:\n{}",
+            saved_content
+        );
+        assert!(
+            saved_content.contains("show_sidebar = false"),
+            "saved config should contain show_sidebar = false. Got:\n{}",
+            saved_content
+        );
+
+        // Create a NEW manager to simulate reopening /config palette
+        let new_manager =
+            ConfigManager::load_from_workspace(workspace).expect("failed to reload config");
+        assert_eq!(
+            new_manager.config().ui.display_mode,
+            crate::UiDisplayMode::Minimal,
+            "reloaded config should have minimal display_mode"
+        );
+
+        // Force disk read by loading from file directly
+        let new_manager2 =
+            ConfigManager::load_from_file(&config_path).expect("failed to reload from file");
+        assert!(
+            !new_manager2.config().ui.show_sidebar,
+            "reloaded config should have show_sidebar = false, got: {}",
+            new_manager2.config().ui.show_sidebar
+        );
     }
 }

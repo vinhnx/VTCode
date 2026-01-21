@@ -43,6 +43,12 @@ impl Session {
     }
 
     /// Reflow a specific message line based on its type and width
+    ///
+    /// This method creates visually grouped message blocks with:
+    /// - Role headers for User/Agent messages
+    /// - Subtle dividers between conversation turns
+    /// - Consistent spacing between message blocks
+    /// - Tool output grouped with headers
     #[allow(dead_code)]
     pub(super) fn reflow_message_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
         let Some(message) = self.lines.get(index) else {
@@ -66,9 +72,29 @@ impl Session {
         let mut wrapped = Vec::new();
         let max_width = width as usize;
 
-        if message.kind == InlineMessageKind::User && max_width > 0 {
-            let divider = self.message_divider_line(max_width, message.kind);
-            wrapped.push(divider);
+        // Check if this is the start of a new conversation turn
+        let prev_kind = if index > 0 {
+            self.lines.get(index - 1).map(|l| l.kind)
+        } else {
+            None
+        };
+        let is_new_turn = prev_kind.is_none()
+            || (message.kind == InlineMessageKind::User
+                && prev_kind != Some(InlineMessageKind::User))
+            || (message.kind == InlineMessageKind::Agent
+                && prev_kind != Some(InlineMessageKind::Agent));
+
+        // Add a subtle separator before User messages (single divider, not double)
+        // Only show dividers if enabled in appearance config
+        if message.kind == InlineMessageKind::User && is_new_turn && max_width > 0 {
+            // Add blank line for visual separation before user turn
+            if prev_kind.is_some() {
+                wrapped.push(Line::default());
+            }
+            if self.appearance.should_show_dividers() {
+                let divider = self.message_divider_line(max_width, message.kind);
+                wrapped.push(divider);
+            }
         }
 
         let mut lines = self.wrap_line(base_line, max_width);
@@ -81,22 +107,40 @@ impl Session {
 
         wrapped.extend(lines);
 
-        if message.kind == InlineMessageKind::User && max_width > 0 {
-            let divider = self.message_divider_line(max_width, message.kind);
-            wrapped.push(divider);
-        }
-
         if wrapped.is_empty() {
             wrapped.push(Line::default());
         }
 
-        // Add a line break after Error, Info, and Policy messages
+        // Add spacing after messages for visual grouping (respects message_block_spacing config)
+        let spacing = self.appearance.message_block_spacing.min(2) as usize;
+        let next_kind = self.lines.get(index + 1).map(|l| l.kind);
         match message.kind {
-            InlineMessageKind::Error
-            | InlineMessageKind::Info
-            | InlineMessageKind::Policy
-            | InlineMessageKind::Warning => {
-                wrapped.push(Line::default());
+            InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Warning => {
+                for _ in 0..spacing {
+                    wrapped.push(Line::default());
+                }
+            }
+            InlineMessageKind::Policy => {
+                // No spacing if followed by Agent (reasoning -> content flow)
+                if next_kind != Some(InlineMessageKind::Agent) {
+                    for _ in 0..spacing {
+                        wrapped.push(Line::default());
+                    }
+                }
+            }
+            InlineMessageKind::User => {
+                // Blank lines after user message for clean separation
+                for _ in 0..spacing {
+                    wrapped.push(Line::default());
+                }
+            }
+            InlineMessageKind::Agent => {
+                // Check if next message is a different type (end of agent turn)
+                if next_kind.is_some() && next_kind != Some(InlineMessageKind::Agent) {
+                    for _ in 0..spacing {
+                        wrapped.push(Line::default());
+                    }
+                }
             }
             _ => {}
         }
@@ -216,6 +260,11 @@ impl Session {
     }
 
     /// Reflow tool output lines with appropriate formatting
+    ///
+    /// Tool blocks are visually grouped with:
+    /// - Consistent indentation (2 spaces)
+    /// - Dimmed styling for less visual weight
+    /// - Blank line after tool block ends
     #[allow(dead_code)]
     pub(super) fn reflow_tool_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
         let Some(line) = self.lines.get(index) else {
@@ -236,15 +285,35 @@ impl Session {
             .segments
             .iter()
             .any(|segment| segment.style.effects.contains(Effects::ITALIC));
+
+        // Check if this is the start of a tool block
+        let prev_is_tool = if index > 0 {
+            self.lines
+                .get(index - 1)
+                .map(|prev| prev.kind == InlineMessageKind::Tool)
+                .unwrap_or(false)
+        } else {
+            false
+        };
+        let is_start = !prev_is_tool;
+
         let next_is_tool = self
             .lines
             .get(index + 1)
             .map(|next| next.kind == InlineMessageKind::Tool)
             .unwrap_or(false);
-
         let is_end = !next_is_tool;
 
         let mut lines = Vec::new();
+
+        // Add visual separator at start of tool block
+        if is_start {
+            // Blank line before tool block for visual separation
+            if index > 0 {
+                lines.push(Line::default());
+            }
+        }
+
         if is_detail {
             // Simple indent prefix without border characters
             let body_prefix = "  ";
@@ -257,7 +326,7 @@ impl Session {
                 border_style,
             ));
         } else {
-            // For simple tool output, render without borders
+            // For simple tool output, render with consistent indent
             let mut combined_text = String::new();
             for segment in &line.segments {
                 let stripped_text = render::strip_ansi_codes(&segment.text);
@@ -267,7 +336,9 @@ impl Session {
             // Collapse multiple consecutive newlines
             let processed_text = collapse_excess_newlines(&combined_text);
 
-            let base_line = Line::from(processed_text.into_owned());
+            // Add indent for visual grouping
+            let indented_text = format!("  {}", processed_text);
+            let base_line = Line::from(indented_text).style(border_style);
             if max_width > 0 {
                 lines.extend(self.wrap_line(base_line, max_width));
             } else {
@@ -275,8 +346,9 @@ impl Session {
             }
         }
 
+        // Add blank line after tool block for clean separation
         if is_end {
-            // Don't add bottom border for simple tool output
+            lines.push(Line::default());
         }
 
         if lines.is_empty() {
@@ -444,6 +516,11 @@ impl Session {
     }
 
     /// Justify wrapped lines for agent messages
+    ///
+    /// This method also applies visual styling for:
+    /// - Todo/checkbox items (completed items are dimmed)
+    /// - List items with consistent formatting
+    /// - Diff lines with background colors
     #[allow(dead_code)]
     pub(super) fn justify_wrapped_lines(
         &self,
@@ -460,29 +537,39 @@ impl Session {
         let mut in_fenced_block = false;
         for (index, line) in lines.into_iter().enumerate() {
             let is_last = index + 1 == total;
-            let mut next_in_fenced_block = in_fenced_block;
-            let is_fence_line = {
-                let line_text_storage: std::borrow::Cow<'_, str> = if line.spans.len() == 1 {
-                    std::borrow::Cow::Borrowed(line.spans[0].content.as_ref())
-                } else {
-                    std::borrow::Cow::Owned(
-                        line.spans
-                            .iter()
-                            .map(|span| span.content.as_ref())
-                            .collect::<String>(),
-                    )
-                };
-                let line_text = line_text_storage.as_ref();
-                let trimmed_start = line_text.trim_start();
-                trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~")
+
+            // Extract line text for analysis
+            let line_text_storage: std::borrow::Cow<'_, str> = if line.spans.len() == 1 {
+                std::borrow::Cow::Borrowed(line.spans[0].content.as_ref())
+            } else {
+                std::borrow::Cow::Owned(
+                    line.spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect::<String>(),
+                )
             };
+            let line_text = line_text_storage.as_ref();
+            let trimmed_start = line_text.trim_start();
+
+            let mut next_in_fenced_block = in_fenced_block;
+            let is_fence_line =
+                trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~");
             if is_fence_line {
                 next_in_fenced_block = !in_fenced_block;
             }
 
+            // Check for todo/checkbox items
+            let todo_state = text_utils::detect_todo_state(line_text);
+
             // Extend diff line backgrounds to full width
             let processed_line = if self.is_diff_line(&line) {
                 self.pad_diff_line(&line, max_width)
+            } else if todo_state == text_utils::TodoState::Completed
+                && self.appearance.dim_completed_todos
+            {
+                // Dim completed todo items for visual hierarchy
+                self.apply_completed_todo_style(&line)
             } else if kind == InlineMessageKind::Agent
                 && !in_fenced_block
                 && !is_fence_line
@@ -498,6 +585,23 @@ impl Session {
         }
 
         justified
+    }
+
+    /// Apply dimmed styling to completed todo items
+    fn apply_completed_todo_style(&self, line: &Line<'static>) -> Line<'static> {
+        let dimmed_spans: Vec<Span<'static>> = line
+            .spans
+            .iter()
+            .map(|span| {
+                Span::styled(
+                    span.content.clone(),
+                    span.style
+                        .add_modifier(Modifier::DIM)
+                        .add_modifier(Modifier::CROSSED_OUT),
+                )
+            })
+            .collect();
+        Line::from(dimmed_spans)
     }
 
     /// Check if a message line should be justified

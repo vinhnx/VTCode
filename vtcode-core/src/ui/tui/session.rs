@@ -1,5 +1,7 @@
 use std::{collections::VecDeque, sync::Arc};
 
+use anyhow::Result;
+
 #[cfg(test)]
 use anstyle::Color as AnsiColorEnum;
 use anstyle::RgbColor;
@@ -23,6 +25,7 @@ use super::{
     },
 };
 use crate::config::constants::ui;
+use crate::config::loader::VTCodeConfig;
 use crate::ui::tui::widgets::SessionWidget;
 
 pub mod file_palette;
@@ -39,7 +42,7 @@ pub mod render;
 mod scroll;
 pub mod slash;
 pub mod slash_palette;
-mod styling;
+pub mod styling;
 mod text_utils;
 mod transcript;
 
@@ -49,6 +52,7 @@ mod command;
 pub mod config_palette;
 mod editing;
 
+pub mod config;
 mod diff_preview;
 mod events;
 mod message_renderer;
@@ -68,6 +72,7 @@ use self::input_manager::InputManager;
 use self::message::{MessageLabels, MessageLine};
 use self::modal::{ModalState, WizardModalState};
 
+use self::config::AppearanceConfig;
 use self::prompt_palette::PromptPalette;
 use self::queue::QueueOverlay;
 use self::scroll::ScrollManager;
@@ -101,6 +106,7 @@ pub struct Session {
     pub(crate) lines: Vec<MessageLine>,
     pub(crate) theme: InlineTheme,
     pub(crate) styles: SessionStyles,
+    pub(crate) appearance: AppearanceConfig,
     pub(crate) header_context: InlineHeaderContext,
     pub(crate) header_rows: u16,
     pub(crate) labels: MessageLabels,
@@ -222,10 +228,43 @@ impl Session {
         view_rows: u16,
         show_logs: bool,
     ) -> Self {
+        Self::new_with_config_and_logs(theme, placeholder, view_rows, show_logs, None)
+    }
+
+    /// Create a new Session with configuration loaded from vtcode.toml
+    pub fn new_with_config(
+        theme: InlineTheme,
+        placeholder: Option<String>,
+        view_rows: u16,
+    ) -> Result<Self> {
+        let config_manager = crate::config::loader::ConfigManager::load()?;
+        let config = config_manager.config().clone();
+        Ok(Self::new_with_config_and_logs(
+            theme,
+            placeholder,
+            view_rows,
+            true,
+            Some(config),
+        ))
+    }
+
+    /// Internal constructor that combines config loading with log settings
+    fn new_with_config_and_logs(
+        theme: InlineTheme,
+        placeholder: Option<String>,
+        view_rows: u16,
+        show_logs: bool,
+        config: Option<VTCodeConfig>,
+    ) -> Self {
         let resolved_rows = view_rows.max(2);
         let initial_header_rows = ui::INLINE_HEADER_HEIGHT;
         let reserved_rows = initial_header_rows + Self::input_block_height_for_lines(1);
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
+
+        let appearance = config
+            .as_ref()
+            .map(AppearanceConfig::from_config)
+            .unwrap_or_default();
 
         let mut session = Self {
             // --- Managers (Phase 2) ---
@@ -236,6 +275,7 @@ impl Session {
             lines: Vec::with_capacity(64),
             styles: SessionStyles::new(theme.clone()),
             theme,
+            appearance,
             header_context: InlineHeaderContext::default(),
             labels: MessageLabels::default(),
 
@@ -655,6 +695,24 @@ impl Session {
             // Re-apply theme to prompt prefix if needed (though it usually uses self.theme)
             self.prompt_style.color = self.theme.primary.or(self.theme.foreground);
         }
+
+        // Sync UI appearance settings from VTCodeConfig
+        self.appearance.show_sidebar = config.ui.show_sidebar;
+        self.appearance.show_message_dividers = config.ui.show_message_dividers;
+        self.appearance.dim_completed_todos = config.ui.dim_completed_todos;
+        // Convert message_block_spacing bool to u8 (0 or 1)
+        self.appearance.message_block_spacing = if config.ui.message_block_spacing {
+            1
+        } else {
+            0
+        };
+
+        // Sync UI mode from VTCodeConfig
+        self.appearance.ui_mode = match config.ui.display_mode {
+            crate::config::UiDisplayMode::Full => config::UiMode::Full,
+            crate::config::UiDisplayMode::Minimal => config::UiMode::Minimal,
+            crate::config::UiDisplayMode::Focused => config::UiMode::Focused,
+        };
 
         self.recalculate_transcript_rows();
         self.mark_dirty();

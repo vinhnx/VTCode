@@ -23,6 +23,36 @@ pub enum ReasoningDisplayMode {
     Hidden,
 }
 
+/// Layout mode override for responsive UI
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LayoutModeOverride {
+    /// Auto-detect based on terminal size
+    #[default]
+    Auto,
+    /// Force compact mode (no borders)
+    Compact,
+    /// Force standard mode (borders, no sidebar/footer)
+    Standard,
+    /// Force wide mode (sidebar + footer)
+    Wide,
+}
+
+/// UI display mode variants for quick presets
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum UiDisplayMode {
+    /// Full UI with all features (sidebar, footer, dividers)
+    Full,
+    /// Minimal UI - no sidebar, no footer, no dividers
+    #[default]
+    Minimal,
+    /// Focused mode - transcript only, maximum content space
+    Focused,
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UiConfig {
@@ -46,6 +76,46 @@ pub struct UiConfig {
     pub status_line: StatusLineConfig,
     #[serde(default)]
     pub keyboard_protocol: KeyboardProtocolConfig,
+
+    /// Override the responsive layout mode
+    #[serde(default)]
+    pub layout_mode: LayoutModeOverride,
+
+    /// UI display mode preset (full, minimal, focused)
+    #[serde(default)]
+    pub display_mode: UiDisplayMode,
+
+    /// Show the right sidebar (queue, context, tools)
+    #[serde(default = "default_show_sidebar")]
+    pub show_sidebar: bool,
+
+    /// Show message dividers between conversation turns
+    #[serde(default = "default_show_message_dividers")]
+    pub show_message_dividers: bool,
+
+    /// Dim completed todo items (- [x]) in agent output
+    #[serde(default = "default_dim_completed_todos")]
+    pub dim_completed_todos: bool,
+
+    /// Add spacing between message blocks
+    #[serde(default = "default_message_block_spacing")]
+    pub message_block_spacing: bool,
+}
+
+fn default_show_sidebar() -> bool {
+    true
+}
+
+fn default_show_message_dividers() -> bool {
+    false // Clean UI by default
+}
+
+fn default_dim_completed_todos() -> bool {
+    true
+}
+
+fn default_message_block_spacing() -> bool {
+    true
 }
 
 impl Default for UiConfig {
@@ -61,6 +131,12 @@ impl Default for UiConfig {
             reasoning_visible_default: default_reasoning_visible_default(),
             status_line: StatusLineConfig::default(),
             keyboard_protocol: KeyboardProtocolConfig::default(),
+            layout_mode: LayoutModeOverride::default(),
+            display_mode: UiDisplayMode::default(),
+            show_sidebar: default_show_sidebar(),
+            show_message_dividers: default_show_message_dividers(),
+            dim_completed_todos: default_dim_completed_todos(),
+            message_block_spacing: default_message_block_spacing(),
         }
     }
 }

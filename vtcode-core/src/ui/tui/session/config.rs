@@ -24,11 +24,30 @@ pub struct SessionConfig {
     pub customization: CustomizationConfig,
 }
 
+/// UI mode variants for quick presets
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UiMode {
+    /// Full UI with all features (sidebar, footer, dividers)
+    #[default]
+    Full,
+    /// Minimal UI - no sidebar, no footer, no dividers
+    Minimal,
+    /// Focused mode - transcript only, maximum content space
+    Focused,
+}
+
 /// UI appearance configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppearanceConfig {
     /// Color theme to use
     pub theme: String,
+
+    /// UI mode variant (full, minimal, focused)
+    pub ui_mode: UiMode,
+
+    /// Whether to show the right sidebar (queue, context, tools)
+    pub show_sidebar: bool,
 
     /// Minimum width for content area
     pub min_content_width: u16,
@@ -39,22 +58,88 @@ pub struct AppearanceConfig {
     /// Percentage of width for navigation area
     pub navigation_width_percent: u8,
 
-    /// Whether to show message dividers
+    /// Whether to show message dividers between conversation turns
     pub show_message_dividers: bool,
 
     /// Transcript bottom padding
     pub transcript_bottom_padding: u16,
+
+    /// Whether to dim completed todo items (- [x] and ~~strikethrough~~)
+    pub dim_completed_todos: bool,
+
+    /// Number of blank lines between message blocks (0-2)
+    pub message_block_spacing: u8,
+
+    /// Customization settings
+    pub customization: CustomizationConfig,
 }
 
 impl Default for AppearanceConfig {
     fn default() -> Self {
         Self {
             theme: "default".to_owned(),
+            ui_mode: UiMode::Full,
+            show_sidebar: true,
             min_content_width: 40,
             min_navigation_width: 20,
             navigation_width_percent: 25,
             show_message_dividers: true,
             transcript_bottom_padding: 1,
+            dim_completed_todos: true,
+            message_block_spacing: 1,
+            customization: CustomizationConfig::default(),
+        }
+    }
+}
+
+impl AppearanceConfig {
+    /// Create AppearanceConfig from VTCodeConfig
+    pub fn from_config(config: &crate::config::loader::VTCodeConfig) -> Self {
+        Self {
+            theme: config.agent.theme.clone(),
+            ui_mode: match config.ui.display_mode {
+                crate::config::UiDisplayMode::Full => UiMode::Full,
+                crate::config::UiDisplayMode::Minimal => UiMode::Minimal,
+                crate::config::UiDisplayMode::Focused => UiMode::Focused,
+            },
+            show_sidebar: config.ui.show_sidebar,
+            min_content_width: 40,
+            min_navigation_width: 20,
+            navigation_width_percent: 25,
+            show_message_dividers: config.ui.show_message_dividers,
+            transcript_bottom_padding: 1,
+            dim_completed_todos: config.ui.dim_completed_todos,
+            message_block_spacing: if config.ui.message_block_spacing {
+                1
+            } else {
+                0
+            },
+            customization: CustomizationConfig::default(),
+        }
+    }
+
+    /// Check if sidebar should be shown based on ui_mode and show_sidebar
+    pub fn should_show_sidebar(&self) -> bool {
+        match self.ui_mode {
+            UiMode::Full => self.show_sidebar,
+            UiMode::Minimal | UiMode::Focused => false,
+        }
+    }
+
+    /// Check if message dividers should be shown based on ui_mode
+    pub fn should_show_dividers(&self) -> bool {
+        match self.ui_mode {
+            UiMode::Full => self.show_message_dividers,
+            UiMode::Minimal | UiMode::Focused => false,
+        }
+    }
+
+    /// Check if footer should be shown based on ui_mode
+    pub fn should_show_footer(&self) -> bool {
+        match self.ui_mode {
+            UiMode::Full => true,
+            UiMode::Minimal => false,
+            UiMode::Focused => false,
         }
     }
 }
@@ -214,11 +299,13 @@ impl SessionConfig {
         // parsing and validation for different configuration types
         match key {
             "behavior.max_input_lines" => {
-                self.behavior.max_input_lines = value.parse()
+                self.behavior.max_input_lines = value
+                    .parse()
                     .map_err(|_| format!("Cannot parse '{}' as number", value))?;
             }
             "performance.lru_cache_size" => {
-                self.performance.lru_cache_size = value.parse()
+                self.performance.lru_cache_size = value
+                    .parse()
                     .map_err(|_| format!("Cannot parse '{}' as number", value))?;
             }
             _ => return Err(format!("Unknown configuration key: {}", key)),
@@ -229,10 +316,8 @@ impl SessionConfig {
     /// Gets a configuration value by key
     pub fn get_value(&self, key: &str) -> Option<String> {
         match key {
-            "behavior.max_input_lines" =>
-                Some(self.behavior.max_input_lines.to_string()),
-            "performance.lru_cache_size" =>
-                Some(self.performance.lru_cache_size.to_string()),
+            "behavior.max_input_lines" => Some(self.behavior.max_input_lines.to_string()),
+            "performance.lru_cache_size" => Some(self.performance.lru_cache_size.to_string()),
             _ => None,
         }
     }
@@ -285,13 +370,20 @@ mod tests {
         config.set_value("behavior.max_input_lines", "15").unwrap();
         assert_eq!(config.behavior.max_input_lines, 15);
 
-        assert!(config.set_value("behavior.max_input_lines", "not_a_number").is_err());
+        assert!(
+            config
+                .set_value("behavior.max_input_lines", "not_a_number")
+                .is_err()
+        );
     }
 
     #[test]
     fn test_config_value_getting() {
         let config = SessionConfig::new();
-        assert_eq!(config.get_value("behavior.max_input_lines"), Some("10".to_owned()));
+        assert_eq!(
+            config.get_value("behavior.max_input_lines"),
+            Some("10".to_owned())
+        );
     }
 
     #[test]

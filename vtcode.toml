@@ -12,7 +12,7 @@ api_key_env = "OLLAMA_API_KEY"
 default_model = "gpt-oss:20b-cloud"
 
 # Visual theme for the terminal interface
-theme = "vitesse-dark"
+theme = "vitesse-light"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -27,10 +27,10 @@ max_conversation_turns = 80
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 reasoning_effort = "low"
 system_prompt_mode = "default"
-tool_documentation_mode = "full"
+tool_documentation_mode = "minimal"
 enable_split_tool_results = true
 todo_planning_mode = true
-verbosity = "medium"
+verbosity = "low"
 refine_temperature = 0.3
 enable_self_review = false
 max_review_passes = 1
@@ -53,7 +53,7 @@ require_plan_confirmation = true
 autonomous_mode = false
 
 [agent.small_model]
-enabled = true
+enabled = false
 model = ""
 temperature = 0.3
 use_for_large_reads = true
@@ -111,15 +111,21 @@ max_file_size_kb = 64
 # UI configuration
 [ui]
 # Tool output display mode
-tool_output_mode = "compact"
+tool_output_mode = "full"
 
 # Maximum number of lines to display in tool output (prevents transcript flooding)
 tool_output_max_lines = 50
 tool_output_spool_bytes = 200000
-allow_tool_ansi = false
+allow_tool_ansi = true
 inline_viewport_rows = 16
 reasoning_display_mode = "toggle"
 reasoning_visible_default = false
+layout_mode = "auto"
+show_message_dividers = false
+dim_completed_todos = true
+message_block_spacing = true
+display_mode = "minimal"
+show_sidebar = false
 
 [agent.custom_slash_commands]
 enabled = false

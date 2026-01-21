@@ -228,7 +228,7 @@ impl ModelPickerState {
         workspace: &std::path::Path,
         selection: &ModelSelectionResult,
     ) -> Result<VTCodeConfig> {
-        let manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
+        let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
             format!(
                 "Failed to load vtcode configuration for workspace {}",
                 workspace.display()
