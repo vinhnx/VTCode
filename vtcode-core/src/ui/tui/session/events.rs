@@ -251,7 +251,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::ScrollPageDown)
         }
         KeyCode::Up => {
-            tracing::debug!("KeyCode::Up received, input_enabled: {}", session.input_enabled);
+            tracing::debug!(
+                "KeyCode::Up received, input_enabled: {}",
+                session.input_enabled
+            );
             if session.navigate_history_previous() {
                 session.mark_dirty();
                 Some(InlineEvent::HistoryPrevious)
@@ -260,7 +263,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
         }
         KeyCode::Down => {
-            tracing::debug!("KeyCode::Down received, input_enabled: {}", session.input_enabled);
+            tracing::debug!(
+                "KeyCode::Down received, input_enabled: {}",
+                session.input_enabled
+            );
             if session.navigate_history_next() {
                 session.mark_dirty();
                 Some(InlineEvent::HistoryNext)

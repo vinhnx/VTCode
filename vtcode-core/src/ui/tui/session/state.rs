@@ -352,5 +352,4 @@ impl Session {
         }
         let _ = events.send(event.clone());
     }
-
 }

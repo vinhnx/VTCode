@@ -371,9 +371,8 @@ impl Session {
 
     /// Build history position indicator string
     fn build_history_indicator(&self) -> Option<String> {
-        self.history_position().map(|(current, total)| {
-            format!("⏱ {}/{}", current, total)
-        })
+        self.history_position()
+            .map(|(current, total)| format!("⏱ {}/{}", current, total))
     }
 
     #[allow(dead_code)]

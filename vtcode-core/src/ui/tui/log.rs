@@ -9,17 +9,16 @@ use ratatui::{
     text::{Line, Span, Text},
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::warn;
 use tracing::{Event, Level, Subscriber, field::Visit};
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
-use tui_syntax_highlight::{
-    Highlighter,
-    syntect::{
-        highlighting::{Theme, ThemeSet},
-        parsing::{SyntaxReference, SyntaxSet},
-    },
+use tui_syntax_highlight::Highlighter;
+
+use crate::ui::syntax_highlight::{
+    default_theme_name, find_syntax_by_extension, find_syntax_by_name, find_syntax_plain_text,
+    load_theme, syntax_set,
 };
+use syntect::parsing::SyntaxReference;
 
 #[derive(Debug, Clone)]
 pub struct LogEntry {
@@ -53,22 +52,6 @@ impl LogForwarder {
 
 static LOG_FORWARDER: Lazy<Arc<LogForwarder>> = Lazy::new(|| Arc::new(LogForwarder::default()));
 
-const DEFAULT_THEME_NAME: &str = "base16-ocean.dark";
-static LOG_SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(|| {
-    // Attempt to load default syntaxes, but provide empty fallback if it fails
-    let syntax_set = SyntaxSet::load_defaults_newlines();
-    if syntax_set.syntaxes().is_empty() {
-        warn!("Failed to load syntax set for log highlighting; log syntax highlighting disabled");
-    }
-    syntax_set
-});
-static LOG_THEME_SET: Lazy<ThemeSet> = Lazy::new(|| match ThemeSet::load_defaults() {
-    theme_set if !theme_set.themes.is_empty() => theme_set,
-    _ => {
-        warn!("Failed to load theme set for log highlighting; using empty theme set");
-        ThemeSet::new()
-    }
-});
 static LOG_THEME_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
 static LOG_HIGHLIGHTER_CACHE: Lazy<RwLock<Option<(String, Highlighter)>>> =
     Lazy::new(|| RwLock::new(None));
@@ -225,30 +208,9 @@ pub fn set_log_theme_name(theme: Option<String>) {
     *cache = None;
 }
 
-fn resolve_theme(theme_name: Option<String>) -> Theme {
-    let name = theme_name.unwrap_or_else(|| DEFAULT_THEME_NAME.to_string());
-
-    // If themes are empty, return default theme early
-    if LOG_THEME_SET.themes.is_empty() {
-        warn!("No log highlighting themes available");
-        return Theme::default();
-    }
-
-    if let Some(theme) = LOG_THEME_SET.themes.get(&name) {
-        return theme.clone();
-    }
-    if let Some(theme) = LOG_THEME_SET.themes.get(DEFAULT_THEME_NAME) {
-        return theme.clone();
-    }
-    LOG_THEME_SET
-        .themes
-        .values()
-        .next()
-        .cloned()
-        .unwrap_or_else(|| {
-            warn!("No themes available in LOG_THEME_SET despite non-empty check");
-            Theme::default()
-        })
+fn resolve_theme(theme_name: Option<String>) -> tui_syntax_highlight::syntect::highlighting::Theme {
+    let name = theme_name.unwrap_or_else(|| default_theme_name());
+    load_theme(&name, false)
 }
 
 fn highlighter_for_current_theme() -> Highlighter {
@@ -256,9 +218,7 @@ fn highlighter_for_current_theme() -> Highlighter {
         let slot = LOG_THEME_NAME.read().unwrap();
         slot.clone()
     };
-    let resolved_name = theme_name
-        .clone()
-        .unwrap_or_else(|| DEFAULT_THEME_NAME.to_string());
+    let resolved_name = theme_name.clone().unwrap_or_else(|| default_theme_name());
     {
         let cache = LOG_HIGHLIGHTER_CACHE.read().unwrap();
         if let Some((cached_name, cached)) = &*cache
@@ -315,31 +275,29 @@ fn select_syntax(message: &str) -> &'static SyntaxReference {
     let trimmed = message.trim_start();
     if !trimmed.is_empty() {
         if (trimmed.starts_with('{') || trimmed.starts_with('['))
-            && let Some(json) = LOG_SYNTAX_SET
-                .find_syntax_by_name("JSON")
-                .or_else(|| LOG_SYNTAX_SET.find_syntax_by_extension("json"))
+            && let Some(json) =
+                find_syntax_by_name("JSON").or_else(|| find_syntax_by_extension("json"))
         {
             return json;
         }
 
         if (trimmed.contains('$') || trimmed.contains(';'))
-            && let Some(shell) = LOG_SYNTAX_SET
-                .find_syntax_by_name("Bash")
-                .or_else(|| LOG_SYNTAX_SET.find_syntax_by_extension("sh"))
+            && let Some(shell) =
+                find_syntax_by_name("Bash").or_else(|| find_syntax_by_extension("sh"))
         {
             return shell;
         }
     }
 
-    LOG_SYNTAX_SET
-        .find_syntax_by_name("Rust")
-        .or_else(|| LOG_SYNTAX_SET.find_syntax_by_extension("rs"))
-        .unwrap_or_else(|| LOG_SYNTAX_SET.find_syntax_plain_text())
+    find_syntax_by_name("Rust")
+        .or_else(|| find_syntax_by_extension("rs"))
+        .unwrap_or_else(find_syntax_plain_text)
 }
 
 pub fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
     // If syntax set is empty, skip highlighting entirely
-    if LOG_SYNTAX_SET.syntaxes().is_empty() {
+    let ss = syntax_set();
+    if ss.syntaxes().is_empty() {
         let mut text = Text::raw(entry.formatted.as_ref().to_string());
         prepend_metadata(&mut text, entry);
         return text;
@@ -347,7 +305,7 @@ pub fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
 
     let syntax = select_syntax(entry.message.as_ref());
     let mut highlighted = highlighter_for_current_theme()
-        .highlight_lines(entry.message.lines(), syntax, &LOG_SYNTAX_SET)
+        .highlight_lines(entry.message.lines(), syntax, ss)
         .unwrap_or_else(|_| Text::raw(entry.formatted.as_ref().to_string()));
     prepend_metadata(&mut highlighted, entry);
     highlighted
