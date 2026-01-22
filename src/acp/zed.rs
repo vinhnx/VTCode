@@ -98,6 +98,46 @@ const WORKSPACE_TRUST_ALREADY_SATISFIED_LOG: &str = "ACP workspace trust level a
 const WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG: &str =
     "ACP workspace trust downgrade skipped because workspace is fully trusted";
 
+/// Tools that are not exposed via ACP because the protocol has native support for these features.
+///
+/// - Plan mode tools: ACP has built-in session modes (ask/architect/code) - see https://agentclientprotocol.com/protocol/session-modes.md
+/// - HITL tools: ACP has native permission request mechanism
+const TOOLS_EXCLUDED_FROM_ACP: &[&str] = &[
+    tools::ENTER_PLAN_MODE,
+    tools::EXIT_PLAN_MODE,
+    tools::ASK_USER_QUESTION,
+];
+
+/// ACP Session Mode identifiers (aligned with https://agentclientprotocol.com/protocol/session-modes.md)
+const MODE_ID_ASK: &str = "ask";
+const MODE_ID_ARCHITECT: &str = "architect";
+const MODE_ID_CODE: &str = "code";
+
+fn acp_session_modes() -> Vec<acp::SessionMode> {
+    vec![
+        acp::SessionMode {
+            id: acp::SessionModeId(MODE_ID_ASK.into()),
+            name: "Ask".to_string(),
+            description: Some("Request permission before making any changes".to_string()),
+            meta: None,
+        },
+        acp::SessionMode {
+            id: acp::SessionModeId(MODE_ID_ARCHITECT.into()),
+            name: "Architect".to_string(),
+            description: Some(
+                "Design and plan software systems without implementation".to_string(),
+            ),
+            meta: None,
+        },
+        acp::SessionMode {
+            id: acp::SessionModeId(MODE_ID_CODE.into()),
+            name: "Code".to_string(),
+            description: Some("Write and modify code with full tool access".to_string()),
+            meta: None,
+        },
+    ]
+}
+
 fn text_chunk(text: impl Into<String>) -> acp::ContentChunk {
     acp::ContentChunk {
         content: acp::ContentBlock::from(text.into()),
@@ -411,11 +451,12 @@ impl ZedAgent {
             .into_iter()
             .collect();
         let decls = build_function_declarations_for_level(CapabilityLevel::CodeSearch);
-        let mut local_definitions = Vec::with_capacity(decls.len()); // Pre-allocate capacity
+        let mut local_definitions = Vec::with_capacity(decls.len());
 
         for decl in decls {
             if decl.name != tools::READ_FILE
                 && decl.name != tools::LIST_FILES
+                && !TOOLS_EXCLUDED_FROM_ACP.contains(&decl.name.as_str())
                 && available_local_tools.contains(decl.name.as_str())
             {
                 local_definitions.push(ToolDefinition::function(
@@ -953,15 +994,16 @@ impl ZedAgent {
             };
 
             let call_id = acp::ToolCallId(Arc::from(call.id.clone()));
+            let kind = tool_descriptor
+                .map(|d| d.kind())
+                .unwrap_or_else(|| self.acp_tool_registry.tool_kind(&func_ref.name));
             let initial_call = acp::ToolCall {
                 id: call_id.clone(),
                 title,
-                kind: tool_descriptor
-                    .map(|descriptor| descriptor.kind())
-                    .unwrap_or(acp::ToolKind::Other),
+                kind,
                 status: acp::ToolCallStatus::Pending,
-                content: Vec::with_capacity(1), // Pre-allocate for typical content
-                locations: Vec::with_capacity(1), // Pre-allocate for typical locations
+                content: Vec::with_capacity(1),
+                locations: Vec::with_capacity(1),
                 raw_input: args_value_for_input.clone(),
                 raw_output: None,
                 meta: None,
@@ -1785,9 +1827,14 @@ impl acp::Agent for ZedAgent {
         _args: acp::NewSessionRequest,
     ) -> Result<acp::NewSessionResponse, acp::Error> {
         let session_id = self.register_session();
+        let available_modes = acp_session_modes();
         Ok(acp::NewSessionResponse {
             session_id,
-            modes: None,
+            modes: Some(acp::SessionModeState {
+                current_mode_id: acp::SessionModeId(MODE_ID_CODE.into()),
+                available_modes,
+                meta: None,
+            }),
             meta: None,
         })
     }
@@ -1856,9 +1903,17 @@ impl acp::Agent for ZedAgent {
         let has_local_tools = self.acp_tool_registry.has_local_tools();
         let tools_allowed =
             provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
-        let _tool_definitions = self.tool_definitions(provider_supports_tools, &enabled_tools);
+        let tool_definitions = self.tool_definitions(provider_supports_tools, &enabled_tools);
         let mut messages = self.resolved_messages(&session);
         let allow_streaming = supports_streaming && !tools_allowed;
+
+        tracing::debug!(
+            tools_allowed = tools_allowed,
+            has_local_tools = has_local_tools,
+            acp_tools_count = enabled_tools.len(),
+            local_tools_count = tool_definitions.as_ref().map_or(0, |t| t.len()),
+            "Tool configuration for ACP session"
+        );
 
         let mut plan = PlanProgress::new(tools_allowed);
         if plan.has_entries() {
@@ -1873,6 +1928,7 @@ impl acp::Agent for ZedAgent {
                 messages: messages.clone(),
                 model: self.config.model.clone(),
                 stream: true,
+                tools: tool_definitions,
                 tool_choice: self.tool_choice(tools_allowed),
                 reasoning_effort,
                 ..Default::default()
@@ -1958,6 +2014,7 @@ impl acp::Agent for ZedAgent {
                 let request = LLMRequest {
                     messages: messages.clone(),
                     model: self.config.model.clone(),
+                    tools: tool_definitions.clone(),
                     tool_choice: self.tool_choice(tools_allowed),
                     reasoning_effort,
                     ..Default::default()
