@@ -29,9 +29,9 @@ pub struct ReadSummarizer {
 impl Default for ReadSummarizer {
     fn default() -> Self {
         Self {
-            max_preview_lines: 10,
-            max_suffix_lines: 3,
-            max_tokens: 200,
+            max_preview_lines: 20,
+            max_suffix_lines: 10,
+            max_tokens: 500, // ~1000 chars for token efficiency
         }
     }
 }
@@ -89,6 +89,14 @@ impl Summarizer for ReadSummarizer {
                 .join("\n");
 
             summary.push_str(&format!("\n\nEnd:\n{}", suffix));
+        }
+
+        // Add external editor hint for long files
+        if stats.total_lines > self.max_preview_lines + self.max_suffix_lines {
+            summary.push_str(&format!(
+                "\n\n[Use `/edit {}` for full content or specify offset/limit]",
+                file_path
+            ));
         }
 
         // Truncate to token limit

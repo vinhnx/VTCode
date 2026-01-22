@@ -500,9 +500,9 @@ fn trim_empty_lines(out: &mut VecDeque<&LineRecord>) {
 }
 
 fn condense_collected_lines(lines: &mut Vec<String>) {
-    const CONDENSED_THRESHOLD: usize = 100;
-    const HEAD_LINES: usize = 30;
-    const TAIL_LINES: usize = 30;
+    const CONDENSED_THRESHOLD: usize = 50;
+    const HEAD_LINES: usize = 20;
+    const TAIL_LINES: usize = 10;
 
     // If under threshold, return as-is
     if lines.len() <= CONDENSED_THRESHOLD {
