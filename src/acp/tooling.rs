@@ -46,6 +46,8 @@ pub const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 /// - Diagnostic tools (debug_agent, analyze_agent): Internal agent state, not for editor
 /// - Web fetch: Network access restricted in editor context
 /// - Search tools: Integrated into Zed's own search functionality
+/// - Plan mode tools (enter_plan_mode, exit_plan_mode): ACP has native session mode support - see https://agentclientprotocol.com/protocol/session-modes.md
+/// - HITL tools (ask_user_question): ACP has native permission request mechanism
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SupportedTool {
     ReadFile,
@@ -377,6 +379,24 @@ impl AcpToolRegistry {
                 }
             },
             ToolDescriptor::Local => Self::format_local_title(function_name),
+        }
+    }
+
+    pub fn tool_kind(&self, function_name: &str) -> agent_client_protocol::ToolKind {
+        match function_name {
+            n if n == tools::READ_FILE => agent_client_protocol::ToolKind::Fetch,
+            n if n == tools::GREP_FILE || n == tools::LIST_FILES => {
+                agent_client_protocol::ToolKind::Search
+            }
+            n if n == tools::RUN_PTY_CMD => agent_client_protocol::ToolKind::Execute,
+            n if n == tools::WRITE_FILE || n == tools::CREATE_FILE => {
+                agent_client_protocol::ToolKind::Edit
+            }
+            n if n == tools::EDIT_FILE => agent_client_protocol::ToolKind::Edit,
+            n if n == tools::DELETE_FILE => agent_client_protocol::ToolKind::Delete,
+            n if n == tools::WEB_FETCH => agent_client_protocol::ToolKind::Fetch,
+            n if n == tools::CODE_INTELLIGENCE => agent_client_protocol::ToolKind::Search,
+            _ => agent_client_protocol::ToolKind::Other,
         }
     }
 

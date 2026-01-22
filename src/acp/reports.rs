@@ -1,5 +1,6 @@
 use agent_client_protocol as acp;
 use serde_json::{Value, json};
+use std::path::PathBuf;
 
 pub const TOOL_FAILURE_PREFIX: &str = "Tool execution failed";
 pub const TOOL_SUCCESS_LABEL: &str = "success";
@@ -70,5 +71,20 @@ impl ToolExecutionReport {
 
     pub fn cancelled(tool_name: &str) -> Self {
         Self::failure(tool_name, TOOL_EXECUTION_CANCELLED_MESSAGE)
+    }
+}
+
+pub fn create_diff_content(
+    path: &str,
+    old_text: Option<&str>,
+    new_text: &str,
+) -> acp::ToolCallContent {
+    acp::ToolCallContent::Diff {
+        diff: acp::Diff {
+            path: PathBuf::from(path),
+            old_text: old_text.map(|s| s.to_string()),
+            new_text: new_text.to_string(),
+            meta: None,
+        },
     }
 }

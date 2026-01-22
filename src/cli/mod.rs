@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use vtcode_core::config::loader::VTCodeConfig;
 
+mod acp;
+
 /// Skills command options
 #[derive(Debug)]
 pub struct SkillsCommandOptions {
@@ -236,16 +238,10 @@ pub async fn handle_plugin_validate(path: &std::path::Path) -> Result<()> {
     vtcode_core::plugins::handle_plugin_validate(path).await
 }
 
+// Re-export the handle_acp_command from acp module
+pub use self::acp::handle_acp_command;
+
 // For the other functions, we'll use proper implementations that match the expected signatures
-pub async fn handle_acp_command(
-    _core_cfg: &vtcode_core::config::types::AgentConfig,
-    _cfg: &VTCodeConfig,
-    _target: vtcode_core::cli::args::AgentClientProtocolTarget,
-) -> Result<()> {
-    // This function should delegate to the actual implementation
-    // For now, we'll just return an error to indicate it's not implemented
-    Err(anyhow::anyhow!("ACP command not implemented in this stub"))
-}
 
 pub async fn handle_ask_single_command(
     core_cfg: vtcode_core::config::types::AgentConfig,

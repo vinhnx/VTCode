@@ -743,10 +743,10 @@ path_traversal_protection = true
 max_argument_size = 1048576
 
 [acp]
-enabled = false
+enabled = true
 
 [acp.zed]
-enabled = false
+enabled = true
 transport = "stdio"
 workspace_trust = "full_auto"
 
