@@ -1594,7 +1594,7 @@ impl ZedAgent {
                 let decoded = percent_decode_str(raw_path).decode_utf8().map_err(|_| {
                     format!("Unable to resolve URI provided to {}", tools::READ_FILE)
                 })?;
-                PathBuf::from(decoded.as_ref())
+                PathBuf::from(&*decoded)
             }
             _ => {
                 return Err(format!(
