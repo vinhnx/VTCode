@@ -1,295 +1,41 @@
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/exec/code*executor.rs:242:66
-|
-242 | OsString::from(self.workspace_root.to_string_lossy().as_ref()),
-| ^^^^^^
-|
-= note: multiple `impl`s satisfying `Cow<'*, str>: AsRef<_>`found in the following crates:`alloc`, `typed_path`: - impl<T> AsRef<T> for Cow<'_, T>
-where T: ToOwned, T: ?Sized; - impl<T> AsRef<typed*path::common::utf8::path::Utf8Path<T>> for Cow<'*, str>
-where T: typed*path::common::utf8::Utf8Encoding;
-help: try using a fully qualified path to specify the expected types
-|
-242 - OsString::from(self.workspace_root.to_string_lossy().as_ref()),
-242 + OsString::from(<Cow<'*, str> as AsRef<T>>::as_ref(&self.workspace_root.to_string_lossy())),
-|
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/exec/code*executor.rs:248:54
-|
-248 | OsString::from(ipc_dir.to_string_lossy().as_ref()),
-| ^^^^^^
-|
-= note: multiple `impl`s satisfying `Cow<'*, str>: AsRef<_>`found in the following crates:`alloc`, `typed_path`: - impl<T> AsRef<T> for Cow<'_, T>
-where T: ToOwned, T: ?Sized; - impl<T> AsRef<typed*path::common::utf8::path::Utf8Path<T>> for Cow<'*, str>
-where T: typed*path::common::utf8::Utf8Encoding;
-help: try using a fully qualified path to specify the expected types
-|
-248 - OsString::from(ipc_dir.to_string_lossy().as_ref()),
-248 + OsString::from(<Cow<'*, str> as AsRef<T>>::as_ref(&ipc_dir.to_string_lossy())),
-|
+――――――――――――――――――――――――――――――――
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/llm/providers/error*handling.rs:154:46
-|
-154 | format!("{} (HTTP {})", friendly_msg.as_ref(), status)
-| ^^^^^^
-|
-= note: multiple `impl`s satisfying `Cow<'*, str>: AsRef<_>`found in the following crates:`alloc`, `typed_path`: - impl<T> AsRef<T> for Cow<'_, T>
-where T: ToOwned, T: ?Sized; - impl<T> AsRef<typed*path::common::utf8::path::Utf8Path<T>> for Cow<'*, str>
-where T: typed*path::common::utf8::Utf8Encoding;
-help: try using a fully qualified path to specify the expected types
-|
-154 - format!("{} (HTTP {})", friendly_msg.as_ref(), status)
-154 + format!("{} (HTTP {})", <Cow<'*, str> as AsRef<T>>::as_ref(&friendly_msg), status)
-|
+Dependency Injection
 
-error[E0283]: type annotations needed for `&_`
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/tool*policy.rs:595:13
-|
-595 | let lookup = canonical.as_ref();
-| ^^^^^^ ------ type must be known at this point
-|
-= note: multiple `impl`s satisfying `Cow<'*, str>: AsRef<_>`found in the following crates:`alloc`, `typed_path`: - impl<T> AsRef<T> for Cow<'_, T>
-where T: ToOwned, T: ?Sized; - impl<T> AsRef<typed*path::common::utf8::path::Utf8Path<T>> for Cow<'*, str>
-where T: typed_path::common::utf8::Utf8Encoding;
-help: consider giving `lookup` an explicit type, where the type for type parameter `T` is specified
-|
-595 | let lookup: &T = canonical.as_ref();
-| ++++
+• CCDefaultAssembler (from CTCommon) is a thin Swinject wrapper.
+• Each feature’s Assembler registers:
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/tool*policy.rs:842:14
-|
-842 | .get(canonical.as_ref())
-| ^^^ ------------------ type must be known at this point
-| |
-| cannot infer type of the type parameter `Q` declared on the method `get`
-|
-= note: cannot satisfy `*: Hash`note: required by a bound in`IndexMap::<K, V, S>::get`   --> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/indexmap-2.13.0/src/map.rs:840:21
-    |
-838 |     pub fn get<Q>(&self, key: &Q) -> Option<&V>
-    |            --- required by a bound in this associated function
-839 |     where
-840 |         Q: ?Sized + Hash + Equivalent<K>,
-    |                     ^^^^ required by this bound in`IndexMap::<K, V, S>::get`help: consider specifying the generic argument
-    |
-842 |             .get::<Q>(canonical.as_ref())
-    |                 +++++
-help: consider removing this method call, as the receiver has type`Cow<'_, str>`and`Cow<'_, str>: Hash` trivially holds
-|
-842 - .get(canonical.as_ref())
-842 + .get(canonical)
-|
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/tool*policy.rs:842:14
-|
-842 | .get(canonical.as_ref())
-| ^^^ ------ type must be known at this point
-| |
-| cannot infer type of the type parameter `Q` declared on the method `get`
-|
-= note: multiple `impl`s satisfying `Cow<'*, str>: AsRef<_>`found in the following crates:`alloc`, `typed_path`: - impl<T> AsRef<T> for Cow<'_, T>
-where T: ToOwned, T: ?Sized; - impl<T> AsRef<typed*path::common::utf8::path::Utf8Path<T>> for Cow<'*, str>
-where T: typed_path::common::utf8::Utf8Encoding;
-help: consider specifying the generic argument
-|
-842 | .get::<Q>(canonical.as_ref())
-| +++++
+container.register(<FeatureViewModel>.self) { r in
+<FeatureViewModel>(
+useCase: r.resolve(<FeatureUseCase>.self)!,
+router: r.resolve(<FeatureRouter>.self)!
+)
+}
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/tool*policy.rs:850:33
-|
-850 | self.config.constraints.get(canonical.as_ref())
-| ^^^ ------------------ type must be known at this point
-| |
-| cannot infer type of the type parameter `Q` declared on the method `get`
-|
-= note: cannot satisfy `*: Hash`note: required by a bound in`IndexMap::<K, V, S>::get`   --> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/indexmap-2.13.0/src/map.rs:840:21
-    |
-838 |     pub fn get<Q>(&self, key: &Q) -> Option<&V>
-    |            --- required by a bound in this associated function
-839 |     where
-840 |         Q: ?Sized + Hash + Equivalent<K>,
-    |                     ^^^^ required by this bound in`IndexMap::<K, V, S>::get`help: consider specifying the generic argument
-    |
-850 |         self.config.constraints.get::<Q>(canonical.as_ref())
-    |                                    +++++
-help: consider removing this method call, as the receiver has type`Cow<'_, str>`and`Cow<'_, str>: Hash` trivially holds
-|
-850 - self.config.constraints.get(canonical.as_ref())
-850 + self.config.constraints.get(canonical)
-|
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/tool*policy.rs:850:33
-|
-850 | self.config.constraints.get(canonical.as_ref())
-| ^^^ ------ type must be known at this point
-| |
-| cannot infer type of the type parameter `Q` declared on the method `get`
-|
-= note: multiple `impl`s satisfying `Cow<'*, str>: AsRef<_>`found in the following crates:`alloc`, `typed_path`: - impl<T> AsRef<T> for Cow<'_, T>
-where T: ToOwned, T: ?Sized; - impl<T> AsRef<typed*path::common::utf8::path::Utf8Path<T>> for Cow<'*, str>
-where T: typed_path::common::utf8::Utf8Encoding;
-help: consider specifying the generic argument
-|
-850 | self.config.constraints.get::<Q>(canonical.as_ref())
-| +++++
+• The assembler is called in the feature’s AppDelegate or SceneDelegate when the feature is presented.
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/tools/registry/policy.rs:246:40
-|
-246 | .map(|allowlist| allowlist.contains(canonical.as*ref()))
-| ^^^^^^^^ ------------------ type must be known at this point
-| |
-| cannot infer type of the type parameter `Q` declared on the method `contains`
-|
-= note: multiple `impl`s satisfying `std::string::String: Borrow<*>`found in the following crates:`alloc`, `bstr`, `core`:
-            - impl Borrow<bstr::bstr::BStr> for std::string::String;
-            - impl Borrow<str> for std::string::String;
-            - impl<T> Borrow<T> for T
-              where T: ?Sized;
-note: required by a bound in `HashSet::<T, S>::contains`   --> /Users/vinhnguyenxuan/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/collections/hash/set.rs:690:12
-    |
-688 |     pub fn contains<Q: ?Sized>(&self, value: &Q) -> bool
-    |            -------- required by a bound in this associated function
-689 |     where
-690 |         T: Borrow<Q>,
-    |            ^^^^^^^^^ required by this bound in`HashSet::<T, S>::contains`
-help: consider specifying the generic argument
-|
-246 | .map(|allowlist| allowlist.contains::<Q>(canonical.as_ref()))
-| +++++
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/tools/registry/policy.rs:246:40
-|
-246 | .map(|allowlist| allowlist.contains(canonical.as*ref()))
-| ^^^^^^^^ ------ type must be known at this point
-| |
-| cannot infer type of the type parameter `Q` declared on the method `contains`
-|
-= note: multiple `impl`s satisfying `Cow<'*, str>: AsRef<_>`found in the following crates:`alloc`, `typed_path`: - impl<T> AsRef<T> for Cow<'_, T>
-where T: ToOwned, T: ?Sized; - impl<T> AsRef<typed*path::common::utf8::path::Utf8Path<T>> for Cow<'*, str>
-where T: typed_path::common::utf8::Utf8Encoding;
-help: consider specifying the generic argument
-|
-246 | .map(|allowlist| allowlist.contains::<Q>(canonical.as_ref()))
-| +++++
+――――――――――――――――――――――――――――――――
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/tools/registry/policy.rs:325:54
-|
-325 | let was*preapproved = self.preapproved_tools.remove(canonical.as_ref());
-| ^^^^^^ ------------------ type must be known at this point
-| |
-| cannot infer type of the type parameter `Q` declared on the method `remove`
-|
-= note: multiple `impl`s satisfying `std::string::String: Borrow<*>`found in the following crates:`alloc`, `bstr`, `core`:
-            - impl Borrow<bstr::bstr::BStr> for std::string::String;
-            - impl Borrow<str> for std::string::String;
-            - impl<T> Borrow<T> for T
-              where T: ?Sized;
-note: required by a bound in `HashSet::<T, S>::remove`   --> /Users/vinhnguyenxuan/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/collections/hash/set.rs:965:12
-    |
-963 |     pub fn remove<Q: ?Sized>(&mut self, value: &Q) -> bool
-    |            ------ required by a bound in this associated function
-964 |     where
-965 |         T: Borrow<Q>,
-    |            ^^^^^^^^^ required by this bound in`HashSet::<T, S>::remove`
-help: consider specifying the generic argument
-|
-325 | let was_preapproved = self.preapproved_tools.remove::<Q>(canonical.as_ref());
-| +++++
+Testing
 
-error[E0283]: type annotations needed
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/tools/registry/policy.rs:325:54
-|
-325 | let was*preapproved = self.preapproved_tools.remove(canonical.as_ref());
-| ^^^^^^ ------ type must be known at this point
-| |
-| cannot infer type of the type parameter `Q` declared on the method `remove`
-|
-= note: multiple `impl`s satisfying `Cow<'*, str>: AsRef<_>`found in the following crates:`alloc`, `typed_path`: - impl<T> AsRef<T> for Cow<'_, T>
-where T: ToOwned, T: ?Sized; - impl<T> AsRef<typed*path::common::utf8::path::Utf8Path<T>> for Cow<'*, str>
-where T: typed_path::common::utf8::Utf8Encoding;
-help: consider specifying the generic argument
-|
-325 | let was_preapproved = self.preapproved_tools.remove::<Q>(canonical.as_ref());
-| +++++
+• Unit tests live in Tests/.
+• They mock repositories/services via protocols, ensuring pure business logic.
+• Example test:
 
-error[E0282]: type annotations needed for `&_`
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/ui/tui/session/render.rs:1201:17
-|
-1201 | let line*text = line_text_storage.as_ref();
-| ^^^^^^^^^
-1202 | let trimmed_start = line_text.trim_start();
-| ---------- type must be known at this point
-|
-help: consider giving `line_text` an explicit type, where the placeholders `*` are specified
-|
-1201 | let line_text: &T = line_text_storage.as_ref();
-| ++++
 
-error[E0282]: type annotations needed for `&_`
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/ui/tui/session/render.rs:1241:9
-|
-1241 | let text = line.spans[0].content.as*ref();
-| ^^^^
-1242 | if text.trim().is_empty() {
-| ---- type must be known at this point
-|
-help: consider giving `text` an explicit type, where the placeholders `*` are specified
-|
-1241 | let text: &T = line.spans[0].content.as_ref();
-| ++++
+func testLoginSuccess() {
+let mockRepo = MockLoginRepository()
+mockRepo.result = .success(User(id: "1", name: "Alice"))
+let vm = LoginViewModel(useCase: LoginUseCase(repo: mockRepo))
+vm.login(email: "a@b.com", password: "pass")
+XCTAssertEqual(vm.state.value, .loggedIn(User(id: "1", name: "Alice")))
+}
 
-error[E0282]: type annotations needed for `&_`
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/ui/tui/session/reflow.rs:552:17
-|
-552 | let line*text = line_text_storage.as_ref();
-| ^^^^^^^^^
-553 | let trimmed_start = line_text.trim_start();
-| ---------- type must be known at this point
-|
-help: consider giving `line_text` an explicit type, where the placeholders `*` are specified
-|
-552 | let line_text: &T = line_text_storage.as_ref();
-| ++++
-
-error[E0282]: type annotations needed for `&_`
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/ui/tui/session/reflow.rs:621:13
-|
-621 | let text = line.spans[0].content.as*ref();
-| ^^^^
-622 | if text.trim().is_empty() {
-| ---- type must be known at this point
-|
-help: consider giving `text` an explicit type, where the placeholders `*` are specified
-|
-621 | let text: &T = line.spans[0].content.as_ref();
-| ++++
-
-error[E0282]: type annotations needed for `&_`
---> /Users/vinhnguyenxuan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vtcode-core-0.66.2/src/utils/ansi.rs:817:25
-|
-817 | let content = span.content.as*ref();
-| ^^^^^^^
-818 | if content.is_empty() {
-| -------- type must be known at this point
-|
-help: consider giving `content` an explicit type, where the placeholders `*` are specified
-|
-817 | let content: &T = span.content.as_ref();
-| ++++
-
-Some errors have detailed explanations: E0282, E0283.
-For more information about an error, try `rustc --explain E0282`.
-error: could not compile `vtcode-core` (lib) due to 17 previous errors
-warning: build failed, waiting for other jobs to finish...
-error: failed to compile `vtcode v0.66.2`, intermediate artifacts can be found at `/var/folders/bw/b3wqv2xj57s853ypn022f87w0000gp/T/cargo-installISIhD9`.
-To reuse those artifacts with a future compilation, set the environment variable `CARGO_TARGET_DIR` to that path.
+check and fix code syntax highlighting and indentation doesn't work for assistant response.
 
 ---
 
@@ -409,3 +155,44 @@ To keep `vtcode` simple but powerful, transition from iterative refinement to a 
 | **High**   | **Tool Optimization** | Enable **Parallel Tool Calling** for shell/read commands.   | Cuts latency & improves speed. |
 | **Medium** | **Context Folding**   | Summarize older interaction turns every $N$ steps.          | Prevents "lost in the middle". |
 | **Medium** | **Hierarchical View** | Provide a **Gist/Summary** of the repo file structure.      | Better navigational accuracy.  |
+
+--
+
+
+> show me content of AppFeatures/CTJOB/SampleJOB/AppDelegate.swift
+
+for cat and show content command, DO NOT STREAM THE FULL CONTENT, ONLY SHOW THE FIRST 1000 CHARACTERS. head ...+n lines... and tail. and don't show the full content to presserve token. THIS IS CRITICAL FOR TOKEN EFFICIENCY. check tools exec and file system exec and vtcode agent system prompt.
+
+---
+
+edit UI '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-22 at 4.33.00 PM.png'
+
+---
+
+enhace read file tool with more efficient way to read file content. for example read by batch
+
+'/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-22 at 4.33.00 PM.png'
+
+---
+
+bash UI '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-22 at 4.43.06 PM.png'
+
+---
+
+Now I understand the usage:
+
+syntect - Used in markdown.rs and syntax_highlight.rs for core syntax highlighting
+anstyle-syntect - Used in markdown.rs to convert syntect styles to anstyle (for terminal output)
+tui-syntax-highlight - Used in log.rs for TUI log viewer highlighting (wraps syntect for ratatui)
+
+Now I understand the usage:
+
+syntect - Used in markdown.rs and syntax_highlight.rs for core syntax highlighting
+anstyle-syntect - Used in markdown.rs to convert syntect styles to anstyle (for terminal output)
+tui-syntax-highlight - Used in log.rs for TUI log viewer highlighting (wraps syntect for ratatui)
+
+The issue is that tui-syntax-highlight re-exports its own version of syntect (notice tui_syntax_highlight::syntect::highlighting::Theme on line 221), potentially causing version conflicts and binary bloat.
+
+--
+
+check to only use termimad only

@@ -94,9 +94,6 @@ anstyle-crossterm = "4.0"
 anstyle-query = "1.0"
 anstream = "0.6"
 anstyle-syntect = "1.0"
-tui-syntax-highlight = { version = "0.2.0", default-features = false, features = [
-    "regex-fancy",
-] }
 colorchoice-clap = "1.0"
 quick_cache = "0.6"
 roff = "0.2"
