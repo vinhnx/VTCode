@@ -164,7 +164,7 @@ pub(crate) async fn render_stream_section(
             let _ = write!(
                 &mut msg_buffer,
                 "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
-                uppercase_title.as_ref(),
+                <Cow<'_, str> as AsRef<str>>::as_ref(&uppercase_title),
                 effective_normalized_content.len(),
                 total,
                 log_path.display()
