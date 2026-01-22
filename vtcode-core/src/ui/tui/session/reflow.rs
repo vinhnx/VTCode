@@ -540,12 +540,12 @@ impl Session {
 
             // Extract line text for analysis
             let line_text_storage: std::borrow::Cow<'_, str> = if line.spans.len() == 1 {
-                std::borrow::Cow::Borrowed(line.spans[0].content.as_ref())
+                std::borrow::Cow::Borrowed(&*line.spans[0].content)
             } else {
                 std::borrow::Cow::Owned(
                     line.spans
                         .iter()
-                        .map(|span| span.content.as_ref())
+                        .map(|span| &*span.content)
                         .collect::<String>(),
                 )
             };
@@ -648,7 +648,7 @@ impl Session {
         max_width: usize,
     ) -> Line<'static> {
         let span = &line.spans[0];
-        if let Some(justified) = text_utils::justify_plain_text(span.content.as_ref(), max_width) {
+        if let Some(justified) = text_utils::justify_plain_text(&*span.content, max_width) {
             Line::from(justified).style(span.style)
         } else {
             line.clone()
