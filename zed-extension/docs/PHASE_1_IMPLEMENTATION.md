@@ -454,11 +454,11 @@ cargo install vtcode
 
 ## Compatibility
 
--   **Rust Edition**: 2021
--   **Minimum Rust**: 1.70.0
--   **Target**: WebAssembly (wasm32-unknown-unknown)
--   **Zed Version**: 0.150.0+
--   **VT Code CLI**: 0.1.0+
+- **Rust Edition**: 2021
+- **Minimum Rust**: 1.93.0
+- **Target**: WebAssembly (wasm32-unknown-unknown)
+- **Zed Version**: 0.150.0+
+- **VT Code CLI**: 0.1.0+
 
 ## Changelog
 

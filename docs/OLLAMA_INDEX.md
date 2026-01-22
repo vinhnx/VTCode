@@ -278,11 +278,11 @@ Handles both:
 
 ## Compatibility
 
-- ✅ Rust 1.75+
-- ✅ Tokio async runtime
-- ✅ Ollama 0.1+
-- ✅ OpenAI-compatible endpoints
-- ✅ Cloud and local deployments
+- Rust 1.93.0+
+- Tokio async runtime
+- Ollama 0.1+
+- OpenAI-compatible endpoints
+- Cloud and local deployments
 
 ## References
 

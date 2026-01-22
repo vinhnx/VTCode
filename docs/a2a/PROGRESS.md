@@ -248,12 +248,12 @@ CLAUDE.md (added A2A protocol documentation)
 
 ## Standards Compliance
 
--   ✅ [A2A Protocol 1.0](https://a2a-protocol.org)
--   ✅ [JSON-RPC 2.0](https://www.jsonrpc.org/specification)
--   ✅ Rust 2021 Edition
--   ✅ MSRV: 1.70+
--   ✅ Follows VT Code conventions
--   ✅ Strict Clippy checks
+- [A2A Protocol 1.0](https://a2a-protocol.org)
+- [JSON-RPC 2.0](https://www.jsonrpc.org/specification)
+- Rust 2021 Edition
+- MSRV: 1.93.0+
+- Follows VT Code conventions
+- Strict Clippy checks
 
 ## Next Phase: Client & Advanced Features
 
