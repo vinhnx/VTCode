@@ -361,9 +361,6 @@ impl Drop for PlaceholderSpinner {
     }
 }
 
-// NOTE: is_giving_up_reasoning and get_constructive_reasoning are now imported
-// from crate::agent::runloop::unified::reasoning
-
 fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError {
     let formatted_error = error_display::format_llm_error(
         provider_name,
@@ -912,61 +909,5 @@ mod tests {
             "should mark emitted tokens when reasoning is rendered"
         );
         assert!(resp.content.is_none(), "content should remain none");
-    }
-
-    #[test]
-    fn test_detects_giving_up_reasoning() {
-        assert!(is_giving_up_reasoning("Complex. Probably stop."));
-        assert!(is_giving_up_reasoning(
-            "This is too complex, I should stop."
-        ));
-        assert!(is_giving_up_reasoning(
-            "I can't continue, it's too complex."
-        ));
-        assert!(is_giving_up_reasoning("Probably should stop here."));
-        assert!(is_giving_up_reasoning(
-            "Unable to continue with this complex task."
-        ));
-    }
-
-    #[test]
-    fn test_does_not_detect_normal_reasoning() {
-        assert!(!is_giving_up_reasoning("I'm analyzing the file structure."));
-        assert!(!is_giving_up_reasoning(
-            "Let me check the directory contents."
-        ));
-        assert!(!is_giving_up_reasoning(
-            "Processing the request systematically."
-        ));
-        assert!(!is_giving_up_reasoning("Continue with the next step."));
-    }
-
-    #[test]
-    fn test_constructive_reasoning_generation() {
-        let original = "Complex. Probably stop.";
-        let constructive = get_constructive_reasoning(original);
-        assert!(!constructive.is_empty());
-        assert!(!constructive.to_lowercase().contains("stop"));
-        assert!(
-            constructive.to_lowercase().contains("solution")
-                || constructive.to_lowercase().contains("try")
-        );
-    }
-
-    #[test]
-    fn test_constructive_reasoning_task_specific() {
-        let pdf_reasoning = "Complex PDF generation, probably stop.";
-        let pdf_constructive = get_constructive_reasoning(pdf_reasoning);
-        assert!(
-            pdf_constructive.to_lowercase().contains("file")
-                || pdf_constructive.to_lowercase().contains("path")
-        );
-
-        let tool_reasoning = "Tool execution too complex, can't continue.";
-        let tool_constructive = get_constructive_reasoning(tool_reasoning);
-        assert!(
-            tool_constructive.to_lowercase().contains("tool")
-                || tool_constructive.to_lowercase().contains("execut")
-        );
     }
 }

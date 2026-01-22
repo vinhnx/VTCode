@@ -163,6 +163,7 @@ fn test_anthropic_tool_message_handling() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
         top_p: None,

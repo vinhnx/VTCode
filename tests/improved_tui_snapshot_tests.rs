@@ -93,6 +93,7 @@ fn test_header_context_rendering() {
         mcp: "available".to_string(),
         highlights: vec![],
         editing_mode: EditingMode::default(),
+        autonomous_mode: false,
     };
 
     // Test that the context can be properly represented

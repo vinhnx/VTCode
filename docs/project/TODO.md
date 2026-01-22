@@ -195,4 +195,40 @@ The issue is that tui-syntax-highlight re-exports its own version of syntect (no
 
 --
 
-check to only use termimad only
+Audit and simplify markdown.rs - reduce the 1500 lines of custom code
+
+--
+
+remove blank lines in assistant "reasoning" response.
+
+log:
+```
+✓ [read_file] Read file resources/vhs/demo.rs · Path: resources/vhs/demo.rs
+
+The user asked me to show the content of resources/vhs/demo.rs. I was able to read this file successfully
+. It's a simple "Hello, World!" program with just 3 lines.
+
+
+
+According to my guidelines:
+
+- Be concise, answer directly without unnecessary preamble
+
+- Focus on the task
+
+- One-to-three sentences by default
+
+- No long introductions
+
+- Clean markdown
+
+
+
+I should just show the content directly without any fluff.
+```
+
+---
+
+research and convert plan/code mode as subagent implementation instead of just plain mode. it has it own system prompt and set of tools. and can be used as a standalone agent.
+
+---
