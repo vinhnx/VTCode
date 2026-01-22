@@ -549,7 +549,7 @@ impl Session {
                         .collect::<String>(),
                 )
             };
-            let line_text = line_text_storage.as_ref();
+            let line_text: &str = &*line_text_storage;
             let trimmed_start = line_text.trim_start();
 
             let mut next_in_fenced_block = in_fenced_block;
@@ -618,7 +618,7 @@ impl Session {
         if line.spans.len() != 1 {
             return false;
         }
-        let text = line.spans[0].content.as_ref();
+        let text: &str = &*line.spans[0].content;
         if text.trim().is_empty() {
             return false;
         }

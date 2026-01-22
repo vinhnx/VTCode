@@ -1198,7 +1198,7 @@ fn justify_wrapped_lines(
                         .collect::<String>(),
                 )
             };
-            let line_text = line_text_storage.as_ref();
+            let line_text: &str = &*line_text_storage;
             let trimmed_start = line_text.trim_start();
             trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~")
         };
@@ -1238,7 +1238,7 @@ fn should_justify_message_line(
     if line.spans.len() != 1 {
         return false;
     }
-    let text = line.spans[0].content.as_ref();
+    let text: &str = &*line.spans[0].content;
     if text.trim().is_empty() {
         return false;
     }

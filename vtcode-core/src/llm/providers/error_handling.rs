@@ -151,7 +151,7 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
     let error_message = if friendly_msg.is_empty() {
         format!("HTTP {}", status)
     } else {
-        format!("{} (HTTP {})", friendly_msg.as_ref(), status)
+        format!("{} (HTTP {})", &*friendly_msg, status)
     };
 
     let formatted_error = error_display::format_llm_error("Anthropic", &error_message);

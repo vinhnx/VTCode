@@ -592,7 +592,7 @@ impl ToolPolicyManager {
 
     fn resolve_config_policy(tools_config: &ToolsConfig, tool_name: &str) -> ConfigToolPolicy {
         let canonical = canonical_tool_name(tool_name);
-        let lookup = canonical.as_ref();
+        let lookup: &str = &*canonical;
 
         if let Some(policy) = tools_config.policies.get(lookup) {
             return *policy;
@@ -839,7 +839,7 @@ impl ToolPolicyManager {
 
         self.config
             .policies
-            .get(canonical.as_ref())
+            .get(&*canonical)
             .cloned()
             .unwrap_or(ToolPolicy::Prompt)
     }
@@ -847,7 +847,7 @@ impl ToolPolicyManager {
     /// Get optional constraints for a specific tool
     pub fn get_constraints(&self, tool_name: &str) -> Option<&ToolConstraints> {
         let canonical = canonical_tool_name(tool_name);
-        self.config.constraints.get(canonical.as_ref())
+        self.config.constraints.get(&*canonical)
     }
 
     /// Check if tool should be executed based on policy
