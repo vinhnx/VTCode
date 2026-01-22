@@ -3,6 +3,25 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.66.8] - 2026-01-22
+
+
+### Features
+    - feat: enhance CLI with quick start guidance and slash command notes
+
+
+### Refactors
+    - refactor: use AsRef trait for string conversion in command rendering
+
+
+### Documentation
+    - docs: update changelog for v0.66.7 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.66.7 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.66.6 version =  [skip ci]
 # [Version 0.66.7] - 2026-01-22
 
 
