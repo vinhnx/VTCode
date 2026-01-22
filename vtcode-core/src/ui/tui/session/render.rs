@@ -1189,12 +1189,12 @@ fn justify_wrapped_lines(
         let mut next_in_fenced_block = in_fenced_block;
         let is_fence_line = {
             let line_text_storage: std::borrow::Cow<'_, str> = if line.spans.len() == 1 {
-                std::borrow::Cow::Borrowed(line.spans[0].content.as_ref())
+                std::borrow::Cow::Borrowed(&*line.spans[0].content)
             } else {
                 std::borrow::Cow::Owned(
                     line.spans
                         .iter()
-                        .map(|span| span.content.as_ref())
+                        .map(|span| &*span.content)
                         .collect::<String>(),
                 )
             };
@@ -1266,7 +1266,7 @@ fn justify_message_line(
     max_width: usize,
 ) -> Line<'static> {
     let span = &line.spans[0];
-    if let Some(justified) = justify_plain_text(span.content.as_ref(), max_width) {
+    if let Some(justified) = justify_plain_text(&*span.content, max_width) {
         Line::from(justified).style(span.style)
     } else {
         line.clone()
