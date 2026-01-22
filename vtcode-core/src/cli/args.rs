@@ -38,7 +38,7 @@ pub fn long_version() -> String {
 #[command(
     name = "vtcode",
     version,
-    about = "Advanced coding agent with XDG-compliant configuration\n\nFeatures:\n• Single-agent architecture with Decision Ledger for reliable task execution\n• XDG Base Directory Specification compliance for organized storage\n• Tree-sitter powered code analysis (Rust, Python, JavaScript, TypeScript, Go, Java)\n• Multi-provider LLM support (Gemini, OpenAI, Anthropic, DeepSeek, xAI, Z.AI, Moonshot AI, OpenRouter, Ollama)\n• Thinking/Reasoning support with configurable thinking levels (Gemini 3, GPT-5, Claude 4.5)\n• Agent Client Protocol (ACP) bridge for IDE integrations (Zed, VS Code)\n• Prompt caching and token-efficient context management\n• Real-time performance monitoring and benchmarking\n• Enhanced security with tool policies and execution control\n\nConfiguration:\n• Config dir: Set VTCODE_CONFIG or uses XDG directories\n• Data dir: Set VTCODE_DATA or uses XDG directories\n• See: https://ratatui.rs/recipes/apps/config-directories/\n\nQuick Start:\n  export GEMINI_API_KEY=\"your_key\"\n  vtcode chat",
+    about = "VT Code - AI coding assistant",
     color = ColorChoice::Auto
 )]
 pub struct Cli {
@@ -54,66 +54,19 @@ pub struct Cli {
     )]
     pub workspace_path: Option<PathBuf>,
 
-    /// LLM Model ID with latest model support
-    ///
-    /// Available providers & models:
-    ///   • gemini-3-pro-preview - Latest flagship Gemini model with advanced reasoning
-    ///   • gemini-3-flash-preview - Fast version of Gemini 3 Pro with 3-level thinking
-    ///   • gemini-2.5-flash - Stable fast Gemini model (default)
-    ///   • gpt-5 - OpenAI's latest flagship (default)
-    ///   • gpt-5-codex - OpenAI's latest coding-focused model
-    ///   • gpt-5.2 - OpenAI's latest flagship (Responses API)
-    ///   • claude-sonnet-4-5-20250929 - Anthropic's latest Sonnet model (default)
-    ///   • claude-opus-4-5-20251101 - Anthropic's latest Opus model
-    ///   • deepseek-reasoner - DeepSeek reasoning model
-    ///   • deepseek-chat - DeepSeek chat model (default)
-    ///   • grok-4 - xAI Grok flagship model (default)
-    ///   • grok-4-code - xAI Grok coding-specific model
-    ///   • glm-4.6 - Z.AI GLM 4.6 model (default)
-    ///   • kimi-k2-0905 - Moonshot AI Kimi K2 (default)
-    ///   • x-ai/grok-code-fast-1 - OpenRouter Grok fast coding model
-    ///   • qwen/qwen3-coder - OpenRouter Qwen3 Coder optimized for IDE usage
-    ///   • gpt-oss:20b - Ollama local model (default)
-    /// Note: If using OpenAI, the `prompt_cache_retention` configuration applies only to models
-    /// that support the OpenAI Responses API (e.g., gpt-5, gpt-5.1, gpt-5.2). Setting it for
-    /// non-Responses models will be ignored.
-    /// To see all available models for a given provider, use the `models` command. For example:
-    ///
-    ///   vtcode models list --provider openai
-    ///
-    /// Note: If using OpenAI, the `prompt_cache_retention` configuration applies only to models
-    /// that support the OpenAI Responses API (e.g., gpt-5, gpt-5.1, gpt-5.2). Setting it for
-    /// non-Responses models will be ignored.
+    /// LLM Model ID (e.g., gpt-5, claude-sonnet-4-5, gemini-2.5-flash)
     #[arg(long, global = true)]
     pub model: Option<String>,
 
-    /// **LLM Provider** with expanded support
-    ///
-    /// Available providers:
-    ///   • gemini - Google Gemini (default)
-    ///   • openai - OpenAI GPT models
-    ///   • anthropic - Anthropic Claude models
-    ///   • deepseek - DeepSeek models
-    ///   • openrouter - OpenRouter marketplace models
-    ///   • xai - xAI Grok models
-    ///   • zai - Z.AI GLM models
-    ///   • moonshot - Moonshot AI Kimi models
-    ///   • minimax - MiniMax models (Anthropic-compatible)
-    ///   • ollama - Local Ollama server (default gpt-oss:20b)
-    ///   • lmstudio - Local LM Studio server (OpenAI-compatible)
-    ///
-    /// Example: --provider deepseek
+    /// **LLM Provider** (gemini, openai, anthropic, deepseek, openrouter, xai, zai, moonshot, minimax, ollama, lmstudio)
     #[arg(long, global = true)]
     pub provider: Option<String>,
 
-    /// **API key environment variable**\n\n**Auto-detects based on provider:**\n• Gemini: `GEMINI_API_KEY`\n• OpenAI: `OPENAI_API_KEY`\n• Anthropic: `ANTHROPIC_API_KEY`\n• DeepSeek: `DEEPSEEK_API_KEY`\n• OpenRouter: `OPENROUTER_API_KEY`\n• xAI: `XAI_API_KEY`\n• Z.AI: `ZAI_API_KEY`\n• Ollama: (not required)\n• LM Studio: (optional `LMSTUDIO_API_KEY`)\n\n**Override:** --api-key-env CUSTOM_KEY
+    /// **API key environment variable** (auto-detects GEMINI_API_KEY, OPENAI_API_KEY, etc.)
     #[arg(long, global = true, default_value = crate::config::constants::defaults::DEFAULT_API_KEY_ENV)]
     pub api_key_env: String,
 
-    /// **Workspace root directory for file operations**
-    ///
-    /// Security: All file operations restricted to this path
-    /// Default: Current directory
+    /// **Workspace root directory** (default: current directory)
     #[arg(
         long,
         global = true,
@@ -124,99 +77,46 @@ pub struct Cli {
     pub workspace: Option<PathBuf>,
 
     /// **Enable tree-sitter code analysis**
-    ///
-    /// Features:
-    ///   • AST-based code parsing
-    ///   • Symbol extraction and navigation
-    ///   • Intelligent refactoring suggestions
-    ///   • Multi-language support (Rust, Python, JS, TS, Go, Java)
     #[arg(long, global = true)]
     pub enable_tree_sitter: bool,
 
     /// **Enable research-preview features**
-    ///
-    /// Includes:
-    ///   • Advanced context compression
-    ///   • Conversation summarization
-    ///   • Enhanced error recovery
-    ///   • Decision transparency tracking
     #[arg(long, global = true)]
     pub research_preview: bool,
 
-    /// **Security level** for tool execution
-    ///
-    /// Options:
-    ///   • strict - Maximum security, prompt for all tools
-    ///   • moderate - Balance security and usability
-    ///   • permissive - Minimal restrictions (not recommended)
+    /// **Security level** for tool execution (strict, moderate, permissive)
     #[arg(long, global = true, default_value = "moderate")]
     pub security_level: String,
 
-    /// **Show diffs for file changes in chat interface**
-    ///
-    /// Features:
-    ///   • Real-time diff rendering
-    ///   • Syntax highlighting
-    ///   • Line-by-line changes
-    ///   • Before/after comparison
+    /// **Show diffs for file changes** in chat interface
     #[arg(long, global = true)]
     pub show_file_diffs: bool,
 
     /// **Maximum concurrent async operations**
-    ///
-    /// Default: 5
-    /// Higher values: Better performance but more resource usage
     #[arg(long, global = true, default_value_t = 5)]
     pub max_concurrent_ops: usize,
 
     /// **Maximum API requests per minute**
-    ///
-    /// Default: 30
-    /// Purpose: Prevents rate limiting
     #[arg(long, global = true, default_value_t = 30)]
     pub api_rate_limit: usize,
 
     /// **Maximum tool calls per session**
-    ///
-    /// Default: 10
-    /// Purpose: Prevents runaway execution
     #[arg(long, global = true, default_value_t = 10)]
     pub max_tool_calls: usize,
 
-    /// **Enable debug output for troubleshooting**
-    ///
-    /// Shows:
-    ///   • Tool call details
-    ///   • API request/response
-    ///   • Internal agent state
-    ///   • Performance metrics
+    /// **Enable debug output** for troubleshooting
     #[arg(long, global = true)]
     pub debug: bool,
 
     /// **Enable verbose logging**
-    ///
-    /// Includes:
-    ///   • Detailed operation logs
-    ///   • Context management info
-    ///   • Agent coordination details
     #[arg(long, global = true)]
     pub verbose: bool,
 
-    /// **Suppress all non-essential output**
-    ///
-    /// Useful for: Scripting, pipelines, CI/CD
+    /// **Suppress all non-essential output** (for scripting, CI/CD)
     #[arg(short, long, global = true)]
     pub quiet: bool,
 
-    /// **Configuration overrides or file path**
-    ///
-    /// Mirrors Codex CLI's `--config key=value` behaviour while still accepting
-    /// an explicit config path.
-    /// Use repeated flags to apply multiple overrides (highest precedence).
-    ///
-    /// Example: set prompt cache retention for an OpenAI Responses model
-    ///
-    ///   vtcode --model gpt-5 --config prompt_cache.providers.openai.prompt_cache_retention=24h ask "Explain this function"
+    /// **Configuration overrides or file path** (KEY=VALUE or PATH)
     #[arg(
         short = 'c',
         long = "config",
@@ -226,43 +126,43 @@ pub struct Cli {
     )]
     pub config: Vec<String>,
 
-    /// NOTE: If you set `prompt_cache.providers.openai.prompt_cache_retention` via `--config`,
-    /// it is only applied to OpenAI models that support the Responses API (e.g., `gpt-5`). For
-    /// other models this setting is ignored (and a warning will be emitted at startup).
-
-    /// Log level (error, warn, info, debug, trace)
-    ///
-    /// Default: info
+    /// **Log level** (error, warn, info, debug, trace)
     #[arg(long, global = true, default_value = "info")]
     pub log_level: String,
 
-    /// Disable color output
-    ///
-    /// Useful for: Log files, CI/CD pipelines
+    /// **Disable color output** (for log files, CI/CD)
     #[arg(long, global = true)]
     pub no_color: bool,
 
-    /// Select UI theme for ANSI styling (e.g., ciapre-dark, ciapre-blue)
+    /// **Select UI theme** (e.g., ciapre-dark, ciapre-blue)
     #[arg(long, global = true, value_name = "THEME")]
     pub theme: Option<String>,
 
-    /// **Skip safety confirmations**
-    ///
-    /// Warning: Reduces security, use with caution
+    /// **App tick rate** in milliseconds (default: 250)
+    #[arg(short = 't', long, default_value_t = 250)]
+    pub tick_rate: u64,
+
+    /// **Frame rate** in FPS (default: 60)
+    #[arg(short = 'f', long, default_value_t = 60)]
+    pub frame_rate: u64,
+
+    /// **Enable skills system**
+    #[arg(long, global = true)]
+    pub enable_skills: bool,
+
+    /// **Enable Chrome browser integration** for web automation
+    #[arg(long, global = true)]
+    pub chrome: bool,
+
+    /// **Disable Chrome browser integration**
+    #[arg(long = "no-chrome", global = true, conflicts_with = "chrome")]
+    pub no_chrome: bool,
+
+    /// **Skip safety confirmations** (use with caution)
     #[arg(long, global = true)]
     pub skip_confirmations: bool,
 
     /// **Print response without launching the interactive TUI**
-    ///
-    /// Equivalent to `vtcode -p` style single prompt mode.
-    ///
-    /// Behaviour:
-    ///   • Provide a prompt inline: `vtcode -p "Explain this function"`
-    ///   • Pipe content and add a question: `cat file.rs | vtcode -p "Summarize"`
-    ///   • Pipe content only: `cat plan.md | vtcode -p`
-    ///
-    /// When both piped content and an inline prompt are supplied, the piped
-    /// content is prepended to the inline prompt separated by a blank line.
     #[arg(
         short = 'p',
         long = "print",
@@ -275,11 +175,7 @@ pub struct Cli {
     )]
     pub print: Option<String>,
 
-    /// **Enable full-auto mode (no interaction) or run a headless task**
-    ///
-    /// Use without a value to launch the interactive UI in full-auto mode.
-    /// Provide a prompt value to execute a single autonomous task headlessly.
-    /// The alias `--auto` is provided for ergonomic scripting.
+    /// **Enable full-auto mode** (no interaction) or run a headless task
     #[arg(
         long = "full-auto",
         visible_alias = "auto",
@@ -291,11 +187,7 @@ pub struct Cli {
     )]
     pub full_auto: Option<String>,
 
-    /// **Resume a previous conversation**
-    ///
-    /// Use without an ID to open an interactive picker of recent sessions.
-    /// Provide a session identifier (from `/sessions` or `vtcode --resume`) to resume directly.
-    /// Shortcut: `-r`.
+    /// **Resume a previous conversation** (use without ID for interactive picker)
     #[arg(
         short = 'r',
         long = "resume",
@@ -308,8 +200,6 @@ pub struct Cli {
     pub resume_session: Option<String>,
 
     /// **Continue the most recent conversation automatically**
-    ///
-    /// Equivalent to `--resume` with the newest session identifier.
     #[arg(
         long = "continue",
         visible_alias = "continue-session",
@@ -318,17 +208,7 @@ pub struct Cli {
     )]
     pub continue_latest: bool,
 
-    /// **Fork an existing session and continue with a new session ID**
-    ///
-    /// Creates a copy of an existing session's conversation history and starts
-    /// a new independent session. The forked session inherits all messages from
-    /// the original but operates independently (new messages don't affect the original).
-    ///
-    /// Can be combined with `--session-id` for custom naming.
-    ///
-    /// Examples:
-    ///   vtcode --fork-session session-vtcode-20250101T120000Z_123456-12345
-    ///   vtcode --fork-session old-session --session-id my-feature
+    /// **Fork an existing session** with a new session ID
     #[arg(
         long = "fork-session",
         global = true,
@@ -337,136 +217,37 @@ pub struct Cli {
     )]
     pub fork_session: Option<String>,
 
-    /// **Provide a custom suffix for the session identifier**
-    ///
-    /// Customizes the session file name with a user-provided suffix.
-    /// Format: `session-{workspace}-{timestamp}-{custom-suffix}.json`
-    ///
-    /// Works standalone for new sessions or combined with session operations:
-    ///
-    /// Examples:
-    ///   vtcode --session-id my-feature                    (new session)
-    ///   vtcode --fork-session old-id --session-id new-id  (fork with custom name)
-    ///   vtcode --resume old-id --session-id continued     (resume as fork)
-    ///   vtcode --continue --session-id suffix             (fork from latest)
-    ///
-    /// Validation: Alphanumeric characters, dash, and underscore only (max 64 chars).
+    /// **Custom suffix for session identifier** (alphanumeric, dash, underscore only, max 64 chars)
     #[arg(long = "session-id", global = true, value_name = "CUSTOM_SUFFIX")]
     pub session_id: Option<String>,
 
-    /// **Enable skills system**
-    ///
-    /// Enables the skills subsystem for loading and executing agent skills.
-    /// When disabled, skill-related commands and functionality are not available.
-    /// Mirrors OpenAI Codex CLI's `--enable skills` flag for compatibility.
-    #[arg(long, global = true)]
-    pub enable_skills: bool,
-
-    /// App tick rate in milliseconds - Controls how frequently the UI updates
-    ///
-    /// This dictates the application's tick rate for event processing.
-    /// Lower values: More responsive UI but higher CPU usage
-    /// Higher values: Less CPU usage but potentially less responsive
-    #[arg(short = 't', long, default_value_t = 250)]
-    pub tick_rate: u64,
-
-    /// Frame rate in FPS - Controls rendering frequency
-    ///
-    /// This controls how often the terminal UI is redrawn.
-    /// Lower values: Less CPU usage but potentially choppier animations
-    /// Higher values: Smoother UI but higher CPU usage
-    #[arg(short = 'f', long, default_value_t = 60)]
-    pub frame_rate: u64,
-
-    /// **Override the default agent model for this session**
-    ///
-    /// Use this to temporarily switch to a different model without modifying your config.
-    /// The agent name can be a model ID (e.g., gpt-5, claude-sonnet-4-5, gemini-3-pro).
-    ///
-    /// Example: vtcode --agent gpt-5 chat
+    /// **Override the default agent model** for this session
     #[arg(long, global = true, value_name = "AGENT")]
     pub agent: Option<String>,
 
-    /// **Add additional working directories for the agent to access**
-    ///
-    /// Allows the agent to work with multiple directories. Each path is validated
-    /// to ensure it exists and is a directory. Files outside all specified directories
-    /// (including the main workspace) will be inaccessible.
-    ///
-    /// Example: vtcode --add-dir ../apps --add-dir ../libs chat
+    /// **Add additional working directories** for the agent to access
     #[arg(long = "add-dir", global = true, value_name = "PATH", value_hint = ValueHint::DirPath)]
     pub additional_dirs: Vec<PathBuf>,
 
-    /// **Tools that execute without prompting for permission**
-    ///
-    /// Specify tools that can run automatically without asking for user approval.
-    /// Use tool names like "Read", "Edit", "Bash", or patterns like "Bash(git:*)".
-    ///
-    /// Example: vtcode --allowed-tools "Read,Edit,Grep" --allowed-tools "Bash(git:*)"
+    /// **Tools that execute without prompting** (comma-separated, supports patterns like "Bash(git:*)")
     #[arg(long = "allowed-tools", global = true, value_name = "TOOLS", action = ArgAction::Append)]
     pub allowed_tools: Vec<String>,
 
-    /// **Tools that cannot be used by the agent**
-    ///
-    /// Explicitly remove tools from the agent's available toolkit. These tools
-    /// will not be shown in the agent's context and cannot be invoked.
-    /// Use tool names or patterns like with --allowed-tools.
-    ///
-    /// Example: vtcode --disallowed-tools "Bash(rm:*),Bash(sudo:*)"
+    /// **Tools that cannot be used** by the agent
     #[arg(long = "disallowed-tools", global = true, value_name = "TOOLS", action = ArgAction::Append)]
     pub disallowed_tools: Vec<String>,
 
-    /// **Skip all permission prompts (use with extreme caution)**
-    ///
-    /// This disables all safety checks and allows the agent to execute any
-    /// tool without confirmation. Only use in trusted environments.
-    ///
-    /// Warning: This significantly reduces security. Use --allowed-tools for
-    /// more granular control instead when possible.
+    /// **Skip all permission prompts** (reduces security - use with caution)
     #[arg(long = "dangerously-skip-permissions", global = true)]
     pub dangerously_skip_permissions: bool,
 
-    /// **Explicitly connect to IDE on startup**
-    ///
-    /// Automatically connect to IDE if exactly one valid IDE is available.
-    /// This is more explicit than auto-detection and useful for scripting.
-    ///
-    /// Example: vtcode --ide chat
+    /// **Explicitly connect to IDE on startup** (auto-detects available IDEs)
     #[arg(long, global = true)]
     pub ide: bool,
 
-    /// **Begin in a specified permission mode**
-    ///
-    /// Set the initial permission mode for tool execution. More explicit than
-    /// --security-level and provides immediate control over agent behavior.
-    ///
-    /// Options:
-    ///   • ask - Prompt for every tool execution (default)
-    ///   • suggest - Agent suggests tools but asks for approval
-    ///   • auto-approved - Allowed tools run automatically
-    ///   • full-auto - All tools run without prompts (requires --dangerously-skip-permissions)
-    ///
-    /// Example: vtcode --permission-mode suggest chat
+    /// **Begin in a specified permission mode** (ask, suggest, auto-approved, full-auto, plan)
     #[arg(long, global = true, value_name = "MODE")]
     pub permission_mode: Option<String>,
-
-    /// **Enable Chrome browser integration for web automation**
-    ///
-    /// Allows the agent to control Chrome browser for web testing, scraping,
-    /// and automation tasks. Requires Chrome to be installed.
-    ///
-    /// Example: vtcode --chrome chat
-    #[arg(long, global = true)]
-    pub chrome: bool,
-
-    /// **Disable Chrome browser integration**
-    ///
-    /// Explicitly disable Chrome browser integration even if it would normally
-    /// be available. Useful for security or when Chrome causes issues.
-    ///
-    /// Example: vtcode --no-chrome chat
-    #[arg(long = "no-chrome", global = true, conflicts_with = "chrome")]
-    pub no_chrome: bool,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -488,7 +269,7 @@ pub enum AskOutputFormat {
     Json,
 }
 
-/// Available commands with comprehensive features
+/// Available commands
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Start Agent Client Protocol bridge for IDE integrations
@@ -499,24 +280,10 @@ pub enum Commands {
         target: AgentClientProtocolTarget,
     },
 
-    /// **Interactive AI coding assistant** with advanced capabilities
-    ///
-    /// Features:
-    ///   • Real-time code generation and editing
-    ///   • Tree-sitter powered analysis
-    ///   • Research-preview context management
-    ///
-    /// Usage: vtcode chat
+    /// Interactive AI coding assistant
     Chat,
 
-    /// **Single prompt mode** - prints model reply without tools
-    ///
-    /// Perfect for:
-    ///   • Quick questions
-    ///   • Code explanations
-    ///   • Simple queries
-    ///
-    /// Example: vtcode ask "Explain Rust ownership"
+    /// Single prompt mode - prints model reply without tools
     Ask {
         /// Prompt to ask. Use `-` to force reading from stdin.
         #[arg(value_name = "PROMPT")]
@@ -525,16 +292,7 @@ pub enum Commands {
         #[arg(long = "output-format", value_enum, value_name = "FORMAT")]
         output_format: Option<AskOutputFormat>,
     },
-    /// **Headless execution mode** mirroring Codex exec semantics
-    ///
-    /// Features:
-    ///   • Autonomous run using workspace automation settings
-    ///   • Optional JSONL output stream for tool integrations
-    ///   • Support for writing the final message to disk
-    ///
-    /// Prompt handling:
-    ///   • Positional argument or `-` to read from stdin
-    ///   • When omitted and stdin is a TTY, the command exits with an error
+    /// Headless execution mode
     Exec {
         /// Emit structured JSON events to stdout (one per line)
         #[arg(long)]
@@ -550,143 +308,60 @@ pub enum Commands {
         prompt: Option<String>,
     },
 
-    /// **Verbose interactive chat** with enhanced transparency
-    ///
-    /// Shows:
-    ///   • Tool execution details
-    ///   • API request/response
-    ///   • Performance metrics
-    ///
-    /// Usage: vtcode chat-verbose
+    /// Verbose interactive chat with debug output
     ChatVerbose,
 
-    /// **Analyze workspace** with tree-sitter integration
-    ///
-    /// Provides:
-    ///   • Project structure analysis
-    ///   • Language detection
-    ///   • Code complexity metrics
-    ///   • Dependency insights
-    ///   • Symbol extraction
-    ///
-    /// Analysis types:
-    ///   • full (default) - Comprehensive analysis including structure, dependencies, and metrics
-    ///   • structure - File structure and language distribution
-    ///   • security - Security vulnerability patterns and best practices
-    ///   • performance - Performance bottlenecks and optimization opportunities
-    ///   • dependencies - Dependency analysis and version management
-    ///   • complexity - Code complexity metrics and maintainability
-    ///
-    /// Examples:
-    ///   • Basic analysis - vtcode analyze
-    ///   • Security analysis - vtcode analyze security
-    ///   • Performance analysis - vtcode analyze performance
+    /// Analyze workspace (structure, security, performance)
     Analyze {
         /// Type of analysis to perform
         #[arg(value_name = "TYPE", default_value = "full")]
         analysis_type: String,
     },
 
-    /// Pretty-print trajectory logs and show basic analytics
-    ///
-    /// Sources:
-    ///   • .vtcode/logs/trajectory.jsonl (default)
-    /// Options:
-    ///   • --file to specify an alternate path
-    ///   • --top to limit report rows (default: 10)
-    ///
-    /// Shows:
-    ///   • Class distribution with percentages
-    ///   • Model usage statistics
-    ///   • Tool success rates with status indicators
-    ///   • Time range of logged activity
+    /// Pretty-print trajectory logs
     #[command(name = "trajectory")]
     Trajectory {
         /// Optional path to trajectory JSONL file
         #[arg(long)]
         file: Option<std::path::PathBuf>,
-        /// Number of top entries to show for each section
+        /// Number of top entries to show
         #[arg(long, default_value_t = 10)]
         top: usize,
     },
 
-    /// **Benchmark against SWE-bench evaluation framework**
-    ///
-    /// Features:
-    ///   • Automated performance testing
-    ///   • Comparative analysis across models
-    ///   • Benchmark scoring and metrics
-    ///   • Optimization insights
-    ///
-    /// Usage: vtcode benchmark --task-file swe_task.json --output reports/result.json
+    /// Benchmark against SWE-bench evaluation framework
     Benchmark {
-        /// Path to a JSON benchmark specification. Falls back to STDIN when omitted.
+        /// Path to a JSON benchmark specification
         #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
         task_file: Option<PathBuf>,
-        /// Inline JSON specification for quick experiments.
+        /// Inline JSON specification for quick experiments
         #[arg(long, value_name = "JSON")]
         task: Option<String>,
-        /// Optional path to write the structured benchmark report.
+        /// Optional path to write the structured benchmark report
         #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
         output: Option<PathBuf>,
-        /// Limit the number of tasks executed from the specification.
+        /// Limit the number of tasks executed
         #[arg(long, value_name = "COUNT")]
         max_tasks: Option<usize>,
     },
 
-    /// **Create complete Rust project with advanced features**
-    ///
-    /// Features:
-    ///   • Web frameworks (Axum, Rocket, Warp)
-    ///   • Database integration
-    ///   • Authentication systems
-    ///   • Testing setup
-    ///   • Tree-sitter integration
-    ///
-    /// Example: vtcode create-project myapp web,auth,db
+    /// Create complete Rust project
     CreateProject { name: String, features: Vec<String> },
 
-    /// **Revert agent to a previous snapshot
-    ///
-    /// Features:
-    ///   • Revert to any previous turn
-    ///   • Partial reverts (conversation, code, full)
-    ///   • Safe rollback with validation
-    ///
-    /// Examples:
-    ///   vtcode revert --turn 5
-    ///   vtcode revert --turn 3 --partial memory
+    /// Revert agent to a previous snapshot
     Revert {
         /// Turn number to revert to
-        ///
-        /// Required: Yes
-        /// Example: 5
         #[arg(short, long)]
         turn: usize,
-
-        /// Scope of revert operation
-        ///
-        /// Options: conversation, code, full
-        /// Default: full
-        /// Examples:
-        ///   --partial conversation (revert chat history only)
-        ///   --partial code (revert code changes only)
+        /// Scope of revert operation: conversation, code, full
         #[arg(short, long)]
         partial: Option<String>,
     },
 
-    /// **List all available snapshots**
-    ///
-    /// Shows:
-    ///   • Snapshot ID and turn number
-    ///   • Creation timestamp
-    ///   • Description
-    ///   • File size and compression status
-    ///
-    /// Usage: vtcode snapshots
+    /// List all available snapshots
     Snapshots,
 
-    /// **Clean up old snapshots**
+    /// Clean up old snapshots
     ///
     /// Features:
     ///   • Remove snapshots beyond limit
@@ -706,246 +381,99 @@ pub enum Commands {
         max: usize,
     },
 
-    /// **Initialize project** with enhanced dot-folder structure
-    ///
-    /// Features:
-    ///   • Creates project directory structure
-    ///   • Sets up config, cache, embeddings directories
-    ///   • Creates .project metadata file
-    ///   • Tree-sitter parser setup
-    ///
-    /// Usage: vtcode init
+    /// Initialize project with dot-folder structure
     Init,
 
-    /// **Initialize project with dot-folder structure** - sets up `~/.vtcode/projects/<project-name>` structure
-    ///
-    /// Features:
-    ///   • Creates project directory structure in ~/.vtcode/projects/
-    ///   • Sets up config, cache, embeddings, and retrieval directories
-    ///   • Creates .project metadata file
-    ///   • Migrates existing config/cache files with user confirmation
-    ///
-    /// Examples:
-    ///   vtcode init-project
-    ///   vtcode init-project --name my-project
-    ///   vtcode init-project --force
+    /// Initialize project in ~/.vtcode/projects/
     #[command(name = "init-project")]
     InitProject {
         /// Project name - defaults to current directory name
         #[arg(long)]
         name: Option<String>,
-
         /// Force initialization - overwrite existing project structure
         #[arg(long)]
         force: bool,
-
         /// Migrate existing files - move existing config/cache files to new structure
         #[arg(long)]
         migrate: bool,
     },
 
-    /// **Generate configuration file - creates a vtcode.toml configuration file
-    ///
-    /// Features:
-    ///   • Generate default configuration
-    ///   • Support for global (home directory) and local configuration
-    ///   • TOML format with comprehensive settings
-    ///   • Tree-sitter and performance monitoring settings
-    ///
-    /// Examples:
-    ///   vtcode config
-    ///   vtcode config --output ./custom-config.toml
-    ///   vtcode config --global
+    /// Generate configuration file
     Config {
-        /// Output file path - where to save the configuration file
+        /// Output file path
         #[arg(long)]
         output: Option<std::path::PathBuf>,
-
-        /// Create in user home directory - creates ~/.vtcode/vtcode.toml
+        /// Create in user home directory (~/.vtcode/vtcode.toml)
         #[arg(long)]
         global: bool,
     },
 
-    /// **Manage tool execution policies** - control which tools the agent can use
-    ///
-    /// Features:
-    ///   • Granular tool permissions
-    ///   • Security level presets
-    ///   • Audit logging
-    ///   • Safe tool execution
-    ///
-    /// Examples:
-    ///   vtcode tool-policy status
-    ///   vtcode tool-policy allow file-write
-    ///   vtcode tool-policy deny shell-exec
+    /// Manage tool execution policies
     #[command(name = "tool-policy")]
     ToolPolicy {
         #[command(subcommand)]
         command: crate::cli::tool_policy_commands::ToolPolicyCommands,
     },
 
-    /// **Manage Model Context Protocol providers**
-    ///
-    /// Features:
-    ///   • Add stdio or HTTP MCP providers
-    ///   • Inspect configuration details
-    ///   • Remove providers from the global vtcode config
-    ///
-    /// Examples:
-    ///   vtcode mcp list --json
-    ///   vtcode mcp add context7 --url https://example
+    /// Manage Model Context Protocol providers
     #[command(name = "mcp")]
     Mcp {
         #[command(subcommand)]
         command: crate::mcp::cli::McpCommands,
     },
 
-    /// **Agent2Agent (A2A) Protocol** - enable VT Code as an A2A agent or connect to other agents
-    ///
-    /// Features:
-    ///   • Serve VT Code as an A2A agent (requires a2a-server feature)
-    ///   • Discover and query remote A2A agents
-    ///   • Send tasks to other A2A agents
-    ///   • Real-time streaming via Server-Sent Events
-    ///
-    /// Examples:
-    ///   vtcode a2a serve --port 8080
-    ///   vtcode a2a discover https://agent.example.com
-    ///   vtcode a2a send-task https://agent.example.com "Help me refactor this code"
+    /// Agent2Agent (A2A) Protocol
     #[command(name = "a2a")]
     A2a {
         #[command(subcommand)]
         command: super::super::a2a::cli::A2aCommands,
     },
 
-    /// **Manage models and providers** - configure and switch between LLM providers\n\n**Features:**\n• Support for latest models (DeepSeek, etc.)\n• Provider configuration and testing\n• Model performance comparison\n• API key management\n\n**Examples:**\n  vtcode models list\n  vtcode models set-provider deepseek\n  vtcode models set-model deepseek-reasoner
+    /// Manage models and providers
     Models {
         #[command(subcommand)]
         command: ModelCommands,
     },
 
-    /// **Security and safety management**\n\n**Features:**\n• Security scanning and vulnerability detection\n• Audit logging and monitoring\n• Access control management\n• Privacy protection settings\n\n**Usage:** vtcode security
+    /// Security and safety management
     Security,
 
-    /// **Tree-sitter code analysis tools**\n\n**Features:**\n• AST-based code parsing\n• Symbol extraction and navigation\n• Code complexity analysis\n• Multi-language refactoring\n\n**Usage:** vtcode tree-sitter
+    /// Tree-sitter code analysis tools
     #[command(name = "tree-sitter")]
     TreeSitter,
 
-    /// **Generate or display man pages** for VT Code commands\n\n**Features:**\n• Generate Unix man pages for all commands\n• Display detailed command documentation\n• Save man pages to files\n• Comprehensive help for all VT Code features\n\n**Examples:**\n  vtcode man\n  vtcode man chat\n  vtcode man chat --output chat.1
+    /// Generate or display man pages
     Man {
-        /// **Command name** to generate man page for (optional)\n\n**Available commands:**\n• chat, ask, analyze, performance, benchmark\n• create-project, init, man\n\n**If not specified, shows main VT Code man page**
+        /// Command name to generate man page for (optional)
         command: Option<String>,
-
-        /// **Output file path** to save man page\n\n**Format:** Standard Unix man page format (.1, .8, etc.)\n**Default:** Display to stdout
+        /// Output file path to save man page
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
     },
 
-    /// **Display token budget information and usage statistics**
-    ///
-    /// Features:
-    ///   • Show current token usage and remaining budget
-    ///   • Display recent max_tokens usage from tool calls
-    ///   • Provide token usage statistics and breakdown
-    ///
-    /// Examples:
-    ///   vtcode tokens status
-    ///   vtcode tokens history
-    ///   vtcode tokens summary
+    /// Display token budget information
     Tokens {
         #[command(subcommand)]
         command: TokenCommands,
     },
 
-    /// **Manage Agent Skills**
-    ///
-    /// Skills extend VT Code's functionality with specialized capabilities.
-    /// Discover, load, and manage skills from the local filesystem.
-    ///
-    /// Features:
-    ///   • Discover skills from ~/.vtcode/skills, ./skills/
-    ///   • Load skills for use in agent sessions
-    ///   • Create skill templates for custom skills
-    ///   • Validate SKILL.md manifest files
-    ///
-    /// Examples:
-    ///   vtcode skills list           # List available skills
-    ///   vtcode skills info pdf       # Show skill details
-    ///   vtcode skills load pdf       # Load skill for session
-    ///   vtcode skills create my-skill # Create template
+    /// Manage Agent Skills
     #[command(subcommand)]
     Skills(SkillsSubcommand),
 
-    /// **List available skills** (OpenAI Codex CLI style)
-    ///
-    /// Quick alias for `vtcode skills list`
-    /// Shows all available agent skills with descriptions
+    /// List available skills (alias for `vtcode skills list`)
     #[command(name = "list-skills")]
     ListSkills {},
 
-    /// **Manage plugin marketplaces and plugins**
-    ///
-    /// Plugin marketplaces allow you to discover and install plugins
-    /// that extend VT Code's functionality with new commands, tools, and capabilities.
-    ///
-    /// Features:
-    ///   • Add/remove marketplace sources (GitHub, Git, local, remote)
-    ///   • Install/uninstall plugins from marketplaces
-    ///   • Enable/disable installed plugins
-    ///   • Update marketplace listings
-    ///
-    /// Examples:
-    ///   vtcode marketplace add vinhnx/vtcode-plugins    # Add a marketplace
-    ///   vtcode marketplace list                        # List configured marketplaces
-    ///   vtcode plugin install commit-commands @vtcode  # Install a plugin
-    ///   vtcode plugin list                             # List installed plugins
+    /// Manage plugin marketplaces and plugins
     #[command(subcommand)]
     Marketplace(MarketplaceSubcommand),
 
-    /// **Manage plugins installed from marketplaces**
-    ///
-    /// Install, uninstall, and manage plugins that extend VT Code's functionality.
-    ///
-    /// Examples:
-    ///   vtcode plugin install commit-commands @vtcode  # Install a plugin
-    ///   vtcode plugin list                             # List installed plugins
-    ///   vtcode plugin uninstall commit-commands        # Uninstall a plugin
+    /// Manage plugins installed from marketplaces
     #[command(subcommand)]
     Plugin(PluginSubcommand),
 
     /// Check for and install binary updates from GitHub Releases
-    ///
-    /// This command checks for new versions of VT Code and can install updates.
-    /// Updates are downloaded from GitHub Releases and verified against checksums.
-    /// Start Anthropic API compatibility server
-    ///
-    /// Provides compatibility with the Anthropic Messages API to help connect existing
-    /// applications to VT Code, including tools like Claude Code.
-    ///
-    /// Features:
-    ///   • Full Anthropic Messages API compatibility
-    ///   • Streaming support
-    ///   • Tool calling support
-    ///   • Vision (image) support
-    ///   • Multi-turn conversations
-    ///
-    /// Usage:
-    ///   • Start server - vtcode anthropic-api
-    ///   • Custom port - vtcode anthropic-api --port 8080
-    #[command(name = "anthropic-api")]
-    AnthropicApi {
-        /// Port to run the server on
-        #[arg(long, default_value = "11434")]
-        port: u16,
-        /// Host address to bind to
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
-    },
-
-    ///
-    /// Examples:
-    ///   • Check for updates - vtcode self-update
-    ///   • Force update - vtcode self-update --force
     #[command(name = "self-update")]
     SelfUpdate {
         /// Check for updates without installing
@@ -954,6 +482,17 @@ pub enum Commands {
         /// Force update even if on latest version
         #[arg(long)]
         force: bool,
+    },
+
+    /// Start Anthropic API compatibility server
+    #[command(name = "anthropic-api")]
+    AnthropicApi {
+        /// Port to run the server on
+        #[arg(long, default_value = "11434")]
+        port: u16,
+        /// Host address to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
     },
 }
 

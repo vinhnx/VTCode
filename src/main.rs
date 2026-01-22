@@ -59,6 +59,9 @@ async fn run() -> Result<()> {
     // Build the CLI command with dynamic augmentations
     let mut cmd = Cli::command();
 
+    // Inject quick start guidance for first-time users
+    cmd = cmd.before_help("Quick start:\n  1. Set your API key: export ANTHROPIC_API_KEY=\"your_key\"\n  2. Run: vtcode chat\n  3. First-time setup will run automatically\n\nFor help: vtcode --help");
+
     // Inject dynamic version info (XDG directories)
     let version_info = vtcode_core::cli::args::long_version();
     // We leak the string to get a 'static lifetime which clap often expects or handles better
@@ -70,6 +73,11 @@ async fn run() -> Result<()> {
     let help_extra = vtcode_core::cli::help::openai_responses_models_help();
     let help_leak: &'static str = Box::leak(help_extra.into_boxed_str());
     cmd = cmd.after_help(help_leak);
+
+    // Add note about slash commands - use static string directly
+    cmd = cmd.after_help(
+        "\n\nSlash commands (type / in chat):\n  /init     - Reconfigure provider, model, and settings\n  /status   - Show current configuration\n  /doctor   - Diagnose setup issues\n  /plan     - Toggle read-only planning mode\n  /theme    - Switch UI theme\n  /help     - Show all slash commands",
+    );
 
     // Parse arguments using the augmented command
     let matches = cmd.get_matches();
