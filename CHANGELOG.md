@@ -3,6 +3,43 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.66.3] - 2026-01-22
+
+
+### Features
+    - feat: add support for image URLs in @ pattern parsing and implement vision support for LLM providers
+
+
+### Refactors
+    - refactor: optimize string handling with dereferencing in multiple files
+    - refactor: enhance log event filtering and improve user message styling in TUI
+    - refactor: optimize inline event handling and improve command safety checks
+    - refactor: streamline syntax highlighting by introducing a dedicated module and optimizing theme management
+    - refactor: update thinking budget constants and enhance extended thinking configuration
+    - refactor: implement Chain-of-Thought monitoring and context anxiety management patterns
+    - refactor: improve history navigation and update input handling
+    - refactor: enhance history navigation and update inline event handling
+    - refactor: update test assertions for clarity and accuracy
+    - refactor: update TODO list with improved queue messages UI and handling
+    - refactor: update path parameter types from PathBuf to Path for consistency
+    - refactor: simplify conditional checks for context awareness in prompt building
+
+
+### Documentation
+    - docs: update changelog for v0.66.2 [skip ci]
+    - docs: update changelog for v0.67.0 [skip ci]
+    - docs: update changelog for v0.67.0 [skip ci]
+
+
+### Tests
+    - test: add streaming event deserialization tests
+
+
+### Chores
+    - chore: update npm package.json to v0.66.2 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: add #[allow(dead_code)] annotations to unused items across multiple files
+    - chore: update npm package.json to v0.66.1 version =  [skip ci]
 # [Version 0.66.2] - 2026-01-22
 
 
