@@ -48,6 +48,7 @@ fn test_header_context_snapshot() {
         highlights: vec![],
         version: "0.37.1".to_string(),
         editing_mode: EditingMode::default(),
+        autonomous_mode: false,
     };
     assert_snapshot!("header_context", format!("{:?}", context));
 }

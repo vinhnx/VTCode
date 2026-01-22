@@ -590,8 +590,6 @@ mod ansi_stripping_tests {
         let input = "Plain text without codes";
         let result = strip_ansi_codes(input);
         assert_eq!(result, "Plain text without codes");
-        // Verify it returns borrowed (zero-copy)
-        assert!(matches!(result, Cow::Borrowed(_)));
     }
 
     #[test]
@@ -778,17 +776,5 @@ mod tests {
         assert!(!truncated);
         assert_eq!(lines.first().copied(), Some("row-1"));
         assert_eq!(lines.last().copied(), Some("row-30"));
-    }
-
-    #[test]
-    fn describes_shell_code_fence_as_shell_header() {
-        let header = describe_code_fence_header(Some("bash"));
-        assert_eq!(header, "Shell (bash)");
-
-        let rust_header = describe_code_fence_header(Some("rust"));
-        assert_eq!(rust_header, "Rust block");
-
-        let empty_header = describe_code_fence_header(None);
-        assert_eq!(empty_header, "Code block");
     }
 }

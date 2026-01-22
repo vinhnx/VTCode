@@ -305,9 +305,6 @@ pub(crate) async fn execute_llm_request(
 
 // Use `strip_harmony_syntax` and `derive_recent_tool_output` helpers from other modules
 
-// NOTE: is_giving_up_reasoning, get_constructive_reasoning, and is_thinking_only_content
-// are now imported from crate::agent::runloop::unified::reasoning
-
 /// Result of processing a single turn
 pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub ctx: &'a mut TurnProcessingContext<'a>,
