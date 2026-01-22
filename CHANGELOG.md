@@ -3,6 +3,23 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.68.0] - 2026-01-22
+
+
+### Refactors
+    - refactor: simplify codebase by auditing markdown.rs, removing unused tests, and standardizing effort parameter in tool calls
+    - refactor: remove tui-syntax-highlight dependency and streamline syntax highlighting implementation
+    - refactor: adjust output thresholds and preview line counts for improved token efficiency
+
+
+### Documentation
+    - docs: update changelog for v0.67.0 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.67.0 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.66.8 version =  [skip ci]
 # [Version 0.67.0] - 2026-01-22
 
 
