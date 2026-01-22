@@ -135,6 +135,7 @@ impl AppearanceConfig {
     }
 
     /// Check if footer should be shown based on ui_mode
+    #[allow(dead_code)]
     pub fn should_show_footer(&self) -> bool {
         match self.ui_mode {
             UiMode::Full => true,

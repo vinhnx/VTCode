@@ -205,7 +205,7 @@ pub(crate) async fn render_terminal_command_panel(
     }
 
     // Render stderr if present, even for PTY sessions
-    if !stderr.as_ref().trim().is_empty() {
+    if !<Cow<'_, str> as AsRef<str>>::as_ref(&stderr).trim().is_empty() {
         render_stream_section(
             renderer,
             "stderr",
