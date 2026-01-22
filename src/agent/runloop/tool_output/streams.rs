@@ -63,15 +63,15 @@ const MAX_CONTENT_WIDTH_PERCENT: usize = 96;
 /// Maximum line length before truncation to prevent TUI hang
 const MAX_LINE_LENGTH: usize = 150;
 /// Size threshold (bytes) below which output is displayed inline vs. spooled
-const DEFAULT_SPOOL_THRESHOLD: usize = 200_000;
+const DEFAULT_SPOOL_THRESHOLD: usize = 4_000; // 4KB for token efficiency
 /// Maximum number of lines to display in code fence blocks
 const MAX_CODE_LINES: usize = 500;
 /// Preview window lines used by large-output previewing (kept local)
 #[allow(dead_code)]
-const PREVIEW_HEAD_LINES: usize = 15;
+const PREVIEW_HEAD_LINES: usize = 20;
 /// Preview tail lines used by large-output previewing (kept local)
 #[allow(dead_code)]
-const PREVIEW_TAIL_LINES: usize = 15;
+const PREVIEW_TAIL_LINES: usize = 10;
 /// Size threshold (bytes) at which to show minimal preview instead of full output
 const LARGE_OUTPUT_THRESHOLD_MB: usize = 1_000_000;
 /// Size threshold (bytes) at which to show fewer preview lines
@@ -79,7 +79,7 @@ const VERY_LARGE_OUTPUT_THRESHOLD_MB: usize = 500_000;
 /// Size threshold (bytes) at which to skip preview entirely
 const EXTREME_OUTPUT_THRESHOLD_MB: usize = 2_000_000;
 /// Size threshold (bytes) for using new large output handler with hashed directories
-const LARGE_OUTPUT_NOTIFICATION_THRESHOLD: usize = 60_000;
+const LARGE_OUTPUT_NOTIFICATION_THRESHOLD: usize = 4_000; // 4KB for token efficiency
 
 /// Determine preview line count based on content size
 fn calculate_preview_lines(content_size: usize) -> usize {

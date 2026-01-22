@@ -51,7 +51,7 @@ impl Default for LargeOutputConfig {
             .unwrap_or_else(|_| PathBuf::from("."));
         Self {
             base_dir: home.join(".vtcode").join("tmp"),
-            threshold_bytes: 60_000, // 60KB default threshold
+            threshold_bytes: 4_000, // 4KB (~1000 chars) for token efficiency
             session_id: None,
         }
     }
@@ -81,9 +81,9 @@ impl LargeOutputConfig {
 }
 
 /// Number of lines to show in preview (head)
-const PREVIEW_HEAD_LINES: usize = 15;
+const PREVIEW_HEAD_LINES: usize = 20;
 /// Number of lines to show in preview (tail)
-const PREVIEW_TAIL_LINES: usize = 15;
+const PREVIEW_TAIL_LINES: usize = 10;
 /// Metadata header line count to skip when reading content
 #[allow(dead_code)]
 const METADATA_HEADER_LINES: usize = 5;

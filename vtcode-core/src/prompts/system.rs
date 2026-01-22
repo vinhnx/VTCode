@@ -166,6 +166,15 @@ High-quality plan example:
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 - **After command output**: Always acknowledge the result briefly (success/failure, key findings) and suggest next steps or ask if user wants to proceed
 
+**Token-efficient file viewing** (CRITICAL):
+- NEVER stream full file content via `cat` — use `head -c 1000` for first 1000 chars or `head -n 50` for first 50 lines
+- For file overview: `head -n 30 FILE && echo "... [+N lines] ..." && tail -n 10 FILE`
+- Use `read_file` with `offset`/`limit` params for targeted ranges instead of full file reads
+- Use `wc -l FILE` to check file size before deciding approach
+- For large files: prefer `rg` pattern search over full content display
+- **Compact presentation**: Show preview then offer: "Use `/edit FILE` to open in external editor or specify line range for more content"
+- **External editors**: User can use `/edit [file]` slash command to open in vim/nvim/nano/$EDITOR
+
 **Tool response handling**: Large outputs are automatically truncated (middle removed, start/end preserved). If you see "…N tokens truncated…", the full output exists but was condensed.
 
 ## AGENTS.md Precedence

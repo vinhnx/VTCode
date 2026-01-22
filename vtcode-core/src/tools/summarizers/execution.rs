@@ -32,9 +32,9 @@ pub struct BashSummarizer {
 impl Default for BashSummarizer {
     fn default() -> Self {
         Self {
-            max_head_lines: 5,
-            max_tail_lines: 3,
-            max_tokens: 250,
+            max_head_lines: 20,
+            max_tail_lines: 10,
+            max_tokens: 500, // ~1000 chars for token efficiency
         }
     }
 }
