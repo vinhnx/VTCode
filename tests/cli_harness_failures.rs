@@ -10,6 +10,7 @@ use support::TestHarness;
 fn base_command(harness: &TestHarness) -> Command {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("vtcode"));
     cmd.env("OLLAMA_API_KEY", "test-key")
+        .env("OPENAI_API_KEY", "test-key")
         .env("NO_COLOR", "1")
         .current_dir(harness.workspace());
     cmd

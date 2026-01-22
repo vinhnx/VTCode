@@ -106,6 +106,36 @@ use vtcode_core::llm::factory::infer_provider;
 use vtcode_core::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
 use vtcode_core::{initialize_dot_folder, load_user_config, update_theme_preference};
 
+fn provider_label(provider: &str) -> String {
+    match provider.to_lowercase().as_str() {
+        "openai" => "OpenAI".to_string(),
+        "anthropic" => "Anthropic".to_string(),
+        "gemini" => "Gemini".to_string(),
+        "deepseek" => "DeepSeek".to_string(),
+        "openrouter" => "OpenRouter".to_string(),
+        "xai" => "xAI".to_string(),
+        "zai" => "Z.AI".to_string(),
+        "ollama" => "Ollama".to_string(),
+        "lmstudio" => "LM Studio".to_string(),
+        _ => provider.to_string(),
+    }
+}
+
+fn api_key_env_var(provider: &str) -> String {
+    match provider.to_lowercase().as_str() {
+        "openai" => "OPENAI_API_KEY".to_string(),
+        "anthropic" => "ANTHROPIC_API_KEY".to_string(),
+        "gemini" => "GEMINI_API_KEY".to_string(),
+        "deepseek" => "DEEPSEEK_API_KEY".to_string(),
+        "openrouter" => "OPENROUTER_API_KEY".to_string(),
+        "xai" => "XAI_API_KEY".to_string(),
+        "zai" => "ZAI_API_KEY".to_string(),
+        "ollama" => "OLLAMA_API_KEY".to_string(),
+        "lmstudio" => "LMSTUDIO_API_KEY".to_string(),
+        _ => format!("{}_API_KEY", provider.to_uppercase()),
+    }
+}
+
 /// Aggregated data required for CLI command execution after startup.
 #[derive(Debug, Clone)]
 pub struct StartupContext {
@@ -286,8 +316,26 @@ impl StartupContext {
 
         update_theme_preference(&theme_selection).await.ok();
 
+        // Validate API key AFTER first-run setup so new users can complete setup first
         let api_key = get_api_key(&provider, &ApiKeySources::default())
-            .with_context(|| format!("API key not found for provider '{}'", provider))?;
+            .with_context(|| {
+                let first_run_occurred = _first_run;
+                let provider_name = provider_label(&provider);
+                let env_var = api_key_env_var(&provider);
+                if first_run_occurred {
+                    format!(
+                        "API key not found for {}. To fix:\n  1. Set {} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml\n\nRun `/init` anytime to reconfigure.",
+                        provider_name,
+                        env_var
+                    )
+                } else {
+                    format!(
+                        "API key not found for provider '{}'. Set {} environment variable (or add to .env file) or configure in vtcode.toml.",
+                        provider,
+                        api_key_env_var(&provider)
+                    )
+                }
+            })?;
 
         let provider_enum = Provider::from_str(&provider).unwrap_or(Provider::Gemini);
         let cli_api_key_env = args.api_key_env.trim();
