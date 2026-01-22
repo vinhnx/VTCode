@@ -15,7 +15,9 @@ pub const TOOL_RESPONSE_KEY_MESSAGE: &str = "message";
 pub const TOOL_EXECUTION_CANCELLED_MESSAGE: &str =
     "Tool execution cancelled at the client's request";
 pub const TOOL_PERMISSION_ALLOW_OPTION_ID: &str = "allow-once";
+pub const TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID: &str = "allow-always";
 pub const TOOL_PERMISSION_DENY_OPTION_ID: &str = "reject-once";
+pub const TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID: &str = "reject-always";
 pub const TOOL_PERMISSION_ALLOW_PREFIX: &str = "Allow";
 pub const TOOL_PERMISSION_DENY_PREFIX: &str = "Deny";
 pub const TOOL_PERMISSION_DENIED_MESSAGE: &str =

@@ -2,7 +2,7 @@ use crate::acp::permissions::{AcpPermissionPrompter, DefaultPermissionPrompter};
 use crate::acp::reports::{
     TOOL_ERROR_LABEL, TOOL_FAILURE_PREFIX, TOOL_RESPONSE_KEY_CONTENT, TOOL_RESPONSE_KEY_MESSAGE,
     TOOL_RESPONSE_KEY_PATH, TOOL_RESPONSE_KEY_STATUS, TOOL_RESPONSE_KEY_TOOL,
-    TOOL_RESPONSE_KEY_TRUNCATED, TOOL_SUCCESS_LABEL, ToolExecutionReport,
+    TOOL_RESPONSE_KEY_TRUNCATED, TOOL_SUCCESS_LABEL, ToolExecutionReport, create_diff_content,
 };
 use crate::acp::tooling::{
     AcpToolRegistry, SupportedTool, TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_MESSAGE_KEY,
@@ -151,6 +151,57 @@ fn agent_implementation_info() -> acp::Implementation {
         title: Some("VT Code".to_string()),
         version: env!("CARGO_PKG_VERSION").to_string(),
     }
+}
+
+fn build_available_commands() -> Vec<acp::AvailableCommand> {
+    vec![
+        acp::AvailableCommand {
+            name: "init".to_string(),
+            description: "Create vtcode.toml and index the workspace".to_string(),
+            input: Some(acp::AvailableCommandInput::Unstructured {
+                hint: "Optional: --force flag".to_string(),
+            }),
+            meta: None,
+        },
+        acp::AvailableCommand {
+            name: "config".to_string(),
+            description: "View the effective vtcode.toml configuration".to_string(),
+            input: None,
+            meta: None,
+        },
+        acp::AvailableCommand {
+            name: "status".to_string(),
+            description: "Show model, provider, workspace, and tool status".to_string(),
+            input: None,
+            meta: None,
+        },
+        acp::AvailableCommand {
+            name: "doctor".to_string(),
+            description: "Run installation and configuration diagnostics".to_string(),
+            input: None,
+            meta: None,
+        },
+        acp::AvailableCommand {
+            name: "plan".to_string(),
+            description: "Toggle Plan Mode: read-only exploration and planning".to_string(),
+            input: Some(acp::AvailableCommandInput::Unstructured {
+                hint: "Optional: on | off".to_string(),
+            }),
+            meta: None,
+        },
+        acp::AvailableCommand {
+            name: "mode".to_string(),
+            description: "Cycle through Edit -> Plan -> Agent modes".to_string(),
+            input: None,
+            meta: None,
+        },
+        acp::AvailableCommand {
+            name: "help".to_string(),
+            description: "Show slash command help".to_string(),
+            input: None,
+            meta: None,
+        },
+    ]
 }
 
 enum ToolRuntime<'a> {
@@ -308,6 +359,7 @@ struct SessionHandle {
 struct SessionData {
     messages: Vec<Message>,
     tool_notice_sent: bool,
+    current_mode: acp::SessionModeId,
 }
 
 struct NotificationEnvelope {
@@ -513,8 +565,9 @@ impl ZedAgent {
         let session_id = acp::SessionId(Arc::from(format!("{SESSION_PREFIX}-{raw_id}")));
         let handle = SessionHandle {
             data: Rc::new(RefCell::new(SessionData {
-                messages: Vec::with_capacity(20), // Pre-allocate for typical message count
+                messages: Vec::with_capacity(20),
                 tool_notice_sent: false,
+                current_mode: acp::SessionModeId(MODE_ID_CODE.into()),
             })),
             cancel_flag: Rc::new(Cell::new(false)),
         };
@@ -538,6 +591,15 @@ impl ZedAgent {
 
     fn mark_tool_notice_sent(&self, session: &SessionHandle) {
         session.data.borrow_mut().tool_notice_sent = true;
+    }
+
+    fn update_session_mode(&self, session: &SessionHandle, mode_id: acp::SessionModeId) -> bool {
+        let mut data = session.data.borrow_mut();
+        if data.current_mode == mode_id {
+            return false;
+        }
+        data.current_mode = mode_id;
+        true
     }
 
     fn resolved_messages(&self, session: &SessionHandle) -> Vec<Message> {
@@ -1301,14 +1363,32 @@ impl ZedAgent {
         tool_name: &str,
         output: &Value,
     ) -> Vec<acp::ToolCallContent> {
-        let mut sections = Vec::with_capacity(10); // Pre-allocate for typical sections
+        if tool_name == tools::EDIT_FILE
+            || tool_name == tools::WRITE_FILE
+            || tool_name == tools::CREATE_FILE
+        {
+            if let (Some(path), Some(old_text), Some(new_text)) = (
+                output.get("path").and_then(Value::as_str),
+                output.get("old_text").and_then(Value::as_str),
+                output.get("new_text").and_then(Value::as_str),
+            ) {
+                return vec![create_diff_content(path, Some(old_text), new_text)];
+            }
+            if let (Some(path), Some(new_text)) = (
+                output.get("path").and_then(Value::as_str),
+                output.get("new_text").and_then(Value::as_str),
+            ) {
+                return vec![create_diff_content(path, None, new_text)];
+            }
+        }
+
+        let mut sections = Vec::with_capacity(10);
 
         if let Some(stdout) = output
             .get("stdout")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
         {
-            // Strip any ANSI escape sequences from tool output before truncation
             let plain = strip_ansi(stdout);
             let (rendered, truncated) = self.truncate_text(&plain);
             sections.push(format!("stdout:\n{rendered}"));
@@ -1358,7 +1438,6 @@ impl ZedAgent {
             sections.push(format!("{tool_name} completed without output"));
         }
 
-        // Avoid inserting extra blank lines between sections; use single newline separator
         vec![acp::ToolCallContent::from(sections.join("\n"))]
     }
 
@@ -1784,6 +1863,21 @@ impl ZedAgent {
         self.send_update(session_id, acp::SessionUpdate::Plan(plan.to_plan()))
             .await
     }
+
+    async fn send_available_commands_update(
+        &self,
+        session_id: &acp::SessionId,
+    ) -> Result<(), acp::Error> {
+        let available_commands = build_available_commands();
+        self.send_update(
+            session_id,
+            acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate {
+                available_commands,
+                meta: None,
+            }),
+        )
+        .await
+    }
 }
 
 #[async_trait(?Send)]
@@ -1805,6 +1899,11 @@ impl acp::Agent for ZedAgent {
 
         let mut capabilities = acp::AgentCapabilities::default();
         capabilities.prompt_capabilities.embedded_context = true;
+        capabilities.prompt_capabilities.image = true;
+        capabilities.prompt_capabilities.audio = true;
+        capabilities.mcp_capabilities.http = true;
+        capabilities.mcp_capabilities.sse = false;
+        capabilities.load_session = false;
 
         Ok(acp::InitializeResponse {
             protocol_version: acp::V1,
@@ -1828,6 +1927,9 @@ impl acp::Agent for ZedAgent {
     ) -> Result<acp::NewSessionResponse, acp::Error> {
         let session_id = self.register_session();
         let available_modes = acp_session_modes();
+
+        self.send_available_commands_update(&session_id).await?;
+
         Ok(acp::NewSessionResponse {
             session_id,
             modes: Some(acp::SessionModeState {
@@ -1849,6 +1951,20 @@ impl acp::Agent for ZedAgent {
         session.cancel_flag.set(false);
 
         let user_message = self.resolve_prompt(&args.session_id, &args.prompt).await?;
+
+        for block in &args.prompt {
+            if let acp::ContentBlock::Text(text) = block {
+                self.send_update(
+                    &args.session_id,
+                    acp::SessionUpdate::UserMessageChunk(acp::ContentChunk {
+                        content: acp::ContentBlock::from(text.text.clone()),
+                        meta: None,
+                    }),
+                )
+                .await?;
+            }
+        }
+
         self.push_message(&session, Message::user(user_message.clone()));
 
         let provider = match create_provider_for_model(
@@ -2128,6 +2244,42 @@ impl acp::Agent for ZedAgent {
             stop_reason,
             meta: None,
         })
+    }
+
+    async fn set_session_mode(
+        &self,
+        args: acp::SetSessionModeRequest,
+    ) -> Result<acp::SetSessionModeResponse, acp::Error> {
+        let Some(session) = self.session_handle(&args.session_id) else {
+            return Err(
+                acp::Error::invalid_params().with_data(json!({ "reason": "unknown_session" }))
+            );
+        };
+
+        let valid_modes: HashSet<Arc<str>> = [
+            Arc::from(MODE_ID_ASK),
+            Arc::from(MODE_ID_ARCHITECT),
+            Arc::from(MODE_ID_CODE),
+        ]
+        .into_iter()
+        .collect();
+        if !valid_modes.contains(&args.mode_id.0) {
+            return Err(acp::Error::invalid_params()
+                .with_data(json!({ "reason": "unknown_mode", "mode_id": args.mode_id.0 })));
+        }
+
+        if self.update_session_mode(&session, args.mode_id.clone()) {
+            self.send_update(
+                &args.session_id,
+                acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate {
+                    current_mode_id: args.mode_id.clone(),
+                    meta: None,
+                }),
+            )
+            .await?;
+        }
+
+        Ok(acp::SetSessionModeResponse { meta: None })
     }
 
     async fn cancel(&self, args: acp::CancelNotification) -> Result<(), acp::Error> {
