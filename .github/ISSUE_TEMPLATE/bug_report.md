@@ -32,7 +32,7 @@ If applicable, add screenshots to help explain your problem.
 ## Environment
 
 - **OS:** [e.g. macOS 14.1, Ubuntu 22.04, Windows 11]
-- **Rust version:** [e.g. rustc 1.75.0]
+- **Rust version:** [e.g. rustc 1.93.0]
 - **VT Code version:** [e.g. 0.31.0 or commit hash]
 - **Terminal:** [e.g. iTerm2, GNOME Terminal, Windows Terminal]
 - **Shell:** [e.g. bash, zsh, PowerShell]

@@ -174,11 +174,11 @@ cargo test --lib ollama::url
 
 ## Compatibility
 
-- ✅ Rust 1.75+ (workspace MSRV)
-- ✅ Async/await with Tokio
-- ✅ Works with local Ollama (default port 11434)
-- ✅ Works with Ollama Cloud (API key required)
-- ✅ Compatible with OpenAI-compatible endpoints
+- Rust 1.93.0+ (workspace MSRV)
+- Async/await with Tokio
+- Works with local Ollama (default port 11434)
+- Works with Ollama Cloud (API key required)
+- Compatible with OpenAI-compatible endpoints
 
 ## References
 

@@ -252,10 +252,10 @@ None. A2A support is entirely new and non-breaking.
 
 ## Compatibility
 
--   Rust Edition: 2021
--   Minimum MSRV: 1.70
--   All major platforms supported (macOS, Linux, Windows)
--   Async runtime: Tokio
+- Rust Edition: 2021
+- Minimum MSRV: 1.93.0
+- All major platforms supported (macOS, Linux, Windows)
+- Async runtime: Tokio
 
 ## Future Enhancements
 

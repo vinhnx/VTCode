@@ -233,7 +233,7 @@ See **[SPEC_ALIGNMENT.md - Compliance Checklist](SPEC_ALIGNMENT.md#compliance-ch
 | A2A Protocol | 1.0     |
 | JSON-RPC     | 2.0     |
 | Rust Edition | 2021    |
-| MSRV         | 1.70+   |
+| MSRV         | 1.93.0+ |
 
 ## Document Maintenance
 

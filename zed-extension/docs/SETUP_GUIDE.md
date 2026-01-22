@@ -176,7 +176,7 @@ cargo build --release
 
 # Check Rust version
 rustc --version
-# Should be 1.70.0 or newer
+# Should be 1.93.0 or newer
 ```
 
 ### VT Code CLI Not Found
