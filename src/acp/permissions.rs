@@ -7,8 +7,9 @@ use serde_json::Value;
 use tracing::{error, warn};
 
 use crate::acp::reports::{
-    TOOL_PERMISSION_ALLOW_OPTION_ID, TOOL_PERMISSION_ALLOW_PREFIX,
-    TOOL_PERMISSION_CANCELLED_MESSAGE, TOOL_PERMISSION_DENIED_MESSAGE,
+    TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID, TOOL_PERMISSION_ALLOW_OPTION_ID,
+    TOOL_PERMISSION_ALLOW_PREFIX, TOOL_PERMISSION_CANCELLED_MESSAGE,
+    TOOL_PERMISSION_DENIED_MESSAGE, TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID,
     TOOL_PERMISSION_DENY_OPTION_ID, TOOL_PERMISSION_DENY_PREFIX,
     TOOL_PERMISSION_REQUEST_FAILURE_LOG, TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE,
     TOOL_PERMISSION_UNKNOWN_OPTION_LOG, ToolExecutionReport,
@@ -68,21 +69,40 @@ where
     ) -> Vec<acp::PermissionOption> {
         let action_label = self.render_action_label(tool, args);
 
-        let allow_option = acp::PermissionOption {
+        let allow_once_option = acp::PermissionOption {
             id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_ALLOW_OPTION_ID)),
-            name: format!("{TOOL_PERMISSION_ALLOW_PREFIX} {action_label}"),
+            name: format!("{TOOL_PERMISSION_ALLOW_PREFIX} {action_label} once"),
             kind: acp::PermissionOptionKind::AllowOnce,
             meta: None,
         };
 
-        let deny_option = acp::PermissionOption {
+        let allow_always_option = acp::PermissionOption {
+            id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID)),
+            name: format!("{TOOL_PERMISSION_ALLOW_PREFIX} {action_label} always"),
+            kind: acp::PermissionOptionKind::AllowAlways,
+            meta: None,
+        };
+
+        let deny_once_option = acp::PermissionOption {
             id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_DENY_OPTION_ID)),
-            name: format!("{TOOL_PERMISSION_DENY_PREFIX} {action_label}"),
+            name: format!("{TOOL_PERMISSION_DENY_PREFIX} {action_label} once"),
             kind: acp::PermissionOptionKind::RejectOnce,
             meta: None,
         };
 
-        vec![allow_option, deny_option]
+        let deny_always_option = acp::PermissionOption {
+            id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID)),
+            name: format!("{TOOL_PERMISSION_DENY_PREFIX} {action_label} always"),
+            kind: acp::PermissionOptionKind::RejectAlways,
+            meta: None,
+        };
+
+        vec![
+            allow_once_option,
+            allow_always_option,
+            deny_once_option,
+            deny_always_option,
+        ]
     }
 
     async fn request_tool_permission(
@@ -119,12 +139,20 @@ where
                     TOOL_PERMISSION_CANCELLED_MESSAGE,
                 ))),
                 acp::RequestPermissionOutcome::Selected { option_id } => {
-                    if option_id.0.as_ref() == TOOL_PERMISSION_ALLOW_OPTION_ID {
+                    let option_id_str = option_id.0.as_ref();
+                    if option_id_str == TOOL_PERMISSION_ALLOW_OPTION_ID
+                        || option_id_str == TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID
+                    {
                         Ok(None)
+                    } else if option_id_str == TOOL_PERMISSION_DENY_OPTION_ID
+                        || option_id_str == TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID
+                    {
+                        Ok(Some(ToolExecutionReport::failure(
+                            tool.function_name(),
+                            TOOL_PERMISSION_DENIED_MESSAGE,
+                        )))
                     } else {
-                        if option_id.0.as_ref() != TOOL_PERMISSION_DENY_OPTION_ID {
-                            warn!("{}", TOOL_PERMISSION_UNKNOWN_OPTION_LOG);
-                        }
+                        warn!("{}", TOOL_PERMISSION_UNKNOWN_OPTION_LOG);
                         Ok(Some(ToolExecutionReport::failure(
                             tool.function_name(),
                             TOOL_PERMISSION_DENIED_MESSAGE,

@@ -5,8 +5,9 @@ use agent_client_protocol as acp;
 use serde_json::Value;
 use vtcode::acp::permissions::{AcpPermissionPrompter, DefaultPermissionPrompter};
 use vtcode::acp::reports::{
-    TOOL_PERMISSION_ALLOW_OPTION_ID, TOOL_PERMISSION_CANCELLED_MESSAGE,
-    TOOL_PERMISSION_DENIED_MESSAGE, TOOL_PERMISSION_DENY_OPTION_ID,
+    TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID, TOOL_PERMISSION_ALLOW_OPTION_ID,
+    TOOL_PERMISSION_CANCELLED_MESSAGE, TOOL_PERMISSION_DENIED_MESSAGE,
+    TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID, TOOL_PERMISSION_DENY_OPTION_ID,
     TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE,
 };
 use vtcode::acp::tooling::{
@@ -21,7 +22,9 @@ use acp_fixtures::{list_files_permission, read_file_permission};
 
 enum FakeOutcome {
     Allow,
+    AllowAlways,
     Deny,
+    DenyAlways,
     Cancel,
     Error(acp::Error),
 }
@@ -62,9 +65,25 @@ impl acp::Client for FakeClient {
                 },
                 meta: None,
             }),
+            FakeOutcome::AllowAlways => Ok(acp::RequestPermissionResponse {
+                outcome: acp::RequestPermissionOutcome::Selected {
+                    option_id: acp::PermissionOptionId(Arc::from(
+                        TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID,
+                    )),
+                },
+                meta: None,
+            }),
             FakeOutcome::Deny => Ok(acp::RequestPermissionResponse {
                 outcome: acp::RequestPermissionOutcome::Selected {
                     option_id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_DENY_OPTION_ID)),
+                },
+                meta: None,
+            }),
+            FakeOutcome::DenyAlways => Ok(acp::RequestPermissionResponse {
+                outcome: acp::RequestPermissionOutcome::Selected {
+                    option_id: acp::PermissionOptionId(Arc::from(
+                        TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID,
+                    )),
                 },
                 meta: None,
             }),
@@ -204,14 +223,16 @@ async fn permission_allow_flow_returns_none() {
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
     assert_eq!(request.session_id, fixture.session_id);
-    assert_eq!(request.options.len(), 2);
+    assert_eq!(request.options.len(), 4);
     let option_ids: Vec<_> = request
         .options
         .iter()
         .map(|option| option.id.0.as_ref().to_string())
         .collect();
     assert!(option_ids.contains(&TOOL_PERMISSION_ALLOW_OPTION_ID.to_string()));
+    assert!(option_ids.contains(&TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID.to_string()));
     assert!(option_ids.contains(&TOOL_PERMISSION_DENY_OPTION_ID.to_string()));
+    assert!(option_ids.contains(&TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID.to_string()));
 
     assert!(
         request.options.iter().any(|option| {
@@ -266,6 +287,61 @@ async fn permission_cancelled_flow_returns_cancel_report() {
             .llm_response
             .contains(TOOL_PERMISSION_CANCELLED_MESSAGE)
     );
+}
+
+#[tokio::test]
+async fn permission_allow_always_flow_returns_none() {
+    let fixture = read_file_permission();
+    let client = FakeClient::new(FakeOutcome::AllowAlways);
+    let prompter = prompter();
+
+    let report = prompter
+        .request_tool_permission(
+            &client,
+            &fixture.session_id,
+            &fixture.tool_call,
+            SupportedTool::ReadFile,
+            &fixture.arguments,
+        )
+        .await
+        .expect("permission request should succeed");
+
+    assert!(report.is_none(), "allow always flow must not short-circuit");
+
+    let requests = client.recorded_requests();
+    assert_eq!(requests.len(), 1);
+    let request = &requests[0];
+    assert_eq!(request.session_id, fixture.session_id);
+    assert_eq!(request.options.len(), 4);
+
+    let option_ids: Vec<_> = request
+        .options
+        .iter()
+        .map(|option| option.id.0.as_ref().to_string())
+        .collect();
+    assert!(option_ids.contains(&TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID.to_string()));
+}
+
+#[tokio::test]
+async fn permission_deny_always_flow_returns_failure_report() {
+    let fixture = read_file_permission();
+    let client = FakeClient::new(FakeOutcome::DenyAlways);
+    let prompter = prompter();
+
+    let report = prompter
+        .request_tool_permission(
+            &client,
+            &fixture.session_id,
+            &fixture.tool_call,
+            SupportedTool::ReadFile,
+            &fixture.arguments,
+        )
+        .await
+        .expect("permission request should return a report")
+        .expect("denied flow should produce a tool report");
+
+    assert_eq!(report.status, acp::ToolCallStatus::Failed);
+    assert!(report.llm_response.contains(TOOL_PERMISSION_DENIED_MESSAGE));
 }
 
 #[tokio::test]
