@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anstyle::Style as AnsiStyle;
 use anyhow::Result;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};

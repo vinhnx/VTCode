@@ -6085,16 +6085,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui-syntax-highlight"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a93b2eee88e20e19f274b96d4a87912c905acdb5db0cfa1be9b8fadf6c12334"
-dependencies = [
- "ratatui-core",
- "syntect 5.3.0",
-]
-
-[[package]]
 name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6582,7 +6572,6 @@ dependencies = [
  "tree-sitter-typescript",
  "tui-popup",
  "tui-prompts",
- "tui-syntax-highlight",
  "unicode-segmentation",
  "unicode-width 0.2.0",
  "url",

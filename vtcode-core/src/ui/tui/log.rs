@@ -8,17 +8,18 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
 };
+use syntect::easy::HighlightLines;
+use syntect::highlighting::Theme;
+use syntect::parsing::SyntaxReference;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{Event, Level, Subscriber, field::Visit};
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
-use tui_syntax_highlight::Highlighter;
 
 use crate::ui::syntax_highlight::{
     default_theme_name, find_syntax_by_extension, find_syntax_by_name, find_syntax_plain_text,
     load_theme, syntax_set,
 };
-use syntect::parsing::SyntaxReference;
 
 #[derive(Debug, Clone)]
 pub struct LogEntry {
@@ -53,8 +54,7 @@ impl LogForwarder {
 static LOG_FORWARDER: Lazy<Arc<LogForwarder>> = Lazy::new(|| Arc::new(LogForwarder::default()));
 
 static LOG_THEME_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
-static LOG_HIGHLIGHTER_CACHE: Lazy<RwLock<Option<(String, Highlighter)>>> =
-    Lazy::new(|| RwLock::new(None));
+static LOG_THEME_CACHE: Lazy<RwLock<Option<(String, Theme)>>> = Lazy::new(|| RwLock::new(None));
 
 #[derive(Default)]
 struct FieldVisitor {
@@ -213,24 +213,18 @@ pub fn set_log_theme_name(theme: Option<String>) {
     *slot = theme
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty());
-    // Clear cached highlighter so it reloads with the new theme
-    let mut cache = LOG_HIGHLIGHTER_CACHE.write().unwrap();
+    let mut cache = LOG_THEME_CACHE.write().unwrap();
     *cache = None;
 }
 
-fn resolve_theme(theme_name: Option<String>) -> tui_syntax_highlight::syntect::highlighting::Theme {
-    let name = theme_name.unwrap_or_else(|| default_theme_name());
-    load_theme(&name, false)
-}
-
-fn highlighter_for_current_theme() -> Highlighter {
+fn theme_for_current_config() -> Theme {
     let theme_name = {
         let slot = LOG_THEME_NAME.read().unwrap();
         slot.clone()
     };
-    let resolved_name = theme_name.clone().unwrap_or_else(|| default_theme_name());
+    let resolved_name = theme_name.clone().unwrap_or_else(default_theme_name);
     {
-        let cache = LOG_HIGHLIGHTER_CACHE.read().unwrap();
+        let cache = LOG_THEME_CACHE.read().unwrap();
         if let Some((cached_name, cached)) = &*cache
             && *cached_name == resolved_name
         {
@@ -238,11 +232,44 @@ fn highlighter_for_current_theme() -> Highlighter {
         }
     }
 
-    let theme = resolve_theme(theme_name);
-    let highlighter = Highlighter::new(theme).line_numbers(false);
-    let mut cache = LOG_HIGHLIGHTER_CACHE.write().unwrap();
-    *cache = Some((resolved_name, highlighter.clone()));
-    highlighter
+    let theme = load_theme(&resolved_name, true);
+    let mut cache = LOG_THEME_CACHE.write().unwrap();
+    *cache = Some((resolved_name, theme.clone()));
+    theme
+}
+
+fn syntect_to_ratatui_style(style: syntect::highlighting::Style) -> Style {
+    let fg = style.foreground;
+    Style::default().fg(Color::Rgb(fg.r, fg.g, fg.b))
+}
+
+fn highlight_lines_to_text<'a>(
+    lines: impl Iterator<Item = &'a str>,
+    syntax: &SyntaxReference,
+) -> Text<'static> {
+    let theme = theme_for_current_config();
+    let ss = syntax_set();
+    let mut highlighter = HighlightLines::new(syntax, &theme);
+    let mut result_lines = Vec::new();
+
+    for line in lines {
+        match highlighter.highlight_line(line, ss) {
+            Ok(ranges) => {
+                let spans: Vec<Span<'static>> = ranges
+                    .into_iter()
+                    .map(|(style, text)| {
+                        Span::styled(text.to_owned(), syntect_to_ratatui_style(style))
+                    })
+                    .collect();
+                result_lines.push(Line::from(spans));
+            }
+            Err(_) => {
+                result_lines.push(Line::raw(line.to_owned()));
+            }
+        }
+    }
+
+    Text::from(result_lines)
 }
 
 fn log_level_style(level: &Level) -> Style {
@@ -305,7 +332,6 @@ fn select_syntax(message: &str) -> &'static SyntaxReference {
 }
 
 pub fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
-    // If syntax set is empty, skip highlighting entirely
     let ss = syntax_set();
     if ss.syntaxes().is_empty() {
         let mut text = Text::raw(entry.formatted.as_ref().to_string());
@@ -314,9 +340,7 @@ pub fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
     }
 
     let syntax = select_syntax(entry.message.as_ref());
-    let mut highlighted = highlighter_for_current_theme()
-        .highlight_lines(entry.message.lines(), syntax, ss)
-        .unwrap_or_else(|_| Text::raw(entry.formatted.as_ref().to_string()));
+    let mut highlighted = highlight_lines_to_text(entry.message.lines(), syntax);
     prepend_metadata(&mut highlighted, entry);
     highlighted
 }

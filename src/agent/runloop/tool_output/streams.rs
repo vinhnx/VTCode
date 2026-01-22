@@ -52,14 +52,11 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::files::truncate_text_safe;
 use super::large_output::{LargeOutputConfig, spool_large_output};
-use super::panels::{PanelContentLine, clamp_panel_text, render_panel};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
 
 /// Maximum number of lines to display in inline mode before truncating
 const INLINE_STREAM_MAX_LINES: usize = 30;
-/// Maximum content width percentage for panel rendering
-const MAX_CONTENT_WIDTH_PERCENT: usize = 96;
 /// Maximum line length before truncation to prevent TUI hang
 const MAX_LINE_LENGTH: usize = 150;
 /// Size threshold (bytes) below which output is displayed inline vs. spooled
@@ -328,47 +325,38 @@ pub(crate) fn render_code_fence_blocks(
     renderer: &mut AnsiRenderer,
     blocks: &[CodeFenceBlock],
 ) -> Result<()> {
-    let content_limit = MAX_CONTENT_WIDTH_PERCENT.saturating_sub(4);
     for (index, block) in blocks.iter().enumerate() {
-        let header = describe_code_fence_header(block.language.as_deref());
-
-        let mut lines = Vec::new();
-
         if block.lines.is_empty() {
-            lines.push(PanelContentLine::new(
-                clamp_panel_text("    (no content)", content_limit),
-                MessageStyle::Info,
-            ));
+            renderer.line(MessageStyle::Info, "    (no content)")?;
         } else {
-            lines.push(PanelContentLine::new(String::new(), MessageStyle::Response));
-            // Use reasonable limit to prevent UI hang, but note that semantic content is
-            // truncated at token level (25k tokens in render_stream_section)
             let total_lines = block.lines.len();
-            for (idx, line) in block.lines.iter().enumerate() {
-                if idx >= MAX_CODE_LINES {
-                    lines.push(PanelContentLine::new(
-                        format!(
-                            "    ... ({} more lines truncated, view full output in tool logs)",
-                            total_lines - MAX_CODE_LINES
-                        ),
-                        MessageStyle::Info,
-                    ));
-                    break;
-                }
-                let display = format!("    {}", line);
-                lines.push(PanelContentLine::new(
-                    clamp_panel_text(&display, content_limit),
-                    MessageStyle::Response,
-                ));
+            let truncated = total_lines > MAX_CODE_LINES;
+            let display_lines = if truncated {
+                &block.lines[..MAX_CODE_LINES]
+            } else {
+                &block.lines[..]
+            };
+
+            let lang = block.language.as_deref().unwrap_or("");
+            let mut markdown = format!("```{lang}\n");
+            for line in display_lines {
+                markdown.push_str(line);
+                markdown.push('\n');
+            }
+            markdown.push_str("```");
+
+            renderer.line(MessageStyle::Response, &markdown)?;
+
+            if truncated {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "    ... ({} more lines truncated, view full output in tool logs)",
+                        total_lines - MAX_CODE_LINES
+                    ),
+                )?;
             }
         }
-
-        render_panel(
-            renderer,
-            Some(clamp_panel_text(&header, content_limit)),
-            lines,
-            MessageStyle::Response,
-        )?;
 
         if index + 1 < blocks.len() {
             renderer.line(MessageStyle::Response, "")?;
@@ -744,43 +732,6 @@ mod ansi_stripping_tests {
         let input = "Line1\n\u{1b}[31mLine2\u{1b}[0m\nLine3";
         let result = strip_ansi_codes(input);
         assert_eq!(result, "Line1\nLine2\nLine3");
-    }
-}
-
-/// Truncate content by tokens, keeping head + tail to preserve context
-///
-/// This function implements token-aware truncation instead of naive line-based limits.
-/// It preserves the most important parts of the output:
-/// - Head: Shows initial state, setup, early context (40% for logs, 50% for code)
-/// - Tail: Shows final state, errors, completion status (60% for logs, 50% for code)
-///
-/// Smart allocation: For non-code output (logs, test results), we bias toward the tail
-/// (40/60 split) since errors and summaries typically appear at the end. For code blocks,
-/// we use balanced allocation (50/50) since logic can be distributed throughout.
-///
-/// Why token-based is better than line-based:
-fn describe_code_fence_header(language: Option<&str>) -> String {
-    let Some(lang) = language
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-    else {
-        return "Code block".to_string();
-    };
-
-    let lower = lang.to_ascii_lowercase();
-    match lower.as_str() {
-        "sh" | "bash" | "zsh" | "shell" | "pwsh" | "powershell" | "cmd" | "batch" | "bat" => {
-            format!("Shell ({lower})")
-        }
-        _ => {
-            let mut chars = lower.chars();
-            let Some(first) = chars.next() else {
-                return "Code block".to_string();
-            };
-            let mut label = first.to_uppercase().collect::<String>();
-            label.extend(chars);
-            format!("{label} block")
-        }
     }
 }
 

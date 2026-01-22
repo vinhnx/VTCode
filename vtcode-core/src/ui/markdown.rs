@@ -1397,6 +1397,76 @@ fn get_theme(theme_name: &str, cache: bool) -> Theme {
     load_theme(theme_name, cache)
 }
 
+/// A highlighted line segment with style and text.
+#[derive(Clone, Debug)]
+pub struct HighlightedSegment {
+    pub style: Style,
+    pub text: String,
+}
+
+/// Highlight a code string and return styled segments per line.
+///
+/// This function applies syntax highlighting to the provided code and returns
+/// a vector of lines, where each line contains styled segments.
+pub fn highlight_code_to_segments(
+    code: &str,
+    language: Option<&str>,
+    theme_name: &str,
+) -> Vec<Vec<HighlightedSegment>> {
+    let syntax = select_syntax(language);
+    let theme = get_theme(theme_name, true);
+    let mut highlighter = HighlightLines::new(syntax, &theme);
+    let mut result = Vec::new();
+
+    for line in LinesWithEndings::from(code) {
+        let trimmed = line.trim_end_matches('\n');
+        let segments = match highlighter.highlight_line(trimmed, syntax_set()) {
+            Ok(ranges) => ranges
+                .into_iter()
+                .filter(|(_, text)| !text.is_empty())
+                .map(|(style, text)| {
+                    let mut anstyle = to_anstyle(style);
+                    anstyle = anstyle.bg_color(None);
+                    HighlightedSegment {
+                        style: anstyle,
+                        text: text.to_owned(),
+                    }
+                })
+                .collect(),
+            Err(_) => vec![HighlightedSegment {
+                style: Style::new(),
+                text: trimmed.to_owned(),
+            }],
+        };
+        result.push(segments);
+    }
+
+    result
+}
+
+/// Highlight a code string and return ANSI-formatted strings per line.
+///
+/// This is a convenience function that renders highlighting directly to
+/// ANSI escape sequences suitable for terminal output.
+pub fn highlight_code_to_ansi(code: &str, language: Option<&str>, theme_name: &str) -> Vec<String> {
+    let segments = highlight_code_to_segments(code, language, theme_name);
+    segments
+        .into_iter()
+        .map(|line_segments| {
+            let mut ansi_line = String::new();
+            for seg in line_segments {
+                let rendered = seg.style.render();
+                ansi_line.push_str(&format!(
+                    "{rendered}{text}{reset}",
+                    text = seg.text,
+                    reset = anstyle::Reset
+                ));
+            }
+            ansi_line
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
