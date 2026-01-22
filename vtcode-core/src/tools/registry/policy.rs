@@ -243,7 +243,7 @@ impl ToolPolicyGateway {
         let canonical = canonical_tool_name(name);
         self.full_auto_allowlist
             .as_ref()
-            .map(|allowlist| allowlist.contains(canonical.as_ref()))
+            .map(|allowlist| allowlist.contains(&*canonical))
             .unwrap_or(true)
     }
 
@@ -322,7 +322,7 @@ impl ToolPolicyGateway {
 
     pub fn take_preapproved(&mut self, name: &str) -> bool {
         let canonical = canonical_tool_name(name);
-        let was_preapproved = self.preapproved_tools.remove(canonical.as_ref());
+        let was_preapproved = self.preapproved_tools.remove(&*canonical);
         tracing::debug!(
             "take_preapproved: tool='{}', canonical='{}', was_preapproved={}, remaining={:?}",
             name,

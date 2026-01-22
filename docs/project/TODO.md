@@ -326,7 +326,7 @@ Improve premium UI/UX for subagents in TUI. use golden + dark gray or special hi
 
 --
 
-NOTE: check git stask stash 92bb678
+NOTE: check git stask stash 3b261bc
 
 To improve your coding agent **vtcode**, you should transition from a linear "query-response" model to a **budget-aware agentic system** that optimizes the trade-off between task success and resource consumption. The research suggests that an efficient agent is not necessarily a smaller model, but one optimized to minimize token usage, latency, and computational costs across **memory, tool usage, and planning**.
 

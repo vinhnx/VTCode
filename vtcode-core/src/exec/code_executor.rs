@@ -239,13 +239,13 @@ impl CodeExecutor {
         // Set workspace path for scripts
         env.insert(
             OsString::from("VTCODE_WORKSPACE"),
-            OsString::from(self.workspace_root.to_string_lossy().as_ref()),
+            OsString::from(&*self.workspace_root.to_string_lossy()),
         );
 
         // Set IPC directory for tool invocation
         env.insert(
             OsString::from("VTCODE_IPC_DIR"),
-            OsString::from(ipc_dir.to_string_lossy().as_ref()),
+            OsString::from(&*ipc_dir.to_string_lossy()),
         );
 
         // Spawn IPC handler task that will process tool requests from code
