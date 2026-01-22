@@ -3,6 +3,30 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.66.6] - 2026-01-22
+
+
+### Bug Fixes
+    - fix: resolve ambiguous AsRef trait for Cow in zed.rs
+    - fix: resolve ambiguous AsRef trait for Cow<'_, str>
+
+
+### Refactors
+    - refactor: optimize string handling with dereferencing in multiple files
+
+
+### Documentation
+    - docs: update changelog for v0.66.5 [skip ci]
+    - docs: update changelog for v0.66.4 [skip ci]
+    - docs: update changelog for v0.66.3 [skip ci]
+
+
+### Chores
+    - chore(release): bump version to {{version}}
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.66.3 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.66.2 version =  [skip ci]
 # [Version 0.66.5] - 2026-01-22
 
 
