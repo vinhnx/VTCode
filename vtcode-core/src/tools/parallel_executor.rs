@@ -31,10 +31,7 @@ impl ParallelToolExecutor {
 
                 tokio::spawn(async move {
                     // Acquire permit
-                    let _permit = semaphore.acquire().await.context("Semaphore closed");
-                    if let Err(e) = _permit {
-                        return Err(e);
-                    }
+                    let _permit = semaphore.acquire().await.context("Semaphore closed")?;
                     inner.execute_tool(&name, args).await
                 })
             })

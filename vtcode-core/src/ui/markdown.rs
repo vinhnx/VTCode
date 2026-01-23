@@ -940,7 +940,7 @@ fn try_highlight(
 
 fn select_syntax(language: Option<&str>) -> &'static SyntaxReference {
     language
-        .map(|lang| find_syntax_by_token(lang))
+        .map(find_syntax_by_token)
         .unwrap_or_else(|| syntax_set().find_syntax_plain_text())
 }
 

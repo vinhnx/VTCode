@@ -158,13 +158,22 @@ impl ToolOutputSpooler {
         let filename = format!("{}_{}.txt", sanitize_tool_name(tool_name), timestamp);
         let file_path = self.output_dir.join(&filename);
 
-        // For read_file/unified_file, extract raw content so the spooled file is directly usable
+        // For read_file/unified_file and PTY-related tools, extract raw content so the spooled file is directly usable
         // This allows grep_file to work on the spooled output and makes reading more intuitive
         let content = if (tool_name == "read_file" || tool_name == "unified_file") && !is_mcp {
             if let Some(raw_content) = value.get("content").and_then(|v| v.as_str()) {
                 raw_content.to_string()
             } else {
                 // Fallback to JSON serialization if no content field
+                serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
+            }
+        } else if (tool_name == "run_pty_cmd" || tool_name == "send_pty_input" || tool_name == "read_pty_session") && !is_mcp {
+            // For PTY-related tools, extract the actual command output from the "output" field
+            // This ensures the spooled file contains the raw command output, not the JSON wrapper
+            if let Some(output_content) = value.get("output").and_then(|v| v.as_str()) {
+                output_content.to_string()
+            } else {
+                // Fallback to JSON serialization if no output field
                 serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
             }
         } else if let Some(s) = value.as_str() {
@@ -574,5 +583,83 @@ mod tests {
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, file_content);
         assert!(!spooled_content.contains("\"success\"")); // Raw content, not JSON
+    }
+
+    #[tokio::test]
+    async fn test_run_pty_cmd_spools_raw_output() {
+        let temp = tempdir().unwrap();
+        let mut config = SpoolerConfig::default();
+        config.threshold_bytes = 50;
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+
+        let command_output = "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev [unoptimized + debuginfo] target(s)";
+
+        // Simulate a run_pty_cmd response with output field
+        let pty_response = json!({
+            "output": command_output,
+            "exit_code": 0,
+            "wall_time": 1.234,
+            "success": true
+        });
+
+        let result = spooler
+            .process_output("run_pty_cmd", pty_response, false)
+            .await
+            .unwrap();
+
+        // Should return file reference
+        assert!(result.get("spooled_to_file").is_some());
+
+        // Verify spooled file contains raw output, not JSON wrapper
+        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
+        assert_eq!(spooled_content, command_output);
+        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
+        assert!(!spooled_content.contains("\"exit_code\"")); // Raw content, not JSON
+    }
+
+    #[tokio::test]
+    async fn test_pty_tools_spool_raw_output() {
+        let temp = tempdir().unwrap();
+        let mut config = SpoolerConfig::default();
+        config.threshold_bytes = 50;
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+
+        let command_output = "Some command output text\nwith multiple lines\nfor testing";
+
+        // Test send_pty_input
+        let send_input_response = json!({
+            "output": command_output,
+            "wall_time": 0.123,
+            "session_id": "session123"
+        });
+
+        let result = spooler
+            .process_output("send_pty_input", send_input_response, false)
+            .await
+            .unwrap();
+
+        assert!(result.get("spooled_to_file").is_some());
+        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
+        assert_eq!(spooled_content, command_output);
+        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
+
+        // Test read_pty_session
+        let read_session_response = json!({
+            "output": command_output,
+            "wall_time": 0.456
+        });
+
+        let result = spooler
+            .process_output("read_pty_session", read_session_response, false)
+            .await
+            .unwrap();
+
+        assert!(result.get("spooled_to_file").is_some());
+        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
+        assert_eq!(spooled_content, command_output);
+        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
     }
 }
