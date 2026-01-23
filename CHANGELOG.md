@@ -3,6 +3,29 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.68.1] - 2026-01-23
+
+
+### Bug Fixes
+    - fix: remove unused methods is_planner_active and is_coder_active
+
+
+### Refactors
+    - refactor: increase max_conversation_turns to 150 and streamline allowed_tools format; add auto_exit_plan_mode_attempted to context for improved plan mode handling
+    - refactor: integrate clean_reasoning_text function to streamline reasoning text handling across multiple modules
+    - refactor: rename default method to default_cache and update default implementations for various structs
+
+
+### Documentation
+    - docs: update changelog for v0.68.0 [skip ci]
+
+
+### Chores
+    - chore: clean up Cargo.toml and Cargo.lock by removing unused dependencies and updating package versions
+    - chore: update Rust version to 1.93.0 in documentation and templates
+    - chore: update npm package.json to v0.68.0 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.67.0 version =  [skip ci]
 # [Version 0.68.0] - 2026-01-22
 
 
