@@ -652,12 +652,12 @@ impl Session {
             }
             CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
                 MouseEventKind::ScrollDown => {
-                    // Scroll mouse functionality disabled
-                    // self.handle_scroll_down(events, callback);
+                    self.scroll_line_down();
+                    self.mark_dirty();
                 }
                 MouseEventKind::ScrollUp => {
-                    // Scroll mouse functionality disabled
-                    // self.handle_scroll_up(events, callback);
+                    self.scroll_line_up();
+                    self.mark_dirty();
                 }
                 _ => {}
             },

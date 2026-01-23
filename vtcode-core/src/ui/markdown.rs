@@ -5,148 +5,16 @@ use crate::ui::syntax_highlight::{find_syntax_by_token, load_theme, syntax_set};
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 use anstyle_syntect::to_anstyle;
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::cmp::max;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::Theme;
 use syntect::parsing::SyntaxReference;
 use syntect::util::LinesWithEndings;
-use tracing::warn;
 use unicode_width::UnicodeWidthStr;
 
 const LIST_INDENT_WIDTH: usize = 2;
 const CODE_EXTRA_INDENT: &str = "    ";
-
-#[derive(Clone, Debug)]
-enum MarkdownEvent {
-    Start(MarkdownTag),
-    End(MarkdownTag),
-    Text(String),
-    Code(String),
-    Html(String),
-    SoftBreak,
-    HardBreak,
-    Rule,
-    TaskListMarker(bool),
-    FootnoteReference(String),
-}
-
-#[derive(Clone, Debug)]
-enum MarkdownTag {
-    Paragraph,
-    Heading(HeadingLevel),
-    BlockQuote,
-    List(Option<usize>),
-    Item,
-    Emphasis,
-    Strong,
-    Strikethrough,
-    Link,
-    Image,
-    CodeBlock(CodeBlockKind),
-    Table,
-    TableHead,
-    TableRow,
-    TableCell,
-    FootnoteDefinition,
-    HtmlBlock,
-}
-
-impl From<Tag<'_>> for MarkdownTag {
-    fn from(tag: Tag) -> Self {
-        match tag {
-            Tag::Paragraph => MarkdownTag::Paragraph,
-            Tag::Heading { level, .. } => MarkdownTag::Heading(heading_level_from_u8(level as u8)),
-            Tag::BlockQuote(_) => MarkdownTag::BlockQuote,
-            Tag::CodeBlock(kind) => MarkdownTag::CodeBlock(kind.into()),
-            Tag::HtmlBlock => MarkdownTag::HtmlBlock,
-            Tag::List(start) => MarkdownTag::List(start.map(|n| n as usize)),
-            Tag::Item => MarkdownTag::Item,
-            Tag::FootnoteDefinition(_) => MarkdownTag::FootnoteDefinition,
-            Tag::DefinitionList | Tag::DefinitionListTitle | Tag::DefinitionListDefinition => {
-                MarkdownTag::Paragraph
-            }
-            Tag::Table(_) => MarkdownTag::Table,
-            Tag::TableHead => MarkdownTag::TableHead,
-            Tag::TableRow => MarkdownTag::TableRow,
-            Tag::TableCell => MarkdownTag::TableCell,
-            Tag::Emphasis => MarkdownTag::Emphasis,
-            Tag::Strong => MarkdownTag::Strong,
-            Tag::Strikethrough => MarkdownTag::Strikethrough,
-            Tag::Superscript | Tag::Subscript => MarkdownTag::Emphasis,
-            Tag::Link { .. } => MarkdownTag::Link,
-            Tag::Image { .. } => MarkdownTag::Image,
-            Tag::MetadataBlock(_) => MarkdownTag::Paragraph, // fallback
-        }
-    }
-}
-
-impl From<pulldown_cmark::CodeBlockKind<'_>> for CodeBlockKind {
-    fn from(kind: pulldown_cmark::CodeBlockKind) -> Self {
-        match kind {
-            pulldown_cmark::CodeBlockKind::Fenced(info) => {
-                CodeBlockKind::Fenced(info.into_string())
-            }
-            pulldown_cmark::CodeBlockKind::Indented => CodeBlockKind::Indented,
-        }
-    }
-}
-
-impl From<TagEnd> for MarkdownTag {
-    fn from(tag_end: TagEnd) -> Self {
-        match tag_end {
-            TagEnd::Paragraph => MarkdownTag::Paragraph,
-            TagEnd::Heading(level) => MarkdownTag::Heading(heading_level_from_u8(level as u8)),
-            TagEnd::BlockQuote(_) => MarkdownTag::BlockQuote,
-            TagEnd::CodeBlock => MarkdownTag::CodeBlock(CodeBlockKind::Indented), // doesn't matter for end
-            TagEnd::HtmlBlock => MarkdownTag::HtmlBlock,
-            TagEnd::List(_) => MarkdownTag::List(None), // doesn't matter for end
-            TagEnd::Item => MarkdownTag::Item,
-            TagEnd::FootnoteDefinition => MarkdownTag::FootnoteDefinition,
-            TagEnd::DefinitionList
-            | TagEnd::DefinitionListTitle
-            | TagEnd::DefinitionListDefinition => MarkdownTag::Paragraph,
-            TagEnd::Table => MarkdownTag::Table,
-            TagEnd::TableHead => MarkdownTag::TableHead,
-            TagEnd::TableRow => MarkdownTag::TableRow,
-            TagEnd::TableCell => MarkdownTag::TableCell,
-            TagEnd::Emphasis => MarkdownTag::Emphasis,
-            TagEnd::Strong => MarkdownTag::Strong,
-            TagEnd::Strikethrough => MarkdownTag::Strikethrough,
-            TagEnd::Superscript | TagEnd::Subscript => MarkdownTag::Emphasis,
-            TagEnd::Link => MarkdownTag::Link,
-            TagEnd::Image => MarkdownTag::Image,
-            TagEnd::MetadataBlock(_) => MarkdownTag::Paragraph, // fallback
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-enum CodeBlockKind {
-    Fenced(String),
-    Indented,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum HeadingLevel {
-    H1,
-    H2,
-    H3,
-    H4,
-    H5,
-    H6,
-}
-
-fn heading_level_from_u8(level: u8) -> HeadingLevel {
-    match level {
-        1 => HeadingLevel::H1,
-        2 => HeadingLevel::H2,
-        3 => HeadingLevel::H3,
-        4 => HeadingLevel::H4,
-        5 => HeadingLevel::H5,
-        _ => HeadingLevel::H6,
-    }
-}
 
 /// A styled text segment.
 #[derive(Clone, Debug)]
@@ -184,14 +52,12 @@ impl MarkdownLine {
         self.segments.push(MarkdownSegment::new(style, text));
     }
 
-    fn prepend_segments(&mut self, segments: &[PrefixSegment]) {
+    fn prepend_segments(&mut self, segments: &[MarkdownSegment]) {
         if segments.is_empty() {
             return;
         }
         let mut prefixed = Vec::with_capacity(segments.len() + self.segments.len());
-        for segment in segments {
-            prefixed.push(MarkdownSegment::new(segment.style, segment.text.clone()));
-        }
+        prefixed.extend(segments.iter().cloned());
         prefixed.append(&mut self.segments);
         self.segments = prefixed;
     }
@@ -216,21 +82,6 @@ struct TableBuffer {
     rows: Vec<Vec<MarkdownLine>>,
     current_row: Vec<MarkdownLine>,
     in_head: bool,
-}
-
-#[derive(Clone, Debug)]
-struct PrefixSegment {
-    style: Style,
-    text: String,
-}
-
-impl PrefixSegment {
-    fn new(style: Style, text: impl Into<String>) -> Self {
-        Self {
-            style,
-            text: text.into(),
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -259,14 +110,12 @@ pub fn render_markdown_to_lines(
     theme_styles: &ThemeStyles,
     highlight_config: Option<&SyntaxHighlightingConfig>,
 ) -> Vec<MarkdownLine> {
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_STRIKETHROUGH);
-    options.insert(Options::ENABLE_TABLES);
-    options.insert(Options::ENABLE_TASKLISTS);
-    options.insert(Options::ENABLE_FOOTNOTES);
+    let options = Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TABLES
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_FOOTNOTES;
 
     let parser = Parser::new_ext(source, options);
-    let events = collect_markdown_events(parser);
 
     let mut lines = Vec::new();
     let mut current_line = MarkdownLine::default();
@@ -278,14 +127,17 @@ pub fn render_markdown_to_lines(
     let mut active_table: Option<TableBuffer> = None;
     let mut table_cell_index: usize = 0;
 
-    for event in events {
-        if let Some(state) = code_block.as_mut() {
-            match event {
-                MarkdownEvent::Text(text) => {
-                    state.buffer.push_str(&text);
+    for event in parser {
+        // Handle code block accumulation separately to avoid borrow conflicts
+        if code_block.is_some() {
+            match &event {
+                Event::Text(text) => {
+                    if let Some(state) = code_block.as_mut() {
+                        state.buffer.push_str(text);
+                    }
                     continue;
                 }
-                MarkdownEvent::End(MarkdownTag::CodeBlock(_)) => {
+                Event::End(TagEnd::CodeBlock) => {
                     flush_current_line(
                         &mut lines,
                         &mut current_line,
@@ -295,180 +147,76 @@ pub fn render_markdown_to_lines(
                         theme_styles,
                         base_style,
                     );
-                    let prefix = build_prefix_segments(
-                        blockquote_depth,
-                        &list_stack,
-                        theme_styles,
-                        base_style,
-                    );
-                    let highlighted = highlight_code_block(
-                        &state.buffer,
-                        state.language.as_deref(),
-                        highlight_config,
-                        theme_styles,
-                        base_style,
-                        &prefix,
-                    );
-                    lines.extend(highlighted);
-                    push_blank_line(&mut lines);
-                    code_block = None;
+                    if let Some(state) = code_block.take() {
+                        let prefix = build_prefix_segments(
+                            blockquote_depth,
+                            &list_stack,
+                            theme_styles,
+                            base_style,
+                        );
+                        let highlighted = highlight_code_block(
+                            &state.buffer,
+                            state.language.as_deref(),
+                            highlight_config,
+                            theme_styles,
+                            base_style,
+                            &prefix,
+                        );
+                        lines.extend(highlighted);
+                        push_blank_line(&mut lines);
+                    }
                     continue;
                 }
                 _ => {}
             }
         }
 
+        let mut ctx = MarkdownContext {
+            style_stack: &mut style_stack,
+            blockquote_depth: &mut blockquote_depth,
+            list_stack: &mut list_stack,
+            pending_list_prefix: &mut pending_list_prefix,
+            lines: &mut lines,
+            current_line: &mut current_line,
+            theme_styles,
+            base_style,
+            code_block: &mut code_block,
+            active_table: &mut active_table,
+            table_cell_index: &mut table_cell_index,
+        };
+
         match event {
-            MarkdownEvent::Start(tag) => {
-                let mut context = MarkdownContext {
-                    style_stack: &mut style_stack,
-                    blockquote_depth: &mut blockquote_depth,
-                    list_stack: &mut list_stack,
-                    pending_list_prefix: &mut pending_list_prefix,
-                    lines: &mut lines,
-                    current_line: &mut current_line,
-                    theme_styles,
-                    base_style,
-                    code_block: &mut code_block,
-                    active_table: &mut active_table,
-                    table_cell_index: &mut table_cell_index,
-                };
-                handle_start_tag(tag, &mut context);
+            Event::Start(ref tag) => handle_start_tag(tag, &mut ctx),
+            Event::End(tag) => handle_end_tag(tag, &mut ctx),
+            Event::Text(text) => append_text(&text, &mut ctx),
+            Event::Code(code) => {
+                ctx.ensure_prefix();
+                ctx.current_line
+                    .push_segment(inline_code_style(theme_styles, base_style), &code);
             }
-            MarkdownEvent::End(tag) => {
-                let mut context = MarkdownContext {
-                    style_stack: &mut style_stack,
-                    blockquote_depth: &mut blockquote_depth,
-                    list_stack: &mut list_stack,
-                    pending_list_prefix: &mut pending_list_prefix,
-                    lines: &mut lines,
-                    current_line: &mut current_line,
-                    theme_styles,
-                    base_style,
-                    code_block: &mut code_block,
-                    active_table: &mut active_table,
-                    table_cell_index: &mut table_cell_index,
-                };
-                handle_end_tag(tag, &mut context);
-            }
-            MarkdownEvent::Text(text) => {
-                let mut context = MarkdownContext {
-                    style_stack: &mut style_stack,
-                    blockquote_depth: &mut blockquote_depth,
-                    list_stack: &mut list_stack,
-                    pending_list_prefix: &mut pending_list_prefix,
-                    lines: &mut lines,
-                    current_line: &mut current_line,
-                    theme_styles,
-                    base_style,
-                    code_block: &mut code_block,
-                    active_table: &mut active_table,
-                    table_cell_index: &mut table_cell_index,
-                };
-                append_text(&text, &mut context);
-            }
-            MarkdownEvent::Code(code_text) => {
-                ensure_prefix(
-                    &mut current_line,
-                    blockquote_depth,
-                    &list_stack,
-                    &mut pending_list_prefix,
-                    theme_styles,
-                    base_style,
-                );
-                current_line.push_segment(inline_code_style(theme_styles, base_style), &code_text);
-            }
-            MarkdownEvent::SoftBreak => {
-                let mut context = MarkdownContext {
-                    style_stack: &mut style_stack,
-                    blockquote_depth: &mut blockquote_depth,
-                    list_stack: &mut list_stack,
-                    pending_list_prefix: &mut pending_list_prefix,
-                    lines: &mut lines,
-                    current_line: &mut current_line,
-                    theme_styles,
-                    base_style,
-                    code_block: &mut code_block,
-                    active_table: &mut active_table,
-                    table_cell_index: &mut table_cell_index,
-                };
-                append_text(" ", &mut context);
-            }
-            MarkdownEvent::HardBreak => {
-                flush_current_line(
-                    &mut lines,
-                    &mut current_line,
-                    blockquote_depth,
-                    &list_stack,
-                    &mut pending_list_prefix,
-                    theme_styles,
-                    base_style,
-                );
-            }
-            MarkdownEvent::Rule => {
-                flush_current_line(
-                    &mut lines,
-                    &mut current_line,
-                    blockquote_depth,
-                    &list_stack,
-                    &mut pending_list_prefix,
-                    theme_styles,
-                    base_style,
-                );
+            Event::SoftBreak => append_text(" ", &mut ctx),
+            Event::HardBreak => ctx.flush_line(),
+            Event::Rule => {
+                ctx.flush_line();
                 let mut line = MarkdownLine::default();
-                let rule_style = theme_styles.secondary.bold();
-                line.push_segment(rule_style, "―".repeat(32).as_str());
-                lines.push(line);
-                push_blank_line(&mut lines);
+                line.push_segment(theme_styles.secondary.bold(), &"―".repeat(32));
+                ctx.lines.push(line);
+                push_blank_line(ctx.lines);
             }
-            MarkdownEvent::TaskListMarker(checked) => {
-                ensure_prefix(
-                    &mut current_line,
-                    blockquote_depth,
-                    &list_stack,
-                    &mut pending_list_prefix,
-                    theme_styles,
-                    base_style,
-                );
-                let marker = if checked { "[x] " } else { "[ ] " };
-                current_line.push_segment(base_style, marker);
+            Event::TaskListMarker(checked) => {
+                ctx.ensure_prefix();
+                ctx.current_line
+                    .push_segment(base_style, if checked { "[x] " } else { "[ ] " });
             }
-            MarkdownEvent::Html(html) => {
-                let mut context = MarkdownContext {
-                    style_stack: &mut style_stack,
-                    blockquote_depth: &mut blockquote_depth,
-                    list_stack: &mut list_stack,
-                    pending_list_prefix: &mut pending_list_prefix,
-                    lines: &mut lines,
-                    current_line: &mut current_line,
-                    theme_styles,
-                    base_style,
-                    code_block: &mut code_block,
-                    active_table: &mut active_table,
-                    table_cell_index: &mut table_cell_index,
-                };
-                append_text(&html, &mut context);
-            }
-            MarkdownEvent::FootnoteReference(reference) => {
-                let mut context = MarkdownContext {
-                    style_stack: &mut style_stack,
-                    blockquote_depth: &mut blockquote_depth,
-                    list_stack: &mut list_stack,
-                    pending_list_prefix: &mut pending_list_prefix,
-                    lines: &mut lines,
-                    current_line: &mut current_line,
-                    theme_styles,
-                    base_style,
-                    code_block: &mut code_block,
-                    active_table: &mut active_table,
-                    table_cell_index: &mut table_cell_index,
-                };
-                append_text(&format!("[^{}]", reference), &mut context);
-            }
+            Event::Html(html) | Event::InlineHtml(html) => append_text(&html, &mut ctx),
+            Event::FootnoteReference(r) => append_text(&format!("[^{}]", r), &mut ctx),
+            Event::InlineMath(m) => append_text(&format!("${}$", m), &mut ctx),
+            Event::DisplayMath(m) => append_text(&format!("$$\n{}\n$$", m), &mut ctx),
         }
     }
 
-    if let Some(state) = code_block {
+    // Handle unclosed code block at end of input
+    if let Some(state) = code_block.take() {
         flush_current_line(
             &mut lines,
             &mut current_line,
@@ -499,42 +247,9 @@ pub fn render_markdown_to_lines(
 }
 
 /// Convenience helper that renders markdown using the active theme without emitting output.
-///
-/// Returns the styled lines so callers can perform custom handling or assertions in tests.
 pub fn render_markdown(source: &str) -> Vec<MarkdownLine> {
     let styles = theme::active_styles();
     render_markdown_to_lines(source, Style::default(), &styles, None)
-}
-
-fn collect_markdown_events<'a>(parser: Parser<'a>) -> Vec<MarkdownEvent> {
-    parser
-        .map(|event| {
-            #[allow(unreachable_patterns)]
-            match event {
-                Event::Start(tag) => MarkdownEvent::Start(tag.into()),
-                Event::End(tag_end) => MarkdownEvent::End(tag_end.into()),
-                Event::Text(text) => MarkdownEvent::Text(text.into_string()),
-                Event::Code(code) => MarkdownEvent::Code(code.into_string()),
-                Event::Html(html) => MarkdownEvent::Html(html.into_string()),
-                Event::FootnoteReference(ref_str) => {
-                    MarkdownEvent::FootnoteReference(ref_str.into_string())
-                }
-                Event::SoftBreak => MarkdownEvent::SoftBreak,
-                Event::HardBreak => MarkdownEvent::HardBreak,
-                Event::Rule => MarkdownEvent::Rule,
-                Event::TaskListMarker(checked) => MarkdownEvent::TaskListMarker(checked),
-                Event::InlineHtml(html) => MarkdownEvent::Html(html.into_string()),
-                Event::InlineMath(math) => MarkdownEvent::Text(format!("${}$", math.into_string())),
-                Event::DisplayMath(math) => {
-                    MarkdownEvent::Text(format!("$$\n{}\n$$", math.into_string()))
-                }
-                other => {
-                    warn!(?other, "Unhandled pulldown-cmark event variant");
-                    MarkdownEvent::Text(String::new())
-                }
-            }
-        })
-        .collect()
 }
 
 struct MarkdownContext<'a> {
@@ -551,38 +266,74 @@ struct MarkdownContext<'a> {
     table_cell_index: &'a mut usize,
 }
 
-fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
+impl MarkdownContext<'_> {
+    fn current_style(&self) -> Style {
+        self.style_stack.last().copied().unwrap_or(self.base_style)
+    }
+
+    fn push_style(&mut self, modifier: impl FnOnce(Style) -> Style) {
+        self.style_stack.push(modifier(self.current_style()));
+    }
+
+    fn pop_style(&mut self) {
+        self.style_stack.pop();
+    }
+
+    fn flush_line(&mut self) {
+        flush_current_line(
+            self.lines,
+            self.current_line,
+            *self.blockquote_depth,
+            self.list_stack,
+            self.pending_list_prefix,
+            self.theme_styles,
+            self.base_style,
+        );
+    }
+
+    fn flush_paragraph(&mut self) {
+        self.flush_line();
+        push_blank_line(self.lines);
+    }
+
+    fn ensure_prefix(&mut self) {
+        ensure_prefix(
+            self.current_line,
+            *self.blockquote_depth,
+            self.list_stack,
+            self.pending_list_prefix,
+            self.theme_styles,
+            self.base_style,
+        );
+    }
+}
+
+fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
     match tag {
-        MarkdownTag::Paragraph => {}
-        MarkdownTag::Heading(level) => {
-            context.style_stack.push(heading_style(
-                level,
-                context.theme_styles,
-                context.base_style,
-            ));
+        Tag::Paragraph => {}
+        Tag::Heading { level, .. } => {
+            ctx.style_stack
+                .push(heading_style(*level, ctx.theme_styles, ctx.base_style));
         }
-        MarkdownTag::BlockQuote => {
-            *context.blockquote_depth += 1;
-        }
-        MarkdownTag::List(start) => {
-            let depth = context.list_stack.len();
+        Tag::BlockQuote(_) => *ctx.blockquote_depth += 1,
+        Tag::List(start) => {
+            let depth = ctx.list_stack.len();
             let kind = start
-                .map(|value| ListKind::Ordered {
-                    next: max(1, value),
+                .map(|v| ListKind::Ordered {
+                    next: max(1, v as usize),
                 })
                 .unwrap_or(ListKind::Unordered);
-            context.list_stack.push(ListState {
+            ctx.list_stack.push(ListState {
                 kind,
                 depth,
                 continuation: String::new(),
             });
         }
-        MarkdownTag::Item => {
-            if let Some(state) = context.list_stack.last_mut() {
+        Tag::Item => {
+            if let Some(state) = ctx.list_stack.last_mut() {
                 let indent = " ".repeat(state.depth * LIST_INDENT_WIDTH);
                 match &mut state.kind {
                     ListKind::Unordered => {
-                        // Use better bullet character: • (U+2022) for nested, then ◦, ▪
                         let bullet_char = match state.depth % 3 {
                             0 => "•",
                             1 => "◦",
@@ -590,277 +341,150 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
                         };
                         let bullet = format!("{}{} ", indent, bullet_char);
                         state.continuation = format!("{}  ", indent);
-                        *context.pending_list_prefix = Some(bullet);
+                        *ctx.pending_list_prefix = Some(bullet);
                     }
                     ListKind::Ordered { next } => {
                         let bullet = format!("{}{}. ", indent, *next);
                         let width = bullet.len().saturating_sub(indent.len());
                         state.continuation = format!("{}{}", indent, " ".repeat(width));
-                        *context.pending_list_prefix = Some(bullet);
+                        *ctx.pending_list_prefix = Some(bullet);
                         *next += 1;
                     }
                 }
             }
         }
-        MarkdownTag::Emphasis => {
-            let style = context
-                .style_stack
-                .last()
-                .copied()
-                .unwrap_or(context.base_style)
-                .italic();
-            context.style_stack.push(style);
-        }
-        MarkdownTag::Strong => {
-            let style = context
-                .style_stack
-                .last()
-                .copied()
-                .unwrap_or(context.base_style)
-                .bold();
-            context.style_stack.push(style);
-        }
-        MarkdownTag::Strikethrough => {
-            let style = context
-                .style_stack
-                .last()
-                .copied()
-                .unwrap_or(context.base_style)
-                .strikethrough();
-            context.style_stack.push(style);
-        }
-        MarkdownTag::Link | MarkdownTag::Image => {
-            let style = context
-                .style_stack
-                .last()
-                .copied()
-                .unwrap_or(context.base_style)
-                .underline();
-            context.style_stack.push(style);
-        }
-        MarkdownTag::CodeBlock(kind) => {
+        Tag::Emphasis => ctx.push_style(Style::italic),
+        Tag::Strong => ctx.push_style(Style::bold),
+        Tag::Strikethrough => ctx.push_style(Style::strikethrough),
+        Tag::Superscript | Tag::Subscript => ctx.push_style(Style::italic),
+        Tag::Link { .. } | Tag::Image { .. } => ctx.push_style(Style::underline),
+        Tag::CodeBlock(kind) => {
             let language = match kind {
                 CodeBlockKind::Fenced(info) => info
                     .split_whitespace()
                     .next()
                     .filter(|lang| !lang.is_empty())
-                    .map(|lang| lang.to_owned()),
+                    .map(|lang| lang.to_string()),
                 CodeBlockKind::Indented => None,
             };
-            *context.code_block = Some(CodeBlockState {
+            *ctx.code_block = Some(CodeBlockState {
                 language,
                 buffer: String::new(),
             });
         }
-        MarkdownTag::Table => {
-            // Begin table rendering - initialize buffer
-            // First flush any pending content
-            flush_current_line(
-                context.lines,
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
-            push_blank_line(context.lines);
-            *context.active_table = Some(TableBuffer::default());
-            *context.table_cell_index = 0;
+        Tag::Table(_) => {
+            ctx.flush_paragraph();
+            *ctx.active_table = Some(TableBuffer::default());
+            *ctx.table_cell_index = 0;
         }
-        MarkdownTag::TableRow => {
-            // New row
-            if let Some(table) = context.active_table {
+        Tag::TableRow => {
+            if let Some(table) = ctx.active_table.as_mut() {
                 table.current_row.clear();
             } else {
-                // Fallback if not in table mode (shouldn't happen with valid markdown)
-                flush_current_line(
-                    context.lines,
-                    context.current_line,
-                    *context.blockquote_depth,
-                    context.list_stack,
-                    context.pending_list_prefix,
-                    context.theme_styles,
-                    context.base_style,
-                );
+                ctx.flush_line();
             }
-            *context.table_cell_index = 0;
+            *ctx.table_cell_index = 0;
         }
-        MarkdownTag::TableHead => {
-            if let Some(table) = context.active_table {
+        Tag::TableHead => {
+            if let Some(table) = ctx.active_table.as_mut() {
                 table.in_head = true;
             }
         }
-        MarkdownTag::TableCell => {
-            // Ensure current line is clear for capturing cell content
-            // We do NOT write separators here anymore, we do it in render_table
-            if context.active_table.is_none() {
-                ensure_prefix(
-                    context.current_line,
-                    *context.blockquote_depth,
-                    context.list_stack,
-                    context.pending_list_prefix,
-                    context.theme_styles,
-                    context.base_style,
-                );
+        Tag::TableCell => {
+            if ctx.active_table.is_none() {
+                ctx.ensure_prefix();
             } else {
-                // Just clear the line so we capture fresh content
-                // If there's garbage in current_line, it should have been flushed by previous tags
-                context.current_line.segments.clear();
+                ctx.current_line.segments.clear();
             }
-            *context.table_cell_index += 1;
+            *ctx.table_cell_index += 1;
         }
-        MarkdownTag::FootnoteDefinition | MarkdownTag::HtmlBlock => {}
+        Tag::FootnoteDefinition(_)
+        | Tag::HtmlBlock
+        | Tag::MetadataBlock(_)
+        | Tag::DefinitionList
+        | Tag::DefinitionListTitle
+        | Tag::DefinitionListDefinition => {}
     }
 }
 
-fn handle_end_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
+fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
     match tag {
-        MarkdownTag::Paragraph => {
-            flush_current_line(
-                context.lines,
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
-            push_blank_line(context.lines);
+        TagEnd::Paragraph => ctx.flush_paragraph(),
+        TagEnd::Heading(_) => {
+            ctx.flush_line();
+            ctx.pop_style();
+            push_blank_line(ctx.lines);
         }
-        MarkdownTag::Heading(..) => {
-            flush_current_line(
-                context.lines,
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
-            if !context.style_stack.is_empty() {
-                context.style_stack.pop();
-            }
-            push_blank_line(context.lines);
+        TagEnd::BlockQuote(_) => {
+            ctx.flush_line();
+            *ctx.blockquote_depth = ctx.blockquote_depth.saturating_sub(1);
         }
-        MarkdownTag::BlockQuote => {
-            flush_current_line(
-                context.lines,
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
-            if *context.blockquote_depth > 0 {
-                *context.blockquote_depth -= 1;
-            }
-        }
-        MarkdownTag::List(_) => {
-            flush_current_line(
-                context.lines,
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
-            if context.list_stack.pop().is_some() {
-                if let Some(state) = context.list_stack.last() {
-                    context
-                        .pending_list_prefix
-                        .replace(state.continuation.clone());
+        TagEnd::List(_) => {
+            ctx.flush_line();
+            if ctx.list_stack.pop().is_some() {
+                if let Some(state) = ctx.list_stack.last() {
+                    ctx.pending_list_prefix.replace(state.continuation.clone());
                 } else {
-                    context.pending_list_prefix.take();
+                    ctx.pending_list_prefix.take();
                 }
             }
-            push_blank_line(context.lines);
+            push_blank_line(ctx.lines);
         }
-        MarkdownTag::Item => {
-            flush_current_line(
-                context.lines,
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
-            if let Some(state) = context.list_stack.last() {
-                context
-                    .pending_list_prefix
-                    .replace(state.continuation.clone());
+        TagEnd::Item => {
+            ctx.flush_line();
+            if let Some(state) = ctx.list_stack.last() {
+                ctx.pending_list_prefix.replace(state.continuation.clone());
             }
         }
-        MarkdownTag::Emphasis
-        | MarkdownTag::Strong
-        | MarkdownTag::Strikethrough
-        | MarkdownTag::Link
-        | MarkdownTag::Image => {
-            context.style_stack.pop();
+        TagEnd::Emphasis
+        | TagEnd::Strong
+        | TagEnd::Strikethrough
+        | TagEnd::Superscript
+        | TagEnd::Subscript
+        | TagEnd::Link
+        | TagEnd::Image => {
+            ctx.pop_style();
         }
-        MarkdownTag::CodeBlock(_) => {}
-        MarkdownTag::Table => {
-            // End table rendering - render buffered table
-            if let Some(mut table) = context.active_table.take() {
-                // Validate if current_row has data (unlikely for Table end, usually TableRow end)
+        TagEnd::CodeBlock => {}
+        TagEnd::Table => {
+            if let Some(mut table) = ctx.active_table.take() {
                 if !table.current_row.is_empty() {
                     table.rows.push(std::mem::take(&mut table.current_row));
                 }
-
-                let rendered_lines = render_table(
-                    &table,
-                    context.theme_styles,
-                    context.base_style,
-                    *context.blockquote_depth,
-                    context.list_stack,
-                    context.pending_list_prefix.clone(),
-                );
-                context.lines.extend(rendered_lines);
+                let rendered = render_table(&table, ctx.theme_styles, ctx.base_style);
+                ctx.lines.extend(rendered);
             }
-
-            push_blank_line(context.lines);
-            *context.table_cell_index = 0;
+            push_blank_line(ctx.lines);
+            *ctx.table_cell_index = 0;
         }
-        MarkdownTag::TableRow => {
-            // End of row
-            if let Some(table) = context.active_table {
+        TagEnd::TableRow => {
+            if let Some(table) = ctx.active_table.as_mut() {
                 if table.in_head {
-                    // Collect into headers
-                    // We assume table head has only one row usually, but if multiple, we might overwrite or append?
-                    // Standard markdown table has one header row.
-                    // If current_row is not empty, move it to headers
                     table.headers = std::mem::take(&mut table.current_row);
                 } else {
                     table.rows.push(std::mem::take(&mut table.current_row));
                 }
             } else {
-                flush_current_line(
-                    context.lines,
-                    context.current_line,
-                    *context.blockquote_depth,
-                    context.list_stack,
-                    context.pending_list_prefix,
-                    context.theme_styles,
-                    context.base_style,
-                );
+                ctx.flush_line();
             }
-            *context.table_cell_index = 0;
+            *ctx.table_cell_index = 0;
         }
-        MarkdownTag::TableCell => {
-            // End of cell - capture content
-            if let Some(table) = context.active_table {
-                table.current_row.push(std::mem::take(context.current_line));
+        TagEnd::TableCell => {
+            if let Some(table) = ctx.active_table.as_mut() {
+                table.current_row.push(std::mem::take(ctx.current_line));
             }
         }
-        MarkdownTag::TableHead => {
-            if let Some(table) = context.active_table {
+        TagEnd::TableHead => {
+            if let Some(table) = ctx.active_table.as_mut() {
                 table.in_head = false;
             }
         }
-        MarkdownTag::FootnoteDefinition | MarkdownTag::HtmlBlock => {}
+        TagEnd::FootnoteDefinition
+        | TagEnd::HtmlBlock
+        | TagEnd::MetadataBlock(_)
+        | TagEnd::DefinitionList
+        | TagEnd::DefinitionListTitle
+        | TagEnd::DefinitionListDefinition => {}
     }
 }
 
@@ -868,13 +492,8 @@ fn render_table(
     table: &TableBuffer,
     theme_styles: &ThemeStyles,
     base_style: Style,
-    blockquote_depth: usize,
-    list_stack: &[ListState],
-    pending_list_prefix: Option<String>,
 ) -> Vec<MarkdownLine> {
     let mut lines = Vec::new();
-    let mut pending_prefix = pending_list_prefix; // local mutable copy
-
     if table.headers.is_empty() && table.rows.is_empty() {
         return lines;
     }
@@ -900,161 +519,85 @@ fn render_table(
         }
     }
 
-    let border_style = theme_styles.secondary.dimmed(); // faint-ish border
+    let border_style = theme_styles.secondary.dimmed();
+
+    let render_row = |cells: &[MarkdownLine], col_widths: &[usize], bold: bool| -> MarkdownLine {
+        let mut line = MarkdownLine::default();
+        line.push_segment(border_style, "│ ");
+        for (i, width) in col_widths.iter().enumerate() {
+            if let Some(c) = cells.get(i) {
+                for seg in &c.segments {
+                    let s = if bold { seg.style.bold() } else { seg.style };
+                    line.push_segment(s, &seg.text);
+                }
+                let padding = width.saturating_sub(c.width());
+                if padding > 0 {
+                    line.push_segment(base_style, &" ".repeat(padding));
+                }
+            } else {
+                line.push_segment(base_style, &" ".repeat(*width));
+            }
+            line.push_segment(border_style, " │ ");
+        }
+        line
+    };
 
     // Render Headers
     if !table.headers.is_empty() {
-        let cells = &table.headers;
-        let mut line = MarkdownLine::default();
+        lines.push(render_row(&table.headers, &col_widths, true));
 
-        ensure_prefix(
-            &mut line,
-            blockquote_depth,
-            list_stack,
-            &mut pending_prefix,
-            theme_styles,
-            base_style,
-        );
-
-        line.push_segment(border_style, "│ ");
-
+        // Separator line
+        let mut sep = MarkdownLine::default();
+        sep.push_segment(border_style, "├─");
         for (i, width) in col_widths.iter().enumerate() {
-            let cell = cells.get(i);
-            let cell_width = cell.map(|c| c.width()).unwrap_or(0);
-            let padding = width.saturating_sub(cell_width);
-
-            if let Some(c) = cell {
-                for seg in &c.segments {
-                    line.push_segment(seg.style.bold(), &seg.text);
-                }
-            }
-
-            if padding > 0 {
-                line.push_segment(base_style, &" ".repeat(padding));
-            }
-
-            line.push_segment(border_style, " │ ");
+            sep.push_segment(border_style, &"─".repeat(*width));
+            sep.push_segment(
+                border_style,
+                if i < col_widths.len() - 1 {
+                    "─┼─"
+                } else {
+                    "─┤"
+                },
+            );
         }
-        lines.push(line);
-
-        // Render Separator
-        let mut sep_line = MarkdownLine::default();
-        ensure_prefix(
-            &mut sep_line,
-            blockquote_depth,
-            list_stack,
-            &mut pending_prefix,
-            theme_styles,
-            base_style,
-        );
-
-        sep_line.push_segment(border_style, "├─");
-        for (i, width) in col_widths.iter().enumerate() {
-            let dash_count = *width;
-            sep_line.push_segment(border_style, &"─".repeat(dash_count));
-
-            if i < col_widths.len() - 1 {
-                sep_line.push_segment(border_style, "─┼─");
-            } else {
-                sep_line.push_segment(border_style, "─┤");
-            }
-        }
-        lines.push(sep_line);
+        lines.push(sep);
     }
 
     // Render Rows
     for row in &table.rows {
-        let cells = row;
-        let mut line = MarkdownLine::default();
-
-        ensure_prefix(
-            &mut line,
-            blockquote_depth,
-            list_stack,
-            &mut pending_prefix,
-            theme_styles,
-            base_style,
-        );
-
-        line.push_segment(border_style, "│ ");
-
-        for (i, width) in col_widths.iter().enumerate() {
-            let cell = cells.get(i);
-            let cell_width = cell.map(|c| c.width()).unwrap_or(0);
-            let padding = width.saturating_sub(cell_width);
-
-            if let Some(c) = cell {
-                for seg in &c.segments {
-                    line.push_segment(seg.style, &seg.text);
-                }
-            }
-
-            if padding > 0 {
-                line.push_segment(base_style, &" ".repeat(padding));
-            }
-
-            line.push_segment(border_style, " │ ");
-        }
-        lines.push(line);
+        lines.push(render_row(row, &col_widths, false));
     }
 
     lines
 }
 
-fn append_text(text: &str, context: &mut MarkdownContext<'_>) {
-    let style = context
-        .style_stack
-        .last()
-        .copied()
-        .unwrap_or(context.base_style);
-
+fn append_text(text: &str, ctx: &mut MarkdownContext<'_>) {
+    let style = ctx.current_style();
     let mut start = 0usize;
     let mut chars = text.char_indices().peekable();
+
     while let Some((idx, ch)) = chars.next() {
         if ch == '\n' {
             let segment = &text[start..idx];
             if !segment.is_empty() {
-                ensure_prefix(
-                    context.current_line,
-                    *context.blockquote_depth,
-                    context.list_stack,
-                    context.pending_list_prefix,
-                    context.theme_styles,
-                    context.base_style,
-                );
-                context.current_line.push_segment(style, segment);
+                ctx.ensure_prefix();
+                ctx.current_line.push_segment(style, segment);
             }
-            context.lines.push(std::mem::take(context.current_line));
-            start = idx + ch.len_utf8();
-
-            // Skip consecutive newlines to prevent multiple blank lines
-            // Each sequence of consecutive newlines should result in only one blank line
-            while let Some(&(_, next_ch)) = chars.peek() {
-                if next_ch != '\n' {
-                    break;
-                }
-                chars.next(); // consume the additional newline
-                start += next_ch.len_utf8(); // increment start by character length
+            ctx.lines.push(std::mem::take(ctx.current_line));
+            start = idx + 1;
+            // Skip consecutive newlines (one blank line per sequence)
+            while chars.peek().is_some_and(|&(_, c)| c == '\n') {
+                let (_, c) = chars.next().expect("peeked");
+                start += c.len_utf8();
             }
-
-            // After skipping consecutive newlines, if there are more consecutive newlines,
-            // we need to ensure we don't add multiple blank lines.
-            // The first \n already added a line (above), so we only need one blank line per sequence
         }
     }
 
     if start < text.len() {
         let remaining = &text[start..];
         if !remaining.is_empty() {
-            ensure_prefix(
-                context.current_line,
-                *context.blockquote_depth,
-                context.list_stack,
-                context.pending_list_prefix,
-                context.theme_styles,
-                context.base_style,
-            );
-            context.current_line.push_segment(style, remaining);
+            ctx.ensure_prefix();
+            ctx.current_line.push_segment(style, remaining);
         }
     }
 }
@@ -1160,10 +703,10 @@ fn build_prefix_segments(
     list_stack: &[ListState],
     theme_styles: &ThemeStyles,
     base_style: Style,
-) -> Vec<PrefixSegment> {
+) -> Vec<MarkdownSegment> {
     let mut segments = Vec::new();
     for _ in 0..blockquote_depth {
-        segments.push(PrefixSegment::new(theme_styles.secondary.italic(), "│ "));
+        segments.push(MarkdownSegment::new(theme_styles.secondary.italic(), "│ "));
     }
     if !list_stack.is_empty() {
         let mut continuation = String::new();
@@ -1171,7 +714,7 @@ fn build_prefix_segments(
             continuation.push_str(&state.continuation);
         }
         if !continuation.is_empty() {
-            segments.push(PrefixSegment::new(base_style, continuation));
+            segments.push(MarkdownSegment::new(base_style, continuation));
         }
     }
     segments
@@ -1183,11 +726,11 @@ fn highlight_code_block(
     highlight_config: Option<&SyntaxHighlightingConfig>,
     theme_styles: &ThemeStyles,
     base_style: Style,
-    prefix_segments: &[PrefixSegment],
+    prefix_segments: &[MarkdownSegment],
 ) -> Vec<MarkdownLine> {
     let mut lines = Vec::new();
     let mut augmented_prefix = prefix_segments.to_vec();
-    augmented_prefix.push(PrefixSegment::new(base_style, CODE_EXTRA_INDENT));
+    augmented_prefix.push(MarkdownSegment::new(base_style, CODE_EXTRA_INDENT));
 
     // Always normalize indentation first, regardless of highlighting
     let normalized_code = normalize_code_indentation(code, language);
