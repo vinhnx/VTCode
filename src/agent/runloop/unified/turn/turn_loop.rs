@@ -57,6 +57,7 @@ pub struct TurnLoopContext<'a> {
     pub handle: &'a InlineHandle,
     pub session: &'a mut InlineSession,
     pub session_stats: &'a mut crate::agent::runloop::unified::state::SessionStats,
+    pub auto_exit_plan_mode_attempted: &'a mut bool,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
     pub approval_recorder: &'a Arc<ApprovalRecorder>,
@@ -112,6 +113,7 @@ pub async fn run_turn_loop(
     // Initialize the outcome result
     let mut result = TurnLoopResult::Completed;
     let mut turn_modified_files = BTreeSet::new();
+    *ctx.auto_exit_plan_mode_attempted = false;
 
     // NOTE: The user input is already in working_history from the caller (session_loop or run_loop)
     // Do NOT add it again here, as it will cause duplicate messages in the conversation
