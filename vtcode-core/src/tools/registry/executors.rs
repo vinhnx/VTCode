@@ -867,8 +867,59 @@ fn normalized_shell_name(shell: &str) -> String {
 }
 
 fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str) -> String {
-    raw.map(|s| s.to_string())
-        .unwrap_or_else(|| shell_words::join(parts.iter().map(|s| s.as_str())))
+    let cmd_string = raw
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| shell_words::join(parts.iter().map(|s| s.as_str())));
+    transform_for_token_efficiency(&cmd_string)
+}
+
+/// Transform commands for token efficiency.
+/// Converts full file display commands to limited output versions.
+/// Critical for preserving context window tokens.
+fn transform_for_token_efficiency(cmd: &str) -> String {
+    let trimmed = cmd.trim();
+
+    // Skip if command contains pipes, redirects, or subshells (complex command)
+    if trimmed.contains('|')
+        || trimmed.contains('>')
+        || trimmed.contains('<')
+        || trimmed.contains('$')
+        || trimmed.contains('`')
+    {
+        return cmd.to_string();
+    }
+
+    // Check if command starts with full file display commands
+    let full_display_cmds = [
+        ("cat ", true),   // cat file -> transform
+        ("less ", false), // less is interactive, skip
+        ("more ", false), // more is interactive, skip
+        ("bat ", true),   // bat file -> transform
+    ];
+
+    for (prefix, should_transform) in &full_display_cmds {
+        if trimmed.starts_with(prefix) && *should_transform {
+            let args = &trimmed[prefix.len()..].trim();
+
+            // Skip if it has flags that already limit output or do other things
+            if args.starts_with('-') {
+                return cmd.to_string();
+            }
+
+            // Skip if multiple files or special args
+            if args.contains(' ') && !args.starts_with('"') && !args.starts_with('\'') {
+                return cmd.to_string();
+            }
+
+            // Transform single file cat to head with line count
+            return format!(
+                "{{ head -c 1000 {}; LINES=$(wc -l < {} 2>/dev/null || echo '?'); echo; echo '... ['\"$LINES\"' total lines, showing first 1000 chars. Use: head -n N / tail -n N for more]'; }}",
+                args, args
+            );
+        }
+    }
+
+    cmd.to_string()
 }
 
 fn should_use_windows_command_tokenizer(shell: Option<&str>) -> bool {
@@ -973,4 +1024,78 @@ fn enforce_pty_command_policy(display_command: &str, confirm: bool) -> Result<()
 
     // Allowlisted commands are simply allowed; we rely on general policy for others.
     Ok(())
+}
+
+#[cfg(test)]
+mod token_efficiency_tests {
+    use super::*;
+
+    #[test]
+    fn test_transforms_simple_cat() {
+        let result = transform_for_token_efficiency("cat file.txt");
+        assert!(result.contains("head -c 1000"));
+        assert!(result.contains("file.txt"));
+    }
+
+    #[test]
+    fn test_transforms_cat_with_path() {
+        let result = transform_for_token_efficiency("cat /path/to/file.rs");
+        assert!(result.contains("head -c 1000"));
+        assert!(result.contains("/path/to/file.rs"));
+    }
+
+    #[test]
+    fn test_skips_cat_with_flags() {
+        let result = transform_for_token_efficiency("cat -n file.txt");
+        assert_eq!(result, "cat -n file.txt");
+    }
+
+    #[test]
+    fn test_skips_piped_commands() {
+        let result = transform_for_token_efficiency("cat file.txt | grep pattern");
+        assert_eq!(result, "cat file.txt | grep pattern");
+    }
+
+    #[test]
+    fn test_skips_redirected_commands() {
+        let result = transform_for_token_efficiency("cat file.txt > output.txt");
+        assert_eq!(result, "cat file.txt > output.txt");
+    }
+
+    #[test]
+    fn test_skips_subshell_commands() {
+        let result = transform_for_token_efficiency("cat $(find . -name '*.rs')");
+        assert_eq!(result, "cat $(find . -name '*.rs')");
+    }
+
+    #[test]
+    fn test_skips_multiple_files() {
+        let result = transform_for_token_efficiency("cat file1.txt file2.txt");
+        assert_eq!(result, "cat file1.txt file2.txt");
+    }
+
+    #[test]
+    fn test_preserves_quoted_paths() {
+        let result = transform_for_token_efficiency("cat \"file with spaces.txt\"");
+        assert!(result.contains("head -c 1000"));
+    }
+
+    #[test]
+    fn test_transforms_bat() {
+        let result = transform_for_token_efficiency("bat file.rs");
+        assert!(result.contains("head -c 1000"));
+    }
+
+    #[test]
+    fn test_skips_less_interactive() {
+        let result = transform_for_token_efficiency("less file.txt");
+        assert_eq!(result, "less file.txt");
+    }
+
+    #[test]
+    fn test_passthrough_other_commands() {
+        assert_eq!(transform_for_token_efficiency("ls -la"), "ls -la");
+        assert_eq!(transform_for_token_efficiency("grep pattern file"), "grep pattern file");
+        assert_eq!(transform_for_token_efficiency("head -n 50 file.txt"), "head -n 50 file.txt");
+    }
 }

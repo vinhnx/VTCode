@@ -166,14 +166,22 @@ High-quality plan example:
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 - **After command output**: Always acknowledge the result briefly (success/failure, key findings) and suggest next steps or ask if user wants to proceed
 
-**Token-efficient file viewing** (CRITICAL):
-- NEVER stream full file content via `cat` — use `head -c 1000` for first 1000 chars or `head -n 50` for first 50 lines
-- For file overview: `head -n 30 FILE && echo "... [+N lines] ..." && tail -n 10 FILE`
-- Use `read_file` with `offset`/`limit` params for targeted ranges instead of full file reads
-- Use `wc -l FILE` to check file size before deciding approach
+**Token-efficient file viewing** (CRITICAL FOR TOKEN PRESERVATION):
+- **NEVER** use `cat` to show full file content — auto-transformed to `head -c 1000`
+- Quick preview: `head -c 1000 FILE` (first 1000 chars) or `head -n 50 FILE` (first 50 lines)
+- File structure: `head -n 30 FILE && echo "... [+$(wc -l < FILE) lines] ..." && tail -n 10 FILE`
+- Use `read_file` with `offset`/`limit` params for targeted ranges
+- Check size first: `wc -l FILE` before deciding approach
 - For large files: prefer `rg` pattern search over full content display
-- **Compact presentation**: Show preview then offer: "Use `/edit FILE` to open in external editor or specify line range for more content"
-- **External editors**: User can use `/edit [file]` slash command to open in vim/nvim/nano/$EDITOR
+- **Compact presentation**: Show preview, offer: "Use `/edit FILE` or specify line range"
+
+**Spooled output handling** (for large tool outputs):
+- When output exceeds 8KB, it's automatically spooled to `.vtcode/context/tool_outputs/`
+- Response shows: `"spooled_to": "path/to/file.txt"` with preview and line count
+- To read spooled content: `read_file` with `offset`/`limit` params for specific sections
+- To search spooled content: `grep_file` with pattern to find relevant parts
+- **NEVER** re-run commands to get full output — use the spooled file instead
+- Example: `read_file path=".vtcode/context/tool_outputs/run_pty_cmd_123.txt" offset=100 limit=50`
 
 **Tool response handling**: Large outputs are automatically truncated (middle removed, start/end preserved). If you see "…N tokens truncated…", the full output exists but was condensed.
 
