@@ -1,11 +1,9 @@
-
 ――――――――――――――――――――――――――――――――
 
 Dependency Injection
 
 • CCDefaultAssembler (from CTCommon) is a thin Swinject wrapper.
 • Each feature’s Assembler registers:
-
 
 container.register(<FeatureViewModel>.self) { r in
 <FeatureViewModel>(
@@ -14,9 +12,7 @@ router: r.resolve(<FeatureRouter>.self)!
 )
 }
 
-
 • The assembler is called in the feature’s AppDelegate or SceneDelegate when the feature is presented.
-
 
 ――――――――――――――――――――――――――――――――
 
@@ -25,7 +21,6 @@ Testing
 • Unit tests live in Tests/.
 • They mock repositories/services via protocols, ensuring pure business logic.
 • Example test:
-
 
 func testLoginSuccess() {
 let mockRepo = MockLoginRepository()
@@ -158,7 +153,6 @@ To keep `vtcode` simple but powerful, transition from iterative refinement to a 
 
 --
 
-
 > show me content of AppFeatures/CTJOB/SampleJOB/AppDelegate.swift
 
 for cat and show content command, DO NOT STREAM THE FULL CONTENT, ONLY SHOW THE FIRST 1000 CHARACTERS. head ...+n lines... and tail. and don't show the full content to presserve token. THIS IS CRITICAL FOR TOKEN EFFICIENCY. check tools exec and file system exec and vtcode agent system prompt.
@@ -177,76 +171,8 @@ enhace read file tool with more efficient way to read file content. for example 
 
 bash UI '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-22 at 4.43.06 PM.png'
 
----
-
-Now I understand the usage:
-
-syntect - Used in markdown.rs and syntax_highlight.rs for core syntax highlighting
-anstyle-syntect - Used in markdown.rs to convert syntect styles to anstyle (for terminal output)
-tui-syntax-highlight - Used in log.rs for TUI log viewer highlighting (wraps syntect for ratatui)
-
-Now I understand the usage:
-
-syntect - Used in markdown.rs and syntax_highlight.rs for core syntax highlighting
-anstyle-syntect - Used in markdown.rs to convert syntect styles to anstyle (for terminal output)
-tui-syntax-highlight - Used in log.rs for TUI log viewer highlighting (wraps syntect for ratatui)
-
-The issue is that tui-syntax-highlight re-exports its own version of syntect (notice tui_syntax_highlight::syntect::highlighting::Theme on line 221), potentially causing version conflicts and binary bloat.
-
 --
 
 Audit and simplify markdown.rs - reduce the 1500 lines of custom code
-
---
-
-remove blank lines in assistant "reasoning" response.
-
-log:
-```
-✓ [read_file] Read file resources/vhs/demo.rs · Path: resources/vhs/demo.rs
-
-The user asked me to show the content of resources/vhs/demo.rs. I was able to read this file successfully
-. It's a simple "Hello, World!" program with just 3 lines.
-
-
-
-According to my guidelines:
-
-- Be concise, answer directly without unnecessary preamble
-
-- Focus on the task
-
-- One-to-three sentences by default
-
-- No long introductions
-
-- Clean markdown
-
-
-
-I should just show the content directly without any fluff.
-```
-
----
-
-research and convert plan/code mode as subagent implementation instead of just plain mode. it has it own system prompt and set of tools. and can be used as a standalone agent.
-
-**Status: COMPLETED** - See `.vtcode/plans/planner-coder-subagent-migration.md` for detailed plan.
-
-**Completed:**
-- [x] Phase 1: Created `planner` and `coder` built-in subagents in `vtcode-core/src/subagents/registry.rs`
-- [x] Phase 2: Added `active_agent_name` to `SessionStats` with sync to legacy `EditingMode`
-- [x] Phase 3: Updated `SystemPromptContext` and `IncrementalSystemPrompt` to use active agent prompt
-- [x] Phase 4: Wired up mode switching to call `switch_to_planner()`/`switch_to_coder()`
-- [x] Phase 5: `/plan` and `/mode` commands now switch active agent profiles
-- [x] Phase 6: `planner` and `coder` can be spawned via `spawn_subagent` tool
-
-**Key Changes:**
-- `vtcode-core/src/subagents/registry.rs` - Added PLANNER_AGENT and CODER_AGENT built-in definitions
-- `vtcode-core/src/subagents/mod.rs` - Added `get_agent_prompt_body()` helper function
-- `src/agent/runloop/unified/state.rs` - Added active agent profile tracking
-- `src/agent/runloop/unified/incremental_system_prompt.rs` - Uses active agent's system prompt
-- `src/agent/runloop/unified/tool_pipeline.rs` - Switches active agent on mode transitions
-- `src/agent/runloop/unified/turn/session/slash_commands/handlers.rs` - /plan command switches profile
 
 ---

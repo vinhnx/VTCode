@@ -1,12 +1,11 @@
 //! Panic hook implementation for VT Code TUI applications
 //! This module provides a panic hook that restores terminal state when a panic occurs,
-//! preventing terminal corruption, and provides better panic formatting for different build types.
+//! preventing terminal corruption, and provides enhanced panic formatting for different build types.
 
 use std::io::{self, Write};
 use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use better_panic::Settings;
 use ratatui::crossterm::{
     cursor::Show,
     event::{
@@ -21,8 +20,7 @@ static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
 
 /// Set whether the application is in debug mode
 ///
-/// When debug mode is enabled, panics will show a detailed backtrace
-/// using better-panic.
+/// When debug mode is enabled, panics will show a detailed backtrace.
 pub fn set_debug_mode(enabled: bool) {
     DEBUG_MODE.store(enabled, Ordering::SeqCst);
 }
@@ -53,11 +51,20 @@ pub fn init_panic_hook() {
         }
 
         if is_debug {
-            // Show pretty backtrace (the "modal" look)
-            Settings::debug()
-                .most_recent_first(false)
-                .lineno_suffix(true)
-                .create_panic_handler()(panic_info);
+            // Show detailed panic information with backtrace
+            eprintln!("\n=== VTCode Debug Panic Information ===");
+            eprintln!("Panic details: {}", panic_info);
+            eprintln!("Backtrace:");
+            // Capture and display backtrace if available
+            let backtrace = std::backtrace::Backtrace::capture();
+            if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
+                eprintln!("{}", backtrace);
+            } else {
+                eprintln!(
+                    "(Backtrace not available - set RUST_BACKTRACE=1 environment variable for full backtrace)"
+                );
+            }
+            eprintln!("=== End Debug Information ===");
         } else {
             eprintln!("\nVTCode encountered a critical error and needs to shut down.");
             eprintln!("Error details: {}", panic_info);
