@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use super::progress::{ProgressReporter, ProgressState};
 #[allow(unused_imports)]
-use super::reasoning::{self, analyze_reasoning, is_giving_up_reasoning};
+use super::reasoning::{analyze_reasoning, is_giving_up_reasoning};
+use vtcode_core::llm::providers::clean_reasoning_text;
 
 use anyhow::{Error, Result};
 use futures::StreamExt;
@@ -438,11 +439,14 @@ impl StreamingReasoningState {
 
     fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
         if !self.buffered.is_empty() {
-            // If we have buffered content and are rendering inline, add newline first
-            if self.render_inline && self.started {
-                renderer.inline_with_style(MessageStyle::Reasoning, "\n")?;
+            let cleaned = clean_reasoning_text(&self.buffered);
+            if !cleaned.is_empty() {
+                // If we have buffered content and are rendering inline, add newline first
+                if self.render_inline && self.started {
+                    renderer.inline_with_style(MessageStyle::Reasoning, "\n")?;
+                }
+                renderer.line(MessageStyle::Reasoning, &cleaned)?;
             }
-            renderer.line(MessageStyle::Reasoning, &self.buffered)?;
             self.buffered.clear();
         }
         Ok(())
@@ -463,19 +467,22 @@ impl StreamingReasoningState {
             && let Some(reasoning_text) = final_reasoning
             && !reasoning_text.trim().is_empty()
         {
-            renderer.line(MessageStyle::Reasoning, reasoning_text)?;
+            let cleaned_reasoning = clean_reasoning_text(reasoning_text);
+            if !cleaned_reasoning.trim().is_empty() {
+                renderer.line(MessageStyle::Reasoning, &cleaned_reasoning)?;
 
-            // Chain-of-Thought Monitoring: Analyze reasoning for concerns
-            // This enables early intervention if the agent is going down a wrong path
-            use super::reasoning::analyze_reasoning;
-            let analysis = analyze_reasoning(reasoning_text);
-            if analysis.has_concerns() {
-                // Log concern for debugging/visibility
-                // In production, this could trigger UI indicators or interrupt
-                tracing::debug!(
-                    concern = ?analysis.priority_concern(),
-                    "Reasoning concern detected in CoT output"
-                );
+                // Chain-of-Thought Monitoring: Analyze reasoning for concerns
+                // This enables early intervention if the agent is going down a wrong path
+                use super::reasoning::analyze_reasoning;
+                let analysis = analyze_reasoning(&cleaned_reasoning);
+                if analysis.has_concerns() {
+                    // Log concern for debugging/visibility
+                    // In production, this could trigger UI indicators or interrupt
+                    tracing::debug!(
+                        concern = ?analysis.priority_concern(),
+                        "Reasoning concern detected in CoT output"
+                    );
+                }
             }
         }
         Ok(())
@@ -733,15 +740,15 @@ pub(crate) async fn stream_and_render_response(
         && response.content.is_none()
         && let Some(reasoning) = response.reasoning.as_deref()
     {
-        let reasoning_trimmed = reasoning.trim();
+        let reasoning_trimmed = clean_reasoning_text(reasoning.trim());
         if !reasoning_trimmed.is_empty() {
             if supports_streaming_markdown {
                 renderer
-                    .stream_markdown_response(reasoning_trimmed, 0)
+                    .stream_markdown_response(&reasoning_trimmed, 0)
                     .map_err(|err| map_render_error(provider_name, err))?;
             } else {
                 renderer
-                    .line(MessageStyle::Response, reasoning_trimmed)
+                    .line(MessageStyle::Response, &reasoning_trimmed)
                     .map_err(|err| map_render_error(provider_name, err))?;
             }
             emitted_tokens = true;

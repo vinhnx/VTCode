@@ -14,6 +14,7 @@ use crate::config::constants::ui;
 use super::super::types::{InlineHeaderContext, InlineHeaderHighlight};
 use super::terminal_capabilities;
 use super::{PROMPT_COMMAND_NAME, Session, ratatui_color_from_ansi};
+use crate::llm::providers::clean_reasoning_text;
 
 fn capitalize_first_letter(s: &str) -> String {
     let mut chars = s.chars();
@@ -264,11 +265,13 @@ impl Session {
     }
 
     fn header_reasoning_value(&self) -> Option<String> {
-        let trimmed = self.header_context.reasoning.trim();
+        let raw_reasoning = &self.header_context.reasoning;
+        let cleaned = clean_reasoning_text(raw_reasoning);
+        let trimmed = cleaned.trim();
         let value = if trimmed.is_empty() {
             InlineHeaderContext::default().reasoning
         } else {
-            self.header_context.reasoning.clone()
+            cleaned
         };
         if value.trim().is_empty() {
             None
