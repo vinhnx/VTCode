@@ -411,134 +411,6 @@ pub enum ToolChoiceParam {
     Specific(SpecificFunctionChoice),
 }
 
-impl Default for ToolChoiceParam {
-    fn default() -> Self {
-        Self::Value(ToolChoiceValue::Auto)
-    }
-}
-
-// ============================================================================
-// Reasoning Configuration
-// ============================================================================
-
-/// Reasoning effort level.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ReasoningEffort {
-    Low,
-    Medium,
-    High,
-    Minimal,
-}
-
-/// Reasoning summary mode.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ReasoningSummary {
-    Auto,
-    Concise,
-    Detailed,
-}
-
-/// Reasoning configuration parameter.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReasoningParam {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub effort: Option<ReasoningEffort>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<ReasoningSummary>,
-}
-
-// ============================================================================
-// Text/Output Format
-// ============================================================================
-
-/// Text response format.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TextResponseFormat {
-    #[serde(rename = "type")]
-    pub format_type: String, // "text"
-}
-
-/// JSON schema response format.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JsonSchemaResponseFormat {
-    #[serde(rename = "type")]
-    pub format_type: String, // "json_schema"
-    pub json_schema: Value,
-}
-
-/// Text format parameter union.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum TextFormatParam {
-    Text(TextResponseFormat),
-    JsonSchema(JsonSchemaResponseFormat),
-}
-
-// ============================================================================
-// Request/Response Types
-// ============================================================================
-
-/// OpenResponses API request body.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpenResponsesRequest {
-    pub model: String,
-    pub input: Vec<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub instructions: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<FunctionToolParam>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_choice: Option<ToolChoiceParam>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<ReasoningParam>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub text: Option<TextFormatParam>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_output_tokens: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stream: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub previous_response_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub truncation: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub service_tier: Option<String>,
-}
-
-/// Usage statistics.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ResponseUsage {
-    #[serde(default)]
-    pub input_tokens: u32,
-    #[serde(default)]
-    pub output_tokens: u32,
-    #[serde(default)]
-    pub total_tokens: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_tokens_details: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_tokens_details: Option<Value>,
-}
-
-/// Response status.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ResponseStatus {
-    Queued,
-    InProgress,
-    Completed,
-    Failed,
-    Incomplete,
-}
-
 /// Incomplete details for partial responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IncompleteDetails {
@@ -551,6 +423,18 @@ pub struct IncompleteDetails {
 pub struct ResponseError {
     pub code: String,
     pub message: String,
+}
+
+/// Response status.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponseStatus {
+    Queued,
+    #[default]
+    InProgress,
+    Completed,
+    Failed,
+    Cancelled,
 }
 
 /// OpenResponses API response body.
@@ -575,10 +459,15 @@ pub struct OpenResponsesResponse {
     pub metadata: Option<Value>,
 }
 
-impl Default for ResponseStatus {
-    fn default() -> Self {
-        Self::InProgress
-    }
+/// Response usage statistics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_tokens_details: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_tokens_details: Option<Value>,
 }
 
 #[cfg(test)]

@@ -240,21 +240,21 @@ impl TaskRunState {
 
             // Messages 1..safe_split_at+1 are the "discard" set (excluding system prompt at 0)
             for i in 1..=safe_split_at {
-                if let Some(msg) = self.conversation_messages.get(i) {
-                    if let Some(tool_calls) = &msg.tool_calls {
-                        for call in tool_calls {
-                            call_ids_in_discard.insert(call.id.clone());
-                        }
+                if let Some(msg) = self.conversation_messages.get(i)
+                    && let Some(tool_calls) = &msg.tool_calls
+                {
+                    for call in tool_calls {
+                        call_ids_in_discard.insert(call.id.clone());
                     }
                 }
             }
 
             // Messages safe_split_at+1..len are the "keep" set
             for i in (safe_split_at + 1)..self.conversation_messages.len() {
-                if let Some(msg) = self.conversation_messages.get(i) {
-                    if let Some(id) = &msg.tool_call_id {
-                        response_ids_in_keep.insert(id.clone());
-                    }
+                if let Some(msg) = self.conversation_messages.get(i)
+                    && let Some(id) = &msg.tool_call_id
+                {
+                    response_ids_in_keep.insert(id.clone());
                 }
             }
 

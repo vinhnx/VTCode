@@ -336,9 +336,11 @@ use std::sync::OnceLock;
 static GLOBAL_NOTIFICATION_MANAGER: OnceLock<NotificationManager> = OnceLock::new();
 
 /// Initialize the global notification manager
-pub fn init_global_notification_manager() -> Result<(), ()> {
+pub fn init_global_notification_manager() -> Result<()> {
     let manager = NotificationManager::new();
-    GLOBAL_NOTIFICATION_MANAGER.set(manager).map_err(|_| ())
+    GLOBAL_NOTIFICATION_MANAGER
+        .set(manager)
+        .map_err(|_| anyhow::anyhow!("Failed to set global notification manager"))
 }
 
 /// Get a reference to the global notification manager

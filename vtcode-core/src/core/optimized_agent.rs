@@ -144,6 +144,7 @@ pub struct OptimizedAgentEngine {
 }
 
 /// Performance predictor for optimization
+#[derive(Default)]
 pub struct PerformancePredictor {
     /// Historical execution patterns
     execution_patterns: Arc<RwLock<HashMap<String, ExecutionPattern>>>,

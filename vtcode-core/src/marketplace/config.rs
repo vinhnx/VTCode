@@ -2,7 +2,7 @@
 //!
 //! This module handles the integration of marketplace settings with VT Code's configuration system.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use tokio::fs;
 use crate::marketplace::MarketplaceSource;
 
 /// Configuration for marketplace settings that integrates with VT Code's config system
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct MarketplaceSettings {
     /// List of configured marketplaces
     #[serde(default)]
@@ -28,17 +28,6 @@ pub struct MarketplaceSettings {
     /// Security and trust settings
     #[serde(default)]
     pub security: SecuritySettings,
-}
-
-impl Default for MarketplaceSettings {
-    fn default() -> Self {
-        Self {
-            marketplaces: Vec::new(),
-            installed_plugins: Vec::new(),
-            auto_update: AutoUpdateSettings::default(),
-            security: SecuritySettings::default(),
-        }
-    }
 }
 
 /// Information about an installed plugin
@@ -284,7 +273,7 @@ impl MarketplaceSettings {
 }
 
 /// Helper function to get the marketplace config path based on VT Code's config directory structure
-pub fn get_marketplace_config_path(base_config_dir: &PathBuf) -> PathBuf {
+pub fn get_marketplace_config_path(base_config_dir: &Path) -> PathBuf {
     base_config_dir.join("marketplace.toml")
 }
 

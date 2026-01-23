@@ -1,25 +1,21 @@
 //! Policy types for execution control.
 
 use serde::{Deserialize, Serialize};
+use std::default::Default;
 
 /// Decision made by a policy rule.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Decision {
     /// Allow the command to execute.
     Allow,
 
     /// Require user confirmation before executing.
+    #[default]
     Prompt,
 
     /// Forbid the command from executing.
     Forbidden,
-}
-
-impl Default for Decision {
-    fn default() -> Self {
-        Self::Prompt
-    }
 }
 
 /// A prefix-based rule for matching commands.

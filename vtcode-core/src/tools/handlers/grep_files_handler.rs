@@ -2,7 +2,7 @@
 //!
 //! Searches for patterns in files using ripgrep-like functionality.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -229,7 +229,7 @@ impl GrepFilesHandler {
     }
 
     /// Check if a file should be included based on filters.
-    fn should_include_file(&self, path: &PathBuf, args: &GrepFilesArgs) -> bool {
+    fn should_include_file(&self, path: &Path, args: &GrepFilesArgs) -> bool {
         let file_name = path.file_name().unwrap_or_default().to_string_lossy();
 
         // Check include pattern
