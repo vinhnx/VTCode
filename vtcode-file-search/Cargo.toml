@@ -25,5 +25,4 @@ tokio = { workspace = true, features = ["full"] }
 num_cpus = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }
 tempfile = { workspace = true }

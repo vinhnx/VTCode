@@ -34,6 +34,5 @@ anyhow = { workspace = true }
 async-trait = "0.1"
 serde_json = { workspace = true }
 assert_fs = "1.1"
-tempfile = { workspace = true }
 tokio = { workspace = true }
 criterion = "0.8"

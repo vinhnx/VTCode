@@ -110,7 +110,7 @@ ratatui = { version = "0.30", default-features = false, features = [
     "unstable-widget-ref",
 ] }
 tui-popup = "0.7"
-tui-prompts = "0.5"
+
 perg = "0.8.0"
 nucleo-matcher = "0.3"
 line-clipping = "0.3"
@@ -151,7 +151,7 @@ textwrap = "0.16"
 editor-command = "2.0"
 signal-hook = "0.4"
 rand = "0.9"
-better-panic = { version = "0.3.0", features = ["syntect"] }
+
 lsp-types = "0.97.0"
 notify-rust = { version = "4.11", optional = true }
 ring = "0.17"
@@ -193,7 +193,7 @@ version = "0.7.1"
 optional = true
 
 [package.metadata.cargo-machete]
-ignored = ["dotenvy", "itertools", "toml_edit"]
+ignored = ["dotenvy", "toml_edit"]
 
 [package.metadata.docs.rs]
 all-features = true
