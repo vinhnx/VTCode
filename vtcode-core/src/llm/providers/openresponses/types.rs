@@ -317,6 +317,19 @@ pub struct ReasoningItemParam {
     pub content: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encrypted_content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<ReasoningUsage>,
+}
+
+/// Usage information for reasoning items.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReasoningUsage {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_tokens: Option<u32>,
 }
 
 /// Item reference parameter for referencing previous items.
