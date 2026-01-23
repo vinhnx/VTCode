@@ -1033,6 +1033,16 @@ fn parse_yaml_tool_block(block: &str) -> Option<(String, Value)> {
         "typescript",
         "markdown",
         "text",
+        "swift",
+        "go",
+        "java",
+        "cpp",
+        "c",
+        "php",
+        "html",
+        "css",
+        "sql",
+        "csharp",
     ];
 
     for line in lines.by_ref() {

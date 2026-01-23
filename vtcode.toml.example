@@ -928,6 +928,7 @@ enabled_languages = [
     "typescript",
     "go",
     "java",
+    "swift",
 ]
 
 # Timeout for syntax highlighting operations (milliseconds)
