@@ -298,9 +298,11 @@ pub(crate) async fn run_tool_call(
                 ctx.tool_registry.enable_plan_mode();
                 ctx.session_stats
                     .set_editing_mode(vtcode_core::ui::EditingMode::Plan);
+                // Switch to planner agent profile for system prompt
+                ctx.session_stats.switch_to_planner();
                 tracing::info!(
                     target: "vtcode.plan_mode",
-                    "Agent entered Plan Mode (read-only, mutating tools blocked)"
+                    "Agent entered Plan Mode with planner profile (read-only, mutating tools blocked)"
                 );
             }
         }
@@ -388,9 +390,11 @@ pub(crate) async fn run_tool_call(
                             // Also update the UI editing mode indicator
                             ctx.session_stats
                                 .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                            // Switch to coder agent profile for implementation
+                            ctx.session_stats.switch_to_coder();
                             tracing::info!(
                                 target: "vtcode.plan_mode",
-                                "User approved plan execution, transitioning to Edit mode (mutating tools enabled)"
+                                "User approved plan execution, transitioning to coder profile (mutating tools enabled)"
                             );
                         } else if matches!(outcome, PlanConfirmationOutcome::EditPlan) {
                             // User wants to edit the plan - ensure plan mode stays active
@@ -425,9 +429,11 @@ pub(crate) async fn run_tool_call(
                 plan_state.set_plan_file(None).await;
                 ctx.session_stats
                     .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                // Switch to coder agent profile for implementation
+                ctx.session_stats.switch_to_coder();
                 tracing::info!(
                     target: "vtcode.plan_mode",
-                    "Plan confirmation disabled via config, auto-approving (mutating tools enabled)"
+                    "Plan confirmation disabled via config, auto-approving with coder profile (mutating tools enabled)"
                 );
                 return Ok(ToolPipelineOutcome::from_status(
                     ToolExecutionStatus::Success {

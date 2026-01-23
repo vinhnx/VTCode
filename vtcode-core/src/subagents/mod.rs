@@ -121,3 +121,111 @@ pub use vtcode_config::subagent::{
     SubagentConfig, SubagentModel, SubagentParseError, SubagentPermissionMode, SubagentSource,
     SubagentsConfig,
 };
+
+/// Get the system prompt for a built-in agent profile by name.
+/// This is a convenience function for the planner/coder subagent architecture.
+/// Returns None if the agent is not found or is not a built-in.
+///
+/// Note: For full registry access, use SubagentRegistry directly.
+pub fn get_builtin_agent_prompt(name: &str) -> Option<&'static str> {
+    match name {
+        "planner" => Some(registry::builtins::PLANNER_AGENT),
+        "coder" => Some(registry::builtins::CODER_AGENT),
+        "explore" => Some(registry::builtins::EXPLORE_AGENT),
+        "plan" => Some(registry::builtins::PLAN_AGENT),
+        "general" => Some(registry::builtins::GENERAL_AGENT),
+        "code-reviewer" => Some(registry::builtins::CODE_REVIEWER_AGENT),
+        "debugger" => Some(registry::builtins::DEBUGGER_AGENT),
+        _ => None,
+    }
+}
+
+/// Extract just the system prompt body from a built-in agent definition.
+/// This strips the YAML frontmatter and returns only the markdown body.
+pub fn extract_agent_system_prompt(agent_definition: &str) -> Option<String> {
+    let content = agent_definition.trim();
+    if !content.starts_with("---") {
+        return None;
+    }
+
+    let after_start = &content[3..];
+    let end_pos = after_start.find("\n---")?;
+    let body_start = 3 + end_pos + 4; // Skip "---" + yaml + "\n---"
+
+    content
+        .get(body_start..)
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Get the extracted system prompt for a built-in agent profile.
+/// Returns the prompt body without YAML frontmatter.
+pub fn get_agent_prompt_body(name: &str) -> Option<String> {
+    get_builtin_agent_prompt(name).and_then(extract_agent_system_prompt)
+}
+
+#[cfg(test)]
+mod active_agent_tests {
+    use super::*;
+
+    #[test]
+    fn test_get_builtin_agent_prompt_planner() {
+        let prompt = get_builtin_agent_prompt("planner");
+        assert!(prompt.is_some());
+        assert!(prompt.unwrap().contains("name: planner"));
+    }
+
+    #[test]
+    fn test_get_builtin_agent_prompt_coder() {
+        let prompt = get_builtin_agent_prompt("coder");
+        assert!(prompt.is_some());
+        assert!(prompt.unwrap().contains("name: coder"));
+    }
+
+    #[test]
+    fn test_get_builtin_agent_prompt_unknown() {
+        assert!(get_builtin_agent_prompt("unknown-agent").is_none());
+    }
+
+    #[test]
+    fn test_extract_agent_system_prompt_valid() {
+        let definition = r#"---
+name: test
+description: Test agent
+---
+
+This is the system prompt body.
+It has multiple lines."#;
+
+        let body = extract_agent_system_prompt(definition);
+        assert!(body.is_some());
+        let body = body.unwrap();
+        assert!(body.contains("This is the system prompt body"));
+        assert!(body.contains("multiple lines"));
+        assert!(!body.contains("name: test"));
+    }
+
+    #[test]
+    fn test_extract_agent_system_prompt_no_frontmatter() {
+        let definition = "Just a plain prompt without frontmatter";
+        assert!(extract_agent_system_prompt(definition).is_none());
+    }
+
+    #[test]
+    fn test_get_agent_prompt_body_planner() {
+        let body = get_agent_prompt_body("planner");
+        assert!(body.is_some());
+        let body = body.unwrap();
+        assert!(body.contains("PLAN MODE"));
+        assert!(!body.contains("name: planner"));
+    }
+
+    #[test]
+    fn test_get_agent_prompt_body_coder() {
+        let body = get_agent_prompt_body("coder");
+        assert!(body.is_some());
+        let body = body.unwrap();
+        assert!(body.contains("CODE MODE"));
+        assert!(!body.contains("name: coder"));
+    }
+}
