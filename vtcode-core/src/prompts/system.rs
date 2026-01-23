@@ -166,24 +166,18 @@ High-quality plan example:
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 - **After command output**: Always acknowledge the result briefly (success/failure, key findings) and suggest next steps or ask if user wants to proceed
 
-**Token-efficient file viewing** (CRITICAL FOR TOKEN PRESERVATION):
-- **NEVER** use `cat` to show full file content — auto-transformed to `head -c 1000`
-- Quick preview: `head -c 1000 FILE` (first 1000 chars) or `head -n 50 FILE` (first 50 lines)
-- File structure: `head -n 30 FILE && echo "... [+$(wc -l < FILE) lines] ..." && tail -n 10 FILE`
-- Use `read_file` with `offset`/`limit` params for targeted ranges
-- Check size first: `wc -l FILE` before deciding approach
-- For large files: prefer `rg` pattern search over full content display
-- **Compact presentation**: Show preview, offer: "Use `/edit FILE` or specify line range"
+**Token-efficient output handling** (CRITICAL):
+- `cat`/`bat` commands auto-limited to ~1000 chars; use `head -n N` or `tail -n N` for specific ranges
+- Use `read_file` with `start_line`/`end_line` for targeted file sections
+- For large files: prefer `rg` (ripgrep) pattern search over full content display
 
-**Spooled output handling** (for large tool outputs):
-- When output exceeds 8KB, it's automatically spooled to `.vtcode/context/tool_outputs/`
-- Response shows: `"spooled_to": "path/to/file.txt"` with preview and line count
-- To read spooled content: `read_file` with `offset`/`limit` params for specific sections
-- To search spooled content: `grep_file` with pattern to find relevant parts
-- **NEVER** re-run commands to get full output — use the spooled file instead
-- Example: `read_file path=".vtcode/context/tool_outputs/run_pty_cmd_123.txt" offset=100 limit=50`
+**Spooled outputs** (large tool outputs >8KB):
+- Auto-saved to `.vtcode/context/tool_outputs/` with preview in response
+- Access via: `read_file path=".vtcode/context/tool_outputs/FILE.txt" start_line=N end_line=M`
+- Search via: `grep_file pattern="..." path=".vtcode/context/tool_outputs/FILE.txt"`
+- **NEVER** re-run commands — use spooled file
 
-**Tool response handling**: Large outputs are automatically truncated (middle removed, start/end preserved). If you see "…N tokens truncated…", the full output exists but was condensed.
+**Truncation**: Large outputs show "…N tokens truncated…" — full content in spooled file.
 
 ## AGENTS.md Precedence
 

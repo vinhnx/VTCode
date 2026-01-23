@@ -419,7 +419,7 @@ impl ToolRegistry {
             .as_object()
             .ok_or_else(|| anyhow!("run_pty_cmd requires a JSON object"))?;
 
-        let mut command = parse_command_parts(
+        let (mut command, auto_raw_command) = parse_command_parts(
             payload,
             "run_pty_cmd requires a 'command' value",
             "PTY command cannot be empty",
@@ -444,10 +444,12 @@ impl ToolRegistry {
             .map(|existing| normalized_shell_name(existing));
 
         if existing_shell != Some(normalized_shell.clone()) {
+            // Prefer explicit raw_command, fallback to auto-detected from string command
             let raw_command = payload
                 .get("raw_command")
                 .and_then(|value| value.as_str())
-                .map(|value| value.to_string());
+                .map(|value| value.to_string())
+                .or(auto_raw_command);
 
             let command_string =
                 build_shell_command_string(raw_command.as_deref(), &command, &shell_program);
@@ -484,17 +486,19 @@ impl ToolRegistry {
             .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
             .await?;
 
-        let max_tokens = payload
-            .get("max_tokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
-
         let display_command = if should_use_windows_command_tokenizer(Some(&shell_program)) {
             join_windows_command(&command)
         } else {
             shell_words::join(command.iter().map(|part| part.as_str()))
         };
+
+        // Use explicit max_tokens if provided, otherwise check if command suggests a limit
+        let max_tokens = payload
+            .get("max_tokens")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .or_else(|| suggest_max_tokens_for_command(&display_command))
+            .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
 
         enforce_pty_command_policy(&display_command, confirm)?;
 
@@ -815,20 +819,25 @@ fn parse_command_parts(
     payload: &serde_json::Map<String, Value>,
     missing_error: &str,
     empty_error: &str,
-) -> Result<Vec<String>> {
-    let mut parts = match payload.get("command") {
+) -> Result<(Vec<String>, Option<String>)> {
+    let (mut parts, raw_command) = match payload.get("command") {
         Some(Value::String(command)) => {
-            shell_words::split(command).context("Failed to parse command string")?
+            // Preserve the original command string to avoid splitting shell operators
+            let parts = shell_words::split(command).context("Failed to parse command string")?;
+            (parts, Some(command.to_string()))
         }
-        Some(Value::Array(values)) => values
-            .iter()
-            .map(|value| {
-                value
-                    .as_str()
-                    .map(|part| part.to_string())
-                    .ok_or_else(|| anyhow!("command array must contain only strings"))
-            })
-            .collect::<Result<Vec<_>>>()?,
+        Some(Value::Array(values)) => {
+            let parts = values
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .map(|part| part.to_string())
+                        .ok_or_else(|| anyhow!("command array must contain only strings"))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            (parts, None)
+        }
         _ => return Err(anyhow!("{}", missing_error)),
     };
 
@@ -846,7 +855,7 @@ fn parse_command_parts(
         return Err(anyhow!("{}", empty_error));
     }
 
-    Ok(parts)
+    Ok((parts, raw_command))
 }
 
 fn resolve_shell_preference(pref: Option<&str>, config: &crate::config::PtyConfig) -> String {
@@ -867,59 +876,31 @@ fn normalized_shell_name(shell: &str) -> String {
 }
 
 fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str) -> String {
-    let cmd_string = raw
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| shell_words::join(parts.iter().map(|s| s.as_str())));
-    transform_for_token_efficiency(&cmd_string)
+    raw.map(|s| s.to_string())
+        .unwrap_or_else(|| shell_words::join(parts.iter().map(|s| s.as_str())))
 }
 
-/// Transform commands for token efficiency.
-/// Converts full file display commands to limited output versions.
-/// Critical for preserving context window tokens.
-fn transform_for_token_efficiency(cmd: &str) -> String {
-    let trimmed = cmd.trim();
+/// Check if a command is a file display command that should have limited output.
+/// Returns suggested max_tokens if the command is a file display command without explicit limits.
+pub fn suggest_max_tokens_for_command(cmd: &str) -> Option<usize> {
+    let trimmed = cmd.trim().to_lowercase();
 
-    // Skip if command contains pipes, redirects, or subshells (complex command)
-    if trimmed.contains('|')
-        || trimmed.contains('>')
-        || trimmed.contains('<')
-        || trimmed.contains('$')
-        || trimmed.contains('`')
-    {
-        return cmd.to_string();
+    // Skip if command already has output limiting
+    if trimmed.contains("head") || trimmed.contains("tail") || trimmed.contains("| ") {
+        return None;
     }
 
-    // Check if command starts with full file display commands
-    let full_display_cmds = [
-        ("cat ", true),   // cat file -> transform
-        ("less ", false), // less is interactive, skip
-        ("more ", false), // more is interactive, skip
-        ("bat ", true),   // bat file -> transform
-    ];
+    // File display commands that benefit from token limits
+    let file_display_cmds = ["cat ", "bat ", "type "]; // type for Windows
 
-    for (prefix, should_transform) in &full_display_cmds {
-        if trimmed.starts_with(prefix) && *should_transform {
-            let args = &trimmed[prefix.len()..].trim();
-
-            // Skip if it has flags that already limit output or do other things
-            if args.starts_with('-') {
-                return cmd.to_string();
-            }
-
-            // Skip if multiple files or special args
-            if args.contains(' ') && !args.starts_with('"') && !args.starts_with('\'') {
-                return cmd.to_string();
-            }
-
-            // Transform single file cat to head with line count
-            return format!(
-                "{{ head -c 1000 {}; LINES=$(wc -l < {} 2>/dev/null || echo '?'); echo; echo '... ['\"$LINES\"' total lines, showing first 1000 chars. Use: head -n N / tail -n N for more]'; }}",
-                args, args
-            );
+    for prefix in &file_display_cmds {
+        if trimmed.starts_with(prefix) {
+            // Suggest 250 tokens (~1000 chars) for file preview
+            return Some(250);
         }
     }
 
-    cmd.to_string()
+    None
 }
 
 fn should_use_windows_command_tokenizer(shell: Option<&str>) -> bool {
@@ -1031,71 +1012,28 @@ mod token_efficiency_tests {
     use super::*;
 
     #[test]
-    fn test_transforms_simple_cat() {
-        let result = transform_for_token_efficiency("cat file.txt");
-        assert!(result.contains("head -c 1000"));
-        assert!(result.contains("file.txt"));
+    fn test_suggests_limit_for_cat() {
+        assert_eq!(suggest_max_tokens_for_command("cat file.txt"), Some(250));
+        assert_eq!(suggest_max_tokens_for_command("cat /path/to/file.rs"), Some(250));
+        assert_eq!(suggest_max_tokens_for_command("CAT file.txt"), Some(250)); // case insensitive
     }
 
     #[test]
-    fn test_transforms_cat_with_path() {
-        let result = transform_for_token_efficiency("cat /path/to/file.rs");
-        assert!(result.contains("head -c 1000"));
-        assert!(result.contains("/path/to/file.rs"));
+    fn test_suggests_limit_for_bat() {
+        assert_eq!(suggest_max_tokens_for_command("bat file.rs"), Some(250));
     }
 
     #[test]
-    fn test_skips_cat_with_flags() {
-        let result = transform_for_token_efficiency("cat -n file.txt");
-        assert_eq!(result, "cat -n file.txt");
+    fn test_no_limit_when_already_limited() {
+        assert_eq!(suggest_max_tokens_for_command("cat file.txt | head"), None);
+        assert_eq!(suggest_max_tokens_for_command("head -n 50 file.txt"), None);
+        assert_eq!(suggest_max_tokens_for_command("tail -n 20 file.txt"), None);
     }
 
     #[test]
-    fn test_skips_piped_commands() {
-        let result = transform_for_token_efficiency("cat file.txt | grep pattern");
-        assert_eq!(result, "cat file.txt | grep pattern");
-    }
-
-    #[test]
-    fn test_skips_redirected_commands() {
-        let result = transform_for_token_efficiency("cat file.txt > output.txt");
-        assert_eq!(result, "cat file.txt > output.txt");
-    }
-
-    #[test]
-    fn test_skips_subshell_commands() {
-        let result = transform_for_token_efficiency("cat $(find . -name '*.rs')");
-        assert_eq!(result, "cat $(find . -name '*.rs')");
-    }
-
-    #[test]
-    fn test_skips_multiple_files() {
-        let result = transform_for_token_efficiency("cat file1.txt file2.txt");
-        assert_eq!(result, "cat file1.txt file2.txt");
-    }
-
-    #[test]
-    fn test_preserves_quoted_paths() {
-        let result = transform_for_token_efficiency("cat \"file with spaces.txt\"");
-        assert!(result.contains("head -c 1000"));
-    }
-
-    #[test]
-    fn test_transforms_bat() {
-        let result = transform_for_token_efficiency("bat file.rs");
-        assert!(result.contains("head -c 1000"));
-    }
-
-    #[test]
-    fn test_skips_less_interactive() {
-        let result = transform_for_token_efficiency("less file.txt");
-        assert_eq!(result, "less file.txt");
-    }
-
-    #[test]
-    fn test_passthrough_other_commands() {
-        assert_eq!(transform_for_token_efficiency("ls -la"), "ls -la");
-        assert_eq!(transform_for_token_efficiency("grep pattern file"), "grep pattern file");
-        assert_eq!(transform_for_token_efficiency("head -n 50 file.txt"), "head -n 50 file.txt");
+    fn test_no_limit_for_other_commands() {
+        assert_eq!(suggest_max_tokens_for_command("ls -la"), None);
+        assert_eq!(suggest_max_tokens_for_command("grep pattern file"), None);
+        assert_eq!(suggest_max_tokens_for_command("echo hello"), None);
     }
 }
