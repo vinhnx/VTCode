@@ -86,7 +86,7 @@
     "enter_plan": "prompt",
     "enter_plan_mode": "prompt",
     "exit_plan": "prompt",
-    "exit_plan_mode": "allow",
+    "exit_plan_mode": "prompt",
     "implement_plan": "prompt",
     "plan_exit": "prompt",
     "plan_mode": "prompt",

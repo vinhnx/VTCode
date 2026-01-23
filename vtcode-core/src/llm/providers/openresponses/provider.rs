@@ -23,6 +23,9 @@ use super::streaming::{StreamAccumulator, parse_sse_event};
 /// Default base URL for OpenResponses-compatible APIs.
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 
+/// Default OpenResponses version header value.
+const DEFAULT_OPENRESPONSES_VERSION: &str = "latest";
+
 /// Default model to use if none specified.
 const DEFAULT_MODEL: &str = "gpt-4o";
 
@@ -37,6 +40,7 @@ pub struct OpenResponsesProvider {
     base_url: String,
     http_client: reqwest::Client,
     prompt_cache: Option<PromptCachingConfig>,
+    version: String,
 }
 
 impl std::fmt::Debug for OpenResponsesProvider {
@@ -62,6 +66,7 @@ impl OpenResponsesProvider {
             base_url: DEFAULT_BASE_URL.to_string(),
             http_client: reqwest::Client::new(),
             prompt_cache: None,
+            version: DEFAULT_OPENRESPONSES_VERSION.to_string(),
         }
     }
 
@@ -84,12 +89,19 @@ impl OpenResponsesProvider {
             base_url,
             http_client: reqwest::Client::new(),
             prompt_cache,
+            version: DEFAULT_OPENRESPONSES_VERSION.to_string(),
         }
     }
 
     /// Set the base URL for the API.
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = base_url.into();
+        self
+    }
+
+    /// Set the OpenResponses version header.
+    pub fn with_version(mut self, version: impl Into<String>) -> Self {
+        self.version = version.into();
         self
     }
 
@@ -127,13 +139,19 @@ impl OpenResponsesProvider {
                     }
                 }
                 MessageRole::User => {
+                    // Handle multimodal content
+                    let mut content_parts: Vec<Value> = Vec::new();
+
+                    // For now, just handle text content - in a full implementation we'd handle images too
+                    content_parts.push(json!({
+                        "type": "input_text",
+                        "text": msg.content.as_text()
+                    }));
+
                     input.push(json!({
                         "type": "message",
                         "role": "user",
-                        "content": [{
-                            "type": "input_text",
-                            "text": msg.content.as_text()
-                        }]
+                        "content": content_parts
                     }));
                 }
                 MessageRole::Assistant => {
@@ -205,9 +223,14 @@ impl OpenResponsesProvider {
 
         let mut payload = json!({
             "model": model,
-            "input": input,
         });
 
+        // Add input array if we have messages
+        if !input.is_empty() {
+            payload["input"] = json!(input);
+        }
+
+        // Add instructions if present
         if let Some(inst) = instructions {
             payload["instructions"] = json!(inst);
         }
@@ -261,6 +284,75 @@ impl OpenResponsesProvider {
             }
         }
 
+        // Add top_k parameter if specified
+        if let Some(top_k) = request.top_k {
+            payload["top_k"] = json!(top_k);
+        }
+
+        // Add presence_penalty parameter if specified
+        if let Some(presence_penalty) = request.presence_penalty {
+            payload["presence_penalty"] = json!(presence_penalty);
+        }
+
+        // Add frequency_penalty parameter if specified
+        if let Some(frequency_penalty) = request.frequency_penalty {
+            payload["frequency_penalty"] = json!(frequency_penalty);
+        }
+
+        // Add tool_choice parameter if specified
+        if let Some(ref tool_choice) = request.tool_choice {
+            payload["tool_choice"] = json!(tool_choice);
+        }
+
+        // Add provider-specific options if present
+        if let Some(provider_options) = request.betas.as_ref() {
+            payload["provider_options"] = json!(provider_options);
+        }
+
+        // Add routing parameters if present
+        // This allows specifying which provider to route to in multi-provider setups
+        let mut routing_needed = false;
+        let mut provider_part = String::new();
+        let mut model_name = String::new();
+        let mut variant_part = None;
+
+        if let Some(model) = payload.get("model").and_then(|v| v.as_str()) {
+            // Check if the model contains provider routing information
+            if model.contains("/") {
+                // Split provider/model format like "moonshotai/Kimi-K2-Thinking:nebius"
+                let parts: Vec<&str> = model.split('/').collect();
+                if parts.len() >= 2 {
+                    provider_part = parts[0].to_string();
+                    let model_part = parts[1];
+
+                    // Extract provider and model name
+                    let model_parts: Vec<&str> = model_part.split(':').collect();
+                    model_name = model_parts[0].to_string();
+                    if model_parts.len() > 1 {
+                        variant_part = Some(model_parts[1].to_string());
+                    }
+
+                    routing_needed = true;
+                }
+            }
+        }
+
+        if routing_needed {
+            // Update the model field to just the model name
+            payload["model"] = json!(model_name);
+
+            // Add provider routing information
+            let mut routing_info = json!({
+                "provider": provider_part
+            });
+
+            if let Some(variant) = variant_part {
+                routing_info["variant"] = json!(variant);
+            }
+
+            payload["routing"] = routing_info;
+        }
+
         // Add prompt cache retention if configured
         if let Some(ref pc) = self.prompt_cache {
             if let Some(ref retention) = pc.providers.openai.prompt_cache_retention {
@@ -291,6 +383,7 @@ impl OpenResponsesProvider {
         let mut reasoning_fragments: Vec<String> = Vec::new();
         let mut reasoning_items: Vec<Value> = Vec::new();
         let mut tool_calls_vec: Vec<ToolCall> = Vec::new();
+        let mut tool_references: Vec<String> = Vec::new();
 
         for item in output {
             let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -320,6 +413,10 @@ impl OpenResponsesProvider {
                                         }
                                     }
                                 }
+                                "input_text" | "input_image" | "input_file" => {
+                                    // These are input content types, typically not part of assistant responses
+                                    // but we might encounter them in certain contexts
+                                }
                                 _ => {}
                             }
                         }
@@ -330,9 +427,16 @@ impl OpenResponsesProvider {
                         tool_calls_vec.push(call);
                     }
                 }
+                "function_call_output" => {
+                    // Handle function call outputs if needed
+                    if let Some(output) = item.get("output").and_then(|v| v.as_str()) {
+                        content_fragments.push(format!("[Function Output: {}]", output));
+                    }
+                }
                 "reasoning" => {
                     reasoning_items.push(item.clone());
 
+                    // Extract summary content
                     if let Some(summary_array) = item.get("summary").and_then(|v| v.as_array()) {
                         for summary_part in summary_array {
                             if let Some(text) = summary_part.get("text").and_then(|v| v.as_str()) {
@@ -341,6 +445,29 @@ impl OpenResponsesProvider {
                                 }
                             }
                         }
+                    }
+
+                    // Extract content if available
+                    if let Some(content) = item.get("content") {
+                        if content.is_string() {
+                            if let Some(text) = content.as_str() {
+                                if !text.is_empty() {
+                                    reasoning_fragments.push(text.to_string());
+                                }
+                            }
+                        } else if content.is_object() || content.is_array() {
+                            // For complex content, serialize to string
+                            let content_str = content.to_string();
+                            if !content_str.is_empty() && content_str != "{}" && content_str != "[]" {
+                                reasoning_fragments.push(content_str);
+                            }
+                        }
+                    }
+                }
+                "item_reference" => {
+                    // Handle item references
+                    if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
+                        tool_references.push(id.to_string());
                     }
                 }
                 _ => {}
@@ -368,7 +495,18 @@ impl OpenResponsesProvider {
         let finish_reason = if !tool_calls_vec.is_empty() {
             FinishReason::ToolCalls
         } else {
-            FinishReason::Stop
+            // Determine finish reason from response status if available
+            let status = response_json
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("completed");
+
+            match status {
+                "completed" => FinishReason::Stop,
+                "failed" | "cancelled" => FinishReason::Error("response_failed".to_string()),
+                "incomplete" => FinishReason::Length,
+                _ => FinishReason::Stop,
+            }
         };
 
         let tool_calls = if tool_calls_vec.is_empty() {
@@ -396,13 +534,30 @@ impl OpenResponsesProvider {
                 .and_then(|v| u32::try_from(v).ok())
                 .unwrap_or(0),
             cached_prompt_tokens: usage_value
-                .get("prompt_tokens_details")
+                .get("input_tokens_details")
                 .and_then(|d| d.get("cached_tokens"))
                 .and_then(|v| v.as_u64())
                 .and_then(|v| u32::try_from(v).ok()),
-            cache_creation_tokens: None,
-            cache_read_tokens: None,
+            cache_creation_tokens: usage_value
+                .get("cache_creation_input_tokens")
+                .and_then(|v| v.as_u64())
+                .and_then(|v| u32::try_from(v).ok()),
+            cache_read_tokens: usage_value
+                .get("cache_read_input_tokens")
+                .and_then(|v| v.as_u64())
+                .and_then(|v| u32::try_from(v).ok()),
         });
+
+        // Extract request ID and organization ID if available
+        let request_id = response_json
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let organization_id = response_json
+            .get("organization_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
         Ok(LLMResponse {
             content,
@@ -411,9 +566,9 @@ impl OpenResponsesProvider {
             finish_reason,
             reasoning,
             reasoning_details,
-            tool_references: Vec::new(),
-            request_id: None,
-            organization_id: None,
+            tool_references,
+            request_id,
+            organization_id,
         })
     }
 
@@ -461,12 +616,77 @@ impl LLMProvider for OpenResponsesProvider {
         vec![self.model.clone()]
     }
 
-    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-        // OpenResponses spec is flexible; minimal validation needed
+    fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
+        // Validate that the request conforms to OpenResponses specification
+        if request.model.is_empty() && self.model.is_empty() {
+            return Err(LLMError::InvalidRequest {
+                message: "Model must be specified".to_string(),
+                metadata: None,
+            });
+        }
+
+        // Validate message roles are supported by OpenResponses
+        for msg in &request.messages {
+            match msg.role {
+                MessageRole::User | MessageRole::Assistant | MessageRole::System => {
+                    // These are all valid OpenResponses roles
+                }
+                _ => {
+                    return Err(LLMError::InvalidRequest {
+                        message: format!("Unsupported message role for OpenResponses: {:?}", msg.role),
+                        metadata: None,
+                    });
+                }
+            }
+        }
+
+        // Validate max_tokens range if specified
+        if let Some(max_tokens) = request.max_tokens {
+            if max_tokens == 0 {
+                return Err(LLMError::InvalidRequest {
+                    message: "max_tokens must be greater than 0".to_string(),
+                    metadata: None,
+                });
+            }
+        }
+
+        // Validate temperature range if specified
+        if let Some(temp) = request.temperature {
+            if temp < 0.0 || temp > 2.0 {
+                return Err(LLMError::InvalidRequest {
+                    message: "temperature must be between 0.0 and 2.0".to_string(),
+                    metadata: None,
+                });
+            }
+        }
+
+        // Validate top_p range if specified
+        if let Some(top_p) = request.top_p {
+            if top_p <= 0.0 || top_p > 1.0 {
+                return Err(LLMError::InvalidRequest {
+                    message: "top_p must be between 0.0 and 1.0".to_string(),
+                    metadata: None,
+                });
+            }
+        }
+
+        // Validate top_k range if specified
+        if let Some(top_k) = request.top_k {
+            if top_k <= 0 {
+                return Err(LLMError::InvalidRequest {
+                    message: "top_k must be greater than 0".to_string(),
+                    metadata: None,
+                });
+            }
+        }
+
         Ok(())
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        // Validate the request before sending
+        self.validate_request(&request)?;
+
         let payload = self.build_request_payload(&request)?;
         let url = self.responses_url();
 
@@ -482,12 +702,20 @@ impl LLMProvider for OpenResponsesProvider {
             .post(&url)
             .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
             .header(CONTENT_TYPE, "application/json")
+            .header("OpenAI-Beta", "responses-v1") // Indicate OpenResponses API usage
+            .header("OpenResponses-Version", &self.version) // Specify OpenResponses version
             .json(&payload)
             .send()
             .await
-            .map_err(|e| LLMError::Network {
-                message: format!("Request failed: {}", e),
-                metadata: None,
+            .map_err(|e| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenResponses",
+                    &format!("Network error: {}", e),
+                );
+                LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         let status = response.status();
@@ -497,29 +725,46 @@ impl LLMProvider for OpenResponsesProvider {
                 "OpenResponses",
                 &format!("API error ({}): {}", status.as_u16(), error_text),
             );
+
+            // Try to parse error details from the response
+            let error_details: Option<Value> = serde_json::from_str(&error_text).ok();
+            let error_code = error_details
+                .as_ref()
+                .and_then(|v| v.get("error").and_then(|e| e.get("code")).and_then(|c| c.as_str()))
+                .map(|s| s.to_string());
+
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: Some(LLMErrorMetadata::new(
                     "openresponses",
                     Some(status.as_u16()),
-                    None,             // code
-                    None,             // request_id
-                    None,             // organization_id
-                    None,             // retry_after
-                    Some(error_text), // message
+                    error_code,         // code
+                    None,               // request_id (will be extracted from headers if available)
+                    None,               // organization_id
+                    None,               // retry_after
+                    Some(error_text),   // message
                 )),
             });
         }
 
-        let response_json: Value = response.json().await.map_err(|e| LLMError::Provider {
-            message: format!("Failed to parse response: {}", e),
-            metadata: None,
+        let response_json: Value = response.json().await.map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenResponses",
+                &format!("Failed to parse response JSON: {}", e),
+            );
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         self.parse_response(response_json)
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
+        // Validate the request before sending
+        self.validate_request(&request)?;
+
         let mut payload = self.build_request_payload(&request)?;
         payload["stream"] = json!(true);
 
@@ -537,12 +782,20 @@ impl LLMProvider for OpenResponsesProvider {
             .post(&url)
             .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
             .header(CONTENT_TYPE, "application/json")
+            .header("OpenAI-Beta", "responses-v1") // Indicate OpenResponses API usage
+            .header("OpenResponses-Version", &self.version) // Specify OpenResponses version
             .json(&payload)
             .send()
             .await
-            .map_err(|e| LLMError::Network {
-                message: format!("Streaming request failed: {}", e),
-                metadata: None,
+            .map_err(|e| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenResponses",
+                    &format!("Streaming request failed: {}", e),
+                );
+                LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         let status = response.status();
@@ -552,16 +805,24 @@ impl LLMProvider for OpenResponsesProvider {
                 "OpenResponses",
                 &format!("Streaming API error ({}): {}", status.as_u16(), error_text),
             );
+
+            // Try to parse error details from the response
+            let error_details: Option<Value> = serde_json::from_str(&error_text).ok();
+            let error_code = error_details
+                .as_ref()
+                .and_then(|v| v.get("error").and_then(|e| e.get("code")).and_then(|c| c.as_str()))
+                .map(|s| s.to_string());
+
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: Some(LLMErrorMetadata::new(
                     "openresponses",
                     Some(status.as_u16()),
-                    None,             // code
-                    None,             // request_id
-                    None,             // organization_id
-                    None,             // retry_after
-                    Some(error_text), // message
+                    error_code,         // code
+                    None,               // request_id
+                    None,               // organization_id
+                    None,               // retry_after
+                    Some(error_text),   // message
                 )),
             });
         }
@@ -588,71 +849,108 @@ impl LLMProvider for OpenResponsesProvider {
                             accumulator.process_event(&event);
 
                             // Emit text deltas
-                            if event.event_type == "response.output_text.delta" {
-                                if let super::streaming::StreamEventData::TextDelta(data) =
-                                    &event.data
-                                {
+                            match event.event_type.as_str() {
+                                "response.output_text.delta" => {
+                                    if let super::streaming::StreamEventData::TextDelta(data) = &event.data {
+                                        return Some((
+                                            Ok(LLMStreamEvent::Token {
+                                                delta: data.delta.clone(),
+                                            }),
+                                            (byte_stream, buffer, accumulator, done),
+                                        ));
+                                    }
+                                }
+                                "response.reasoning_summary_text.delta" => {
+                                    if let super::streaming::StreamEventData::TextDelta(_data) = &event.data {
+                                        // For reasoning deltas, we could emit them separately if needed
+                                        // For now, we accumulate them and include in final response
+                                    }
+                                }
+                                "response.reasoning_content.delta" => {
+                                    if let super::streaming::StreamEventData::ReasoningContentDelta(_data) = &event.data {
+                                        // For reasoning content deltas, we accumulate them
+                                        // Could emit them as separate events if needed
+                                    }
+                                }
+                                "response.function_call_arguments.delta" => {
+                                    if let super::streaming::StreamEventData::FunctionCallDelta(_data) = &event.data {
+                                        // For function call argument deltas, we accumulate them
+                                        // and emit the completed call at the end
+                                    }
+                                }
+                                "response.completed" => {
+                                    done = true;
+
+                                    let tool_calls = if accumulator.function_calls.is_empty() {
+                                        None
+                                    } else {
+                                        Some(
+                                            accumulator
+                                                .function_calls
+                                                .iter()
+                                                .map(|fc| {
+                                                    ToolCall::function(
+                                                        fc.call_id.clone(),
+                                                        fc.name.clone(),
+                                                        fc.arguments.clone(),
+                                                    )
+                                                })
+                                                .collect(),
+                                        )
+                                    };
+
+                                    let finish_reason = if tool_calls.is_some() {
+                                        FinishReason::ToolCalls
+                                    } else {
+                                        FinishReason::Stop
+                                    };
+
+                                    let response = LLMResponse {
+                                        content: if accumulator.text_content.is_empty() {
+                                            None
+                                        } else {
+                                            Some(accumulator.text_content.clone())
+                                        },
+                                        tool_calls,
+                                        usage: None, // Usage info might be available in accumulator
+                                        finish_reason,
+                                        reasoning: if accumulator.reasoning_content.is_empty() {
+                                            None
+                                        } else {
+                                            Some(accumulator.reasoning_content.clone())
+                                        },
+                                        reasoning_details: None,
+                                        tool_references: Vec::new(),
+                                        request_id: accumulator.response_id.clone(),
+                                        organization_id: None,
+                                    };
+
                                     return Some((
-                                        Ok(LLMStreamEvent::Token {
-                                            delta: data.delta.clone(),
+                                        Ok(LLMStreamEvent::Completed { response }),
+                                        (byte_stream, buffer, accumulator, done),
+                                    ));
+                                }
+                                "response.failed" | "error" => {
+                                    done = true;
+
+                                    // Return an error response
+                                    let error_msg = if let Some(ref err) = accumulator.error {
+                                        format!("OpenResponses stream error: {} - {}", err.code, err.message)
+                                    } else {
+                                        "OpenResponses stream failed".to_string()
+                                    };
+
+                                    return Some((
+                                        Err(LLMError::Provider {
+                                            message: error_display::format_llm_error("OpenResponses", &error_msg),
+                                            metadata: None,
                                         }),
                                         (byte_stream, buffer, accumulator, done),
                                     ));
                                 }
-                            }
-
-                            // Check for completion
-                            if event.event_type == "response.completed" {
-                                done = true;
-
-                                let tool_calls = if accumulator.function_calls.is_empty() {
-                                    None
-                                } else {
-                                    Some(
-                                        accumulator
-                                            .function_calls
-                                            .iter()
-                                            .map(|fc| {
-                                                ToolCall::function(
-                                                    fc.call_id.clone(),
-                                                    fc.name.clone(),
-                                                    fc.arguments.clone(),
-                                                )
-                                            })
-                                            .collect(),
-                                    )
-                                };
-
-                                let finish_reason = if tool_calls.is_some() {
-                                    FinishReason::ToolCalls
-                                } else {
-                                    FinishReason::Stop
-                                };
-
-                                let response = LLMResponse {
-                                    content: if accumulator.text_content.is_empty() {
-                                        None
-                                    } else {
-                                        Some(accumulator.text_content.clone())
-                                    },
-                                    tool_calls,
-                                    usage: None,
-                                    finish_reason,
-                                    reasoning: if accumulator.reasoning_content.is_empty() {
-                                        None
-                                    } else {
-                                        Some(accumulator.reasoning_content.clone())
-                                    },
-                                    reasoning_details: None,
-                                    tool_references: Vec::new(),
-                                    request_id: None,
-                                    organization_id: None,
-                                };
-
-                                return Some((
-                                    Ok(LLMStreamEvent::Completed { response }),
-                                    (byte_stream, buffer, accumulator, done),
-                                ));
+                                _ => {
+                                    // Ignore other events for now
+                                }
                             }
                         }
                         continue;
@@ -708,7 +1006,38 @@ impl LLMProvider for OpenResponsesProvider {
                                         Some(accumulator.text_content.clone())
                                     },
                                     tool_calls,
-                                    usage: None,
+                                    usage: accumulator.usage.as_ref().map(|usage_value| Usage {
+                                        prompt_tokens: usage_value
+                                            .get("input_tokens")
+                                            .or_else(|| usage_value.get("prompt_tokens"))
+                                            .and_then(|v| v.as_u64())
+                                            .and_then(|v| u32::try_from(v).ok())
+                                            .unwrap_or(0),
+                                        completion_tokens: usage_value
+                                            .get("output_tokens")
+                                            .or_else(|| usage_value.get("completion_tokens"))
+                                            .and_then(|v| v.as_u64())
+                                            .and_then(|v| u32::try_from(v).ok())
+                                            .unwrap_or(0),
+                                        total_tokens: usage_value
+                                            .get("total_tokens")
+                                            .and_then(|v| v.as_u64())
+                                            .and_then(|v| u32::try_from(v).ok())
+                                            .unwrap_or(0),
+                                        cached_prompt_tokens: usage_value
+                                            .get("input_tokens_details")
+                                            .and_then(|d| d.get("cached_tokens"))
+                                            .and_then(|v| v.as_u64())
+                                            .and_then(|v| u32::try_from(v).ok()),
+                                        cache_creation_tokens: usage_value
+                                            .get("cache_creation_input_tokens")
+                                            .and_then(|v| v.as_u64())
+                                            .and_then(|v| u32::try_from(v).ok()),
+                                        cache_read_tokens: usage_value
+                                            .get("cache_read_input_tokens")
+                                            .and_then(|v| v.as_u64())
+                                            .and_then(|v| u32::try_from(v).ok()),
+                                    }),
                                     finish_reason,
                                     reasoning: if accumulator.reasoning_content.is_empty() {
                                         None
@@ -717,7 +1046,7 @@ impl LLMProvider for OpenResponsesProvider {
                                     },
                                     reasoning_details: None,
                                     tool_references: Vec::new(),
-                                    request_id: None,
+                                    request_id: accumulator.response_id.clone(),
                                     organization_id: None,
                                 };
 
@@ -806,5 +1135,78 @@ mod tests {
         let calls = response.tool_calls.unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].function.as_ref().unwrap().name, "get_weather");
+    }
+
+    #[test]
+    fn test_parse_reasoning_response() {
+        let provider = OpenResponsesProvider::new("test-key".to_string());
+        let response_json = json!({
+            "id": "resp_123",
+            "object": "response",
+            "output": [{
+                "type": "reasoning",
+                "summary": [{"text": "Let me think through this step by step."}],
+                "content": {"raw_thoughts": "Initial thoughts..."}
+            }, {
+                "type": "message",
+                "role": "assistant",
+                "content": [{
+                    "type": "output_text",
+                    "text": "The answer is 42."
+                }]
+            }],
+            "usage": {
+                "input_tokens": 20,
+                "output_tokens": 10,
+                "total_tokens": 30
+            }
+        });
+
+        let response = provider.parse_response(response_json).unwrap();
+        assert!(response.reasoning.is_some());
+        let reasoning = response.reasoning.unwrap();
+        // The reasoning should contain the summary text
+        assert!(reasoning.contains("Let me think through this step by step."));
+        assert_eq!(response.content, Some("The answer is 42.".to_string()));
+        assert!(response.usage.is_some());
+    }
+
+    #[test]
+    fn test_validate_request_with_temperature_range() {
+        let provider = OpenResponsesProvider::new("test-key".to_string());
+        let mut request = LLMRequest {
+            messages: vec![Message::user("Hello".to_string())],
+            model: "test-model".to_string(),
+            temperature: Some(2.5), // Invalid range
+            ..Default::default()
+        };
+
+        let result = provider.validate_request(&request);
+        assert!(result.is_err());
+
+        // Test valid temperature
+        request.temperature = Some(1.0);
+        let result = provider.validate_request(&request);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_build_request_with_additional_params() {
+        let provider = OpenResponsesProvider::new("test-key".to_string());
+        let request = LLMRequest {
+            messages: vec![Message::user("Hello".to_string())],
+            model: "test-model".to_string(),
+            top_k: Some(40),
+            presence_penalty: Some(0.5),
+            frequency_penalty: Some(0.3),
+            ..Default::default()
+        };
+
+        let payload = provider.build_request_payload(&request).unwrap();
+        assert_eq!(payload["top_k"], 40);
+        assert_eq!(payload["presence_penalty"], 0.5);
+        // Use approximate equality for floating point comparison
+        let freq_penalty = payload["frequency_penalty"].as_f64().unwrap();
+        assert!((freq_penalty - 0.3).abs() < 1e-6);
     }
 }

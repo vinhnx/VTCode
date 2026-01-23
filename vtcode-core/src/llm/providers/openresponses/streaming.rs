@@ -55,6 +55,12 @@ pub enum StreamEventType {
     #[serde(rename = "response.reasoning_summary_text.done")]
     ReasoningSummaryTextDone,
 
+    // Reasoning content events
+    #[serde(rename = "response.reasoning_content.delta")]
+    ReasoningContentDelta,
+    #[serde(rename = "response.reasoning_content.done")]
+    ReasoningContentDone,
+
     // Error event
     #[serde(rename = "error")]
     Error,
@@ -83,6 +89,8 @@ pub enum StreamEventData {
     TextDelta(TextDeltaEventData),
     /// Function call arguments delta.
     FunctionCallDelta(FunctionCallDeltaEventData),
+    /// Reasoning content delta.
+    ReasoningContentDelta(ReasoningContentDeltaEventData),
     /// Error event data.
     Error(ErrorEventData),
     /// Generic/unknown event data.
@@ -129,6 +137,16 @@ pub struct FunctionCallDeltaEventData {
     pub output_index: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub call_id: Option<String>,
+}
+
+/// Data for reasoning content delta events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReasoningContentDeltaEventData {
+    pub delta: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub item_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_index: Option<u32>,
 }
 
 /// Data for error events.
@@ -243,6 +261,11 @@ impl StreamAccumulator {
             }
             "response.reasoning_summary_text.delta" => {
                 if let StreamEventData::TextDelta(data) = &event.data {
+                    self.reasoning_content.push_str(&data.delta);
+                }
+            }
+            "response.reasoning_content.delta" => {
+                if let StreamEventData::ReasoningContentDelta(data) = &event.data {
                     self.reasoning_content.push_str(&data.delta);
                 }
             }
