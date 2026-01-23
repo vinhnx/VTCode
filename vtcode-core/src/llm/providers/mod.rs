@@ -28,6 +28,7 @@ pub use crate::tools::constants::{
     DEFAULT_VEC_CAPACITY, ERROR_DETECTION_PATTERNS, MAX_SEARCH_RESULTS, OVERFLOW_INDICATOR_PREFIX,
 };
 
+pub use reasoning::clean_reasoning_text;
 pub(crate) use reasoning::{ReasoningBuffer, extract_reasoning_trace, split_reasoning_from_text};
 
 pub use anthropic::AnthropicProvider;

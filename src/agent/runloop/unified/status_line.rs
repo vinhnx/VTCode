@@ -16,6 +16,7 @@ use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi_parser::strip_ansi;
 
 use crate::agent::runloop::git::{GitStatusSummary, git_status_summary};
+use vtcode_core::llm::providers::clean_reasoning_text;
 use vtcode_core::terminal_setup::detector::TerminalType;
 
 #[derive(Default, Clone)]
@@ -129,7 +130,8 @@ pub(crate) async fn update_input_status_if_changed(
     }
 
     let trimmed_model = model.trim();
-    let trimmed_reasoning = reasoning.trim();
+    let cleaned_reasoning = clean_reasoning_text(reasoning.trim());
+    let trimmed_reasoning = cleaned_reasoning.as_str();
     let model_display = ModelId::from_str(trimmed_model)
         .map(|id| id.display_name().to_string())
         .unwrap_or_else(|_| trimmed_model.to_string());

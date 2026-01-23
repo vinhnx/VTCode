@@ -1093,8 +1093,12 @@ pub(crate) fn handle_assistant_response(
         if let Some(reasoning_text) = reasoning.as_ref()
             && !reasoning_text.trim().is_empty()
         {
-            ctx.renderer
-                .line(MessageStyle::Info, &format!(" {}", reasoning_text))?;
+            let cleaned_reasoning =
+                vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
+            if !cleaned_reasoning.trim().is_empty() {
+                ctx.renderer
+                    .line(MessageStyle::Info, &format!(" {}", cleaned_reasoning))?;
+            }
         }
     }
 

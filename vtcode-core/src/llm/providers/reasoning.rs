@@ -86,6 +86,15 @@ impl ReasoningBuffer {
     }
 }
 
+pub fn clean_reasoning_text(text: &str) -> String {
+    let lines: Vec<&str> = text
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .collect();
+    lines.join("\n")
+}
+
 const PRIMARY_TEXT_KEYS: &[&str] = &[
     "text",
     "content",
@@ -416,5 +425,40 @@ mod tests {
             vec!["deep dive".to_string(), "summary".to_string()]
         );
         assert!(cleaned.is_none());
+    }
+
+    #[test]
+    fn cleans_blank_lines_from_reasoning() {
+        let input = "line1\n\n\nline2\n\n\n\nline3";
+        let cleaned = clean_reasoning_text(input);
+        assert_eq!(cleaned, "line1\nline2\nline3");
+    }
+
+    #[test]
+    fn cleans_leading_and_trailing_blank_lines() {
+        let input = "\n\nline1\n\n\n\n";
+        let cleaned = clean_reasoning_text(input);
+        assert_eq!(cleaned, "line1");
+    }
+
+    #[test]
+    fn handles_empty_and_whitespace_only() {
+        assert_eq!(clean_reasoning_text(""), "");
+        assert_eq!(clean_reasoning_text("   "), "");
+        assert_eq!(clean_reasoning_text("\n\n\n"), "");
+    }
+
+    #[test]
+    fn removes_single_blank_lines() {
+        let input = "line1\n\nline2";
+        let cleaned = clean_reasoning_text(input);
+        assert_eq!(cleaned, "line1\nline2");
+    }
+
+    #[test]
+    fn handles_mixed_whitespace_lines() {
+        let input = "  line1  \n   \n  \n  line2  \n\t\n     \nline3";
+        let cleaned = clean_reasoning_text(input);
+        assert_eq!(cleaned, "line1\nline2\nline3");
     }
 }
