@@ -596,6 +596,7 @@ enabled_languages = [
     "sql",
     "csharp",
     "bash",
+    "swift",
 ]
 highlight_timeout_ms = 5000
 

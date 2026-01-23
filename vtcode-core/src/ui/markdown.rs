@@ -1261,8 +1261,16 @@ fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
                 | "go"
                 | "golang"
                 | "java"
+                | "cpp"
+                | "c"
+                | "php"
+                | "html"
+                | "css"
+                | "sql"
+                | "csharp"
                 | "bash"
                 | "sh"
+                | "swift"
         )
     });
 
