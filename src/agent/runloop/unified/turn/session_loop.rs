@@ -342,11 +342,13 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut _loop_detection_disabled_for_session = false;
 
             // New unified turn loop: use TurnLoopContext and run_turn_loop
+            let mut auto_exit_plan_mode_attempted = false;
             let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext {
                 renderer: &mut renderer,
                 handle: &handle,
                 session: &mut session,
                 session_stats: &mut session_stats,
+                auto_exit_plan_mode_attempted: &mut auto_exit_plan_mode_attempted,
                 mcp_panel_state: &mut mcp_panel_state,
                 tool_result_cache: &tool_result_cache,
                 approval_recorder: &approval_recorder,

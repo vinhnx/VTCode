@@ -355,16 +355,17 @@ pub(crate) async fn handle_tool_calls(
                     let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
                     *current_count += 1;
 
-                    handle_tool_execution_result(
-                        &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
-                            renderer: ctx.renderer,
-                            handle: ctx.handle,
-                            session: ctx.session,
-                            session_stats: ctx.session_stats,
-                            mcp_panel_state: ctx.mcp_panel_state,
-                            tool_result_cache: ctx.tool_result_cache,
-                            approval_recorder: ctx.approval_recorder,
-                            decision_ledger: ctx.decision_ledger,
+                handle_tool_execution_result(
+                    &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
+                        renderer: ctx.renderer,
+                        handle: ctx.handle,
+                        session: ctx.session,
+                        session_stats: ctx.session_stats,
+                        auto_exit_plan_mode_attempted: ctx.auto_exit_plan_mode_attempted,
+                        mcp_panel_state: ctx.mcp_panel_state,
+                        tool_result_cache: ctx.tool_result_cache,
+                        approval_recorder: ctx.approval_recorder,
+                        decision_ledger: ctx.decision_ledger,
                             tool_registry: ctx.tool_registry,
                             tools: ctx.tools,
                             cached_tools: ctx.cached_tools,
@@ -653,6 +654,7 @@ pub(crate) async fn handle_tool_call(
                     handle: ctx.handle,
                     session: ctx.session,
                     session_stats: ctx.session_stats,
+                    auto_exit_plan_mode_attempted: ctx.auto_exit_plan_mode_attempted,
                     mcp_panel_state: ctx.mcp_panel_state,
                     tool_result_cache: ctx.tool_result_cache,
                     approval_recorder: ctx.approval_recorder,
@@ -853,6 +855,15 @@ pub(crate) async fn handle_tool_execution_result(
             // Auto-recovery: If we're in Plan Mode and a mutating tool was denied,
             // proactively call exit_plan_mode to show the confirmation modal.
             if is_plan_mode_denial && ctx.session_stats.is_plan_mode() {
+                if *ctx.auto_exit_plan_mode_attempted {
+                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                        ctx.renderer,
+                        "Plan Mode still active. Call `exit_plan_mode` to review the plan or refine the plan before retrying.",
+                    )?;
+                    return Ok(());
+                }
+                *ctx.auto_exit_plan_mode_attempted = true;
+
                 // Don't print status message - the modal will show the plan
                 // (printing here corrupts the TUI display)
 
@@ -1826,6 +1837,7 @@ pub(crate) async fn handle_text_response(
                         handle: params.ctx.handle,
                         session: params.ctx.session,
                         session_stats: params.ctx.session_stats,
+                        auto_exit_plan_mode_attempted: params.ctx.auto_exit_plan_mode_attempted,
                         mcp_panel_state: params.ctx.mcp_panel_state,
                         tool_result_cache: params.ctx.tool_result_cache,
                         approval_recorder: params.ctx.approval_recorder,

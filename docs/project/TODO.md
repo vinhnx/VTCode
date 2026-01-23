@@ -54,7 +54,6 @@ check plans/ implementation: /Users/vinhnguyenxuan/.cursor/plans/video_upload_cr
 
 --
 
-DO NOT SHOW DEBUG LOG IN USER INPUT
 '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-01-21 at 9.25.28 PM.png'
 
 --
@@ -176,3 +175,43 @@ bash UI '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-0
 Audit and simplify markdown.rs - reduce the 1500 lines of custom code
 
 ---
+
+check and try to implement plan mode's ask user question feature with suggestions.
+
+● Asking user: For fixing auto-triggered `exit_plan_mode` loops, which b...
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ For fixing auto-triggered `exit_plan_mode` loops, which behavior do you want │
+│ when a plan-mode denial triggers `exit_plan_mode` repeatedly? │
+│ │
+│ ❯ 1. Suppress auto-trigger after first failure and surface guidance │
+│ (Recommended) │
+│ 2. Exempt auto-triggered exit_plan_mode from loop detection │
+│ 3. Disable auto-trigger entirely │
+│ 4. Other (type your answer) │
+│ │
+│ Use ↑↓ or number keys to select, Enter to confirm, Esc to cancel │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+--
+
+HITL prompt for exit plan mode.
+
+● Asking user: You're still in Plan Mode. Switch to Edit Mode (Shift+Tab...
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ You're still in Plan Mode. Switch to Edit Mode (Shift+Tab), then confirm to │
+│ proceed with implementation. │
+│ │
+│ ❯ 1. I'm in Edit Mode, proceed │
+│ 2. Other (type your answer) │
+│ │
+│ Use ↑↓ or number keys to select, Enter to confirm, Esc to cancel │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+---
+
+refine openresponse implementation
+
+1. https://huggingface.co/blog/open-responses
+2. https://www.openresponses.org/
