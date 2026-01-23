@@ -8,7 +8,7 @@
 //! - MCP servers (Model Context Protocol)
 //! - LSP servers (Language Server Protocol)
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use tokio::fs;
@@ -21,7 +21,7 @@ pub struct CommandsHandler;
 impl CommandsHandler {
     /// Process plugin commands from the plugin directory
     pub async fn process_commands(
-        plugin_path: &PathBuf,
+        plugin_path: &Path,
         manifest_commands: Option<Vec<String>>,
     ) -> Result<Vec<PathBuf>> {
         let mut command_files = Vec::new();
@@ -58,7 +58,7 @@ pub struct AgentsHandler;
 impl AgentsHandler {
     /// Process plugin agents from the plugin directory
     pub async fn process_agents(
-        plugin_path: &PathBuf,
+        plugin_path: &Path,
         manifest_agents: Option<Vec<String>>,
     ) -> Result<Vec<PathBuf>> {
         let mut agent_files = Vec::new();
@@ -95,7 +95,7 @@ pub struct SkillsHandler;
 impl SkillsHandler {
     /// Process plugin skills from the plugin directory
     pub async fn process_skills(
-        plugin_path: &PathBuf,
+        plugin_path: &Path,
         manifest_skills: Option<Vec<String>>,
     ) -> Result<Vec<PathBuf>> {
         let mut skill_dirs = Vec::new();
@@ -136,7 +136,7 @@ pub struct HooksHandler;
 impl HooksHandler {
     /// Process plugin hooks from the plugin directory
     pub async fn process_hooks(
-        plugin_path: &PathBuf,
+        plugin_path: &Path,
         manifest_hooks: Option<serde_json::Value>,
     ) -> Result<Option<PathBuf>> {
         // Check for hooks in manifest
@@ -166,7 +166,7 @@ pub struct McpServersHandler;
 impl McpServersHandler {
     /// Process plugin MCP servers from the plugin directory
     pub async fn process_mcp_servers(
-        plugin_path: &PathBuf,
+        plugin_path: &Path,
         manifest_mcp: Option<serde_json::Value>,
     ) -> Result<Option<PathBuf>> {
         // Check for MCP config in manifest
@@ -196,7 +196,7 @@ pub struct LspServersHandler;
 impl LspServersHandler {
     /// Process plugin LSP servers from the plugin directory
     pub async fn process_lsp_servers(
-        plugin_path: &PathBuf,
+        plugin_path: &Path,
         manifest_lsp: Option<serde_json::Value>,
     ) -> Result<Option<PathBuf>> {
         // Check for LSP config in manifest

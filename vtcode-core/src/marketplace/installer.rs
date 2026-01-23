@@ -1,6 +1,6 @@
 //! Plugin installer for marketplace system
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::tools::plugins::PluginRuntime;
 use anyhow::{Context, Result, bail};
@@ -79,7 +79,7 @@ impl PluginInstaller {
     }
 
     /// Integrate the installed plugin with VT Code's core plugin system
-    async fn integrate_with_core_plugin_system(&self, manifest_path: &PathBuf) -> Result<()> {
+    async fn integrate_with_core_plugin_system(&self, manifest_path: &Path) -> Result<()> {
         // This would load the plugin into VT Code's plugin runtime
         if let Some(runtime) = &self.core_plugin_runtime {
             // Load the plugin manifest and register it with the core runtime
@@ -99,7 +99,7 @@ impl PluginInstaller {
     }
 
     /// Download plugin from its source
-    async fn download_plugin(&self, manifest: &PluginManifest, plugin_dir: &PathBuf) -> Result<()> {
+    async fn download_plugin(&self, manifest: &PluginManifest, plugin_dir: &Path) -> Result<()> {
         // Validate the manifest before downloading
         self.validate_manifest(manifest)?;
 
@@ -125,11 +125,7 @@ impl PluginInstaller {
     }
 
     /// Download plugin from HTTP source
-    async fn download_from_http(
-        &self,
-        manifest: &PluginManifest,
-        plugin_dir: &PathBuf,
-    ) -> Result<()> {
+    async fn download_from_http(&self, manifest: &PluginManifest, plugin_dir: &Path) -> Result<()> {
         // For now, we'll create a placeholder since we don't have the actual HTTP client configured
         let placeholder_path = plugin_dir.join(&manifest.entrypoint);
         if let Some(parent) = placeholder_path.parent() {
@@ -158,11 +154,7 @@ impl PluginInstaller {
     }
 
     /// Download plugin from local file
-    async fn download_from_file(
-        &self,
-        manifest: &PluginManifest,
-        plugin_dir: &PathBuf,
-    ) -> Result<()> {
+    async fn download_from_file(&self, manifest: &PluginManifest, plugin_dir: &Path) -> Result<()> {
         let source_path = PathBuf::from(&manifest.source.replace("file://", ""));
 
         if !source_path.exists() {
@@ -201,7 +193,7 @@ impl PluginInstaller {
     async fn download_from_local(
         &self,
         manifest: &PluginManifest,
-        plugin_dir: &PathBuf,
+        plugin_dir: &Path,
     ) -> Result<()> {
         let source_path = PathBuf::from(&manifest.source);
 
@@ -238,11 +230,7 @@ impl PluginInstaller {
     }
 
     /// Download plugin from git repository
-    async fn download_from_git(
-        &self,
-        manifest: &PluginManifest,
-        plugin_dir: &PathBuf,
-    ) -> Result<()> {
+    async fn download_from_git(&self, manifest: &PluginManifest, plugin_dir: &Path) -> Result<()> {
         // For now, we'll create a placeholder since we don't have git functionality integrated
         let placeholder_path = plugin_dir.join(&manifest.entrypoint);
         if let Some(parent) = placeholder_path.parent() {

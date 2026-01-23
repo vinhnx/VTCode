@@ -24,9 +24,10 @@ pub enum Priority {
 /// Agent type for VT Code architecture
 ///
 /// Supports both single-agent mode and specialized subagents for task delegation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AgentType {
     /// Single main agent (default mode)
+    #[default]
     Single,
     /// Main orchestrator that delegates to subagents
     Orchestrator,
@@ -38,12 +39,6 @@ pub enum AgentType {
     General,
     /// User-defined custom subagent
     Custom(String),
-}
-
-impl Default for AgentType {
-    fn default() -> Self {
-        Self::Single
-    }
 }
 
 impl AgentType {

@@ -322,7 +322,7 @@ impl ModelsManager {
             return false;
         }
 
-        let models: Vec<ModelInfo> = cache.models.into_iter().map(|m| m).collect();
+        let models: Vec<ModelInfo> = cache.models.into_iter().collect();
 
         *self.etag.write().await = cache.etag;
         self.apply_remote_models(models).await;

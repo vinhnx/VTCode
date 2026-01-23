@@ -104,7 +104,7 @@ impl MemoryMonitor {
 
         // Use `ps` command to get RSS in kilobytes
         let output = Command::new("ps")
-            .args(&["-o", "rss=", "-p"])
+            .args(["-o", "rss=", "-p"])
             .arg(std::process::id().to_string())
             .output()
             .map_err(|e| format!("Failed to run ps command: {}", e))?;
@@ -145,7 +145,7 @@ impl MemoryMonitor {
         // Only record if change is significant (> 1 MB)
         let min_threshold = vtcode_config::constants::memory::MIN_RSS_CHECKPOINT_BYTES;
         if let Ok(state) = self.state.lock() {
-            let diff = (rss as i64 - state.last_rss_bytes as i64).abs() as usize;
+            let diff = (rss as i64 - state.last_rss_bytes as i64).unsigned_abs() as usize;
             if diff < min_threshold {
                 return Ok(());
             }

@@ -4,7 +4,7 @@
 //! and environment policy management.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -86,7 +86,7 @@ impl ShellHandler {
     async fn execute_command(
         &self,
         params: &ShellToolCallParams,
-        cwd: &PathBuf,
+        cwd: &Path,
         env: Option<HashMap<String, String>>,
     ) -> Result<ShellOutput, ToolCallError> {
         // Join command parts or use single command
@@ -95,7 +95,7 @@ impl ShellHandler {
             .workdir
             .as_ref()
             .map(PathBuf::from)
-            .unwrap_or_else(|| cwd.clone());
+            .unwrap_or_else(|| cwd.to_path_buf());
         let timeout_ms = params
             .timeout_ms
             .unwrap_or(DEFAULT_SHELL_TIMEOUT_MS)
