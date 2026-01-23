@@ -7,11 +7,18 @@ use vtcode_core::core::agent::error_recovery::ErrorRecoveryState;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::ui::tui::EditingMode;
 
+/// Default agent profile names for mode switching
+pub const PLANNER_AGENT: &str = "planner";
+pub const CODER_AGENT: &str = "coder";
+
 #[derive(Default)]
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
-    /// Current editing mode: Edit or Plan
+    /// Current editing mode: Edit or Plan (legacy, for backward compatibility)
     pub editing_mode: EditingMode,
+    /// Active agent profile name - the subagent config driving the main conversation
+    /// This replaces EditingMode with a more flexible approach
+    pub active_agent_name: String,
     /// Autonomous mode - auto-approve safe tools with reduced HITL prompts
     pub autonomous_mode: bool,
     #[allow(dead_code)]
@@ -69,7 +76,51 @@ impl SessionStats {
     /// Cycle to the next mode: Edit → Plan → Edit
     pub(crate) fn cycle_mode(&mut self) -> EditingMode {
         self.editing_mode = self.editing_mode.next();
+        self.sync_active_agent_from_mode();
         self.editing_mode
+    }
+
+    /// Get the active agent profile name
+    pub(crate) fn active_agent(&self) -> &str {
+        if self.active_agent_name.is_empty() {
+            CODER_AGENT
+        } else {
+            &self.active_agent_name
+        }
+    }
+
+    /// Set the active agent profile by name
+    /// This also syncs the legacy EditingMode for backward compatibility
+    pub(crate) fn set_active_agent(&mut self, name: &str) {
+        self.active_agent_name = name.to_string();
+        self.sync_mode_from_active_agent();
+    }
+
+    /// Sync legacy EditingMode from active agent (for backward compatibility)
+    fn sync_mode_from_active_agent(&mut self) {
+        self.editing_mode = if self.active_agent() == PLANNER_AGENT {
+            EditingMode::Plan
+        } else {
+            EditingMode::Edit
+        };
+    }
+
+    /// Sync active agent from legacy EditingMode (for backward compatibility)
+    fn sync_active_agent_from_mode(&mut self) {
+        self.active_agent_name = match self.editing_mode {
+            EditingMode::Plan => PLANNER_AGENT.to_string(),
+            EditingMode::Edit => CODER_AGENT.to_string(),
+        };
+    }
+
+    /// Switch to planner agent (convenience method)
+    pub(crate) fn switch_to_planner(&mut self) {
+        self.set_active_agent(PLANNER_AGENT);
+    }
+
+    /// Switch to coder agent (convenience method)
+    pub(crate) fn switch_to_coder(&mut self) {
+        self.set_active_agent(CODER_AGENT);
     }
 }
 

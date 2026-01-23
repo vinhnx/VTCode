@@ -1236,7 +1236,11 @@ pub async fn handle_toggle_plan_mode(
 
     if new_state {
         ctx.tool_registry.enable_plan_mode();
-        ctx.renderer.line(MessageStyle::Info, "Plan Mode enabled")?;
+        ctx.session_stats.switch_to_planner();
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Plan Mode enabled (planner profile active)",
+        )?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  The agent will only read/analyze the codebase and produce step-by-step plans.",
@@ -1252,7 +1256,11 @@ pub async fn handle_toggle_plan_mode(
         )?;
     } else {
         ctx.tool_registry.disable_plan_mode();
-        ctx.renderer.line(MessageStyle::Info, "Edit Mode enabled")?;
+        ctx.session_stats.switch_to_coder();
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Edit Mode enabled (coder profile active)",
+        )?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  Mutating tools (edits, commands, tests) are now allowed, subject to normal permissions.",

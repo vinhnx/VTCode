@@ -211,6 +211,8 @@ impl ContextManager {
         full_auto: bool,
         plan_mode: bool,
         context_window_size: Option<usize>,
+        active_agent_name: Option<&str>,
+        active_agent_prompt: Option<&str>,
     ) -> Result<String> {
         if self.base_system_prompt.trim().is_empty() {
             bail!("Base system prompt is empty; cannot build prompt");
@@ -244,6 +246,8 @@ impl ContextManager {
             token_usage_ratio: 0.0,
             full_auto,
             plan_mode,
+            active_agent_name: active_agent_name.unwrap_or("coder").to_string(),
+            active_agent_prompt: active_agent_prompt.map(|s| s.to_string()),
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
             context_window_size,
             current_token_usage: if supports_context_awareness {
@@ -368,7 +372,7 @@ mod tests {
         );
 
         let result = manager
-            .build_system_prompt(&[], 0, false, false, None)
+            .build_system_prompt(&[], 0, false, false, None, None, None)
             .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));

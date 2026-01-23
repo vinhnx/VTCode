@@ -86,7 +86,7 @@
     "enter_plan": "prompt",
     "enter_plan_mode": "prompt",
     "exit_plan": "prompt",
-    "exit_plan_mode": "prompt",
+    "exit_plan_mode": "allow",
     "implement_plan": "prompt",
     "plan_exit": "prompt",
     "plan_mode": "prompt",
@@ -96,7 +96,8 @@
     "cargo_test": "allow",
     "git_status": "allow",
     "git_diff": "allow",
-    "git_log": "allow"
+    "git_log": "allow",
+    "spawn_subagent": "allow"
   },
   "constraints": {},
   "mcp": {

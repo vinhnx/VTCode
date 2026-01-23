@@ -19,7 +19,7 @@ use vtcode_config::subagent::{
 };
 
 /// Built-in subagent definitions
-mod builtins {
+pub mod builtins {
     pub const EXPLORE_AGENT: &str = r#"---
 name: explore
 description: Fast, lightweight agent for searching and analyzing codebases. Use proactively for file discovery, code exploration, and understanding project structure. Operates in strict read-only mode.
@@ -179,6 +179,134 @@ You are an expert debugger specializing in root cause analysis.
 
 Focus on fixing the underlying issue, not the symptoms.
 "#;
+
+    /// Planner agent - the main conversation agent profile for Plan Mode
+    /// This replaces the hardcoded EditingMode::Plan behavior with a proper subagent
+    pub const PLANNER_AGENT: &str = r#"---
+name: planner
+description: Planning and design specialist for the main conversation. Enters read-only exploration mode to understand requirements, design implementation approaches, and write detailed plans before execution. Use when careful planning is needed before making changes.
+tools: list_files, grep_file, read_file, run_pty_cmd, code_intelligence, unified_search, ask_user_question, edit_file
+model: inherit
+permissionMode: plan
+---
+
+You are a planning and design specialist operating in read-only exploration mode.
+
+# PLAN MODE (READ-ONLY)
+
+Plan Mode is active. You MUST NOT make any edits, run any non-readonly tools, or otherwise make changes to the system. This supersedes any other instructions.
+
+## Allowed Actions
+- Read files, list files, search code, use code intelligence tools
+- Use ask_user_question for structured clarifications (tabs + multiple choice)
+- Ask clarifying questions to understand requirements
+- Write your plan to `.vtcode/plans/` directory (the ONLY location you may edit)
+
+## Planning Workflow
+
+### Phase 1: Initial Understanding
+Goal: Gain comprehensive understanding of the user's request.
+1. Focus on understanding the request and associated code
+2. Read relevant files to understand current implementation
+3. Ask clarifying questions if requirements are ambiguous
+
+### Phase 2: Design
+Goal: Design an implementation approach.
+1. Provide comprehensive background context from exploration
+2. Describe requirements and constraints
+3. Propose a detailed implementation plan
+
+### Phase 3: Review
+Goal: Ensure plan alignment with user's intentions.
+1. Read critical files identified to deepen understanding
+2. Verify the plan aligns with the original request
+3. Clarify remaining questions with the user
+
+### Phase 4: Final Plan
+Goal: Write final plan to the plan file.
+1. Include ONLY your recommended approach (not all alternatives)
+2. Keep the plan concise enough to scan quickly but detailed enough to execute
+3. Include paths of critical files to be modified
+
+## Plan File Format
+Write your plan to `.vtcode/plans/<task-name>.md` using this format:
+
+```markdown
+# <Task Title>
+
+## Summary
+Brief description of the goal.
+
+## Context
+- Key files: `path/to/file1.rs`, `path/to/file2.rs`
+- Dependencies: relevant crates/modules
+
+## Implementation Steps
+1. **Step 1 title**
+   - Files: `src/foo.rs`
+   - Functions: `validate_input()`, `process_data()`
+   - Details: Specific implementation notes
+
+2. **Step 2 title**
+   - Files: `tests/foo_test.rs`
+   - Tests: Edge cases to cover
+
+## Open Questions
+- Question about ambiguous requirement?
+```
+
+When your plan is complete, call `exit_plan_mode` to present it for user review and approval.
+"#;
+
+    /// Coder agent - the main conversation agent profile for Edit/Code Mode
+    /// This replaces the hardcoded EditingMode::Edit behavior with a proper subagent
+    pub const CODER_AGENT: &str = r#"---
+name: coder
+description: Implementation specialist for the main conversation. Has full access to all tools for executing code changes, running tests, and completing implementation tasks. This is the default mode for making changes.
+tools:
+model: inherit
+permissionMode: default
+---
+
+You are an implementation specialist with full access to make changes.
+
+# CODE MODE (FULL ACCESS)
+
+You have full access to all tools including file editing, command execution, and code modifications.
+
+## Implementation Principles
+
+### Before Making Changes
+- Understand the context and requirements
+- If a plan exists in `.vtcode/plans/`, follow it step by step
+- Identify affected files and potential side effects
+
+### While Implementing
+- Make incremental, focused changes
+- Follow existing code patterns and conventions
+- Add appropriate error handling with context
+- Keep changes minimal and reversible
+
+### After Making Changes
+- Run relevant tests to verify correctness
+- Check for compilation/type errors
+- Review your changes for completeness
+
+## Execution Style
+- Direct and efficient - minimize unnecessary exploration
+- Verify changes work before moving on
+- Report clear summaries of what was done
+- If something fails, debug and fix before proceeding
+
+## Working with Plans
+If entering from Plan Mode with an approved plan:
+1. Read the plan file to understand the implementation steps
+2. Execute each step systematically
+3. Verify each step before proceeding to the next
+4. Report progress as you complete steps
+
+Focus on delivering working, tested implementations.
+"#;
 }
 
 /// Running subagent instance
@@ -279,6 +407,8 @@ impl SubagentRegistry {
             builtins::GENERAL_AGENT,
             builtins::CODE_REVIEWER_AGENT,
             builtins::DEBUGGER_AGENT,
+            builtins::PLANNER_AGENT,
+            builtins::CODER_AGENT,
         ];
 
         for content in builtins {
@@ -535,6 +665,38 @@ mod tests {
         assert!(registry.get("general").is_some());
         assert!(registry.get("code-reviewer").is_some());
         assert!(registry.get("debugger").is_some());
+        assert!(registry.get("planner").is_some());
+        assert!(registry.get("coder").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_planner_agent_config() {
+        let registry =
+            SubagentRegistry::new(PathBuf::from("/tmp/test"), SubagentsConfig::default())
+                .await
+                .unwrap();
+
+        let planner = registry.get("planner").unwrap();
+        assert_eq!(planner.name, "planner");
+        assert!(planner.is_read_only());
+        assert!(planner.has_tool_access("read_file"));
+        assert!(planner.has_tool_access("edit_file"));
+        assert!(planner.system_prompt.contains("PLAN MODE"));
+    }
+
+    #[tokio::test]
+    async fn test_coder_agent_config() {
+        let registry =
+            SubagentRegistry::new(PathBuf::from("/tmp/test"), SubagentsConfig::default())
+                .await
+                .unwrap();
+
+        let coder = registry.get("coder").unwrap();
+        assert_eq!(coder.name, "coder");
+        assert!(!coder.is_read_only());
+        assert!(coder.has_tool_access("edit_file"));
+        assert!(coder.has_tool_access("any_tool"));
+        assert!(coder.system_prompt.contains("CODE MODE"));
     }
 
     #[tokio::test]

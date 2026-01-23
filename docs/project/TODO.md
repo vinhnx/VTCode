@@ -231,4 +231,22 @@ I should just show the content directly without any fluff.
 
 research and convert plan/code mode as subagent implementation instead of just plain mode. it has it own system prompt and set of tools. and can be used as a standalone agent.
 
+**Status: COMPLETED** - See `.vtcode/plans/planner-coder-subagent-migration.md` for detailed plan.
+
+**Completed:**
+- [x] Phase 1: Created `planner` and `coder` built-in subagents in `vtcode-core/src/subagents/registry.rs`
+- [x] Phase 2: Added `active_agent_name` to `SessionStats` with sync to legacy `EditingMode`
+- [x] Phase 3: Updated `SystemPromptContext` and `IncrementalSystemPrompt` to use active agent prompt
+- [x] Phase 4: Wired up mode switching to call `switch_to_planner()`/`switch_to_coder()`
+- [x] Phase 5: `/plan` and `/mode` commands now switch active agent profiles
+- [x] Phase 6: `planner` and `coder` can be spawned via `spawn_subagent` tool
+
+**Key Changes:**
+- `vtcode-core/src/subagents/registry.rs` - Added PLANNER_AGENT and CODER_AGENT built-in definitions
+- `vtcode-core/src/subagents/mod.rs` - Added `get_agent_prompt_body()` helper function
+- `src/agent/runloop/unified/state.rs` - Added active agent profile tracking
+- `src/agent/runloop/unified/incremental_system_prompt.rs` - Uses active agent's system prompt
+- `src/agent/runloop/unified/tool_pipeline.rs` - Switches active agent on mode transitions
+- `src/agent/runloop/unified/turn/session/slash_commands/handlers.rs` - /plan command switches profile
+
 ---

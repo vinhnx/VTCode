@@ -207,126 +207,22 @@ impl IncrementalSystemPrompt {
                 );
             }
 
-            if context.plan_mode {
+            // Inject active agent's system prompt (replaces hardcoded plan mode injection)
+            // This supports the planner/coder subagent architecture
+            if let Some(ref agent_prompt) = context.active_agent_prompt {
+                // Use the subagent's system prompt directly
+                let _ = writeln!(prompt, "\n{}", agent_prompt);
+            } else if context.plan_mode {
+                // Legacy fallback: if no active agent prompt but plan_mode is set,
+                // inject minimal plan mode notice (backward compatibility)
                 let _ = writeln!(prompt, "\n# PLAN MODE (READ-ONLY)");
                 let _ = writeln!(
                     prompt,
-                    "Plan Mode is active. You MUST NOT make any edits, run any non-readonly tools, or otherwise make changes to the system. This supersedes any other instructions."
-                );
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "## Allowed Actions");
-                let _ = writeln!(
-                    prompt,
-                    "- Read files, list files, search code, use code intelligence tools"
+                    "Plan Mode is active. Mutating tools are blocked except for `.vtcode/plans/` directory."
                 );
                 let _ = writeln!(
                     prompt,
-                    "- Use ask_user_question for structured clarifications (tabs + multiple choice)"
-                );
-                let _ = writeln!(
-                    prompt,
-                    "- Ask clarifying questions to understand requirements"
-                );
-                let _ = writeln!(
-                    prompt,
-                    "- Write your plan to `.vtcode/plans/` directory (the ONLY file you may edit)"
-                );
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "## Planning Workflow");
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "### Phase 1: Initial Understanding");
-                let _ = writeln!(
-                    prompt,
-                    "Goal: Gain comprehensive understanding of the user's request."
-                );
-                let _ = writeln!(
-                    prompt,
-                    "1. Focus on understanding the request and associated code"
-                );
-                let _ = writeln!(
-                    prompt,
-                    "2. Read relevant files to understand current implementation"
-                );
-                let _ = writeln!(
-                    prompt,
-                    "3. Ask clarifying questions if requirements are ambiguous"
-                );
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "### Phase 2: Design");
-                let _ = writeln!(prompt, "Goal: Design an implementation approach.");
-                let _ = writeln!(
-                    prompt,
-                    "1. Provide comprehensive background context from exploration"
-                );
-                let _ = writeln!(prompt, "2. Describe requirements and constraints");
-                let _ = writeln!(prompt, "3. Propose a detailed implementation plan");
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "### Phase 3: Review");
-                let _ = writeln!(
-                    prompt,
-                    "Goal: Ensure plan alignment with user's intentions."
-                );
-                let _ = writeln!(
-                    prompt,
-                    "1. Read critical files identified to deepen understanding"
-                );
-                let _ = writeln!(
-                    prompt,
-                    "2. Verify the plan aligns with the original request"
-                );
-                let _ = writeln!(prompt, "3. Clarify remaining questions with the user");
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "### Phase 4: Final Plan");
-                let _ = writeln!(prompt, "Goal: Write final plan to the plan file.");
-                let _ = writeln!(
-                    prompt,
-                    "1. Include ONLY your recommended approach (not all alternatives)"
-                );
-                let _ = writeln!(
-                    prompt,
-                    "2. Keep the plan concise enough to scan quickly but detailed enough to execute"
-                );
-                let _ = writeln!(prompt, "3. Include paths of critical files to be modified");
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "## Plan File Format");
-                let _ = writeln!(
-                    prompt,
-                    "Write your plan to `.vtcode/plans/<task-name>.md` using this format:"
-                );
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "```markdown");
-                let _ = writeln!(prompt, "# <Task Title>");
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "## Summary");
-                let _ = writeln!(prompt, "Brief description of the goal.");
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "## Context");
-                let _ = writeln!(
-                    prompt,
-                    "- Key files: `path/to/file1.rs`, `path/to/file2.rs`"
-                );
-                let _ = writeln!(prompt, "- Dependencies: relevant crates/modules");
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "## Implementation Steps");
-                let _ = writeln!(prompt, "1. **Step 1 title**");
-                let _ = writeln!(prompt, "   - Files: `src/foo.rs`");
-                let _ = writeln!(
-                    prompt,
-                    "   - Functions: `validate_input()`, `process_data()`"
-                );
-                let _ = writeln!(prompt, "   - Details: Specific implementation notes");
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "2. **Step 2 title**");
-                let _ = writeln!(prompt, "   - Files: `tests/foo_test.rs`");
-                let _ = writeln!(prompt, "   - Tests: Edge cases to cover");
-                let _ = writeln!(prompt);
-                let _ = writeln!(prompt, "## Open Questions");
-                let _ = writeln!(prompt, "- Question about ambiguous requirement?");
-                let _ = writeln!(prompt, "```");
-                let _ = writeln!(prompt);
-                let _ = writeln!(
-                    prompt,
-                    "The user can exit Plan Mode with `/plan off` to enable mutating tools and execute the plan."
+                    "Call `exit_plan_mode` when ready to transition to implementation."
                 );
             }
         }
@@ -418,8 +314,14 @@ pub struct SystemPromptContext {
     pub error_count: usize,
     pub token_usage_ratio: f64,
     pub full_auto: bool,
-    /// Plan mode: read-only mode for exploration and planning
+    /// Plan mode: read-only mode for exploration and planning (legacy, for backward compatibility)
     pub plan_mode: bool,
+    /// Active agent profile name (e.g., "planner", "coder")
+    /// This determines which subagent's system prompt is used
+    pub active_agent_name: String,
+    /// Active agent's system prompt (from SubagentConfig)
+    /// If set, this will be appended to the base system prompt
+    pub active_agent_prompt: Option<String>,
     /// Discovered skills for immediate awareness
     pub discovered_skills: Vec<vtcode_core::skills::types::Skill>,
     /// Total context window size for the current model (e.g., 200000, 1000000)
@@ -444,6 +346,8 @@ impl SystemPromptContext {
         ((self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
         self.full_auto.hash(&mut hasher);
         self.plan_mode.hash(&mut hasher);
+        self.active_agent_name.hash(&mut hasher);
+        self.active_agent_prompt.hash(&mut hasher);
         self.context_window_size.hash(&mut hasher);
         self.current_token_usage.hash(&mut hasher);
         self.supports_context_awareness.hash(&mut hasher);
@@ -472,6 +376,8 @@ mod tests {
             token_usage_ratio: 0.0,
             full_auto: false,
             plan_mode: false,
+            active_agent_name: String::new(),
+            active_agent_prompt: None,
             discovered_skills: Vec::new(),
             context_window_size: None,
             current_token_usage: None,
@@ -509,6 +415,8 @@ mod tests {
             token_usage_ratio: 0.0,
             full_auto: false,
             plan_mode: false,
+            active_agent_name: String::new(),
+            active_agent_prompt: None,
             discovered_skills: Vec::new(),
             context_window_size: None,
             current_token_usage: None,
@@ -558,6 +466,8 @@ mod tests {
             token_usage_ratio: 0.65,
             full_auto: false,
             plan_mode: false,
+            active_agent_name: String::new(),
+            active_agent_prompt: None,
             discovered_skills: Vec::new(),
             context_window_size: Some(200_000),
             current_token_usage: Some(130_000),
@@ -585,6 +495,8 @@ mod tests {
             token_usage_ratio: 0.88,
             full_auto: true,
             plan_mode: false,
+            active_agent_name: String::new(),
+            active_agent_prompt: None,
             discovered_skills: Vec::new(),
             context_window_size: Some(200_000),
             current_token_usage: Some(176_000),
@@ -612,6 +524,8 @@ mod tests {
             token_usage_ratio: 0.95,
             full_auto: false,
             plan_mode: false,
+            active_agent_name: String::new(),
+            active_agent_prompt: None,
             discovered_skills: Vec::new(),
             context_window_size: Some(200_000),
             current_token_usage: Some(190_000),
@@ -639,6 +553,8 @@ mod tests {
             token_usage_ratio: 0.10,
             full_auto: false,
             plan_mode: false,
+            active_agent_name: String::new(),
+            active_agent_prompt: None,
             discovered_skills: Vec::new(),
             context_window_size: Some(200_000),
             current_token_usage: Some(20_000),
@@ -670,6 +586,8 @@ mod tests {
             token_usage_ratio: 0.10,
             full_auto: false,
             plan_mode: false,
+            active_agent_name: String::new(),
+            active_agent_prompt: None,
             discovered_skills: Vec::new(),
             context_window_size: None,
             current_token_usage: None,

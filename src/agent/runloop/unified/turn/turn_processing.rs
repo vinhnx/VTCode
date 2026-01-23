@@ -36,6 +36,12 @@ pub(crate) async fn execute_llm_request(
 
     let plan_mode = ctx.session_stats.is_plan_mode();
     let context_window_size = provider_client.effective_context_size(active_model);
+
+    // Get active agent info for system prompt injection
+    let active_agent_name = ctx.session_stats.active_agent();
+    // Fetch the active agent's system prompt body from built-in definitions
+    let active_agent_prompt_body = vtcode_core::subagents::get_agent_prompt_body(active_agent_name);
+
     let system_prompt = ctx
         .context_manager
         .build_system_prompt(
@@ -44,6 +50,8 @@ pub(crate) async fn execute_llm_request(
             ctx.full_auto,
             plan_mode,
             Some(context_window_size),
+            Some(active_agent_name),
+            active_agent_prompt_body.as_deref(),
         )
         .await?;
 
