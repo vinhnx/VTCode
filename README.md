@@ -1,4 +1,8 @@
 <p align="center">
+  <h1 align="center">VT Code</h1>
+</p>
+
+<p align="center">
   <a href="./docs/guides/mcp-integration.md">
     <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
   </a> <a href="./docs/guides/zed-acp.md">
