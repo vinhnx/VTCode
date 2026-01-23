@@ -53,7 +53,7 @@
     "apply_patch": "prompt",
     "create_file": "prompt",
     "delete_file": "prompt",
-    "edit_file": "allow",
+    "edit_file": "prompt",
     "execute_code": "prompt",
     "grep_file": "allow",
     "list_files": "allow",
