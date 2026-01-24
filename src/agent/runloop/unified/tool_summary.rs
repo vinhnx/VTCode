@@ -129,6 +129,7 @@ pub(crate) fn render_tool_call_summary(
     stream_label: Option<&str>,
 ) -> Result<()> {
     let (headline, highlights) = describe_tool_action(tool_name, args);
+    let command_line = command_line_for_args(args).filter(|_| should_render_command_line(&highlights));
     let details = collect_param_details(args, &highlights);
     let palette = ColorPalette::default();
     let action_label = tool_action_label(tool_name, args);
@@ -153,6 +154,14 @@ pub(crate) fn render_tool_call_summary(
     }
 
     renderer.line(MessageStyle::Info, &line)?;
+
+    if let Some(command_line) = command_line {
+        let mut styled = String::new();
+        styled.push_str(&render_styled("$", palette.accent, None));
+        styled.push(' ');
+        styled.push_str(&render_styled(&command_line, palette.muted, None));
+        renderer.line(MessageStyle::Info, &styled)?;
+    }
 
     Ok(())
 }
@@ -590,6 +599,9 @@ fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec<String> {
     };
     let include_all = keys.is_empty();
     for (key, value) in map {
+        if matches!(key.as_str(), "command" | "bash_command" | "cmd") {
+            continue;
+        }
         if !include_all && keys.contains(key) {
             continue;
         }
@@ -620,6 +632,45 @@ fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec<String> {
         }
     }
     details
+}
+
+fn should_render_command_line(highlights: &HashSet<String>) -> bool {
+    highlights.is_empty()
+        || (!highlights.contains("command")
+            && !highlights.contains("bash_command")
+            && !highlights.contains("cmd"))
+}
+
+fn command_line_for_args(args: &Value) -> Option<String> {
+    let command = if let Some(array) = args.get("command").and_then(Value::as_array) {
+        let joined = array
+            .iter()
+            .filter_map(|value| value.as_str())
+            .filter(|segment| !segment.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if joined.is_empty() {
+            None
+        } else {
+            Some(joined)
+        }
+    } else {
+        args.get("command")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| {
+                args.get("bash_command")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+            .or_else(|| args.get("cmd").and_then(Value::as_str).map(str::to_string))
+    }?;
+
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(truncate_middle(trimmed, 120))
 }
 
 fn summarize_list(items: &[String], max_items: usize, max_len: usize) -> String {

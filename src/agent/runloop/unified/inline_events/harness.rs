@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use chrono::Utc;
@@ -14,6 +14,8 @@ use vtcode_core::exec::events::{
 use crate::agent::runloop::unified::run_loop_context::TurnRunId;
 
 pub struct HarnessEventEmitter {
+    #[allow(dead_code)]
+    path: PathBuf,
     writer: Mutex<BufWriter<File>>,
 }
 
@@ -29,6 +31,7 @@ impl HarnessEventEmitter {
             .open(&path)
             .with_context(|| format!("Failed to open harness log {}", path.display()))?;
         Ok(Self {
+            path,
             writer: Mutex::new(BufWriter::new(file)),
         })
     }
@@ -49,6 +52,11 @@ impl HarnessEventEmitter {
             .context("Failed to write harness event newline")?;
         writer.flush().context("Failed to flush harness log")?;
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }
 
@@ -135,6 +143,9 @@ mod tests {
         let tmp = TempDir::new().expect("temp dir");
         let path = tmp.path().join("events.jsonl");
         let emitter = HarnessEventEmitter::new(path.clone()).expect("emitter");
+
+        // Use the path method to verify it works
+        assert_eq!(emitter.path(), path.as_path());
 
         emitter.emit(turn_started_event()).expect("emit");
 

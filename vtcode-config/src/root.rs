@@ -44,9 +44,9 @@ pub enum LayoutModeOverride {
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum UiDisplayMode {
-    /// Full UI with all features (sidebar, footer, dividers)
+    /// Full UI with all features (sidebar, footer)
     Full,
-    /// Minimal UI - no sidebar, no footer, no dividers
+    /// Minimal UI - no sidebar, no footer
     #[default]
     Minimal,
     /// Focused mode - transcript only, maximum content space
@@ -89,10 +89,6 @@ pub struct UiConfig {
     #[serde(default = "default_show_sidebar")]
     pub show_sidebar: bool,
 
-    /// Show message dividers between conversation turns
-    #[serde(default = "default_show_message_dividers")]
-    pub show_message_dividers: bool,
-
     /// Dim completed todo items (- [x]) in agent output
     #[serde(default = "default_dim_completed_todos")]
     pub dim_completed_todos: bool,
@@ -104,10 +100,6 @@ pub struct UiConfig {
 
 fn default_show_sidebar() -> bool {
     true
-}
-
-fn default_show_message_dividers() -> bool {
-    false // Clean UI by default
 }
 
 fn default_dim_completed_todos() -> bool {
@@ -134,7 +126,6 @@ impl Default for UiConfig {
             layout_mode: LayoutModeOverride::default(),
             display_mode: UiDisplayMode::default(),
             show_sidebar: default_show_sidebar(),
-            show_message_dividers: default_show_message_dividers(),
             dim_completed_todos: default_dim_completed_todos(),
             message_block_spacing: default_message_block_spacing(),
         }

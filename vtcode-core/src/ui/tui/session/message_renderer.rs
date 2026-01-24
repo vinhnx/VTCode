@@ -69,6 +69,7 @@ pub(super) fn render_message_spans(
         let mut style = ratatui_style_from_inline(&segment.style, fallback);
         if line.kind == InlineMessageKind::Agent {
             style = style.add_modifier(Modifier::ITALIC);
+            style = style.remove_modifier(Modifier::BOLD);
         } else if line.kind == InlineMessageKind::User {
             style = style.add_modifier(Modifier::BOLD);
         }

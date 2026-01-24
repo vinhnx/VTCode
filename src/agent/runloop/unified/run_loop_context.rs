@@ -31,6 +31,10 @@ pub enum TurnPhase {
 }
 
 pub struct HarnessTurnState {
+    #[allow(dead_code)]
+    pub run_id: TurnRunId,
+    #[allow(dead_code)]
+    pub turn_id: TurnId,
     pub phase: TurnPhase,
     pub turn_started_at: Instant,
     pub tool_calls: usize,
@@ -41,13 +45,15 @@ pub struct HarnessTurnState {
 
 impl HarnessTurnState {
     pub fn new(
-        _run_id: TurnRunId,
-        _turn_id: TurnId,
+        run_id: TurnRunId,
+        turn_id: TurnId,
         max_tool_calls: usize,
         max_tool_wall_clock_secs: u64,
         max_tool_retries: u32,
     ) -> Self {
         Self {
+            run_id,
+            turn_id,
             phase: TurnPhase::Preparing,
             turn_started_at: Instant::now(),
             tool_calls: 0,
@@ -115,6 +121,10 @@ mod tests {
             10,
             1,
         );
+
+        // Verify that run_id and turn_id are accessible
+        assert_eq!(state.run_id.0, "run-1");
+        assert_eq!(state.turn_id.0, "turn-1");
 
         assert_eq!(state.phase, TurnPhase::Preparing);
         state.set_phase(TurnPhase::Requesting);

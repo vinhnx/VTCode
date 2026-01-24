@@ -6,7 +6,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
     let actual_tool_name = normalize_tool_name(tool_name);
 
     match actual_tool_name {
-        name if name == tool_names::RUN_PTY_CMD => "Run command".to_string(),
+        name if name == tool_names::RUN_PTY_CMD => "Run".to_string(),
         name if name == tool_names::EXECUTE_CODE => "Run code".to_string(),
         name if name == tool_names::LIST_FILES => "List files".to_string(),
         name if name == tool_names::GREP_FILE => "Search text".to_string(),

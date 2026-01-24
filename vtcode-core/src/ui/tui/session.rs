@@ -698,7 +698,6 @@ impl Session {
 
         // Sync UI appearance settings from VTCodeConfig
         self.appearance.show_sidebar = config.ui.show_sidebar;
-        self.appearance.show_message_dividers = config.ui.show_message_dividers;
         self.appearance.dim_completed_todos = config.ui.dim_completed_todos;
         // Convert message_block_spacing bool to u8 (0 or 1)
         self.appearance.message_block_spacing = if config.ui.message_block_spacing {

@@ -249,16 +249,6 @@ impl ConfigPalette {
             description: Some("Show right pane with queue/context/tools".to_string()),
         });
 
-        // Show Message Dividers
-        items.push(ConfigItem {
-            key: "ui.show_message_dividers".to_string(),
-            label: "Message Dividers".to_string(),
-            kind: ConfigItemKind::Bool {
-                value: config.ui.show_message_dividers,
-            },
-            description: Some("Show divider lines between conversation turns".to_string()),
-        });
-
         // Dim Completed Todos
         items.push(ConfigItem {
             key: "ui.dim_completed_todos".to_string(),
@@ -626,10 +616,6 @@ impl ConfigPalette {
                 }
                 "ui.show_sidebar" => {
                     self.config.ui.show_sidebar = !self.config.ui.show_sidebar;
-                    changed = true;
-                }
-                "ui.show_message_dividers" => {
-                    self.config.ui.show_message_dividers = !self.config.ui.show_message_dividers;
                     changed = true;
                 }
                 "ui.dim_completed_todos" => {
