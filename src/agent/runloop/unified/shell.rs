@@ -1,4 +1,5 @@
 use serde_json::json;
+use shell_words::split as shell_split;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
 
@@ -38,12 +39,34 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
         }
     }
 
+    if contains_chained_instruction(command_part) {
+        return None;
+    }
+
     // Build the tool call arguments
     let args = json!({
         "command": command_part
     });
 
     Some((tools::RUN_PTY_CMD.to_string(), args))
+}
+
+fn contains_chained_instruction(command_part: &str) -> bool {
+    let tokens = shell_split(command_part)
+        .unwrap_or_else(|_| command_part.split_whitespace().map(|s| s.to_string()).collect());
+    if tokens.len() < 2 {
+        return false;
+    }
+
+    let separators = ["and", "then", "after", "before", "also", "next"];
+    for (idx, token) in tokens.iter().enumerate() {
+        let lowered = token.to_ascii_lowercase();
+        if separators.contains(&lowered.as_str()) && idx + 1 < tokens.len() {
+            return true;
+        }
+    }
+
+    false
 }
 
 pub(crate) fn should_short_circuit_shell(
@@ -391,6 +414,18 @@ mod tests {
         assert!(detect_explicit_run_command("run some commands").is_none());
         assert!(detect_explicit_run_command("run this script").is_none());
         assert!(detect_explicit_run_command("run a quick check").is_none());
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_rejects_chained_instruction() {
+        assert!(detect_explicit_run_command("run cargo clippy and fix issue").is_none());
+        assert!(detect_explicit_run_command("run cargo test then analyze failures").is_none());
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_allows_quoted_and() {
+        let result = detect_explicit_run_command("run echo \"fish and chips\"");
+        assert!(result.is_some());
     }
 
     #[test]

@@ -236,7 +236,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
             })
             .unwrap_or_else(|| {
                 (
-                    format!("{}Run shell command", if is_mcp_tool { "MCP " } else { "" }),
+                    format!("{}bash", if is_mcp_tool { "MCP " } else { "" }),
                     HashSet::new(),
                 )
             }),
