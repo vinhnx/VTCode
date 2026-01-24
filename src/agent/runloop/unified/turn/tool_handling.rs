@@ -11,6 +11,9 @@ use vtcode_core::utils::ansi::MessageStyle;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
+use crate::agent::runloop::unified::turn::utils::{
+    enforce_history_limits, truncate_message_content,
+};
 
 pub(crate) async fn handle_tool_execution_result(
     ctx: &mut TurnLoopContext<'_>,
@@ -39,11 +42,13 @@ pub(crate) async fn handle_tool_execution_result(
                 _ => output.to_string(),
             };
 
+            let limited_content = truncate_message_content(&content_for_model);
             working_history.push(uni::Message::tool_response_with_origin(
                 tool_call_id,
-                content_for_model,
+                limited_content,
                 tool_name.to_string(),
             ));
+            enforce_history_limits(working_history);
 
             // Build a ToolPipelineOutcome to leverage centralized handling
             let pipeline_outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -102,11 +107,13 @@ pub(crate) async fn handle_tool_execution_result(
             ctx.renderer.line(MessageStyle::Error, &error_msg)?;
 
             let error_content = serde_json::json!({"error": error_msg});
+            let limited_content = truncate_message_content(&error_content.to_string());
             working_history.push(uni::Message::tool_response_with_origin(
                 tool_call_id,
-                error_content.to_string(),
+                limited_content,
                 tool_name.to_string(),
             ));
+            enforce_history_limits(working_history);
         }
         ToolExecutionStatus::Timeout { error } => {
             // Add timeout result to history
@@ -114,11 +121,13 @@ pub(crate) async fn handle_tool_execution_result(
             ctx.renderer.line(MessageStyle::Error, &error_msg)?;
 
             let error_content = serde_json::json!({"error": error_msg});
+            let limited_content = truncate_message_content(&error_content.to_string());
             working_history.push(uni::Message::tool_response_with_origin(
                 tool_call_id,
-                error_content.to_string(),
+                limited_content,
                 tool_name.to_string(),
             ));
+            enforce_history_limits(working_history);
         }
         ToolExecutionStatus::Cancelled => {
             // Add cancellation result to history
@@ -126,11 +135,13 @@ pub(crate) async fn handle_tool_execution_result(
             ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
             let error_content = serde_json::json!({"error": error_msg});
+            let limited_content = truncate_message_content(&error_content.to_string());
             working_history.push(uni::Message::tool_response_with_origin(
                 tool_call_id,
-                error_content.to_string(),
+                limited_content,
                 tool_name.to_string(),
             ));
+            enforce_history_limits(working_history);
         }
         ToolExecutionStatus::Progress(_) => {
             // Progress events are handled internally by the tool execution system

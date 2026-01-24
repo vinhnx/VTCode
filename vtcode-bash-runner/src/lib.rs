@@ -8,6 +8,7 @@ pub mod background;
 pub mod executor;
 pub mod policy;
 pub mod runner;
+pub mod stream;
 
 pub use background::{BackgroundCommandManager, BackgroundTaskHandle, BackgroundTaskStatus};
 #[cfg(feature = "dry-run")]
@@ -22,3 +23,4 @@ pub use executor::{
 };
 pub use policy::{AllowAllPolicy, CommandPolicy, WorkspaceGuardPolicy};
 pub use runner::BashRunner;
+pub use stream::{ReadLineResult, read_line_with_limit};

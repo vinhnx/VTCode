@@ -4,6 +4,7 @@ mod control;
 mod driver;
 mod input;
 mod interrupts;
+pub(crate) mod harness;
 mod modal;
 mod queue;
 mod state;

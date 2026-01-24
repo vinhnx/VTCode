@@ -793,6 +793,7 @@ TODO2.md
 .vtcode/mcp/tools/
 .vtcode/mcp/status.json
 .vtcode/terminals/
+.vtcode/sessions/
 
 .claude/
 .agent/

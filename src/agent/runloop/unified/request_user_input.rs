@@ -79,8 +79,8 @@ pub(crate) async fn execute_request_user_input_tool(
             let items = if let Some(ref options) = q.options {
                 options
                     .iter()
-                    .enumerate()
-                    .map(|(_idx, opt)| InlineListItem {
+                    
+                    .map(|opt| InlineListItem {
                         title: opt.label.clone(),
                         subtitle: Some(opt.description.clone()),
                         badge: None,

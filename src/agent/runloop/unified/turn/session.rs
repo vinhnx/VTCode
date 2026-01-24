@@ -5,6 +5,7 @@ pub mod slash_commands;
 pub mod tool_dispatch;
 
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
+use crate::agent::runloop::unified::turn::utils::{enforce_history_limits, truncate_message_content};
 use anyhow::Result;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::llm::provider as uni;
@@ -114,12 +115,14 @@ pub(crate) async fn handle_tool_failure(
     handle_pipeline_output(&mut *ctx, details.name, details.args_val, &outcome, vt_cfg).await?;
 
     let error_content = serde_json::to_string(&error_json).unwrap_or_else(|_| "{}".to_string());
+    let limited_content = truncate_message_content(&error_content);
 
     working_history.push(uni::Message::tool_response_with_origin(
         details.call_id.to_string(),
-        error_content,
+        limited_content,
         details.name.to_string(),
     ));
+    enforce_history_limits(working_history);
     let _ = last_tool_stdout.take();
 
     crate::agent::runloop::unified::tool_ledger::record_outcome_for_decision(

@@ -94,7 +94,7 @@ pub use subagent::{
     SubagentsConfig,
 };
 pub use telemetry::TelemetryConfig;
-pub use timeouts::TimeoutsConfig;
+pub use timeouts::{TimeoutsConfig, resolve_timeout};
 pub use types::{
     EditingMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,
     UiSurfacePreference, VerbosityLevel,

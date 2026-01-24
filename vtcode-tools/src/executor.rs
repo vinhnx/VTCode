@@ -11,6 +11,8 @@ use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+use tokio::time::timeout;
+use vtcode_core::config::constants::execution;
 
 /// Thread-safe snapshot of executor state.
 #[derive(Clone, Debug)]
@@ -138,7 +140,22 @@ impl CachedToolExecutor {
 
         // Execute tool (caller provides actual execution)
         // This is where your tool registry would call the actual tool
-        let result = self.execute_tool_internal(tool_name, &owned_args).await?;
+        let timeout_secs = execution::DEFAULT_TIMEOUT_SECS;
+        let result = match timeout(
+            Duration::from_secs(timeout_secs),
+            self.execute_tool_internal(tool_name, &owned_args),
+        )
+        .await
+        {
+            Ok(result) => result?,
+            Err(_) => {
+                return Err(anyhow::anyhow!(
+                    "Tool '{}' timed out after {} seconds",
+                    tool_name,
+                    timeout_secs
+                ));
+            }
+        };
 
         let duration_ms = start.elapsed().as_millis() as u64;
 

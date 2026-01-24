@@ -158,6 +158,10 @@ pub struct AgentConfig {
     #[serde(default = "default_max_task_retries")]
     pub max_task_retries: u32,
 
+    /// Harness configuration for turn-level budgets and telemetry
+    #[serde(default)]
+    pub harness: AgentHarnessConfig,
+
     /// Include current date/time in system prompt for temporal awareness
     /// Helps LLM understand context for time-sensitive tasks (default: true)
     #[serde(default = "default_include_temporal_context")]
@@ -201,6 +205,34 @@ pub struct AgentConfig {
     /// Controls when the agent should pause and ask for user guidance due to repeated failures
     #[serde(default)]
     pub circuit_breaker: CircuitBreakerConfig,
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AgentHarnessConfig {
+    /// Maximum number of tool calls allowed per turn
+    #[serde(default = "default_harness_max_tool_calls_per_turn")]
+    pub max_tool_calls_per_turn: usize,
+    /// Maximum wall clock time (seconds) for tool execution in a turn
+    #[serde(default = "default_harness_max_tool_wall_clock_secs")]
+    pub max_tool_wall_clock_secs: u64,
+    /// Maximum retries for retryable tool errors
+    #[serde(default = "default_harness_max_tool_retries")]
+    pub max_tool_retries: u32,
+    /// Optional JSONL event log path for harness events
+    #[serde(default)]
+    pub event_log_path: Option<String>,
+}
+
+impl Default for AgentHarnessConfig {
+    fn default() -> Self {
+        Self {
+            max_tool_calls_per_turn: default_harness_max_tool_calls_per_turn(),
+            max_tool_wall_clock_secs: default_harness_max_tool_wall_clock_secs(),
+            max_tool_retries: default_harness_max_tool_retries(),
+            event_log_path: None,
+        }
+    }
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -272,6 +304,7 @@ impl Default for AgentConfig {
             checkpointing: AgentCheckpointingConfig::default(),
             vibe_coding: AgentVibeCodingConfig::default(),
             max_task_retries: default_max_task_retries(),
+            harness: AgentHarnessConfig::default(),
             include_temporal_context: default_include_temporal_context(),
             temporal_context_use_utc: false, // Default to local time
             include_working_directory: default_include_working_directory(),
@@ -395,6 +428,21 @@ const fn default_instruction_max_bytes() -> usize {
 #[inline]
 const fn default_max_task_retries() -> u32 {
     2 // Retry twice on transient failures
+}
+
+#[inline]
+const fn default_harness_max_tool_calls_per_turn() -> usize {
+    defaults::DEFAULT_MAX_TOOL_CALLS_PER_TURN
+}
+
+#[inline]
+const fn default_harness_max_tool_wall_clock_secs() -> u64 {
+    defaults::DEFAULT_MAX_TOOL_WALL_CLOCK_SECS
+}
+
+#[inline]
+const fn default_harness_max_tool_retries() -> u32 {
+    defaults::DEFAULT_MAX_TOOL_RETRIES
 }
 
 #[inline]

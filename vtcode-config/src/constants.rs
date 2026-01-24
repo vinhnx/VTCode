@@ -26,6 +26,21 @@ pub mod commands {
     ];
 }
 
+/// Output limits to prevent unbounded memory growth.
+pub mod output_limits {
+    /// Maximum size for single agent message payloads (bytes).
+    pub const MAX_AGENT_MESSAGES_SIZE: usize = 10 * 1024 * 1024;
+    /// Maximum size for entire message history payloads (bytes).
+    pub const MAX_ALL_MESSAGES_SIZE: usize = 50 * 1024 * 1024;
+    /// Maximum size per line (bytes).
+    pub const MAX_LINE_LENGTH: usize = 1024 * 1024;
+    /// Default message count limit.
+    pub const DEFAULT_MESSAGE_LIMIT: usize = 10_000;
+    /// Maximum message count limit.
+    pub const MAX_MESSAGE_LIMIT: usize = 50_000;
+}
+
+
 /// Model ID constants to sync with docs/models.json
 pub mod models {
     // Google/Gemini models
@@ -757,6 +772,48 @@ pub mod defaults {
     /// Byte fuse for PTY output - secondary safeguard after token truncation.
     /// Protects against edge cases where token estimation underestimates size.
     pub const DEFAULT_PTY_OUTPUT_BYTE_FUSE: usize = 40 * 1024; // 40 KiB
+
+    pub const DEFAULT_MAX_TOOL_CALLS_PER_TURN: usize = 32;
+    pub const DEFAULT_MAX_TOOL_WALL_CLOCK_SECS: u64 = 600;
+    pub const DEFAULT_MAX_TOOL_RETRIES: u32 = 2;
+}
+
+/// Execution boundary constants (inspired by OpenAI Codex agent loop patterns)
+/// Reference: https://openai.com/index/unrolling-the-codex-agent-loop/
+pub mod execution {
+    /// Default timeout for agent loop execution (10 minutes)
+    /// Used when no timeout is specified or when 0 is passed
+    pub const DEFAULT_TIMEOUT_SECS: u64 = 600;
+
+    /// Maximum allowed timeout (1 hour)
+    /// Any user-specified timeout above this is capped
+    pub const MAX_TIMEOUT_SECS: u64 = 3600;
+
+    /// Minimum timeout (10 seconds)
+    /// Prevents unreasonably short timeouts that would cause failures
+    pub const MIN_TIMEOUT_SECS: u64 = 10;
+
+    /// Resolve timeout with deterministic bounds (never returns 0 or unbounded)
+    /// This pattern ensures execution always has a bounded duration.
+    ///
+    /// # Arguments
+    /// * `user_timeout` - Optional user-specified timeout in seconds
+    ///
+    /// # Returns
+    /// A bounded timeout value that is:
+    /// - DEFAULT_TIMEOUT_SECS if None or 0
+    /// - MAX_TIMEOUT_SECS if exceeds maximum
+    /// - The user value if within bounds
+    #[inline]
+    pub const fn resolve_timeout(user_timeout: Option<u64>) -> u64 {
+        match user_timeout {
+            None => DEFAULT_TIMEOUT_SECS,
+            Some(0) => DEFAULT_TIMEOUT_SECS,
+            Some(t) if t > MAX_TIMEOUT_SECS => MAX_TIMEOUT_SECS,
+            Some(t) if t < MIN_TIMEOUT_SECS => MIN_TIMEOUT_SECS,
+            Some(t) => t,
+        }
+    }
 }
 
 pub mod ui {

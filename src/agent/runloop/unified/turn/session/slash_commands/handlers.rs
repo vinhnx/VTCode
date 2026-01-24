@@ -14,6 +14,7 @@ use vtcode_core::utils::session_archive;
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
+use crate::agent::runloop::unified::turn::utils::{enforce_history_limits, truncate_message_content};
 use crate::agent::runloop::slash_commands::{AgentCommandAction, McpCommandAction};
 use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
 use crate::agent::runloop::unified::display::persist_theme_preference;
@@ -878,8 +879,10 @@ pub async fn handle_manage_skills(
                     )));
 
                     let result_string: String = result;
+                    let limited = truncate_message_content(&result_string);
                     ctx.conversation_history
-                        .push(uni::Message::assistant(result_string));
+                        .push(uni::Message::assistant(limited));
+                    enforce_history_limits(ctx.conversation_history);
 
                     Ok(SlashCommandControl::Continue)
                 }

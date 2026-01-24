@@ -4,11 +4,13 @@ use std::collections::VecDeque;
 use std::io::Write;
 
 use std::time::Instant;
+use std::path::Path;
 use tokio_util::sync::CancellationToken;
 
-use tokio::time::{Duration, sleep};
+use tokio::time::{Duration, sleep, timeout};
 use vtcode::config_watcher::SimpleConfigWatcher;
 use vtcode_core::config::constants::defaults;
+use vtcode_core::config::resolve_timeout;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
@@ -23,6 +25,11 @@ struct IdleDetectionConfig {
 
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
+use vtcode_core::session::{SessionId, SessionState as PersistentSessionState, session_path};
+use chrono::Utc;
+use vtcode_core::exec::events::{ThreadEvent, ThreadStartedEvent};
+use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, resolve_event_log_path};
+use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerState;
@@ -112,6 +119,12 @@ pub(crate) async fn run_single_agent_loop_unified(
         let resume_request = resume_state.take();
         let resume_ref = resume_request.as_ref();
 
+        let session_id = resume_ref
+            .map(|resume| SessionId::from_string(resume.identifier.clone()))
+            .unwrap_or_else(SessionId::new);
+        let session_created_at = Utc::now();
+        let session_state_path = session_path(Path::new(&config.workspace), &session_id);
+
         let _session_trigger = if resume_ref.is_some() {
             SessionStartTrigger::Resume
         } else {
@@ -120,6 +133,22 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         let mut session_state =
             initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
+
+        let harness_config = vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.agent.harness.clone())
+            .unwrap_or_default();
+        let turn_run_id = TurnRunId(SessionId::new().0);
+        let harness_emitter: Option<HarnessEventEmitter> =
+            harness_config.event_log_path.as_ref().and_then(|path| {
+                let resolved = resolve_event_log_path(path, &turn_run_id);
+                HarnessEventEmitter::new(resolved).ok()
+            });
+        if let Some(emitter) = harness_emitter.as_ref() {
+            let _ = emitter.emit(ThreadEvent::ThreadStarted(ThreadStartedEvent {
+                thread_id: turn_run_id.0.clone(),
+            }));
+        }
 
         let ui_setup = initialize_session_ui(
             &config,
@@ -342,50 +371,91 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut _loop_detection_disabled_for_session = false;
 
             // New unified turn loop: use TurnLoopContext and run_turn_loop
-            let mut auto_exit_plan_mode_attempted = false;
-            let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext {
-                renderer: &mut renderer,
-                handle: &handle,
-                session: &mut session,
-                session_stats: &mut session_stats,
-                auto_exit_plan_mode_attempted: &mut auto_exit_plan_mode_attempted,
-                mcp_panel_state: &mut mcp_panel_state,
-                tool_result_cache: &tool_result_cache,
-                approval_recorder: &approval_recorder,
-                decision_ledger: &decision_ledger,
-                tool_registry: &mut tool_registry,
-                tools: &tools,
-                cached_tools: &cached_tools,
-                ctrl_c_state: &ctrl_c_state,
-                ctrl_c_notify: &ctrl_c_notify,
-                context_manager: &mut context_manager,
-                last_forced_redraw: &mut last_forced_redraw,
-                input_status_state: &mut input_status_state,
-                lifecycle_hooks: lifecycle_hooks.as_ref(),
-                default_placeholder: &default_placeholder,
-                tool_permission_cache: &tool_permission_cache,
-                safety_validator: &safety_validator,
-                circuit_breaker: &circuit_breaker,
-                tool_health_tracker: &tool_health_tracker,
-                rate_limiter: &rate_limiter,
-                telemetry: &telemetry,
-                autonomous_executor: &autonomous_executor,
-                error_recovery: &session_state.error_recovery,
-            };
-            let outcome = match crate::agent::runloop::unified::turn::run_turn_loop(
-                &input,
-                working_history.clone(),
-                turn_loop_ctx,
-                &config,
-                vt_cfg.as_ref(),
-                &mut provider_client,
-                &traj,
-                skip_confirmations,
-                full_auto,
-                &mut session_end_reason,
-            )
-            .await
-            {
+            let timeout_secs = resolve_timeout(
+                vt_cfg
+                    .as_ref()
+                    .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs),
+            );
+            let mut attempts = 0;
+            let outcome = match loop {
+                let mut auto_exit_plan_mode_attempted = false;
+                let mut harness_state = HarnessTurnState::new(
+                    TurnRunId(turn_run_id.0.clone()),
+                    TurnId(SessionId::new().0),
+                    harness_config.max_tool_calls_per_turn,
+                    harness_config.max_tool_wall_clock_secs,
+                    harness_config.max_tool_retries,
+                );
+                let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext {
+                    renderer: &mut renderer,
+                    handle: &handle,
+                    session: &mut session,
+                    session_stats: &mut session_stats,
+                    auto_exit_plan_mode_attempted: &mut auto_exit_plan_mode_attempted,
+                    mcp_panel_state: &mut mcp_panel_state,
+                    tool_result_cache: &tool_result_cache,
+                    approval_recorder: &approval_recorder,
+                    decision_ledger: &decision_ledger,
+                    tool_registry: &mut tool_registry,
+                    tools: &tools,
+                    cached_tools: &cached_tools,
+                    ctrl_c_state: &ctrl_c_state,
+                    ctrl_c_notify: &ctrl_c_notify,
+                    context_manager: &mut context_manager,
+                    last_forced_redraw: &mut last_forced_redraw,
+                    input_status_state: &mut input_status_state,
+                    lifecycle_hooks: lifecycle_hooks.as_ref(),
+                    default_placeholder: &default_placeholder,
+                    tool_permission_cache: &tool_permission_cache,
+                    safety_validator: &safety_validator,
+                    circuit_breaker: &circuit_breaker,
+                    tool_health_tracker: &tool_health_tracker,
+                    rate_limiter: &rate_limiter,
+                    telemetry: &telemetry,
+                    autonomous_executor: &autonomous_executor,
+                    error_recovery: &session_state.error_recovery,
+                    harness_state: &mut harness_state,
+                    harness_emitter: harness_emitter.as_ref(),
+                };
+
+                let result = timeout(
+                    Duration::from_secs(timeout_secs),
+                    crate::agent::runloop::unified::turn::run_turn_loop(
+                        &input,
+                        working_history.clone(),
+                        turn_loop_ctx,
+                        &config,
+                        vt_cfg.as_ref(),
+                        &mut provider_client,
+                        &traj,
+                        skip_confirmations,
+                        full_auto,
+                        &mut session_end_reason,
+                    ),
+                )
+                .await;
+
+                match result {
+                    Ok(inner) => break inner,
+                    Err(_) => {
+                        attempts += 1;
+                        tool_registry.terminate_all_pty_sessions();
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!(
+                                "Turn timed out after {} seconds. PTY session cancelled; retrying.",
+                                timeout_secs
+                            ),
+                        )?;
+                        if attempts >= 2 {
+                            break Err(anyhow::anyhow!(
+                                "Turn timed out after {} seconds",
+                                timeout_secs
+                            ));
+                        }
+                    }
+                }
+            } {
                 Ok(outcome) => outcome,
                 Err(err) => {
                     // Handle errors gracefully - display to user but continue the session
@@ -461,6 +531,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                     loaded_skills: Some(skill_names),
                 }) {
                     tracing::warn!("Failed to persist session progress: {}", err);
+                }
+            }
+            {
+                let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
+                let mut session_state = PersistentSessionState::new(
+                    session_id.clone(),
+                    session_created_at,
+                    conversation_history.clone(),
+                    skill_names,
+                    Path::new(&config.workspace).to_path_buf(),
+                );
+                session_state.last_updated = Utc::now();
+                if let Err(err) = session_state.save(&session_state_path) {
+                    tracing::warn!("Failed to persist session state: {}", err);
                 }
             }
             let _turn_result = outcome.result;

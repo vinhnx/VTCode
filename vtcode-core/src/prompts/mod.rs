@@ -10,6 +10,7 @@ pub mod custom_slash_commands;
 pub mod generator;
 pub mod guidelines;
 pub mod output_styles;
+pub mod cache_aware;
 pub mod system;
 pub mod system_prompt_cache;
 pub mod templates;
@@ -22,6 +23,7 @@ pub use custom::{BuiltinDocs, CustomPrompt, CustomPromptRegistry, PromptInvocati
 pub use custom_slash_commands::{
     CustomSlashCommand, CustomSlashCommandConfig, CustomSlashCommandRegistry,
 };
+pub use cache_aware::sort_tool_definitions;
 pub use generator::{SystemPromptGenerator, generate_system_instruction_with_config};
 pub use guidelines::{generate_tool_guidelines, infer_capability_level};
 pub use system::{

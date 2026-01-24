@@ -118,13 +118,13 @@ pub async fn discover_instruction_sources(
             None
         };
 
-        if let Some(path) = chosen {
-            if seen_paths.insert(path.clone()) {
-                workspace_paths.push(InstructionSource {
-                    path,
-                    scope: InstructionScope::Workspace,
-                });
-            }
+        if let Some(path) = chosen
+            && seen_paths.insert(path.clone())
+        {
+            workspace_paths.push(InstructionSource {
+                path,
+                scope: InstructionScope::Workspace,
+            });
         }
 
         if cursor == root {

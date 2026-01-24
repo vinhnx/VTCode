@@ -146,9 +146,11 @@ impl A2aClient {
                 }
             }
 
-            if !buffer.is_empty() {
-                if let Some(event) = parse_sse_event(&buffer)? {
-                    yield event;
+            if !buffer.is_empty()
+            {
+                if let Some(event) = parse_sse_event(&buffer)?
+                {
+                yield event;
                 }
             }
         };

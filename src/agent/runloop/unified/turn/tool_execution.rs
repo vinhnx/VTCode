@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 
 use vtcode_core::tools::registry::ToolRegistry;
+use vtcode_core::config::constants::defaults;
 
 /// Execute a single tool call after permissions have been approved
 #[allow(dead_code)]
@@ -22,6 +23,7 @@ pub(crate) async fn execute_single_tool_call(
         ctrl_c_state,
         ctrl_c_notify,
         progress_reporter,
+        defaults::DEFAULT_MAX_TOOL_RETRIES as usize,
     )
     .await
 }

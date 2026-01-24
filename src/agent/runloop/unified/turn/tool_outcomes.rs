@@ -46,9 +46,10 @@ use crate::agent::runloop::unified::tool_summary::render_tool_call_summary_with_
 use crate::agent::runloop::unified::turn::ui_sync::{redraw_with_sync, wait_for_redraw_complete};
 use crate::hooks::lifecycle::LifecycleHookEngine;
 
-use super::utils::{render_hook_messages, safe_force_redraw};
+use super::utils::{enforce_history_limits, render_hook_messages, safe_force_redraw, truncate_message_content};
 use crate::agent::runloop::unified::display::ensure_turn_bottom_gap;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
+use vtcode_core::config::constants::defaults;
 
 fn normalize_signature_args(tool_name: &str, args: &serde_json::Value) -> serde_json::Value {
     let mut normalized = match args.as_object() {
@@ -91,6 +92,39 @@ fn normalize_signature_args(tool_name: &str, args: &serde_json::Value) -> serde_
     }
 
     normalized
+}
+
+fn push_tool_response(
+    history: &mut Vec<uni::Message>,
+    tool_call_id: String,
+    content: String,
+    tool_name: &str,
+) {
+    let limited = truncate_message_content(&content);
+    history.push(uni::Message::tool_response_with_origin(
+        tool_call_id,
+        limited,
+        tool_name.to_string(),
+    ));
+    enforce_history_limits(history);
+}
+
+fn push_assistant_message(history: &mut Vec<uni::Message>, mut message: uni::Message) {
+    if let Some(text) = message.content.as_text_borrowed() {
+        let limited = truncate_message_content(text);
+        message.content = uni::MessageContent::text(limited);
+    }
+    if let Some(reasoning) = message.reasoning.as_ref() {
+        message.reasoning = Some(truncate_message_content(reasoning));
+    }
+    history.push(message);
+    enforce_history_limits(history);
+}
+
+fn resolve_max_tool_retries(vt_cfg: Option<&VTCodeConfig>) -> usize {
+    vt_cfg
+        .map(|cfg| cfg.agent.harness.max_tool_retries as usize)
+        .unwrap_or(defaults::DEFAULT_MAX_TOOL_RETRIES as usize)
 }
 
 fn signature_key_for(tool_name: &str, args: &serde_json::Value) -> String {
@@ -318,6 +352,7 @@ pub(crate) async fn handle_tool_calls(
                 let ctrl_c_state = Arc::clone(ctx.ctrl_c_state);
                 let ctrl_c_notify = Arc::clone(ctx.ctrl_c_notify);
 
+                let max_tool_retries = resolve_max_tool_retries(ctx.vt_cfg);
                 let futures: Vec<_> = execution_items
                     .iter()
                     .map(|(call_id, name, args)| {
@@ -327,6 +362,7 @@ pub(crate) async fn handle_tool_calls(
                         let name = name.clone();
                         let args = args.clone();
                         let reporter = progress_reporter.clone();
+                        let max_tool_retries = max_tool_retries;
 
                         async move {
                             let start_time = std::time::Instant::now();
@@ -337,6 +373,7 @@ pub(crate) async fn handle_tool_calls(
                                 &ctrl_c_state,
                                 &ctrl_c_notify,
                                 Some(&reporter),
+                                max_tool_retries,
                             )
                             .await;
                             (call_id.clone(), name, args, result, start_time)
@@ -355,11 +392,11 @@ pub(crate) async fn handle_tool_calls(
                     let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
                     *current_count += 1;
 
-                handle_tool_execution_result(
-                    &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
-                        renderer: ctx.renderer,
-                        handle: ctx.handle,
-                        session: ctx.session,
+                    handle_tool_execution_result(
+                        &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
+                            renderer: ctx.renderer,
+                            handle: ctx.handle,
+                            session: ctx.session,
                         session_stats: ctx.session_stats,
                         auto_exit_plan_mode_attempted: ctx.auto_exit_plan_mode_attempted,
                         mcp_panel_state: ctx.mcp_panel_state,
@@ -384,6 +421,8 @@ pub(crate) async fn handle_tool_calls(
                             telemetry: ctx.telemetry,
                             autonomous_executor: ctx.autonomous_executor,
                             error_recovery: ctx.error_recovery,
+                            harness_state: ctx.harness_state,
+                            harness_emitter: ctx.harness_emitter,
                         },
                         call_id,
                         &name,
@@ -453,12 +492,12 @@ pub(crate) async fn handle_tool_call(
         );
         // Log to tracing but don't show error in TUI - just inform the LLM via history
         tracing::warn!(tool = %tool_name, "Circuit breaker open, tool disabled");
-        ctx.working_history
-            .push(uni::Message::tool_response_with_origin(
-                tool_call.id.clone(),
-                serde_json::json!({"error": error_msg}).to_string(),
-                tool_name.clone(),
-            ));
+        push_tool_response(
+            ctx.working_history,
+            tool_call.id.clone(),
+            serde_json::json!({"error": error_msg}).to_string(),
+            tool_name,
+        );
         return Ok(None);
     }
 
@@ -495,12 +534,12 @@ pub(crate) async fn handle_tool_call(
                 tool_name
             );
             tracing::warn!(tool = %tool_name, "Loop detector blocked tool");
-            ctx.working_history
-                .push(uni::Message::tool_response_with_origin(
-                    tool_call.id.clone(),
-                    serde_json::json!({"error": error_msg}).to_string(),
-                    tool_name.clone(),
-                ));
+            push_tool_response(
+                ctx.working_history,
+                tool_call.id.clone(),
+                serde_json::json!({"error": error_msg}).to_string(),
+                tool_name,
+            );
             return Ok(None);
         } else {
             // Log warning but proceed
@@ -537,12 +576,13 @@ pub(crate) async fn handle_tool_call(
                     }
                     _ => {
                         // Denied or cancelled
-                        ctx.working_history.push(uni::Message::tool_response_with_origin(
+                        push_tool_response(
+                            ctx.working_history,
                             tool_call.id.clone(),
                             serde_json::json!({"error": "Session tool limit reached and not increased by user"})
                                 .to_string(),
-                            tool_name.clone(),
-                        ));
+                            tool_name,
+                        );
                         return Ok(None);
                     }
                 }
@@ -552,13 +592,13 @@ pub(crate) async fn handle_tool_call(
                     MessageStyle::Error,
                     &format!("Safety validation failed: {}", err),
                 )?;
-                ctx.working_history
-                    .push(uni::Message::tool_response_with_origin(
-                        tool_call.id.clone(),
-                        serde_json::json!({"error": format!("Safety validation failed: {}", err)})
-                            .to_string(),
-                        tool_name.clone(),
-                    ));
+                push_tool_response(
+                    ctx.working_history,
+                    tool_call.id.clone(),
+                    serde_json::json!({"error": format!("Safety validation failed: {}", err)})
+                        .to_string(),
+                    tool_name,
+                );
                 return Ok(None);
             }
         }
@@ -633,6 +673,7 @@ pub(crate) async fn handle_tool_call(
                 }));
 
             let tool_execution_start = std::time::Instant::now();
+            let max_tool_retries = resolve_max_tool_retries(ctx.vt_cfg);
             let tool_result = execute_tool_with_timeout_ref(
                 ctx.tool_registry,
                 tool_name,
@@ -640,6 +681,7 @@ pub(crate) async fn handle_tool_call(
                 ctx.ctrl_c_state,
                 ctx.ctrl_c_notify,
                 Some(&progress_reporter),
+                max_tool_retries,
             )
             .await;
 
@@ -677,6 +719,8 @@ pub(crate) async fn handle_tool_call(
                     telemetry: ctx.telemetry,
                     autonomous_executor: ctx.autonomous_executor,
                     error_recovery: ctx.error_recovery,
+                    harness_state: ctx.harness_state,
+                    harness_emitter: ctx.harness_emitter,
                 },
                 tool_call.id.clone(),
                 tool_name,
@@ -698,12 +742,12 @@ pub(crate) async fn handle_tool_call(
             )
             .to_json_value();
 
-            ctx.working_history
-                .push(uni::Message::tool_response_with_origin(
-                    tool_call.id.clone(),
-                    serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
-                    tool_name.clone(),
-                ));
+            push_tool_response(
+                ctx.working_history,
+                tool_call.id.clone(),
+                serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
+                tool_name,
+            );
         }
         Ok(ToolPermissionFlow::Exit) => {
             return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)));
@@ -715,12 +759,12 @@ pub(crate) async fn handle_tool_call(
             let err_json = serde_json::json!({
                 "error": format!("Failed to evaluate policy for tool '{}': {}", tool_name, err)
             });
-            ctx.working_history
-                .push(uni::Message::tool_response_with_origin(
-                    tool_call.id.clone(),
-                    err_json.to_string(),
-                    tool_name.clone(),
-                ));
+            push_tool_response(
+                ctx.working_history,
+                tool_call.id.clone(),
+                err_json.to_string(),
+                tool_name,
+            );
         }
     }
 
@@ -762,11 +806,12 @@ pub(crate) async fn handle_tool_execution_result(
                 serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
             };
 
-            working_history.push(uni::Message::tool_response_with_origin(
+            push_tool_response(
+                working_history,
                 tool_call_id,
                 content_for_model,
-                tool_name.to_string(),
-            ));
+                tool_name,
+            );
 
             // Build a small RunLoopContext to reuse the generic `handle_pipeline_output`
             let (_any_write, mod_files, last_stdout) = crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
@@ -846,11 +891,12 @@ pub(crate) async fn handle_tool_execution_result(
             tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
 
             let error_content = serde_json::json!({"error": error_msg});
-            working_history.push(uni::Message::tool_response_with_origin(
+            push_tool_response(
+                working_history,
                 tool_call_id,
                 error_content.to_string(),
-                tool_name.to_string(),
-            ));
+                tool_name,
+            );
 
             // Auto-recovery: If we're in Plan Mode and a mutating tool was denied,
             // proactively call exit_plan_mode to show the confirmation modal.
@@ -899,6 +945,8 @@ pub(crate) async fn handle_tool_execution_result(
                         approval_recorder: ctx.approval_recorder,
                         session: ctx.session,
                         traj,
+                        harness_state: ctx.harness_state,
+                        harness_emitter: ctx.harness_emitter,
                     },
                     &exit_call,
                     ctx.ctrl_c_state,
@@ -929,11 +977,12 @@ pub(crate) async fn handle_tool_execution_result(
                             } else {
                                 serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
                             };
-                            working_history.push(uni::Message::tool_response_with_origin(
+                            push_tool_response(
+                                working_history,
                                 exit_call_id.clone(),
                                 content_for_model,
-                                tool_names::EXIT_PLAN_MODE.to_string(),
-                            ));
+                                tool_names::EXIT_PLAN_MODE,
+                            );
 
                             let (_any_write, mod_files, _last_stdout) =
                                 crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
@@ -966,11 +1015,12 @@ pub(crate) async fn handle_tool_execution_result(
                             );
                             tracing::debug!(tool = tool_names::EXIT_PLAN_MODE, error = %error, "exit_plan_mode failed");
                             let error_content = serde_json::json!({"error": err_msg});
-                            working_history.push(uni::Message::tool_response_with_origin(
+                            push_tool_response(
+                                working_history,
                                 exit_call_id.clone(),
                                 error_content.to_string(),
-                                tool_names::EXIT_PLAN_MODE.to_string(),
-                            ));
+                                tool_names::EXIT_PLAN_MODE,
+                            );
                         }
                         ToolExecutionStatus::Timeout { error } => {
                             let duration = exit_start.elapsed();
@@ -988,11 +1038,12 @@ pub(crate) async fn handle_tool_execution_result(
                             );
                             tracing::debug!(tool = tool_names::EXIT_PLAN_MODE, error = %error.message, "exit_plan_mode timed out");
                             let error_content = serde_json::json!({"error": err_msg});
-                            working_history.push(uni::Message::tool_response_with_origin(
+                            push_tool_response(
+                                working_history,
                                 exit_call_id.clone(),
                                 error_content.to_string(),
-                                tool_names::EXIT_PLAN_MODE.to_string(),
-                            ));
+                                tool_names::EXIT_PLAN_MODE,
+                            );
                         }
                         ToolExecutionStatus::Cancelled | ToolExecutionStatus::Progress(_) => {
                             // No-op
@@ -1014,11 +1065,12 @@ pub(crate) async fn handle_tool_execution_result(
             tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
 
             let error_content = serde_json::json!({"error": error_msg});
-            working_history.push(uni::Message::tool_response_with_origin(
+            push_tool_response(
+                working_history,
                 tool_call_id,
                 error_content.to_string(),
-                tool_name.to_string(),
-            ));
+                tool_name,
+            );
         }
         ToolExecutionStatus::Cancelled => {
             // Phase 4: Cancelled is neutral, do not record success or failure
@@ -1028,11 +1080,12 @@ pub(crate) async fn handle_tool_execution_result(
             ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
             let error_content = serde_json::json!({"error": error_msg});
-            working_history.push(uni::Message::tool_response_with_origin(
+            push_tool_response(
+                working_history,
                 tool_call_id,
                 error_content.to_string(),
-                tool_name.to_string(),
-            ));
+                tool_name,
+            );
         }
         ToolExecutionStatus::Progress(_) => {
             // Progress events are handled internally by the tool execution system
@@ -1120,10 +1173,12 @@ pub(crate) fn handle_assistant_response(
         } else {
             msg
         };
-        ctx.working_history.push(msg_with_reasoning);
+        push_assistant_message(ctx.working_history, msg_with_reasoning);
     } else if let Some(reasoning_text) = reasoning {
-        ctx.working_history
-            .push(uni::Message::assistant(String::new()).with_reasoning(Some(reasoning_text)));
+        push_assistant_message(
+            ctx.working_history,
+            uni::Message::assistant(String::new()).with_reasoning(Some(reasoning_text)),
+        );
     }
 
     Ok(())
@@ -1140,6 +1195,7 @@ pub(crate) struct RunTurnExecuteToolParams<'a> {
     pub progress_reporter: Option<&'a ProgressReporter>,
     pub handle: &'a vtcode_core::ui::tui::InlineHandle,
     pub last_forced_redraw: &'a mut Instant,
+    pub max_tool_retries: usize,
 }
 
 #[allow(dead_code)]
@@ -1180,6 +1236,7 @@ pub(crate) async fn run_turn_execute_tool(
             params.ctrl_c_state,
             params.ctrl_c_notify,
             params.progress_reporter,
+            params.max_tool_retries,
         )
         .await;
 
@@ -1203,6 +1260,7 @@ pub(crate) async fn run_turn_execute_tool(
         params.ctrl_c_state,
         params.ctrl_c_notify,
         params.progress_reporter,
+        params.max_tool_retries,
     )
     .await
 }
@@ -1358,13 +1416,12 @@ pub(crate) async fn run_turn_handle_tool_success(
 
     let content = serde_json::to_string(&params.output).unwrap_or_else(|_| "{}".to_string());
 
-    params
-        .working_history
-        .push(uni::Message::tool_response_with_origin(
-            params.call_id.to_string(),
-            content,
-            params.name.to_string(),
-        ));
+    push_tool_response(
+        params.working_history,
+        params.call_id.to_string(),
+        content,
+        params.name,
+    );
 
     let mut hook_block_reason: Option<String> = None;
 
@@ -1447,7 +1504,7 @@ pub(crate) async fn run_turn_handle_tool_success(
             .unwrap_or_else(|| "Command completed successfully.".to_string());
         params.renderer.line(MessageStyle::Response, &reply)?;
         ensure_turn_bottom_gap(params.renderer, params.bottom_gap_applied)?;
-        params.working_history.push(uni::Message::assistant(reply));
+        push_assistant_message(params.working_history, uni::Message::assistant(reply));
         let _ = params.last_tool_stdout.take();
         return Ok(Some(TurnLoopResult::Completed));
     }
@@ -1537,13 +1594,12 @@ pub(crate) async fn run_turn_handle_tool_failure(
     )
     .await?;
 
-    params
-        .working_history
-        .push(uni::Message::tool_response_with_origin(
-            params.call_id.to_string(),
-            serde_json::to_string(&error_json).unwrap_or_default(),
-            params.name.to_string(),
-        ));
+    push_tool_response(
+        params.working_history,
+        params.call_id.to_string(),
+        serde_json::to_string(&error_json).unwrap_or_default(),
+        params.name,
+    );
 
     {
         let mut ledger = params.decision_ledger.write().await;
@@ -1629,13 +1685,12 @@ pub(crate) async fn run_turn_handle_tool_timeout(
     let err_json = serde_json::json!({ "error": error_message });
     let timeout_content = serde_json::to_string(&err_json).unwrap_or_else(|_| "{}".to_string());
 
-    params
-        .working_history
-        .push(uni::Message::tool_response_with_origin(
-            params.call_id.to_string(),
-            timeout_content,
-            params.name.to_string(),
-        ));
+    push_tool_response(
+        params.working_history,
+        params.call_id.to_string(),
+        timeout_content,
+        params.name,
+    );
 
     {
         let mut ledger = params.decision_ledger.write().await;
@@ -1669,13 +1724,12 @@ pub(crate) async fn run_turn_handle_tool_cancelled(
 
     let err_json = serde_json::json!({ "error": "Tool execution cancelled by user" });
 
-    params
-        .working_history
-        .push(uni::Message::tool_response_with_origin(
-            params.call_id.to_string(),
-            serde_json::to_string(&err_json).unwrap_or_else(|_| "{}".to_string()),
-            params.name.to_string(),
-        ));
+    push_tool_response(
+        params.working_history,
+        params.call_id.to_string(),
+        serde_json::to_string(&err_json).unwrap_or_else(|_| "{}".to_string()),
+        params.name,
+    );
 
     {
         let mut ledger = params.decision_ledger.write().await;
@@ -1769,17 +1823,15 @@ pub(crate) async fn handle_text_response(
                     MessageStyle::Error,
                     &format!("Safety validation failed: {}", err),
                 )?;
-                params
-                    .ctx
-                    .working_history
-                    .push(uni::Message::tool_response_with_origin(
+                push_tool_response(
+                    params.ctx.working_history,
                     tool_call.id.clone(),
                     serde_json::to_string(
                         &serde_json::json!({"error": format!("Safety validation failed: {}", err)}),
                     )
-                    .unwrap(),
-                    call_tool_name.clone(),
-                ));
+                    .unwrap_or_else(|_| "{}".to_string()),
+                    call_tool_name,
+                );
                 return Ok(handle_turn_balancer(
                     params.ctx,
                     params.step_count,
@@ -1826,6 +1878,7 @@ pub(crate) async fn handle_text_response(
                     params.ctx.ctrl_c_state,
                     params.ctx.ctrl_c_notify,
                     None, // progress_reporter
+                    resolve_max_tool_retries(params.ctx.vt_cfg),
                 )
                 .await;
 
@@ -1860,6 +1913,8 @@ pub(crate) async fn handle_text_response(
                         telemetry: params.ctx.telemetry,
                         autonomous_executor: params.ctx.autonomous_executor,
                         error_recovery: params.ctx.error_recovery,
+                        harness_state: params.ctx.harness_state,
+                        harness_emitter: params.ctx.harness_emitter,
                     },
                     tool_call.id.clone(),
                     call_tool_name,
@@ -1884,14 +1939,12 @@ pub(crate) async fn handle_text_response(
                 )
                 .to_json_value();
 
-                params
-                    .ctx
-                    .working_history
-                    .push(uni::Message::tool_response_with_origin(
-                        tool_call.id.clone(),
-                        serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
-                        call_tool_name.clone(),
-                    ));
+                push_tool_response(
+                    params.ctx.working_history,
+                    tool_call.id.clone(),
+                    serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
+                    call_tool_name,
+                );
             }
             Ok(ToolPermissionFlow::Exit) => {
                 *params.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Exit;
@@ -1904,14 +1957,12 @@ pub(crate) async fn handle_text_response(
                 let err_json = serde_json::json!({
                     "error": format!("Failed to evaluate policy for detected tool '{}': {}", call_tool_name, err)
                 });
-                params
-                    .ctx
-                    .working_history
-                    .push(uni::Message::tool_response_with_origin(
-                        tool_call.id.clone(),
-                        err_json.to_string(),
-                        call_tool_name.clone(),
-                    ));
+                push_tool_response(
+                    params.ctx.working_history,
+                    tool_call.id.clone(),
+                    err_json.to_string(),
+                    call_tool_name,
+                );
             }
         }
         Ok(handle_turn_balancer(
@@ -1931,7 +1982,7 @@ pub(crate) async fn handle_text_response(
         };
 
         if !params.text.is_empty() || msg_with_reasoning.reasoning.is_some() {
-            params.ctx.working_history.push(msg_with_reasoning);
+            push_assistant_message(params.ctx.working_history, msg_with_reasoning);
         }
 
         Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
