@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-core"
-version = "0.69.1"
+version = "0.70.0"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Core library for VT Code - a Rust-based terminal coding agent"
@@ -114,7 +114,7 @@ tui-popup = "0.7"
 perg = "0.8.0"
 nucleo-matcher = "0.3"
 line-clipping = "0.3"
-vtcode-file-search = { version = "0.69.1", path = "../vtcode-file-search" }
+vtcode-file-search = { version = "0.70.0", path = "../vtcode-file-search" }
 pulldown-cmark = { version = "0.13", default-features = false, features = [
     "simd",
 ] }
@@ -125,11 +125,11 @@ rig = { package = "rig-core", version = "0.23.1", default-features = false, feat
 vt100 = "0.15.2"
 portable-pty = "0.9.0"
 ansi-to-tui = "8.0.0"
-vtcode-commons = { path = "../vtcode-commons", version = "0.69.1" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.69.1" }
-vtcode-config = { path = "../vtcode-config", version = "0.69.1" }
-vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.69.1" }
-vtcode-indexer = { path = "../vtcode-indexer", version = "0.69.1" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.70.0" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.70.0" }
+vtcode-config = { path = "../vtcode-config", version = "0.70.0" }
+vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.70.0" }
+vtcode-indexer = { path = "../vtcode-indexer", version = "0.70.0" }
 
 # Schema generation
 schemars = { workspace = true, optional = true }
@@ -163,7 +163,7 @@ tower-http = { version = "0.6", features = ["cors", "trace"], optional = true }
 tokio-stream = { version = "0.1", optional = true }
 
 [build-dependencies]
-vtcode-config = { path = "../vtcode-config", version = "0.69.1" }
+vtcode-config = { path = "../vtcode-config", version = "0.70.0" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
