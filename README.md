@@ -15,7 +15,7 @@
 
 ---
 
-<strong>VT Code</strong> is a research-preview terminal coding agent, with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.
+<strong>VT Code</strong> is an open-source coding agent, with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.
 
 ---
 
