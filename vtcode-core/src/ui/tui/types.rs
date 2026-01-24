@@ -207,6 +207,13 @@ pub enum InlineListSelection {
         choice_id: String,
     },
 
+    /// Selection returned from the `request_user_input` HITL tool.
+    RequestUserInputAnswer {
+        question_id: String,
+        selected: Vec<String>,
+        other: Option<String>,
+    },
+
     /// Plan confirmation dialog result (Claude Code style HITL)
     PlanApprovalExecute,
     /// Return to planning to edit the plan

@@ -11,6 +11,7 @@ mod intent_extractor;
 
 mod ask_user_question;
 mod mcp_support;
+mod request_user_input;
 mod mcp_tool_manager;
 mod model_selection;
 mod palettes;

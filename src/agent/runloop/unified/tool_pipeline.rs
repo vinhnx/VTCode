@@ -277,6 +277,29 @@ pub(crate) async fn run_tool_call(
         }));
     }
 
+    // Special-case request_user_input HITL tool: simpler Q&A format.
+    if name == tools::REQUEST_USER_INPUT {
+        let output = super::request_user_input::execute_request_user_input_tool(
+            ctx.handle,
+            ctx.session,
+            &args_val,
+            ctrl_c_state,
+            ctrl_c_notify,
+        )
+        .await;
+
+        return Ok(ToolPipelineOutcome::from_status(match output {
+            Ok(value) => ToolExecutionStatus::Success {
+                output: value,
+                stdout: None,
+                modified_files: vec![],
+                command_success: true,
+                has_more: false,
+            },
+            Err(error) => ToolExecutionStatus::Failure { error },
+        }));
+    }
+
     // Special-case enter_plan_mode: execute tool and enable plan mode in registry.
     // This ensures the registry's plan_read_only_mode flag is set when agent enters plan mode.
     if name == tools::ENTER_PLAN_MODE {

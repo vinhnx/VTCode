@@ -4,6 +4,7 @@ use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tools::ask_user_question::AskUserQuestionTool;
 use crate::tools::handlers::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
+use crate::tools::request_user_input::RequestUserInputTool;
 
 use super::registration::ToolRegistration;
 use super::{ToolInventory, ToolRegistry};
@@ -35,6 +36,11 @@ pub(super) fn builtin_tool_registrations(
             tools::ASK_USER_QUESTION,
             CapabilityLevel::Basic,
             AskUserQuestionTool,
+        ),
+        ToolRegistration::from_tool_instance(
+            tools::REQUEST_USER_INPUT,
+            CapabilityLevel::Basic,
+            RequestUserInputTool,
         ),
         // ============================================================
         // PLAN MODE (enter/exit)

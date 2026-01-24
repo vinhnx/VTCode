@@ -361,6 +361,7 @@ impl ToolRegistry {
             tool_names::ENTER_PLAN_MODE,
             tool_names::EXIT_PLAN_MODE,
             tool_names::ASK_USER_QUESTION,
+            tool_names::REQUEST_USER_INPUT,
             "get_errors",
             "search_tools",
             "think",

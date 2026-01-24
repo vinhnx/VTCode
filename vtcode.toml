@@ -9,7 +9,7 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "minimax-m2.1:cloud"
+default_model = "glm-4.7:cloud"
 
 # Visual theme for the terminal interface
 theme = "vitesse-light-soft"
@@ -610,7 +610,11 @@ cache_size = 100
 [automation.full_auto]
 enabled = false
 max_turns = 30
-allowed_tools = ["read_file", "list_files", "grep_file"]
+allowed_tools = [
+    "read_file",
+    "list_files",
+    "grep_file",
+]
 require_profile_ack = true
 
 [optimization.llm_client]
