@@ -338,15 +338,18 @@ impl Session {
     }
 
     /// Remember submitted input in history
-    pub(super) fn remember_submitted_input(&mut self, submitted: &str) {
-        self.input_manager.add_to_history(submitted.to_owned());
+    pub(super) fn remember_submitted_input(
+        &mut self,
+        submitted: super::input_manager::InputHistoryEntry,
+    ) {
+        self.input_manager.add_to_history(submitted);
     }
 
     /// Navigate to previous history entry (disabled to prevent cursor flickering)
     #[allow(dead_code)]
     pub(super) fn navigate_history_previous(&mut self) -> bool {
         if let Some(previous) = self.input_manager.go_to_previous_history() {
-            self.input_manager.set_content(previous);
+            self.input_manager.apply_history_entry(previous);
             true
         } else {
             false
@@ -357,7 +360,7 @@ impl Session {
     #[allow(dead_code)]
     pub(super) fn navigate_history_next(&mut self) -> bool {
         if let Some(next) = self.input_manager.go_to_next_history() {
-            self.input_manager.set_content(next);
+            self.input_manager.apply_history_entry(next);
             true
         } else {
             false

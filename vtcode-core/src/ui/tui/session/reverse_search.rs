@@ -1,5 +1,7 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+use crate::llm::provider::ContentPart;
+
 use super::input_manager::InputManager;
 
 #[derive(Debug, Clone)]
@@ -9,7 +11,8 @@ pub struct ReverseSearchState {
     pub search_position: usize, // Position in history where search started
     pub original_content: String, // Content before search started
     pub original_cursor: usize, // Cursor position before search started
-    pub matches: Vec<(usize, String)>, // (index, matching command)
+    pub original_attachments: Vec<ContentPart>, // Attachments before search started
+    pub matches: Vec<usize>, // Indices of matching history entries
     pub current_match_index: usize, // Current position in matches
 }
 
@@ -27,6 +30,7 @@ impl ReverseSearchState {
             search_position: 0,
             original_content: String::new(),
             original_cursor: 0,
+            original_attachments: Vec::new(),
             matches: Vec::new(),
             current_match_index: 0,
         }
@@ -37,6 +41,7 @@ impl ReverseSearchState {
         self.search_term = String::new();
         self.original_content = input_manager.content().to_string();
         self.original_cursor = input_manager.cursor();
+        self.original_attachments = input_manager.attachments().to_vec();
         self.search_position = history.len();
         self.matches = Vec::new();
         self.current_match_index = 0;
@@ -47,13 +52,13 @@ impl ReverseSearchState {
         self.search_term.clear();
         input_manager.set_content(self.original_content.clone());
         input_manager.set_cursor(self.original_cursor);
+        input_manager.set_attachments(self.original_attachments.clone());
         self.matches.clear();
     }
 
     pub fn accept_search(&mut self, input_manager: &mut InputManager) {
-        if let Some((_, command)) = self.matches.get(self.current_match_index) {
-            input_manager.set_content(command.clone());
-            input_manager.set_cursor(command.len());
+        if let Some(index) = self.matches.get(self.current_match_index).copied() {
+            let _ = input_manager.apply_history_index(index);
         }
         self.active = false;
         self.search_term.clear();
@@ -69,7 +74,7 @@ impl ReverseSearchState {
                 .to_lowercase()
                 .contains(&self.search_term.to_lowercase())
             {
-                self.matches.push((history.len() - 1 - i, command.clone()));
+                self.matches.push(i);
             }
         }
 

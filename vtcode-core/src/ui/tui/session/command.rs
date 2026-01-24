@@ -702,8 +702,11 @@ pub(super) fn delete_sentence_backward(session: &mut Session) {
 }
 
 #[allow(dead_code)]
-pub(super) fn remember_submitted_input(session: &mut Session, submitted: &str) {
-    session.input_manager.add_to_history(submitted.to_owned());
+pub(super) fn remember_submitted_input(
+    session: &mut Session,
+    submitted: super::input_manager::InputHistoryEntry,
+) {
+    session.input_manager.add_to_history(submitted);
 }
 
 #[allow(dead_code)]

@@ -148,7 +148,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             // Start reverse search
             session
                 .reverse_search_state
-                .start_search(&session.input_manager, &session.input_manager.history());
+                .start_search(&session.input_manager, &session.input_manager.history_texts());
             session.mark_dirty();
             return None;
         }
@@ -157,7 +157,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     // Handle reverse search if active
     if session.reverse_search_state.active {
         // Get history first to avoid borrow conflicts
-        let history = session.input_manager.history().to_vec();
+        let history = session.input_manager.history_texts();
         let handled = crate::ui::tui::session::reverse_search::handle_reverse_search_key(
             &key,
             &mut session.reverse_search_state,
@@ -300,6 +300,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
 
             let submitted = session.input_manager.content().to_owned();
+            let submitted_entry = session.input_manager.current_history_entry();
             session.input_manager.clear();
             session.scroll_manager.set_offset(0);
             crate::ui::tui::session::slash::update_slash_suggestions(session);
@@ -309,7 +310,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            session.remember_submitted_input(&submitted);
+            session.remember_submitted_input(submitted_entry);
 
             // Note: The thinking spinner message is no longer added here.
             // Instead, it's added in session_loop.rs after the user message is displayed,
