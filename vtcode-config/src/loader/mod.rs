@@ -15,6 +15,7 @@ use crate::mcp::McpClientConfig;
 use crate::optimization::OptimizationConfig;
 use crate::output_styles::OutputStyleConfig;
 use crate::root::{PtyConfig, UiConfig};
+use crate::subagent::SubagentsConfig;
 use crate::telemetry::TelemetryConfig;
 use crate::timeouts::TimeoutsConfig;
 use anyhow::{Context, Result, ensure};
@@ -198,6 +199,10 @@ pub struct VTCodeConfig {
     /// Skills system configuration (Agent Skills spec)
     #[serde(default)]
     pub skills: SkillsConfig,
+
+    /// Subagent system configuration
+    #[serde(default)]
+    pub subagents: SubagentsConfig,
 
     /// Output style configuration
     #[serde(default)]
@@ -436,6 +441,23 @@ max_snapshots = 50
 
 # Maximum age of checkpoints to keep (in days)
 max_age_days = 30
+
+# Subagent system (opt-in)
+[subagents]
+# Enable subagents (default: false)
+enabled = false
+
+# Maximum concurrent subagents
+# max_concurrent = 3
+
+# Default timeout for subagent execution (seconds)
+# default_timeout_seconds = 300
+
+# Default model for subagents (override per-agent model if set)
+# default_model = ""
+
+# Additional directories to search for subagent definitions
+# additional_agent_dirs = []
 
 # Tool security configuration
 [tools]

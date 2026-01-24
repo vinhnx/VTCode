@@ -112,11 +112,11 @@ Skills are dormant by default and activated on-demand to save tokens:
   - `debugger` - Debugging and issue diagnosis
 - **Parameters**:
   - `prompt` (required) - Task to delegate
-  - `subagent_type` (required) - Which subagent to use
+  - `subagent_type` (optional) - Which subagent to use
   - `resume` (optional) - Resume previous work
   - `thoroughness` (optional) - Analysis depth
   - `parent_context` (optional) - Context from parent agent
-- **Status**: Active (always available in registry)
+- **Status**: Available when enabled in `vtcode.toml` (`[subagents] enabled = true`)
 - **Custom Agents**: Can be defined in `.vtcode/agents/` (project) or `~/.vtcode/agents/` (user)
 
 ---
