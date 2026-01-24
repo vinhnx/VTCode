@@ -3,6 +3,44 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.70.0] - 2026-01-24
+
+
+### Features
+    - feat: introduce `InputHistoryEntry` to manage input with attachments, enhance reverse search and history navigation
+    - feat: introduce `InputHistoryEntry` to manage input with attachments, enhance reverse search and history navigation
+    - feat: refine tool output styling, and enhance agent configuration
+    - feat: refine tool output styling, and enhance agent configuration
+    - feat: add nested discovery for Claude skills, enhance SKILL.md parsing with default values, and update validation rules
+    - feat: add subagent system with optional enablement, commands, and configuration updates
+    - feat: add harness event emitter and session persistence for enhanced logging and state management
+    - feat: add adaptive logo SVGs for different color schemes
+
+
+### Bug Fixes
+    - fix: update allowed tools list to include request_user_input
+    - fix: enhance output spooling logic for PTY commands and handle double-serialized JSON
+
+
+### Refactors
+    - refactor: remove `ui.show_message_dividers` config, simplify divider logic, and enhance tool summary rendering
+    - refactor: transition `UnifiedCache` to use `RwLock` for interior mutability, enhance test coverage, and simplify cache operations
+    - refactor: disable subagents by default and update documentation with usage and configuration details
+    - refactor: remove unused fields and path handling from `HarnessEventEmitter` and `HarnessTurnState`
+    - refactor: update queue display to show follow-ups and improve styling
+
+
+### Documentation
+    - docs: update changelog for v0.69.1 [skip ci]
+    - docs: update changelog for v0.69.0 [skip ci]
+    - docs: add note to check amp in vscode session
+
+
+### Chores
+    - chore: update npm package.json to v0.69.1 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.68.2 version =  [skip ci]
 # [Version 0.69.1] - 2026-01-24
 
 
