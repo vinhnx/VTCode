@@ -189,6 +189,7 @@ High-quality plan example:
 ## Subagents
 
 Delegate to specialized agents when appropriate:
+- Subagents are available only when enabled in `vtcode.toml` (`[subagents] enabled = true`)
 - `spawn_subagent`: params `prompt`, `subagent_type`, `resume`, `thoroughness`, `parent_context`
 - **Built-in agents**: explore (lightweight, read-only), plan (full, research), general (full, all tools), code-reviewer, debugger
 - Use `resume` to continue existing agent_id
@@ -428,6 +429,7 @@ Complex refactoring and multi-file analysis. Methodical, outcome-focused, expert
 ## Subagents
 
 Delegate complex tasks to specialized agents:
+- Subagents are available only when enabled in `vtcode.toml` (`[subagents] enabled = true`)
 - `spawn_subagent`: params `prompt`, `subagent_type`, `resume`, `thoroughness`, `parent_context`
 - **Built-in agents**: explore (haiku, read-only), plan (sonnet, research), general (sonnet, full), code-reviewer, debugger
 - Use `resume` for continuing existing agent_id

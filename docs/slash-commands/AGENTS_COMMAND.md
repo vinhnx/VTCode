@@ -14,6 +14,8 @@ Subagents enable more efficient problem-solving by providing task-specific confi
 /agents
 /agents list
 /agents ls
+/subagents
+/subagents list
 ```
 
 Lists all available subagents (built-in and custom).
@@ -30,6 +32,7 @@ Lists all available subagents (built-in and custom).
 ```
 /agents create
 /agents new
+/subagents create
 ```
 
 Starts the interactive creation workflow for a new subagent. You can either:
@@ -59,6 +62,7 @@ the agent's role, capabilities, and approach.
 ```
 /agents edit <agent-name>
 /agents edit code-reviewer
+/subagents edit <agent-name>
 ```
 
 Shows instructions for editing an existing subagent configuration.
@@ -69,6 +73,7 @@ Shows instructions for editing an existing subagent configuration.
 /agents delete <agent-name>
 /agents remove <agent-name>
 /agents rm <agent-name>
+/subagents delete <agent-name>
 ```
 
 Shows instructions for deleting a subagent configuration.
@@ -83,6 +88,15 @@ Shows instructions for deleting a subagent configuration.
 Displays command usage information.
 
 ## Subagent Configuration
+
+### Enablement
+
+Subagents are disabled by default. Enable them in `vtcode.toml`:
+
+```toml
+[subagents]
+enabled = true
+```
 
 ### File Locations
 
@@ -129,7 +143,7 @@ Focus on understanding the failure root cause and fixing the underlying issue.
 
 ### Automatic Delegation
 
-Claude Code proactively delegates tasks to subagents when:
+VT Code delegates tasks to subagents when:
 - The task matches a subagent's description
 - The subagent is available and properly configured
 - The current context suggests the subagent would be helpful
@@ -160,6 +174,5 @@ Request a specific subagent by mentioning it:
 
 ## Related Documentation
 
-- [Subagents Guide](https://code.claude.com/docs/en/sub-agents)
-- [Creating Custom Agents](https://code.claude.com/docs/en/sub-agents#creating-custom-agents)
-- [Agent Skills](https://code.claude.com/docs/en/skills)
+- `docs/subagents/SUBAGENTS.md`
+- `docs/SKILLS_GUIDE.md`

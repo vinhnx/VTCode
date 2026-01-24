@@ -439,12 +439,6 @@ Now go build something complex!
 ![G_V_oL6W4AAnHSU.jpg](../../../../../Documents/vtcode-resources/idea/G_V_oL6W4AAnHSU.jpg)
 ![G_WBJbsW4AE7anl.jpg](../../../../../Documents/vtcode-resources/idea/G_WBJbsW4AE7anl.jpg)
 
---
-
-
-https://cursor.com/docs/context/subagents
-
 ---
-
 
 https://code.claude.com/docs/en/skills

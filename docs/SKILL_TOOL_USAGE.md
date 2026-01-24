@@ -205,8 +205,10 @@ list_skills → load_skill → use skill → load_skill_resource if needed
 ### 2. Use Subagents for Isolation
 Spawn subagents when you need:
 - Focused expertise (code-reviewer, debugger)
-- Preserve main conversation context
+- Preserve main conversation context (subagents run in isolated context)
 - Parallel exploration (multiple subagents)
+
+Note: Subagents must be enabled in `vtcode.toml` (`[subagents] enabled = true`).
 
 ### 3. Progressive Loading
 Load skills as needed, not all at once:
@@ -221,7 +223,7 @@ When you `load_skill`, associated tools become active:
 - They're saved in snapshots for resume
 
 ### 5. Subagent Context
-Provide parent context when spawning for better results:
+Subagents start with a clean context. Provide parent context when spawning for better results:
 ```
 spawn_subagent 
   prompt="Review the authentication module"
@@ -234,7 +236,7 @@ spawn_subagent
 Skills and subagents are session-aware:
 
 - **Skill State**: Active skills are saved in snapshots and restored on resume
-- **Subagent Context**: Subagent results are captured in the parent conversation
+- **Subagent Context**: Subagent results are captured in the parent conversation (not shared beforehand)
 - **Tool Definitions**: Active skill tools are re-registered on session resume
 
 This ensures your skill workflow continues seamlessly across sessions.
@@ -266,5 +268,5 @@ This ensures your skill workflow continues seamlessly across sessions.
 Skill tools integrate with the main agent:
 - LLM sees all available skills via `list_skills`
 - Agent can autonomously load skills as needed
-- Subagents maintain parent conversation context
+- Subagents operate with isolated context and require explicit parent_context
 - Skill state is preserved across sessions

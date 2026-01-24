@@ -128,6 +128,7 @@ High-quality plan example:
 ## Subagents
 
 Delegate to specialized agents when appropriate:
+- Subagents are available only when enabled in `vtcode.toml` (`[subagents] enabled = true`)
 - `spawn_subagent`: params `prompt`, `subagent_type`, `resume`, `thoroughness`, `parent_context`
 - **Built-in agents**: explore (haiku, read-only), plan (sonnet, research), general 
   (sonnet, full), code-reviewer, debugger
@@ -499,4 +500,3 @@ When to revise:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-01-04 | Audit Agent | Initial reference document |
-

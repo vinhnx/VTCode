@@ -79,6 +79,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "agents",
             description: "Create, edit, and manage subagents (usage: /agents [--create|--edit|--delete])",
         },
+        SlashCommandInfo {
+            name: "subagents",
+            description: "Alias for /agents (usage: /subagents [--create|--edit|--delete])",
+        },
         // Status and diagnostics
         SlashCommandInfo {
             name: "status",

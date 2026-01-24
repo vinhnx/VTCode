@@ -576,61 +576,69 @@ pub(crate) async fn initialize_session(
         ));
     }
 
-    // 4. SpawnSubagent
-    let subagent_registry =
-        SubagentRegistry::new(config.workspace.clone(), SubagentsConfig::default()).await?;
-    let spawn_subagent_tool = SpawnSubagentTool::new(
-        Arc::new(subagent_registry),
-        config.clone(),
-        Arc::new(tool_registry.clone()),
-        config.workspace.clone(),
-    );
-    let spawn_subagent_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
-        tool_constants::SPAWN_SUBAGENT,
-        vtcode_core::config::types::CapabilityLevel::Basic,
-        spawn_subagent_tool,
-    );
-    tool_registry
-        .register_tool(spawn_subagent_reg)
-        .await
-        .context("Failed to register spawn_subagent tool")?;
+    // 4. SpawnSubagent (optional)
+    let subagent_config = vt_cfg
+        .map(|cfg| cfg.subagents.clone())
+        .unwrap_or_else(SubagentsConfig::default);
 
-    {
-        let mut tools_guard = tools.write().await;
-        tools_guard.push(uni::ToolDefinition::function(
-            tool_constants::SPAWN_SUBAGENT.to_string(),
-            "Spawn a specialized subagent to handle a specific task with isolated context. Subagents are useful for focused expertise or preserving main conversation context.".to_string(),
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "prompt": {
-                        "type": "string",
-                        "description": "Task description for the subagent"
+    if subagent_config.enabled {
+        let subagent_registry =
+            SubagentRegistry::new(config.workspace.clone(), subagent_config).await?;
+        let spawn_subagent_tool = SpawnSubagentTool::new(
+            Arc::new(subagent_registry),
+            config.clone(),
+            Arc::new(tool_registry.clone()),
+            config.workspace.clone(),
+        );
+        let spawn_subagent_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
+            tool_constants::SPAWN_SUBAGENT,
+            vtcode_core::config::types::CapabilityLevel::Basic,
+            spawn_subagent_tool,
+        );
+        tool_registry
+            .register_tool(spawn_subagent_reg)
+            .await
+            .context("Failed to register spawn_subagent tool")?;
+
+        {
+            let mut tools_guard = tools.write().await;
+            tools_guard.push(uni::ToolDefinition::function(
+                tool_constants::SPAWN_SUBAGENT.to_string(),
+                "Spawn a specialized subagent to handle a specific task with isolated context. Subagents are useful for focused expertise or preserving main conversation context.".to_string(),
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "prompt": {
+                            "type": "string",
+                            "description": "Task description for the subagent"
+                        },
+                        "subagent_type": {
+                            "type": "string",
+                            "description": "Optional: specific subagent type (explore, plan, general, code-reviewer, debugger)"
+                        },
+                        "resume": {
+                            "type": "string",
+                            "description": "Optional: agent ID to resume"
+                        },
+                        "thoroughness": {
+                            "type": "string",
+                            "description": "Optional: thoroughness level (quick, medium, very_thorough). Default: medium."
+                        },
+                        "timeout_seconds": {
+                            "type": "integer",
+                            "description": "Optional: timeout in seconds"
+                        },
+                        "parent_context": {
+                            "type": "string",
+                            "description": "Optional: context from parent agent"
+                        }
                     },
-                    "subagent_type": {
-                        "type": "string",
-                        "description": "Optional: specific subagent type (explore, plan, general, code-reviewer, debugger)"
-                    },
-                    "resume": {
-                        "type": "string",
-                        "description": "Optional: agent ID to resume"
-                    },
-                    "thoroughness": {
-                        "type": "string",
-                        "description": "Optional: thoroughness level (quick, medium, very_thorough). Default: medium."
-                    },
-                    "timeout_seconds": {
-                        "type": "integer",
-                        "description": "Optional: timeout in seconds"
-                    },
-                    "parent_context": {
-                        "type": "string",
-                        "description": "Optional: context from parent agent"
-                    }
-                },
-                "required": ["prompt"]
-            }),
-        ));
+                    "required": ["prompt"]
+                }),
+            ));
+        }
+    } else {
+        debug!("Subagents are disabled via vtcode.toml");
     }
 
     // 5. Discovered CLI tool adapters
