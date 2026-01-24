@@ -1085,6 +1085,8 @@ pub mod tools {
     // ============================================================
     /// Ask the human a question via the interactive UI (TUI) and return the selection.
     pub const ASK_USER_QUESTION: &str = "ask_user_question";
+    /// Request structured user input with 1-3 questions and optional multiple-choice options.
+    pub const REQUEST_USER_INPUT: &str = "request_user_input";
 
     // ============================================================
     // PLAN MODE

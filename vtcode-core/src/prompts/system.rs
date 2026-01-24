@@ -225,6 +225,8 @@ Tools hidden by default (saves context):
 
 Plan Mode is a read-only exploration phase where mutating tools are blocked:
 
+**ExecPlan Methodology**: For complex multi-hour tasks, use ExecPlans (see `.vtcode/PLANS.md`). ExecPlans are self-contained, living design documents with mandatory sections for progress tracking, decision logging, and retrospectives.
+
 **Entering Plan Mode**:
 - The session may start in Plan Mode (check status bar showing "Plan")
 - In Plan Mode, you can only use read-only tools: `read_file`, `grep_file`, `list_files`, `code_intelligence`, `unified_search`

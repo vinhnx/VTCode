@@ -590,6 +590,58 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         // NETWORK OPERATIONS
         // ============================================================
+
+        // ============================================================
+        // HUMAN-IN-THE-LOOP (HITL)
+        // ============================================================
+        FunctionDeclaration {
+            name: tools::REQUEST_USER_INPUT.to_string(),
+            description: "Ask the user 1-3 structured questions with optional multiple-choice options. Use when you need clarification, preference input, or a decision from the user before proceeding. Prefer this over asking in plain text.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "questions": {
+                        "type": "array",
+                        "description": "Questions to show the user (1-3). Prefer 1 unless multiple independent decisions block progress.",
+                        "minItems": 1,
+                        "maxItems": 3,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "description": "Stable identifier for mapping answers (snake_case)."
+                                },
+                                "header": {
+                                    "type": "string",
+                                    "description": "Short header label shown in the UI (12 or fewer chars)."
+                                },
+                                "question": {
+                                    "type": "string",
+                                    "description": "Single-sentence prompt shown to the user."
+                                },
+                                "options": {
+                                    "type": "array",
+                                    "description": "Optional 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with '(Recommended)'.",
+                                    "minItems": 2,
+                                    "maxItems": 3,
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "label": {"type": "string", "description": "User-facing label (1-5 words)."},
+                                            "description": {"type": "string", "description": "One short sentence explaining impact."}
+                                        },
+                                        "required": ["label", "description"]
+                                    }
+                                }
+                            },
+                            "required": ["id", "header", "question"]
+                        }
+                    }
+                },
+                "required": ["questions"]
+            }),
+        },
     ]
 }
 

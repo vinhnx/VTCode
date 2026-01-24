@@ -125,6 +125,7 @@ pub mod ask_user_question;
 pub mod code_intelligence;
 pub mod constants;
 pub mod error_messages;
+pub mod request_user_input;
 
 pub mod autonomous_executor;
 pub mod cache;

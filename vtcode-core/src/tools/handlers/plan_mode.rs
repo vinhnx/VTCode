@@ -160,39 +160,54 @@ impl Tool for EnterPlanModeTool {
         let plan_name = self.generate_plan_name(args.plan_name.as_deref());
         let plan_file = plans_dir.join(format!("{}.md", plan_name));
 
-        // Create initial plan file with template
+        // Create initial plan file with ExecPlan-compliant template
+        // Reference: .vtcode/PLANS.md for full ExecPlan specification
         let initial_content = format!(
             r#"# {}
 
-## Summary
+This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
+
+Reference: `.vtcode/PLANS.md` for full ExecPlan specification.
+
+## Purpose / Big Picture
+
 {}
 
-## Context
-- Key files: (to be identified)
-- Dependencies: (to be identified)
+## Progress
 
-## Phase 1: Initial Understanding
-[ ] Understand the user's request
-[ ] Identify relevant code paths
-[ ] Ask clarifying questions if needed
+- [ ] Explore codebase and understand requirements
+- [ ] Design implementation approach
+- [ ] Review plan with user
+- [ ] (Add implementation steps here)
 
-## Phase 2: Design
-[ ] Provide background context
-[ ] Describe requirements and constraints
-[ ] Propose implementation approach
+## Surprises & Discoveries
 
-## Phase 3: Review
-[ ] Verify plan aligns with request
-[ ] Check for edge cases
-[ ] Clarify remaining questions
+(Document unexpected behaviors, bugs, optimizations, or insights discovered during implementation.)
 
-## Phase 4: Implementation Steps
-1. **Step 1**
-   - Files:
-   - Details:
+## Decision Log
 
-## Open Questions
-- (Add questions here)
+(Record every decision made while working on the plan.)
+
+- Decision: Initial plan created
+  Rationale: Starting from ExecPlan template
+  Date: {}
+
+## Outcomes & Retrospective
+
+(Summarize outcomes, gaps, and lessons learned at major milestones or at completion.)
+
+## Context and Orientation
+
+Key files: (to be identified)
+Dependencies: (to be identified)
+
+## Plan of Work
+
+(Describe the sequence of edits and additions. For each edit, name the file and location.)
+
+## Validation and Acceptance
+
+(Describe how to verify the changes work. Include test commands and expected outputs.)
 
 ---
 *Plan created: {}*
@@ -200,7 +215,8 @@ impl Tool for EnterPlanModeTool {
             plan_name.replace('-', " ").to_uppercase(),
             args.description
                 .as_deref()
-                .unwrap_or("(Describe the goal here)"),
+                .unwrap_or("(Describe the goal here - what someone gains after this change and how they can see it working)"),
+            chrono::Utc::now().format("%Y-%m-%d"),
             chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
         );
 

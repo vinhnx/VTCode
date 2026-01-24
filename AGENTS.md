@@ -6,6 +6,10 @@ This file provides guidance to agents (both AI and human) working with VT Code.
 
 When agents intuitively guess wrong about a command, flag, or workflow, we treat it as a signal to **improve the interface** rather than just documenting correct behavior. We "pave the desire paths" by adding aliases, flags, and shortcuts that match intuitive expectations. Over time, this compounds—agents stop making mistakes naturally, and the tool becomes easier to use.
 
+## ExecPlans
+
+When writing complex features or significant refactors, use an ExecPlan (as described in `.vtcode/PLANS.md`) from design to implementation. ExecPlans are self-contained, living design documents that enable a complete novice to implement a feature end-to-end. They include mandatory sections for progress tracking, decision logging, and retrospectives.
+
 ## Build & Test Commands
 
 ```bash
