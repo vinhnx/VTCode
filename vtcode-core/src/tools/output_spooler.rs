@@ -163,17 +163,84 @@ impl ToolOutputSpooler {
         let content = if (tool_name == "read_file" || tool_name == "unified_file") && !is_mcp {
             if let Some(raw_content) = value.get("content").and_then(|v| v.as_str()) {
                 raw_content.to_string()
+            } else if let Some(json_str) = value.as_str() {
+                // Edge case: value might be a JSON string that needs parsing
+                if let Ok(parsed) = serde_json::from_str::<Value>(json_str) {
+                    if let Some(raw_content) = parsed.get("content").and_then(|v| v.as_str()) {
+                        debug!(
+                            tool = tool_name,
+                            "read_file spool: recovered content from double-serialized JSON string"
+                        );
+                        raw_content.to_string()
+                    } else {
+                        json_str.to_string()
+                    }
+                } else {
+                    json_str.to_string()
+                }
             } else {
                 // Fallback to JSON serialization if no content field
+                debug!(
+                    tool = tool_name,
+                    has_content = value.get("content").is_some(),
+                    "read_file spool: could not extract content as string; falling back to JSON"
+                );
                 serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
             }
-        } else if (tool_name == "run_pty_cmd" || tool_name == "send_pty_input" || tool_name == "read_pty_session") && !is_mcp {
-            // For PTY-related tools, extract the actual command output from the "output" field
-            // This ensures the spooled file contains the raw command output, not the JSON wrapper
+        } else if (tool_name == "run_pty_cmd"
+            || tool_name == "send_pty_input"
+            || tool_name == "read_pty_session"
+            || tool_name == "unified_exec"
+            || tool_name == "bash"
+            || tool_name == "shell")
+            && !is_mcp
+        {
+            // For PTY-related tools (including unified_exec which delegates to run_pty_cmd),
+            // extract the actual command output from the "output" field.
+            // This ensures the spooled file contains the raw command output, not the JSON wrapper.
+            //
+            // Handle two cases:
+            // 1. value is an object with "output" field (normal case)
+            // 2. value is a string containing JSON (edge case: double-serialized)
             if let Some(output_content) = value.get("output").and_then(|v| v.as_str()) {
                 output_content.to_string()
+            } else if let Some(json_str) = value.as_str() {
+                // Edge case: value might be a JSON string that needs parsing
+                // This can happen if the value was serialized somewhere in the pipeline
+                if let Ok(parsed) = serde_json::from_str::<Value>(json_str) {
+                    if let Some(output_content) = parsed.get("output").and_then(|v| v.as_str()) {
+                        debug!(
+                            tool = tool_name,
+                            "PTY spool: recovered output from double-serialized JSON string"
+                        );
+                        output_content.to_string()
+                    } else {
+                        // Parsed but no output field - use the parsed value's stdout if available
+                        if let Some(stdout) = parsed.get("stdout").and_then(|v| v.as_str()) {
+                            stdout.to_string()
+                        } else {
+                            json_str.to_string()
+                        }
+                    }
+                } else {
+                    // Not valid JSON - use the string as-is
+                    json_str.to_string()
+                }
             } else {
                 // Fallback to JSON serialization if no output field
+                debug!(
+                    tool = tool_name,
+                    has_output = value.get("output").is_some(),
+                    output_type = ?value.get("output").map(|v| match v {
+                        serde_json::Value::Null => "null",
+                        serde_json::Value::Bool(_) => "bool",
+                        serde_json::Value::Number(_) => "number",
+                        serde_json::Value::String(_) => "string",
+                        serde_json::Value::Array(_) => "array",
+                        serde_json::Value::Object(_) => "object",
+                    }),
+                    "PTY spool: could not extract output as string; falling back to JSON"
+                );
                 serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
             }
         } else if let Some(s) = value.as_str() {
@@ -661,5 +728,118 @@ mod tests {
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
         assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
+    }
+
+    #[tokio::test]
+    async fn test_unified_exec_spools_raw_output() {
+        let temp = tempdir().unwrap();
+        let mut config = SpoolerConfig::default();
+        config.threshold_bytes = 50;
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+
+        let command_output =
+            "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev";
+
+        // Simulate a unified_exec response (delegates to run_pty_cmd)
+        let unified_exec_response = json!({
+            "output": command_output,
+            "exit_code": 0,
+            "wall_time": 1.234,
+            "success": true
+        });
+
+        let result = spooler
+            .process_output("unified_exec", unified_exec_response, false)
+            .await
+            .unwrap();
+
+        // Should return file reference
+        assert!(result.get("spooled_to_file").is_some());
+
+        // Verify spooled file contains raw output, not JSON wrapper
+        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
+        assert_eq!(spooled_content, command_output);
+        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
+        assert!(!spooled_content.contains("\"exit_code\"")); // Raw content, not JSON
+    }
+
+    #[tokio::test]
+    async fn test_double_serialized_pty_output() {
+        let temp = tempdir().unwrap();
+        let mut config = SpoolerConfig::default();
+        config.threshold_bytes = 50;
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+
+        let command_output =
+            "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev";
+
+        // Simulate a double-serialized response (Value::String containing JSON)
+        // This can happen if the value was serialized somewhere in the pipeline
+        let inner_json = json!({
+            "output": command_output,
+            "exit_code": 0,
+            "wall_time": 1.234,
+            "success": true
+        });
+        let double_serialized = json!(serde_json::to_string(&inner_json).unwrap());
+
+        let result = spooler
+            .process_output("run_pty_cmd", double_serialized, false)
+            .await
+            .unwrap();
+
+        // Should return file reference
+        assert!(result.get("spooled_to_file").is_some());
+
+        // Verify spooled file contains raw output, not JSON wrapper
+        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
+        assert_eq!(spooled_content, command_output);
+        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
+    }
+
+    #[tokio::test]
+    async fn test_bash_and_shell_spool_raw_output() {
+        let temp = tempdir().unwrap();
+        let mut config = SpoolerConfig::default();
+        config.threshold_bytes = 50;
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+
+        let command_output = "total 32\ndrwxr-xr-x  10 user  staff   320 Jan  1 12:00 .";
+
+        // Test bash tool
+        let bash_response = json!({
+            "output": command_output,
+            "exit_code": 0,
+            "wall_time": 0.1
+        });
+
+        let result = spooler
+            .process_output("bash", bash_response, false)
+            .await
+            .unwrap();
+
+        assert!(result.get("spooled_to_file").is_some());
+        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
+        assert_eq!(spooled_content, command_output);
+
+        // Test shell tool
+        let shell_response = json!({
+            "output": command_output,
+            "exit_code": 0,
+            "wall_time": 0.2
+        });
+
+        let result = spooler
+            .process_output("shell", shell_response, false)
+            .await
+            .unwrap();
+
+        assert!(result.get("spooled_to_file").is_some());
+        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
+        assert_eq!(spooled_content, command_output);
     }
 }
