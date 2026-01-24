@@ -44,11 +44,11 @@ pub(crate) fn render_write_file_preview(
 ) -> Result<()> {
     // Show basic metadata (compact format)
     if get_bool(payload, "created") {
-        renderer.line(MessageStyle::Response, "File created")?;
+        renderer.line(MessageStyle::ToolDetail, "File created")?;
     }
 
     if let Some(encoding) = get_string(payload, "encoding") {
-        renderer.line(MessageStyle::Info, &format!("encoding: {}", encoding))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("encoding: {}", encoding))?;
     }
 
     // Handle diff preview
@@ -61,11 +61,11 @@ pub(crate) fn render_write_file_preview(
         let reason = get_string(diff_value, "reason").unwrap_or("skipped");
         if let Some(detail) = get_string(diff_value, "detail") {
             renderer.line(
-                MessageStyle::Info,
+                MessageStyle::ToolDetail,
                 &format!("diff: {} ({})", reason, detail),
             )?;
         } else {
-            renderer.line(MessageStyle::Info, &format!("diff: {}", reason))?;
+            renderer.line(MessageStyle::ToolDetail, &format!("diff: {}", reason))?;
         }
         return Ok(());
     }
@@ -73,23 +73,23 @@ pub(crate) fn render_write_file_preview(
     let diff_content = get_string(diff_value, "content").unwrap_or("");
 
     if diff_content.is_empty() && get_bool(diff_value, "is_empty") {
-        renderer.line(MessageStyle::Info, "(no changes)")?;
+        renderer.line(MessageStyle::ToolDetail, "(no changes)")?;
         return Ok(());
     }
 
     if !diff_content.is_empty() {
-        renderer.line(MessageStyle::Info, "▼ diff")?;
+        renderer.line(MessageStyle::ToolDetail, "▼ diff")?;
         render_diff_content(renderer, diff_content, git_styles, ls_styles)?;
     }
 
     if get_bool(diff_value, "truncated") {
         if let Some(omitted) = get_u64(diff_value, "omitted_line_count") {
             renderer.line(
-                MessageStyle::Info,
+                MessageStyle::ToolDetail,
                 &format!("… +{} lines (use read_file for full view)", omitted),
             )?;
         } else {
-            renderer.line(MessageStyle::Info, "… diff truncated")?;
+            renderer.line(MessageStyle::ToolDetail, "… diff truncated")?;
         }
     }
 
@@ -112,7 +112,7 @@ pub(crate) fn render_list_dir_output(
     if let Some(path) = get_string(val, "path") {
         let display_path = if path.is_empty() { "/" } else { path };
         renderer.line(
-            MessageStyle::Info,
+            MessageStyle::ToolDetail,
             &format!(
                 "  {}{}",
                 display_path,
@@ -132,13 +132,13 @@ pub(crate) fn render_list_dir_output(
         } else {
             format!("  {} items total", count)
         };
-        renderer.line(MessageStyle::Info, &summary)?;
+        renderer.line(MessageStyle::ToolDetail, &summary)?;
     }
 
     // Render items grouped by type
     if let Some(items) = val.get("items").and_then(|v| v.as_array()) {
         if items.is_empty() {
-            renderer.line(MessageStyle::Info, "  (empty)")?;
+            renderer.line(MessageStyle::ToolDetail, "  (empty)")?;
         } else {
             let mut directories = Vec::new();
             let mut files = Vec::new();
@@ -220,33 +220,33 @@ pub(crate) fn render_list_dir_output(
 
             // Render directories first with section header
             if !directories.is_empty() {
-                renderer.line(MessageStyle::Info, "  [Directories]")?;
+                renderer.line(MessageStyle::ToolDetail, "  [Directories]")?;
                 for (name, _size) in &directories {
                     let name_with_slash = format!("{}/", name);
                     let display = format!("  {:<width$}", name_with_slash, width = max_name_width,);
-                    renderer.line(MessageStyle::Response, &display)?;
+                    renderer.line(MessageStyle::ToolDetail, &display)?;
                 }
 
                 // Add visual separation between directories and files
                 if !files.is_empty() {
-                    renderer.line(MessageStyle::Info, "  ")?; // Add blank line
+                    renderer.line(MessageStyle::ToolDetail, "  ")?; // Add blank line
                 }
             }
 
             // Render files with section header
             if !files.is_empty() {
-                renderer.line(MessageStyle::Info, "  [Files]")?;
+                renderer.line(MessageStyle::ToolDetail, "  [Files]")?;
                 for (name, _size) in &files {
                     // Simple file name display without size or emoji
                     let display = format!("  {:<width$}", name, width = max_name_width,);
-                    renderer.line(MessageStyle::Response, &display)?;
+                    renderer.line(MessageStyle::ToolDetail, &display)?;
                 }
             }
 
             let omitted = items.len().saturating_sub(MAX_DISPLAYED_FILES);
             if omitted > 0 {
                 renderer.line(
-                    MessageStyle::Info,
+                    MessageStyle::ToolDetail,
                     &format!("  + {} more items not shown", omitted),
                 )?;
             }
@@ -263,7 +263,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
     // Show file metadata with aligned formatting (no size information)
     if let Some(encoding) = get_string(val, "encoding") {
         renderer.line(
-            MessageStyle::Info,
+            MessageStyle::ToolDetail,
             &format!("  {:16} {}", "encoding", encoding),
         )?;
     }
@@ -273,7 +273,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
         && let Some(end) = get_u64(val, "end_line")
     {
         renderer.line(
-            MessageStyle::Info,
+            MessageStyle::ToolDetail,
             &format!("  {:16} {}-{}", "lines", start, end),
         )?;
     }
@@ -322,20 +322,20 @@ fn render_diff_content(
     // Render all lines compactly (minimal padding)
     for (is_truncation, content) in lines_to_render {
         if is_truncation {
-            renderer.line(MessageStyle::Info, &format!("…{}", content))?;
+            renderer.line(MessageStyle::ToolDetail, &format!("…{}", content))?;
         } else if let Some(style) =
             select_line_style(Some(tools::WRITE_FILE), &content, git_styles, ls_styles)
         {
             renderer.line_with_style(style, &content)?;
         } else {
-            renderer.line(MessageStyle::Response, &content)?;
+            renderer.line(MessageStyle::ToolDetail, &content)?;
         }
     }
 
     // Show summary stats if we rendered changes (compact format)
     if added_count + removed_count > 0 {
         renderer.line(
-            MessageStyle::Info,
+            MessageStyle::ToolDetail,
             &format!("▸ +{} -{}", added_count, removed_count),
         )?;
     }

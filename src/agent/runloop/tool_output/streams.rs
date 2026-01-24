@@ -143,8 +143,8 @@ pub(crate) async fn render_stream_section(
                 effective_normalized_content.len(),
                 log_path.display()
             );
-            renderer.line(MessageStyle::Info, &msg_buffer)?;
-            renderer.line(MessageStyle::Info, "(Preview skipped due to size)")?;
+            renderer.line(MessageStyle::ToolDetail, &msg_buffer)?;
+            renderer.line(MessageStyle::ToolDetail, "(Preview skipped due to size)")?;
             return Ok(());
         }
 
@@ -175,9 +175,9 @@ pub(crate) async fn render_stream_section(
                 log_path.display()
             );
         }
-        renderer.line(MessageStyle::Info, &msg_buffer)?;
+        renderer.line(MessageStyle::ToolDetail, &msg_buffer)?;
         renderer.line(
-            MessageStyle::Info,
+            MessageStyle::ToolDetail,
             &format!("Last {} lines:", preview_lines),
         )?;
 
@@ -196,7 +196,7 @@ pub(crate) async fn render_stream_section(
                 msg_buffer.push('s');
             }
             msg_buffer.push_str(" truncated ...]");
-            renderer.line(MessageStyle::Info, &msg_buffer)?;
+            renderer.line(MessageStyle::ToolDetail, &msg_buffer)?;
         }
 
         for line in &tail {
@@ -283,7 +283,7 @@ pub(crate) async fn render_stream_section(
             }
             format_buffer.push_str(" truncated ...]");
         }
-        renderer.line(MessageStyle::Info, &format_buffer)?;
+        renderer.line(MessageStyle::ToolDetail, &format_buffer)?;
     }
 
     if !is_mcp_tool && !is_run_command && !title.is_empty() {
@@ -293,7 +293,7 @@ pub(crate) async fn render_stream_section(
             format_buffer.push(ch.to_ascii_uppercase());
         }
         format_buffer.push(']');
-        renderer.line(MessageStyle::Info, &format_buffer)?;
+        renderer.line(MessageStyle::ToolDetail, &format_buffer)?;
     }
 
     let mut display_buffer = String::with_capacity(128);
@@ -327,7 +327,7 @@ pub(crate) fn render_code_fence_blocks(
 ) -> Result<()> {
     for (index, block) in blocks.iter().enumerate() {
         if block.lines.is_empty() {
-            renderer.line(MessageStyle::Info, "    (no content)")?;
+            renderer.line(MessageStyle::ToolDetail, "    (no content)")?;
         } else {
             let total_lines = block.lines.len();
             let truncated = total_lines > MAX_CODE_LINES;
@@ -345,11 +345,11 @@ pub(crate) fn render_code_fence_blocks(
             }
             markdown.push_str("```");
 
-            renderer.line(MessageStyle::Response, &markdown)?;
+            renderer.line(MessageStyle::ToolDetail, &markdown)?;
 
             if truncated {
                 renderer.line(
-                    MessageStyle::Info,
+                    MessageStyle::ToolDetail,
                     &format!(
                         "    ... ({} more lines truncated, view full output in tool logs)",
                         total_lines - MAX_CODE_LINES
@@ -359,7 +359,7 @@ pub(crate) fn render_code_fence_blocks(
         }
 
         if index + 1 < blocks.len() {
-            renderer.line(MessageStyle::Response, "")?;
+            renderer.line(MessageStyle::ToolDetail, "")?;
         }
     }
 

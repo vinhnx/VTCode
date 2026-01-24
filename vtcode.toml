@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "openai/gpt-oss-20b"
+default_model = "gpt-oss:20b-cloud"
 
 # Visual theme for the terminal interface
 theme = "vitesse-light-soft"
@@ -139,6 +139,11 @@ failure_threshold = 5
 pause_on_open = true
 max_open_circuits = 3
 recovery_cooldown = 60
+
+[agent.harness]
+max_tool_calls_per_turn = 32
+max_tool_wall_clock_secs = 600
+max_tool_retries = 2
 
 # Status line configuration
 [ui.status_line]
@@ -800,6 +805,12 @@ min-keyword-matches = 2
 
 [output_style]
 active_style = "default"
+
+[subagents]
+enabled = false
+max_concurrent = 3
+default_timeout_seconds = 300
+additional_agent_dirs = []
 # Pre-tool use hooks - Run before tools execute, can block or validate
 # pre_tool_use = [
 #   # Example: Block modifications to sensitive files
