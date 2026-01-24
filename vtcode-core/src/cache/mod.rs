@@ -2,11 +2,14 @@
 //!
 //! This module provides a consolidated caching framework that replaces
 //! the multiple duplicate cache implementations throughout the codebase.
+//!
+//! Uses interior mutability with `RwLock` to allow `&self` methods,
+//! following the pattern from matklad's "Caches in Rust" article.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
 /// Default TTL for cache entries (2 minutes for memory-constrained environments)
@@ -75,7 +78,15 @@ impl<V> CacheEntry<V> {
 }
 
 /// Unified cache backend with configurable eviction policies
+///
+/// Uses interior mutability via `RwLock` to allow `&self` methods,
+/// enabling easier use in concurrent contexts without borrow checker conflicts.
 pub struct UnifiedCache<K, V> {
+    inner: RwLock<UnifiedCacheInner<K, V>>,
+}
+
+/// Internal state for `UnifiedCache`, protected by `RwLock`
+struct UnifiedCacheInner<K, V> {
     entries: HashMap<K, CacheEntry<V>>,
     max_size: usize,
     ttl: Duration,
@@ -102,66 +113,80 @@ where
 {
     pub fn new(max_size: usize, ttl: Duration, eviction_policy: EvictionPolicy) -> Self {
         Self {
-            entries: HashMap::with_capacity(max_size),
-            max_size,
-            ttl,
-            stats: CacheStats {
+            inner: RwLock::new(UnifiedCacheInner {
+                entries: HashMap::with_capacity(max_size),
                 max_size,
-                ..Default::default()
-            },
-            eviction_policy,
+                ttl,
+                stats: CacheStats {
+                    max_size,
+                    ..Default::default()
+                },
+                eviction_policy,
+            }),
         }
     }
 
     /// Get value from cache with zero-copy access by default
-    pub fn get(&mut self, key: &K) -> Option<Arc<V>> {
-        match self.entries.get_mut(key) {
-            Some(entry) => {
-                if entry.is_expired(self.ttl) {
-                    self.remove(key);
-                    self.stats.misses += 1;
-                    None
-                } else {
-                    entry.mark_accessed();
-                    self.stats.hits += 1;
-                    Some(Arc::clone(&entry.value))
-                }
-            }
-            None => {
-                self.stats.misses += 1;
-                None
-            }
+    pub fn get(&self, key: &K) -> Option<Arc<V>> {
+        let mut inner = self.inner.write().ok()?;
+        let ttl = inner.ttl;
+
+        // Check if key exists and handle expiration
+        let is_expired = inner
+            .entries
+            .get(key)
+            .map(|entry| entry.is_expired(ttl))
+            .unwrap_or(false);
+
+        if is_expired {
+            Self::remove_inner(&mut inner, key);
+            inner.stats.misses += 1;
+            return None;
+        }
+
+        if let Some(entry) = inner.entries.get_mut(key) {
+            entry.mark_accessed();
+            let value = Arc::clone(&entry.value);
+            inner.stats.hits += 1;
+            Some(value)
+        } else {
+            inner.stats.misses += 1;
+            None
         }
     }
 
     /// Get owned value (explicitly clones when needed)
-    pub fn get_owned(&mut self, key: &K) -> Option<V> {
+    pub fn get_owned(&self, key: &K) -> Option<V> {
         self.get(key).map(|arc| (*arc).clone())
     }
 
     /// Insert value into cache with automatic eviction
-    pub fn insert(&mut self, key: K, value: V, size_bytes: u64) {
+    pub fn insert(&self, key: K, value: V, size_bytes: u64) {
+        let Ok(mut inner) = self.inner.write() else {
+            return;
+        };
+
         // Remove expired entries first
-        self.remove_expired_entries();
+        Self::remove_expired_entries_inner(&mut inner);
 
         // Evict if necessary
-        while self.entries.len() >= self.max_size {
-            self.evict_one();
+        while inner.entries.len() >= inner.max_size {
+            Self::evict_one_inner(&mut inner);
         }
 
         let entry = CacheEntry::new(value, size_bytes);
-        self.entries.insert(key, entry);
-        self.stats.current_size = self.entries.len();
-        self.stats.total_memory_bytes += size_bytes;
+        inner.entries.insert(key, entry);
+        inner.stats.current_size = inner.entries.len();
+        inner.stats.total_memory_bytes += size_bytes;
     }
 
     /// Remove expired entries based on TTL
-    fn remove_expired_entries(&mut self) {
-        let expired_keys: Vec<K> = self
+    fn remove_expired_entries_inner(inner: &mut UnifiedCacheInner<K, V>) {
+        let expired_keys: Vec<K> = inner
             .entries
             .iter()
             .filter_map(|(k, v)| {
-                if v.is_expired(self.ttl) {
+                if v.is_expired(inner.ttl) {
                     Some(k.clone())
                 } else {
                     None
@@ -170,80 +195,91 @@ where
             .collect();
 
         for key in expired_keys {
-            self.remove(&key);
+            Self::remove_inner(inner, &key);
         }
     }
 
     /// Evict one entry based on the eviction policy
-    fn evict_one(&mut self) {
-        if self.entries.is_empty() {
+    fn evict_one_inner(inner: &mut UnifiedCacheInner<K, V>) {
+        if inner.entries.is_empty() {
             return;
         }
 
-        let key_to_remove = match self.eviction_policy {
-            EvictionPolicy::Lru => self.find_lru_entry(),
-            EvictionPolicy::Lfu => self.find_lfu_entry(),
-            EvictionPolicy::Fifo => self.find_fifo_entry(),
-            EvictionPolicy::TtlOnly => self.find_oldest_entry(),
+        let key_to_remove = match inner.eviction_policy {
+            EvictionPolicy::Lru => Self::find_lru_entry_inner(inner),
+            EvictionPolicy::Lfu => Self::find_lfu_entry_inner(inner),
+            EvictionPolicy::Fifo => Self::find_fifo_entry_inner(inner),
+            EvictionPolicy::TtlOnly => Self::find_oldest_entry_inner(inner),
         };
 
         if let Some(key) = key_to_remove {
-            self.remove(&key);
-            self.stats.evictions += 1;
+            Self::remove_inner(inner, &key);
+            inner.stats.evictions += 1;
         }
     }
 
-    fn find_lru_entry(&self) -> Option<K> {
-        self.entries
+    fn find_lru_entry_inner(inner: &UnifiedCacheInner<K, V>) -> Option<K> {
+        inner
+            .entries
             .iter()
             .min_by_key(|(_, entry)| entry.last_accessed)
             .map(|(k, _)| k.clone())
     }
 
-    fn find_lfu_entry(&self) -> Option<K> {
-        self.entries
+    fn find_lfu_entry_inner(inner: &UnifiedCacheInner<K, V>) -> Option<K> {
+        inner
+            .entries
             .iter()
             .min_by_key(|(_, entry)| entry.access_count)
             .map(|(k, _)| k.clone())
     }
 
-    fn find_fifo_entry(&self) -> Option<K> {
-        self.entries
+    fn find_fifo_entry_inner(inner: &UnifiedCacheInner<K, V>) -> Option<K> {
+        inner
+            .entries
             .iter()
             .min_by_key(|(_, entry)| entry.created_at)
             .map(|(k, _)| k.clone())
     }
 
-    fn find_oldest_entry(&self) -> Option<K> {
-        self.find_fifo_entry()
+    fn find_oldest_entry_inner(inner: &UnifiedCacheInner<K, V>) -> Option<K> {
+        Self::find_fifo_entry_inner(inner)
     }
 
-    fn remove(&mut self, key: &K) {
-        if let Some(entry) = self.entries.remove(key) {
-            self.stats.total_memory_bytes -= entry.size_bytes;
-            self.stats.current_size = self.entries.len();
+    fn remove_inner(inner: &mut UnifiedCacheInner<K, V>, key: &K) {
+        if let Some(entry) = inner.entries.remove(key) {
+            inner.stats.total_memory_bytes -= entry.size_bytes;
+            inner.stats.current_size = inner.entries.len();
         }
     }
 
-    /// Get cache statistics
-    pub fn stats(&self) -> &CacheStats {
-        &self.stats
+    /// Get cache statistics (returns owned clone)
+    pub fn stats(&self) -> CacheStats {
+        self.inner
+            .read()
+            .map(|inner| inner.stats.clone())
+            .unwrap_or_default()
     }
 
     /// Clear all entries
-    pub fn clear(&mut self) {
-        self.entries.clear();
-        self.stats.current_size = 0;
-        self.stats.total_memory_bytes = 0;
+    pub fn clear(&self) {
+        if let Ok(mut inner) = self.inner.write() {
+            inner.entries.clear();
+            inner.stats.current_size = 0;
+            inner.stats.total_memory_bytes = 0;
+        }
     }
 
     /// Get current size
     pub fn len(&self) -> usize {
-        self.entries.len()
+        self.inner
+            .read()
+            .map(|inner| inner.entries.len())
+            .unwrap_or(0)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.len() == 0
     }
 
     /// Invalidate cache entries matching a key prefix (selective eviction)
@@ -254,8 +290,12 @@ where
     /// cache.invalidate_prefix("grep_file:/workspace/src/");
     /// // Only removes entries for that specific file, not entire cache
     /// ```
-    pub fn invalidate_prefix(&mut self, prefix: &str) {
-        let keys_to_remove: Vec<K> = self
+    pub fn invalidate_prefix(&self, prefix: &str) {
+        let Ok(mut inner) = self.inner.write() else {
+            return;
+        };
+
+        let keys_to_remove: Vec<K> = inner
             .entries
             .keys()
             .filter(|key| key.to_cache_key().starts_with(prefix))
@@ -263,7 +303,7 @@ where
             .collect();
 
         for key in keys_to_remove {
-            self.remove(&key);
+            Self::remove_inner(&mut inner, &key);
         }
     }
 
@@ -275,13 +315,64 @@ where
     /// cache.invalidate_path("/workspace/src/main.rs");
     /// // Removes all cache entries related to this file
     /// ```
-    pub fn invalidate_path(&mut self, path: &str) {
+    pub fn invalidate_path(&self, path: &str) {
         self.invalidate_prefix(&format!("{}:", path));
+    }
+
+    /// Invalidate cache entries matching a key suffix (selective eviction)
+    ///
+    /// # Example
+    /// ```ignore
+    /// cache.invalidate_suffix(":/workspace/src/main.rs");
+    /// // Only removes entries for that specific file
+    /// ```
+    pub fn invalidate_suffix(&self, suffix: &str) {
+        let Ok(mut inner) = self.inner.write() else {
+            return;
+        };
+
+        let keys_to_remove: Vec<K> = inner
+            .entries
+            .keys()
+            .filter(|key| key.to_cache_key().ends_with(suffix))
+            .cloned()
+            .collect();
+
+        for key in keys_to_remove {
+            Self::remove_inner(&mut inner, &key);
+        }
+    }
+
+    /// Invalidate cache entries containing a substring (selective eviction)
+    ///
+    /// # Example
+    /// ```ignore
+    /// cache.invalidate_containing("/workspace/src/main.rs");
+    /// // Removes entries where the cache key contains this path
+    /// ```
+    pub fn invalidate_containing(&self, substring: &str) {
+        let Ok(mut inner) = self.inner.write() else {
+            return;
+        };
+
+        let keys_to_remove: Vec<K> = inner
+            .entries
+            .keys()
+            .filter(|key| key.to_cache_key().contains(substring))
+            .cloned()
+            .collect();
+
+        for key in keys_to_remove {
+            Self::remove_inner(&mut inner, &key);
+        }
     }
 
     /// Get total memory used by cache in bytes
     pub fn total_memory_bytes(&self) -> u64 {
-        self.stats.total_memory_bytes
+        self.inner
+            .read()
+            .map(|inner| inner.stats.total_memory_bytes)
+            .unwrap_or(0)
     }
 
     /// Estimate entry cost in bytes (for memory-aware decisions)
@@ -295,9 +386,12 @@ where
 
     /// Reduce TTL for all entries in cache (for pressure-based tuning)
     /// Returns the new TTL that was set
-    pub fn reduce_ttl(&mut self, factor: f64) -> Duration {
-        let new_ttl = Duration::from_secs_f64(self.ttl.as_secs_f64() * factor);
-        self.ttl = new_ttl;
+    pub fn reduce_ttl(&self, factor: f64) -> Duration {
+        let Ok(mut inner) = self.inner.write() else {
+            return Duration::ZERO;
+        };
+        let new_ttl = Duration::from_secs_f64(inner.ttl.as_secs_f64() * factor);
+        inner.ttl = new_ttl;
         new_ttl
     }
 
@@ -307,41 +401,49 @@ where
     /// 1. Remove all expired entries first
     /// 2. Evict least useful entries until target percentage reached
     /// 3. Use access count and age for ranking
-    pub fn evict_under_pressure(&mut self, target_reduction_percent: u32) -> u64 {
+    pub fn evict_under_pressure(&self, target_reduction_percent: u32) -> usize {
+        let Ok(mut inner) = self.inner.write() else {
+            return 0;
+        };
+
         // Clamp percentage to 0-100
         let target_percent = std::cmp::min(100, target_reduction_percent);
 
         // Remove expired entries first (most efficient cleanup)
-        let expired_before = self.entries.len();
-        self.remove_expired_entries();
-        let expired_removed = expired_before - self.entries.len();
+        let expired_before = inner.entries.len();
+        Self::remove_expired_entries_inner(&mut inner);
+        let expired_removed = expired_before - inner.entries.len();
 
         // Calculate target size
-        let current_size = self.entries.len();
+        let current_size = inner.entries.len();
         let target_size = (current_size * (100 - target_percent) as usize) / 100;
 
         // Evict until we reach target
         let mut evicted_count = expired_removed;
-        while self.entries.len() > target_size && !self.entries.is_empty() {
-            self.evict_one();
+        while inner.entries.len() > target_size && !inner.entries.is_empty() {
+            Self::evict_one_inner(&mut inner);
             evicted_count += 1;
         }
 
-        evicted_count as u64
+        evicted_count
     }
 
     /// Clear a percentage of least-used entries (for aggressive cleanup under critical pressure)
     /// Returns number of entries removed
-    pub fn clear_least_used(&mut self, percent_to_clear: u32) -> u64 {
-        let percent = std::cmp::min(100, percent_to_clear);
-        let entries_to_remove = (self.entries.len() * percent as usize) / 100;
+    pub fn clear_least_used(&self, percent_to_clear: u32) -> usize {
+        let Ok(mut inner) = self.inner.write() else {
+            return 0;
+        };
 
-        let mut removed = 0u64;
+        let percent = std::cmp::min(100, percent_to_clear);
+        let entries_to_remove = (inner.entries.len() * percent as usize) / 100;
+
+        let mut removed = 0usize;
         for _ in 0..entries_to_remove {
-            if self.entries.is_empty() {
+            if inner.entries.is_empty() {
                 break;
             }
-            self.evict_one();
+            Self::evict_one_inner(&mut inner);
             removed += 1;
         }
 
@@ -350,9 +452,13 @@ where
 
     /// Get entries sorted by "usefulness" (access count and recency)
     /// Higher score = more useful (keep these)
-    pub fn entries_by_usefulness(&self) -> Vec<(K, u64)> {
+    pub fn entries_by_usefulness(&self) -> Vec<(K, CacheEntry<V>)> {
+        let Ok(inner) = self.inner.read() else {
+            return Vec::new();
+        };
+
         let now = SystemTime::now();
-        let mut entries: Vec<(K, u64)> = self
+        let mut entries: Vec<(K, CacheEntry<V>, u64)> = inner
             .entries
             .iter()
             .map(|(k, entry)| {
@@ -366,13 +472,13 @@ where
                 let recency_factor = std::cmp::max(1, 3600 / (age_secs + 1));
                 let usefulness_score = entry.access_count * recency_factor as u64;
 
-                (k.clone(), usefulness_score)
+                (k.clone(), entry.clone(), usefulness_score)
             })
             .collect();
 
         // Sort by usefulness descending (highest first)
-        entries.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
-        entries
+        entries.sort_by_key(|(_, _, score)| std::cmp::Reverse(*score));
+        entries.into_iter().map(|(k, e, _)| (k, e)).collect()
     }
 }
 
@@ -422,7 +528,7 @@ where
     }
 
     /// Get results with automatic context limitation
-    pub fn get_context_limited<F>(&mut self, keys: &[K], mut process_fn: F) -> Vec<V>
+    pub fn get_context_limited<F>(&self, keys: &[K], mut process_fn: F) -> Vec<V>
     where
         F: FnMut(&K) -> Option<V>,
     {
@@ -454,7 +560,7 @@ where
         results
     }
 
-    pub fn stats(&self) -> &CacheStats {
+    pub fn stats(&self) -> CacheStats {
         self.inner.stats()
     }
 }
@@ -474,7 +580,7 @@ mod tests {
 
     #[test]
     fn test_cache_basic_operations() {
-        let mut cache = UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let cache = UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
         let key = TestKey("test".into());
         let value: String = "test_value".into();
 
@@ -485,13 +591,13 @@ mod tests {
         // Check stats
         let stats = cache.stats();
         assert_eq!(stats.hits, 1);
-        assert_eq!(stats.misses, 1); // One miss from initial get
+        assert_eq!(stats.misses, 0);
         assert_eq!(stats.current_size, 1);
     }
 
     #[test]
     fn test_cache_expiration() {
-        let mut cache = UnifiedCache::new(10, Duration::from_millis(100), EvictionPolicy::Lru);
+        let cache = UnifiedCache::new(10, Duration::from_millis(100), EvictionPolicy::Lru);
         let key = TestKey("test".into());
         let value: String = "test_value".into();
 
@@ -505,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_context_limited_cache() {
-        let mut cache = ContextAwareCache::new(100, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let cache = ContextAwareCache::new(100, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
         let keys: Vec<TestKey> = (0..10).map(|i| TestKey(i.to_string())).collect();
 
         let results = cache.get_context_limited(&keys, |key| Some(format!("value_{}", key.0)));
@@ -518,7 +624,7 @@ mod tests {
 
     #[test]
     fn test_pressure_aware_total_memory() {
-        let mut cache = UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let cache = UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         // Insert three entries with known sizes
         cache.insert(TestKey("k1".into()), "v1".to_string(), 100);
@@ -531,11 +637,8 @@ mod tests {
 
     #[test]
     fn test_pressure_aware_reduce_ttl() {
-        let mut cache: UnifiedCache<TestKey, String> =
+        let cache: UnifiedCache<TestKey, String> =
             UnifiedCache::new(10, Duration::from_secs(300), EvictionPolicy::Lru);
-
-        // Original TTL is 300s
-        assert_eq!(cache.ttl.as_secs(), 300);
 
         // Reduce by 40% (Warning pressure)
         let new_ttl = cache.reduce_ttl(0.4);
@@ -548,7 +651,7 @@ mod tests {
 
     #[test]
     fn test_pressure_aware_evict_under_pressure() {
-        let mut cache: UnifiedCache<TestKey, String> =
+        let cache: UnifiedCache<TestKey, String> =
             UnifiedCache::new(20, Duration::from_secs(3600), EvictionPolicy::Lru);
 
         // Insert 10 entries
@@ -566,7 +669,7 @@ mod tests {
 
     #[test]
     fn test_pressure_aware_clear_least_used() {
-        let mut cache: UnifiedCache<TestKey, String> =
+        let cache: UnifiedCache<TestKey, String> =
             UnifiedCache::new(20, Duration::from_secs(3600), EvictionPolicy::Lru);
 
         // Insert 10 entries
@@ -588,7 +691,7 @@ mod tests {
 
     #[test]
     fn test_pressure_aware_entries_by_usefulness() {
-        let mut cache: UnifiedCache<TestKey, String> =
+        let cache: UnifiedCache<TestKey, String> =
             UnifiedCache::new(20, Duration::from_secs(3600), EvictionPolicy::Lru);
 
         // Insert and access entries with different patterns

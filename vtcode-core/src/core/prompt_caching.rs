@@ -109,7 +109,7 @@ impl PromptCache {
     }
 
     /// Get cached optimized prompt
-    pub fn get(&mut self, prompt_hash: &str) -> Option<&CachedPrompt> {
+    pub fn get(&mut self, prompt_hash: &str) -> Option<CachedPrompt> {
         if !self.config.enabled {
             return None;
         }
@@ -117,7 +117,7 @@ impl PromptCache {
             entry.last_used = Self::current_timestamp();
             entry.usage_count += 1;
             self.dirty = true;
-            entry as &CachedPrompt
+            entry.clone()
         })
     }
 
@@ -358,7 +358,7 @@ impl PromptOptimizer {
 
         // Check cache first
         if let Some(cached) = self.cache.get(&prompt_hash) {
-            return Ok(cached.optimized_prompt.clone());
+            return Ok(cached.optimized_prompt);
         }
 
         // Generate optimized prompt
