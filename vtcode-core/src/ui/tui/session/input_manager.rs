@@ -4,6 +4,49 @@
 /// and command history navigation.
 use std::time::Instant;
 
+use crate::llm::provider::ContentPart;
+
+#[derive(Clone, Debug)]
+pub struct InputHistoryEntry {
+    content: String,
+    elements: Vec<ContentPart>,
+}
+
+impl InputHistoryEntry {
+    pub fn from_content_and_attachments(content: String, attachments: Vec<ContentPart>) -> Self {
+        let mut elements = Vec::new();
+        if !content.is_empty() {
+            elements.push(ContentPart::text(content.clone()));
+        }
+        elements.extend(attachments.into_iter().filter(ContentPart::is_image));
+        Self { content, elements }
+    }
+
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+
+    pub fn elements(&self) -> &[ContentPart] {
+        &self.elements
+    }
+
+    pub fn has_attachments(&self) -> bool {
+        self.elements.iter().any(|part| part.is_image())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.content.trim().is_empty() && !self.has_attachments()
+    }
+
+    pub fn attachment_elements(&self) -> Vec<ContentPart> {
+        self.elements
+            .iter()
+            .filter(|part| part.is_image())
+            .cloned()
+            .collect()
+    }
+}
+
 /// Manages user input state including text, cursor, and history
 #[derive(Clone, Debug)]
 pub struct InputManager {
@@ -11,12 +54,14 @@ pub struct InputManager {
     content: String,
     /// Current cursor position in the input
     cursor: usize,
+    /// Non-text input elements (e.g. image attachments)
+    attachments: Vec<ContentPart>,
     /// Command history entries
-    history: Vec<String>,
+    history: Vec<InputHistoryEntry>,
     /// Current position in history (None = viewing current input)
     history_index: Option<usize>,
     /// Unsaved draft when navigating history
-    history_draft: Option<String>,
+    history_draft: Option<InputHistoryEntry>,
     /// Time of last Escape key press for double-tap detection
     last_escape_time: Option<Instant>,
 }
@@ -28,6 +73,7 @@ impl InputManager {
         Self {
             content: String::new(),
             cursor: 0,
+            attachments: Vec::new(),
             history: Vec::new(),
             history_index: None,
             history_draft: None,
@@ -128,19 +174,20 @@ impl InputManager {
     pub fn clear(&mut self) {
         self.content.clear();
         self.cursor = 0;
+        self.attachments.clear();
         self.reset_history_navigation();
     }
 
     /// Adds an entry to history and resets navigation
-    pub fn add_to_history(&mut self, entry: String) {
-        if !entry.trim().is_empty() {
+    pub fn add_to_history(&mut self, entry: InputHistoryEntry) {
+        if !entry.is_empty() {
             self.history.push(entry);
         }
         self.reset_history_navigation();
     }
 
     /// Navigates to the next history entry
-    pub fn go_to_next_history(&mut self) -> Option<String> {
+    pub fn go_to_next_history(&mut self) -> Option<InputHistoryEntry> {
         match self.history_index {
             None => None,
             Some(0) => {
@@ -155,11 +202,11 @@ impl InputManager {
     }
 
     /// Navigates to the previous history entry
-    pub fn go_to_previous_history(&mut self) -> Option<String> {
+    pub fn go_to_previous_history(&mut self) -> Option<InputHistoryEntry> {
         let current_index = match self.history_index {
             None => {
                 // Save current input as draft when starting history navigation
-                self.history_draft = Some(self.content.clone());
+                self.history_draft = Some(self.current_history_entry());
                 self.history.len().saturating_sub(1)
             }
             Some(i) => {
@@ -198,13 +245,49 @@ impl InputManager {
     }
 
     /// Returns the history entries (for debugging/testing)
-    pub fn history(&self) -> &[String] {
+    pub fn history(&self) -> &[InputHistoryEntry] {
         &self.history
+    }
+
+    pub fn history_texts(&self) -> Vec<String> {
+        self.history
+            .iter()
+            .map(|entry| entry.content.clone())
+            .collect()
     }
 
     /// Returns the current history index
     pub fn history_index(&self) -> Option<usize> {
         self.history_index
+    }
+
+    pub fn attachments(&self) -> &[ContentPart] {
+        &self.attachments
+    }
+
+    pub fn set_attachments(&mut self, attachments: Vec<ContentPart>) {
+        self.attachments = attachments.into_iter().filter(ContentPart::is_image).collect();
+    }
+
+    pub fn current_history_entry(&self) -> InputHistoryEntry {
+        InputHistoryEntry::from_content_and_attachments(
+            self.content.clone(),
+            self.attachments.clone(),
+        )
+    }
+
+    pub fn apply_history_entry(&mut self, entry: InputHistoryEntry) {
+        self.content = entry.content.clone();
+        self.cursor = self.content.len();
+        self.attachments = entry.attachment_elements();
+    }
+
+    pub fn apply_history_index(&mut self, index: usize) -> bool {
+        let Some(entry) = self.history.get(index).cloned() else {
+            return false;
+        };
+        self.apply_history_entry(entry);
+        true
     }
 }
 
@@ -273,22 +356,40 @@ mod tests {
     #[test]
     fn history_navigation() {
         let mut manager = InputManager::new();
-        manager.add_to_history("first".to_owned());
-        manager.add_to_history("second".to_owned());
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "first".to_owned(),
+            Vec::new(),
+        ));
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "second".to_owned(),
+            Vec::new(),
+        ));
 
-        assert_eq!(manager.go_to_previous_history(), Some("second".to_owned()));
-        assert_eq!(manager.go_to_previous_history(), Some("first".to_owned()));
-        assert_eq!(manager.go_to_previous_history(), None);
+        assert_eq!(
+            manager.go_to_previous_history().map(|entry| entry.content().to_owned()),
+            Some("second".to_owned())
+        );
+        assert_eq!(
+            manager.go_to_previous_history().map(|entry| entry.content().to_owned()),
+            Some("first".to_owned())
+        );
+        assert_eq!(manager.go_to_previous_history().map(|entry| entry.content().to_owned()), None);
     }
 
     #[test]
     fn history_navigation_saves_draft() {
         let mut manager = InputManager::new();
         manager.set_content("current".to_owned());
-        manager.add_to_history("previous".to_owned());
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
+            "previous".to_owned(),
+            Vec::new(),
+        ));
 
         manager.go_to_previous_history();
-        assert_eq!(manager.go_to_next_history(), Some("current".to_owned()));
+        assert_eq!(
+            manager.go_to_next_history().map(|entry| entry.content().to_owned()),
+            Some("current".to_owned())
+        );
     }
 
     #[test]
@@ -309,5 +410,23 @@ mod tests {
 
         manager.move_cursor_right();
         assert_eq!(manager.cursor(), 6);
+    }
+
+    #[test]
+    fn history_navigation_restores_attachments() {
+        let mut manager = InputManager::new();
+        manager.set_content("check this".to_owned());
+        manager.set_attachments(vec![ContentPart::image(
+            "encoded".to_owned(),
+            "image/png".to_owned(),
+        )]);
+        manager.add_to_history(manager.current_history_entry());
+        manager.clear();
+
+        let entry = manager.go_to_previous_history().expect("history entry");
+        manager.apply_history_entry(entry);
+
+        assert_eq!(manager.content(), "check this");
+        assert_eq!(manager.attachments().len(), 1);
     }
 }
