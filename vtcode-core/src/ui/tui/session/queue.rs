@@ -81,11 +81,12 @@ impl Session {
         let mut header_style = self.styles.accent_style();
         header_style = header_style.add_modifier(Modifier::BOLD);
         let message_style = self.styles.default_style();
+        let muted_style = self.styles.default_style().add_modifier(Modifier::DIM);
 
         let header_text = if self.queued_inputs.len() == 1 {
-            "Queued message".to_owned()
+            "Follow-up".to_owned()
         } else {
-            format!("Queued messages ({})", self.queued_inputs.len())
+            format!("Follow-ups ({})", self.queued_inputs.len())
         };
 
         let mut header_lines =
@@ -95,7 +96,7 @@ impl Session {
         }
         lines.extend(header_lines);
 
-        const DISPLAY_LIMIT: usize = 2;
+        const DISPLAY_LIMIT: usize = 5;
         for (index, entry) in self.queued_inputs.iter().take(DISPLAY_LIMIT).enumerate() {
             let label = format!("  {}. ", index + 1);
             let mut message_lines =
@@ -108,14 +109,22 @@ impl Session {
 
         let remaining = self.queued_inputs.len().saturating_sub(DISPLAY_LIMIT);
         if remaining > 0 {
-            let indicator = format!("  +{}...", remaining);
+            let indicator = format!("  +{} more", remaining);
             let mut indicator_lines =
-                self.wrap_line(Line::from(indicator).style(message_style), max_width);
+                self.wrap_line(Line::from(indicator).style(muted_style), max_width);
             if indicator_lines.is_empty() {
                 indicator_lines.push(Line::default());
             }
             lines.extend(indicator_lines);
         }
+
+        lines.push(Line::default());
+        let hint = "Ctrl+↑ to edit queue";
+        let hint_line = Line::from(vec![Span::styled(
+            format!("  {}", hint),
+            muted_style,
+        )]);
+        lines.push(hint_line);
 
         lines
     }
