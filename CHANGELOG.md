@@ -3,6 +3,38 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.69.1] - 2026-01-24
+
+
+### Features
+    - feat: add harness event emitter and session persistence for enhanced logging and state management
+    - feat: add adaptive logo SVGs for different color schemes
+    - feat: implement batch file reading with token-efficient command transformation
+    - feat: add support for additional programming languages including swift in syntax highlighting and configuration
+
+
+### Bug Fixes
+    - fix: update allowed tools list to include request_user_input
+    - fix: enhance output spooling logic for PTY commands and handle double-serialized JSON
+
+
+### Refactors
+    - refactor: update queue display to show follow-ups and improve styling
+    - refactor: enhance token-efficient output handling and command parsing in executors
+    - refactor: update exit_plan_mode policy to prompt; enhance OpenResponsesProvider with version handling and reasoning content support
+
+
+### Documentation
+    - docs: update changelog for v0.69.0 [skip ci]
+    - docs: add note to check amp in vscode session
+    - docs: update changelog for v0.68.2 [skip ci]
+
+
+### Chores
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.68.2 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.68.1 version =  [skip ci]
 # [Version 0.69.0] - 2026-01-24
 
 
