@@ -1,14 +1,17 @@
+<p align="center">
 <img src="./resources/logo/vt_code_adaptive.svg" alt="vtcode"/>
 
 <a href="./docs/guides/mcp-integration.md"><img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/></a>
 <a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/></a>
 
+  <a href="https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion" target="_blank">
+    <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
+  </a>
   <a href="https://open-vsx.org/extension/nguyenxuanvinh/vtcode-companion" target="_blank">
     <img src="https://img.shields.io/badge/Available%20on-Open%20VSX-4CAF50?style=for-the-badge&logo=opensearch&logoColor=white" alt="Open VSX Registry"/>
   </a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion" target="_blank">
-    <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
-  </a> <a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?color=fc8d62&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=Release" alt="GitHub Release"/></a>
+
+<a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?color=fc8d62&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=Release" alt="GitHub Release"/></a>
 
 ---
 
