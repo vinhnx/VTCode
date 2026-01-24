@@ -31,8 +31,6 @@ pub enum TurnPhase {
 }
 
 pub struct HarnessTurnState {
-    pub run_id: TurnRunId,
-    pub turn_id: TurnId,
     pub phase: TurnPhase,
     pub turn_started_at: Instant,
     pub tool_calls: usize,
@@ -43,15 +41,13 @@ pub struct HarnessTurnState {
 
 impl HarnessTurnState {
     pub fn new(
-        run_id: TurnRunId,
-        turn_id: TurnId,
+        _run_id: TurnRunId,
+        _turn_id: TurnId,
         max_tool_calls: usize,
         max_tool_wall_clock_secs: u64,
         max_tool_retries: u32,
     ) -> Self {
         Self {
-            run_id,
-            turn_id,
             phase: TurnPhase::Preparing,
             turn_started_at: Instant::now(),
             tool_calls: 0,
