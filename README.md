@@ -232,19 +232,6 @@ For installation instructions and download links for other IDEs, visit our [IDE 
 
 ---
 
-## Support VT Code Development
-
-I build VT Code in my free time as one of my passion projects, in order to research and explore how coding agents work in practice. If you find VT Code useful, please consider supporting my work with a coffee via
-[BuyMeACoffee](https://www.buymeacoffee.com/vinhnx):
-
-[![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-yellow.svg)](https://www.buymeacoffee.com/vinhnx)
-
-[![QR Code](resources/screenshots/qr_donate.png)](https://buymeacoffee.com/vinhnx)
-
-Your support means the world to me, thank you!
-
----
-
 ## License
 
 This repository is licensed under the [MIT License](LICENSE).
