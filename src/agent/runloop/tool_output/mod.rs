@@ -105,7 +105,7 @@ pub(crate) async fn render_tool_output(
     render_simple_tool_status(renderer, tool_name, val)?;
 
     if let Some(notice) = val.get("security_notice").and_then(Value::as_str) {
-        renderer.line(MessageStyle::Info, notice)?;
+        renderer.line(MessageStyle::ToolDetail, notice)?;
     }
 
     // Render follow-up prompt if present (with double-rendering protection)
@@ -118,8 +118,8 @@ pub(crate) async fn render_tool_output(
             .unwrap_or(false);
 
         if !already_rendered {
-            renderer.line(MessageStyle::Info, "")?; // Add spacing
-            renderer.line(MessageStyle::Response, follow_up_prompt)?;
+            renderer.line(MessageStyle::ToolDetail, "")?; // Add spacing
+            renderer.line(MessageStyle::ToolDetail, follow_up_prompt)?;
         }
     }
 
@@ -187,7 +187,7 @@ pub(crate) async fn render_tool_output(
             tool_name,
             &git_styles,
             &ls_styles,
-            MessageStyle::Error,
+            MessageStyle::ToolError,
             allow_tool_ansi,
             vt_config,
         )
@@ -212,7 +212,7 @@ fn render_simple_tool_status(
 
 fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     if let Some(error_msg) = val.get("message").and_then(|v| v.as_str()) {
-        renderer.line(MessageStyle::Error, &format!("  Error: {}", error_msg))?;
+        renderer.line(MessageStyle::ToolError, &format!("  Error: {}", error_msg))?;
     }
 
     if let Some(error_type) = val.get("error_type").and_then(|v| v.as_str()) {
@@ -229,7 +229,7 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
             "FileSystemError" => "File system error",
             _ => error_type,
         };
-        renderer.line(MessageStyle::Info, &format!("  Type: {}", type_description))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("  Type: {}", type_description))?;
     }
 
     if let Some(original) = val.get("original_error").and_then(|v| v.as_str())
@@ -240,37 +240,37 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
         } else {
             original.to_string()
         };
-        renderer.line(MessageStyle::Info, &format!("  Details: {}", display_error))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("  Details: {}", display_error))?;
     }
 
     if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
-        renderer.line(MessageStyle::Info, &format!("  Path: {}", path))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("  Path: {}", path))?;
     }
 
     if let Some(line) = val.get("line").and_then(|v| v.as_u64()) {
         if let Some(col) = val.get("column").and_then(|v| v.as_u64()) {
             renderer.line(
-                MessageStyle::Info,
+                MessageStyle::ToolDetail,
                 &format!("  Location: line {}, column {}", line, col),
             )?;
         } else {
-            renderer.line(MessageStyle::Info, &format!("  Location: line {}", line))?;
+            renderer.line(MessageStyle::ToolDetail, &format!("  Location: line {}", line))?;
         }
     }
 
     if let Some(suggestions) = val.get("recovery_suggestions").and_then(|v| v.as_array())
         && !suggestions.is_empty()
     {
-        renderer.line(MessageStyle::Info, "")?;
-        renderer.line(MessageStyle::Info, "  Suggestions:")?;
+        renderer.line(MessageStyle::ToolDetail, "")?;
+        renderer.line(MessageStyle::ToolDetail, "  Suggestions:")?;
         for (idx, suggestion) in suggestions.iter().take(5).enumerate() {
             if let Some(text) = suggestion.as_str() {
-                renderer.line(MessageStyle::Info, &format!("    {}. {}", idx + 1, text))?;
+                renderer.line(MessageStyle::ToolDetail, &format!("    {}. {}", idx + 1, text))?;
             }
         }
         if suggestions.len() > 5 {
             renderer.line(
-                MessageStyle::Info,
+                MessageStyle::ToolDetail,
                 &format!("    ... and {} more", suggestions.len() - 5),
             )?;
         }

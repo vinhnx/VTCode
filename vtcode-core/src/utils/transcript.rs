@@ -144,7 +144,9 @@ fn message_kind(style: MessageStyle) -> InlineMessageKind {
         MessageStyle::Error => InlineMessageKind::Error,
         MessageStyle::Output | MessageStyle::ToolOutput => InlineMessageKind::Pty,
         MessageStyle::Response => InlineMessageKind::Agent,
-        MessageStyle::Tool | MessageStyle::ToolDetail => InlineMessageKind::Tool,
+        MessageStyle::Tool | MessageStyle::ToolDetail | MessageStyle::ToolError => {
+            InlineMessageKind::Tool
+        }
         MessageStyle::Status | MessageStyle::McpStatus => InlineMessageKind::Info,
         MessageStyle::User => InlineMessageKind::User,
         MessageStyle::Reasoning => InlineMessageKind::Policy,

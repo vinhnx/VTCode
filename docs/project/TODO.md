@@ -1,23 +1,5 @@
 --
 
-https://openai.com/index/unrolling-the-codex-agent-loop/ƒ
-check amp in vscode session and contnue
-
-docs/CODEX_AGENT_LOOP_IMPROVEMENTS.md
-
-
---
-
-
-https://x.com/trq212/status/2014836841846132761
-
---
-
-
-https://x.com/nummanali/status/2014684862985175205
-
-==
-
 fix immediate command parser right way -> the harnes should processing before executing to decide to use agent or pty 
 
 lgo:
@@ -438,7 +420,3 @@ Now go build something complex!
 
 ![G_V_oL6W4AAnHSU.jpg](../../../../../Documents/vtcode-resources/idea/G_V_oL6W4AAnHSU.jpg)
 ![G_WBJbsW4AE7anl.jpg](../../../../../Documents/vtcode-resources/idea/G_WBJbsW4AE7anl.jpg)
-
----
-
-https://code.claude.com/docs/en/skills

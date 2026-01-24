@@ -126,11 +126,11 @@ pub(crate) async fn render_terminal_command_panel(
             )
         };
 
-        renderer.line(MessageStyle::Info, &header)?;
+        renderer.line(MessageStyle::Tool, &header)?;
 
         // Show full command only on separate line if truncated
         if command.len() > 50 || working_dir.is_some() {
-            renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
+            renderer.line(MessageStyle::ToolDetail, &format!("$ {}", command))?;
         }
     }
 
@@ -140,7 +140,7 @@ pub(crate) async fn render_terminal_command_panel(
     {
         // Show the input as if it came from a command prompt
         let prompt = format!("$ {}", stdin.trim());
-        renderer.line(MessageStyle::Response, &prompt)?;
+        renderer.line(MessageStyle::ToolDetail, &prompt)?;
     }
 
     // Special handling for exit code 127 (command not found) - show critical message prominently
@@ -152,22 +152,25 @@ pub(crate) async fn render_terminal_command_panel(
 
         if let Some(note) = critical_note {
             renderer.line(
-                MessageStyle::Error,
+                MessageStyle::ToolError,
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
             )?;
-            renderer.line(MessageStyle::Error, "⤫  COMMAND NOT FOUND (EXIT CODE 127)")?;
             renderer.line(
-                MessageStyle::Error,
+                MessageStyle::ToolError,
+                "⤫  COMMAND NOT FOUND (EXIT CODE 127)",
+            )?;
+            renderer.line(
+                MessageStyle::ToolError,
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
             )?;
-            renderer.line(MessageStyle::Error, note)?;
-            renderer.line(MessageStyle::Error, "")?;
+            renderer.line(MessageStyle::ToolError, note)?;
+            renderer.line(MessageStyle::ToolError, "")?;
         }
 
         if let Some(msg) = output_msg {
-            renderer.line(MessageStyle::Info, "Solution:")?;
-            renderer.line(MessageStyle::Info, msg)?;
-            renderer.line(MessageStyle::Info, "")?;
+            renderer.line(MessageStyle::ToolDetail, "Solution:")?;
+            renderer.line(MessageStyle::ToolDetail, msg)?;
+            renderer.line(MessageStyle::ToolDetail, "")?;
         }
 
         // For exit code 127, skip showing the raw PTY output that would confuse the agent
@@ -177,7 +180,7 @@ pub(crate) async fn render_terminal_command_panel(
 
     if stdout.trim().is_empty() && stderr.trim().is_empty() {
         if !is_pty_session || is_completed {
-            renderer.line(MessageStyle::Info, "(no output)")?;
+            renderer.line(MessageStyle::ToolDetail, "(no output)")?;
         } else if is_pty_session && !is_completed {
             // For running PTY sessions with no output yet, don't show "no output"
             // since the process may still be starting up or processing
@@ -218,7 +221,7 @@ pub(crate) async fn render_terminal_command_panel(
             Some(tools::RUN_PTY_CMD),
             git_styles,
             ls_styles,
-            MessageStyle::Error, // Error output
+            MessageStyle::ToolError, // Error output
             allow_ansi,
             vt_config,
         )
@@ -236,7 +239,7 @@ pub(crate) async fn render_terminal_command_panel(
         } else {
             "done".to_string()
         };
-        renderer.line(MessageStyle::Info, &format!("✓ {}", exit_badge))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("✓ {}", exit_badge))?;
     }
 
     // Render follow-up prompt if present (with double-rendering protection)
@@ -248,8 +251,8 @@ pub(crate) async fn render_terminal_command_panel(
         let already_rendered = stdout.contains(follow_up_prompt);
 
         if !already_rendered {
-            renderer.line(MessageStyle::Info, "")?; // Add spacing
-            renderer.line(MessageStyle::Response, follow_up_prompt)?;
+            renderer.line(MessageStyle::ToolDetail, "")?; // Add spacing
+            renderer.line(MessageStyle::ToolDetail, follow_up_prompt)?;
         }
     }
 
