@@ -42,6 +42,7 @@ num_cpus = "1.16"
 clap = { version = "4.5", features = ["derive"] }
 pretty_assertions = "1.4"
 libc = "0.2"
+rand = "0.9"
 
 [workspace.package]
 version = "0.70.0"
