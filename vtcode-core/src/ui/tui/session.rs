@@ -1889,13 +1889,13 @@ mod tests {
         });
 
         let view = visible_transcript(&mut session);
-        let footer: Vec<String> = view.iter().rev().take(4).cloned().collect();
+        let footer: Vec<String> = view.iter().rev().take(10).cloned().collect();
 
         assert!(
             footer
                 .iter()
-                .any(|line| line.contains("Queued messages (3)")),
-            "queued header should be visible at the bottom of the transcript"
+                .any(|line| line.contains("Follow-ups (3)")),
+            "follow-up header should be visible at the bottom of the transcript"
         );
         assert!(
             footer.iter().any(|line| line.contains("1.")),
@@ -1906,14 +1906,17 @@ mod tests {
             "second queued message label should be rendered"
         );
         assert!(
-            footer.iter().any(|line| line.contains("+1...")),
-            "an indicator should show how many queued messages are hidden"
+            footer.iter().any(|line| line.contains("3.")),
+            "third queued message label should be rendered"
         );
         assert!(
-            footer.iter().all(|line| !line.contains("3.")),
-            "queued messages beyond the display limit should be hidden"
+            footer
+                .iter()
+                .any(|line| line.contains("Ctrl+↑ to edit queue")),
+            "hint line should show how to edit queue"
         );
     }
+
 
     #[test]
     fn timeline_visible_selects_latest_item() {
