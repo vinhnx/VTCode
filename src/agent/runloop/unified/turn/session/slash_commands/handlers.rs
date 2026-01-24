@@ -1252,7 +1252,7 @@ pub async fn handle_toggle_plan_mode(
         ctx.renderer.line(MessageStyle::Output, "")?;
         ctx.renderer.line(
             MessageStyle::Info,
-            "Allowed tools: read_file, list_files, grep_file, code_intelligence, ask_user_question",
+            "Allowed tools: read_file, list_files, grep_file, code_intelligence, ask_user_question, request_user_input",
         )?;
     } else {
         ctx.tool_registry.disable_plan_mode();
