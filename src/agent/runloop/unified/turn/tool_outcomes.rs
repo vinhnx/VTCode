@@ -1152,6 +1152,13 @@ pub(crate) fn handle_assistant_response(
 ) -> Result<()> {
     use vtcode_core::utils::ansi::MessageStyle;
 
+    fn reasoning_duplicates_content(cleaned_reasoning: &str, content: &str) -> bool {
+        let cleaned_content = vtcode_core::llm::providers::clean_reasoning_text(content);
+        !cleaned_reasoning.is_empty()
+            && !cleaned_content.is_empty()
+            && cleaned_reasoning == cleaned_content
+    }
+
     if !response_streamed {
         if !assistant_text.trim().is_empty() {
             ctx.renderer.line(MessageStyle::Response, &assistant_text)?;
@@ -1159,9 +1166,10 @@ pub(crate) fn handle_assistant_response(
         if let Some(reasoning_text) = reasoning.as_ref()
             && !reasoning_text.trim().is_empty()
         {
-            let cleaned_reasoning =
-                vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
-            if !cleaned_reasoning.trim().is_empty() {
+            let cleaned_reasoning = vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
+            let duplicates_content = !assistant_text.trim().is_empty()
+                && reasoning_duplicates_content(&cleaned_reasoning, &assistant_text);
+            if !cleaned_reasoning.trim().is_empty() && !duplicates_content {
                 ctx.renderer
                     .line(MessageStyle::Info, &format!(" {}", cleaned_reasoning))?;
             }
@@ -1763,6 +1771,13 @@ pub(crate) async fn handle_text_response(
 ) -> Result<TurnHandlerOutcome> {
     use vtcode_core::utils::ansi::MessageStyle;
 
+    fn reasoning_duplicates_content(cleaned_reasoning: &str, content: &str) -> bool {
+        let cleaned_content = vtcode_core::llm::providers::clean_reasoning_text(content);
+        !cleaned_reasoning.is_empty()
+            && !cleaned_content.is_empty()
+            && cleaned_reasoning == cleaned_content
+    }
+
     if !params.response_streamed {
         if !params.text.trim().is_empty() {
             params
@@ -1773,10 +1788,16 @@ pub(crate) async fn handle_text_response(
         if let Some(reasoning_text) = params.reasoning.as_ref()
             && !reasoning_text.trim().is_empty()
         {
-            params
-                .ctx
-                .renderer
-                .line(MessageStyle::Info, &format!(" {}", reasoning_text))?;
+            let cleaned_reasoning =
+                vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
+            let duplicates_content = !params.text.trim().is_empty()
+                && reasoning_duplicates_content(&cleaned_reasoning, &params.text);
+            if !cleaned_reasoning.trim().is_empty() && !duplicates_content {
+                params
+                    .ctx
+                    .renderer
+                    .line(MessageStyle::Info, &format!(" {}", cleaned_reasoning))?;
+            }
         }
     }
 

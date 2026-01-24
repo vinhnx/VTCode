@@ -407,6 +407,14 @@ fn stream_plain_response_delta(
     Ok(())
 }
 
+fn reasoning_matches_content(reasoning: &str, content: &str) -> bool {
+    let cleaned_reasoning = clean_reasoning_text(reasoning);
+    let cleaned_content = clean_reasoning_text(content);
+    !cleaned_reasoning.is_empty()
+        && !cleaned_content.is_empty()
+        && cleaned_reasoning == cleaned_content
+}
+
 #[derive(Default)]
 struct StreamingReasoningState {
     // Tracks buffered reasoning delta during streaming
@@ -415,6 +423,8 @@ struct StreamingReasoningState {
     render_inline: bool,
     // Track whether we've started streaming (for prefix)
     started: bool,
+    // Whether reasoning output has been rendered
+    rendered_any: bool,
 }
 
 impl StreamingReasoningState {
@@ -423,6 +433,7 @@ impl StreamingReasoningState {
             buffered: String::new(),
             render_inline: inline_enabled,
             started: false,
+            rendered_any: false,
         }
     }
 
@@ -434,6 +445,7 @@ impl StreamingReasoningState {
 
         // For inline rendering: stream reasoning like response tokens
         renderer.inline_with_style(MessageStyle::Reasoning, delta)?;
+        self.rendered_any = true;
         Ok(())
     }
 
@@ -446,6 +458,7 @@ impl StreamingReasoningState {
                     renderer.inline_with_style(MessageStyle::Reasoning, "\n")?;
                 }
                 renderer.line(MessageStyle::Reasoning, &cleaned)?;
+                self.rendered_any = true;
             }
             self.buffered.clear();
         }
@@ -457,7 +470,13 @@ impl StreamingReasoningState {
         renderer: &mut AnsiRenderer,
         final_reasoning: Option<&str>,
         reasoning_already_emitted: bool,
+        suppress_reasoning: bool,
     ) -> Result<()> {
+        if suppress_reasoning {
+            self.buffered.clear();
+            return Ok(());
+        }
+
         // Flush any buffered reasoning first
         self.flush_pending(renderer)?;
 
@@ -470,6 +489,7 @@ impl StreamingReasoningState {
             let cleaned_reasoning = clean_reasoning_text(reasoning_text);
             if !cleaned_reasoning.trim().is_empty() {
                 renderer.line(MessageStyle::Reasoning, &cleaned_reasoning)?;
+                self.rendered_any = true;
 
                 // Chain-of-Thought Monitoring: Analyze reasoning for concerns
                 // This enables early intervention if the agent is going down a wrong path
@@ -491,6 +511,10 @@ impl StreamingReasoningState {
     fn handle_stream_failure(&mut self, _renderer: &mut AnsiRenderer) -> Result<()> {
         self.buffered.clear();
         Ok(())
+    }
+
+    fn rendered_reasoning(&self) -> bool {
+        self.rendered_any
     }
 }
 
@@ -694,8 +718,18 @@ pub(crate) async fn stream_and_render_response(
             if !already_rendered {
                 // Content wasn't rendered yet - render it now
                 // First, flush any pending reasoning
+                let suppress_reasoning = response
+                    .reasoning
+                    .as_deref()
+                    .map(|reasoning| reasoning_matches_content(reasoning, content))
+                    .unwrap_or(false);
                 reasoning_state
-                    .finalize(renderer, response.reasoning.as_deref(), reasoning_emitted)
+                    .finalize(
+                        renderer,
+                        response.reasoning.as_deref(),
+                        reasoning_emitted,
+                        suppress_reasoning,
+                    )
                     .map_err(|err| map_render_error(provider_name, err))?;
 
                 // Now render the actual content
@@ -728,8 +762,19 @@ pub(crate) async fn stream_and_render_response(
 
     // Finalize reasoning display (only if we haven't already in the content block above)
     if response.content.is_none() || aggregated.trim().is_empty() {
+        let suppress_reasoning = response
+            .reasoning
+            .as_deref()
+            .zip(response.content.as_deref())
+            .map(|(reasoning, content)| reasoning_matches_content(reasoning, content))
+            .unwrap_or(false);
         reasoning_state
-            .finalize(renderer, response.reasoning.as_deref(), reasoning_emitted)
+            .finalize(
+                renderer,
+                response.reasoning.as_deref(),
+                reasoning_emitted,
+                suppress_reasoning,
+            )
             .map_err(|err| map_render_error(provider_name, err))?;
     }
 
@@ -738,6 +783,7 @@ pub(crate) async fn stream_and_render_response(
     if !emitted_tokens
         && aggregated.trim().is_empty()
         && response.content.is_none()
+        && !reasoning_state.rendered_reasoning()
         && let Some(reasoning) = response.reasoning.as_deref()
     {
         let reasoning_trimmed = clean_reasoning_text(reasoning.trim());

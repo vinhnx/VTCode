@@ -22,14 +22,6 @@ impl InputHistoryEntry {
         Self { content, elements }
     }
 
-    pub fn content(&self) -> &str {
-        &self.content
-    }
-
-    pub fn elements(&self) -> &[ContentPart] {
-        &self.elements
-    }
-
     pub fn has_attachments(&self) -> bool {
         self.elements.iter().any(|part| part.is_image())
     }
