@@ -183,10 +183,10 @@ impl ToolResultCache {
     /// - Before: Full cache clear on any file change → 90% hit rate drop
     /// - After: Selective removal → 10-15% hit rate impact only
     pub fn invalidate_for_path(&mut self, path: &str) {
-        // Use prefix-based invalidation instead of clearing entire cache
         // Cache keys follow format: "tool:hash:path"
-        // We match on the path component to remove only related entries
-        self.inner.invalidate_path(path);
+        // We need to match entries whose target_path starts with the given path
+        // Use contains-based matching to find path component
+        self.inner.invalidate_containing(path);
     }
 
     /// Clear entire cache
@@ -206,7 +206,7 @@ impl ToolResultCache {
 
     /// Get cache statistics
     pub fn stats(&self) -> crate::cache::CacheStats {
-        self.inner.stats().clone()
+        self.inner.stats()
     }
 }
 

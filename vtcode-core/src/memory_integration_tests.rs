@@ -87,7 +87,7 @@ mod memory_integration {
         const CACHE_SIZE: usize = 50; // Post-optimization parse cache size
         const ENTRY_SIZE: usize = 100_000; // ~100KB per parsed tree
 
-        let mut cache: UnifiedCache<MemKey, Vec<u8>> =
+        let cache: UnifiedCache<MemKey, Vec<u8>> =
             UnifiedCache::new(CACHE_SIZE, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         // Simulate parsing 200 different files
@@ -121,7 +121,7 @@ mod memory_integration {
     /// Simulates cache under sustained load
     #[test]
     fn test_cache_eviction_under_load() {
-        let mut cache: UnifiedCache<MemKey, String> = UnifiedCache::new(
+        let cache: UnifiedCache<MemKey, String> = UnifiedCache::new(
             100, // Small cache
             DEFAULT_CACHE_TTL,
             EvictionPolicy::Lru,
@@ -159,7 +159,7 @@ mod memory_integration {
     fn test_cache_ttl_prevents_stale_accumulation() {
         use std::time::Duration;
 
-        let mut cache: UnifiedCache<MemKey, Vec<u8>> = UnifiedCache::new(
+        let cache: UnifiedCache<MemKey, Vec<u8>> = UnifiedCache::new(
             1_000,
             Duration::from_millis(100), // Short TTL for testing
             EvictionPolicy::TtlOnly,
@@ -201,7 +201,7 @@ mod memory_integration {
     /// With proper eviction, memory should stabilize, not grow linearly
     #[test]
     fn test_memory_stability_over_time() {
-        let mut cache: UnifiedCache<MemKey, String> = UnifiedCache::new(
+        let cache: UnifiedCache<MemKey, String> = UnifiedCache::new(
             100, // Smaller cache to force eviction
             DEFAULT_CACHE_TTL,
             EvictionPolicy::Lru,
