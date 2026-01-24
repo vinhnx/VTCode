@@ -255,3 +255,4 @@ theres seems to be issue with spool file logic for large output, the agent repea
 --
 
 https://openai.com/index/unrolling-the-codex-agent-loop/
+check amp in vscode session and contnue
