@@ -1,5 +1,5 @@
 use std::io;
-use tokio::io::{AsyncBufReadExt, AsyncBufRead};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt};
 
 /// Result of a bounded line read.
 #[derive(Debug)]
@@ -17,7 +17,6 @@ pub async fn read_line_with_limit<R: AsyncBufRead + Unpin>(
 ) -> io::Result<ReadLineResult> {
     buf.clear();
     let mut total_read = 0;
-    let mut truncated = false;
 
     loop {
         let available = reader.fill_buf().await?;
@@ -26,28 +25,43 @@ pub async fn read_line_with_limit<R: AsyncBufRead + Unpin>(
         }
 
         if let Some(pos) = available.iter().position(|&b| b == b'\n') {
+            // Found a newline within the available buffer
             let to_read = pos + 1;
-            if total_read + to_read <= max_len {
+            let would_be_total = total_read + to_read;
+
+            if would_be_total <= max_len {
+                // Line fits within the limit
                 buf.extend_from_slice(&available[..to_read]);
+                reader.consume(to_read);
+                return Ok(ReadLineResult::Line(buf.clone()));
             } else {
-                truncated = true;
+                // Line would exceed the limit, so we truncate
+                let remaining_space = max_len.saturating_sub(total_read);
+                if remaining_space > 0 {
+                    buf.extend_from_slice(&available[..remaining_space]);
+                }
+                reader.consume(to_read); // Still consume the whole line from the reader
+                return Ok(ReadLineResult::Truncated(buf.clone()));
             }
-            reader.consume(to_read);
-            return Ok(if truncated {
-                ReadLineResult::Truncated(buf.clone())
-            } else {
-                ReadLineResult::Line(buf.clone())
-            });
         }
 
+        // No newline found in current buffer, add what we can
         let len = available.len();
-        if total_read + len <= max_len {
+        let would_be_total = total_read + len;
+
+        if would_be_total <= max_len {
+            // Buffer content fits within the limit
             buf.extend_from_slice(available);
-            total_read += len;
+            total_read = would_be_total;
+            reader.consume(len);
         } else {
-            truncated = true;
+            // Would exceed the limit, add only what fits
+            let remaining_space = max_len.saturating_sub(total_read);
+            if remaining_space > 0 {
+                buf.extend_from_slice(&available[..remaining_space]);
+            }
+            reader.consume(len);
         }
-        reader.consume(len);
     }
 }
 
