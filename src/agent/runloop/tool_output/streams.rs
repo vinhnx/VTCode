@@ -109,7 +109,6 @@ pub(crate) async fn render_stream_section(
 ) -> Result<()> {
     use std::fmt::Write as FmtWrite;
 
-    let is_mcp_tool = tool_name.is_some_and(|name| name.starts_with("mcp_"));
     let is_run_command = matches!(
         tool_name,
         Some(vtcode_core::config::constants::tools::RUN_PTY_CMD)
@@ -183,12 +182,10 @@ pub(crate) async fn render_stream_section(
 
         msg_buffer.clear();
         msg_buffer.reserve(128);
-        let prefix = if is_mcp_tool { "" } else { "  " };
 
         let hidden = total.saturating_sub(tail.len());
         if hidden > 0 {
             msg_buffer.clear();
-            msg_buffer.push_str(prefix);
             msg_buffer.push_str("[... ");
             msg_buffer.push_str(&hidden.to_string());
             msg_buffer.push_str(" line");
@@ -213,7 +210,6 @@ pub(crate) async fn render_stream_section(
                 continue;
             } else {
                 msg_buffer.clear();
-                msg_buffer.push_str(prefix);
                 msg_buffer.push_str(&display_line);
             }
             if apply_line_styles
@@ -269,9 +265,7 @@ pub(crate) async fn render_stream_section(
         0
     };
     if hidden > 0 {
-        let prefix = if is_mcp_tool { "" } else { "  " };
         format_buffer.clear();
-        format_buffer.push_str(prefix);
         if was_truncated_by_tokens {
             format_buffer.push_str("[... content truncated by token budget ...]");
         } else {
@@ -286,18 +280,7 @@ pub(crate) async fn render_stream_section(
         renderer.line(MessageStyle::ToolDetail, &format_buffer)?;
     }
 
-    if !is_mcp_tool && !is_run_command && !title.is_empty() {
-        format_buffer.clear();
-        format_buffer.push('[');
-        for ch in title.chars() {
-            format_buffer.push(ch.to_ascii_uppercase());
-        }
-        format_buffer.push(']');
-        renderer.line(MessageStyle::ToolDetail, &format_buffer)?;
-    }
-
     let mut display_buffer = String::with_capacity(128);
-    let prefix = if is_mcp_tool { "" } else { "  " };
 
     for line in &lines_vec {
         if line.is_empty() {
@@ -305,7 +288,6 @@ pub(crate) async fn render_stream_section(
             continue;
         } else {
             display_buffer.clear();
-            display_buffer.push_str(prefix);
             display_buffer.push_str(line);
         }
 
@@ -327,7 +309,7 @@ pub(crate) fn render_code_fence_blocks(
 ) -> Result<()> {
     for (index, block) in blocks.iter().enumerate() {
         if block.lines.is_empty() {
-            renderer.line(MessageStyle::ToolDetail, "    (no content)")?;
+            renderer.line(MessageStyle::ToolDetail, "(no content)")?;
         } else {
             let total_lines = block.lines.len();
             let truncated = total_lines > MAX_CODE_LINES;
@@ -351,7 +333,7 @@ pub(crate) fn render_code_fence_blocks(
                 renderer.line(
                     MessageStyle::ToolDetail,
                     &format!(
-                        "    ... ({} more lines truncated, view full output in tool logs)",
+                        "... ({} more lines truncated, view full output in tool logs)",
                         total_lines - MAX_CODE_LINES
                     ),
                 )?;

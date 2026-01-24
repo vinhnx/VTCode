@@ -18,7 +18,7 @@ pub(crate) fn render_context7_output(renderer: &mut AnsiRenderer, val: &Value) -
     if let Some(meta) = val.get("meta").and_then(|value| value.as_object())
         && let Some(query) = meta.get("query").and_then(|value| value.as_str())
     {
-        renderer.line(MessageStyle::ToolDetail, &format!("  {}", shorten(query, 120)))?;
+        renderer.line(MessageStyle::ToolDetail, &shorten(query, 120))?;
     }
 
     if let Some(messages) = val.get("messages").and_then(|value| value.as_array())
@@ -26,7 +26,7 @@ pub(crate) fn render_context7_output(renderer: &mut AnsiRenderer, val: &Value) -
     {
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!("  {} snippets retrieved", messages.len()),
+            &format!("{} snippets retrieved", messages.len()),
         )?;
     }
 
@@ -35,13 +35,13 @@ pub(crate) fn render_context7_output(renderer: &mut AnsiRenderer, val: &Value) -
     {
         for err in errors.iter().take(1) {
             if let Some(msg) = err.get("message").and_then(|value| value.as_str()) {
-                renderer.line(MessageStyle::ToolError, &format!("  {}", shorten(msg, 120)))?;
+                renderer.line(MessageStyle::ToolError, &shorten(msg, 120))?;
             }
         }
         if errors.len() > 1 {
             renderer.line(
                 MessageStyle::ToolError,
-                &format!("  … {} more errors", errors.len() - 1),
+                &format!("… {} more errors", errors.len() - 1),
             )?;
         }
     }
@@ -55,14 +55,14 @@ pub(crate) fn render_sequential_output(renderer: &mut AnsiRenderer, val: &Value)
         .and_then(|value| value.as_str())
         .unwrap_or("Sequential reasoning summary unavailable");
 
-    renderer.line(MessageStyle::ToolDetail, &format!("  {}", shorten(summary, 120)))?;
+    renderer.line(MessageStyle::ToolDetail, &shorten(summary, 120))?;
 
     if let Some(events) = val.get("events").and_then(|value| value.as_array())
         && !events.is_empty()
     {
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!("  {} reasoning steps", events.len()),
+            &format!("{} reasoning steps", events.len()),
         )?;
     }
 
@@ -71,13 +71,13 @@ pub(crate) fn render_sequential_output(renderer: &mut AnsiRenderer, val: &Value)
     {
         for err in errors.iter().take(1) {
             if let Some(msg) = err.get("message").and_then(|value| value.as_str()) {
-                renderer.line(MessageStyle::ToolError, &format!("  {}", shorten(msg, 120)))?;
+                renderer.line(MessageStyle::ToolError, &shorten(msg, 120))?;
             }
         }
         if errors.len() > 1 {
             renderer.line(
                 MessageStyle::ToolError,
-                &format!("  … {} more errors", errors.len() - 1),
+                &format!("… {} more errors", errors.len() - 1),
             )?;
         }
     }
@@ -97,7 +97,7 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                 if let Ok(json_val) = serde_json::from_str::<Value>(text) {
                     if content.len() > 1 {
                         block_lines.push(PanelContentLine::new(
-                            format!("  [content {}]", idx + 1),
+                            format!("[content {}]", idx + 1),
                             MessageStyle::ToolDetail,
                         ));
                     }
@@ -124,12 +124,12 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                 render_text_content(text)?;
             } else if item.get("type").and_then(|t| t.as_str()) == Some("image") {
                 block_lines.push(PanelContentLine::new(
-                    "  [image content]",
+                    "[image content]",
                     MessageStyle::ToolDetail,
                 ));
                 if let Some(mime) = item.get("mimeType").and_then(|v| v.as_str()) {
                     block_lines.push(PanelContentLine::new(
-                        format!("    type: {}", mime),
+                        format!("type: {}", mime),
                         MessageStyle::ToolDetail,
                     ));
                 }
@@ -137,7 +137,7 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                 && let Some(uri) = item.get("uri").and_then(|v| v.as_str())
             {
                 block_lines.push(PanelContentLine::new(
-                    format!("  [resource: {}]", uri),
+                    format!("[resource: {}]", uri),
                     MessageStyle::ToolDetail,
                 ));
             }
@@ -153,12 +153,12 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
         for (key, value) in meta {
             if let Some(text) = value.as_str() {
                 block_lines.push(PanelContentLine::new(
-                    format!("  {}: {}", key, shorten(text, 100)),
+                    format!("{}: {}", key, shorten(text, 100)),
                     MessageStyle::ToolDetail,
                 ));
             } else if let Some(num) = value.as_u64() {
                 block_lines.push(PanelContentLine::new(
-                    format!("  {}: {}", key, num),
+                    format!("{}: {}", key, num),
                     MessageStyle::ToolDetail,
                 ));
             }
@@ -184,16 +184,13 @@ fn collect_text_with_code_blocks(lines: &mut Vec<PanelContentLine>, text: &str) 
                 let lang = line.trim_start().trim_start_matches("```").trim();
                 if !lang.is_empty() {
                     lines.push(PanelContentLine::new(
-                        format!("  [{}]", lang),
+                        format!("[{}]", lang),
                         MessageStyle::ToolDetail,
                     ));
                 }
             }
         } else if in_code_block {
-            lines.push(PanelContentLine::new(
-                format!("  {}", line),
-                MessageStyle::ToolDetail,
-            ));
+            lines.push(PanelContentLine::new(line, MessageStyle::ToolDetail));
         } else {
             lines.push(PanelContentLine::new(line, MessageStyle::ToolDetail));
         }
@@ -211,12 +208,12 @@ fn collect_formatted_json_lines(lines: &mut Vec<PanelContentLine>, json: &Value)
                 }
 
                 let entry = match value {
-                    Value::String(s) => format!("  {}: {}", key, s),
-                    Value::Number(n) => format!("  {}: {}", key, n),
-                    Value::Bool(b) => format!("  {}: {}", key, b),
-                    Value::Null => format!("  {}: null", key),
-                    Value::Array(arr) => format!("  {}: [] ({} items)", key, arr.len()),
-                    Value::Object(_) => format!("  {}: {{...}}", key),
+                    Value::String(s) => format!("{}: {}", key, s),
+                    Value::Number(n) => format!("{}: {}", key, n),
+                    Value::Bool(b) => format!("{}: {}", key, b),
+                    Value::Null => format!("{}: null", key),
+                    Value::Array(arr) => format!("{}: [] ({} items)", key, arr.len()),
+                    Value::Object(_) => format!("{}: {{...}}", key),
                 };
                 lines.push(PanelContentLine::new(entry, MessageStyle::ToolDetail));
             }
@@ -224,7 +221,7 @@ fn collect_formatted_json_lines(lines: &mut Vec<PanelContentLine>, json: &Value)
         Value::Array(arr) => {
             for (idx, item) in arr.iter().enumerate() {
                 lines.push(PanelContentLine::new(
-                    format!("  [{}]: {}", idx, serde_json::to_string(item)?),
+                    format!("[{}]: {}", idx, serde_json::to_string(item)?),
                     MessageStyle::ToolDetail,
                 ));
             }

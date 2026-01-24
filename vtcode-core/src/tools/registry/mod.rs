@@ -13,6 +13,7 @@ mod harness;
 mod inventory;
 mod justification;
 mod justification_extractor;
+pub mod labels;
 mod policy;
 mod progressive_docs;
 mod pty;

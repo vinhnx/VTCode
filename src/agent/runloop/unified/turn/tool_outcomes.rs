@@ -42,7 +42,9 @@ use crate::agent::runloop::unified::tool_pipeline::{
 use crate::agent::runloop::unified::tool_routing::{
     ToolPermissionFlow, ensure_tool_permission, prompt_session_limit_increase,
 };
-use crate::agent::runloop::unified::tool_summary::render_tool_call_summary_with_status;
+use crate::agent::runloop::unified::tool_summary::{
+    render_tool_call_summary, stream_label_from_output,
+};
 use crate::agent::runloop::unified::turn::ui_sync::{redraw_with_sync, wait_for_redraw_complete};
 use crate::hooks::lifecycle::LifecycleHookEngine;
 
@@ -1324,15 +1326,9 @@ pub(crate) async fn run_turn_handle_tool_success(
         params.mcp_panel_state.add_event(mcp_event);
     } else {
         // Render tool summary with status
-        let exit_code = params.output.get("exit_code").and_then(|v| v.as_i64());
-        let status_icon = if params.command_success { "✓" } else { "✗" };
-        render_tool_call_summary_with_status(
-            params.renderer,
-            params.name,
-            &serde_json::to_value(&params.output).unwrap_or(serde_json::json!({})),
-            status_icon,
-            exit_code,
-        )?;
+        let output_json = serde_json::to_value(&params.output).unwrap_or(serde_json::json!({}));
+        let stream_label = stream_label_from_output(&output_json, params.command_success);
+        render_tool_call_summary(params.renderer, params.name, &output_json, stream_label)?;
     }
 
     // Render unified tool output via generic minimal adapter, to ensure consistent handling

@@ -120,15 +120,16 @@ pub async fn render_tool_output_common(
     command_success: bool,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
-    let status_icon = if command_success { "✓" } else { "✗" };
-    let exit_code = output.get("exit_code").and_then(|v| v.as_i64());
-
-    crate::agent::runloop::unified::tool_summary::render_tool_call_summary_with_status(
+    let stream_label =
+        crate::agent::runloop::unified::tool_summary::stream_label_from_output(
+            output,
+            command_success,
+        );
+    crate::agent::runloop::unified::tool_summary::render_tool_call_summary(
         renderer,
         name,
         args_val,
-        status_icon,
-        exit_code,
+        stream_label,
     )?;
 
     crate::agent::runloop::tool_output::render_tool_output(renderer, Some(name), output, vt_config)

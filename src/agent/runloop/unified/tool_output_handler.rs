@@ -116,7 +116,9 @@ pub(crate) async fn handle_pipeline_output_renderer(
 ) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
     use crate::agent::runloop::mcp_events;
     use crate::agent::runloop::tool_output::render_tool_output;
-    use crate::agent::runloop::unified::tool_summary::render_tool_call_summary_with_status;
+    use crate::agent::runloop::unified::tool_summary::{
+        render_tool_call_summary, stream_label_from_output,
+    };
 
     let mut any_write_effect = false;
     let mut turn_modified_files: Vec<PathBuf> = Vec::new();
@@ -142,15 +144,8 @@ pub(crate) async fn handle_pipeline_output_renderer(
                 mcp_event.success(None);
                 mcp_panel_state.add_event(mcp_event);
             } else {
-                let exit_code = output.get("exit_code").and_then(|v| v.as_i64());
-                let status_icon = if *command_success { "✓" } else { "✗" };
-                render_tool_call_summary_with_status(
-                    renderer,
-                    name,
-                    args_val,
-                    status_icon,
-                    exit_code,
-                )?;
+                let stream_label = stream_label_from_output(output, *command_success);
+                render_tool_call_summary(renderer, name, args_val, stream_label)?;
             }
 
             render_tool_output(renderer, Some(name), output, vt_config).await?;

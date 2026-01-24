@@ -18,7 +18,9 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 
 use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
-use crate::agent::runloop::unified::tool_summary::render_tool_call_summary_with_status;
+use crate::agent::runloop::unified::tool_summary::{
+    render_tool_call_summary, stream_label_from_output,
+};
 
 /// Generic context trait that provides the common functionality needed for tool output handling
 pub trait ToolOutputContext {
@@ -267,13 +269,8 @@ async fn handle_regular_tool_success<C: ToolOutputContext>(
     }
 
     // Render output with appropriate styling
-    render_tool_call_summary_with_status(
-        ctx.renderer(),
-        name,
-        args_val,
-        "✓",
-        if command_success { Some(0) } else { Some(1) },
-    )?;
+    let stream_label = stream_label_from_output(output, command_success);
+    render_tool_call_summary(ctx.renderer(), name, args_val, stream_label)?;
     Ok(())
 }
 
@@ -337,7 +334,8 @@ async fn handle_regular_tool_failure<C: ToolOutputContext>(
     }
 
     // Render error output
-    render_tool_call_summary_with_status(ctx.renderer(), name, args_val, "✗", Some(1))?;
+    let stream_label = stream_label_from_output(&error_json, false);
+    render_tool_call_summary(ctx.renderer(), name, args_val, stream_label)?;
     Ok(())
 }
 
@@ -356,7 +354,8 @@ async fn handle_tool_blocked<C: ToolOutputContext>(
         .log_tool_call(working_history_len_estimate(), name, &blocked_json, false);
 
     // Render blocked output
-    render_tool_call_summary_with_status(ctx.renderer(), name, args_val, "[WARN]", Some(1))?;
+    let stream_label = stream_label_from_output(&blocked_json, false);
+    render_tool_call_summary(ctx.renderer(), name, args_val, stream_label)?;
     Ok(())
 }
 
