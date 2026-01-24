@@ -220,6 +220,60 @@ impl ComprehensiveSkillValidator {
             );
         }
 
+        // Validate argument-hint field
+        if let Some(argument_hint) = &manifest.argument_hint
+            && argument_hint.len() > 128
+        {
+            report.add_error(
+                Some("argument-hint".to_string()),
+                format!(
+                    "argument-hint exceeds maximum length: {} characters (max 128)",
+                    argument_hint.len()
+                ),
+                Some("Shorten the argument-hint field to 128 characters or less".to_string()),
+            );
+        }
+
+        // Validate context field
+        if let Some(context) = &manifest.context {
+            if context.is_empty() {
+                report.add_error(
+                    Some("context".to_string()),
+                    "context must not be empty if specified".to_string(),
+                    Some("Remove the field or set it to a valid value like \"fork\"".to_string()),
+                );
+            } else if context.len() > 32 {
+                report.add_error(
+                    Some("context".to_string()),
+                    format!(
+                        "context exceeds maximum length: {} characters (max 32)",
+                        context.len()
+                    ),
+                    Some("Shorten the context field to 32 characters or less".to_string()),
+                );
+            }
+        }
+
+        // Validate agent field
+        if let Some(agent) = &manifest.agent {
+            if agent.is_empty() {
+                report.add_error(
+                    Some("agent".to_string()),
+                    "agent must not be empty if specified".to_string(),
+                    Some("Remove the field or set it to a valid agent name".to_string()),
+                );
+            } else if agent.len() > 64 {
+                report.add_error(
+                    Some("agent".to_string()),
+                    format!(
+                        "agent exceeds maximum length: {} characters (max 64)",
+                        agent.len()
+                    ),
+                    Some("Shorten the agent field to 64 characters or less".to_string()),
+                );
+            }
+        }
+
         // Validate allowed-tools field
         if let Some(allowed_tools) = &manifest.allowed_tools {
             let tools: Vec<&str> = allowed_tools.split_whitespace().collect();

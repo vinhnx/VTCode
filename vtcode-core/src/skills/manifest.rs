@@ -13,8 +13,8 @@ use std::path::Path;
 /// YAML frontmatter structure for SKILL.md
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SkillYaml {
-    pub name: String,
-    pub description: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -34,7 +34,7 @@ pub struct SkillYaml {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "allowed-tools")]
     #[serde(alias = "allowed_tools")]
-    pub allowed_tools: Option<Vec<String>>,
+    pub allowed_tools: Option<AllowedToolsField>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "disable-model-invocation")]
     #[serde(alias = "disable_model_invocation")]
@@ -43,6 +43,20 @@ pub struct SkillYaml {
     #[serde(rename = "when-to-use")]
     #[serde(alias = "when_to_use")]
     pub when_to_use: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "argument-hint")]
+    #[serde(alias = "argument_hint")]
+    pub argument_hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "user-invocable")]
+    #[serde(alias = "user_invocable")]
+    pub user_invocable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "requires-container")]
     #[serde(alias = "requires_container")]
@@ -57,6 +71,13 @@ pub struct SkillYaml {
     pub metadata: Option<HashMap<String, String>>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AllowedToolsField {
+    List(Vec<String>),
+    String(String),
+}
+
 /// Parse SKILL.md file and extract manifest + instructions
 pub fn parse_skill_file(skill_path: &Path) -> anyhow::Result<(SkillManifest, String)> {
     let skill_md = skill_path.join("SKILL.md");
@@ -69,7 +90,13 @@ pub fn parse_skill_file(skill_path: &Path) -> anyhow::Result<(SkillManifest, Str
     let content = fs::read_to_string(&skill_md)
         .context(format!("Failed to read SKILL.md at {}", skill_md.display()))?;
 
-    let (manifest, instructions) = parse_skill_content(&content)?;
+    let default_name = skill_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_string());
+
+    let (manifest, instructions) =
+        parse_skill_content_with_defaults(&content, default_name.as_deref())?;
 
     // Validate directory name matches per Agent Skills spec
     // For traditional skills (not CLI tools), the name must match the directory
@@ -90,6 +117,14 @@ pub fn parse_skill_file(skill_path: &Path) -> anyhow::Result<(SkillManifest, Str
 
 /// Parse SKILL.md content string
 pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, String)> {
+    parse_skill_content_with_defaults(content, None)
+}
+
+/// Parse SKILL.md content with optional defaults from path context
+pub fn parse_skill_content_with_defaults(
+    content: &str,
+    default_name: Option<&str>,
+) -> anyhow::Result<(SkillManifest, String)> {
     // Split YAML frontmatter (between --- markers)
     let parts: Vec<&str> = content.splitn(3, "---").collect();
 
@@ -105,19 +140,41 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
     let yaml: SkillYaml =
         serde_yaml::from_str(yaml_str).context("Failed to parse SKILL.md YAML frontmatter")?;
 
-    // Convert allowed_tools from Vec<String> to space-delimited string for backward compatibility
-    let allowed_tools_string = yaml.allowed_tools.map(|tools| {
-        if !tools.is_empty() {
-            tracing::warn!(
-                "allowed-tools uses deprecated array format, please use space-delimited string instead"
-            );
-        }
-        tools.join(" ")
-    });
+    let name = yaml
+        .name
+        .and_then(|name| {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .or_else(|| default_name.map(|name| name.to_string()))
+        .ok_or_else(|| anyhow::anyhow!("name is required and must not be empty"))?;
+
+    let description = yaml
+        .description
+        .and_then(|description| {
+            let trimmed = description.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .or_else(|| infer_description_from_instructions(&instructions))
+        .ok_or_else(|| anyhow::anyhow!("description is required and must not be empty"))?;
+
+    // Convert allowed-tools into space-delimited string for compatibility
+    let allowed_tools_string = yaml
+        .allowed_tools
+        .map(normalize_allowed_tools)
+        .transpose()?;
 
     let manifest = SkillManifest {
-        name: yaml.name,
-        description: yaml.description,
+        name,
+        description,
         version: yaml.version,
         author: yaml.author,
         license: yaml.license,
@@ -127,6 +184,11 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
         allowed_tools: allowed_tools_string,
         disable_model_invocation: yaml.disable_model_invocation,
         when_to_use: yaml.when_to_use,
+        argument_hint: yaml.argument_hint,
+        user_invocable: yaml.user_invocable,
+        context: yaml.context,
+        agent: yaml.agent,
+        hooks: yaml.hooks,
         requires_container: yaml.requires_container,
         disallow_container: yaml.disallow_container,
         compatibility: yaml.compatibility,
@@ -137,6 +199,63 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
     manifest.validate()?;
 
     Ok((manifest, instructions))
+}
+
+fn infer_description_from_instructions(instructions: &str) -> Option<String> {
+    let mut lines = instructions.lines();
+    let mut paragraph = Vec::new();
+    while let Some(line) = lines.next() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if !paragraph.is_empty() {
+                break;
+            }
+            continue;
+        }
+        paragraph.push(trimmed);
+    }
+    if paragraph.is_empty() {
+        None
+    } else {
+        Some(paragraph.join(" "))
+    }
+}
+
+fn normalize_allowed_tools(field: AllowedToolsField) -> anyhow::Result<String> {
+    match field {
+        AllowedToolsField::List(tools) => {
+            if !tools.is_empty() {
+                tracing::warn!(
+                    "allowed-tools uses deprecated array format, please use a string instead"
+                );
+            }
+            Ok(tools.join(" "))
+        }
+        AllowedToolsField::String(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "allowed-tools must not be empty if specified"
+                ));
+            }
+            let has_commas = trimmed.contains(',');
+            if has_commas {
+                tracing::warn!(
+                    "allowed-tools uses comma-separated format; normalizing to space-delimited"
+                );
+            }
+            let parts = if has_commas {
+                trimmed
+                    .split(',')
+                    .map(|part| part.trim())
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+            } else {
+                trimmed.split_whitespace().collect::<Vec<_>>()
+            };
+            Ok(parts.join(" "))
+        }
+    }
 }
 
 /// Generate a skill template with YAML frontmatter
@@ -151,6 +270,13 @@ license: MIT
 # author: Your Name
 # compatibility: "Requires: tool1, tool2, network access"
 # allowed-tools: "Read Write Bash"  # Space-delimited list per Agent Skills spec
+# argument-hint: "[path] [format]" # Optional slash command hint
+# user-invocable: true             # Hide from menu when false
+# context: "fork"                  # Run in subagent context
+# agent: "explore"                 # Subagent type when context=fork
+# hooks:
+#   pre_tool_use:
+#     - command: "echo pre"
 # metadata:
 #   version: "1.0"
 #   author: your-org

@@ -41,9 +41,15 @@ impl Default for DiscoveryConfig {
     fn default() -> Self {
         Self {
             skill_paths: vec![
+                PathBuf::from(".vtcode/skills"),
                 PathBuf::from(".claude/skills"),
+                PathBuf::from(".pi/skills"),
+                PathBuf::from(".codex/skills"),
                 PathBuf::from("./skills"),
                 PathBuf::from("~/.vtcode/skills"),
+                PathBuf::from("~/.claude/skills"),
+                PathBuf::from("~/.pi/agent/skills"),
+                PathBuf::from("~/.codex/skills"),
             ],
             tool_paths: vec![
                 PathBuf::from("./tools"),
@@ -201,7 +207,20 @@ impl SkillDiscovery {
         dir: &Path,
         stats: &mut DiscoveryStats,
     ) -> Result<Vec<SkillContext>> {
+        self.scan_for_skills_recursive(dir, stats, 0)
+    }
+
+    fn scan_for_skills_recursive(
+        &self,
+        dir: &Path,
+        stats: &mut DiscoveryStats,
+        depth: usize,
+    ) -> Result<Vec<SkillContext>> {
         let mut skills = vec![];
+
+        if depth > self.config.max_depth {
+            return Ok(skills);
+        }
 
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
@@ -230,6 +249,14 @@ impl SkillDiscovery {
                             stats.errors_encountered += 1;
                         }
                     }
+                }
+
+                if depth < self.config.max_depth {
+                    skills.extend(self.scan_for_skills_recursive(
+                        &path,
+                        stats,
+                        depth + 1,
+                    )?);
                 }
             }
         }
@@ -483,6 +510,11 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         allowed_tools: None,
         disable_model_invocation: None,
         when_to_use: None,
+        argument_hint: None,
+        user_invocable: None,
+        context: None,
+        agent: None,
+        hooks: None,
         requires_container: None,
         disallow_container: None,
         compatibility: None,

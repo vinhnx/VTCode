@@ -4,6 +4,7 @@
 //! skill metadata, manifest parsing, and resource management.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -62,6 +63,25 @@ pub struct SkillManifest {
     #[serde(rename = "when-to-use")]
     #[serde(alias = "when_to_use")]
     pub when_to_use: Option<String>,
+    /// Optional argument hint for slash command style usage
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "argument-hint")]
+    #[serde(alias = "argument_hint")]
+    pub argument_hint: Option<String>,
+    /// Optional toggle for user menu visibility
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "user-invocable")]
+    #[serde(alias = "user_invocable")]
+    pub user_invocable: Option<bool>,
+    /// Optional execution context ("fork" for subagent)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+    /// Optional subagent identifier when context is forked
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    /// Optional hooks configuration (raw payload)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<JsonValue>,
     /// Indicates the skill explicitly requires container skills
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "requires-container")]
@@ -97,6 +117,11 @@ impl Default for SkillManifest {
             allowed_tools: None,
             disable_model_invocation: None,
             when_to_use: None,
+            argument_hint: None,
+            user_invocable: None,
+            context: None,
+            agent: None,
+            hooks: None,
             requires_container: None,
             disallow_container: None,
             compatibility: None,
@@ -207,6 +232,36 @@ impl SkillManifest {
             anyhow::bail!(
                 "when-to-use exceeds maximum length: {} characters (max 512)",
                 when_to_use.len()
+            );
+        }
+
+        // Validate argument-hint field
+        if let Some(argument_hint) = &self.argument_hint
+            && argument_hint.len() > 128
+        {
+            anyhow::bail!(
+                "argument-hint exceeds maximum length: {} characters (max 128)",
+                argument_hint.len()
+            );
+        }
+
+        // Validate context field
+        if let Some(context) = &self.context
+            && (context.is_empty() || context.len() > 32)
+        {
+            anyhow::bail!(
+                "context must be between 1-32 characters if provided, got {} characters",
+                context.len()
+            );
+        }
+
+        // Validate agent field
+        if let Some(agent) = &self.agent
+            && (agent.is_empty() || agent.len() > 64)
+        {
+            anyhow::bail!(
+                "agent must be between 1-64 characters if provided, got {} characters",
+                agent.len()
             );
         }
 
@@ -354,7 +409,9 @@ impl Skill {
         manifest.validate()?;
         // Determine scope based on path
         let scope = if path.to_string_lossy().contains(".vtcode/skills")
+            || path.to_string_lossy().contains(".claude/skills")
             || path.to_string_lossy().contains(".codex/skills")
+            || path.to_string_lossy().contains(".pi/skills")
         {
             SkillScope::Repo
         } else {
