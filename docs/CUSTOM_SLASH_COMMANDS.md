@@ -12,6 +12,7 @@ Custom slash commands are loaded from:
 
 -   Personal commands: `~/.vtcode/commands/` (default)
 -   Project-specific commands: `./.vtcode/commands/` (if exists)
+-   Claude Code commands: `~/.claude/commands/`, `./.claude/commands/` (if exists)
 -   Additional directories can be configured in `vtcode.toml`
 
 ## File Format
@@ -22,7 +23,7 @@ Commands are defined in markdown files with the following structure:
 ---
 description: Brief description of the command
 argument-hint: [arg1] [arg2] - optional hint for arguments
-allowed-tools: List of tools that should be allowed when this command is used
+allowed-tools: Space- or comma-delimited list of tools that should be allowed when this command is used
 model: Specific model to use for this command (optional)
 disable-model-invocation: Whether to prevent model invocation (optional)
 ---

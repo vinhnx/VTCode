@@ -117,6 +117,15 @@ impl SkillLocation {
         }
 
         if self.recursive {
+            if matches!(
+                self.location_type,
+                SkillLocationType::ClaudeUser | SkillLocationType::ClaudeProject
+            ) {
+                return skill_path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|s| s.to_string());
+            }
             // For recursive locations, build name with separators
             match skill_path.strip_prefix(&self.base_path) {
                 Ok(relative_path) => {
@@ -194,12 +203,12 @@ impl SkillLocations {
             SkillLocation::new(
                 SkillLocationType::ClaudeUser,
                 PathBuf::from("~/.claude/skills"),
-                false, // one-level
+                true, // recursive
             ),
             SkillLocation::new(
                 SkillLocationType::ClaudeProject,
                 PathBuf::from(".claude/skills"),
-                false, // one-level
+                true, // recursive
             ),
             // Codex CLI locations (recursive)
             SkillLocation::new(
@@ -519,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn test_one_level_location() {
+    fn test_recursive_location() {
         let temp_dir = TempDir::new().unwrap();
         let base_path = temp_dir.path();
 
@@ -532,11 +541,8 @@ mod tests {
         )
         .unwrap();
 
-        let location = SkillLocation::new(
-            SkillLocationType::ClaudeProject,
-            base_path.to_path_buf(),
-            false, // one-level
-        );
+        let location =
+            SkillLocation::new(SkillLocationType::ClaudeProject, base_path.to_path_buf(), true);
 
         let skill_name = location.get_skill_name(&skill_path);
         assert_eq!(skill_name, Some("file-analyzer".to_string()));
@@ -561,7 +567,7 @@ mod tests {
 
         let locations = SkillLocations::with_locations(vec![
             SkillLocation::new(SkillLocationType::VtcodeProject, vtcode_skills, true),
-            SkillLocation::new(SkillLocationType::ClaudeProject, claude_skills, false),
+            SkillLocation::new(SkillLocationType::ClaudeProject, claude_skills, true),
         ]);
 
         let discovered = locations.discover_skills().unwrap();

@@ -6,7 +6,7 @@ use crate::skills::discovery::{DiscoveryResult, SkillDiscovery};
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome, SkillMetadata, SkillScope};
 use crate::skills::system::system_cache_root_dir;
 use crate::skills::types::{Skill, SkillContext, SkillManifest};
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use dunce::canonicalize as normalize_path;
 use std::collections::{HashSet, VecDeque};
 use std::fs;
@@ -480,12 +480,7 @@ impl EnhancedSkillLoader {
         for skill_ctx in &result.skills {
             if skill_ctx.manifest().name == name {
                 let path = skill_ctx.path();
-                let skill_md = path.join("SKILL.md");
-                let content = fs::read_to_string(&skill_md)
-                    .context(format!("Failed to read SKILL.md at {}", skill_md.display()))?;
-
-                let (manifest, instructions) =
-                    crate::skills::manifest::parse_skill_content(&content)?;
+                let (manifest, instructions) = crate::skills::manifest::parse_skill_file(path)?;
                 let skill = Skill::new(manifest, path.clone(), instructions)?;
                 return Ok(EnhancedSkill::Traditional(skill));
             }
@@ -536,9 +531,7 @@ impl EnhancedSkillLoader {
 
     fn load_full_skill_from_ctx(&self, ctx: &SkillContext) -> Result<Skill> {
         let path = ctx.path();
-        let skill_md = path.join("SKILL.md");
-        let content = fs::read_to_string(&skill_md)?;
-        let (manifest, instructions) = crate::skills::manifest::parse_skill_content(&content)?;
+        let (manifest, instructions) = crate::skills::manifest::parse_skill_file(path)?;
         Skill::new(manifest, path.clone(), instructions)
     }
 }

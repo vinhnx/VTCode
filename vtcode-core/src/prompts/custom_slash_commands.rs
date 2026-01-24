@@ -226,7 +226,10 @@ impl CustomSlashCommand {
             name: name.to_owned(),
             description: frontmatter.as_ref().and_then(|fm| fm.description.clone()),
             argument_hint: frontmatter.as_ref().and_then(|fm| fm.argument_hint.clone()),
-            allowed_tools: frontmatter.as_ref().and_then(|fm| fm.allowed_tools.clone()),
+            allowed_tools: frontmatter
+                .as_ref()
+                .and_then(|fm| fm.allowed_tools.as_ref())
+                .and_then(|field| normalize_allowed_tools_list(field).ok()),
             disable_model_invocation: frontmatter
                 .as_ref()
                 .map(|fm| fm.disable_model_invocation)
@@ -399,7 +402,7 @@ struct CustomSlashCommandFrontmatter {
     #[serde(default, alias = "argument_hint", alias = "argument-hint")]
     argument_hint: Option<String>,
     #[serde(default, alias = "allowed-tools", alias = "allowed_tools")]
-    allowed_tools: Option<Vec<String>>,
+    allowed_tools: Option<AllowedToolsField>,
     #[serde(
         default,
         alias = "disable-model-invocation",
@@ -408,6 +411,13 @@ struct CustomSlashCommandFrontmatter {
     disable_model_invocation: bool,
     #[serde(default, alias = "model")]
     model: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum AllowedToolsField {
+    List(Vec<String>),
+    String(String),
 }
 
 /// Parse frontmatter from markdown content
@@ -465,7 +475,43 @@ fn resolve_directories(config: &CustomSlashCommandConfig, workspace: &Path) -> V
         resolved.insert(project_commands);
     }
 
+    let project_claude_commands = workspace.join(".claude").join("commands");
+    if project_claude_commands.exists() {
+        resolved.insert(project_claude_commands);
+    }
+
+    let user_claude_commands = resolve_directory("~/.claude/commands", workspace);
+    if user_claude_commands.exists() {
+        resolved.insert(user_claude_commands);
+    }
+
     resolved.into_iter().collect()
+}
+
+fn normalize_allowed_tools_list(field: &AllowedToolsField) -> Result<Vec<String>> {
+    match field {
+        AllowedToolsField::List(tools) => Ok(tools.clone()),
+        AllowedToolsField::String(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                return Ok(vec![]);
+            }
+            let parts = if trimmed.contains(',') {
+                trimmed
+                    .split(',')
+                    .map(|part| part.trim())
+                    .filter(|part| !part.is_empty())
+                    .map(|part| part.to_string())
+                    .collect::<Vec<_>>()
+            } else {
+                trimmed
+                    .split_whitespace()
+                    .map(|part| part.to_string())
+                    .collect::<Vec<_>>()
+            };
+            Ok(parts)
+        }
+    }
 }
 
 fn resolve_directory(value: &str, workspace: &Path) -> PathBuf {

@@ -19,7 +19,14 @@ name: {skill_name}
 description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
 # Optional fields following Agent Skills spec:
 # allowed-tools: "Read Write Bash"  # Space-delimited list
+# argument-hint: "[file] [format]"  # Optional usage hint for slash commands
+# user-invocable: true              # Show in user menu (defaults to true)
 # compatibility: "Designed for VT Code (or similar CLI agents)"
+# context: "fork"                   # Run in a subagent context
+# agent: "explore"                  # Subagent type when context=fork
+# hooks:
+#   pre_tool_use:
+#     - command: "echo pre"
 # license: MIT
 # metadata:
 #   author: Your Name
@@ -92,12 +99,24 @@ Include specific API endpoints, schemas, or detailed instructions here.
 /// YAML frontmatter for SKILL.md
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillFrontmatter {
-    pub name: String,
-    pub description: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "allowed-tools")]
     pub allowed_tools: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "argument-hint")]
+    pub argument_hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "user-invocable")]
+    pub user_invocable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compatibility: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -184,15 +203,39 @@ impl SkillAuthor {
         let frontmatter: SkillFrontmatter = serde_yaml::from_str(parts[1].trim())
             .map_err(|e| anyhow!("Invalid YAML frontmatter: {}", e))?;
 
-        // Validate frontmatter properties (only allowed: name, description, license, allowed-tools, metadata)
+        // Validate frontmatter properties (only allowed: skill metadata fields)
         let raw_frontmatter: serde_yaml::Value =
             serde_yaml::from_str(parts[1].trim()).map_err(|e| anyhow!("Invalid YAML: {}", e))?;
         if let serde_yaml::Value::Mapping(map) = raw_frontmatter {
             let allowed = [
                 "name",
                 "description",
+                "version",
+                "author",
                 "license",
                 "allowed-tools",
+                "allowed_tools",
+                "argument-hint",
+                "argument_hint",
+                "user-invocable",
+                "user_invocable",
+                "model",
+                "context",
+                "agent",
+                "hooks",
+                "mode",
+                "tags",
+                "vtcode-native",
+                "vtcode_native",
+                "disable-model-invocation",
+                "disable_model_invocation",
+                "when-to-use",
+                "when_to_use",
+                "requires-container",
+                "requires_container",
+                "disallow-container",
+                "disallow_container",
+                "compatibility",
                 "metadata",
             ];
             for key in map.keys() {
@@ -207,68 +250,83 @@ impl SkillAuthor {
         }
 
         // Validate name
-        if frontmatter.name.is_empty() {
-            report.errors.push("Skill name is required".to_string());
-        } else if !self.is_valid_skill_name(&frontmatter.name) {
-            let mut reasons = Vec::new();
-            if frontmatter.name.chars().any(|c| c.is_ascii_uppercase()) {
-                reasons.push("must be lowercase");
+        let inferred_name = frontmatter.name.clone().or_else(|| {
+            skill_dir
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.to_string())
+        });
+
+        if frontmatter.name.is_none() {
+            report
+                .warnings
+                .push("Skill name missing; defaulting to directory name".to_string());
+        }
+
+        match inferred_name.as_deref() {
+            Some(name) => {
+                if name.is_empty() {
+                    report.errors.push("Skill name must not be empty".to_string());
+                } else if !self.is_valid_skill_name(name) {
+                    let mut reasons = Vec::new();
+                    if name.chars().any(|c| c.is_ascii_uppercase()) {
+                        reasons.push("must be lowercase");
+                    }
+                    if name.contains('_') {
+                        reasons.push("no underscores allowed");
+                    }
+                    if name.starts_with('-') || name.ends_with('-') {
+                        reasons.push("cannot start or end with hyphen");
+                    }
+                    if name.contains("--") {
+                        reasons.push("no consecutive hyphens");
+                    }
+                    if name.len() > 64 {
+                        reasons.push("max 64 characters");
+                    }
+                    if name.contains("anthropic")
+                        || name.contains("claude")
+                        || name.contains("vtcode")
+                    {
+                        reasons.push("reserved words not allowed");
+                    }
+                    report.errors.push(format!(
+                        "Invalid skill name '{}': {}",
+                        name,
+                        reasons.join(", ")
+                    ));
+                }
             }
-            if frontmatter.name.contains('_') {
-                reasons.push("no underscores allowed");
-            }
-            if frontmatter.name.starts_with('-') || frontmatter.name.ends_with('-') {
-                reasons.push("cannot start or end with hyphen");
-            }
-            if frontmatter.name.contains("--") {
-                reasons.push("no consecutive hyphens");
-            }
-            if frontmatter.name.len() > 64 {
-                reasons.push("max 64 characters");
-            }
-            if frontmatter.name.contains("anthropic")
-                || frontmatter.name.contains("claude")
-                || frontmatter.name.contains("vtcode")
-            {
-                reasons.push("reserved words not allowed");
-            }
-            report.errors.push(format!(
-                "Invalid skill name '{}': {}",
-                frontmatter.name,
-                reasons.join(", ")
-            ));
+            None => report.errors.push("Skill name is required".to_string()),
         }
 
         // Validate description
-        if frontmatter.description.is_empty() {
-            report.errors.push("Description is required".to_string());
-        } else if frontmatter.description.contains("[TODO") {
-            report
+        match frontmatter.description.as_deref() {
+            Some(description) => {
+                if description.is_empty() {
+                    report.errors.push("Description is required".to_string());
+                } else {
+                    if description.contains("[TODO") {
+                        report
+                            .warnings
+                            .push("Description contains TODO placeholder".to_string());
+                    }
+                    if description.contains('<') || description.contains('>') {
+                        report
+                            .errors
+                            .push("Description cannot contain angle brackets (< or >)".to_string());
+                    }
+                    if description.len() > 1024 {
+                        report.errors.push(format!(
+                            "Description is too long ({} characters). Maximum is 1024 characters.",
+                            description.len()
+                        ));
+                    }
+                }
+            }
+            None => report
                 .warnings
-                .push("Description contains TODO placeholder".to_string());
-            if frontmatter.description.contains('<') || frontmatter.description.contains('>') {
-                report
-                    .errors
-                    .push("Description cannot contain angle brackets (< or >)".to_string());
-            }
-            if frontmatter.description.len() > 1024 {
-                report.errors.push(format!(
-                    "Description is too long ({} characters). Maximum is 1024 characters.",
-                    frontmatter.description.len()
-                ));
-            }
-        } else {
-            if frontmatter.description.contains('<') || frontmatter.description.contains('>') {
-                report
-                    .errors
-                    .push("Description cannot contain angle brackets (< or >)".to_string());
-            }
-            if frontmatter.description.len() > 1024 {
-                report.errors.push(format!(
-                    "Description is too long ({} characters). Maximum is 1024 characters.",
-                    frontmatter.description.len()
-                ));
-            }
+                .push("Description missing; add one for discoverability".to_string()),
         }
 
         // Check body content

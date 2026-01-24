@@ -32,6 +32,7 @@ Shows all discovered skills from multiple locations with precedence handling:
 -   **Codex User Skills** (`~/.codex/skills/`) - Codex CLI user skills
 
 Skills from higher precedence locations override skills with the same name from lower precedence locations.
+Claude skill directories support nested discovery; VT Code will scan nested `.claude/skills/**/SKILL.md` files.
 
 ### View Skill Details
 
@@ -117,8 +118,10 @@ author: Your Name
 
 -   `name` - Lowercase alphanumeric + hyphens, max 64 chars
     -   Cannot contain "anthropic" or "claude"
+    -   If omitted, VT Code defaults to the skill directory name
 -   `description` - Non-empty, max 1024 chars
     -   Should include what it does and when to use it
+    -   If omitted, VT Code uses the first paragraph of the skill body
 
 **Optional**:
 
@@ -126,6 +129,14 @@ author: Your Name
 -   `author` - Skill creator name
 -   `license` - License name or bundled license file reference
 -   `compatibility` - Environment requirements and product compatibility
+-   `allowed-tools` - Space- or comma-delimited list of tools allowed for the skill
+-   `argument-hint` - Usage hint for slash-command style invocation
+-   `user-invocable` - Toggle visibility in user menus
+-   `disable-model-invocation` - Prevents model invocation when skill is active
+-   `when-to-use` - Short guidance for automatic triggering
+-   `context` - Set to `fork` to run in a subagent context
+-   `agent` - Subagent type when `context = "fork"`
+-   `hooks` - Skill-scoped hook configuration
 
 ### Compliance with Agent Skills Standard
 
