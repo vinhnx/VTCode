@@ -371,6 +371,9 @@ pub(crate) async fn run_tool_call(
                 ctx.tool_registry.enable_plan_mode();
                 ctx.session_stats
                     .set_editing_mode(vtcode_core::ui::EditingMode::Plan);
+                // Update TUI header indicator (OpenCode-style event handling)
+                ctx.handle
+                    .set_editing_mode(vtcode_core::ui::EditingMode::Plan);
                 // Switch to planner agent profile for system prompt
                 ctx.session_stats.switch_to_planner();
                 tracing::info!(
@@ -473,6 +476,9 @@ pub(crate) async fn run_tool_call(
                             // Also update the UI editing mode indicator
                             ctx.session_stats
                                 .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                            // Update TUI header indicator (OpenCode-style event handling)
+                            ctx.handle
+                                .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
                             // Switch to coder agent profile for implementation
                             ctx.session_stats.switch_to_coder();
                             tracing::info!(
@@ -511,6 +517,9 @@ pub(crate) async fn run_tool_call(
                 plan_state.disable();
                 plan_state.set_plan_file(None).await;
                 ctx.session_stats
+                    .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                // Update TUI header indicator (OpenCode-style event handling)
+                ctx.handle
                     .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
                 // Switch to coder agent profile for implementation
                 ctx.session_stats.switch_to_coder();

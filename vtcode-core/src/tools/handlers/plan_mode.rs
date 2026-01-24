@@ -127,9 +127,10 @@ impl EnterPlanModeTool {
                     .collect()
             }
             None => {
-                // Generate timestamp-based name
-                let now = chrono::Utc::now();
-                format!("plan-{}", now.format("%Y%m%d-%H%M%S"))
+                // Generate human-readable slug with timestamp prefix
+                // Format: {timestamp_millis}-{adjective}-{noun} (e.g., "1768330644696-gentle-harbor")
+                // This follows the OpenCode pattern for memorable plan file names
+                vtcode_commons::slug::create_timestamped()
             }
         }
     }

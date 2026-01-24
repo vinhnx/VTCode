@@ -10,6 +10,7 @@
 pub mod errors;
 pub mod paths;
 pub mod reference;
+pub mod slug;
 pub mod telemetry;
 
 pub use errors::{DisplayErrorFormatter, ErrorFormatter, ErrorReporter, NoopErrorReporter};

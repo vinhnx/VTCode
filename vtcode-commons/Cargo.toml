@@ -22,3 +22,4 @@ default = []
 
 [dependencies]
 anyhow = "1"
+rand = { workspace = true }
