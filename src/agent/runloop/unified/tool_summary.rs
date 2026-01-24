@@ -4,6 +4,7 @@ use anyhow::Result;
 use serde_json::Value;
 
 use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
@@ -121,120 +122,93 @@ pub(crate) fn is_file_modification_tool(tool_name: &str, args: &Value) -> bool {
     }
 }
 
-pub(crate) fn render_tool_call_summary_with_status(
+pub(crate) fn render_tool_call_summary(
     renderer: &mut AnsiRenderer,
     tool_name: &str,
     args: &Value,
-    status_icon: &str,
-    exit_code: Option<i64>,
+    stream_label: Option<&str>,
 ) -> Result<()> {
     let (headline, highlights) = describe_tool_action(tool_name, args);
-    let details = collect_highlight_details(args, &highlights);
+    let details = collect_param_details(args, &highlights);
     let palette = ColorPalette::default();
+    let action_label = tool_action_label(tool_name, args);
+    let summary = build_tool_summary(&action_label, &headline);
 
     let mut line = String::new();
-
-    // Status icon with color based on exit code
-    let status_color = match exit_code {
-        Some(0) => palette.success,
-        Some(_) => palette.error,
-        None => palette.info,
-    };
-    line.push_str(&render_styled(status_icon, status_color, None));
-    line.push(' ');
-
-    // Check if this is an MCP tool for special decoration
-    let is_mcp = tool_name.starts_with("mcp::") || tool_name == "fetch";
-
-    // Use magenta for MCP tools, cyan for normal tools
-    let tool_bracket_color = if is_mcp {
-        anstyle::Color::Ansi(anstyle::AnsiColor::Magenta)
-    } else {
-        palette.info
-    };
-    line.push_str(&render_styled(
-        &format!("[{}]", tool_name),
-        tool_bracket_color,
-        None,
-    ));
-    line.push(' ');
-
-    // Headline in bright white
-    line.push_str(&render_styled(&headline, palette.primary, None));
+    line.push_str(&render_styled(&summary, palette.primary, None));
 
     // Details in dim gray if present - these are the call parameters
     if !details.is_empty() {
-        line.push(' ');
+        line.push_str(" .. ");
         line.push_str(&render_styled(
-            &format!("· {}", details.join(" · ")),
+            &details.join(" .. "),
             palette.muted,
             None,
         ));
-    } else {
-        // Even if no specific highlights were extracted, show all parameters if available
-        if let Some(map) = args.as_object() {
-            // Build a compact string directly to avoid allocating an intermediate Vec
-            let mut all_params_buf = String::new();
-            for (key, value) in map.iter() {
-                if let Some(part) = match value {
-                    Value::String(s) if !s.is_empty() => {
-                        Some(format!("{}: {}", humanize_key(key), truncate_middle(s, 40)))
-                    }
-                    Value::Bool(true) => Some(humanize_key(key)),
-                    Value::Array(items) => {
-                        let strings: Vec<String> = items
-                            .iter()
-                            .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                            .collect();
-                        if !strings.is_empty() {
-                            Some(format!(
-                                "{}: {}",
-                                humanize_key(key),
-                                summarize_list(&strings, 1, 30)
-                            ))
-                        } else {
-                            None
-                        }
-                    }
-                    Value::Number(num) => Some(format!("{}: {}", humanize_key(key), num)),
-                    _ => None,
-                } {
-                    if !all_params_buf.is_empty() {
-                        all_params_buf.push_str(" · ");
-                    }
-                    all_params_buf.push_str(&part);
-                }
-            }
-
-            if !all_params_buf.is_empty() {
-                line.push(' ');
-                line.push_str(&render_styled(
-                    &format!("· {}", all_params_buf),
-                    palette.muted,
-                    None,
-                ));
-            }
-        }
     }
 
-    // Exit code at the end if available (colored based on success)
-    if let Some(code) = exit_code {
-        let code_color = if code == 0 {
-            palette.success
-        } else {
-            palette.error
-        };
+    if let Some(stream) = stream_label {
         line.push(' ');
-        line.push_str(&render_styled(
-            &format!("(exit: {})", code),
-            code_color,
-            None,
-        ));
+        line.push_str(&render_styled(stream, palette.info, None));
     }
 
     renderer.line(MessageStyle::Info, &line)?;
 
     Ok(())
+}
+
+fn build_tool_summary(action_label: &str, headline: &str) -> String {
+    let normalized = headline.trim().trim_start_matches("MCP ").trim();
+    if normalized.is_empty() {
+        return action_label.to_string();
+    }
+    if normalized == action_label {
+        return normalized.to_string();
+    }
+    if normalized.starts_with(action_label) {
+        return normalized.to_string();
+    }
+    if let Some(stripped) = normalized.strip_prefix("Use ") {
+        if stripped == action_label {
+            return action_label.to_string();
+        }
+    }
+    format!("{} {}", action_label, normalized)
+}
+
+pub(crate) fn stream_label_from_output(
+    output: &Value,
+    command_success: bool,
+) -> Option<&'static str> {
+    let has_output = output
+        .get("output")
+        .and_then(Value::as_str)
+        .is_some_and(|s| !s.is_empty());
+    let has_stdout = output
+        .get("stdout")
+        .and_then(Value::as_str)
+        .is_some_and(|s| !s.is_empty());
+    let has_stderr = output
+        .get("stderr")
+        .and_then(Value::as_str)
+        .is_some_and(|s| !s.is_empty());
+    let has_error = output.get("error").is_some() || output.get("error_type").is_some();
+
+    if has_output {
+        return Some("output");
+    }
+    match (has_stdout, has_stderr) {
+        (true, true) => Some("stdio"),
+        (true, false) => Some("stdout"),
+        (false, true) => Some("stderr"),
+        (false, false) => {
+            if has_error || !command_success {
+                Some("error")
+            } else {
+                None
+            }
+        }
+    }
 }
 
 pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, HashSet<String>) {
@@ -442,7 +416,7 @@ pub(crate) fn humanize_tool_name(name: &str) -> String {
 
 fn describe_fetch_action(_args: &Value) -> (String, HashSet<String>) {
     // Return simple description without parameters to avoid duplication
-    // Parameters will be shown in the details section by render_tool_call_summary_with_status
+    // Parameters will be shown in the details section by render_tool_call_summary
     ("Use Fetch".into(), HashSet::new())
 }
 
@@ -609,38 +583,40 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
     result
 }
 
-fn collect_highlight_details(args: &Value, keys: &HashSet<String>) -> Vec<String> {
+fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec<String> {
     let mut details = Vec::new();
     let Some(map) = args.as_object() else {
         return details;
     };
-    for key in keys {
-        if let Some(value) = map.get(key) {
-            match value {
-                Value::String(s) if !s.is_empty() => {
-                    details.push(format!("{}: {}", humanize_key(key), truncate_middle(s, 60)))
-                }
-                Value::Bool(true) => {
-                    details.push(humanize_key(key));
-                }
-                Value::Array(items) => {
-                    let strings: Vec<String> = items
-                        .iter()
-                        .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                        .collect();
-                    if !strings.is_empty() {
-                        details.push(format!(
-                            "{}: {}",
-                            humanize_key(key),
-                            summarize_list(&strings, 2, 60)
-                        ));
-                    }
-                }
-                Value::Number(num) => {
-                    details.push(format!("{}: {}", humanize_key(key), num));
-                }
-                _ => {}
+    let include_all = keys.is_empty();
+    for (key, value) in map {
+        if !include_all && keys.contains(key) {
+            continue;
+        }
+        match value {
+            Value::String(s) if !s.is_empty() => {
+                details.push(format!("{}: {}", humanize_key(key), truncate_middle(s, 60)))
             }
+            Value::Bool(true) => {
+                details.push(humanize_key(key));
+            }
+            Value::Array(items) => {
+                let strings: Vec<String> = items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                    .collect();
+                if !strings.is_empty() {
+                    details.push(format!(
+                        "{}: {}",
+                        humanize_key(key),
+                        summarize_list(&strings, 2, 60)
+                    ));
+                }
+            }
+            Value::Number(num) => {
+                details.push(format!("{}: {}", humanize_key(key), num));
+            }
+            _ => {}
         }
     }
     details

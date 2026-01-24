@@ -113,11 +113,7 @@ pub(crate) fn render_list_dir_output(
         let display_path = if path.is_empty() { "/" } else { path };
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!(
-                "  {}{}",
-                display_path,
-                if !path.is_empty() { "/" } else { "" }
-            ),
+            &format!("{}{}", display_path, if !path.is_empty() { "/" } else { "" }),
         )?;
     }
 
@@ -128,9 +124,9 @@ pub(crate) fn render_list_dir_output(
 
         // Simplified summary without pagination details that confuse the agent
         let summary = if total > count {
-            format!("  Showing {} of {} items", count, total)
+            format!("Showing {} of {} items", count, total)
         } else {
-            format!("  {} items total", count)
+            format!("{} items total", count)
         };
         renderer.line(MessageStyle::ToolDetail, &summary)?;
     }
@@ -138,7 +134,7 @@ pub(crate) fn render_list_dir_output(
     // Render items grouped by type
     if let Some(items) = val.get("items").and_then(|v| v.as_array()) {
         if items.is_empty() {
-            renderer.line(MessageStyle::ToolDetail, "  (empty)")?;
+            renderer.line(MessageStyle::ToolDetail, "(empty)")?;
         } else {
             let mut directories = Vec::new();
             let mut files = Vec::new();
@@ -220,25 +216,25 @@ pub(crate) fn render_list_dir_output(
 
             // Render directories first with section header
             if !directories.is_empty() {
-                renderer.line(MessageStyle::ToolDetail, "  [Directories]")?;
+                renderer.line(MessageStyle::ToolDetail, "[Directories]")?;
                 for (name, _size) in &directories {
                     let name_with_slash = format!("{}/", name);
-                    let display = format!("  {:<width$}", name_with_slash, width = max_name_width,);
+                    let display = format!("{:<width$}", name_with_slash, width = max_name_width,);
                     renderer.line(MessageStyle::ToolDetail, &display)?;
                 }
 
                 // Add visual separation between directories and files
                 if !files.is_empty() {
-                    renderer.line(MessageStyle::ToolDetail, "  ")?; // Add blank line
+                    renderer.line(MessageStyle::ToolDetail, "")?; // Add blank line
                 }
             }
 
             // Render files with section header
             if !files.is_empty() {
-                renderer.line(MessageStyle::ToolDetail, "  [Files]")?;
+                renderer.line(MessageStyle::ToolDetail, "[Files]")?;
                 for (name, _size) in &files {
                     // Simple file name display without size or emoji
-                    let display = format!("  {:<width$}", name, width = max_name_width,);
+                    let display = format!("{:<width$}", name, width = max_name_width,);
                     renderer.line(MessageStyle::ToolDetail, &display)?;
                 }
             }
@@ -247,7 +243,7 @@ pub(crate) fn render_list_dir_output(
             if omitted > 0 {
                 renderer.line(
                     MessageStyle::ToolDetail,
-                    &format!("  + {} more items not shown", omitted),
+                    &format!("+ {} more items not shown", omitted),
                 )?;
             }
         }
@@ -264,7 +260,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
     if let Some(encoding) = get_string(val, "encoding") {
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!("  {:16} {}", "encoding", encoding),
+            &format!("{:16} {}", "encoding", encoding),
         )?;
     }
 
@@ -274,7 +270,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
     {
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!("  {:16} {}-{}", "lines", start, end),
+            &format!("{:16} {}-{}", "lines", start, end),
         )?;
     }
 

@@ -212,7 +212,7 @@ fn render_simple_tool_status(
 
 fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     if let Some(error_msg) = val.get("message").and_then(|v| v.as_str()) {
-        renderer.line(MessageStyle::ToolError, &format!("  Error: {}", error_msg))?;
+        renderer.line(MessageStyle::ToolError, &format!("Error: {}", error_msg))?;
     }
 
     if let Some(error_type) = val.get("error_type").and_then(|v| v.as_str()) {
@@ -229,7 +229,10 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
             "FileSystemError" => "File system error",
             _ => error_type,
         };
-        renderer.line(MessageStyle::ToolDetail, &format!("  Type: {}", type_description))?;
+        renderer.line(
+            MessageStyle::ToolDetail,
+            &format!("Type: {}", type_description),
+        )?;
     }
 
     if let Some(original) = val.get("original_error").and_then(|v| v.as_str())
@@ -240,21 +243,27 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
         } else {
             original.to_string()
         };
-        renderer.line(MessageStyle::ToolDetail, &format!("  Details: {}", display_error))?;
+        renderer.line(
+            MessageStyle::ToolDetail,
+            &format!("Details: {}", display_error),
+        )?;
     }
 
     if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
-        renderer.line(MessageStyle::ToolDetail, &format!("  Path: {}", path))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("Path: {}", path))?;
     }
 
     if let Some(line) = val.get("line").and_then(|v| v.as_u64()) {
         if let Some(col) = val.get("column").and_then(|v| v.as_u64()) {
             renderer.line(
                 MessageStyle::ToolDetail,
-                &format!("  Location: line {}, column {}", line, col),
+                &format!("Location: line {}, column {}", line, col),
             )?;
         } else {
-            renderer.line(MessageStyle::ToolDetail, &format!("  Location: line {}", line))?;
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("Location: line {}", line),
+            )?;
         }
     }
 
@@ -262,10 +271,10 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
         && !suggestions.is_empty()
     {
         renderer.line(MessageStyle::ToolDetail, "")?;
-        renderer.line(MessageStyle::ToolDetail, "  Suggestions:")?;
+        renderer.line(MessageStyle::ToolDetail, "Suggestions:")?;
         for (idx, suggestion) in suggestions.iter().take(5).enumerate() {
             if let Some(text) = suggestion.as_str() {
-                renderer.line(MessageStyle::ToolDetail, &format!("    {}. {}", idx + 1, text))?;
+                renderer.line(MessageStyle::ToolDetail, &format!("{}. {}", idx + 1, text))?;
             }
         }
         if suggestions.len() > 5 {
