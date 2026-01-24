@@ -422,7 +422,7 @@ pub struct SubagentsConfig {
 }
 
 fn default_enabled() -> bool {
-    true
+    false
 }
 
 fn default_max_concurrent() -> usize {
