@@ -18,6 +18,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
+use vtcode_core::prompts::sort_tool_definitions;
 
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -65,7 +66,10 @@ pub(crate) async fn execute_llm_request(
     });
 
     // HP-3: Use cached tools instead of acquiring lock and cloning
-    let current_tools = ctx.cached_tools.as_ref().map(|arc| (**arc).clone());
+    let current_tools = ctx
+        .cached_tools
+        .as_ref()
+        .map(|arc| sort_tool_definitions((**arc).clone()));
     let has_tools = current_tools.is_some();
     let parallel_config =
         if has_tools && provider_client.supports_parallel_tool_config(active_model) {

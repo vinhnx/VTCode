@@ -13,14 +13,14 @@ pub struct UnifiedTurnDriver;
 #[async_trait]
 impl TurnDriver<ResumeSession> for UnifiedTurnDriver {
     async fn drive_turn(&self, params: TurnDriverParams<'_, ResumeSession>) -> Result<()> {
-        run_single_agent_loop_unified(
+        let runner = run_single_agent_loop_unified(
             params.agent_config,
             params.vt_config,
             params.skip_confirmations,
             params.full_auto,
             params.plan_mode,
             params.resume,
-        )
-        .await
+        );
+        runner.await
     }
 }

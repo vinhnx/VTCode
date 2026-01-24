@@ -12,6 +12,13 @@ use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+use crate::agent::runloop::unified::turn::utils::{enforce_history_limits, truncate_message_content};
+use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
+use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
+use crate::agent::runloop::unified::run_loop_context::TurnPhase;
+use crate::agent::runloop::unified::inline_events::harness::{
+    turn_completed_event, turn_failed_event, turn_started_event,
+};
 #[allow(unused_imports)]
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use vtcode_core::acp::ToolPermissionCache;
@@ -82,6 +89,8 @@ pub struct TurnLoopContext<'a> {
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
     pub error_recovery:
         &'a Arc<StdRwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+    pub harness_state: &'a mut HarnessTurnState,
+    pub harness_emitter: Option<&'a HarnessEventEmitter>,
 }
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
@@ -101,7 +110,7 @@ pub async fn run_turn_loop(
 ) -> Result<TurnLoopOutcome> {
     use crate::agent::runloop::unified::context_manager::PreRequestAction;
     use crate::agent::runloop::unified::turn::context::{
-        TurnHandlerOutcome, TurnProcessingContext,
+        TurnHandlerOutcome, TurnProcessingContext, TurnProcessingResult,
     };
     use crate::agent::runloop::unified::turn::guards::run_proactive_guards;
     use crate::agent::runloop::unified::turn::turn_processing::{
@@ -114,6 +123,11 @@ pub async fn run_turn_loop(
     let mut result = TurnLoopResult::Completed;
     let mut turn_modified_files = BTreeSet::new();
     *ctx.auto_exit_plan_mode_attempted = false;
+
+    ctx.harness_state.set_phase(TurnPhase::Preparing);
+    if let Some(emitter) = ctx.harness_emitter {
+        let _ = emitter.emit(turn_started_event());
+    }
 
     // NOTE: The user input is already in working_history from the caller (session_loop or run_loop)
     // Do NOT add it again here, as it will cause duplicate messages in the conversation
@@ -150,7 +164,11 @@ pub async fn run_turn_loop(
         ctx.telemetry.record_turn();
 
         // Check session boundaries
-        match ctx.context_manager.pre_request_check(&working_history) {
+        let context_window_size = provider_client.effective_context_size(&config.model);
+        match ctx
+            .context_manager
+            .pre_request_check(&working_history, context_window_size)
+        {
             PreRequestAction::Stop(msg) => {
                 crate::agent::runloop::unified::turn::turn_helpers::display_error(
                     ctx.renderer,
@@ -168,6 +186,21 @@ pub async fn run_turn_loop(
                 )?;
                 // Inject warning into history?
                 working_history.push(uni::Message::system(format!("SYSTEM ALERT: {}", msg)));
+            }
+            PreRequestAction::Compact(msg) => {
+                crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                    ctx.renderer,
+                    &msg,
+                )?;
+                let compacted = ctx
+                    .context_manager
+                    .compact_history_if_needed(
+                        &working_history,
+                        provider_client.as_ref(),
+                        &config.model,
+                    )
+                    .await?;
+                working_history = compacted;
             }
             PreRequestAction::Proceed => {}
         }
@@ -231,6 +264,8 @@ pub async fn run_turn_loop(
                     approval_recorder: ctx.approval_recorder,
                     session: ctx.session,
                     traj,
+                    harness_state: ctx.harness_state,
+                    harness_emitter: ctx.harness_emitter,
                 };
 
                 // Build a synthetic tool call for exit_plan_mode
@@ -338,6 +373,9 @@ pub async fn run_turn_loop(
         run_proactive_guards(&mut turn_processing_ctx, step_count).await?;
 
         // Execute the LLM request
+        turn_processing_ctx
+            .harness_state
+            .set_phase(TurnPhase::Requesting);
         let (response, response_streamed) = match execute_llm_request(
             &mut turn_processing_ctx,
             step_count,
@@ -354,7 +392,9 @@ pub async fn run_turn_loop(
                     "LLM request failed",
                     &err,
                 )?;
-                working_history.push(uni::Message::assistant(format!("Request failed: {}", err)));
+                let error_text = truncate_message_content(&format!("Request failed: {}", err));
+                working_history.push(uni::Message::assistant(error_text));
+                enforce_history_limits(&mut working_history);
                 result = TurnLoopResult::Aborted;
                 break;
             }
@@ -370,6 +410,16 @@ pub async fn run_turn_loop(
             turn_processing_ctx.working_history.len(),
             Some(&validation_cache),
         )?;
+
+        if matches!(processing_result, TurnProcessingResult::ToolCalls { .. }) {
+            turn_processing_ctx
+                .harness_state
+                .set_phase(TurnPhase::ExecutingTools);
+        } else {
+            turn_processing_ctx
+                .harness_state
+                .set_phase(TurnPhase::Finalizing);
+        }
 
         // Handle the turn processing result (dispatch tool calls or finish turn)
         match handle_turn_processing_result(HandleTurnProcessingResultParams {
@@ -397,6 +447,19 @@ pub async fn run_turn_loop(
                 result = outcome_result;
                 break;
             }
+        }
+    }
+
+    ctx.harness_state.set_phase(TurnPhase::Finalizing);
+    if let Some(emitter) = ctx.harness_emitter {
+        let event = match result {
+            TurnLoopResult::Completed => Some(turn_completed_event()),
+            TurnLoopResult::Aborted => Some(turn_failed_event("turn aborted")),
+            TurnLoopResult::Cancelled => Some(turn_failed_event("turn cancelled")),
+            TurnLoopResult::Blocked { .. } => Some(turn_failed_event("turn blocked")),
+        };
+        if let Some(event) = event {
+            let _ = emitter.emit(event);
         }
     }
 

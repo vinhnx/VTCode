@@ -102,6 +102,9 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
     pub error_recovery:
         &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+    pub harness_state: &'a mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
+    pub harness_emitter:
+        Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
 }
 
 impl<'a> TurnProcessingContext<'a> {
@@ -144,6 +147,8 @@ impl<'a> TurnProcessingContext<'a> {
             telemetry: ctx.telemetry,
             autonomous_executor: ctx.autonomous_executor,
             error_recovery: ctx.error_recovery,
+            harness_state: ctx.harness_state,
+            harness_emitter: ctx.harness_emitter,
         }
     }
 }

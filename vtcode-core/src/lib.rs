@@ -133,6 +133,7 @@ pub mod cli;
 pub mod code;
 pub mod command_safety; // Command safety detection (Codex patterns)
 pub mod commands;
+pub mod compaction;
 pub mod config;
 pub mod constants;
 pub mod context; // Vibe coding support: entity resolution, workspace state, conversation memory
@@ -157,6 +158,7 @@ pub mod plugins;
 pub mod project_doc;
 pub mod prompts;
 pub mod safety;
+pub mod session;
 pub mod sandboxing; // Codex-style sandbox policy and execution environment
 pub mod security;
 pub mod skills;

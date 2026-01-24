@@ -28,8 +28,12 @@ use super::state::CtrlCState;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
+use crate::agent::runloop::unified::inline_events::harness::{
+    tool_completed_event, tool_started_event,
+};
 use crate::hooks::lifecycle::LifecycleHookEngine;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::exec::events::CommandExecutionStatus;
 
 // No direct use of ApprovalRecorder or DecisionOutcome in this module; these are referenced via `RunLoopContext`.
 
@@ -37,7 +41,6 @@ use vtcode_core::config::loader::VTCodeConfig;
 const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(180);
 /// Minimum buffer before cancelling a tool once a warning fires
 const MIN_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(5);
-const MAX_TOOL_RETRIES: usize = 2;
 const RETRY_BACKOFF_BASE: Duration = Duration::from_millis(200);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(3);
 
@@ -203,6 +206,34 @@ pub(crate) async fn run_tool_call(
             ));
         }
     };
+    let tool_item_id = call.id.clone();
+
+    if ctx.harness_state.tool_budget_exhausted() {
+        return Ok(ToolPipelineOutcome::from_status(
+            ToolExecutionStatus::Failure {
+                error: anyhow!(
+                    "Policy violation: exceeded max tool calls per turn ({})",
+                    ctx.harness_state.max_tool_calls
+                ),
+            },
+        ));
+    }
+    if ctx.harness_state.wall_clock_exhausted() {
+        return Ok(ToolPipelineOutcome::from_status(
+            ToolExecutionStatus::Failure {
+                error: anyhow!(
+                    "Policy violation: exceeded tool wall clock budget ({}s)",
+                    ctx.harness_state.max_tool_wall_clock.as_secs()
+                ),
+            },
+        ));
+    }
+    ctx.harness_state.record_tool_call();
+
+    if let Some(emitter) = ctx.harness_emitter {
+        let _ = emitter.emit(tool_started_event(tool_item_id.clone(), &name));
+    }
+    let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
 
     // Pre-flight permission check
     match ensure_tool_permission(
@@ -265,7 +296,7 @@ pub(crate) async fn run_tool_call(
         )
         .await;
 
-        return Ok(ToolPipelineOutcome::from_status(match output {
+        let outcome = ToolPipelineOutcome::from_status(match output {
             Ok(value) => ToolExecutionStatus::Success {
                 output: value,
                 stdout: None,
@@ -274,7 +305,16 @@ pub(crate) async fn run_tool_call(
                 has_more: false,
             },
             Err(error) => ToolExecutionStatus::Failure { error },
-        }));
+        });
+        if let Some(emitter) = ctx.harness_emitter {
+            let status = if matches!(outcome.status, ToolExecutionStatus::Success { .. }) {
+                CommandExecutionStatus::Completed
+            } else {
+                CommandExecutionStatus::Failed
+            };
+            let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+        }
+        return Ok(outcome);
     }
 
     // Special-case request_user_input HITL tool: simpler Q&A format.
@@ -288,7 +328,7 @@ pub(crate) async fn run_tool_call(
         )
         .await;
 
-        return Ok(ToolPipelineOutcome::from_status(match output {
+        let outcome = ToolPipelineOutcome::from_status(match output {
             Ok(value) => ToolExecutionStatus::Success {
                 output: value,
                 stdout: None,
@@ -297,7 +337,16 @@ pub(crate) async fn run_tool_call(
                 has_more: false,
             },
             Err(error) => ToolExecutionStatus::Failure { error },
-        }));
+        });
+        if let Some(emitter) = ctx.harness_emitter {
+            let status = if matches!(outcome.status, ToolExecutionStatus::Success { .. }) {
+                CommandExecutionStatus::Completed
+            } else {
+                CommandExecutionStatus::Failed
+            };
+            let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+        }
+        return Ok(outcome);
     }
 
     // Special-case enter_plan_mode: execute tool and enable plan mode in registry.
@@ -310,6 +359,7 @@ pub(crate) async fn run_tool_call(
             ctrl_c_state,
             ctrl_c_notify,
             None,
+            max_tool_retries,
         )
         .await;
 
@@ -330,7 +380,16 @@ pub(crate) async fn run_tool_call(
             }
         }
 
-        return Ok(ToolPipelineOutcome::from_status(tool_result));
+        let outcome = ToolPipelineOutcome::from_status(tool_result);
+        if let Some(emitter) = ctx.harness_emitter {
+            let status = if matches!(outcome.status, ToolExecutionStatus::Success { .. }) {
+                CommandExecutionStatus::Completed
+            } else {
+                CommandExecutionStatus::Failed
+            };
+            let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+        }
+        return Ok(outcome);
     }
 
     // Special-case exit_plan_mode: execute tool first, then show confirmation modal if needed.
@@ -349,6 +408,7 @@ pub(crate) async fn run_tool_call(
             ctrl_c_state,
             ctrl_c_notify,
             None,
+            max_tool_retries,
         )
         .await;
 
@@ -476,7 +536,16 @@ pub(crate) async fn run_tool_call(
         }
 
         // Fall through: return the original tool result if no special handling needed
-        return Ok(ToolPipelineOutcome::from_status(tool_result));
+        let outcome = ToolPipelineOutcome::from_status(tool_result);
+        if let Some(emitter) = ctx.harness_emitter {
+            let status = if matches!(outcome.status, ToolExecutionStatus::Success { .. }) {
+                CommandExecutionStatus::Completed
+            } else {
+                CommandExecutionStatus::Failed
+            };
+            let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+        }
+        return Ok(outcome);
     }
 
     // Determine read-only tools for caching
@@ -553,6 +622,7 @@ pub(crate) async fn run_tool_call(
         ctrl_c_state,
         ctrl_c_notify,
         Some(&progress_reporter),
+        max_tool_retries,
     )
     .await;
 
@@ -654,8 +724,16 @@ pub(crate) async fn run_tool_call(
         );
     }
 
-    // Ledger recording is left to the run loop where a decision id is available. Return the pipeline outcome only.
+    if let Some(emitter) = ctx.harness_emitter {
+        let status = if matches!(pipeline_outcome.status, ToolExecutionStatus::Success { .. }) {
+            CommandExecutionStatus::Completed
+        } else {
+            CommandExecutionStatus::Failed
+        };
+        let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+    }
 
+    // Ledger recording is left to the run loop where a decision id is available. Return the pipeline outcome only.
     Ok(pipeline_outcome)
 }
 
@@ -672,6 +750,7 @@ pub(crate) async fn execute_tool_with_timeout(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: Option<&ProgressReporter>,
+    max_tool_retries: usize,
 ) -> ToolExecutionStatus {
     execute_tool_with_timeout_ref(
         registry,
@@ -680,6 +759,7 @@ pub(crate) async fn execute_tool_with_timeout(
         ctrl_c_state,
         ctrl_c_notify,
         progress_reporter,
+        max_tool_retries,
     )
     .await
 }
@@ -692,6 +772,7 @@ pub(crate) async fn execute_tool_with_timeout_ref(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: Option<&ProgressReporter>,
+    max_tool_retries: usize,
 ) -> ToolExecutionStatus {
     // Use provided progress reporter or create a new one
     let mut local_progress_reporter = None;
@@ -718,6 +799,7 @@ pub(crate) async fn execute_tool_with_timeout_ref(
         ctrl_c_notify,
         progress_reporter,
         timeout_ceiling,
+        max_tool_retries,
     )
     .await;
 
@@ -737,6 +819,7 @@ async fn execute_tool_with_progress(
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: &ProgressReporter,
     tool_timeout: Duration,
+    max_tool_retries: usize,
 ) -> ToolExecutionStatus {
     // Execute first attempt
     let mut attempt = 0usize;
@@ -766,14 +849,14 @@ async fn execute_tool_with_progress(
     };
 
     // Retry on recoverable errors with bounded backoff
-    while let Some(delay) = retry_delay_for_status(&status, attempt) {
+    while let Some(delay) = retry_delay_for_status(&status, attempt, max_tool_retries) {
         attempt += 1;
         progress_reporter
             .set_message(format!(
                 "Retrying {} (attempt {}/{}) after {}ms...",
                 name,
                 attempt + 1,
-                MAX_TOOL_RETRIES + 1,
+                max_tool_retries + 1,
                 delay.as_millis()
             ))
             .await;
@@ -952,8 +1035,12 @@ async fn run_single_tool_attempt(
     status
 }
 
-fn retry_delay_for_status(status: &ToolExecutionStatus, attempt: usize) -> Option<Duration> {
-    if attempt >= MAX_TOOL_RETRIES {
+fn retry_delay_for_status(
+    status: &ToolExecutionStatus,
+    attempt: usize,
+    max_tool_retries: usize,
+) -> Option<Duration> {
+    if attempt >= max_tool_retries {
         return None;
     }
 
@@ -1372,6 +1459,22 @@ mod tests {
         AnsiRenderer::with_inline_ui(handle.clone(), Default::default())
     }
 
+    fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
+        build_harness_state_with(4)
+    }
+
+    fn build_harness_state_with(
+        max_tool_calls: usize,
+    ) -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
+        crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(
+            crate::agent::runloop::unified::run_loop_context::TurnRunId("test-run".to_string()),
+            crate::agent::runloop::unified::run_loop_context::TurnId("test-turn".to_string()),
+            max_tool_calls,
+            60,
+            0,
+        )
+    }
+
     /// Helper function to create common test context components
     struct TestContext {
         registry: ToolRegistry,
@@ -1429,6 +1532,7 @@ mod tests {
             &ctrl_c_state,
             &ctrl_c_notify,
             None,
+            0,
         )
         .await;
 
@@ -1530,6 +1634,7 @@ mod tests {
 
         let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
+        let mut harness_state = build_harness_state();
         let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
             renderer: &mut test_ctx.renderer,
             handle: &test_ctx.handle,
@@ -1543,6 +1648,8 @@ mod tests {
             approval_recorder: &approval_recorder,
             session: &mut test_ctx.session,
             traj: &traj,
+            harness_state: &mut harness_state,
+            harness_emitter: None,
         };
 
         let call = vtcode_core::llm::provider::ToolCall::function(
@@ -1571,6 +1678,68 @@ mod tests {
             outcome.status,
             ToolExecutionStatus::Failure { .. }
         ));
+    }
+
+    #[tokio::test]
+    async fn test_run_tool_call_respects_max_tool_calls_budget() {
+        let mut test_ctx = TestContext::new().await;
+        let mut registry = test_ctx.registry;
+
+        let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+        let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+        let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+        let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+        let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+        let approval_recorder = test_ctx.approval_recorder;
+        let traj = TrajectoryLogger::new(&test_ctx.workspace);
+        let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+        let mut harness_state = build_harness_state_with(0);
+        let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+            renderer: &mut test_ctx.renderer,
+            handle: &test_ctx.handle,
+            tool_registry: &mut registry,
+            tools: &tools,
+            tool_result_cache: &result_cache,
+            tool_permission_cache: &permission_cache_arc,
+            decision_ledger: &decision_ledger,
+            session_stats: &mut session_stats,
+            mcp_panel_state: &mut mcp_panel,
+            approval_recorder: &approval_recorder,
+            session: &mut test_ctx.session,
+            traj: &traj,
+            harness_state: &mut harness_state,
+            harness_emitter: None,
+        };
+
+        let call = vtcode_core::llm::provider::ToolCall::function(
+            "call_budget".to_string(),
+            "read_file".to_string(),
+            "{}".to_string(),
+        );
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let outcome = run_tool_call(
+            &mut ctx,
+            &call,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            None,
+            None,
+            true,
+            None,
+            0,
+        )
+        .await
+        .expect("run_tool_call must run");
+
+        match outcome.status {
+            ToolExecutionStatus::Failure { error } => {
+                assert!(error.to_string().contains("Policy violation"));
+            }
+            other => panic!("Expected policy violation, got: {:?}", other),
+        }
     }
 
     #[tokio::test]
@@ -1612,6 +1781,7 @@ mod tests {
 
         let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
+        let mut harness_state = build_harness_state();
         let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
             renderer: &mut renderer,
             handle: &handle,
@@ -1625,6 +1795,8 @@ mod tests {
             approval_recorder: &approval_recorder,
             session: &mut session,
             traj: &traj,
+            harness_state: &mut harness_state,
+            harness_emitter: None,
         };
 
         let args = serde_json::json!({"path": file_path.to_string_lossy()});

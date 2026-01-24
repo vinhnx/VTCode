@@ -7,6 +7,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::llm::provider as uni;
 use crate::agent::runloop::handle_skill_command;
 use crate::agent::runloop::{SkillCommandAction, SkillCommandOutcome};
+use crate::agent::runloop::unified::turn::utils::{enforce_history_limits, truncate_message_content};
 use super::{SlashCommandContext, SlashCommandControl};
 
 pub async fn handle_manage_skills(
@@ -96,8 +97,10 @@ pub async fn handle_manage_skills(
                     )));
 
                     let result_string: String = result;
+                    let limited = truncate_message_content(&result_string);
                     ctx.conversation_history
-                        .push(uni::Message::assistant(result_string));
+                        .push(uni::Message::assistant(limited));
+                    enforce_history_limits(&mut ctx.conversation_history);
 
                     Ok(SlashCommandControl::Continue)
                 }

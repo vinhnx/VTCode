@@ -19,12 +19,12 @@ pub(crate) fn render_file_operation_indicator(
     // Only show indicators for file modification tools
     let (indicator_icon, action_verb) = match tool_name {
         name if name == tool_names::WRITE_FILE || name == tool_names::CREATE_FILE => {
-            (">", "Writing")
+            ("❋", "Writing")
         }
-        name if name == tool_names::EDIT_FILE => (">", "Editing"),
-        name if name == tool_names::APPLY_PATCH => (">", "Applying patch to"),
-        name if name == tool_names::SEARCH_REPLACE => (">", "Search/replace in"),
-        name if name == tool_names::DELETE_FILE => (">", "Deleting"),
+        name if name == tool_names::EDIT_FILE => ("❋", "Editing"),
+        name if name == tool_names::APPLY_PATCH => ("❋", "Applying patch to"),
+        name if name == tool_names::SEARCH_REPLACE => ("❋", "Search/replace in"),
+        name if name == tool_names::DELETE_FILE => ("❋", "Deleting"),
         name if name == tool_names::UNIFIED_FILE => {
             // Determine action from unified_file parameters
             let action = args
@@ -44,10 +44,10 @@ pub(crate) fn render_file_operation_indicator(
                 .unwrap_or("read");
 
             match action {
-                "write" | "create" => (">", "Writing"),
-                "edit" => (">", "Editing"),
-                "patch" | "apply_patch" => (">", "Applying patch to"),
-                "delete" => (">", "Deleting"),
+                "write" | "create" => ("❋", "Writing"),
+                "edit" => ("❋", "Editing"),
+                "patch" | "apply_patch" => ("❋", "Applying patch to"),
+                "delete" => ("❋", "Deleting"),
                 _ => return Ok(()), // Skip indicator for read operations
             }
         }

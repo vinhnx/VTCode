@@ -1,5 +1,6 @@
 use crate::agent::runloop::unified::state::SessionStats;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
@@ -11,8 +12,71 @@ use vtcode_core::ui::tui::InlineSession;
 use vtcode_core::utils::ansi::AnsiRenderer;
 // use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager; // unused
 use crate::agent::runloop::mcp_events::McpPanelState;
+use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::tools::ApprovalRecorder;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnRunId(pub String);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnId(pub String);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TurnPhase {
+    Preparing,
+    Requesting,
+    ExecutingTools,
+    Finalizing,
+}
+
+pub struct HarnessTurnState {
+    pub run_id: TurnRunId,
+    pub turn_id: TurnId,
+    pub phase: TurnPhase,
+    pub turn_started_at: Instant,
+    pub tool_calls: usize,
+    pub max_tool_calls: usize,
+    pub max_tool_wall_clock: Duration,
+    pub max_tool_retries: u32,
+}
+
+impl HarnessTurnState {
+    pub fn new(
+        run_id: TurnRunId,
+        turn_id: TurnId,
+        max_tool_calls: usize,
+        max_tool_wall_clock_secs: u64,
+        max_tool_retries: u32,
+    ) -> Self {
+        Self {
+            run_id,
+            turn_id,
+            phase: TurnPhase::Preparing,
+            turn_started_at: Instant::now(),
+            tool_calls: 0,
+            max_tool_calls,
+            max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
+            max_tool_retries,
+        }
+    }
+
+    pub fn tool_budget_exhausted(&self) -> bool {
+        self.tool_calls >= self.max_tool_calls
+    }
+
+    pub fn wall_clock_exhausted(&self) -> bool {
+        self.turn_started_at.elapsed() >= self.max_tool_wall_clock
+    }
+
+    pub fn record_tool_call(&mut self) {
+        self.tool_calls = self.tool_calls.saturating_add(1);
+    }
+
+    pub fn set_phase(&mut self, phase: TurnPhase) {
+        self.phase = phase;
+    }
+}
 
 #[allow(dead_code)]
 pub(crate) struct RunLoopContext<'a> {
@@ -28,6 +92,8 @@ pub(crate) struct RunLoopContext<'a> {
     pub approval_recorder: &'a ApprovalRecorder,
     pub session: &'a mut InlineSession,
     pub traj: &'a TrajectoryLogger,
+    pub harness_state: &'a mut HarnessTurnState,
+    pub harness_emitter: Option<&'a HarnessEventEmitter>,
 }
 
 // Lightweight adapter that provides a smaller context for per-turn operations.
@@ -38,4 +104,28 @@ pub(crate) struct TurnExecutionContext<'a> {
     pub session_stats: &'a mut SessionStats,
     pub mcp_panel_state: &'a mut McpPanelState,
     pub approval_recorder: &'a ApprovalRecorder,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HarnessTurnState, TurnId, TurnPhase, TurnRunId};
+
+    #[test]
+    fn harness_state_tracks_phase_transitions() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            2,
+            10,
+            1,
+        );
+
+        assert_eq!(state.phase, TurnPhase::Preparing);
+        state.set_phase(TurnPhase::Requesting);
+        assert_eq!(state.phase, TurnPhase::Requesting);
+        state.set_phase(TurnPhase::ExecutingTools);
+        assert_eq!(state.phase, TurnPhase::ExecutingTools);
+        state.set_phase(TurnPhase::Finalizing);
+        assert_eq!(state.phase, TurnPhase::Finalizing);
+    }
 }

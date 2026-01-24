@@ -223,6 +223,8 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
         approval_recorder: ctx.approval_recorder,
         session: ctx.session,
         traj,
+        harness_state: ctx.harness_state,
+        harness_emitter: ctx.harness_emitter,
     };
 
     handle_pipeline_output(&mut run_ctx, name, args_val, outcome, vt_config).await
@@ -242,6 +244,16 @@ mod tests {
     use vtcode_core::tools::result_cache::ToolCacheKey;
     use vtcode_core::ui::theme;
     use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
+
+    fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
+        crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(
+            crate::agent::runloop::unified::run_loop_context::TurnRunId("test-run".to_string()),
+            crate::agent::runloop::unified::run_loop_context::TurnId("test-turn".to_string()),
+            4,
+            60,
+            0,
+        )
+    }
 
     // Use Tokio runtime for async test blocks
     #[tokio::test]
@@ -372,6 +384,7 @@ mod tests {
         let traj = TrajectoryLogger::new(&workspace);
         let tools = Arc::new(RwLock::new(Vec::new()));
 
+        let mut harness_state = build_harness_state();
         let mut ctx = RunLoopContext {
             renderer: &mut renderer,
             handle: &handle,
@@ -385,6 +398,8 @@ mod tests {
             approval_recorder: &approval_recorder,
             session: &mut session,
             traj: &traj,
+            harness_state: &mut harness_state,
+            harness_emitter: None,
         };
 
         let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -447,6 +462,7 @@ mod tests {
         let traj = TrajectoryLogger::new(&workspace);
         let tools = Arc::new(RwLock::new(Vec::new()));
 
+        let mut harness_state = build_harness_state();
         let mut ctx = RunLoopContext {
             renderer: &mut renderer,
             handle: &handle,
@@ -460,6 +476,8 @@ mod tests {
             approval_recorder: &approval_recorder,
             session: &mut session,
             traj: &traj,
+            harness_state: &mut harness_state,
+            harness_emitter: None,
         };
 
         let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
