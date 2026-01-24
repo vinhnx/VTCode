@@ -1,34 +1,18 @@
-<p align="center">
-  <h1 align="center">VT Code</h1>
-</p>
+<img src="./resources/logo/vt_code_adaptive.svg" alt="vtcode"/>
 
-<p align="center">
-  <a href="./docs/guides/mcp-integration.md">
-    <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
-  </a> <a href="./docs/guides/zed-acp.md">
-  <img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/>
-</a>
-</p>
+<a href="./docs/guides/mcp-integration.md"><img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/></a>
+<a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/></a>
 
-<p align="center">
   <a href="https://open-vsx.org/extension/nguyenxuanvinh/vtcode-companion" target="_blank">
     <img src="https://img.shields.io/badge/Available%20on-Open%20VSX-4CAF50?style=for-the-badge&logo=opensearch&logoColor=white" alt="Open VSX Registry"/>
   </a>
   <a href="https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion" target="_blank">
     <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
-  </a>
-</p>
+  </a> <a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?color=fc8d62&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=Release" alt="GitHub Release"/></a>
 
-<p align="center">
-  <a href="https://crates.io/crates/vtcode">
-    <img src="https://img.shields.io/crates/v/vtcode?color=fc8d62&label=crates.io" alt="Crates.io Version"/>
-  </a>
-  <a href="https://github.com/vinhnx/vtcode/releases">
-    <img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=Release" alt="GitHub Release"/>
-  </a>
-</p>
+---
 
-<p align="center"><strong>VT Code</strong> is a research-preview terminal coding agent, with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.</p>
+<strong>VT Code</strong> is a research-preview terminal coding agent, with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.
 
 ---
 
@@ -88,12 +72,12 @@ VT Code can integrate with code editors like Zed. To configure ACP, refer to the
 
 VT Code implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), enabling communication and interoperability between AI agents. The A2A protocol supports:
 
--   **Agent Discovery**: Via Agent Cards at `/.well-known/agent-card.json`
--   **Task Lifecycle Management**: States like `submitted`, `working`, `completed`, `failed`
--   **Real-time Streaming**: Via Server-Sent Events (SSE)
--   **Rich Content Types**: Text, file, and structured data parts
--   **Push Notifications**: Webhook-based async updates
--   **JSON-RPC 2.0**: Over HTTP(S) for interoperability
+- **Agent Discovery**: Via Agent Cards at `/.well-known/agent-card.json`
+- **Task Lifecycle Management**: States like `submitted`, `working`, `completed`, `failed`
+- **Real-time Streaming**: Via Server-Sent Events (SSE)
+- **Rich Content Types**: Text, file, and structured data parts
+- **Push Notifications**: Webhook-based async updates
+- **JSON-RPC 2.0**: Over HTTP(S) for interoperability
 
 For more information about A2A protocol support, see [A2A Protocol Documentation](./docs/a2a-protocol.md).
 
@@ -102,6 +86,7 @@ For more information about A2A protocol support, see [A2A Protocol Documentation
 VT Code provides compatibility with the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) to help connect existing applications to VT Code, including tools like Claude Code.
 
 The server supports:
+
 - Messages endpoint at `/v1/messages`
 - Streaming responses
 - Tool calling
@@ -116,10 +101,10 @@ For more information about Anthropic API compatibility, see [Anthropic API Docum
 
 VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. Key configuration features include:
 
--   **Lifecycle Hooks**: Execute shell commands in response to agent events - see [Lifecycle Hooks Guide](./docs/guides/lifecycle-hooks.md)
--   **Tool Policies**: Control which tools are allowed, prompted, or denied
--   **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
--   **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
+- **Lifecycle Hooks**: Execute shell commands in response to agent events - see [Lifecycle Hooks Guide](./docs/guides/lifecycle-hooks.md)
+- **Tool Policies**: Control which tools are allowed, prompted, or denied
+- **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
+- **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
 
 For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
 
@@ -127,38 +112,38 @@ For full configuration options, see [Configuration](./docs/config/CONFIGURATION_
 
 VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and standard UNIX principles to ensure a robust and pipe-friendly experience:
 
--   **Output Streams**: Primary output (e.g., code from `ask`, events from `exec`) is sent to `stdout`. All logs, metadata, reasoning traces, and interaction prompts are sent to `stderr`. This allows you to safely pipe `vtcode` output to other tools.
+- **Output Streams**: Primary output (e.g., code from `ask`, events from `exec`) is sent to `stdout`. All logs, metadata, reasoning traces, and interaction prompts are sent to `stderr`. This allows you to safely pipe `vtcode` output to other tools.
     ```bash
     # Only the generated code is saved to file; metadata remains on screen
     vtcode ask "factorial function in rust" > factorial.rs
     ```
--   **Standard Arguments**: Adheres to GNU/POSIX argument parsing standards using `clap`, supporting standard flags like `--help`, `--version`, and `--` separator for positional arguments.
+- **Standard Arguments**: Adheres to GNU/POSIX argument parsing standards using `clap`, supporting standard flags like `--help`, `--version`, and `--` separator for positional arguments.
 
 ---
 
 ### Key Features
 
--   **Security First**: Multi-layered security model with execution policy, tool policies, and argument injection protection
--   **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
--   **Code Intelligence**: Tree-sitter powered code navigation with go-to-definition, find-references, hover, and symbol search (Rust, Python, JavaScript/TypeScript, Go, Java, Swift, Bash)
--   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
--   **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling, aligned with the [open Agent Skills standard](http://agentskills.io/) ([docs](./docs/SKILLS_GUIDE.md))
--   **Subagents**: Delegate tasks to specialized agents (explore/plan/general/code-reviewer/debugger) via `spawn_subagent`; see [docs/subagents/SUBAGENTS.md](./docs/subagents/SUBAGENTS.md)
--   **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
--   **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
--   **Context Management**: Advanced token budget tracking and context curation
--   **TUI Interface**: Rich terminal user interface with real-time streaming
+- **Security First**: Multi-layered security model with execution policy, tool policies, and argument injection protection
+- **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
+- **Code Intelligence**: Tree-sitter powered code navigation with go-to-definition, find-references, hover, and symbol search (Rust, Python, JavaScript/TypeScript, Go, Java, Swift, Bash)
+- **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
+- **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling, aligned with the [open Agent Skills standard](http://agentskills.io/) ([docs](./docs/SKILLS_GUIDE.md))
+- **Subagents**: Delegate tasks to specialized agents (explore/plan/general/code-reviewer/debugger) via `spawn_subagent`; see [docs/subagents/SUBAGENTS.md](./docs/subagents/SUBAGENTS.md)
+- **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
+- **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
+- **Context Management**: Advanced token budget tracking and context curation
+- **TUI Interface**: Rich terminal user interface with real-time streaming
 
 ### Security & Safety
 
 VT Code implements a **defense-in-depth security model** to protect against prompt injection and argument injection attacks:
 
--   **Execution Policy**: Command allowlist with per-command argument validation
--   **Workspace Isolation**: All operations confined to workspace boundaries
--   **OS-Native Sandboxing**: macOS Seatbelt and Linux Landlock + seccomp for kernel-enforced isolation
--   **Tool Policies**: Configurable allow/deny/prompt policies for MCP tools
--   **Human-in-the-Loop**: Configurable approval system for sensitive operations
--   **Audit Trail**: Comprehensive logging of all command executions
+- **Execution Policy**: Command allowlist with per-command argument validation
+- **Workspace Isolation**: All operations confined to workspace boundaries
+- **OS-Native Sandboxing**: macOS Seatbelt and Linux Landlock + seccomp for kernel-enforced isolation
+- **Tool Policies**: Configurable allow/deny/prompt policies for MCP tools
+- **Human-in-the-Loop**: Configurable approval system for sensitive operations
+- **Audit Trail**: Comprehensive logging of all command executions
 
 See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SANDBOX_DEEP_DIVE.md) for details.
 
@@ -166,59 +151,59 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
 
 ### Docs & Examples
 
--   [**Installation**](./docs/installation/README.md)
-    -   [Native Installers](./docs/installation/NATIVE_INSTALLERS.md)
-    -   [Quick Reference](./docs/installation/QUICK_REFERENCE.md)
--   [**Getting started**](./docs/user-guide/getting-started.md)
-    -   [Interactive mode](./docs/user-guide/interactive-mode.md)
-    -   [Command line interface](./docs/user-guide/commands.md)
-    -   [Custom prompts](./docs/user-guide/custom-prompts.md)
--   [Subagents](./docs/subagents/SUBAGENTS.md)
--   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
--   [**AI Provider Setup**](./docs/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
-    -   [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
-    -   [OpenRouter](./docs/providers/openrouter.md)
-    -   [Ollama](./docs/providers/ollama.md)
-    -   [LM Studio](./docs/providers/lmstudio.md)
--   [**Context Engineering**](./docs/context_engineering.md)
-    -   [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
-    -   [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)
--   [**Agent Skills**](./docs/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and the [open Agent Skills standard](http://agentskills.io/).
-    -   [**Standard Compliance**](./docs/AGENT_SKILLS_STANDARD.md) - How VT Code implements the Agent Skills standard
--   [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
--   [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
--   [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).
--   [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation
--   [**Keyboard Shortcuts**](./docs/guides/tui-event-handling.md)
--   [**macOS Alt Shortcut Troubleshooting**](./docs/guides/macos-alt-shortcut-troubleshooting.md) - Solutions for when Alt/Option shortcuts don't work on macOS
--   [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
--   [**Exec Mode**](./docs/user-guide/exec-mode.md)
--   [**Development**](./docs/development/README.md)
-    -   [Testing](./docs/development/testing.md)
-    -   [CI/CD](./docs/development/ci-cd.md)
-    -   [**Empirical Evaluation**](./evals/README.md) - Formal framework for measuring LLM performance across safety, logic, and coding benchmarks.
--   [**FAQ**](./docs/FAQ.md) - Frequently asked questions about VT Code
--   [**TUI & Async Guides**](./docs/guides/)
-    -   [Event Handling](./docs/guides/tui-event-handling.md) - Terminal event architecture and patterns
-    -   [Async Architecture](./docs/guides/async-architecture.md) - Tokio async/await design and best practices
-    -   [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
--   [**Ratatui Integration**](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Complete integration of Ratatui FAQ best practices
-    -   [Summary](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Overview of all improvements
-    -   [FAQ Integration](./docs/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
-    -   [Async Improvements](./docs/ASYNC_IMPROVEMENTS.md) - Tokio best practices applied
--   [**Architecture**](./docs/ARCHITECTURE.md)
--   [**Security**](./docs/SECURITY_MODEL.md)
-    -   [Security Model](./docs/SECURITY_MODEL.md)
-    -   [Security Audit](./docs/SECURITY_AUDIT.md)
-    -   [Tool Policies](./docs/vtcode_tools_policy.md)
--   [**Anthropic API Compatibility**](./docs/anthropic-api.md) - Documentation for Anthropic Messages API compatibility server
+- [**Installation**](./docs/installation/README.md)
+    - [Native Installers](./docs/installation/NATIVE_INSTALLERS.md)
+    - [Quick Reference](./docs/installation/QUICK_REFERENCE.md)
+- [**Getting started**](./docs/user-guide/getting-started.md)
+    - [Interactive mode](./docs/user-guide/interactive-mode.md)
+    - [Command line interface](./docs/user-guide/commands.md)
+    - [Custom prompts](./docs/user-guide/custom-prompts.md)
+- [Subagents](./docs/subagents/SUBAGENTS.md)
+- [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
+- [**AI Provider Setup**](./docs/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
+    - [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
+    - [OpenRouter](./docs/providers/openrouter.md)
+    - [Ollama](./docs/providers/ollama.md)
+    - [LM Studio](./docs/providers/lmstudio.md)
+- [**Context Engineering**](./docs/context_engineering.md)
+    - [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
+    - [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)
+- [**Agent Skills**](./docs/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and the [open Agent Skills standard](http://agentskills.io/).
+    - [**Standard Compliance**](./docs/AGENT_SKILLS_STANDARD.md) - How VT Code implements the Agent Skills standard
+- [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
+- [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
+- [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).
+- [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation
+- [**Keyboard Shortcuts**](./docs/guides/tui-event-handling.md)
+- [**macOS Alt Shortcut Troubleshooting**](./docs/guides/macos-alt-shortcut-troubleshooting.md) - Solutions for when Alt/Option shortcuts don't work on macOS
+- [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
+- [**Exec Mode**](./docs/user-guide/exec-mode.md)
+- [**Development**](./docs/development/README.md)
+    - [Testing](./docs/development/testing.md)
+    - [CI/CD](./docs/development/ci-cd.md)
+    - [**Empirical Evaluation**](./evals/README.md) - Formal framework for measuring LLM performance across safety, logic, and coding benchmarks.
+- [**FAQ**](./docs/FAQ.md) - Frequently asked questions about VT Code
+- [**TUI & Async Guides**](./docs/guides/)
+    - [Event Handling](./docs/guides/tui-event-handling.md) - Terminal event architecture and patterns
+    - [Async Architecture](./docs/guides/async-architecture.md) - Tokio async/await design and best practices
+    - [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
+- [**Ratatui Integration**](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Complete integration of Ratatui FAQ best practices
+    - [Summary](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Overview of all improvements
+    - [FAQ Integration](./docs/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
+    - [Async Improvements](./docs/ASYNC_IMPROVEMENTS.md) - Tokio best practices applied
+- [**Architecture**](./docs/ARCHITECTURE.md)
+- [**Security**](./docs/SECURITY_MODEL.md)
+    - [Security Model](./docs/SECURITY_MODEL.md)
+    - [Security Audit](./docs/SECURITY_AUDIT.md)
+    - [Tool Policies](./docs/vtcode_tools_policy.md)
+- [**Anthropic API Compatibility**](./docs/anthropic-api.md) - Documentation for Anthropic Messages API compatibility server
 
 ---
 
 ## Documents
 
--   Ask Google Gemini CodeWiki <a href="https://codewiki.google/github.com/vinhnx/vtcode"><img src="https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white" alt="Ask CodeWiki"></a>
--   Ask Devin DeepWiki <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+- Ask Google Gemini CodeWiki <a href="https://codewiki.google/github.com/vinhnx/vtcode"><img src="https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white" alt="Ask CodeWiki"></a>
+- Ask Devin DeepWiki <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 
 ---
 
