@@ -85,16 +85,13 @@ impl Session {
                 && prev_kind != Some(InlineMessageKind::Agent));
 
         // Add a subtle separator before User messages (single divider, not double)
-        // Only show dividers if enabled in appearance config
         if message.kind == InlineMessageKind::User && is_new_turn && max_width > 0 {
             // Add blank line for visual separation before user turn
             if prev_kind.is_some() {
                 wrapped.push(Line::default());
             }
-            if self.appearance.should_show_dividers() {
-                let divider = self.message_divider_line(max_width, message.kind);
-                wrapped.push(divider);
-            }
+            let divider = self.message_divider_line(max_width, message.kind);
+            wrapped.push(divider);
         }
 
         let mut lines = self.wrap_line(base_line, max_width);

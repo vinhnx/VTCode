@@ -28,10 +28,10 @@ pub struct SessionConfig {
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum UiMode {
-    /// Full UI with all features (sidebar, footer, dividers)
+    /// Full UI with all features (sidebar, footer)
     #[default]
     Full,
-    /// Minimal UI - no sidebar, no footer, no dividers
+    /// Minimal UI - no sidebar, no footer
     Minimal,
     /// Focused mode - transcript only, maximum content space
     Focused,
@@ -58,9 +58,6 @@ pub struct AppearanceConfig {
     /// Percentage of width for navigation area
     pub navigation_width_percent: u8,
 
-    /// Whether to show message dividers between conversation turns
-    pub show_message_dividers: bool,
-
     /// Transcript bottom padding
     pub transcript_bottom_padding: u16,
 
@@ -83,7 +80,6 @@ impl Default for AppearanceConfig {
             min_content_width: 40,
             min_navigation_width: 20,
             navigation_width_percent: 25,
-            show_message_dividers: true,
             transcript_bottom_padding: 1,
             dim_completed_todos: true,
             message_block_spacing: 1,
@@ -106,7 +102,6 @@ impl AppearanceConfig {
             min_content_width: 40,
             min_navigation_width: 20,
             navigation_width_percent: 25,
-            show_message_dividers: config.ui.show_message_dividers,
             transcript_bottom_padding: 1,
             dim_completed_todos: config.ui.dim_completed_todos,
             message_block_spacing: if config.ui.message_block_spacing {
@@ -122,14 +117,6 @@ impl AppearanceConfig {
     pub fn should_show_sidebar(&self) -> bool {
         match self.ui_mode {
             UiMode::Full => self.show_sidebar,
-            UiMode::Minimal | UiMode::Focused => false,
-        }
-    }
-
-    /// Check if message dividers should be shown based on ui_mode
-    pub fn should_show_dividers(&self) -> bool {
-        match self.ui_mode {
-            UiMode::Full => self.show_message_dividers,
             UiMode::Minimal | UiMode::Focused => false,
         }
     }
