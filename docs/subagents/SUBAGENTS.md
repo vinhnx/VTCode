@@ -2,6 +2,23 @@
 
 Subagents are specialized AI assistants that VT Code can delegate tasks to. Each subagent operates with isolated context and can be configured with specific tools, system prompts, and model selections.
 
+## Why Use Subagents
+
+-   **Context isolation**: keep large exploration output out of the main conversation
+-   **Parallel execution**: run multiple focused tasks at once (within concurrency limits)
+-   **Specialized expertise**: tune prompts, tools, and models per task
+-   **Reusability**: share project-specific agents across the team
+
+## How Subagents Work
+
+When VT Code spawns a subagent, it starts with a clean context. The parent agent provides the relevant background in the prompt, and the subagent returns a concise result plus an `agent_id`.
+
+VT Code runs subagents in the foreground today; background mode is not currently supported.
+
+## When to Use Subagents
+
+Use subagents when you need context isolation, parallel workstreams, or a specialized workflow. Use skills for single-purpose, repeatable actions that do not need a separate context window.
+
 ## Quick Start
 
 ### 1. Create a Subagent
@@ -28,6 +45,15 @@ VT Code automatically delegates tasks to appropriate subagents, or you can invok
 > Have the debugger subagent investigate this error
 ```
 
+### 3. Enable Subagents
+
+Subagents are disabled by default. Enable them in `vtcode.toml`:
+
+```toml
+[subagents]
+enabled = true
+```
+
 ## Built-in Subagents
 
 | Name            | Purpose                                 | Model   | Tools                                                    |
@@ -39,6 +65,17 @@ VT Code automatically delegates tasks to appropriate subagents, or you can invok
 | `debugger`      | Error investigation and fixes           | inherit | read_file, edit_file, run_pty_cmd, grep_file, list_files |
 
 ## Configuration
+
+### Enablement
+
+```toml
+[subagents]
+enabled = true
+# max_concurrent = 3
+# default_timeout_seconds = 300
+# default_model = ""
+# additional_agent_dirs = []
+```
 
 ### File Format
 
@@ -81,10 +118,12 @@ System prompt goes here (markdown body)
 | -------- | -------------------- | -------- |
 | Project  | `.vtcode/agents/`    | Highest  |
 | CLI      | `--agents` JSON flag | High     |
-| User     | `~/.vtcode/agents/`  | Medium   |
+| User     | `~/.vtcode/agents/`  | Low      |
 | Built-in | Compiled into binary | Lowest   |
 
 Project-level subagents take precedence over user-level when names conflict.
+
+`additional_agent_dirs` are loaded after user-level agents and before project-level agents.
 
 ## CLI Configuration
 
@@ -126,7 +165,7 @@ Subagents can be resumed to continue previous conversations:
 2. **Detailed Prompts**: Include specific instructions, examples, and constraints
 3. **Limited Tools**: Only grant tools necessary for the subagent's purpose
 4. **Version Control**: Check project subagents into source control for team sharing
-5. **Start with Claude**: Generate initial subagent with Claude, then customize
+5. **Start with VT Code**: Generate initial subagent with `/agents create`, then customize
 
 ## API Usage
 
@@ -159,6 +198,7 @@ println!("Agent {} completed: {}", result.agent_id, result.output);
 See `docs/examples/agents/` for complete examples:
 
 -   `code-reviewer.md` - Code review specialist
+-   `verifier.md` - Verification specialist for completed work
 -   `test-runner.md` - Test automation expert
 -   `data-scientist.md` - Data analysis expert
 
