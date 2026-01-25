@@ -123,10 +123,8 @@ where
         }
 
         // Only show DEBUG level logs when in debug mode
-        if level == tracing::Level::DEBUG {
-            if !crate::ui::tui::panic_hook::is_debug_mode() {
-                return;
-            }
+        if level == tracing::Level::DEBUG && !crate::ui::tui::panic_hook::is_debug_mode() {
+            return;
         }
 
         let mut visitor = FieldVisitor::default();

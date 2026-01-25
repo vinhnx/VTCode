@@ -484,7 +484,7 @@ pub fn build_codex_responses_payload(
 
     // Use collected guidance, or fall back to default system prompt if empty
     let instructions = if additional_guidance.is_empty() {
-        default_system_prompt().to_string()
+        format!("You are Codex, based on GPT-5. {}", default_system_prompt())
     } else {
         additional_guidance.join("\n\n")
     };

@@ -103,10 +103,10 @@ impl LLMProvider for MinimaxProvider {
                 match event {
                     LLMStreamEvent::Completed { response } => {
                         let processed = post_process_response(
-                            response,
+                            *response,
                             tool_defs.as_deref(),
                         );
-                        yield LLMStreamEvent::Completed { response: processed };
+                        yield LLMStreamEvent::Completed { response: Box::new(processed) };
                     }
                     other => {
                         yield other;

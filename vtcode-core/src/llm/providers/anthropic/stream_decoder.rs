@@ -139,7 +139,7 @@ pub fn create_stream(
             organization_id: organization_id.clone(),
         };
 
-        yield LLMStreamEvent::Completed { response };
+        yield LLMStreamEvent::Completed { response: Box::new(response) };
     };
 
     Box::pin(stream)

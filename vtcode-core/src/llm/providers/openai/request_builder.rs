@@ -111,11 +111,15 @@ pub(crate) fn build_chat_request(
     });
 
     let is_native_openai = ctx.base_url.contains("api.openai.com");
-    let _max_tokens_field = if !is_native_openai {
+    let max_tokens_field = if !is_native_openai {
         "max_tokens"
     } else {
         MAX_COMPLETION_TOKENS_FIELD
     };
+
+    if let Some(max_tokens) = request.max_tokens {
+        openai_request[max_tokens_field] = json!(max_tokens);
+    }
 
     if let Some(temperature) = request.temperature
         && ctx.supports_temperature

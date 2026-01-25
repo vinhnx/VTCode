@@ -47,7 +47,7 @@ impl AgentRunner {
         // Typical response: 500-2000 chars, reasoning: 200-1000 chars
         let mut aggregated_text = String::with_capacity(2048);
         let mut aggregated_reasoning = String::with_capacity(1024);
-        let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
+        let mut streaming_response: Option<Box<crate::llm::provider::LLMResponse>> = None;
 
         if supports_streaming && !streaming_disabled {
             let stream_result = if let Some(limit) = streaming_deadline {
@@ -191,7 +191,7 @@ impl AgentRunner {
 
             let reasoning = response.reasoning.clone();
             return Ok(ProviderResponseSummary {
-                response,
+                response: *response,
                 content: aggregated_text,
                 reasoning,
                 agent_message_streamed,

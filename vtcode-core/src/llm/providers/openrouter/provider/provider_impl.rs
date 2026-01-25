@@ -211,7 +211,7 @@ impl LLMProvider for OpenRouterProvider {
                 reasoning,
             );
 
-            yield LLMStreamEvent::Completed { response };
+            yield LLMStreamEvent::Completed { response: Box::new(response) };
         };
 
         Ok(Box::pin(stream))

@@ -1098,7 +1098,7 @@ impl HuggingFaceProvider {
                                 request_id: None,
                                 organization_id: None,
                             };
-                            yield LLMStreamEvent::Completed { response };
+                            yield LLMStreamEvent::Completed { response: Box::new(response) };
                         }
                         break;
                     }
@@ -1156,7 +1156,7 @@ impl HuggingFaceProvider {
                                                 response.reasoning = Some(reasoning_buffer.clone());
                                             }
                                             completed = true;
-                                            yield LLMStreamEvent::Completed { response };
+                                            yield LLMStreamEvent::Completed { response: Box::new(response) };
                                         }
                                         Err(_) => {
                                             // Fallback: create response from buffers
@@ -1173,7 +1173,7 @@ impl HuggingFaceProvider {
                                                 organization_id: None,
                                             };
                                             completed = true;
-                                            yield LLMStreamEvent::Completed { response };
+                                            yield LLMStreamEvent::Completed { response: Box::new(response) };
                                         }
                                     }
                                 }
@@ -1194,7 +1194,7 @@ impl HuggingFaceProvider {
                                     organization_id: None,
                                 };
                                 completed = true;
-                                yield LLMStreamEvent::Completed { response };
+                                yield LLMStreamEvent::Completed { response: Box::new(response) };
                                 break;
                             }
                             _ => {}
@@ -1273,7 +1273,7 @@ impl HuggingFaceProvider {
                                 };
 
                                 completed = true;
-                                yield LLMStreamEvent::Completed { response };
+                                yield LLMStreamEvent::Completed { response: Box::new(response) };
                                 break;
                             }
                         }
@@ -1300,7 +1300,7 @@ impl HuggingFaceProvider {
                     request_id: None,
                     organization_id: None,
                 };
-                yield LLMStreamEvent::Completed { response };
+                yield LLMStreamEvent::Completed { response: Box::new(response) };
             }
         };
 

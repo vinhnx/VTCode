@@ -172,7 +172,7 @@ impl LLMProvider for GeminiProvider {
                     match Self::convert_from_streaming_response(streaming_response) {
                         Ok(final_response) => {
                             let _ = completion_sender.send(Ok(LLMStreamEvent::Completed {
-                                response: final_response,
+                                response: Box::new(final_response),
                             }));
                         }
                         Err(err) => {

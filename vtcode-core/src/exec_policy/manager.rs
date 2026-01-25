@@ -205,7 +205,7 @@ impl ExecPolicyManager {
     /// Evaluate a command against the full policy stack.
     pub async fn evaluate(&self, command: &[String]) -> PolicyEvaluation {
         let policy = self.policy.read().await;
-        let commands = vec![command.to_vec()];
+        let commands = [command.to_vec()];
         policy.check_multiple(commands.iter(), &|cmd| self.heuristics_decision(cmd))
     }
 

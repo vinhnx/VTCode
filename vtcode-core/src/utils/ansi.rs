@@ -818,7 +818,7 @@ impl InlineSink {
 
                 for span in &line.spans {
                     // Use as_ref() to avoid unnecessary clone - Cow is already optimized
-                    let content: &str = &*span.content;
+                    let content: &str = &span.content;
                     if content.is_empty() {
                         continue;
                     }

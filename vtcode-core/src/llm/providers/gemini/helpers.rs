@@ -1,4 +1,5 @@
 use super::*;
+use crate::prompts::system::default_system_prompt;
 
 impl GeminiProvider {
     /// Check if model supports context caching
@@ -302,7 +303,14 @@ impl GeminiProvider {
             system_instruction: request
                 .system_prompt
                 .as_ref()
-                .map(|text| SystemInstruction::new(text.clone())),
+                .map(|text| SystemInstruction::new(text.clone()))
+                .or_else(|| {
+                    if self.prompt_cache_enabled {
+                        Some(SystemInstruction::new(default_system_prompt()))
+                    } else {
+                        None
+                    }
+                }),
             generation_config: Some(generation_config),
         })
     }

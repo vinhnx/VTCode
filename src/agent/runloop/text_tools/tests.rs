@@ -115,7 +115,7 @@ fn test_detect_rust_struct_tool_call_parses_command_block() {
 #[test]
 fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
     let message =
-        "```rust\nrun_pty_cmd {\n    command: \"git status\",\n    workdir: ".",\n}\n```";
+        "```rust\nrun_pty_cmd {\n    command: \"git status\",\n    workdir: \".\",\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, "run_pty_cmd");
     assert_eq!(

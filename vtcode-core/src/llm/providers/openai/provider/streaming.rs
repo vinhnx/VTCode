@@ -117,7 +117,7 @@ impl OpenAIProvider {
                     retry_request.stream = false;
                     let response = self.generate_request(retry_request).await?;
                     let stream = try_stream! {
-                        yield provider::LLMStreamEvent::Completed { response };
+                        yield provider::LLMStreamEvent::Completed { response: Box::new(response) };
                     };
                     return Ok(Box::pin(stream));
                 }
