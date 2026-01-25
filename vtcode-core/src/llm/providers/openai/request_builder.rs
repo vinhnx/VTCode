@@ -2,11 +2,15 @@
 //!
 //! Keeps JSON shaping for chat payloads out of the main provider.
 
+use crate::config::models::Provider as ModelProvider;
+use crate::config::types::ReasoningEffortLevel;
 use crate::llm::error_display;
 use crate::llm::provider as provider;
+use crate::llm::rig_adapter::reasoning_parameters_for;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
+use super::responses_api::{build_codex_responses_payload, build_standard_responses_payload};
 use super::tool_serialization;
 use super::types::MAX_COMPLETION_TOKENS_FIELD;
 
@@ -16,6 +20,17 @@ pub(crate) struct ChatRequestContext<'a> {
     pub supports_tools: bool,
     pub supports_parallel_tool_config: bool,
     pub supports_temperature: bool,
+}
+
+pub(crate) struct ResponsesRequestContext<'a> {
+    pub supports_tools: bool,
+    pub supports_parallel_tool_config: bool,
+    pub supports_temperature: bool,
+    pub supports_reasoning_effort: bool,
+    pub supports_reasoning: bool,
+    pub is_gpt5_codex_model: bool,
+    pub is_responses_api_model: bool,
+    pub prompt_cache_retention: Option<&'a str>,
 }
 
 pub(crate) fn build_chat_request(
@@ -137,6 +152,193 @@ pub(crate) fn build_chat_request(
                         openai_request["parallel_tool_config"] = config_value;
                     }
                 }
+            }
+        }
+    }
+
+    Ok(openai_request)
+}
+
+pub(crate) fn build_responses_request(
+    request: &provider::LLMRequest,
+    ctx: &ResponsesRequestContext<'_>,
+) -> Result<Value, provider::LLMError> {
+    let responses_payload = if ctx.is_gpt5_codex_model {
+        build_codex_responses_payload(request)?
+    } else {
+        build_standard_responses_payload(request)?
+    };
+
+    if responses_payload.input.is_empty() {
+        let formatted_error =
+            error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
+        return Err(provider::LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
+    }
+
+    let mut openai_request = json!({
+        "model": request.model,
+        "input": responses_payload.input,
+        "stream": request.stream,
+    });
+
+    // 'output_types' is part of the GPT-5 Responses API spec
+    openai_request["output_types"] = json!(["message", "tool_call"]);
+
+    if let Some(instructions) = responses_payload.instructions {
+        if !instructions.trim().is_empty() {
+            openai_request["instructions"] = json!(instructions);
+        }
+    }
+
+    let mut sampling_parameters = json!({});
+    let mut has_sampling = false;
+
+    if let Some(temperature) = request.temperature
+        && ctx.supports_temperature
+    {
+        sampling_parameters["temperature"] = json!(temperature);
+        has_sampling = true;
+    }
+
+    if let Some(top_p) = request.top_p {
+        sampling_parameters["top_p"] = json!(top_p);
+        has_sampling = true;
+    }
+
+    if let Some(presence_penalty) = request.presence_penalty {
+        sampling_parameters["presence_penalty"] = json!(presence_penalty);
+        has_sampling = true;
+    }
+
+    if let Some(frequency_penalty) = request.frequency_penalty {
+        sampling_parameters["frequency_penalty"] = json!(frequency_penalty);
+        has_sampling = true;
+    }
+
+    if has_sampling {
+        openai_request["sampling_parameters"] = sampling_parameters;
+    }
+
+    if ctx.supports_tools {
+        if let Some(tools) = &request.tools {
+            if let Some(serialized) = tool_serialization::serialize_tools_for_responses(tools) {
+                openai_request["tools"] = serialized;
+
+                // Check if any tools are custom types - if so, disable parallel tool calls
+                // as per GPT-5 specification: "custom tool type does NOT support parallel tool calling"
+                let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
+                if has_custom_tool {
+                    // Override parallel tool calls to false if custom tools are present
+                    openai_request["parallel_tool_calls"] = Value::Bool(false);
+                }
+
+                // Only add tool_choice when tools are present
+                if let Some(tool_choice) = &request.tool_choice {
+                    openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
+                }
+
+                // Only set parallel tool calls if not overridden due to custom tools
+                if request.parallel_tool_calls.is_some()
+                    && !openai_request.get("parallel_tool_calls").is_some()
+                {
+                    if let Some(parallel) = request.parallel_tool_calls {
+                        openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+                    }
+                }
+
+                // Only add parallel_tool_config when tools are present
+                if ctx.supports_parallel_tool_config {
+                    if let Some(config) = &request.parallel_tool_config {
+                        if let Ok(config_value) = serde_json::to_value(config) {
+                            openai_request["parallel_tool_config"] = config_value;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if ctx.supports_reasoning_effort {
+        if let Some(effort) = request.reasoning_effort {
+            if let Some(payload) = reasoning_parameters_for(ModelProvider::OpenAI, effort) {
+                openai_request["reasoning"] = payload;
+            } else {
+                openai_request["reasoning"] = json!({ "effort": effort.as_str() });
+            }
+        } else if openai_request.get("reasoning").is_none() {
+            // Use the default reasoning effort level (medium) for native OpenAI models
+            let default_effort = ReasoningEffortLevel::default().as_str();
+            openai_request["reasoning"] = json!({ "effort": default_effort });
+        }
+    }
+
+    // Enable reasoning summaries if supported (OpenAI GPT-5 only)
+    if ctx.supports_reasoning {
+        if let Some(map) = openai_request.as_object_mut() {
+            let reasoning_value = map.entry("reasoning").or_insert(json!({}));
+            if let Some(reasoning_obj) = reasoning_value.as_object_mut() {
+                if !reasoning_obj.contains_key("summary") {
+                    reasoning_obj.insert("summary".to_string(), json!("auto"));
+                }
+            }
+        }
+    }
+
+    // Add text formatting options for GPT-5 and compatible models, including verbosity and grammar
+    let mut text_format = json!({});
+    let mut has_format_options = false;
+
+    if let Some(verbosity) = request.verbosity {
+        text_format["verbosity"] = json!(verbosity.as_str());
+        has_format_options = true;
+    }
+
+    // Add grammar constraint if tools include grammar definitions
+    if let Some(ref tools) = request.tools {
+        let grammar_tools: Vec<&provider::ToolDefinition> = tools
+            .iter()
+            .filter(|tool| tool.tool_type == "grammar")
+            .collect();
+
+        if !grammar_tools.is_empty() {
+            // Use the first grammar definition found
+            if let Some(grammar_tool) = grammar_tools.first() {
+                if let Some(ref grammar) = grammar_tool.grammar {
+                    text_format["format"] = json!({
+                        "type": "grammar",
+                        "syntax": grammar.syntax,
+                        "definition": grammar.definition
+                    });
+                    has_format_options = true;
+                }
+            }
+        }
+    }
+
+    // Set default verbosity for GPT-5.1/5.2 models if no format options specified
+    if !has_format_options
+        && (request.model.starts_with("gpt-5.1") || request.model.starts_with("gpt-5.2"))
+    {
+        text_format["verbosity"] = json!("medium");
+        has_format_options = true;
+    }
+
+    if has_format_options {
+        openai_request["text"] = text_format;
+    }
+
+    // If configured, include the `prompt_cache_retention` value in the Responses API
+    // request. This allows the user to extend the server-side prompt cache window
+    // (e.g., "24h") to increase cache reuse and reduce cost/latency on GPT-5.1.
+    // Only include prompt_cache_retention when both configured and when the selected
+    // model uses the OpenAI Responses API.
+    if ctx.is_responses_api_model {
+        if let Some(retention) = ctx.prompt_cache_retention {
+            if !retention.trim().is_empty() {
+                openai_request["prompt_cache_retention"] = json!(retention);
             }
         }
     }
