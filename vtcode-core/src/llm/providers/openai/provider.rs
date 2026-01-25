@@ -44,6 +44,7 @@ use super::errors::{
     fallback_model_if_not_found, format_openai_error, is_model_not_found,
     is_responses_api_unsupported,
 };
+use crate::llm::providers::error_handling::is_rate_limit_error;
 use super::responses_api::{
     build_codex_responses_payload, build_standard_responses_payload, parse_responses_payload,
 };
@@ -1607,11 +1608,7 @@ impl provider::LLMProvider for OpenAIProvider {
                 let status = response.status();
                 let error_text = response.text().await.unwrap_or_default();
 
-                if status.as_u16() == 429
-                    || error_text.contains("insufficient_quota")
-                    || error_text.contains("quota")
-                    || error_text.contains("rate limit")
-                {
+                if is_rate_limit_error(status.as_u16(), &error_text) {
                     return Err(provider::LLMError::RateLimit { metadata: None });
                 }
 
@@ -1691,11 +1688,7 @@ impl provider::LLMProvider for OpenAIProvider {
                 return self.stream(request).await;
             }
 
-            if status.as_u16() == 429
-                || error_text.contains("insufficient_quota")
-                || error_text.contains("quota")
-                || error_text.contains("rate limit")
-            {
+            if is_rate_limit_error(status.as_u16(), &error_text) {
                 return Err(provider::LLMError::RateLimit { metadata: None });
             }
 
@@ -1835,11 +1828,7 @@ impl provider::LLMProvider for OpenAIProvider {
                     );
                     self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
                     return self.generate(request).await;
-                } else if status.as_u16() == 429
-                    || error_text.contains("insufficient_quota")
-                    || error_text.contains("quota")
-                    || error_text.contains("rate limit")
-                {
+                } else if is_rate_limit_error(status.as_u16(), &error_text) {
                     return Err(provider::LLMError::RateLimit { metadata: None });
                 } else if is_model_not_found(status, &error_text) {
                     if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
@@ -1965,11 +1954,7 @@ impl provider::LLMProvider for OpenAIProvider {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
 
-            if status.as_u16() == 429
-                || error_text.contains("insufficient_quota")
-                || error_text.contains("quota")
-                || error_text.contains("rate limit")
-            {
+            if is_rate_limit_error(status.as_u16(), &error_text) {
                 return Err(provider::LLMError::RateLimit { metadata: None });
             }
 

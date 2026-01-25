@@ -33,7 +33,7 @@ use super::{
     shared::{
         StreamAssemblyError, StreamDelta, StreamFragment, StreamTelemetry, ToolCallBuilder,
         append_text_with_reasoning, apply_tool_call_delta_from_content, extract_data_payload,
-        finalize_tool_calls, find_sse_boundary, update_tool_calls,
+        finalize_tool_calls, find_sse_boundary, parse_openai_tool_calls, update_tool_calls,
     },
     split_reasoning_from_text,
 };
@@ -944,29 +944,7 @@ impl OpenRouterProvider {
                     let tool_calls = entry
                         .get("tool_calls")
                         .and_then(|tc| tc.as_array())
-                        .map(|calls| {
-                            calls
-                                .iter()
-                                .filter_map(|call| {
-                                    let id = call.get("id").and_then(|v| v.as_str())?;
-                                    let function = call.get("function")?;
-                                    let name = function.get("name").and_then(|v| v.as_str())?;
-                                    let arguments = function.get("arguments");
-                                    let serialized = arguments.map_or("{}".to_string(), |value| {
-                                        if value.is_string() {
-                                            value.as_str().unwrap_or("").to_string()
-                                        } else {
-                                            value.to_string()
-                                        }
-                                    });
-                                    Some(ToolCall::function(
-                                        id.to_string(),
-                                        name.to_string(),
-                                        serialized,
-                                    ))
-                                })
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|calls| parse_openai_tool_calls(calls))
                         .filter(|calls| !calls.is_empty());
 
                     let message = if let Some(calls) = tool_calls {

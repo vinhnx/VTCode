@@ -358,14 +358,14 @@ mod tests {
         ));
 
         assert_eq!(
-            manager.go_to_previous_history().map(|entry| entry.content().to_owned()),
+            manager.go_to_previous_history().map(|entry| entry.content.clone()),
             Some("second".to_owned())
         );
         assert_eq!(
-            manager.go_to_previous_history().map(|entry| entry.content().to_owned()),
+            manager.go_to_previous_history().map(|entry| entry.content.clone()),
             Some("first".to_owned())
         );
-        assert_eq!(manager.go_to_previous_history().map(|entry| entry.content().to_owned()), None);
+        assert_eq!(manager.go_to_previous_history().map(|entry| entry.content.clone()), None);
     }
 
     #[test]
@@ -379,7 +379,7 @@ mod tests {
 
         manager.go_to_previous_history();
         assert_eq!(
-            manager.go_to_next_history().map(|entry| entry.content().to_owned()),
+            manager.go_to_next_history().map(|entry| entry.content.clone()),
             Some("current".to_owned())
         );
     }
