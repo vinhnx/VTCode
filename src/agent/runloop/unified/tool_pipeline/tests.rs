@@ -367,10 +367,10 @@ async fn test_run_tool_call_read_file_success() {
         harness_emitter: None,
     };
 
-    let args = serde_json::json!({\"path\": file_path.to_string_lossy()});
+    let args = serde_json::json!({"path": file_path.to_string_lossy()});
     let call = vtcode_core::llm::provider::ToolCall::function(
-        \"call_2\".to_string(),
-        \"read_file\".to_string(),
+        "call_2".to_string(),
+        "read_file".to_string(),
         serde_json::to_string(&args).unwrap(),
     );
 

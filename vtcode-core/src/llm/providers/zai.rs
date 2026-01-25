@@ -793,7 +793,7 @@ impl LLMProvider for ZAIProvider {
 
             let tool_calls = finalize_tool_calls(tool_call_builders);
             yield LLMStreamEvent::Completed {
-                response: LLMResponse {
+                response: Box::new(LLMResponse {
                     content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
                     tool_calls,
                     usage,
@@ -803,7 +803,7 @@ impl LLMProvider for ZAIProvider {
                     tool_references: Vec::new(),
                     request_id: None,
                     organization_id: None,
-                }
+                })
             };
         };
 

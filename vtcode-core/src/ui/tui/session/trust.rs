@@ -24,10 +24,10 @@ impl TrustManager {
     }
 
     pub fn check_auto_approve(&self, file_path: &str) -> bool {
-        if let Some(setting) = self.settings.get(file_path) {
-            if matches!(setting.mode, TrustMode::AutoTrust) {
-                return true;
-            }
+        if let Some(setting) = self.settings.get(file_path)
+            && matches!(setting.mode, TrustMode::AutoTrust)
+        {
+            return true;
         }
         self.session_cache.contains(file_path)
     }

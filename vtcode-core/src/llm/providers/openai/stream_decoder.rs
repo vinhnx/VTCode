@@ -123,7 +123,7 @@ pub(crate) fn create_chat_stream(response: reqwest::Response) -> provider::LLMSt
             organization_id: None,
         };
 
-        yield provider::LLMStreamEvent::Completed { response };
+        yield provider::LLMStreamEvent::Completed { response: Box::new(response) };
     };
 
     Box::pin(stream)
@@ -317,7 +317,7 @@ pub(crate) fn create_responses_stream(
             );
         }
 
-        yield provider::LLMStreamEvent::Completed { response };
+        yield provider::LLMStreamEvent::Completed { response: Box::new(response) };
     };
 
     Box::pin(stream)

@@ -914,7 +914,7 @@ impl LLMProvider for OllamaProvider {
                 completion_tokens,
             );
 
-            yield LLMStreamEvent::Completed { response };
+            yield LLMStreamEvent::Completed { response: Box::new(response) };
         };
 
         Ok(Box::pin(stream))

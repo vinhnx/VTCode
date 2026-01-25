@@ -63,7 +63,7 @@ pub trait LLMProvider: Send + Sync {
         // Default implementation falls back to non-streaming
         let response = self.generate(request).await?;
         let stream = try_stream! {
-            yield LLMStreamEvent::Completed { response };
+            yield LLMStreamEvent::Completed { response: Box::new(response) };
         };
         Ok(Box::pin(stream))
     }
@@ -96,8 +96,8 @@ impl LLMErrorMetadata {
         organization_id: Option<String>,
         retry_after: Option<String>,
         message: Option<String>,
-    ) -> Self {
-        Self {
+    ) -> Box<Self> {
+        Box::new(Self {
             provider,
             status,
             code,
@@ -105,7 +105,7 @@ impl LLMErrorMetadata {
             organization_id,
             retry_after,
             message,
-        }
+        })
     }
 }
 
@@ -115,30 +115,30 @@ pub enum LLMError {
     #[error("Authentication failed: {message}")]
     Authentication {
         message: String,
-        metadata: Option<LLMErrorMetadata>,
+        metadata: Option<Box<LLMErrorMetadata>>,
     },
     #[error("Rate limit exceeded")]
-    RateLimit { metadata: Option<LLMErrorMetadata> },
+    RateLimit { metadata: Option<Box<LLMErrorMetadata>> },
     #[error("Invalid request: {message}")]
     InvalidRequest {
         message: String,
-        metadata: Option<LLMErrorMetadata>,
+        metadata: Option<Box<LLMErrorMetadata>>,
     },
     #[error("Network error: {message}")]
     Network {
         message: String,
-        metadata: Option<LLMErrorMetadata>,
+        metadata: Option<Box<LLMErrorMetadata>>,
     },
     #[error("Provider error: {message}")]
     Provider {
         message: String,
-        metadata: Option<LLMErrorMetadata>,
+        metadata: Option<Box<LLMErrorMetadata>>,
     },
 }
 
 impl From<LLMError> for crate::llm::types::LLMError {
     fn from(err: LLMError) -> crate::llm::types::LLMError {
-        let convert = |meta: Option<LLMErrorMetadata>| {
+        let convert = |meta: Option<Box<LLMErrorMetadata>>| {
             meta.map(|m| crate::llm::types::LLMErrorMetadata {
                 provider: Some(m.provider.to_string()),
                 status: m.status,
