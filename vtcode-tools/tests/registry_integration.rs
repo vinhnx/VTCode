@@ -50,9 +50,10 @@ mod tests {
         let chain = MiddlewareChain::new().add(metrics.clone());
 
         let req = ToolRequest {
+            id: "req-1".to_string(),
             tool_name: "test_tool".to_string(),
-            args: Arc::new(serde_json::json!({})),
-            metadata: Default::default(),
+            args: serde_json::json!({}),
+            metadata: Some(Default::default()),
         };
 
         // Simulate 5 tool executions
@@ -60,9 +61,12 @@ mod tests {
             chain.before_execute(&req).await?;
 
             let res = ToolResponse {
-                result: Arc::new(serde_json::json!({"result": i})),
-                duration_ms: 10 + i as u64,
-                cache_hit: i % 2 == 0, // Alternate cache hits
+                id: format!("req-{}", i),
+                success: true,
+                result: Some(serde_json::json!({"result": i})),
+                error: None,
+                duration_ms: Some(10 + i as u64),
+                cache_hit: Some(i % 2 == 0), // Alternate cache hits
             };
 
             chain.after_execute(&req, &res).await?;
@@ -155,16 +159,20 @@ mod tests {
 
             // Update metrics
             let req = ToolRequest {
+                id: format!("workflow-{}", tool),
                 tool_name: tool.to_string(),
-                args: Arc::new(serde_json::json!(args)),
-                metadata: Default::default(),
+                args: serde_json::json!(args),
+                metadata: Some(Default::default()),
             };
 
             chain.before_execute(&req).await?;
             let res = ToolResponse {
-                result: Arc::new(serde_json::json!({"status": "ok"})),
-                duration_ms: 50,
-                cache_hit: is_cached,
+                id: format!("workflow-{}", tool),
+                success: true,
+                result: Some(serde_json::json!({"status": "ok"})),
+                error: None,
+                duration_ms: Some(50),
+                cache_hit: Some(is_cached),
             };
             chain.after_execute(&req, &res).await?;
         }

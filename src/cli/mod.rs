@@ -15,25 +15,17 @@ pub struct SkillsCommandOptions {
 pub use vtcode_core::mcp::cli::handle_mcp_command;
 
 pub mod analyze;
+pub mod benchmark;
+pub mod exec;
 pub mod skills;
 pub mod update;
 
 pub use vtcode_core::cli::args::AskCommandOptions;
 
-#[allow(dead_code)]
-pub struct ExecCommandOptions {
-    pub json: bool,
-    pub events_path: Option<PathBuf>,
-    pub last_message_file: Option<PathBuf>,
-}
+pub use benchmark::BenchmarkCommandOptions;
+pub use exec::ExecCommandOptions;
 
-#[allow(dead_code)]
-pub struct BenchmarkCommandOptions {
-    pub task_file: Option<PathBuf>,
-    pub inline_task: Option<String>,
-    pub output: Option<PathBuf>,
-    pub max_tasks: Option<usize>,
-}
+
 
 // Marketplace command handlers - these are the new functions we're adding
 pub async fn handle_marketplace_add(source: String, id: Option<String>) -> Result<()> {
@@ -70,22 +62,6 @@ pub async fn handle_marketplace_remove(id: String) -> Result<()> {
     // 3. Clean up cached data
 
     println!("Marketplace remove functionality would be implemented here");
-    Ok(())
-}
-
-#[allow(dead_code)]
-pub async fn handle_marketplace_update(id: Option<String>) -> Result<()> {
-    match id {
-        Some(marketplace_id) => println!("Updating marketplace: {}", marketplace_id),
-        None => println!("Updating all marketplaces..."),
-    }
-
-    // In a full implementation, this would:
-    // 1. Fetch updated manifests from the marketplace(s)
-    // 2. Update the cached plugin listings
-    // 3. Potentially notify about new plugins available
-
-    println!("Marketplace update functionality would be implemented here");
     Ok(())
 }
 
@@ -274,12 +250,12 @@ pub async fn handle_chat_command(
 }
 
 pub async fn handle_exec_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _cfg: &VTCodeConfig,
-    _options: ExecCommandOptions,
-    _prompt: Option<String>,
+    core_cfg: vtcode_core::config::types::AgentConfig,
+    cfg: &VTCodeConfig,
+    options: ExecCommandOptions,
+    prompt: Option<String>,
 ) -> Result<()> {
-    Err(anyhow::anyhow!("Exec command not implemented in this stub"))
+    exec::handle_exec_command(&core_cfg, cfg, options, prompt).await
 }
 
 pub async fn handle_analyze_command(
@@ -375,14 +351,12 @@ pub async fn handle_init_project_command(
 }
 
 pub async fn handle_benchmark_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _cfg: &VTCodeConfig,
-    _options: BenchmarkCommandOptions,
-    _full_auto_requested: bool,
+    core_cfg: vtcode_core::config::types::AgentConfig,
+    cfg: &VTCodeConfig,
+    options: BenchmarkCommandOptions,
+    full_auto_requested: bool,
 ) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Benchmark command not implemented in this stub"
-    ))
+    benchmark::handle_benchmark_command(&core_cfg, cfg, options, full_auto_requested).await
 }
 
 pub async fn handle_man_command(_command: Option<String>, _output: Option<PathBuf>) -> Result<()> {

@@ -221,10 +221,10 @@ pub fn get_models_manager() -> &'static ModelsManager {
 pub fn infer_provider_from_model(model: &str) -> Option<Provider> {
     // First check ModelsManager presets for exact match
     let manager = get_models_manager();
-    if let Ok(models) = manager.try_list_models() {
-        if let Some(preset) = models.iter().find(|m| m.model == model || m.id == model) {
-            return Some(preset.provider);
-        }
+    if let Ok(models) = manager.try_list_models()
+        && let Some(preset) = models.iter().find(|m| m.model == model || m.id == model)
+    {
+        return Some(preset.provider);
     }
 
     // Fall back to ModelFamily detection

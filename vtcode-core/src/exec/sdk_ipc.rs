@@ -45,7 +45,6 @@
 //! 4. Maintains token mapping for the session
 
 use anyhow::{Context, Result};
-use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -53,24 +52,13 @@ use tokio::fs;
 use tokio::time::sleep;
 use uuid::Uuid;
 
+use crate::tools::request_response::{ToolCallRequest, ToolCallResponse};
+
 /// IPC request from executing code to executor.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ToolRequest {
-    pub id: String,
-    pub tool_name: String,
-    pub args: Value,
-}
+pub type ToolRequest = ToolCallRequest;
 
 /// IPC response from executor to executing code.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ToolResponse {
-    pub id: String,
-    pub success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+pub type ToolResponse = ToolCallResponse;
 
 /// IPC handler for tool invocation between code and executor.
 pub struct ToolIpcHandler {
@@ -204,6 +192,7 @@ mod tests {
             id: "test-id".into(),
             tool_name: "read_file".into(),
             args: json!({"path": "/test"}),
+            metadata: None,
         };
 
         let json = serde_json::to_string(&request).expect("ToolRequest should serialize");
@@ -218,6 +207,8 @@ mod tests {
             success: true,
             result: Some(json!({"data": "test"})),
             error: None,
+            duration_ms: None,
+            cache_hit: None,
         };
 
         let json = serde_json::to_string(&response).expect("ToolResponse should serialize");
@@ -233,6 +224,8 @@ mod tests {
             success: false,
             result: None,
             error: Some("File not found".into()),
+            duration_ms: None,
+            cache_hit: None,
         };
 
         let json = serde_json::to_string(&response).expect("ToolResponse should serialize");

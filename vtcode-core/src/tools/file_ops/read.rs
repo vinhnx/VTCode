@@ -9,6 +9,50 @@ use crate::tools::types::Input;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 
+fn is_legacy_read_request(args: &Value, is_image: bool) -> bool {
+    if is_image {
+        return true;
+    }
+
+    let legacy_keys = [
+        "offset_bytes",
+        "page_size_bytes",
+        "offset_lines",
+        "page_size_lines",
+        "max_bytes",
+        "max_lines",
+        "chunk_lines",
+        "encoding",
+        "max_tokens",
+    ];
+
+    legacy_keys.iter().any(|key| args.get(*key).is_some())
+}
+
+fn is_new_read_request(args: &Value) -> bool {
+    let new_keys = ["mode", "indentation", "offset", "limit"];
+    new_keys.iter().any(|key| args.get(*key).is_some())
+}
+
+fn build_read_handler_args(args: &Value, canonical_path: &std::path::Path) -> Value {
+    let mut handler_args_json = args.clone();
+    if let Some(obj) = handler_args_json.as_object_mut() {
+        obj.insert(
+            "file_path".to_string(),
+            json!(canonical_path.to_string_lossy()),
+        );
+
+        if !obj.contains_key("offset") && obj.contains_key("offset_lines") {
+            obj.insert("offset".to_string(), obj["offset_lines"].clone());
+        }
+        if !obj.contains_key("limit") && obj.contains_key("page_size_lines") {
+            obj.insert("limit".to_string(), obj["page_size_lines"].clone());
+        }
+    }
+
+    handler_args_json
+}
+
 impl FileOpsTool {
     pub async fn read_file(&self, args: Value) -> Result<Value> {
         let path_str = args
@@ -52,39 +96,12 @@ impl FileOpsTool {
 
             let size_bytes = metadata.len();
 
-            // Heuristic to decide between new handler (line/indentation) and legacy handler (byte-based)
-            // If explicit "offset_bytes", "page_size_bytes" are used, stay with legacy.
-            // If "mode", "indentation", "offset" (implied line) are used, prefer new handler.
             let is_image = is_image_path(&canonical);
-            let is_legacy_request = is_image
-                || args.get("offset_bytes").is_some()
-                || args.get("page_size_bytes").is_some()
-                || args.get("offset_lines").is_some(); // Legacy also used offset_lines, but new one uses 'offset'
+            let is_legacy_request = is_legacy_read_request(&args, is_image);
+            let is_new_request = is_new_read_request(&args);
 
-            let prefer_new_handler = args.get("mode").is_some()
-                || args.get("indentation").is_some()
-                || args.get("offset").is_some();
-
-            if !is_legacy_request || prefer_new_handler {
-                // Prepare args for new handler
-                let mut handler_args_json = args.clone();
-                if let Some(obj) = handler_args_json.as_object_mut() {
-                    // Inject resolved absolute path
-                    obj.insert("file_path".to_string(), json!(canonical.to_string_lossy()));
-
-                    // Map legacy param names if new ones aren't present
-                    if !obj.contains_key("offset") && obj.contains_key("offset_lines") {
-                        obj["offset"] = obj["offset_lines"].clone();
-                    }
-                    if !obj.contains_key("limit") && obj.contains_key("page_size_lines") {
-                        obj["limit"] = obj["page_size_lines"].clone();
-                    }
-                    if !obj.contains_key("limit") {
-                        // Default limit if not specified (ReadFileArgs defaults to 2000)
-                    }
-                }
-
-                // Attempt to parse
+            if !is_image && (is_new_request || !is_legacy_request) {
+                let handler_args_json = build_read_handler_args(&args, &canonical);
                 match serde_json::from_value::<ReadFileArgs>(handler_args_json) {
                     Ok(read_args) => {
                         let handler = ReadFileHandler;
@@ -101,21 +118,18 @@ impl FileOpsTool {
                         }));
                     }
                     Err(e) => {
-                        // If parsing failed (e.g. invalid mode), allow falling back ONLY if it looks strictly like a legacy request,
-                        // otherwise wrap the error.
-                        if prefer_new_handler {
+                        if is_new_request {
                             return Err(anyhow!(
                                 "Failed to parse arguments for read_file handler: {}. Args: {:?}",
                                 e,
                                 args
                             ));
                         }
-                        // Fall through to legacy
                     }
                 }
             }
 
-            // Legacy Fallback
+            // Legacy path
             // We must reconstruct Input from args to use legacy functions
             let input: Input = serde_json::from_value(args.clone())
                 .context("Error: Invalid 'read_file' arguments for legacy handler.")?;

@@ -10,13 +10,12 @@ use tokio::time::timeout;
 use tracing::{debug, error};
 
 use crate::core::memory_pool::global_pool;
+use crate::tools::request_response::ToolCallRequest;
 
 /// Tool execution request with priority and context
 #[derive(Debug, Clone)]
 pub struct ToolRequest {
-    pub id: String,
-    pub tool_name: String,
-    pub args: Value,
+    pub call: ToolCallRequest,
     pub priority: ExecutionPriority,
     pub timeout: Duration,
     pub context: ExecutionContext,
@@ -158,7 +157,7 @@ impl AsyncToolPipeline {
         let cache_key = self.generate_cache_key(&request);
         if let Some(_cached_result) = self.result_cache.read().await.peek(&cache_key) {
             self.metrics.write().await.cache_hits += 1;
-            return Ok(request.id.clone());
+            return Ok(request.call.id.clone());
         }
 
         // Add to priority queue
@@ -174,7 +173,7 @@ impl AsyncToolPipeline {
 
         self.metrics.write().await.total_requests += 1;
 
-        Ok(request.id)
+        Ok(request.call.id)
     }
 
     /// Process a batch of requests efficiently
@@ -251,8 +250,8 @@ impl AsyncToolPipeline {
         let start_time = Instant::now();
         let cache_key = format!(
             "{}:{}",
-            request.tool_name,
-            serde_json::to_string(&request.args).unwrap_or_default()
+            request.call.tool_name,
+            serde_json::to_string(&request.call.args).unwrap_or_default()
         );
 
         // Check cache again (double-checked locking pattern)
@@ -267,7 +266,7 @@ impl AsyncToolPipeline {
         // Execute tool with timeout
         let execution_result = timeout(
             request.timeout,
-            Self::execute_tool_impl(&request.tool_name, &request.args),
+            Self::execute_tool_impl(&request.call.tool_name, &request.call.args),
         )
         .await;
 
@@ -284,7 +283,7 @@ impl AsyncToolPipeline {
         // Create result with metrics
         let result_for_cache = result.is_ok();
         let tool_result = ToolResult {
-            request_id: request.id.clone(),
+            request_id: request.call.id.clone(),
             result: result.map_err(|e| anyhow::anyhow!(e.to_string())),
             execution_time,
             memory_used: None, // Could be implemented with memory tracking
@@ -318,10 +317,10 @@ impl AsyncToolPipeline {
         use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
-        request.tool_name.hash(&mut hasher);
-        request.args.to_string().hash(&mut hasher);
+        request.call.tool_name.hash(&mut hasher);
+        request.call.args.to_string().hash(&mut hasher);
 
-        format!("{}:{:x}", request.tool_name, hasher.finish())
+        format!("{}:{:x}", request.call.tool_name, hasher.finish())
     }
 
     /// Placeholder for actual tool execution

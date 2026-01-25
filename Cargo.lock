@@ -6419,6 +6419,7 @@ dependencies = [
  "url",
  "uuid",
  "vt100",
+ "vtcode-bash-runner",
  "vtcode-commons",
  "vtcode-config",
  "vtcode-exec-events",

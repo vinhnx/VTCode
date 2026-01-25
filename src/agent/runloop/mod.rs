@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 mod git;
 mod mcp_elicitation;
 mod mcp_events;

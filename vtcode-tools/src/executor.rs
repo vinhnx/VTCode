@@ -9,10 +9,18 @@ use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 use vtcode_core::config::constants::execution;
+
+static REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_request_id() -> String {
+    let id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
+    format!("req-{id}")
+}
 
 /// Thread-safe snapshot of executor state.
 #[derive(Clone, Debug)]
@@ -104,9 +112,10 @@ impl CachedToolExecutor {
         // Create request — reuse the shared `args` (already an Arc)
         let owned_args = Arc::clone(&args);
         let req = ToolRequest {
+            id: next_request_id(),
             tool_name: tool_name.to_string(),
-            args: Arc::clone(&owned_args),
-            metadata: Default::default(),
+            args: (*owned_args).clone(),
+            metadata: Some(Default::default()),
         };
 
         // Before hooks
@@ -120,9 +129,12 @@ impl CachedToolExecutor {
             stats.cache_hits += 1;
 
             let res = ToolResponse {
-                result: Arc::clone(&result),
-                duration_ms,
-                cache_hit: true,
+                id: req.id.clone(),
+                success: true,
+                result: Some((*result).clone()),
+                error: None,
+                duration_ms: Some(duration_ms),
+                cache_hit: Some(true),
             };
             self.middleware.after_execute(&req, &res).await?;
 
@@ -173,9 +185,12 @@ impl CachedToolExecutor {
         }
 
         let res = ToolResponse {
-            result: Arc::clone(&arc_res),
-            duration_ms,
-            cache_hit: false,
+            id: req.id.clone(),
+            success: true,
+            result: Some((*arc_res).clone()),
+            error: None,
+            duration_ms: Some(duration_ms),
+            cache_hit: Some(false),
         };
 
         // After hooks

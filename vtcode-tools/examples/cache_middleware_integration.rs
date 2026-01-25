@@ -46,11 +46,12 @@ impl CachedToolExecutor {
         };
         let start = std::time::Instant::now();
 
-        let args = Arc::new(args);
+        let request_id = format!("example-{}", tool_name);
         let req = ToolRequest {
+            id: request_id.clone(),
             tool_name: tool_name.to_string(),
-            args: Arc::clone(&args),
-            metadata: Default::default(),
+            args,
+            metadata: Some(Default::default()),
         };
 
         // Before hooks
@@ -61,9 +62,12 @@ impl CachedToolExecutor {
             eprintln!("✓ Cache hit for {}", tool_name);
 
             let res = ToolResponse {
-                result: Arc::clone(&cached_result),
-                duration_ms: start.elapsed().as_millis() as u64,
-                cache_hit: true,
+                id: request_id.clone(),
+                success: true,
+                result: Some((*cached_result).clone()),
+                error: None,
+                duration_ms: Some(start.elapsed().as_millis() as u64),
+                cache_hit: Some(true),
             };
             self.middleware.after_execute(&req, &res).await?;
             return Ok((*cached_result).clone());
@@ -78,9 +82,12 @@ impl CachedToolExecutor {
             .await;
 
         let res = ToolResponse {
-            result: Arc::new(result.clone()),
-            duration_ms: start.elapsed().as_millis() as u64,
-            cache_hit: false,
+            id: request_id,
+            success: true,
+            result: Some(result.clone()),
+            error: None,
+            duration_ms: Some(start.elapsed().as_millis() as u64),
+            cache_hit: Some(false),
         };
 
         // After hooks

@@ -53,11 +53,13 @@ impl ToolExecutor {
             .add(LoggingMiddleware::new("workflow"))
             .add(self.metrics.clone());
 
-        let args_json = Arc::new(serde_json::json!({"query": args}));
+        let request_id = format!("workflow-{}", tool_name);
+        let args_json = serde_json::json!({"query": args});
         let req = ToolRequest {
+            id: request_id.clone(),
             tool_name: tool_name.to_string(),
-            args: Arc::clone(&args_json),
-            metadata: Default::default(),
+            args: args_json,
+            metadata: Some(Default::default()),
         };
 
         let _ = middleware.before_execute(&req).await;
@@ -84,9 +86,12 @@ impl ToolExecutor {
         let duration = start.elapsed().as_millis() as u64;
         let was_cached = self.cache.get(&cache_key).await.is_some();
         let res = ToolResponse {
-            result: Arc::new(json!({"files": result})),
-            duration_ms: duration,
-            cache_hit: was_cached,
+            id: request_id,
+            success: true,
+            result: Some(json!({"files": result})),
+            error: None,
+            duration_ms: Some(duration),
+            cache_hit: Some(was_cached),
         };
 
         let _ = middleware.after_execute(&req, &res).await;

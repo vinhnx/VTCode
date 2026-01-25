@@ -12,6 +12,7 @@ use crate::core::memory_pool::global_pool;
 use crate::tools::async_pipeline::{
     AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest,
 };
+use crate::tools::ToolCallRequest;
 
 /// Agent execution states
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -381,9 +382,12 @@ impl OptimizedAgentEngine {
 
         for tool_name in tool_group {
             let request = ToolRequest {
-                id: uuid::Uuid::new_v4().to_string(),
-                tool_name: tool_name.clone(),
-                args: Value::Object(serde_json::Map::new()),
+                call: ToolCallRequest {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    tool_name: tool_name.clone(),
+                    args: Value::Object(serde_json::Map::new()),
+                    metadata: None,
+                },
                 priority: ExecutionPriority::Normal,
                 timeout: Duration::from_secs(60),
                 context: ExecutionContext {

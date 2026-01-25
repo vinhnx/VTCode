@@ -345,11 +345,11 @@ impl OptimizedLLMClient {
         // Check cache first
         {
             let cache = self.response_cache.read().await;
-            if let Some(cached) = cache.peek(&cache_key) {
-                if cached.cached_at.elapsed() < cached.ttl {
-                    self.metrics.write().await.cache_hits += 1;
-                    return Ok(cached.response.clone());
-                }
+            if let Some(cached) = cache.peek(&cache_key)
+                && cached.cached_at.elapsed() < cached.ttl
+            {
+                self.metrics.write().await.cache_hits += 1;
+                return Ok(cached.response.clone());
             }
         }
 

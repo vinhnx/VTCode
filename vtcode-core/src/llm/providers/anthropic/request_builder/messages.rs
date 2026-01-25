@@ -20,11 +20,11 @@ pub(crate) fn hoist_largest_user_message(messages: &mut Vec<Message>) {
         }
     }
 
-    if let Some(idx) = max_idx {
-        if idx > 0 {
-            let msg = messages.remove(idx);
-            messages.insert(0, msg);
-        }
+    if let Some(idx) = max_idx
+        && idx > 0
+    {
+        let msg = messages.remove(idx);
+        messages.insert(0, msg);
     }
 }
 
@@ -113,11 +113,9 @@ pub(crate) fn build_messages(
                     && *breakpoints_remaining > 0
                     && content_text.len() >= prompt_cache_settings.min_message_length_for_cache;
 
-                if should_cache {
-                    if let Some(cc) = messages_cache_control.as_ref() {
-                        cache_ctrl = Some(cc.clone());
-                        *breakpoints_remaining -= 1;
-                    }
+                if should_cache && let Some(cc) = messages_cache_control.as_ref() {
+                    cache_ctrl = Some(cc.clone());
+                    *breakpoints_remaining -= 1;
                 }
 
                 messages.push(AnthropicMessage {
@@ -212,10 +210,10 @@ fn build_tool_use_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
 fn add_prefill_message(request: &LLMRequest, messages: &mut Vec<AnthropicMessage>) {
     let mut prefill_text = String::new();
 
-    if let Some(settings) = &request.coding_agent_settings {
-        if settings.prefill_thought {
-            prefill_text.push_str("<thought>");
-        }
+    if let Some(settings) = &request.coding_agent_settings
+        && settings.prefill_thought
+    {
+        prefill_text.push_str("<thought>");
     }
 
     if let Some(request_prefill) = &request.prefill {
@@ -227,12 +225,12 @@ fn add_prefill_message(request: &LLMRequest, messages: &mut Vec<AnthropicMessage
 
     if !prefill_text.is_empty() {
         let mut text = prefill_text;
-        if request.character_reinforcement {
-            if let Some(name) = &request.character_name {
-                let tag = format!("[{}]", name);
-                if !text.contains(&tag) {
-                    text = format!("{} {}", tag, text).trim().to_string();
-                }
+        if request.character_reinforcement
+            && let Some(name) = &request.character_name
+        {
+            let tag = format!("[{}]", name);
+            if !text.contains(&tag) {
+                text = format!("{} {}", tag, text).trim().to_string();
             }
         }
         if !text.is_empty() {
