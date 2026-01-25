@@ -1993,7 +1993,7 @@ impl acp::Agent for ZedAgent {
         };
 
         let mut stop_reason = acp::StopReason::EndTurn;
-        let mut assistant_message = String::new();
+        let mut assistant_message = String::with_capacity(4096); // Pre-allocate to avoid O(n²) push_str
         let client_supports_read_text_file = self.client_supports_read_text_file();
         let provider_supports_tools = provider.supports_tools(&self.config.model);
         let availability =

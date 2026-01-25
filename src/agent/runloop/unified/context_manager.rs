@@ -57,7 +57,7 @@ impl ContextManager {
         agent_config: Option<vtcode_config::core::AgentConfig>,
     ) -> Self {
         Self {
-            base_system_prompt: base_system_prompt.clone(),
+            base_system_prompt,
             incremental_prompt_builder: IncrementalSystemPrompt::new(),
             loaded_skills,
             cached_stats: ContextStats::default(),
@@ -155,37 +155,26 @@ impl ContextManager {
         Ok(new_history)
     }
 
-    /// Get guidance message based on token budget status
-    /// Returns actionable guidance for context management
-    pub(crate) fn get_token_budget_guidance(&self, context_window_size: usize) -> &'static str {
+    /// Compute usage ratio once, avoiding repeated division
+    #[inline]
+    fn usage_ratio(&self, context_window_size: usize) -> f64 {
         if context_window_size == 0 {
-            return "";
-        }
-
-        let usage_ratio = self.cached_stats.total_token_usage as f64 / context_window_size as f64;
-
-        if usage_ratio >= TOKEN_BUDGET_CRITICAL_THRESHOLD {
-            "CRITICAL: Update artifacts (task.md/docs) and consider starting a new session."
-        } else if usage_ratio >= TOKEN_BUDGET_HIGH_THRESHOLD {
-            "HIGH: Start summarizing key findings and preparing for context handoff."
-        } else if usage_ratio >= TOKEN_BUDGET_WARNING_THRESHOLD {
-            "WARNING: Consider updating progress docs to preserve important context."
+            0.0
         } else {
-            ""
+            self.cached_stats.total_token_usage as f64 / context_window_size as f64
         }
     }
 
-    /// Get token budget status and guidance together
-    #[allow(dead_code)]
+    /// Get token budget status and guidance together (single computation)
+    /// Uses thresholds from Anthropic context window documentation:
+    /// - 70%: Warning - prepare for handoff
+    /// - 85%: High - active management needed
+    /// - 90%: Critical - immediate action required
     pub(crate) fn get_token_budget_status_and_guidance(
         &self,
         context_window_size: usize,
     ) -> (TokenBudgetStatus, &'static str) {
-        if context_window_size == 0 {
-            return (TokenBudgetStatus::Normal, "");
-        }
-
-        let usage_ratio = self.cached_stats.total_token_usage as f64 / context_window_size as f64;
+        let usage_ratio = self.usage_ratio(context_window_size);
 
         if usage_ratio >= TOKEN_BUDGET_CRITICAL_THRESHOLD {
             (
@@ -207,28 +196,16 @@ impl ContextManager {
         }
     }
 
+    /// Get guidance message based on token budget status
+    /// Returns actionable guidance for context management
+    pub(crate) fn get_token_budget_guidance(&self, context_window_size: usize) -> &'static str {
+        self.get_token_budget_status_and_guidance(context_window_size).1
+    }
+
     /// Get current token budget status based on usage ratio
-    /// Uses thresholds from Anthropic context window documentation:
-    /// - 70%: Warning - prepare for handoff
-    /// - 85%: High - active management needed
-    /// - 90%: Critical - immediate action required
     #[allow(dead_code)]
     pub(crate) fn get_token_budget_status(&self, context_window_size: usize) -> TokenBudgetStatus {
-        if context_window_size == 0 {
-            return TokenBudgetStatus::Normal;
-        }
-
-        let usage_ratio = self.cached_stats.total_token_usage as f64 / context_window_size as f64;
-
-        if usage_ratio >= TOKEN_BUDGET_CRITICAL_THRESHOLD {
-            TokenBudgetStatus::Critical
-        } else if usage_ratio >= TOKEN_BUDGET_HIGH_THRESHOLD {
-            TokenBudgetStatus::High
-        } else if usage_ratio >= TOKEN_BUDGET_WARNING_THRESHOLD {
-            TokenBudgetStatus::Warning
-        } else {
-            TokenBudgetStatus::Normal
-        }
+        self.get_token_budget_status_and_guidance(context_window_size).0
     }
 
     /// Get current token usage
@@ -254,13 +231,13 @@ impl ContextManager {
         // Update statistics incrementally
         self.update_stats(attempt_history);
 
-        // Create configuration and context hashes for cache invalidation
-        let config = SystemPromptConfig {
-            base_prompt: self.base_system_prompt.clone(),
-            enable_retry_context: retry_attempts > 0,
-            enable_token_tracking: false,
-            max_retry_attempts: 3, // This could be configurable
-        };
+        // Create configuration with pre-computed hash (avoids cloning base_prompt)
+        let config = SystemPromptConfig::new(
+            &self.base_system_prompt,
+            retry_attempts > 0,
+            false,
+            3, // This could be configurable
+        );
 
         // Determine if model supports context awareness (Claude 4.5+)
         let supports_context_awareness = context_window_size.is_some();
