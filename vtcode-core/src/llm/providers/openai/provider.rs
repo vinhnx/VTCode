@@ -33,6 +33,9 @@ use super::request_builder;
 use super::response_parser;
 use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload, ResponsesApiState};
 
+mod generation;
+mod streaming;
+
 use super::super::{
     common::{
         extract_prompt_cache_settings, override_base_url, parse_client_prompt_common, resolve_model,

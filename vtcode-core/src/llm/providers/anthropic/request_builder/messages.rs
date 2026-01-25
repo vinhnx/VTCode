@@ -1,0 +1,290 @@
+use crate::config::core::AnthropicPromptCacheSettings;
+use crate::llm::error_display;
+use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole};
+use crate::llm::providers::anthropic_types::{
+    AnthropicContentBlock, AnthropicMessage, CacheControl,
+};
+use serde_json::{json, Value};
+
+pub(crate) fn hoist_largest_user_message(messages: &mut Vec<Message>) {
+    let mut max_len = 0;
+    let mut max_idx = None;
+
+    for (i, msg) in messages.iter().enumerate() {
+        if msg.role == MessageRole::User {
+            let len = msg.content.as_text().len();
+            if len > max_len {
+                max_len = len;
+                max_idx = Some(i);
+            }
+        }
+    }
+
+    if let Some(idx) = max_idx {
+        if idx > 0 {
+            let msg = messages.remove(idx);
+            messages.insert(0, msg);
+        }
+    }
+}
+
+pub(crate) fn build_messages(
+    request: &LLMRequest,
+    messages_to_process: &[Message],
+    messages_cache_control: &Option<CacheControl>,
+    prompt_cache_settings: &AnthropicPromptCacheSettings,
+    breakpoints_remaining: &mut usize,
+) -> Result<Vec<AnthropicMessage>, LLMError> {
+    let mut messages = Vec::with_capacity(messages_to_process.len());
+
+    for msg in messages_to_process {
+        if msg.role == MessageRole::System {
+            continue;
+        }
+
+        let mut blocks = Vec::new();
+        let content_text = msg.content.as_text();
+
+        match msg.role {
+            MessageRole::Assistant => {
+                blocks.extend(build_reasoning_blocks(msg));
+
+                if !msg.content.is_empty() {
+                    blocks.push(AnthropicContentBlock::Text {
+                        text: content_text.to_string(),
+                        citations: None,
+                        cache_control: None,
+                    });
+                }
+
+                blocks.extend(build_tool_use_blocks(msg));
+
+                if blocks.is_empty() {
+                    blocks.push(AnthropicContentBlock::Text {
+                        text: String::new(),
+                        citations: None,
+                        cache_control: None,
+                    });
+                }
+                messages.push(AnthropicMessage {
+                    role: "assistant".to_string(),
+                    content: blocks,
+                });
+            }
+            MessageRole::Tool => {
+                if let Some(tool_call_id) = &msg.tool_call_id {
+                    let tool_content_blocks = tool_result_blocks(&content_text);
+                    let content_val = if tool_content_blocks.len() == 1
+                        && tool_content_blocks[0]["type"] == "text"
+                    {
+                        json!(tool_content_blocks[0]["text"])
+                    } else {
+                        json!(tool_content_blocks)
+                    };
+
+                    messages.push(AnthropicMessage {
+                        role: "user".to_string(),
+                        content: vec![AnthropicContentBlock::ToolResult {
+                            tool_use_id: tool_call_id.clone(),
+                            content: content_val,
+                            is_error: None,
+                            cache_control: None,
+                        }],
+                    });
+                } else if !msg.content.is_empty() {
+                    messages.push(AnthropicMessage {
+                        role: "user".to_string(),
+                        content: vec![AnthropicContentBlock::Text {
+                            text: content_text.to_string(),
+                            citations: None,
+                            cache_control: None,
+                        }],
+                    });
+                }
+            }
+            _ => {
+                if msg.content.is_empty() {
+                    continue;
+                }
+
+                let mut cache_ctrl = None;
+                let should_cache = msg.role == MessageRole::User
+                    && prompt_cache_settings.cache_user_messages
+                    && *breakpoints_remaining > 0
+                    && content_text.len() >= prompt_cache_settings.min_message_length_for_cache;
+
+                if should_cache {
+                    if let Some(cc) = messages_cache_control.as_ref() {
+                        cache_ctrl = Some(cc.clone());
+                        *breakpoints_remaining -= 1;
+                    }
+                }
+
+                messages.push(AnthropicMessage {
+                    role: msg.role.as_anthropic_str().to_string(),
+                    content: vec![AnthropicContentBlock::Text {
+                        text: content_text.to_string(),
+                        citations: None,
+                        cache_control: cache_ctrl,
+                    }],
+                });
+            }
+        }
+    }
+
+    add_prefill_message(request, &mut messages);
+
+    if messages.is_empty() {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            "No convertible messages for Anthropic request",
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
+    }
+
+    Ok(messages)
+}
+
+fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
+    let mut blocks = Vec::new();
+
+    if let Some(details) = &msg.reasoning_details {
+        for detail in details {
+            if detail.get("type").and_then(|t| t.as_str()) == Some("thinking") {
+                let thinking = detail
+                    .get("thinking")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let signature = detail
+                    .get("signature")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if !thinking.is_empty() && !signature.is_empty() {
+                    blocks.push(AnthropicContentBlock::Thinking {
+                        thinking,
+                        signature,
+                        cache_control: None,
+                    });
+                }
+            } else if detail.get("type").and_then(|t| t.as_str()) == Some("redacted_thinking") {
+                let data = detail
+                    .get("data")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                blocks.push(AnthropicContentBlock::RedactedThinking {
+                    data,
+                    cache_control: None,
+                });
+            }
+        }
+    }
+
+    blocks
+}
+
+fn build_tool_use_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
+    let mut blocks = Vec::new();
+
+    if let Some(tool_calls) = &msg.tool_calls {
+        for call in tool_calls {
+            if let Some(ref func) = call.function {
+                let args: Value =
+                    serde_json::from_str(&func.arguments).unwrap_or_else(|_| json!({}));
+                blocks.push(AnthropicContentBlock::ToolUse {
+                    id: call.id.clone(),
+                    name: func.name.clone(),
+                    input: args,
+                    cache_control: None,
+                });
+            }
+        }
+    }
+
+    blocks
+}
+
+fn add_prefill_message(request: &LLMRequest, messages: &mut Vec<AnthropicMessage>) {
+    let mut prefill_text = String::new();
+
+    if let Some(settings) = &request.coding_agent_settings {
+        if settings.prefill_thought {
+            prefill_text.push_str("<thought>");
+        }
+    }
+
+    if let Some(request_prefill) = &request.prefill {
+        if !prefill_text.is_empty() && !request_prefill.is_empty() {
+            prefill_text.push(' ');
+        }
+        prefill_text.push_str(request_prefill);
+    }
+
+    if !prefill_text.is_empty() {
+        let mut text = prefill_text;
+        if request.character_reinforcement {
+            if let Some(name) = &request.character_name {
+                let tag = format!("[{}]", name);
+                if !text.contains(&tag) {
+                    text = format!("{} {}", tag, text).trim().to_string();
+                }
+            }
+        }
+        if !text.is_empty() {
+            messages.push(AnthropicMessage {
+                role: "assistant".to_string(),
+                content: vec![AnthropicContentBlock::Text {
+                    text,
+                    citations: None,
+                    cache_control: None,
+                }],
+            });
+        }
+    } else if request.character_reinforcement {
+        if let Some(name) = &request.character_name {
+            messages.push(AnthropicMessage {
+                role: "assistant".to_string(),
+                content: vec![AnthropicContentBlock::Text {
+                    text: format!("[{}]", name),
+                    citations: None,
+                    cache_control: None,
+                }],
+            });
+        }
+    }
+}
+
+pub fn tool_result_blocks(content: &str) -> Vec<Value> {
+    if content.trim().is_empty() {
+        return vec![json!({"type": "text", "text": ""})];
+    }
+
+    if let Ok(parsed) = serde_json::from_str::<Value>(content) {
+        match parsed {
+            Value::String(text) => vec![json!({"type": "text", "text": text})],
+            Value::Array(items) => {
+                let mut blocks = Vec::new();
+                for item in items {
+                    if let Some(text) = item.as_str() {
+                        blocks.push(json!({"type": "text", "text": text}));
+                    } else {
+                        blocks.push(json!({"type": "json", "json": item}));
+                    }
+                }
+                if blocks.is_empty() {
+                    vec![json!({"type": "json", "json": Value::Array(vec![])})]
+                } else {
+                    blocks
+                }
+            }
+            other => vec![json!({"type": "json", "json": other})],
+        }
+    } else {
+        vec![json!({"type": "text", "text": content})]
+    }
+}
