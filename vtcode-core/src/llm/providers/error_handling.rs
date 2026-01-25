@@ -12,13 +12,13 @@ const STATUS_FORBIDDEN: u16 = 403;
 const STATUS_BAD_REQUEST: u16 = 400;
 const STATUS_TOO_MANY_REQUESTS: u16 = 429;
 
-/// Common rate limit error patterns
+/// Common rate limit error patterns (pre-lowercased for efficient matching)
 const RATE_LIMIT_PATTERNS: &[&str] = &[
     "insufficient_quota",
-    "RESOURCE_EXHAUSTED",
+    "resource_exhausted",
     "quota",
     "rate limit",
-    "rateLimitExceeded",
+    "ratelimitexceeded",
 ];
 
 /// Handle HTTP response errors for Gemini provider
@@ -228,10 +228,9 @@ pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
         return true;
     }
 
-    // Optimize: Use case-insensitive search without allocating lowercase copy
-    RATE_LIMIT_PATTERNS
-        .iter()
-        .any(|pattern| error_text.to_lowercase().contains(&pattern.to_lowercase()))
+    // Optimize: Lowercase once and use pre-lowercased patterns
+    let lower = error_text.to_lowercase();
+    RATE_LIMIT_PATTERNS.iter().any(|pattern| lower.contains(pattern))
 }
 
 /// Handle network errors with consistent formatting

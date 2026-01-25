@@ -284,21 +284,39 @@ impl Default for IncrementalSystemPrompt {
 }
 
 /// Configuration that affects system prompt building
+/// Uses pre-computed hash of base_prompt to avoid cloning the full string
 #[derive(Debug, Clone, Hash)]
 pub struct SystemPromptConfig {
-    pub base_prompt: String,
+    /// Pre-computed hash of the base prompt (avoids storing full string)
+    pub base_prompt_hash: u64,
     pub enable_retry_context: bool,
     pub enable_token_tracking: bool,
     pub max_retry_attempts: usize,
 }
 
 impl SystemPromptConfig {
+    /// Create a new config with a pre-computed hash of the base prompt
+    pub fn new(base_prompt: &str, enable_retry_context: bool, enable_token_tracking: bool, max_retry_attempts: usize) -> Self {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        let mut hasher = DefaultHasher::new();
+        base_prompt.hash(&mut hasher);
+        
+        Self {
+            base_prompt_hash: hasher.finish(),
+            enable_retry_context,
+            enable_token_tracking,
+            max_retry_attempts,
+        }
+    }
+
     pub fn hash(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
-        self.base_prompt.hash(&mut hasher);
+        self.base_prompt_hash.hash(&mut hasher);
         self.enable_retry_context.hash(&mut hasher);
         self.enable_token_tracking.hash(&mut hasher);
         self.max_retry_attempts.hash(&mut hasher);
@@ -438,19 +456,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_prompt_config_hash() {
-        let config1 = SystemPromptConfig {
-            base_prompt: "Test".to_string(),
-            enable_retry_context: true,
-            enable_token_tracking: false,
-            max_retry_attempts: 3,
-        };
-
-        let config2 = SystemPromptConfig {
-            base_prompt: "Test".to_string(),
-            enable_retry_context: true,
-            enable_token_tracking: false,
-            max_retry_attempts: 3,
-        };
+        let config1 = SystemPromptConfig::new("Test", true, false, 3);
+        let config2 = SystemPromptConfig::new("Test", true, false, 3);
 
         assert_eq!(config1.hash(), config2.hash());
     }

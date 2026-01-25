@@ -1,5 +1,6 @@
+use parking_lot::RwLock;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7,6 +8,30 @@ pub enum CircuitState {
     Closed,   // Normal operation, allow all calls
     Open,     // Failing, reject all calls immediately
     HalfOpen, // Testing, allow limited calls to check recovery
+}
+
+impl CircuitState {
+    /// Returns valid transitions from this state
+    #[inline]
+    const fn valid_transitions(&self) -> &'static [CircuitState] {
+        match self {
+            CircuitState::Closed => &[CircuitState::Open],
+            CircuitState::Open => &[CircuitState::HalfOpen],
+            CircuitState::HalfOpen => &[CircuitState::Closed, CircuitState::Open],
+        }
+    }
+
+    /// Check if transition to target state is valid
+    #[inline]
+    fn can_transition_to(&self, target: CircuitState) -> bool {
+        self.valid_transitions().contains(&target)
+    }
+}
+
+impl Default for CircuitState {
+    fn default() -> Self {
+        CircuitState::Closed
+    }
 }
 
 #[derive(Clone)]
@@ -40,9 +65,26 @@ struct ToolCircuitState {
     open_count: u32,           // How many times circuit has opened
 }
 
-impl Default for CircuitState {
-    fn default() -> Self {
-        CircuitState::Closed
+impl ToolCircuitState {
+    /// Transition to a new state with debug assertion for valid transitions
+    #[inline]
+    fn transition_to(&mut self, new_state: CircuitState) {
+        debug_assert!(
+            self.status.can_transition_to(new_state),
+            "Invalid circuit state transition: {:?} -> {:?}",
+            self.status,
+            new_state
+        );
+        self.status = new_state;
+    }
+
+    /// Reset state on successful recovery (from HalfOpen or Open)
+    #[inline]
+    fn reset_on_success(&mut self) {
+        self.status = CircuitState::Closed;
+        self.failure_count = 0;
+        self.last_failure_time = None;
+        self.circuit_opened_at = None;
     }
 }
 
@@ -60,56 +102,90 @@ pub struct ToolCircuitDiagnostics {
 
 /// Per-tool circuit breaker that tracks failure state independently for each tool.
 /// This prevents one misbehaving tool from disabling all tools in the system.
+///
+/// Uses `parking_lot::RwLock` for better concurrent access:
+/// - Read operations (allow_request, state checks) can proceed in parallel
+/// - Write operations (record_success/failure) acquire exclusive access
+/// - `parking_lot` is more efficient for short critical sections than std::Mutex
 #[derive(Clone)]
 pub struct CircuitBreaker {
-    /// Per-tool state tracking
-    tool_states: Arc<Mutex<HashMap<String, ToolCircuitState>>>,
+    /// Per-tool state tracking with RwLock for better read concurrency
+    tool_states: Arc<RwLock<HashMap<String, ToolCircuitState>>>,
     config: CircuitBreakerConfig,
 }
 
 impl CircuitBreaker {
     pub fn new(config: CircuitBreakerConfig) -> Self {
         Self {
-            tool_states: Arc::new(Mutex::new(HashMap::new())),
+            tool_states: Arc::new(RwLock::new(HashMap::new())),
             config,
         }
     }
 
     /// Check if a request for a specific tool is allowed to proceed.
     /// Returns true if allowed, false if the circuit is open for this tool.
+    ///
+    /// Uses optimistic read-first approach:
+    /// 1. Try read lock first (allows concurrent reads)
+    /// 2. Only upgrade to write lock if state transition is needed
     pub fn allow_request_for_tool(&self, tool_name: &str) -> bool {
-        let mut states = self.tool_states.lock().unwrap();
+        // Fast path: try read lock first for Closed/HalfOpen states
+        {
+            let states = self.tool_states.read();
+            if let Some(state) = states.get(tool_name) {
+                match state.status {
+                    CircuitState::Closed | CircuitState::HalfOpen => return true,
+                    CircuitState::Open => {
+                        // Check if we might need to transition - if not, return early
+                        if let Some(last_failure) = state.last_failure_time {
+                            let backoff = if state.current_backoff.as_secs() == 0 {
+                                self.config.reset_timeout
+                            } else {
+                                state.current_backoff
+                            };
+                            if last_failure.elapsed() < backoff {
+                                return false; // Still in backoff, no transition needed
+                            }
+                            // Fall through to write lock for transition
+                        } else {
+                            return false;
+                        }
+                    }
+                }
+            } else {
+                // Tool not in map = Closed state (default)
+                return true;
+            }
+        }
+
+        // Slow path: need write lock for state transition (Open -> HalfOpen)
+        let mut states = self.tool_states.write();
         let state = states.entry(tool_name.to_string()).or_default();
 
+        // Re-check after acquiring write lock (another thread may have transitioned)
         match state.status {
-            CircuitState::Closed => true,
+            CircuitState::Closed | CircuitState::HalfOpen => true,
             CircuitState::Open => {
-                // Check if backoff period has elapsed
                 if let Some(last_failure) = state.last_failure_time {
-                    // Use the calculated backoff for this specific failure instance
                     let backoff = if state.current_backoff.as_secs() == 0 {
-                        self.config.reset_timeout // Fallback if not set
+                        self.config.reset_timeout
                     } else {
                         state.current_backoff
                     };
 
                     if last_failure.elapsed() >= backoff {
-                        state.status = CircuitState::HalfOpen;
-                        return true; // Probe allowed
+                        state.transition_to(CircuitState::HalfOpen);
+                        return true;
                     }
                 }
                 false
-            }
-            CircuitState::HalfOpen => {
-                // Allow probe
-                true
             }
         }
     }
 
     /// Get remaining backoff time for a tool (if Open)
     pub fn remaining_backoff(&self, tool_name: &str) -> Option<Duration> {
-        let states = self.tool_states.lock().unwrap();
+        let states = self.tool_states.read();
         let state = states.get(tool_name)?;
 
         if state.status == CircuitState::Open {
@@ -131,17 +207,19 @@ impl CircuitBreaker {
     }
 
     /// Record success for a specific tool
+    ///
+    /// State transitions on success:
+    /// - HalfOpen -> Closed (probe succeeded)
+    /// - Closed -> Closed (reset failure count)
+    /// - Open -> Closed (forced recovery, e.g., manual reset)
     pub fn record_success_for_tool(&self, tool_name: &str) {
-        let mut states = self.tool_states.lock().unwrap();
+        let mut states = self.tool_states.write();
         let state = states.entry(tool_name.to_string()).or_default();
 
         match state.status {
             CircuitState::HalfOpen => {
-                // Probe succeeded, close the circuit
-                state.status = CircuitState::Closed;
-                state.failure_count = 0;
-                state.last_failure_time = None;
-                state.circuit_opened_at = None;
+                // Probe succeeded - use batched reset
+                state.reset_on_success();
             }
             CircuitState::Closed => {
                 // Reset failure count on success if we want purely consecutive failures
@@ -149,9 +227,8 @@ impl CircuitBreaker {
             }
             CircuitState::Open => {
                 // Should not happen theoretically unless race condition or forced reset
-                state.status = CircuitState::Closed;
-                state.failure_count = 0;
-                state.circuit_opened_at = None;
+                // Using direct assignment here since this is an exceptional recovery path
+                state.reset_on_success();
             }
         }
     }
@@ -165,6 +242,11 @@ impl CircuitBreaker {
     /// Record failure for a specific tool.
     /// If `is_argument_error` is true, this is an LLM mistake (bad args), not a tool failure,
     /// and should not count toward the circuit breaker threshold.
+    ///
+    /// State transitions on failure:
+    /// - Closed -> Open (when threshold reached)
+    /// - HalfOpen -> Open (probe failed, increase backoff)
+    /// - Open -> Open (no change, just update timestamp)
     pub fn record_failure_for_tool(&self, tool_name: &str, is_argument_error: bool) {
         // Don't count LLM argument errors toward circuit breaker - these are model mistakes
         if is_argument_error {
@@ -175,7 +257,7 @@ impl CircuitBreaker {
             return;
         }
 
-        let mut states = self.tool_states.lock().unwrap();
+        let mut states = self.tool_states.write();
         let state = states.entry(tool_name.to_string()).or_default();
         state.last_failure_time = Some(Instant::now());
 
@@ -183,8 +265,8 @@ impl CircuitBreaker {
             CircuitState::Closed => {
                 state.failure_count += 1;
                 if state.failure_count >= self.config.failure_threshold {
-                    state.status = CircuitState::Open;
-                    state.current_backoff = self.config.min_backoff; // Start with min backoff
+                    state.transition_to(CircuitState::Open);
+                    state.current_backoff = self.config.min_backoff;
                     state.circuit_opened_at = Some(Instant::now());
                     state.open_count += 1;
 
@@ -199,7 +281,7 @@ impl CircuitBreaker {
             }
             CircuitState::HalfOpen => {
                 // Probe failed, revert to Open and increase backoff
-                state.status = CircuitState::Open;
+                state.transition_to(CircuitState::Open);
                 state.circuit_opened_at = Some(Instant::now());
                 state.open_count += 1;
                 // Exponential backoff
@@ -229,7 +311,7 @@ impl CircuitBreaker {
 
     /// Get the circuit state for a specific tool
     pub fn state_for_tool(&self, tool_name: &str) -> CircuitState {
-        let states = self.tool_states.lock().unwrap();
+        let states = self.tool_states.read();
         states
             .get(tool_name)
             .map(|s| s.status)
@@ -244,18 +326,19 @@ impl CircuitBreaker {
 
     /// Reset the circuit breaker state for a specific tool
     pub fn reset_tool(&self, tool_name: &str) {
-        let mut states = self.tool_states.lock().unwrap();
+        let mut states = self.tool_states.write();
         states.remove(tool_name);
     }
 
     /// Reset all tool circuit breaker states
     pub fn reset_all(&self) {
-        let mut states = self.tool_states.lock().unwrap();
+        let mut states = self.tool_states.write();
         states.clear();
     }
+
     /// Get list of tools with currently OPEN circuits
     pub fn get_open_circuits(&self) -> Vec<String> {
-        let states = self.tool_states.lock().unwrap();
+        let states = self.tool_states.read();
         states
             .iter()
             .filter(|(_, state)| matches!(state.status, CircuitState::Open))
@@ -265,7 +348,7 @@ impl CircuitBreaker {
 
     /// Get diagnostic information for a specific tool
     pub fn get_diagnostics(&self, tool_name: &str) -> ToolCircuitDiagnostics {
-        let states = self.tool_states.lock().unwrap();
+        let states = self.tool_states.read();
         let state = states.get(tool_name);
 
         if let Some(s) = state {
@@ -300,7 +383,7 @@ impl CircuitBreaker {
 
     /// Get diagnostics for all tools
     pub fn get_all_diagnostics(&self) -> Vec<ToolCircuitDiagnostics> {
-        let states = self.tool_states.lock().unwrap();
+        let states = self.tool_states.read();
         states
             .iter()
             .map(|(name, state)| ToolCircuitDiagnostics {
@@ -324,7 +407,7 @@ impl CircuitBreaker {
 
     /// Check if recovery pause should be triggered based on open circuit count
     pub fn should_pause_for_recovery(&self, max_open_circuits: usize) -> bool {
-        let states = self.tool_states.lock().unwrap();
+        let states = self.tool_states.read();
         let open_count = states
             .iter()
             .filter(|(_, state)| matches!(state.status, CircuitState::Open))
@@ -334,7 +417,7 @@ impl CircuitBreaker {
 
     /// Get count of currently open circuits
     pub fn open_circuit_count(&self) -> usize {
-        let states = self.tool_states.lock().unwrap();
+        let states = self.tool_states.read();
         states
             .iter()
             .filter(|(_, state)| matches!(state.status, CircuitState::Open))
