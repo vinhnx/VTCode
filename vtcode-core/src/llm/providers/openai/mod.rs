@@ -26,7 +26,9 @@
 //! ```
 
 pub mod errors;
+mod headers;
 pub mod message_parser;
+mod harmony;
 pub mod responses_api;
 pub mod request_builder;
 pub mod response_parser;
