@@ -486,7 +486,16 @@ mod tests {
 
     #[test]
     fn test_get_gemini_api_key_from_config() {
+        let prior_gemini_key = env::var("TEST_GEMINI_KEY").ok();
+        let prior_google_key = env::var("GOOGLE_API_KEY").ok();
+
+        unsafe {
+            env::remove_var("TEST_GEMINI_KEY");
+            env::remove_var("GOOGLE_API_KEY");
+        }
+
         let sources = ApiKeySources {
+            gemini_env: "TEST_GEMINI_KEY".to_string(),
             gemini_config: Some("config-gemini-key".to_string()),
             ..Default::default()
         };
@@ -494,6 +503,19 @@ mod tests {
         let result = get_gemini_api_key(&sources);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "config-gemini-key");
+
+        unsafe {
+            if let Some(value) = prior_gemini_key {
+                env::set_var("TEST_GEMINI_KEY", value);
+            } else {
+                env::remove_var("TEST_GEMINI_KEY");
+            }
+            if let Some(value) = prior_google_key {
+                env::set_var("GOOGLE_API_KEY", value);
+            } else {
+                env::remove_var("GOOGLE_API_KEY");
+            }
+        }
     }
 
     #[test]
