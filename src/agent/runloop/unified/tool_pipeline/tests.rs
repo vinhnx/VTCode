@@ -1,0 +1,484 @@
+use super::*;
+use super::execution::execute_tool_with_timeout;
+use super::timeout::create_timeout_error;
+
+use serde_json::json;
+use std::sync::Arc;
+use tokio::sync::Notify;
+use vtcode_core::acp::PermissionGrant;
+use vtcode_core::acp::permission_cache::ToolPermissionCache;
+use vtcode_core::core::decision_tracker::DecisionTracker;
+use vtcode_core::core::trajectory::TrajectoryLogger;
+use vtcode_core::tools::ApprovalRecorder;
+use vtcode_core::tools::registry::ToolRegistry;
+use vtcode_core::tools::registry::ToolTimeoutCategory;
+use vtcode_core::tools::result_cache::ToolResultCache;
+use vtcode_core::ui::theme;
+use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
+use vtcode_core::utils::ansi::AnsiRenderer;
+use tempfile::TempDir;
+
+/// Helper function to create test registry with common setup
+async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
+    ToolRegistry::new(workspace.to_path_buf()).await
+}
+
+/// Helper function to create test renderer with default config
+fn create_test_renderer(
+    handle: &vtcode_core::ui::tui::InlineHandle,
+) -> vtcode_core::utils::ansi::AnsiRenderer {
+    AnsiRenderer::with_inline_ui(handle.clone(), Default::default())
+}
+
+fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
+    build_harness_state_with(4)
+}
+
+fn build_harness_state_with(
+    max_tool_calls: usize,
+) -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
+    crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(
+        crate::agent::runloop::unified::run_loop_context::TurnRunId("test-run".to_string()),
+        crate::agent::runloop::unified::run_loop_context::TurnId("test-turn".to_string()),
+        max_tool_calls,
+        60,
+        0,
+    )
+}
+
+/// Helper function to create common test context components
+struct TestContext {
+    registry: ToolRegistry,
+    renderer: vtcode_core::utils::ansi::AnsiRenderer,
+    session: vtcode_core::ui::tui::InlineSession,
+    handle: vtcode_core::ui::tui::InlineHandle,
+    approval_recorder: vtcode_core::tools::ApprovalRecorder,
+    workspace: std::path::PathBuf,
+}
+
+impl TestContext {
+    async fn new() -> Self {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let workspace = tmp.path().to_path_buf();
+
+        let registry = create_test_registry(&workspace).await;
+        let active_styles = theme::active_styles();
+        let theme_spec = theme_from_styles(&active_styles);
+        let session = spawn_session(
+            theme_spec,
+            None,
+            vtcode_core::config::types::UiSurfacePreference::default(),
+            10,
+            None,
+            None,
+        )
+        .unwrap();
+        let handle = session.clone_inline_handle();
+        let renderer = create_test_renderer(&handle);
+        let approval_recorder = vtcode_core::tools::ApprovalRecorder::new(workspace.clone());
+
+        Self {
+            registry,
+            renderer,
+            session,
+            handle,
+            approval_recorder,
+            workspace,
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_execute_tool_with_timeout() {
+    // Setup test dependencies
+    let mut registry = ToolRegistry::new(std::env::current_dir().unwrap()).await;
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    // Test a simple tool execution with unknown tool
+    let result = execute_tool_with_timeout(
+        &mut registry,
+        "test_tool",
+        json!({}),
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        0,
+    )
+    .await;
+
+    // Verify the result - unknown tool should return error or failure
+    match result {
+        ToolExecutionStatus::Failure { .. } => {
+            // Expected for unknown tool
+        }
+        ToolExecutionStatus::Success { ref output, .. } => {
+            // Tool returns success with error in output for unknown tools
+            if output.get("error").is_some() {
+                // This is acceptable - tool returned an error object
+            } else {
+                panic!("Expected tool to return error object for unknown tool");
+            }
+        }
+        other => panic!("Unexpected result type: {:?}", other),
+    }
+}
+
+#[test]
+fn test_process_tool_output() {
+    // Test successful output
+    let output = json!({
+        "exit_code": 0,
+        "stdout": "test output",
+        "modified_files": ["file1.txt", "file2.txt"],
+        "has_more": false
+    });
+
+    let status = process_tool_output(output);
+    if let ToolExecutionStatus::Success {
+        output: _,
+        stdout,
+        modified_files,
+        command_success,
+        has_more,
+    } = status
+    {
+        assert_eq!(stdout, Some("test output".to_string()));
+        assert_eq!(modified_files, vec!["file1.txt", "file2.txt"]);
+        assert!(command_success);
+        assert!(!has_more);
+    } else {
+        panic!("Expected Success variant");
+    }
+}
+
+#[test]
+fn test_process_tool_output_loop_detection() {
+    // Test loop detection output - should return Failure with clear message
+    let output = json!({
+        "error": {
+            "tool_name": "read_file",
+            "error_type": "PolicyViolation",
+            "message": "Tool 'read_file' blocked after 5 identical invocations in recent history (limit: 5)",
+            "is_recoverable": false,
+            "recovery_suggestions": [],
+            "original_error": null
+        },
+        "loop_detected": true,
+        "repeat_count": 5,
+        "tool": "read_file"
+    });
+
+    let status = process_tool_output(output);
+    if let ToolExecutionStatus::Failure { error } = status {
+        let error_msg = error.to_string();
+        assert!(error_msg.contains("LOOP DETECTION"));
+        assert!(error_msg.contains("read_file"));
+        assert!(error_msg.contains("5"));
+        assert!(error_msg.contains("DO NOT retry"));
+        assert!(error_msg.contains("ACTION REQUIRED"));
+    } else {
+        panic!(
+            "Expected Failure variant for loop detection, got: {:?}",
+            status
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_run_tool_call_unknown_tool_failure() {
+    let mut test_ctx = TestContext::new().await;
+    let mut registry = test_ctx.registry;
+
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    {
+        let mut cache = permission_cache_arc.write().await;
+        cache.cache_grant("test_tool".to_string(), PermissionGrant::Permanent);
+    }
+
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = test_ctx.approval_recorder;
+    let traj = TrajectoryLogger::new(&test_ctx.workspace);
+
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+    let mut harness_state = build_harness_state();
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+        renderer: &mut test_ctx.renderer,
+        handle: &test_ctx.handle,
+        tool_registry: &mut registry,
+        tools: &tools,
+        tool_result_cache: &result_cache,
+        tool_permission_cache: &permission_cache_arc,
+        decision_ledger: &decision_ledger,
+        session_stats: &mut session_stats,
+        mcp_panel_state: &mut mcp_panel,
+        approval_recorder: &approval_recorder,
+        session: &mut test_ctx.session,
+        traj: &traj,
+        harness_state: &mut harness_state,
+        harness_emitter: None,
+    };
+
+    let call = vtcode_core::llm::provider::ToolCall::function(
+        "call_1".to_string(),
+        "test_tool".to_string(),
+        "{}".to_string(),
+    );
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let outcome = run_tool_call(
+        &mut ctx,
+        &call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+    )
+    .await
+    .expect("run_tool_call must run");
+
+    assert!(matches!(outcome.status, ToolExecutionStatus::Failure { .. }));
+}
+
+#[tokio::test]
+async fn test_run_tool_call_respects_max_tool_calls_budget() {
+    let mut test_ctx = TestContext::new().await;
+    let mut registry = test_ctx.registry;
+
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = test_ctx.approval_recorder;
+    let traj = TrajectoryLogger::new(&test_ctx.workspace);
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+    let mut harness_state = build_harness_state_with(0);
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+        renderer: &mut test_ctx.renderer,
+        handle: &test_ctx.handle,
+        tool_registry: &mut registry,
+        tools: &tools,
+        tool_result_cache: &result_cache,
+        tool_permission_cache: &permission_cache_arc,
+        decision_ledger: &decision_ledger,
+        session_stats: &mut session_stats,
+        mcp_panel_state: &mut mcp_panel,
+        approval_recorder: &approval_recorder,
+        session: &mut test_ctx.session,
+        traj: &traj,
+        harness_state: &mut harness_state,
+        harness_emitter: None,
+    };
+
+    let call = vtcode_core::llm::provider::ToolCall::function(
+        "call_budget".to_string(),
+        "read_file".to_string(),
+        "{}".to_string(),
+    );
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let outcome = run_tool_call(
+        &mut ctx,
+        &call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+    )
+    .await
+    .expect("run_tool_call must run");
+
+    match outcome.status {
+        ToolExecutionStatus::Failure { error } => {
+            assert!(error.to_string().contains("Policy violation"));
+        }
+        other => panic!("Expected policy violation, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_run_tool_call_read_file_success() {
+    use std::io::Write;
+    let tmp = TempDir::new().unwrap();
+    let workspace = tmp.path().to_path_buf();
+    let file_path = workspace.join("sample.txt");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let mut f = std::fs::File::create(&file_path).unwrap();
+    writeln!(f, "hello world").unwrap();
+
+    let mut registry = ToolRegistry::new(workspace.clone()).await;
+
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    {
+        let mut cache = permission_cache_arc.write().await;
+        cache.cache_grant("read_file".to_string(), PermissionGrant::Permanent);
+    }
+
+    let mut session = spawn_session(
+        theme_from_styles(&theme::active_styles()),
+        None,
+        vtcode_core::config::types::UiSurfacePreference::default(),
+        10,
+        None,
+        None,
+    )
+    .unwrap();
+    let handle = session.clone_inline_handle();
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = ApprovalRecorder::new(workspace.clone());
+    let traj = TrajectoryLogger::new(&workspace);
+
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+    let mut harness_state = build_harness_state();
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+        renderer: &mut renderer,
+        handle: &handle,
+        tool_registry: &mut registry,
+        tools: &tools,
+        tool_result_cache: &result_cache,
+        tool_permission_cache: &permission_cache_arc,
+        decision_ledger: &decision_ledger,
+        session_stats: &mut session_stats,
+        mcp_panel_state: &mut mcp_panel,
+        approval_recorder: &approval_recorder,
+        session: &mut session,
+        traj: &traj,
+        harness_state: &mut harness_state,
+        harness_emitter: None,
+    };
+
+    let args = serde_json::json!({\"path\": file_path.to_string_lossy()});
+    let call = vtcode_core::llm::provider::ToolCall::function(
+        \"call_2\".to_string(),
+        \"read_file\".to_string(),
+        serde_json::to_string(&args).unwrap(),
+    );
+
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let outcome = run_tool_call(
+        &mut ctx,
+        &call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        1,
+    )
+    .await
+    .expect(\"read_file run_tool_call should succeed\");
+
+    match outcome.status {
+        ToolExecutionStatus::Success { output, .. } => {
+            assert_eq!(output.get(\"success\").and_then(|v| v.as_bool()), Some(true));
+        }
+        other => panic!(\"Expected success, got: {:?}\", other),
+    }
+}
+
+#[test]
+fn test_create_timeout_error() {
+    let status = create_timeout_error(
+        \"test_tool\",
+        ToolTimeoutCategory::Default,
+        Some(Duration::from_secs(42)),
+    );
+    if let ToolExecutionStatus::Timeout { error } = status {
+        assert!(error.message.contains(\"test_tool\"));
+        assert!(error.message.contains(\"timeout ceiling\"));
+        assert!(error.message.contains(\"42\"));
+    } else {
+        panic!(\"Expected Timeout variant\");
+    }
+}
+
+// Note: This test requires tokio's test-util feature (start_paused, advance)
+// which is not enabled in the standard build. The test is commented out
+// to avoid compilation errors. To run it, enable tokio/test-util in Cargo.toml.
+//
+// #[tokio::test(start_paused = true)]
+// async fn emits_warning_before_timeout_ceiling() {
+//     let warnings = Arc::new(Mutex::new(Vec::new()));
+//     let writer_buffer = warnings.clone();
+//
+//     let subscriber = fmt()
+//         .with_writer(move || CaptureWriter::new(writer_buffer.clone()))
+//         .with_max_level(Level::WARN)
+//         .without_time()
+//         .finish();
+//
+//     let _guard = tracing::subscriber::set_default(subscriber);
+//
+//     let temp_dir = TempDir::new().expect(\"create temp dir\");
+//     let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+//     registry
+//         .register_tool(ToolRegistration::new(
+//             \"__test_slow_tool__\",
+//             CapabilityLevel::Basic,
+//             false,
+//             slow_tool_executor,
+//         ))
+//         .expect(\"register slow tool\");
+//
+//     let ctrl_c_state = Arc::new(CtrlCState::new());
+//     let ctrl_c_notify = Arc::new(Notify::new());
+//
+//     let mut registry_task = registry;
+//     let ctrl_c_state_clone = ctrl_c_state.clone();
+//     let ctrl_c_notify_clone = ctrl_c_notify.clone();
+//
+//     let execution = tokio::spawn(async move {
+//         execute_tool_with_timeout(
+//             &mut registry_task,
+//             \"__test_slow_tool__\",
+//             Value::Null,
+//             &ctrl_c_state_clone,
+//             &ctrl_c_notify_clone,
+//             None,
+//         )
+//         .await
+//     });
+//
+//     let default_timeout = Duration::from_secs(300);
+//     let warning_delay = default_timeout
+//         .checked_sub(TOOL_TIMEOUT_WARNING_HEADROOM)
+//         .expect(\"warning delay\");
+//     advance(warning_delay).await;
+//     yield_now().await;
+//
+//     let captured = warnings.lock().unwrap();
+//     let combined = captured.join(\"\");
+//     assert!(
+//         combined.contains(\"has run\"),
+//         \"expected warning log to include 'has run', captured logs: {}\",
+//         combined
+//     );
+//     drop(captured);
+//
+//     advance(TOOL_TIMEOUT_WARNING_HEADROOM + Duration::from_secs(1)).await;
+//     let status = execution.await.expect(\"join execution\");
+//     assert!(matches!(status, ToolExecutionStatus::Timeout { .. }));
+// }
