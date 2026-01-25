@@ -48,11 +48,13 @@ pub(crate) async fn execute_llm_request(
         .build_system_prompt(
             ctx.working_history,
             step_count,
-            ctx.full_auto,
-            plan_mode,
-            Some(context_window_size),
-            Some(active_agent_name),
-            active_agent_prompt_body.as_deref(),
+            crate::agent::runloop::unified::context_manager::SystemPromptParams {
+                full_auto: ctx.full_auto,
+                plan_mode,
+                context_window_size: Some(context_window_size),
+                active_agent_name: Some(active_agent_name.to_string()),
+                active_agent_prompt: active_agent_prompt_body,
+            },
         )
         .await?;
 

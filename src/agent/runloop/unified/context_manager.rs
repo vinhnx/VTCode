@@ -13,6 +13,16 @@ use crate::agent::runloop::unified::incremental_system_prompt::{
     IncrementalSystemPrompt, SystemPromptConfig, SystemPromptContext,
 };
 
+/// Parameters for building system prompts
+#[derive(Clone)]
+pub(crate) struct SystemPromptParams {
+    pub full_auto: bool,
+    pub plan_mode: bool,
+    pub context_window_size: Option<usize>,
+    pub active_agent_name: Option<String>,
+    pub active_agent_prompt: Option<String>,
+}
+
 /// Statistics tracked incrementally to avoid re-scanning history
 #[derive(Default, Clone)]
 struct ContextStats {
@@ -220,11 +230,7 @@ impl ContextManager {
         &mut self,
         attempt_history: &[uni::Message],
         retry_attempts: usize,
-        full_auto: bool,
-        plan_mode: bool,
-        context_window_size: Option<usize>,
-        active_agent_name: Option<&str>,
-        active_agent_prompt: Option<&str>,
+        params: SystemPromptParams,
     ) -> Result<String> {
         if self.base_system_prompt.trim().is_empty() {
             bail!("Base system prompt is empty; cannot build prompt");
@@ -242,11 +248,11 @@ impl ContextManager {
         );
 
         // Determine if model supports context awareness (Claude 4.5+)
-        let supports_context_awareness = context_window_size.is_some();
+        let supports_context_awareness = params.context_window_size.is_some();
 
         // Get token budget guidance if context awareness is supported
         let token_budget_guidance = if supports_context_awareness {
-            self.get_token_budget_guidance(context_window_size.unwrap_or(0))
+            self.get_token_budget_guidance(params.context_window_size.unwrap_or(0))
         } else {
             ""
         };
@@ -256,12 +262,12 @@ impl ContextManager {
             tool_usage_count: self.cached_stats.tool_usage_count,
             error_count: self.cached_stats.error_count,
             token_usage_ratio: 0.0,
-            full_auto,
-            plan_mode,
-            active_agent_name: active_agent_name.unwrap_or("coder").to_string(),
-            active_agent_prompt: active_agent_prompt.map(|s| s.to_string()),
+            full_auto: params.full_auto,
+            plan_mode: params.plan_mode,
+            active_agent_name: params.active_agent_name.unwrap_or("coder".to_string()),
+            active_agent_prompt: params.active_agent_prompt,
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
-            context_window_size,
+            context_window_size: params.context_window_size,
             current_token_usage: if supports_context_awareness {
                 Some(self.cached_stats.total_token_usage)
             } else {
@@ -402,8 +408,16 @@ mod tests {
             None,
         );
 
+        let params = SystemPromptParams {
+            full_auto: false,
+            plan_mode: false,
+            context_window_size: None,
+            active_agent_name: None,
+            active_agent_prompt: None,
+        };
+
         let result = manager
-            .build_system_prompt(&[], 0, false, false, None, None, None)
+            .build_system_prompt(&[], 0, params)
             .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));
