@@ -113,7 +113,7 @@ impl ZedAgent {
         Ok(RunTerminalMode::Terminal)
     }
 
-    pub(super) fn parse_terminal_command(args: &Value) -> Result<Vec<String>, String> {
+    pub(crate) fn parse_terminal_command(args: &Value) -> Result<Vec<String>, String> {
         if let Some(array) = args.get("command").and_then(Value::as_array) {
             let mut parts = Vec::with_capacity(array.len());
             for value in array {

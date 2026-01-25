@@ -509,7 +509,7 @@ impl ZedAgent {
         ))
     }
 
-    pub(super) async fn run_list_files(&self, args: &Value) -> Result<ToolExecutionReport, String> {
+    pub(crate) async fn run_list_files(&self, args: &Value) -> Result<ToolExecutionReport, String> {
         let Some(tool) = &self.file_ops_tool else {
             return Err("List files tool is unavailable".to_string());
         };
