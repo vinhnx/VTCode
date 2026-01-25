@@ -2,8 +2,8 @@ use anyhow::anyhow;
 use std::sync::Arc;
 use tokio::sync::Notify;
 
-use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::config::constants::defaults;
+use vtcode_core::tools::registry::ToolRegistry;
 
 /// Execute a single tool call after permissions have been approved
 #[allow(dead_code)]

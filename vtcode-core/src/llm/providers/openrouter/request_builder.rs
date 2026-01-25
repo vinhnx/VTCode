@@ -319,7 +319,10 @@ impl OpenRouterProvider {
         Ok(provider_request)
     }
 
-    pub(super) fn convert_to_openrouter_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+    pub(super) fn convert_to_openrouter_format(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Value, LLMError> {
         let resolved_model = self.resolve_model(request);
         let mut messages = Vec::new();
 

@@ -1,8 +1,8 @@
-use super::{
-    convert_call_tool_result, convert_to_mcp, convert_to_rmcp, create_env_for_mcp_server,
-    McpElicitationHandler,
-};
 use super::rmcp_transport::create_stdio_transport_with_stderr;
+use super::{
+    McpElicitationHandler, convert_call_tool_result, convert_to_mcp, convert_to_rmcp,
+    create_env_for_mcp_server,
+};
 use anyhow::{Context, Result, anyhow};
 use futures::FutureExt;
 use jsonschema::Validator;
@@ -239,7 +239,10 @@ impl RmcpClient {
             .context("Failed to convert MCP prompt list")
     }
 
-    pub(super) async fn list_all_resources(&self, timeout: Option<Duration>) -> Result<Vec<Resource>> {
+    pub(super) async fn list_all_resources(
+        &self,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<Resource>> {
         let service = self.service().await?;
         let rmcp_future = service.peer().list_all_resources();
         let rmcp_resources = run_with_timeout(rmcp_future, timeout, "resources/list").await?;

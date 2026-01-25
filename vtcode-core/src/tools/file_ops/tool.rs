@@ -77,7 +77,6 @@ mod tests {
         assert_eq!(preview["detail"], Value::String("InvalidData".to_string()));
         assert_eq!(preview["skipped"], Value::Bool(true));
     }
-
 }
 
 #[async_trait]

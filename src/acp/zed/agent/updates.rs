@@ -1,9 +1,9 @@
+use super::super::helpers::build_available_commands;
+use super::super::types::{NotificationEnvelope, PlanProgress};
 use super::ZedAgent;
 use agent_client_protocol as acp;
 use anyhow::Result;
 use tokio::sync::oneshot;
-use super::super::helpers::build_available_commands;
-use super::super::types::{NotificationEnvelope, PlanProgress};
 
 impl ZedAgent {
     pub(super) async fn send_update(

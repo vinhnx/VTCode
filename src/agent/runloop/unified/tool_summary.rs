@@ -129,7 +129,8 @@ pub(crate) fn render_tool_call_summary(
     stream_label: Option<&str>,
 ) -> Result<()> {
     let (headline, highlights) = describe_tool_action(tool_name, args);
-    let command_line = command_line_for_args(args).filter(|_| should_render_command_line(&highlights));
+    let command_line =
+        command_line_for_args(args).filter(|_| should_render_command_line(&highlights));
     let details = collect_param_details(args, &highlights);
     let palette = ColorPalette::default();
     let action_label = tool_action_label(tool_name, args);
@@ -141,11 +142,7 @@ pub(crate) fn render_tool_call_summary(
     // Details in dim gray if present - these are the call parameters
     if !details.is_empty() {
         line.push_str(" .. ");
-        line.push_str(&render_styled(
-            &details.join(" .. "),
-            palette.muted,
-            None,
-        ));
+        line.push_str(&render_styled(&details.join(" .. "), palette.muted, None));
     }
 
     if let Some(stream) = stream_label {
@@ -177,10 +174,10 @@ fn build_tool_summary(action_label: &str, headline: &str) -> String {
     if normalized.starts_with(action_label) {
         return normalized.to_string();
     }
-    if let Some(stripped) = normalized.strip_prefix("Use ") {
-        if stripped == action_label {
-            return action_label.to_string();
-        }
+    if let Some(stripped) = normalized.strip_prefix("Use ")
+        && stripped == action_label
+    {
+        return action_label.to_string();
     }
     format!("{} {}", action_label, normalized)
 }

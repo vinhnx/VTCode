@@ -11,9 +11,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
-use crate::agent::runloop::unified::tool_pipeline::{
-    ToolExecutionStatus, ToolPipelineOutcome,
-};
+use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 use crate::agent::runloop::unified::turn::ui_sync::{redraw_with_sync, wait_for_redraw_complete};
 use crate::agent::runloop::unified::turn::utils::safe_force_redraw;
 

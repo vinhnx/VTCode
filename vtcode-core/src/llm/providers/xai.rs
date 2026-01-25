@@ -4,8 +4,12 @@ use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, Message as ProviderMessage};
-use crate::llm::providers::openai::responses_api::{build_standard_responses_payload, parse_responses_payload};
+use crate::llm::provider::{
+    LLMError, LLMProvider, LLMRequest, LLMResponse, Message as ProviderMessage,
+};
+use crate::llm::providers::openai::responses_api::{
+    build_standard_responses_payload, parse_responses_payload,
+};
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
@@ -66,7 +70,7 @@ impl XAIProvider {
 
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
             prompt_cache,
-            |providers| &providers.openai,  // Use OpenAI settings since xAI follows OpenAI format
+            |providers| &providers.openai, // Use OpenAI settings since xAI follows OpenAI format
             |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
         );
 
@@ -176,7 +180,8 @@ impl LLMProvider for XAIProvider {
         let responses_payload = build_standard_responses_payload(&request)?;
 
         if responses_payload.input.is_empty() {
-            let formatted = error_display::format_llm_error("xAI", "No messages provided for Responses API");
+            let formatted =
+                error_display::format_llm_error("xAI", "No messages provided for Responses API");
             return Err(LLMError::InvalidRequest {
                 message: formatted,
                 metadata: None,
@@ -252,7 +257,8 @@ impl LLMProvider for XAIProvider {
             .send()
             .await
             .map_err(|e| {
-                let formatted = error_display::format_llm_error("xAI", &format!("Network error: {}", e));
+                let formatted =
+                    error_display::format_llm_error("xAI", &format!("Network error: {}", e));
                 LLMError::Network {
                     message: formatted,
                     metadata: None,
@@ -271,10 +277,8 @@ impl LLMProvider for XAIProvider {
                 return Err(LLMError::RateLimit { metadata: None });
             }
 
-            let formatted = error_display::format_llm_error(
-                "xAI",
-                &format!("HTTP {}: {}", status, error_text),
-            );
+            let formatted =
+                error_display::format_llm_error("xAI", &format!("HTTP {}: {}", status, error_text));
             return Err(LLMError::Provider {
                 message: formatted,
                 metadata: None,
@@ -282,17 +286,16 @@ impl LLMProvider for XAIProvider {
         }
 
         let xai_response: serde_json::Value = response.json().await.map_err(|e| {
-            let formatted = error_display::format_llm_error(
-                "xAI",
-                &format!("Failed to parse response: {}", e),
-            );
+            let formatted =
+                error_display::format_llm_error("xAI", &format!("Failed to parse response: {}", e));
             LLMError::Provider {
                 message: formatted,
                 metadata: None,
             }
         })?;
 
-        let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+        let include_metrics =
+            self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
         parse_responses_payload(xai_response, include_metrics)
     }
 

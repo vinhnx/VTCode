@@ -366,10 +366,10 @@ pub(super) struct ScrollbackMetrics {
     pub(super) lines_dropped: usize,
     pub(super) current_lines: usize,
     pub(super) capacity_lines: usize,
-    pub(super) unicode_errors: usize,      // Count of UTF-8 decoding errors
-    pub(super) utf8_buffer_size: usize,    // Current size of UTF-8 incomplete buffer
+    pub(super) unicode_errors: usize, // Count of UTF-8 decoding errors
+    pub(super) utf8_buffer_size: usize, // Current size of UTF-8 incomplete buffer
     pub(super) total_unicode_chars: usize, // Total unicode characters processed
-    pub(super) unicode_sessions: usize,    // Number of sessions with unicode content
+    pub(super) unicode_sessions: usize, // Number of sessions with unicode content
 }
 
 /// PTY session handle with exclusive access to all PTY resources.

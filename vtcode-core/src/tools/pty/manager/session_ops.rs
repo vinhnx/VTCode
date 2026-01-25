@@ -1,7 +1,7 @@
-use super::PtyManager;
 use super::super::formatting::{format_terminal_file, sanitize_session_id};
 use super::super::manager_utils::exit_status_code;
 use super::super::session::{CommandEchoState, PtySessionHandle};
+use super::PtyManager;
 use crate::tools::types::VTCodePtySession;
 use anyhow::{Context, Result, anyhow};
 use portable_pty::PtySize;

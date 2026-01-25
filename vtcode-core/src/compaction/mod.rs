@@ -54,11 +54,7 @@ pub async fn compact_history(
         .await
         .context("Failed to generate compaction summary")?;
 
-    let summary = response
-        .content
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let summary = response.content.unwrap_or_default().trim().to_string();
 
     let mut new_history = Vec::with_capacity(config.keep_last_messages + 1);
     new_history.push(Message::system(format!(

@@ -29,16 +29,16 @@ pub mod traits;
 pub mod types;
 pub mod utils;
 
+pub use client::McpClient;
 pub use connection_pool::{
     ConnectionPoolStats, McpConnectionPool, McpPoolError, PooledMcpManager, PooledMcpStats,
 };
-pub use client::McpClient;
-pub(crate) use rmcp_client::RmcpClient;
 pub use errors::{
     ErrorCode, McpResult, configuration_error, initialization_timeout, provider_not_found,
     provider_unavailable, schema_invalid, tool_invocation_failed, tool_not_found,
 };
 pub use provider::McpProvider;
+pub(crate) use rmcp_client::RmcpClient;
 pub use rmcp_transport::{
     HttpTransport, create_http_transport, create_stdio_transport,
     create_stdio_transport_with_stderr,

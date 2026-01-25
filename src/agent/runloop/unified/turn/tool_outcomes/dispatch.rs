@@ -10,11 +10,9 @@ use vtcode_core::tools::parallel_executor::ParallelExecutionPlanner;
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::tool_pipeline::{
-    execute_tool_with_timeout_ref, ToolPipelineOutcome,
+    ToolPipelineOutcome, execute_tool_with_timeout_ref,
 };
-use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnProcessingContext,
-};
+use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingContext};
 
 use super::execution_result::handle_tool_execution_result;
 use super::helpers::{resolve_max_tool_retries, signature_key_for};

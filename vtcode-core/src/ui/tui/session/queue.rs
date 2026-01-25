@@ -120,10 +120,7 @@ impl Session {
 
         lines.push(Line::default());
         let hint = "Ctrl+↑ to edit queue";
-        let hint_line = Line::from(vec![Span::styled(
-            format!("  {}", hint),
-            muted_style,
-        )]);
+        let hint_line = Line::from(vec![Span::styled(format!("  {}", hint), muted_style)]);
         lines.push(hint_line);
 
         lines

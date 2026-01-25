@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use portable_pty::{CommandBuilder, PtySize};
 
-use crate::tools::path_env;
 use super::command_utils::is_shell_program;
+use crate::tools::path_env;
 
 pub(super) fn clamp_timeout(duration: Duration) -> u64 {
     duration.as_millis().min(u64::MAX as u128) as u64
@@ -84,5 +84,4 @@ pub(super) fn set_command_environment(
     if is_shell_program(program) {
         builder.env("SHELL", program);
     }
-
 }

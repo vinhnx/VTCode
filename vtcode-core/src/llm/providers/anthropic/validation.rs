@@ -46,8 +46,7 @@ pub fn validate_request(
         });
     }
 
-    if request.output_format.is_some()
-        && !supports_structured_output(&request.model, default_model)
+    if request.output_format.is_some() && !supports_structured_output(&request.model, default_model)
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",

@@ -15,17 +15,13 @@ use crate::agent::runloop::unified::shell::{
 };
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
-use crate::agent::runloop::unified::tool_pipeline::{
-    ToolExecutionStatus, ToolPipelineOutcome,
-};
+use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 use crate::agent::runloop::unified::tool_summary::{
     render_tool_call_summary, stream_label_from_output,
 };
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::ui_sync::redraw_with_sync;
-use crate::agent::runloop::unified::turn::utils::{
-    render_hook_messages, safe_force_redraw,
-};
+use crate::agent::runloop::unified::turn::utils::{render_hook_messages, safe_force_redraw};
 use crate::hooks::lifecycle::LifecycleHookEngine;
 
 use super::super::helpers::{push_assistant_message, push_tool_response};

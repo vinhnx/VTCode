@@ -495,5 +495,4 @@ impl AgentRunner {
         self.tool_registry.set_harness_task(None);
         result
     }
-
 }

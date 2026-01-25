@@ -40,7 +40,6 @@ pub mod output_limits {
     pub const MAX_MESSAGE_LIMIT: usize = 50_000;
 }
 
-
 /// Model ID constants to sync with docs/models.json
 pub mod models {
     // Google/Gemini models

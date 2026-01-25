@@ -145,9 +145,7 @@ impl TimeoutsConfig {
 
 /// Resolve a user-supplied timeout into a bounded, non-zero value.
 pub fn resolve_timeout(user_timeout: Option<u64>) -> u64 {
-    use crate::constants::execution::{
-        DEFAULT_TIMEOUT_SECS, MAX_TIMEOUT_SECS, MIN_TIMEOUT_SECS,
-    };
+    use crate::constants::execution::{DEFAULT_TIMEOUT_SECS, MAX_TIMEOUT_SECS, MIN_TIMEOUT_SECS};
 
     match user_timeout {
         None | Some(0) => DEFAULT_TIMEOUT_SECS,
@@ -208,7 +206,10 @@ mod tests {
         assert_eq!(resolve_timeout(None), DEFAULT_TIMEOUT_SECS);
         assert_eq!(resolve_timeout(Some(0)), DEFAULT_TIMEOUT_SECS);
         assert_eq!(resolve_timeout(Some(1)), MIN_TIMEOUT_SECS);
-        assert_eq!(resolve_timeout(Some(MAX_TIMEOUT_SECS + 1)), MAX_TIMEOUT_SECS);
+        assert_eq!(
+            resolve_timeout(Some(MAX_TIMEOUT_SECS + 1)),
+            MAX_TIMEOUT_SECS
+        );
         assert_eq!(resolve_timeout(Some(120)), 120);
     }
 }

@@ -22,8 +22,9 @@ pub struct HarnessEventEmitter {
 impl HarnessEventEmitter {
     pub fn new(path: PathBuf) -> Result<Self> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create harness log dir {}", parent.display()))?;
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create harness log dir {}", parent.display())
+            })?;
         }
         let file = OpenOptions::new()
             .create(true)
@@ -42,8 +43,8 @@ impl HarnessEventEmitter {
             .writer
             .lock()
             .map_err(|_| anyhow::anyhow!("Harness log lock poisoned"))?;
-        let serialized = serde_json::to_string(&payload)
-            .context("Failed to serialize harness event")?;
+        let serialized =
+            serde_json::to_string(&payload).context("Failed to serialize harness event")?;
         writer
             .write_all(serialized.as_bytes())
             .context("Failed to write harness event")?;
@@ -154,9 +155,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(line).expect("json");
 
         assert_eq!(
-            value
-                .get("schema_version")
-                .and_then(|v| v.as_str()),
+            value.get("schema_version").and_then(|v| v.as_str()),
             Some(vtcode_core::exec::events::EVENT_SCHEMA_VERSION)
         );
         assert_eq!(

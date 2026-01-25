@@ -1,7 +1,7 @@
 //! Harness context accessors for ToolRegistry.
 
-use super::ToolRegistry;
 use super::HarnessContextSnapshot;
+use super::ToolRegistry;
 
 impl ToolRegistry {
     /// Update harness session identifier used for structured tool telemetry

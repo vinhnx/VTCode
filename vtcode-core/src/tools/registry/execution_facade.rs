@@ -10,11 +10,9 @@ use crate::mcp::McpToolExecutor;
 use crate::tool_policy::ToolExecutionDecision;
 use crate::ui::search::fuzzy_match;
 
-use super::{
-    ToolErrorType, ToolExecutionError, ToolExecutionRecord, ToolHandler, ToolRegistry,
-};
-use super::normalize_tool_output;
 use super::LOOP_THROTTLE_MAX_MS;
+use super::normalize_tool_output;
+use super::{ToolErrorType, ToolExecutionError, ToolExecutionRecord, ToolHandler, ToolRegistry};
 
 impl ToolRegistry {
     pub async fn execute_tool(&self, name: &str, args: Value) -> Result<Value> {

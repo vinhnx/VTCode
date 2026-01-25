@@ -252,11 +252,7 @@ impl SkillDiscovery {
                 }
 
                 if depth < self.config.max_depth {
-                    skills.extend(self.scan_for_skills_recursive(
-                        &path,
-                        stats,
-                        depth + 1,
-                    )?);
+                    skills.extend(self.scan_for_skills_recursive(&path, stats, depth + 1)?);
                 }
             }
         }

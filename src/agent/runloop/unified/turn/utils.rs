@@ -4,10 +4,10 @@ use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
 
 use anyhow::Result;
-use vtcode_core::ui::tui::InlineHandle;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::config::constants::output_limits;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::ui::tui::InlineHandle;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::hooks::lifecycle::{HookMessage, HookMessageLevel};
 
@@ -180,7 +180,8 @@ pub(crate) fn render_hook_messages(
 }
 
 pub(crate) fn truncate_message_content(content: &str) -> String {
-    let mut result = String::with_capacity(content.len().min(output_limits::MAX_AGENT_MESSAGES_SIZE));
+    let mut result =
+        String::with_capacity(content.len().min(output_limits::MAX_AGENT_MESSAGES_SIZE));
     let mut truncated = false;
 
     for line in content.lines() {

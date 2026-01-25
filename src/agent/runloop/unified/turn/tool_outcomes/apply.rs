@@ -1,6 +1,4 @@
-use crate::agent::runloop::unified::turn::context::{
-    TurnLoopResult, TurnOutcomeContext,
-};
+use crate::agent::runloop::unified::turn::context::{TurnLoopResult, TurnOutcomeContext};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 use anyhow::Result;
 use vtcode_core::llm::provider as uni;

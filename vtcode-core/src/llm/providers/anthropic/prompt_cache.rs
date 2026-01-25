@@ -7,11 +7,7 @@
 use crate::config::core::AnthropicPromptCacheSettings;
 
 pub fn get_cache_ttl_for_seconds(ttl_seconds: u64) -> &'static str {
-    if ttl_seconds >= 3600 {
-        "1h"
-    } else {
-        "5m"
-    }
+    if ttl_seconds >= 3600 { "1h" } else { "5m" }
 }
 
 pub fn get_tools_cache_ttl(settings: &AnthropicPromptCacheSettings) -> &'static str {

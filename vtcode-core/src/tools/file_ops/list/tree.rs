@@ -115,7 +115,8 @@ async fn build_tree_structure(
                     .to_string_lossy()
                     .to_string();
 
-                let sub_children = if let Some(sub_contents) = dir_contents.get(&sub_relative_path) {
+                let sub_children = if let Some(sub_contents) = dir_contents.get(&sub_relative_path)
+                {
                     let mut sub_items = Vec::new();
                     for (sub_name, sub_type) in sub_contents {
                         if !include_hidden && sub_name.starts_with('.') {

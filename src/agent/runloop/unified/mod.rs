@@ -11,13 +11,13 @@ mod intent_extractor;
 
 mod ask_user_question;
 mod mcp_support;
-mod request_user_input;
 mod mcp_tool_manager;
 mod model_selection;
 mod palettes;
 mod plan_confirmation;
 mod progress;
 mod prompts;
+mod request_user_input;
 pub(crate) mod run_loop_context;
 pub mod session_setup;
 mod shell;

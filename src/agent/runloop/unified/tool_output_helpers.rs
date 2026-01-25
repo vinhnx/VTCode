@@ -120,11 +120,10 @@ pub async fn render_tool_output_common(
     command_success: bool,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
-    let stream_label =
-        crate::agent::runloop::unified::tool_summary::stream_label_from_output(
-            output,
-            command_success,
-        );
+    let stream_label = crate::agent::runloop::unified::tool_summary::stream_label_from_output(
+        output,
+        command_success,
+    );
     crate::agent::runloop::unified::tool_summary::render_tool_call_summary(
         renderer,
         name,

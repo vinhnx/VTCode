@@ -50,11 +50,12 @@ impl SessionState {
 
     /// Save session to disk.
     pub fn save(&self, path: &Path) -> Result<()> {
-        let json = serde_json::to_string_pretty(self)
-            .context("Failed to serialize session state")?;
+        let json =
+            serde_json::to_string_pretty(self).context("Failed to serialize session state")?;
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create session directory {}", parent.display()))?;
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create session directory {}", parent.display())
+            })?;
         }
         std::fs::write(path, json)
             .with_context(|| format!("Failed to write session state to {}", path.display()))?;

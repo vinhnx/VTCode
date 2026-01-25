@@ -3,8 +3,8 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::tools::traits::ToolExecutor;
 use super::ToolRegistry;
+use crate::tools::traits::ToolExecutor;
 
 #[async_trait::async_trait]
 impl ToolExecutor for ToolRegistry {

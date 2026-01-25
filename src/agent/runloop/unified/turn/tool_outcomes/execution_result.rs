@@ -6,10 +6,10 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus;
 use crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome;
 use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
-use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::turn::turn_helpers::display_status;
 
 use super::helpers::push_tool_response;
@@ -47,12 +47,7 @@ pub(crate) async fn handle_tool_execution_result(
                 serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
             };
 
-            push_tool_response(
-                working_history,
-                tool_call_id,
-                content_for_model,
-                tool_name,
-            );
+            push_tool_response(working_history, tool_call_id, content_for_model, tool_name);
 
             let (_any_write, mod_files, last_stdout) = handle_pipeline_output_from_turn_ctx(
                 ctx,
@@ -198,8 +193,7 @@ pub(crate) async fn handle_tool_execution_result(
                             let content_for_model = if let Some(s) = output.as_str() {
                                 s.to_string()
                             } else {
-                                serde_json::to_string(output)
-                                    .unwrap_or_else(|_| "{}".to_string())
+                                serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
                             };
                             push_tool_response(
                                 working_history,

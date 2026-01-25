@@ -38,7 +38,8 @@ impl AgentRunner {
                 *self.streaming_failures.borrow_mut() = 0;
                 self.streaming_last_failure.borrow_mut().take();
             }
-            streaming_disabled = *self.streaming_failures.borrow() >= super::constants::MAX_STREAMING_FAILURES;
+            streaming_disabled =
+                *self.streaming_failures.borrow() >= super::constants::MAX_STREAMING_FAILURES;
         }
         let mut agent_message_streamed = false;
         let mut reasoning_recorded = false;
@@ -81,7 +82,8 @@ impl AgentRunner {
                             Err(err) => {
                                 let mut failures = self.streaming_failures.borrow_mut();
                                 *failures = failures.saturating_add(1);
-                                self.streaming_last_failure.replace(Some(std::time::Instant::now()));
+                                self.streaming_last_failure
+                                    .replace(Some(std::time::Instant::now()));
                                 self.failure_tracker.borrow_mut().record_failure();
                                 if !self.quiet {
                                     println!(
@@ -105,7 +107,8 @@ impl AgentRunner {
                 Ok(Err(err)) => {
                     let mut failures = self.streaming_failures.borrow_mut();
                     *failures = failures.saturating_add(1);
-                    self.streaming_last_failure.replace(Some(std::time::Instant::now()));
+                    self.streaming_last_failure
+                        .replace(Some(std::time::Instant::now()));
                     self.failure_tracker.borrow_mut().record_failure();
                     if !self.quiet {
                         println!(
@@ -122,7 +125,8 @@ impl AgentRunner {
                 Err(_) => {
                     let mut failures = self.streaming_failures.borrow_mut();
                     *failures = failures.saturating_add(1);
-                    self.streaming_last_failure.replace(Some(std::time::Instant::now()));
+                    self.streaming_last_failure
+                        .replace(Some(std::time::Instant::now()));
                     self.failure_tracker.borrow_mut().record_failure();
                     let timeout_display = streaming_deadline
                         .map(|d| format!("{d:?}"))

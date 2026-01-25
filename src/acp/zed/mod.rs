@@ -2,14 +2,14 @@ use anyhow::Result;
 use async_trait::async_trait;
 use vtcode_core::core::interfaces::acp::{AcpClientAdapter, AcpLaunchParams};
 
-mod constants;
 mod agent;
+mod constants;
 mod helpers;
 mod session;
 mod types;
 
-use session::run_zed_agent;
 pub(crate) use agent::ZedAgent;
+use session::run_zed_agent;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ZedAcpAdapter;
@@ -24,16 +24,16 @@ impl AcpClientAdapter for ZedAcpAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert_fs::TempDir;
-    use agent_client_protocol::ToolCallStatus;
-    use serde_json::{Value, json};
-    use std::collections::BTreeMap;
-    use std::path::Path;
-    use tokio::sync::mpsc;
-    use tokio::fs;
     use crate::acp::tooling::{
         TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_URI_ARG,
     };
+    use agent_client_protocol::ToolCallStatus;
+    use assert_fs::TempDir;
+    use serde_json::{Value, json};
+    use std::collections::BTreeMap;
+    use std::path::Path;
+    use tokio::fs;
+    use tokio::sync::mpsc;
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::types::{
         AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,

@@ -1,7 +1,7 @@
-use super::OpenRouterProvider;
 use super::super::stream_decoder::{
     OpenRouterStreamTelemetry, finalize_stream_response, parse_stream_payload,
 };
+use super::OpenRouterProvider;
 use crate::config::constants::models;
 use crate::config::models::ModelId;
 use crate::llm::error_display;

@@ -266,7 +266,9 @@ impl SkillAuthor {
         match inferred_name.as_deref() {
             Some(name) => {
                 if name.is_empty() {
-                    report.errors.push("Skill name must not be empty".to_string());
+                    report
+                        .errors
+                        .push("Skill name must not be empty".to_string());
                 } else if !self.is_valid_skill_name(name) {
                     let mut reasons = Vec::new();
                     if name.chars().any(|c| c.is_ascii_uppercase()) {

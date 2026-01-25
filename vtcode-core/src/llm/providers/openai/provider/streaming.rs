@@ -1,4 +1,3 @@
-use super::OpenAIProvider;
 use super::super::errors::{
     fallback_model_if_not_found, format_openai_error, is_model_not_found,
     is_responses_api_unsupported,
@@ -6,8 +5,9 @@ use super::super::errors::{
 use super::super::headers;
 use super::super::stream_decoder;
 use super::super::types::ResponsesApiState;
+use super::OpenAIProvider;
 use crate::llm::error_display;
-use crate::llm::provider as provider;
+use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
 use crate::llm::providers::error_handling::is_rate_limit_error;
 use async_stream::try_stream;

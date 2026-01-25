@@ -15,12 +15,11 @@ use tracing::warn;
 
 use crate::config::mcp::{McpAllowListConfig, McpProviderConfig, McpTransportConfig};
 
+use super::{McpClient, RmcpClient};
 use super::{
     McpElicitationHandler, McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo,
-    McpToolInfo, TIMEZONE_ARGUMENT, build_headers, ensure_timezone_argument,
-    schema_requires_field,
+    McpToolInfo, TIMEZONE_ARGUMENT, build_headers, ensure_timezone_argument, schema_requires_field,
 };
-use super::{McpClient, RmcpClient};
 
 pub struct McpProvider {
     pub(super) name: String,

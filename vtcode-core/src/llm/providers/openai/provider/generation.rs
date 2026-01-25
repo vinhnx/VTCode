@@ -1,12 +1,12 @@
-use super::OpenAIProvider;
 use super::super::errors::{
     fallback_model_if_not_found, format_openai_error, is_model_not_found,
     is_responses_api_unsupported,
 };
 use super::super::headers;
 use super::super::types::ResponsesApiState;
+use super::OpenAIProvider;
 use crate::llm::error_display;
-use crate::llm::provider as provider;
+use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
 use crate::llm::providers::error_handling::is_rate_limit_error;
 use serde_json::Value;
@@ -58,20 +58,21 @@ impl OpenAIProvider {
             let openai_request = self.convert_to_openai_responses_format(&request)?;
             let url = format!("{}/responses", self.base_url);
 
-            let response = headers::apply_responses_beta(
-                self.authorize(self.http_client.post(&url)),
-            )
-                .json(&openai_request)
-                .send()
-                .await
-                .map_err(|e| {
-                    let formatted_error =
-                        error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                    provider::LLMError::Network {
-                        message: formatted_error,
-                        metadata: None,
-                    }
-                })?;
+            let response =
+                headers::apply_responses_beta(self.authorize(self.http_client.post(&url)))
+                    .json(&openai_request)
+                    .send()
+                    .await
+                    .map_err(|e| {
+                        let formatted_error = error_display::format_llm_error(
+                            "OpenAI",
+                            &format!("Network error: {}", e),
+                        );
+                        provider::LLMError::Network {
+                            message: formatted_error,
+                            metadata: None,
+                        }
+                    })?;
 
             if !response.status().is_success() {
                 let status = response.status();
@@ -82,16 +83,16 @@ impl OpenAIProvider {
                     && is_responses_api_unsupported(status, &error_text)
                 {
                     #[cfg(debug_assertions)]
-                debug!(
-                    target = "vtcode::llm::openai",
-                    model = %request.model,
-                    "Responses API unsupported; falling back to Chat Completions"
-                );
-                self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
-                return self.generate_chat_completions(&request).await;
-            } else if is_rate_limit_error(status.as_u16(), &error_text) {
-                return Err(provider::LLMError::RateLimit { metadata: None });
-            } else if is_model_not_found(status, &error_text) {
+                    debug!(
+                        target = "vtcode::llm::openai",
+                        model = %request.model,
+                        "Responses API unsupported; falling back to Chat Completions"
+                    );
+                    self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
+                    return self.generate_chat_completions(&request).await;
+                } else if is_rate_limit_error(status.as_u16(), &error_text) {
+                    return Err(provider::LLMError::RateLimit { metadata: None });
+                } else if is_model_not_found(status, &error_text) {
                     if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
                         if fallback_model != request.model {
                             #[cfg(debug_assertions)]
@@ -108,19 +109,19 @@ impl OpenAIProvider {
                             let retry_response = headers::apply_responses_beta(
                                 self.authorize(self.http_client.post(&url)),
                             )
-                                .json(&retry_openai)
-                                .send()
-                                .await
-                                .map_err(|e| {
-                                    let formatted_error = error_display::format_llm_error(
-                                        "OpenAI",
-                                        &format!("Network error: {}", e),
-                                    );
-                                    provider::LLMError::Network {
-                                        message: formatted_error,
-                                        metadata: None,
-                                    }
-                                })?;
+                            .json(&retry_openai)
+                            .send()
+                            .await
+                            .map_err(|e| {
+                                let formatted_error = error_display::format_llm_error(
+                                    "OpenAI",
+                                    &format!("Network error: {}", e),
+                                );
+                                provider::LLMError::Network {
+                                    message: formatted_error,
+                                    metadata: None,
+                                }
+                            })?;
                             if retry_response.status().is_success() {
                                 let openai_response: Value =
                                     retry_response.json().await.map_err(|e| {

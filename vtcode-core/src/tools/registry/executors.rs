@@ -1014,7 +1014,10 @@ mod token_efficiency_tests {
     #[test]
     fn test_suggests_limit_for_cat() {
         assert_eq!(suggest_max_tokens_for_command("cat file.txt"), Some(250));
-        assert_eq!(suggest_max_tokens_for_command("cat /path/to/file.rs"), Some(250));
+        assert_eq!(
+            suggest_max_tokens_for_command("cat /path/to/file.rs"),
+            Some(250)
+        );
         assert_eq!(suggest_max_tokens_for_command("CAT file.txt"), Some(250)); // case insensitive
     }
 

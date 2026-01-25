@@ -22,10 +22,10 @@ use super::constants::TOOLS_EXCLUDED_FROM_ACP;
 use super::types::{NotificationEnvelope, SessionHandle};
 
 mod handlers;
+mod prompt;
 mod session_state;
 mod tool_config;
 mod tool_execution;
-mod prompt;
 mod updates;
 
 pub(crate) struct ZedAgent {

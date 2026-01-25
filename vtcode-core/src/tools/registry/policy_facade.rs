@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 
-use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::config::ToolsConfig;
+use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::names::canonical_tool_name;
 
 use super::{ToolPermissionDecision, ToolRegistry};

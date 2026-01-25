@@ -303,4 +303,3 @@ pub enum ModelId {
     /// GLM 4.7 Flash - Z.AI GLM-4.7-Flash lightweight model via OpenRouter
     OpenRouterZaiGlm47Flash,
 }
-

@@ -2,7 +2,7 @@ use crate::llm::provider::LLMRequest;
 use crate::llm::providers::anthropic_types::{
     AnthropicFunctionTool, AnthropicTool, AnthropicToolSearchTool, CacheControl, ThinkingConfig,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::super::capabilities::supports_structured_output;
 

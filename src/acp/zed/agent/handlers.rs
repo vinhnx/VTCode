@@ -1,16 +1,16 @@
-use super::ZedAgent;
 use super::super::constants::*;
 use super::super::helpers::{acp_session_modes, agent_implementation_info, text_chunk};
 use super::super::types::{PlanProgress, ToolRuntime};
+use super::ZedAgent;
 use agent_client_protocol as acp;
 use anyhow::Result;
 use futures::StreamExt;
 use serde_json::json;
 use std::collections::HashSet;
 use std::sync::Arc;
+use tracing::warn;
 use vtcode_core::llm::factory::{create_provider_for_model, create_provider_with_config};
 use vtcode_core::llm::provider::{LLMRequest, LLMStreamEvent, Message};
-use tracing::warn;
 
 #[async_trait::async_trait(?Send)]
 impl acp::Agent for ZedAgent {

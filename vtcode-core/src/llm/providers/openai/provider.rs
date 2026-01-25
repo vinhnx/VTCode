@@ -11,7 +11,7 @@ use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, OpenAIPromptCacheSettings, PromptCachingConfig};
 use crate::llm::error_display;
-use crate::llm::provider as provider;
+use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
 use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
@@ -26,11 +26,11 @@ use std::time::Instant;
 use tracing::debug;
 
 // Import from extracted modules
-use super::responses_api::parse_responses_payload;
-use super::message_parser;
 use super::harmony;
+use super::message_parser;
 use super::request_builder;
 use super::response_parser;
+use super::responses_api::parse_responses_payload;
 use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload, ResponsesApiState};
 
 mod generation;
@@ -285,11 +285,10 @@ impl OpenAIProvider {
             self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
         parse_responses_payload(response_json, include_metrics)
     }
-
 }
 
 #[cfg(test)]
 mod tests;
 
-mod provider_impl;
 mod harmony_client;
+mod provider_impl;

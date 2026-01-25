@@ -16,14 +16,8 @@ impl AgentRunner {
     ) -> bool {
         const LOOP_DETECTED_MESSAGE: &str = "A potential loop was detected";
         if response_content.contains(LOOP_DETECTED_MESSAGE) {
-            let warning_message =
-                "Provider halted execution after detecting a potential tool loop";
-            self.record_warning(
-                agent_prefix,
-                task_state,
-                event_recorder,
-                warning_message,
-            );
+            let warning_message = "Provider halted execution after detecting a potential tool loop";
+            self.record_warning(agent_prefix, task_state, event_recorder, warning_message);
             task_state.mark_tool_loop_limit_hit();
             task_state.record_turn(turn_started_at, turn_recorded);
             return true;

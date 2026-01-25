@@ -5,9 +5,9 @@ use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use tracing::{info, warn};
 
-mod tree;
-mod search;
 mod metrics;
+mod search;
+mod tree;
 
 impl FileOpsTool {
     pub(super) async fn execute_basic_list(&self, input: &ListInput) -> Result<Value> {
@@ -369,5 +369,4 @@ impl FileOpsTool {
         }
         out
     }
-
 }

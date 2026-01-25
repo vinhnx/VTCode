@@ -5,19 +5,17 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 use vtcode_core::utils::ansi::MessageStyle;
 
+use crate::agent::runloop::unified::tool_pipeline::{
+    ToolPipelineOutcome, execute_tool_with_timeout_ref,
+};
+use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
 use crate::agent::runloop::unified::turn::guards::handle_turn_balancer;
-use crate::agent::runloop::unified::tool_pipeline::{
-    ToolPipelineOutcome, execute_tool_with_timeout_ref,
-};
-use crate::agent::runloop::unified::tool_routing::{
-    ToolPermissionFlow, ensure_tool_permission,
-};
 
-use super::helpers::{push_assistant_message, push_tool_response, resolve_max_tool_retries};
 use super::execution_result::handle_tool_execution_result;
+use super::helpers::{push_assistant_message, push_tool_response, resolve_max_tool_retries};
 
 pub(crate) fn handle_assistant_response(
     ctx: &mut TurnProcessingContext<'_>,
@@ -39,7 +37,8 @@ pub(crate) fn handle_assistant_response(
         if let Some(reasoning_text) = reasoning.as_ref()
             && !reasoning_text.trim().is_empty()
         {
-            let cleaned_reasoning = vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
+            let cleaned_reasoning =
+                vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
             let duplicates_content = !assistant_text.trim().is_empty()
                 && reasoning_duplicates_content(&cleaned_reasoning, &assistant_text);
             if !cleaned_reasoning.trim().is_empty() && !duplicates_content {

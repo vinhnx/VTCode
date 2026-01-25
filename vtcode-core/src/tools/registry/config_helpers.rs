@@ -13,8 +13,6 @@ pub(super) fn tool_rate_limit_from_env() -> Option<usize> {
         .filter(|value| *value > 0)
 }
 
-pub(super) fn load_adaptive_tuning_from_config(
-    timeouts: &TimeoutsConfig,
-) -> AdaptiveTimeoutTuning {
+pub(super) fn load_adaptive_tuning_from_config(timeouts: &TimeoutsConfig) -> AdaptiveTimeoutTuning {
     AdaptiveTimeoutTuning::from_config(timeouts)
 }

@@ -158,9 +158,9 @@ pub mod plugins;
 pub mod project_doc;
 pub mod prompts;
 pub mod safety;
-pub mod session;
 pub mod sandboxing; // Codex-style sandbox policy and execution environment
 pub mod security;
+pub mod session;
 pub mod skills;
 pub mod subagents;
 pub mod telemetry;

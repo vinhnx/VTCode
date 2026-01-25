@@ -4,7 +4,7 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::llm::provider::LLMRequest;
 use crate::llm::providers::anthropic_types::ThinkingConfig;
 use crate::llm::rig_adapter::reasoning_parameters_for;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::env;
 
 use super::super::capabilities::supports_reasoning_effort;
@@ -14,9 +14,8 @@ pub(crate) fn build_thinking_config(
     anthropic_config: &AnthropicConfig,
     default_model: &str,
 ) -> (Option<ThinkingConfig>, Option<Value>) {
-    let thinking_enabled =
-        anthropic_config.extended_thinking_enabled
-            && supports_reasoning_effort(&request.model, default_model);
+    let thinking_enabled = anthropic_config.extended_thinking_enabled
+        && supports_reasoning_effort(&request.model, default_model);
 
     if thinking_enabled {
         let max_thinking_tokens: Option<u32> = env::var(env_vars::MAX_THINKING_TOKENS)

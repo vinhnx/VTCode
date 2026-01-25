@@ -1,8 +1,8 @@
 use super::FileOpsTool;
 use super::is_image_path;
 mod legacy;
-mod segments;
 mod logging;
+mod segments;
 use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler};
 use crate::tools::traits::FileTool;
 use crate::tools::types::Input;
@@ -215,9 +215,7 @@ impl FileOpsTool {
                 .join(", ")
         ))
     }
-
 }
-
 
 #[cfg(test)]
 mod read_tests {
@@ -227,165 +225,165 @@ mod read_tests {
     use tempfile::TempDir;
 
     #[tokio::test]
-        async fn test_read_file_paging_lines() {
-            let temp_dir = TempDir::new().unwrap();
-            let workspace_root = temp_dir.path().to_path_buf();
-            let test_file = workspace_root.join("test_file.txt");
+    async fn test_read_file_paging_lines() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("test_file.txt");
 
-            // Create test content with 10 lines
-            let test_content =
-                "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\n";
-            fs::write(&test_file, test_content).unwrap();
+        // Create test content with 10 lines
+        let test_content =
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\n";
+        fs::write(&test_file, test_content).unwrap();
 
-            let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
-            let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
 
-            // Test basic paging functionality: offset_lines=2, page_size_lines=3
-            // Should return lines 3, 4, 5 (0-indexed: 2, 3, 4)
-            let args = json!({
-                "path": test_file.to_string_lossy().into_owned(),
-                "offset_lines": 2,
-                "page_size_lines": 3
-            });
+        // Test basic paging functionality: offset_lines=2, page_size_lines=3
+        // Should return lines 3, 4, 5 (0-indexed: 2, 3, 4)
+        let args = json!({
+            "path": test_file.to_string_lossy().into_owned(),
+            "offset_lines": 2,
+            "page_size_lines": 3
+        });
 
-            let result = file_ops.read_file(args).await.unwrap();
-            assert!(result["success"].as_bool().unwrap());
-            assert_eq!(result["content"].as_str().unwrap(), "line3\nline4\nline5");
-        }
-
-        #[tokio::test]
-        async fn test_read_file_paging_bytes() {
-            let temp_dir = TempDir::new().unwrap();
-            let workspace_root = temp_dir.path().to_path_buf();
-            let test_file = workspace_root.join("test_file.txt");
-
-            let test_content = "line1\nline2\nline3\nline4\nline5\n";
-            fs::write(&test_file, test_content).unwrap();
-
-            let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
-            let file_ops = FileOpsTool::new(workspace_root, grep_manager);
-
-            // Test byte-based paging: skip first 6 bytes ("line1\n") and read next 6 bytes
-            let args = json!({
-                "path": test_file.to_string_lossy().into_owned(),
-                "offset_bytes": 6,
-                "page_size_bytes": 6
-            });
-
-            let result = file_ops.read_file(args).await.unwrap();
-            assert!(result["success"].as_bool().unwrap());
-            assert_eq!(result["content"].as_str().unwrap(), "line2\n");
-        }
-
-        #[tokio::test]
-        async fn test_read_file_offset_beyond_size() {
-            let temp_dir = TempDir::new().unwrap();
-            let workspace_root = temp_dir.path().to_path_buf();
-            let test_file = workspace_root.join("test_file.txt");
-
-            let test_content = "line1\nline2\nline3\n";
-            fs::write(&test_file, test_content).unwrap();
-
-            let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
-            let file_ops = FileOpsTool::new(workspace_root, grep_manager);
-
-            // Test when offset is beyond file size
-            let args = json!({
-                "path": test_file.to_string_lossy().into_owned(),
-                "offset_lines": 100,
-                "page_size_lines": 10
-            });
-
-            let result = file_ops.read_file(args).await.unwrap();
-            assert!(result["success"].as_bool().unwrap());
-            assert_eq!(result["content"].as_str().unwrap(), "");
-        }
-
-        #[tokio::test]
-        async fn test_read_file_empty_file() {
-            let temp_dir = TempDir::new().unwrap();
-            let workspace_root = temp_dir.path().to_path_buf();
-            let test_file = workspace_root.join("empty_file.txt");
-
-            fs::write(&test_file, "").unwrap();
-
-            let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
-            let file_ops = FileOpsTool::new(workspace_root, grep_manager);
-
-            // Test reading empty file with paging
-            let args = json!({
-                "path": test_file.to_string_lossy().into_owned(),
-                "offset_lines": 0,
-                "page_size_lines": 10
-            });
-
-            let result = file_ops.read_file(args).await.unwrap();
-            assert!(result["success"].as_bool().unwrap());
-            assert_eq!(result["content"].as_str().unwrap(), "");
-        }
-
-        #[tokio::test]
-        async fn test_read_file_legacy_functionality() {
-            let temp_dir = TempDir::new().unwrap();
-            let workspace_root = temp_dir.path().to_path_buf();
-            let test_file = workspace_root.join("test_file.txt");
-
-            let test_content = "line1\nline2\nline3\nline4\nline5\n";
-            fs::write(&test_file, test_content).unwrap();
-
-            let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
-            let file_ops = FileOpsTool::new(workspace_root, grep_manager);
-
-            // Test legacy functionality with max_bytes
-            let args = json!({
-                "path": test_file.to_string_lossy().into_owned(),
-                "max_bytes": 10
-            });
-
-            let result = file_ops.read_file(args).await.unwrap();
-            assert!(result["success"].as_bool().unwrap());
-            let content = result["content"].as_str().unwrap();
-            assert!(content.len() <= 10);
-            assert!(content.starts_with("line1"));
-        }
-
-        #[tokio::test]
-        async fn test_read_file_legacy_token_chunking() {
-            let temp_dir = TempDir::new().unwrap();
-            let workspace_root = temp_dir.path().to_path_buf();
-            let test_file = workspace_root.join("test_file.txt");
-
-            // Create test content with 50 lines
-            let test_content = (1..=50)
-                .map(|i| format!("line-{}", i))
-                .collect::<Vec<_>>()
-                .join("\n")
-                + "\n";
-            std::fs::write(&test_file, test_content).unwrap();
-
-            let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
-            let file_ops = FileOpsTool::new(workspace_root, grep_manager);
-
-            // Token budget small enough to keep roughly first+last 5-10 lines
-            let max_tokens = 15 * 12; // ~12 lines worth using TOKENS_PER_LINE
-
-            let args = json!({
-                "path": test_file.to_string_lossy().into_owned(),
-                "max_tokens": max_tokens
-            });
-
-            let result = file_ops.read_file(args).await.unwrap();
-            assert!(result["success"].as_bool().unwrap());
-            let content = result["content"].as_str().unwrap();
-            // Should contain first and last lines
-            assert!(content.contains("line-1"));
-            assert!(content.contains("line-50"));
-            // Should indicate truncation
-            assert!(result["is_truncated"].as_bool().unwrap());
-            // Should report applied token budget
-            assert_eq!(
-                result["metadata"]["applied_max_tokens"].as_u64().unwrap(),
-                max_tokens as u64
-            );
-        }
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["content"].as_str().unwrap(), "line3\nline4\nline5");
     }
+
+    #[tokio::test]
+    async fn test_read_file_paging_bytes() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("test_file.txt");
+
+        let test_content = "line1\nline2\nline3\nline4\nline5\n";
+        fs::write(&test_file, test_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Test byte-based paging: skip first 6 bytes ("line1\n") and read next 6 bytes
+        let args = json!({
+            "path": test_file.to_string_lossy().into_owned(),
+            "offset_bytes": 6,
+            "page_size_bytes": 6
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["content"].as_str().unwrap(), "line2\n");
+    }
+
+    #[tokio::test]
+    async fn test_read_file_offset_beyond_size() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("test_file.txt");
+
+        let test_content = "line1\nline2\nline3\n";
+        fs::write(&test_file, test_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Test when offset is beyond file size
+        let args = json!({
+            "path": test_file.to_string_lossy().into_owned(),
+            "offset_lines": 100,
+            "page_size_lines": 10
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["content"].as_str().unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn test_read_file_empty_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("empty_file.txt");
+
+        fs::write(&test_file, "").unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Test reading empty file with paging
+        let args = json!({
+            "path": test_file.to_string_lossy().into_owned(),
+            "offset_lines": 0,
+            "page_size_lines": 10
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["content"].as_str().unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn test_read_file_legacy_functionality() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("test_file.txt");
+
+        let test_content = "line1\nline2\nline3\nline4\nline5\n";
+        fs::write(&test_file, test_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Test legacy functionality with max_bytes
+        let args = json!({
+            "path": test_file.to_string_lossy().into_owned(),
+            "max_bytes": 10
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        let content = result["content"].as_str().unwrap();
+        assert!(content.len() <= 10);
+        assert!(content.starts_with("line1"));
+    }
+
+    #[tokio::test]
+    async fn test_read_file_legacy_token_chunking() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("test_file.txt");
+
+        // Create test content with 50 lines
+        let test_content = (1..=50)
+            .map(|i| format!("line-{}", i))
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        std::fs::write(&test_file, test_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Token budget small enough to keep roughly first+last 5-10 lines
+        let max_tokens = 15 * 12; // ~12 lines worth using TOKENS_PER_LINE
+
+        let args = json!({
+            "path": test_file.to_string_lossy().into_owned(),
+            "max_tokens": max_tokens
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        let content = result["content"].as_str().unwrap();
+        // Should contain first and last lines
+        assert!(content.contains("line-1"));
+        assert!(content.contains("line-50"));
+        // Should indicate truncation
+        assert!(result["is_truncated"].as_bool().unwrap());
+        // Should report applied token budget
+        assert_eq!(
+            result["metadata"]["applied_max_tokens"].as_u64().unwrap(),
+            max_tokens as u64
+        );
+    }
+}
