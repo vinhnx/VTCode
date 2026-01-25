@@ -1,0 +1,10 @@
+pub const LOW: &str = "low";
+pub const MEDIUM: &str = "medium";
+pub const HIGH: &str = "high";
+pub const ALLOWED_LEVELS: &[&str] = &["minimal", LOW, MEDIUM, HIGH, "xhigh"];
+pub const LABEL_LOW: &str = "Low";
+pub const LABEL_MEDIUM: &str = "Medium";
+pub const LABEL_HIGH: &str = "High";
+pub const DESCRIPTION_LOW: &str = "Fast responses with lightweight reasoning.";
+pub const DESCRIPTION_MEDIUM: &str = "Balanced depth and speed for general tasks. (Note: May not be fully available for all models including Gemini 3 Pro)";
+pub const DESCRIPTION_HIGH: &str = "Maximum reasoning depth for complex problems.";
