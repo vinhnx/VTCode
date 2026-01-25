@@ -386,7 +386,6 @@ pub(super) struct ScrollbackMetrics {
 ///
 /// Note: Some Arc-wrapped locks can be held simultaneously with others since Arc sharing
 /// is safe. Single-lock methods don't need to follow this order.
-
 #[cfg(test)]
 mod unicode_optimization_tests {
     use super::*;

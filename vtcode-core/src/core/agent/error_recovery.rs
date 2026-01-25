@@ -246,7 +246,7 @@ mod tests {
     fn test_error_pattern_detection() {
         let mut state = ErrorRecoveryState::new();
 
-        for i in 0..3 {
+        for _i in 0..3 {
             state.record_error(
                 "grep_file",
                 "Pattern not found".to_string(),

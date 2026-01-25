@@ -376,7 +376,7 @@ fn update_usage_from_value(source: &Value, usage: &mut Option<Usage>) {
     }
 }
 
-pub(super) fn parse_stream_payload(
+pub(crate) fn parse_stream_payload(
     payload: &Value,
     aggregated_content: &mut String,
     tool_call_builders: &mut Vec<ToolCallBuilder>,

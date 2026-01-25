@@ -134,7 +134,7 @@ pub struct FunctionDefinition {
     pub parameters: Value,
 }
 
-fn sanitize_tool_description(description: &str) -> String {
+pub(crate) fn sanitize_tool_description(description: &str) -> String {
     let mut result = String::with_capacity(description.len());
     let mut first = true;
     for line in description.lines() {

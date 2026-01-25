@@ -537,12 +537,12 @@ impl OpenAIProvider {
     }
 
     /// Parse harmony tool name from recipient or tool reference
-    fn parse_harmony_tool_name(recipient: &str) -> String {
+    pub(crate) fn parse_harmony_tool_name(recipient: &str) -> String {
         harmony::parse_harmony_tool_name(recipient)
     }
 
     /// Parse harmony tool call from raw text content
-    fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, serde_json::Value)> {
+    pub(crate) fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, serde_json::Value)> {
         harmony::parse_harmony_tool_call_from_text(text)
     }
 }

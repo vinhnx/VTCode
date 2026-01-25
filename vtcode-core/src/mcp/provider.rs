@@ -25,7 +25,7 @@ pub struct McpProvider {
     pub(super) name: String,
     pub(super) protocol_version: String,
     client: Arc<RmcpClient>,
-    semaphore: Arc<Semaphore>,
+    pub(crate) semaphore: Arc<Semaphore>,
     tools_cache: Mutex<Option<Vec<McpToolInfo>>>,
     resources_cache: Mutex<Option<Vec<McpResourceInfo>>>,
     prompts_cache: Mutex<Option<Vec<McpPromptInfo>>>,

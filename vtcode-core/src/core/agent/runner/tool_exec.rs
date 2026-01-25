@@ -86,13 +86,10 @@ impl AgentRunner {
                 Ok(result) => {
                     if !self.quiet {
                         println!(
-                            "{} {}",
+                            "{} {} {} tool executed successfully",
                             agent_prefix,
-                            format!(
-                                "{} {} tool executed successfully",
-                                style("(OK)").green(),
-                                name
-                            )
+                            style("(OK)").green(),
+                            name
                         );
                     }
 
@@ -120,9 +117,10 @@ impl AgentRunner {
                     let error_msg = format!("Error executing {}: {}", name, e);
                     if !self.quiet {
                         println!(
-                            "{} {}",
+                            "{} {} {}",
                             agent_prefix,
-                            format!("{} {}", style("(ERR)").red(), error_msg)
+                            style("(ERR)").red(),
+                            error_msg
                         );
                     }
                     let err_lower = error_msg.to_lowercase();
@@ -218,13 +216,10 @@ impl AgentRunner {
                 Ok(result) => {
                     if !self.quiet {
                         println!(
-                            "{} {}",
+                            "{} {} {} tool executed successfully",
                             agent_prefix,
-                            format!(
-                                "{} {} tool executed successfully",
-                                style("(OK)").green(),
-                                name
-                            )
+                            style("(OK)").green(),
+                            name
                         );
                     }
 

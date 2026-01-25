@@ -378,7 +378,7 @@ pub enum McpPoolError {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
 
     #[tokio::test]

@@ -19,9 +19,10 @@ impl AgentRunner {
         let warning_message = warning_message.into();
         if !self.quiet {
             println!(
-                "{} {}",
+                "{} {} {}",
                 agent_prefix,
-                format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
+                style("(WARN)").yellow().bold(),
+                warning_message
             );
         }
         event_recorder.warning(&warning_message);
@@ -38,9 +39,10 @@ impl AgentRunner {
         let failure_text = format!("Tool {} failed: {}", tool_name, error);
         if !self.quiet {
             println!(
-                "{} {}",
+                "{} {} {}",
                 failure_ctx.agent_prefix,
-                format!("{} {}", style("(ERR)").red().bold(), failure_text)
+                style("(ERR)").red().bold(),
+                failure_text
             );
         }
         failure_ctx.event_recorder.command_finished(
@@ -72,6 +74,7 @@ impl AgentRunner {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn record_tool_denied(
         &self,
         agent_prefix: &str,
@@ -85,9 +88,10 @@ impl AgentRunner {
         let detail = format!("{ERR_TOOL_DENIED}: {tool_name}");
         if !self.quiet {
             println!(
-                "{} {}",
+                "{} {} {}",
                 agent_prefix,
-                format!("{} {}", style("(WARN)").yellow().bold(), detail)
+                style("(WARN)").yellow().bold(),
+                detail
             );
         }
         task_state.warnings.push(detail.clone());

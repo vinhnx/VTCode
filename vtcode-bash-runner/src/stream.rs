@@ -71,19 +71,19 @@ mod tests {
     use tokio::io::BufReader;
 
     #[tokio::test]
-    async fn read_line_with_limit_truncates() {
+    async fn read_line_with_limit_truncates() -> std::io::Result<()> {
         let data = "hello world\n";
         let mut reader = BufReader::new(data.as_bytes());
         let mut buf = Vec::new();
 
         let result = read_line_with_limit(&mut reader, &mut buf, 5)
-            .await
-            .unwrap();
+            .await?;
         match result {
             ReadLineResult::Truncated(bytes) => {
                 assert!(!bytes.is_empty());
             }
-            other => panic!("expected truncation, got {:?}", other),
+            other => panic!("expected truncation, got {other:?}"),
         }
+        Ok(())
     }
 }
