@@ -134,7 +134,6 @@ pub(crate) async fn handle_tool_calls(
                         let name = name.clone();
                         let args = args.clone();
                         let reporter = progress_reporter.clone();
-                        let max_tool_retries = max_tool_retries;
 
                         async move {
                             let start_time = std::time::Instant::now();
