@@ -94,6 +94,7 @@ pub const PROMPT_INVOKE_PREFIX: &str = "prompt:";
 pub const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
 pub const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 const MAX_LOG_LINES: usize = 256;
+const MAX_LOG_DRAIN_PER_TICK: usize = 256;
 
 pub struct Session {
     // --- Managers (Phase 2) ---
@@ -402,20 +403,21 @@ impl Session {
             return;
         }
 
-        let mut updated = false;
         if let Some(receiver) = self.log_receiver.as_mut() {
             let mut drained = Vec::new();
-            while let Ok(entry) = receiver.try_recv() {
+            while drained.len() < MAX_LOG_DRAIN_PER_TICK {
+                let Ok(entry) = receiver.try_recv() else {
+                    break;
+                };
                 drained.push(entry);
             }
-            for entry in drained {
-                let rendered = Arc::new(highlight_log_entry(&entry));
-                self.push_log_line(rendered);
-                updated = true;
+            if !drained.is_empty() {
+                for entry in drained {
+                    let rendered = Arc::new(highlight_log_entry(&entry));
+                    self.push_log_line(rendered);
+                }
+                self.mark_dirty();
             }
-        }
-        if updated {
-            self.mark_dirty();
         }
     }
 

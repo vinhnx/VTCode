@@ -904,15 +904,20 @@ fn render_secure_prompt(
     area: Rect,
     config: &SecurePromptConfig,
     input: &str,
-    cursor: usize,
+    _cursor: usize,
 ) {
     if area.width == 0 || area.height == 0 {
         return;
     }
 
-    let grapheme_count = input.chars().count();
-    let sanitized: String = std::iter::repeat_n('•', grapheme_count).collect();
-    let cursor_chars = input[..cursor].chars().count();
+    let display_text = if input.is_empty() {
+        config.placeholder.clone().unwrap_or_default()
+    } else if config.mask_input {
+        let grapheme_count = input.chars().count();
+        std::iter::repeat_n('•', grapheme_count).collect()
+    } else {
+        input.to_owned()
+    };
 
     // Render label
     let label_paragraph = Paragraph::new(config.label.clone());
@@ -933,22 +938,7 @@ fn render_secure_prompt(
             height: (area.height - 1).max(1),
         };
 
-        let input_text = if cursor_chars < sanitized.len() {
-            // Insert cursor character
-            let mut text = String::new();
-            let chars: Vec<char> = sanitized.chars().collect();
-            for (i, c) in chars.iter().enumerate() {
-                text.push(*c);
-                if i == cursor_chars {
-                    // Indicate cursor position (simplified, could use block)
-                }
-            }
-            text
-        } else {
-            sanitized.clone()
-        };
-
-        let input_paragraph = Paragraph::new(input_text);
+        let input_paragraph = Paragraph::new(display_text);
         frame.render_widget(input_paragraph, input_area);
     }
 }
@@ -977,7 +967,7 @@ fn highlight_segments(
 
     let mut highlight_flags = vec![false; char_count];
     for term in terms {
-        let needle = term.to_ascii_lowercase();
+        let needle = term.as_str();
         if needle.is_empty() {
             continue;
         }
@@ -1322,10 +1312,23 @@ impl ModalListState {
     ) {
         let trimmed = query.trim();
         if trimmed.is_empty() {
+            if self.filter_query.is_none() {
+                if preferred.is_some() && self.current_selection() != preferred {
+                    self.select_initial(preferred);
+                }
+                return;
+            }
             self.visible_indices = (0..self.items.len()).collect();
             self.filter_terms.clear();
             self.filter_query = None;
             self.select_initial(preferred);
+            return;
+        }
+
+        if self.filter_query.as_deref() == Some(trimmed) {
+            if preferred.is_some() && self.current_selection() != preferred {
+                self.select_initial(preferred);
+            }
             return;
         }
 

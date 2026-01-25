@@ -732,7 +732,7 @@ pub enum InlineEvent {
     FileSelected(String),
     LaunchEditor,
     ForceCancelPtySession,
-    /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Agent)
+    /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Edit)
     ToggleMode,
     /// Plan confirmation result (Claude Code style HITL)
     PlanConfirmation(PlanConfirmationResult),
@@ -773,17 +773,22 @@ impl InlineHandle {
         Self { sender }
     }
 
+    fn send_command(&self, command: InlineCommand) {
+        if self.sender.is_closed() {
+            return;
+        }
+        let _ = self.sender.send(command);
+    }
+
     pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
         if segments.is_empty() {
             return;
         }
-        let _ = self
-            .sender
-            .send(InlineCommand::AppendLine { kind, segments });
+        self.send_command(InlineCommand::AppendLine { kind, segments });
     }
 
     pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
-        let _ = self.sender.send(InlineCommand::Inline { kind, segment });
+        self.send_command(InlineCommand::Inline { kind, segment });
     }
 
     pub fn replace_last(
@@ -792,25 +797,23 @@ impl InlineHandle {
         kind: InlineMessageKind,
         lines: Vec<Vec<InlineSegment>>,
     ) {
-        let _ = self
-            .sender
-            .send(InlineCommand::ReplaceLast { count, kind, lines });
+        self.send_command(InlineCommand::ReplaceLast { count, kind, lines });
     }
 
     pub fn suspend_event_loop(&self) {
-        let _ = self.sender.send(InlineCommand::SuspendEventLoop);
+        self.send_command(InlineCommand::SuspendEventLoop);
     }
 
     pub fn resume_event_loop(&self) {
-        let _ = self.sender.send(InlineCommand::ResumeEventLoop);
+        self.send_command(InlineCommand::ResumeEventLoop);
     }
 
     pub fn clear_input_queue(&self) {
-        let _ = self.sender.send(InlineCommand::ClearInputQueue);
+        self.send_command(InlineCommand::ClearInputQueue);
     }
 
     pub fn set_prompt(&self, prefix: String, style: InlineTextStyle) {
-        let _ = self.sender.send(InlineCommand::SetPrompt { prefix, style });
+        self.send_command(InlineCommand::SetPrompt { prefix, style });
     }
 
     pub fn set_placeholder(&self, hint: Option<String>) {
@@ -818,69 +821,61 @@ impl InlineHandle {
     }
 
     pub fn set_placeholder_with_style(&self, hint: Option<String>, style: Option<InlineTextStyle>) {
-        let _ = self
-            .sender
-            .send(InlineCommand::SetPlaceholder { hint, style });
+        self.send_command(InlineCommand::SetPlaceholder { hint, style });
     }
 
     pub fn set_message_labels(&self, agent: Option<String>, user: Option<String>) {
-        let _ = self
-            .sender
-            .send(InlineCommand::SetMessageLabels { agent, user });
+        self.send_command(InlineCommand::SetMessageLabels { agent, user });
     }
 
     pub fn set_header_context(&self, context: InlineHeaderContext) {
-        let _ = self
-            .sender
-            .send(InlineCommand::SetHeaderContext { context });
+        self.send_command(InlineCommand::SetHeaderContext { context });
     }
 
     pub fn set_input_status(&self, left: Option<String>, right: Option<String>) {
-        let _ = self
-            .sender
-            .send(InlineCommand::SetInputStatus { left, right });
+        self.send_command(InlineCommand::SetInputStatus { left, right });
     }
 
     pub fn set_theme(&self, theme: InlineTheme) {
-        let _ = self.sender.send(InlineCommand::SetTheme { theme });
+        self.send_command(InlineCommand::SetTheme { theme });
     }
 
     pub fn set_queued_inputs(&self, entries: Vec<String>) {
-        let _ = self.sender.send(InlineCommand::SetQueuedInputs { entries });
+        self.send_command(InlineCommand::SetQueuedInputs { entries });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {
-        let _ = self.sender.send(InlineCommand::SetCursorVisible(visible));
+        self.send_command(InlineCommand::SetCursorVisible(visible));
     }
 
     pub fn set_input_enabled(&self, enabled: bool) {
-        let _ = self.sender.send(InlineCommand::SetInputEnabled(enabled));
+        self.send_command(InlineCommand::SetInputEnabled(enabled));
     }
 
     pub fn set_input(&self, content: String) {
-        let _ = self.sender.send(InlineCommand::SetInput(content));
+        self.send_command(InlineCommand::SetInput(content));
     }
 
     pub fn clear_input(&self) {
-        let _ = self.sender.send(InlineCommand::ClearInput);
+        self.send_command(InlineCommand::ClearInput);
     }
 
     pub fn force_redraw(&self) {
-        let _ = self.sender.send(InlineCommand::ForceRedraw);
+        self.send_command(InlineCommand::ForceRedraw);
     }
 
     pub fn shutdown(&self) {
-        let _ = self.sender.send(InlineCommand::Shutdown);
+        self.send_command(InlineCommand::Shutdown);
     }
 
     /// Update editing mode state in the header display
     pub fn set_editing_mode(&self, mode: EditingMode) {
-        let _ = self.sender.send(InlineCommand::SetEditingMode(mode));
+        self.send_command(InlineCommand::SetEditingMode(mode));
     }
 
     /// Update autonomous mode state in the header display
     pub fn set_autonomous_mode(&self, enabled: bool) {
-        let _ = self.sender.send(InlineCommand::SetAutonomousMode(enabled));
+        self.send_command(InlineCommand::SetAutonomousMode(enabled));
     }
 
     pub fn show_modal(
@@ -889,7 +884,7 @@ impl InlineHandle {
         lines: Vec<String>,
         secure_prompt: Option<SecurePromptConfig>,
     ) {
-        let _ = self.sender.send(InlineCommand::ShowModal {
+        self.send_command(InlineCommand::ShowModal {
             title,
             lines,
             secure_prompt,
@@ -904,7 +899,7 @@ impl InlineHandle {
         selected: Option<InlineListSelection>,
         search: Option<InlineListSearchConfig>,
     ) {
-        let _ = self.sender.send(InlineCommand::ShowListModal {
+        self.send_command(InlineCommand::ShowListModal {
             title,
             lines,
             items,
@@ -921,7 +916,7 @@ impl InlineHandle {
         search: Option<InlineListSearchConfig>,
         mode: WizardModalMode,
     ) {
-        let _ = self.sender.send(InlineCommand::ShowWizardModal {
+        self.send_command(InlineCommand::ShowWizardModal {
             title,
             steps,
             current_step,
@@ -957,27 +952,23 @@ impl InlineHandle {
     }
 
     pub fn close_modal(&self) {
-        let _ = self.sender.send(InlineCommand::CloseModal);
+        self.send_command(InlineCommand::CloseModal);
     }
 
     pub fn clear_screen(&self) {
-        let _ = self.sender.send(InlineCommand::ClearScreen);
+        self.send_command(InlineCommand::ClearScreen);
     }
 
     pub fn set_custom_prompts(&self, registry: crate::prompts::CustomPromptRegistry) {
-        let _ = self
-            .sender
-            .send(InlineCommand::SetCustomPrompts { registry });
+        self.send_command(InlineCommand::SetCustomPrompts { registry });
     }
 
     pub fn load_file_palette(&self, files: Vec<String>, workspace: std::path::PathBuf) {
-        let _ = self
-            .sender
-            .send(InlineCommand::LoadFilePalette { files, workspace });
+        self.send_command(InlineCommand::LoadFilePalette { files, workspace });
     }
 
     pub fn open_config_palette(&self) {
-        let _ = self.sender.send(InlineCommand::OpenConfigPalette);
+        self.send_command(InlineCommand::OpenConfigPalette);
     }
 
     /// Show plan confirmation dialog (Claude Code style Implementation Blueprint)
@@ -985,7 +976,7 @@ impl InlineHandle {
     /// Displays the implementation plan and asks user to approve before execution.
     /// User can choose: Execute, Edit Plan, Cancel, or Auto-Accept (for session).
     pub fn show_plan_confirmation(&self, plan: PlanContent) {
-        let _ = self.sender.send(InlineCommand::ShowPlanConfirmation {
+        self.send_command(InlineCommand::ShowPlanConfirmation {
             plan: Box::new(plan),
         });
     }
@@ -998,12 +989,17 @@ impl InlineHandle {
         hunks: Vec<DiffHunk>,
         current_hunk: usize,
     ) {
-        let _ = self.sender.send(InlineCommand::ShowDiffPreview {
+        let resolved_hunk = if hunks.is_empty() {
+            0
+        } else {
+            current_hunk.min(hunks.len().saturating_sub(1))
+        };
+        self.send_command(InlineCommand::ShowDiffPreview {
             file_path,
             before,
             after,
             hunks,
-            current_hunk,
+            current_hunk: resolved_hunk,
         });
     }
 }
