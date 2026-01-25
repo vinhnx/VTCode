@@ -1,0 +1,96 @@
+use crate::models::Provider;
+
+use super::ModelId;
+
+impl ModelId {
+    /// Get the provider for this model
+    pub fn provider(&self) -> Provider {
+        if self.openrouter_metadata().is_some() {
+            return Provider::OpenRouter;
+        }
+        match self {
+            ModelId::Gemini25FlashPreview
+            | ModelId::Gemini25Flash
+            | ModelId::Gemini25FlashLite
+            | ModelId::Gemini25Pro
+            | ModelId::Gemini3ProPreview => Provider::Gemini,
+            ModelId::GPT5
+            | ModelId::GPT5Codex
+            | ModelId::GPT5Mini
+            | ModelId::GPT5Nano
+            | ModelId::CodexMiniLatest
+            | ModelId::OpenAIGptOss20b
+            | ModelId::OpenAIGptOss120b => Provider::OpenAI,
+            ModelId::ClaudeOpus45
+            | ModelId::ClaudeOpus41
+            | ModelId::ClaudeSonnet45
+            | ModelId::ClaudeHaiku45
+            | ModelId::ClaudeSonnet4 => Provider::Anthropic,
+            ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
+            ModelId::HuggingFaceDeepseekV32
+            | ModelId::HuggingFaceOpenAIGptOss20b
+            | ModelId::HuggingFaceOpenAIGptOss120b
+            | ModelId::HuggingFaceGlm47
+            | ModelId::HuggingFaceGlm47FlashNovita
+            | ModelId::HuggingFaceKimiK2Thinking
+            | ModelId::HuggingFaceMinimaxM21Novita
+            | ModelId::HuggingFaceDeepseekV32Novita
+            | ModelId::HuggingFaceXiaomiMimoV2FlashNovita => Provider::HuggingFace,
+            ModelId::XaiGrok4
+            | ModelId::XaiGrok4Mini
+            | ModelId::XaiGrok4Code
+            | ModelId::XaiGrok4CodeLatest
+            | ModelId::XaiGrok4Vision => Provider::XAI,
+            ModelId::ZaiGlm4Plus
+            | ModelId::ZaiGlm4PlusDeepThinking
+            | ModelId::ZaiGlm47
+            | ModelId::ZaiGlm47DeepThinking
+            | ModelId::ZaiGlm47Flash
+            | ModelId::ZaiGlm46
+            | ModelId::ZaiGlm46DeepThinking
+            | ModelId::ZaiGlm46V
+            | ModelId::ZaiGlm46VFlash
+            | ModelId::ZaiGlm46VFlashX
+            | ModelId::ZaiGlm45
+            | ModelId::ZaiGlm45DeepThinking
+            | ModelId::ZaiGlm45Air
+            | ModelId::ZaiGlm45X
+            | ModelId::ZaiGlm45Airx
+            | ModelId::ZaiGlm45Flash
+            | ModelId::ZaiGlm45V
+            | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
+            ModelId::OllamaGptOss20b
+            | ModelId::OllamaGptOss20bCloud
+            | ModelId::OllamaGptOss120bCloud
+            | ModelId::OllamaQwen317b
+            | ModelId::OllamaDeepseekV32Cloud
+            | ModelId::OllamaQwen3Next80bCloud
+            | ModelId::OllamaMistralLarge3675bCloud
+            | ModelId::OllamaKimiK2ThinkingCloud
+            | ModelId::OllamaQwen3Coder480bCloud
+            | ModelId::OllamaGlm46Cloud
+            | ModelId::OllamaGemini3ProPreviewLatestCloud
+            | ModelId::OllamaGemini3FlashPreviewCloud
+            | ModelId::OllamaDevstral2123bCloud
+            | ModelId::OllamaMinimaxM2Cloud
+            | ModelId::OllamaMinimaxM21Cloud
+            | ModelId::OllamaNemotron3Nano30bCloud
+            | ModelId::OllamaGlm47Cloud => Provider::Ollama,
+            ModelId::LmStudioMetaLlama38BInstruct
+            | ModelId::LmStudioMetaLlama318BInstruct
+            | ModelId::LmStudioQwen257BInstruct
+            | ModelId::LmStudioGemma22BIt
+            | ModelId::LmStudioGemma29BIt
+            | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
+            ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning | ModelId::MinimaxM2 => {
+                Provider::Minimax
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Whether this model supports configurable reasoning effort levels
+    pub fn supports_reasoning_effort(&self) -> bool {
+        self.provider().supports_reasoning_effort(self.as_str())
+    }
+}
