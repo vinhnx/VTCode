@@ -1,0 +1,176 @@
+pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
+pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
+pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
+pub const DEFAULT_REASONING_VISIBLE: bool = false;
+pub const SLASH_SUGGESTION_LIMIT: usize = 50; // All commands are scrollable
+pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
+pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;
+pub const SLASH_PALETTE_HORIZONTAL_MARGIN: u16 = 8;
+pub const SLASH_PALETTE_TOP_OFFSET: u16 = 3;
+pub const SLASH_PALETTE_CONTENT_PADDING: u16 = 6;
+pub const SLASH_PALETTE_HINT_PRIMARY: &str = "Type to filter slash commands.";
+pub const SLASH_PALETTE_HINT_SECONDARY: &str = "Press Enter to apply • Esc to dismiss.";
+pub const MODAL_MIN_WIDTH: u16 = 36;
+pub const MODAL_MIN_HEIGHT: u16 = 9;
+pub const MODAL_LIST_MIN_HEIGHT: u16 = 12;
+pub const MODAL_WIDTH_RATIO: f32 = 0.6;
+pub const MODAL_HEIGHT_RATIO: f32 = 0.6;
+pub const MODAL_MAX_WIDTH_RATIO: f32 = 0.9;
+pub const MODAL_MAX_HEIGHT_RATIO: f32 = 0.8;
+pub const MODAL_CONTENT_HORIZONTAL_PADDING: u16 = 8;
+pub const MODAL_CONTENT_VERTICAL_PADDING: u16 = 6;
+pub const MODAL_INSTRUCTIONS_TITLE: &str = "";
+pub const MODAL_INSTRUCTIONS_BULLET: &str = "•";
+pub const INLINE_HEADER_HEIGHT: u16 = 3;
+pub const INLINE_INPUT_HEIGHT: u16 = 4;
+pub const INLINE_INPUT_MAX_LINES: usize = 10;
+pub const INLINE_NAVIGATION_PERCENT: u16 = 28;
+pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
+pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
+pub const INLINE_STACKED_NAVIGATION_PERCENT: u16 = INLINE_NAVIGATION_PERCENT;
+pub const INLINE_SCROLLBAR_EDGE_PADDING: u16 = 1;
+pub const INLINE_TRANSCRIPT_BOTTOM_PADDING: u16 = 6;
+pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
+pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
+pub const HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS: usize = 48;
+pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "";
+pub const INLINE_AGENT_QUOTE_PREFIX: &str = "";
+pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
+
+/// Scroll percentage format in status bar
+pub const SCROLL_INDICATOR_FORMAT: &str = "↕";
+/// Show scroll percentage in status bar
+pub const SCROLL_INDICATOR_ENABLED: bool = true;
+
+pub const INLINE_BLOCK_TOP_LEFT: &str = "╭";
+pub const INLINE_BLOCK_TOP_RIGHT: &str = "╮";
+pub const INLINE_BLOCK_BODY_LEFT: &str = "│";
+pub const INLINE_BLOCK_BODY_RIGHT: &str = "│";
+pub const INLINE_BLOCK_BOTTOM_LEFT: &str = "╰";
+pub const INLINE_BLOCK_BOTTOM_RIGHT: &str = "╯";
+pub const INLINE_BLOCK_HORIZONTAL: &str = "─";
+pub const INLINE_TOOL_HEADER_LABEL: &str = "Tool";
+pub const INLINE_TOOL_ACTION_PREFIX: &str = "→";
+pub const INLINE_TOOL_DETAIL_PREFIX: &str = "↳";
+pub const INLINE_PTY_HEADER_LABEL: &str = "Terminal";
+pub const INLINE_PTY_RUNNING_LABEL: &str = "running";
+pub const INLINE_PTY_STATUS_LIVE: &str = "LIVE";
+pub const INLINE_PTY_STATUS_DONE: &str = "DONE";
+pub const INLINE_PTY_PLACEHOLDER: &str = "Terminal output";
+pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "✦";
+pub const MODAL_LIST_HIGHLIGHT_FULL: &str = "✦ ";
+pub const MODAL_LIST_SUMMARY_FILTER_LABEL: &str = "Filter";
+pub const MODAL_LIST_SUMMARY_SEPARATOR: &str = " • ";
+pub const MODAL_LIST_SUMMARY_MATCHES_LABEL: &str = "Matches";
+pub const MODAL_LIST_SUMMARY_TOTAL_LABEL: &str = "of";
+pub const MODAL_LIST_SUMMARY_NO_MATCHES: &str = "No matches";
+pub const MODAL_LIST_SUMMARY_RESET_HINT: &str = "Press Esc to reset";
+pub const MODAL_LIST_NO_RESULTS_MESSAGE: &str = "No matching options";
+pub const HEADER_VERSION_PROMPT: &str = "> ";
+pub const HEADER_VERSION_PREFIX: &str = "VT Code";
+pub const HEADER_VERSION_LEFT_DELIMITER: &str = "(";
+pub const HEADER_VERSION_RIGHT_DELIMITER: &str = ")";
+pub const HEADER_MODE_INLINE: &str = "Inline session";
+pub const HEADER_MODE_ALTERNATE: &str = "Alternate session";
+pub const HEADER_MODE_AUTO: &str = "Auto session";
+pub const HEADER_MODE_FULL_AUTO_SUFFIX: &str = " (full)";
+pub const HEADER_MODE_PRIMARY_SEPARATOR: &str = " | ";
+pub const HEADER_MODE_SECONDARY_SEPARATOR: &str = " | ";
+pub const HEADER_PROVIDER_PREFIX: &str = "Provider: ";
+pub const HEADER_MODEL_PREFIX: &str = "Model: ";
+pub const HEADER_REASONING_PREFIX: &str = "Reasoning effort: ";
+pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
+pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
+pub const HEADER_MCP_PREFIX: &str = "MCP: ";
+pub const HEADER_GIT_PREFIX: &str = "git: ";
+pub const HEADER_GIT_CLEAN_SUFFIX: &str = "✓";
+pub const HEADER_GIT_DIRTY_SUFFIX: &str = "*";
+pub const HEADER_UNKNOWN_PLACEHOLDER: &str = "unavailable";
+pub const HEADER_STATUS_LABEL: &str = "Status";
+pub const HEADER_STATUS_ACTIVE: &str = "Active";
+pub const HEADER_STATUS_PAUSED: &str = "Paused";
+pub const HEADER_MESSAGES_LABEL: &str = "Messages";
+pub const HEADER_INPUT_LABEL: &str = "Input";
+pub const HEADER_INPUT_ENABLED: &str = "Enabled";
+pub const HEADER_INPUT_DISABLED: &str = "Disabled";
+pub const INLINE_USER_PREFIX: &str = " ";
+pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
+    "Implement {feature} in {file} (@files, #prompts, /commands)";
+pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
+    "Build something (@files, #prompts, /commands or Shift+Tab to switch to modes)";
+pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter=submit | Shift+Enter=newline | Ctrl/Cmd+Enter=queue | Esc=cancel | Ctrl+C=interrupt | @=file picker | #=custom prompts | /=slash commands";
+pub const HEADER_META_SEPARATOR: &str = "   ";
+pub const WELCOME_TEXT_WIDTH: usize = 80;
+pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
+pub const WELCOME_SHORTCUT_HINT_PREFIX: &str = "Shortcuts:";
+pub const WELCOME_SHORTCUT_SEPARATOR: &str = "•";
+pub const WELCOME_SHORTCUT_INDENT: &str = "  ";
+pub const WELCOME_SLASH_COMMAND_SECTION_TITLE: &str = "Slash Commands";
+pub const WELCOME_SLASH_COMMAND_LIMIT: usize = 6;
+pub const WELCOME_SLASH_COMMAND_PREFIX: &str = "/";
+pub const WELCOME_SLASH_COMMAND_INTRO: &str = "";
+pub const WELCOME_SLASH_COMMAND_INDENT: &str = "  ";
+pub const NAVIGATION_BLOCK_TITLE: &str = "Timeline";
+pub const NAVIGATION_BLOCK_SHORTCUT_NOTE: &str = "Ctrl+T";
+pub const NAVIGATION_EMPTY_LABEL: &str = "Waiting for activity";
+pub const NAVIGATION_INDEX_PREFIX: &str = "#";
+pub const NAVIGATION_LABEL_AGENT: &str = "Agent";
+pub const NAVIGATION_LABEL_ERROR: &str = "Error";
+pub const NAVIGATION_LABEL_INFO: &str = "Info";
+pub const NAVIGATION_LABEL_POLICY: &str = "Policy";
+pub const NAVIGATION_LABEL_TOOL: &str = "Tool";
+pub const NAVIGATION_LABEL_USER: &str = "User";
+pub const NAVIGATION_LABEL_PTY: &str = "PTY";
+pub const PLAN_BLOCK_TITLE: &str = "TODOs";
+pub const PLAN_STATUS_EMPTY: &str = "No TODOs";
+pub const PLAN_STATUS_IN_PROGRESS: &str = "In progress";
+pub const PLAN_STATUS_DONE: &str = "Done";
+pub const PLAN_IN_PROGRESS_NOTE: &str = "in progress";
+pub const SUGGESTION_BLOCK_TITLE: &str = "Slash Commands";
+pub const STATUS_LINE_MODE: &str = "auto";
+pub const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
+pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
+
+// TUI tick rate constants for smooth scrolling
+/// Tick rate (Hz) when user is actively interacting with the TUI
+pub const TUI_ACTIVE_TICK_RATE_HZ: f64 = 16.0;
+/// Tick rate (Hz) when TUI is idle to save CPU
+pub const TUI_IDLE_TICK_RATE_HZ: f64 = 4.0;
+/// Duration (ms) to remain in active mode after last input
+pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 500;
+
+// Theme and color constants
+pub const THEME_MIN_CONTRAST_RATIO: f64 = 4.5;
+pub const THEME_FOREGROUND_LIGHTEN_RATIO: f64 = 0.25;
+pub const THEME_SECONDARY_LIGHTEN_RATIO: f64 = 0.2;
+pub const THEME_MIX_RATIO: f64 = 0.35;
+pub const THEME_TOOL_BODY_MIX_RATIO: f64 = 0.35;
+pub const THEME_TOOL_BODY_LIGHTEN_RATIO: f64 = 0.2;
+pub const THEME_RESPONSE_COLOR_LIGHTEN_RATIO: f64 = 0.15;
+pub const THEME_REASONING_COLOR_LIGHTEN_RATIO: f64 = 0.3;
+pub const THEME_USER_COLOR_LIGHTEN_RATIO: f64 = 0.2;
+pub const THEME_SECONDARY_USER_COLOR_LIGHTEN_RATIO: f64 = 0.4;
+pub const THEME_PRIMARY_STATUS_LIGHTEN_RATIO: f64 = 0.35;
+pub const THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO: f64 = 0.5;
+pub const THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO: f64 = 0.35;
+pub const THEME_LOGO_ACCENT_BANNER_SECONDARY_LIGHTEN_RATIO: f64 = 0.25;
+
+// UI Color constants
+pub const THEME_COLOR_WHITE_RED: u8 = 0xFF;
+pub const THEME_COLOR_WHITE_GREEN: u8 = 0xFF;
+pub const THEME_COLOR_WHITE_BLUE: u8 = 0xFF;
+pub const THEME_MIX_RATIO_MIN: f64 = 0.0;
+pub const THEME_MIX_RATIO_MAX: f64 = 1.0;
+pub const THEME_BLEND_CLAMP_MIN: f64 = 0.0;
+pub const THEME_BLEND_CLAMP_MAX: f64 = 255.0;
+
+// WCAG contrast algorithm constants
+pub const THEME_RELATIVE_LUMINANCE_CUTOFF: f64 = 0.03928;
+pub const THEME_RELATIVE_LUMINANCE_LOW_FACTOR: f64 = 12.92;
+pub const THEME_RELATIVE_LUMINANCE_OFFSET: f64 = 0.055;
+pub const THEME_RELATIVE_LUMINANCE_EXPONENT: f64 = 2.4;
+pub const THEME_CONTRAST_RATIO_OFFSET: f64 = 0.05;
+pub const THEME_RED_LUMINANCE_COEFFICIENT: f64 = 0.2126;
+pub const THEME_GREEN_LUMINANCE_COEFFICIENT: f64 = 0.7152;
+pub const THEME_BLUE_LUMINANCE_COEFFICIENT: f64 = 0.0722;
+pub const THEME_LUMINANCE_LIGHTEN_RATIO: f64 = 0.2;
