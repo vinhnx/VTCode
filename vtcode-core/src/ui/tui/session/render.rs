@@ -50,19 +50,23 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     // Handle deferred file browser trigger (after slash modal dismisses)
     if session.deferred_file_browser_trigger {
         session.deferred_file_browser_trigger = false;
-        // Insert @ to trigger file browser now that slash modal is gone
-        session.input_manager.insert_char('@');
-        session.check_file_reference_trigger();
-        session.mark_dirty(); // Ensure UI updates
+        if session.input_enabled && session.modal.is_none() {
+            // Insert @ to trigger file browser now that slash modal is gone
+            session.input_manager.insert_char('@');
+            session.check_file_reference_trigger();
+            session.mark_dirty(); // Ensure UI updates
+        }
     }
 
     // Handle deferred prompt browser trigger (after slash modal dismisses)
     if session.deferred_prompt_browser_trigger {
         session.deferred_prompt_browser_trigger = false;
-        // Insert # to trigger prompt browser now that slash modal is gone
-        session.input_manager.insert_char('#');
-        session.check_prompt_reference_trigger();
-        session.mark_dirty(); // Ensure UI updates
+        if session.input_enabled && session.modal.is_none() {
+            // Insert # to trigger prompt browser now that slash modal is gone
+            session.input_manager.insert_char('#');
+            session.check_prompt_reference_trigger();
+            session.mark_dirty(); // Ensure UI updates
+        }
     }
 
     // Pull any newly forwarded log entries before layout calculations
@@ -99,7 +103,6 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     apply_view_rows(session, transcript_area.height);
 
     // Render components
-    let header_lines = session.header_lines();
     session.render_header(frame, header_area, &header_lines);
     if session.show_logs {
         let split = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
@@ -396,7 +399,8 @@ pub fn render_config_palette(session: &mut Session, frame: &mut Frame<'_>, viewp
         .collect();
 
     let width_hint = 70u16;
-    let modal_height = (items.len() * 2 + 2).min(viewport.height as usize - 4);
+    let max_height = viewport.height.saturating_sub(4) as usize;
+    let modal_height = (items.len() * 2 + 2).min(max_height);
     let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
