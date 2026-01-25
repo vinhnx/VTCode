@@ -179,6 +179,7 @@ pub mod health; // Pre-emptively exporting for next step
 pub mod optimized_registry;
 pub mod output_spooler;
 pub mod parallel_executor; // Pre-emptively exporting for next step
+pub mod request_response;
 
 // Production-grade improvements modules
 pub mod async_middleware;
@@ -233,6 +234,7 @@ pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
 };
+pub use request_response::{ToolCallRequest, ToolCallResponse};
 pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
 pub use smart_cache::{CachedResult as SmartCachedResult, SmartResultCache};
 pub use tool_effectiveness::{

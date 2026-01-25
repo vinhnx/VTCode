@@ -20,41 +20,6 @@ impl ResumeSession {
         self.history.len()
     }
 
-    /// Create a new ResumeSession with optimized history allocation
-    /// If the history vector can be reused (e.g., from a previous session),
-    /// it will be used instead of creating a new one
-    #[allow(dead_code)]
-    pub fn new_optimized(
-        identifier: String,
-        snapshot: SessionSnapshot,
-        history: Vec<ProviderMessage>,
-        path: PathBuf,
-        is_fork: bool,
-    ) -> Self {
-        Self {
-            identifier,
-            snapshot,
-            history,
-            path,
-            is_fork,
-        }
-    }
-
-    /// Create a new ResumeSession by reusing an existing one's history
-    /// This avoids allocating a new Vec and copies only the necessary data
-    #[allow(dead_code)]
-    pub fn from_existing_with_history(
-        existing: &ResumeSession,
-        new_history: Vec<ProviderMessage>,
-    ) -> Self {
-        Self {
-            identifier: existing.identifier.clone(),
-            snapshot: existing.snapshot.clone(),
-            history: new_history,
-            path: existing.path.clone(),
-            is_fork: existing.is_fork,
-        }
-    }
 }
 
 pub async fn run_single_agent_loop(
@@ -84,18 +49,6 @@ pub async fn run_single_agent_loop(
         resume,
     );
     driver.drive_turn(params).await
-}
-
-#[allow(dead_code)]
-pub fn is_context_overflow_error(message: &str) -> bool {
-    let lower = message.to_lowercase();
-    lower.contains("context length")
-        || lower.contains("context window")
-        || lower.contains("maximum context")
-        || lower.contains("model is overloaded")
-        || lower.contains("reduce the amount")
-        || lower.contains("token limit")
-        || lower.contains("503")
 }
 
 pub fn apply_runtime_overrides(vt_cfg: Option<&mut VTCodeConfig>, runtime_cfg: &CoreAgentConfig) {

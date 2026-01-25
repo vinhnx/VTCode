@@ -375,18 +375,15 @@ pub fn should_enrich_prompt(prompt: &str, vt_cfg: Option<&VTCodeConfig>) -> bool
 /// Orchestrator that ties together all vibe coding components
 pub struct PromptEnricher {
     /// Entity resolver for fuzzy matching
-    #[allow(dead_code)]
     entity_resolver: Arc<RwLock<EntityResolver>>,
 
     /// Workspace state tracker
-    #[allow(dead_code)]
     workspace_state: Arc<RwLock<WorkspaceState>>,
 
     /// Conversation memory for pronoun resolution
-    #[allow(dead_code)]
     conversation_memory: Arc<RwLock<ConversationMemory>>,
 
-    /// Proactive context gatherer
+    /// Proactive context gatherer (planned for Phase 3 integration)
     #[allow(dead_code)]
     proactive_gatherer: Arc<ProactiveGatherer>,
 

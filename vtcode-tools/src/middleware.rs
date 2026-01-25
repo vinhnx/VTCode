@@ -4,25 +4,15 @@
 //! tool calls with observability and error recovery.
 
 use async_trait::async_trait;
-use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use vtcode_core::tools::{ToolCallRequest, ToolCallResponse};
 
 /// Request context flowing through middleware.
-#[derive(Clone, Debug)]
-pub struct ToolRequest {
-    pub tool_name: String,
-    pub args: Arc<Value>,
-    pub metadata: std::collections::HashMap<String, String>,
-}
+pub type ToolRequest = ToolCallRequest;
 
 /// Response from tool execution.
-#[derive(Clone, Debug)]
-pub struct ToolResponse {
-    pub result: Arc<Value>,
-    pub duration_ms: u64,
-    pub cache_hit: bool,
-}
+pub type ToolResponse = ToolCallResponse;
 
 /// Middleware trait for intercepting tool execution.
 #[async_trait]
@@ -119,9 +109,11 @@ impl Middleware for LoggingMiddleware {
     }
 
     async fn after_execute(&self, req: &ToolRequest, res: &ToolResponse) -> anyhow::Result<()> {
+        let duration_ms = res.duration_ms.unwrap_or(0);
+        let cache_hit = res.cache_hit.unwrap_or(false);
         eprintln!(
             "[{}] Completed: {} ({}ms, cache_hit={})",
-            self.name, req.tool_name, res.duration_ms, res.cache_hit
+            self.name, req.tool_name, duration_ms, cache_hit
         );
         Ok(())
     }
@@ -182,9 +174,9 @@ impl Middleware for MetricsMiddleware {
     async fn after_execute(&self, _: &ToolRequest, res: &ToolResponse) -> anyhow::Result<()> {
         self.successful_calls.fetch_add(1, Ordering::Relaxed);
         self.total_duration_ms
-            .fetch_add(res.duration_ms, Ordering::Relaxed);
+            .fetch_add(res.duration_ms.unwrap_or(0), Ordering::Relaxed);
 
-        if res.cache_hit {
+        if res.cache_hit.unwrap_or(false) {
             self.cache_hits.fetch_add(1, Ordering::Relaxed);
         }
 
@@ -212,6 +204,7 @@ impl Default for MetricsMiddleware {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
 
     #[tokio::test]
     async fn test_chain_execution() {
@@ -220,17 +213,21 @@ mod tests {
             .add(MetricsMiddleware::new());
 
         let req = ToolRequest {
+            id: "req-1".to_string(),
             tool_name: "test_tool".to_string(),
-            args: Arc::new(Value::Null),
-            metadata: Default::default(),
+            args: Value::Null,
+            metadata: Some(Default::default()),
         };
 
         chain.before_execute(&req).await.unwrap();
 
         let res = ToolResponse {
-            result: Arc::new(Value::Null),
-            duration_ms: 100,
-            cache_hit: false,
+            id: "req-1".to_string(),
+            success: true,
+            result: Some(Value::Null),
+            error: None,
+            duration_ms: Some(100),
+            cache_hit: Some(false),
         };
 
         chain.after_execute(&req, &res).await.unwrap();
@@ -242,17 +239,21 @@ mod tests {
         let chain = MiddlewareChain::new().add(metrics.clone());
 
         let req = ToolRequest {
+            id: "req-2".to_string(),
             tool_name: "test".to_string(),
-            args: Arc::new(Value::Null),
-            metadata: Default::default(),
+            args: Value::Null,
+            metadata: Some(Default::default()),
         };
 
-        for _ in 0..5 {
+        for i in 0..5 {
             chain.before_execute(&req).await.unwrap();
             let res = ToolResponse {
-                result: Arc::new(Value::Null),
-                duration_ms: 10,
-                cache_hit: true,
+                id: format!("req-2-{}", i),
+                success: true,
+                result: Some(Value::Null),
+                error: None,
+                duration_ms: Some(10),
+                cache_hit: Some(true),
             };
             chain.after_execute(&req, &res).await.unwrap();
         }

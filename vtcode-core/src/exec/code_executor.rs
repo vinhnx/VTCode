@@ -276,6 +276,8 @@ impl CodeExecutor {
                             success: false,
                             result: None,
                             error: Some(format!("PII processing error: {}", e)),
+                            duration_ms: None,
+                            cache_hit: None,
                         };
                         ipc_handler.write_response(response).await?;
                         continue;
@@ -293,6 +295,8 @@ impl CodeExecutor {
                                 success: true,
                                 result: Some(result),
                                 error: None,
+                                duration_ms: None,
+                                cache_hit: None,
                             }
                         }
                         Err(e) => {
@@ -306,6 +310,8 @@ impl CodeExecutor {
                                 success: false,
                                 result: None,
                                 error: Some(e.to_string()),
+                                duration_ms: None,
+                                cache_hit: None,
                             }
                         }
                     };

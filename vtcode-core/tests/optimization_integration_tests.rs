@@ -10,6 +10,7 @@ use vtcode_core::llm::optimized_client::OptimizedLLMClient;
 use vtcode_core::tools::async_pipeline::{
     AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest,
 };
+use vtcode_core::tools::ToolCallRequest;
 use vtcode_core::tools::optimized_registry::{OptimizedToolRegistry, ToolMetadata};
 
 #[tokio::test]
@@ -80,9 +81,12 @@ async fn test_async_tool_pipeline() -> Result<()> {
     let mut request_ids = Vec::new();
     for i in 0..10 {
         let request = ToolRequest {
-            id: format!("test_request_{}", i),
-            tool_name: "test_tool".to_string(),
-            args: serde_json::json!({"index": i}),
+            call: ToolCallRequest {
+                id: format!("test_request_{}", i),
+                tool_name: "test_tool".to_string(),
+                args: serde_json::json!({"index": i}),
+                metadata: None,
+            },
             priority: ExecutionPriority::Normal,
             timeout: Duration::from_secs(5),
             context: ExecutionContext {
@@ -203,9 +207,12 @@ async fn test_optimization_integration() -> Result<()> {
 
     // 4. Submit request through pipeline
     let request = ToolRequest {
-        id: "integration_test_request".to_string(),
-        tool_name: "integration_test".to_string(),
-        args: serde_json::json!({}),
+        call: ToolCallRequest {
+            id: "integration_test_request".to_string(),
+            tool_name: "integration_test".to_string(),
+            args: serde_json::json!({}),
+            metadata: None,
+        },
         priority: ExecutionPriority::High,
         timeout: Duration::from_secs(1),
         context: ExecutionContext {
@@ -260,9 +267,12 @@ async fn test_performance_under_load() -> Result<()> {
     let mut handles = Vec::new();
     for i in 0..100 {
         let request = ToolRequest {
-            id: format!("load_test_{}", i),
-            tool_name: format!("load_test_tool_{}", i % 20),
-            args: serde_json::json!({"iteration": i}),
+            call: ToolCallRequest {
+                id: format!("load_test_{}", i),
+                tool_name: format!("load_test_tool_{}", i % 20),
+                args: serde_json::json!({"iteration": i}),
+                metadata: None,
+            },
             priority: if i % 10 == 0 {
                 ExecutionPriority::High
             } else {

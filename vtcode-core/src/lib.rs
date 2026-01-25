@@ -127,7 +127,6 @@ pub mod acp;
 #[cfg(feature = "anthropic-api")]
 pub mod anthropic_api;
 pub mod audit;
-pub mod bash_runner;
 pub mod cache; // Unified caching system
 pub mod cli;
 pub mod code;
@@ -173,7 +172,7 @@ pub mod utils;
 
 // New MCP enhancement modules
 // Re-exports for convenience
-pub use bash_runner::BashRunner;
+pub use vtcode_bash_runner::BashRunner;
 pub use cli::args::{Cli, Commands};
 pub use code::code_completion::{CompletionEngine, CompletionSuggestion};
 pub use commands::stats::handle_stats_command;

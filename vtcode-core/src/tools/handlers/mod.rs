@@ -19,7 +19,7 @@
 //!
 //! - [`apply_patch_handler`]: Apply patch tool implementation
 //! - [`shell_handler`]: Shell command execution
-//! - [`read_file_handler`]: File reading with line ranges
+//! - [`read_file`]: File reading with line ranges
 //! - [`grep_files_handler`]: Pattern search across files
 //! - [`list_dir_handler`]: Directory listing
 //!
@@ -59,7 +59,6 @@ pub mod grep_files_handler;
 pub mod list_dir_handler;
 pub mod plan_mode;
 pub mod read_file;
-pub mod read_file_handler;
 pub mod shell_handler;
 pub mod spawn_subagent;
 
@@ -123,8 +122,6 @@ pub use turn_diff_tracker::{
     FileChange as DiffFileChange, SharedTurnDiffTracker, TurnDiffTracker, new_shared_tracker,
 };
 
-// Read file handler
-pub use read_file_handler::{FileMetadata, ReadFileArgs, ReadFileHandler, create_read_file_tool};
 
 // Router
 pub use router::{

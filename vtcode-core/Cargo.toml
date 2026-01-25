@@ -130,6 +130,7 @@ vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.70.1" }
 vtcode-config = { path = "../vtcode-config", version = "0.70.1" }
 vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.70.1" }
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.70.1" }
+vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.70.1" }
 
 # Schema generation
 schemars = { workspace = true, optional = true }

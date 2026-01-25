@@ -169,13 +169,10 @@ impl AgentRunner {
                 Self::print_compact_response(&self.agent_type, &aggregated_text, self.quiet);
                 if !self.quiet {
                     println!(
-                        "{} {}",
+                        "{} {} {}",
                         agent_prefix,
-                        format!(
-                            "{} {}",
-                            style("(ASSISTANT)").green().bold(),
-                            aggregated_text.trim()
-                        )
+                        style("(ASSISTANT)").green().bold(),
+                        aggregated_text.trim()
                     );
                 }
             } else if agent_message_streamed {
