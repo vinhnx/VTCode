@@ -237,13 +237,10 @@ impl AgentRunner {
                     .await?;
 
                 self.runner_println(format_args!(
-                    "{} {}",
+                    "{} {} {} received response, processing...",
                     agent_prefix,
-                    format!(
-                        "{} {} received response, processing...",
-                        self.agent_type,
-                        style("(RECV)").green().bold()
-                    )
+                    self.agent_type,
+                    style("(RECV)").green().bold()
                 ));
 
                 if !resp_summary.reasoning_recorded
@@ -270,13 +267,10 @@ impl AgentRunner {
                         self.quiet,
                     );
                     self.runner_println(format_args!(
-                        "{} {}",
+                        "{} {} {}",
                         agent_prefix,
-                        format!(
-                            "{} {}",
-                            style("(ASSISTANT)").green().bold(),
-                            resp_summary.content.trim()
-                        )
+                        style("(ASSISTANT)").green().bold(),
+                        resp_summary.content.trim()
                     ));
                 }
 

@@ -81,7 +81,7 @@ impl Session {
     }
 
     #[allow(dead_code)]
-    fn render_message_spans(&self, index: usize) -> Vec<Span<'static>> {
+    pub(crate) fn render_message_spans(&self, index: usize) -> Vec<Span<'static>> {
         let Some(line) = self.lines.get(index) else {
             return vec![Span::raw(String::new())];
         };

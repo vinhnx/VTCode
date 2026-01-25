@@ -12,7 +12,7 @@ impl Session {
     }
 
     #[allow(dead_code)]
-    fn force_view_rows(&mut self, rows: u16) {
+    pub(crate) fn force_view_rows(&mut self, rows: u16) {
         self.apply_view_rows(rows);
     }
 

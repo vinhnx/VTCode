@@ -88,7 +88,7 @@ impl ConfigBuilder {
         Ok(manager)
     }
 
-    fn insert_dotted_key(table: &mut toml::Table, key: &str, value: toml::Value) {
+    pub(crate) fn insert_dotted_key(table: &mut toml::Table, key: &str, value: toml::Value) {
         let parts: Vec<&str> = key.split('.').collect();
         let mut current = table;
         for (i, part) in parts.iter().enumerate() {

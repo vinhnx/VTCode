@@ -321,11 +321,11 @@ mod memory_integration {
         use std::time::Instant;
 
         // Before optimization: 10,000 capacity
-        let mut cache_before: UnifiedCache<MemKey, String> =
+        let cache_before: UnifiedCache<MemKey, String> =
             UnifiedCache::new(10_000, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         // After optimization: 1,000 capacity
-        let mut cache_after: UnifiedCache<MemKey, String> =
+        let cache_after: UnifiedCache<MemKey, String> =
             UnifiedCache::new(1_000, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         // Insert test

@@ -169,6 +169,7 @@ mod tests {
     use super::*;
     use crate::config::TimeoutsConfig;
     use crate::tools::registry::mcp_helpers::normalize_mcp_tool_identifier;
+    use crate::constants::tools;
     use anyhow::Result;
     use async_trait::async_trait;
     use serde_json::Value;

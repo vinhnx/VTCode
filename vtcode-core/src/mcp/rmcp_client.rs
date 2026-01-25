@@ -598,7 +598,7 @@ impl ClientHandler for LoggingClientHandler {
     }
 }
 
-fn build_elicitation_validator(provider: &str, schema: &Value) -> Option<Validator> {
+pub(crate) fn build_elicitation_validator(provider: &str, schema: &Value) -> Option<Validator> {
     if schema.is_null() {
         return None;
     }
@@ -616,7 +616,7 @@ fn build_elicitation_validator(provider: &str, schema: &Value) -> Option<Validat
     }
 }
 
-fn validate_elicitation_payload(
+pub(crate) fn validate_elicitation_payload(
     provider: &str,
     validator: Option<&Validator>,
     action: &ElicitationAction,
@@ -660,7 +660,7 @@ fn validate_elicitation_payload(
     Ok(())
 }
 
-fn directory_to_file_uri(path: &Path) -> Option<String> {
+pub(crate) fn directory_to_file_uri(path: &Path) -> Option<String> {
     Url::from_directory_path(path)
         .ok()
         .map(|url| url.to_string())

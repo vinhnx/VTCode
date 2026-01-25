@@ -1,4 +1,5 @@
 use super::*;
+use vtcode_config::models::openrouter_generated;
 use crate::config::constants::models;
 
 #[test]
@@ -208,7 +209,7 @@ fn test_model_from_string() {
     );
     // Moonshot models are deprecated; use OpenRouter variants instead
     for entry in openrouter_generated::ENTRIES {
-        assert_eq!(entry.id.parse::<ModelId>().unwrap(), entry.variant);
+        assert_eq!(entry.id.parse::<ModelId>().unwrap().as_str(), entry.variant.as_str());
     }
     // Invalid model
     assert!("invalid-model".parse::<ModelId>().is_err());
@@ -277,7 +278,7 @@ fn test_model_providers() {
     );
 
     for entry in openrouter_generated::ENTRIES {
-        assert_eq!(entry.variant.provider(), Provider::OpenRouter);
+        assert_eq!(entry.variant.provider().to_string(), Provider::OpenRouter.to_string());
     }
 }
 
@@ -544,7 +545,8 @@ fn test_models_for_provider() {
 
     let openrouter_models = ModelId::models_for_provider(Provider::OpenRouter);
     for entry in openrouter_generated::ENTRIES {
-        assert!(openrouter_models.contains(&entry.variant));
+        let local_variant = entry.variant.as_str().parse::<ModelId>().unwrap();
+        assert!(openrouter_models.contains(&local_variant));
     }
 
     let xai_models = ModelId::models_for_provider(Provider::XAI);

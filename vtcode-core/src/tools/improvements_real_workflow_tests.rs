@@ -4,7 +4,7 @@
 //! in practical scenarios matching real VT Code usage.
 
 #![allow(deprecated)]
-#![allow(clippy::deprecated)]
+
 #[cfg(test)]
 #[allow(deprecated)]
 mod real_workflow_tests {

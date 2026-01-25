@@ -1,4 +1,5 @@
 use super::*;
+use crate::llm::provider::tool::sanitize_tool_description;
 use serde_json::json;
 
 #[test]
