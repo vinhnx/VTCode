@@ -1,6 +1,7 @@
 mod command_utils;
 mod formatting;
 mod manager;
+mod manager_utils;
 mod scrollback;
 mod session;
 mod types;
