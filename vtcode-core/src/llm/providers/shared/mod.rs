@@ -100,6 +100,33 @@ pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCal
     if calls.is_empty() { None } else { Some(calls) }
 }
 
+pub fn parse_openai_tool_calls(calls: &[Value]) -> Vec<ToolCall> {
+    calls
+        .iter()
+        .filter_map(|call| {
+            let id = call.get("id").and_then(|v| v.as_str())?;
+            let function = call.get("function")?;
+            let name = function.get("name").and_then(|v| v.as_str())?;
+            let arguments = function.get("arguments");
+            let serialized = arguments.map_or_else(
+                || "{}".to_string(),
+                |value| {
+                    if value.is_string() {
+                        value.as_str().unwrap_or("").to_string()
+                    } else {
+                        value.to_string()
+                    }
+                },
+            );
+            Some(ToolCall::function(
+                id.to_string(),
+                name.to_string(),
+                serialized,
+            ))
+        })
+        .collect()
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum StreamFragment {
     Content(String),
