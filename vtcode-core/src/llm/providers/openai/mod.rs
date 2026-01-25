@@ -26,8 +26,13 @@
 //! ```
 
 pub mod errors;
+pub mod message_parser;
 pub mod responses_api;
+pub mod request_builder;
+pub mod response_parser;
 pub mod streaming;
+pub mod stream_decoder;
+pub mod tool_serialization;
 pub mod types;
 
 // Main provider implementation

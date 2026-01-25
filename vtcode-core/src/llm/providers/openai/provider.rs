@@ -15,12 +15,10 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{self, LLMProvider};
-use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
-use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
@@ -49,19 +47,18 @@ use super::errors::{
 use super::responses_api::{
     build_codex_responses_payload, build_standard_responses_payload, parse_responses_payload,
 };
-use super::streaming::OpenAIStreamTelemetry;
+use super::message_parser;
+use super::request_builder;
+use super::response_parser;
+use super::stream_decoder;
+use super::tool_serialization;
 use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload, ResponsesApiState};
 
 use super::super::{
-    ReasoningBuffer,
     common::{
         extract_prompt_cache_settings, override_base_url, parse_client_prompt_common, resolve_model,
     },
     extract_reasoning_trace,
-    shared::{
-        StreamAssemblyError, StreamTelemetry, append_reasoning_segments, extract_data_payload,
-        find_sse_boundary,
-    },
 };
 use crate::prompts::system::default_system_prompt;
 
@@ -76,221 +73,10 @@ pub struct OpenAIProvider {
 }
 
 impl OpenAIProvider {
-    fn serialize_tools(&self, tools: &[provider::ToolDefinition]) -> Option<Value> {
-        if tools.is_empty() {
-            return None;
-        }
-
-        let mut seen_names = std::collections::HashSet::new();
-        let serialized_tools = tools
-            .iter()
-            .filter_map(|tool| {
-                // Use function name when present, otherwise tool type to dedupe apply_patch duplicates
-                let canonical_name = tool
-                    .function
-                    .as_ref()
-                    .map(|f| f.name.as_str())
-                    .unwrap_or(tool.tool_type.as_str());
-                if !seen_names.insert(canonical_name.to_string()) {
-                    return None;
-                }
-
-                Some(match tool.tool_type.as_str() {
-                    "function" => {
-                        let func = tool.function.as_ref()?;
-                        let name = &func.name;
-                        let description = &func.description;
-                        let parameters = &func.parameters;
-
-                        json!({
-                            "type": &tool.tool_type,
-                            "name": name,
-                            "description": description,
-                            "parameters": parameters,
-                            "function": {
-                                "name": name,
-                                "description": description,
-                                "parameters": parameters,
-                            }
-                        })
-                    }
-                    "apply_patch" | "shell" | "custom" | "grammar" => {
-                        // For GPT-5.x models, use native tool types directly
-                        // For other models, normalize to function type for compatibility
-                        if Self::is_gpt5_or_newer(&self.model) {
-                            json!(tool)
-                        } else if let Some(func) = &tool.function {
-                            // Normalize to function type for non-GPT-5.x models
-                            json!({
-                                "type": "function",
-                                "function": {
-                                    "name": func.name,
-                                    "description": func.description,
-                                    "parameters": func.parameters
-                                }
-                            })
-                        } else {
-                            return None;
-                        }
-                    }
-                    _ => {
-                        // Fallback for unknown tool types
-                        json!(tool)
-                    }
-                })
-            })
-            .collect::<Vec<Value>>();
-
-        Some(Value::Array(serialized_tools))
-    }
-
-    /// Serialize tools for the Responses API format (used by GPT-5.1 Codex models)
-    /// Per OpenAI documentation (see GIT_TOOL example):
-    /// - Function tools use FLAT format: {"type": "function", "name": "...", "description": "...", "parameters": {...}}
-    /// - Built-in tools like apply_patch use: {"type": "apply_patch"} (no other fields)
-    ///   Note: Cannot have both built-in apply_patch AND a function named "apply_patch"
-    fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Option<Value> {
-        if tools.is_empty() {
-            return None;
-        }
-
-        let mut seen_names = std::collections::HashSet::new();
-        let serialized_tools = tools
-            .iter()
-            .filter_map(|tool| {
-                match tool.tool_type.as_str() {
-                    "function" => {
-                        let func = tool.function.as_ref()?;
-                        if !seen_names.insert(func.name.clone()) {
-                            return None;
-                        }
-                        // GPT-5.1 Codex uses FLAT function format (name at top level)
-                        Some(json!({
-                            "type": "function",
-                            "name": &func.name,
-                            "description": &func.description,
-                            "parameters": &func.parameters
-                        }))
-                    }
-                    "apply_patch" => {
-                        // GPT-5.2 Responses API does not accept apply_patch type; serialize as function
-                        let name = tool
-                            .function
-                            .as_ref()
-                            .map(|f| f.name.as_str())
-                            .unwrap_or("apply_patch");
-                        if !seen_names.insert(name.to_string()) {
-                            return None;
-                        }
-                        if let Some(func) = tool.function.as_ref() {
-                            Some(json!({
-                                "type": "function",
-                                "name": &func.name,
-                                "description": &func.description,
-                                "parameters": &func.parameters
-                            }))
-                        } else {
-                            Some(json!({
-                                "type": "function",
-                                "name": "apply_patch",
-                                "description": "Apply VT Code patches. Use format: *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++).",
-                                "parameters": json!({
-                                    "type": "object",
-                                    "properties": {
-                                        "input": { "type": "string", "description": "Patch in VT Code format" },
-                                        "patch": { "type": "string", "description": "Alias for input" }
-                                    },
-                                    "anyOf": [
-                                        {"required": ["input"]},
-                                        {"required": ["patch"]}
-                                    ]
-                                })
-                            }))
-                        }
-                    }
-                    "shell" => {
-                        // For shell, treat as function tool with flat format
-                        tool.function.as_ref().map(|func| json!({
-                                "type": "function",
-                                "name": &func.name,
-                                "description": &func.description,
-                                "parameters": &func.parameters
-                            }))
-                    }
-                    "custom" => {
-                        // GPT-5 custom tool - use custom format
-                        if let Some(func) = &tool.function {
-                            if !seen_names.insert(func.name.clone()) {
-                                return None;
-                            }
-                            Some(json!({
-                                "type": "custom",
-                                "name": &func.name,
-                                "description": &func.description,
-                                "format": func.parameters.get("format")
-                            }))
-                        } else {
-                            None
-                        }
-                    }
-                    "grammar" => {
-                        let name = tool
-                            .function
-                            .as_ref()
-                            .map(|f| f.name.as_str())
-                            .unwrap_or("apply_patch_grammar");
-                        if !seen_names.insert(name.to_string()) {
-                            return None;
-                        }
-                        tool.grammar.as_ref().map(|grammar| json!({
-                                "type": "custom",
-                                "name": "apply_patch_grammar",
-                                "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool.",
-                                "format": {
-                                    "type": "grammar",
-                                    "syntax": &grammar.syntax,
-                                    "definition": &grammar.definition
-                                }
-                            }))
-                    }
-                    _ => {
-                        // Unknown tool type - treat as function tool with flat format
-                        if let Some(func) = &tool.function {
-                            if !seen_names.insert(func.name.clone()) {
-                                return None;
-                            }
-                            Some(json!({
-                                "type": "function",
-                                "name": &func.name,
-                                "description": &func.description,
-                                "parameters": &func.parameters
-                            }))
-                        } else {
-                            None
-                        }
-                    }
-                }
-            })
-            .collect::<Vec<Value>>();
-
-        Some(Value::Array(serialized_tools))
-    }
-
     fn is_gpt5_codex_model(model: &str) -> bool {
         model == models::openai::GPT_5_CODEX
             || model == models::openai::GPT_5_1_CODEX
             || model == models::openai::GPT_5_1_CODEX_MAX
-    }
-
-    /// Check if model is GPT-5 or newer (supports native apply_patch, shell, custom tool types)
-    fn is_gpt5_or_newer(model: &str) -> bool {
-        let normalized = model.to_lowercase();
-        normalized.contains("gpt-5")
-            || normalized.contains("gpt5")
-            || normalized.contains("o1")
-            || normalized.contains("o3")
-            || normalized.contains("o4")
-            || Self::is_gpt5_codex_model(model)
     }
 
     fn is_responses_api_model(model: &str) -> bool {
@@ -640,356 +426,24 @@ impl OpenAIProvider {
     }
 
     fn parse_client_prompt(&self, prompt: &str) -> provider::LLMRequest {
-        parse_client_prompt_common(prompt, &self.model, |value| self.parse_chat_request(value))
-    }
-
-    fn parse_chat_request(&self, value: &Value) -> Option<provider::LLMRequest> {
-        let messages_value = value.get("messages")?.as_array()?;
-        let mut system_prompt = None;
-        let mut messages = Vec::with_capacity(messages_value.len());
-
-        for entry in messages_value {
-            let role = entry
-                .get("role")
-                .and_then(|r| r.as_str())
-                .unwrap_or(crate::config::constants::message_roles::USER);
-            let content = entry.get("content");
-            let text_content = content.map(Self::extract_content_text).unwrap_or_default();
-
-            match role {
-                "system" => {
-                    if system_prompt.is_none() && !text_content.is_empty() {
-                        system_prompt = Some(text_content);
-                    }
-                }
-                "assistant" => {
-                    let tool_calls = entry
-                        .get("tool_calls")
-                        .and_then(|tc| tc.as_array())
-                        .map(|calls| {
-                            calls
-                                .iter()
-                                .filter_map(|call| {
-                                    let id = call.get("id").and_then(|v| v.as_str())?;
-                                    let function = call.get("function")?;
-                                    let name = function.get("name").and_then(|v| v.as_str())?;
-                                    let arguments = function.get("arguments");
-                                    let serialized = arguments.map_or("{}".to_owned(), |value| {
-                                        if value.is_string() {
-                                            value.as_str().unwrap_or("").to_string()
-                                        } else {
-                                            value.to_string()
-                                        }
-                                    });
-                                    Some(provider::ToolCall::function(
-                                        id.to_string(),
-                                        name.to_string(),
-                                        serialized,
-                                    ))
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .filter(|calls| !calls.is_empty());
-
-                    let message = if let Some(calls) = tool_calls {
-                        provider::Message::assistant_with_tools(text_content, calls)
-                    } else {
-                        provider::Message::assistant(text_content)
-                    };
-                    messages.push(message);
-                }
-                "tool" => {
-                    let tool_call_id = entry
-                        .get("tool_call_id")
-                        .and_then(|id| id.as_str())
-                        .map(|s| s.to_string());
-                    let content_value = entry
-                        .get("content")
-                        .map(|value| {
-                            if text_content.is_empty() {
-                                value.to_string()
-                            } else {
-                                text_content.clone()
-                            }
-                        })
-                        .unwrap_or_else(|| text_content.clone());
-                    messages.push(if let Some(id) = tool_call_id {
-                        provider::Message::tool_response(id, content_value)
-                    } else {
-                        // Fallback: create a tool message without tool_call_id (invalid but graceful)
-                        provider::Message {
-                            role: provider::MessageRole::Tool,
-                            content: provider::MessageContent::Text(content_value),
-                            reasoning: None,
-                            reasoning_details: None,
-                            tool_calls: None,
-                            tool_call_id: None,
-                            origin_tool: None,
-                        }
-                    });
-                }
-                _ => {
-                    messages.push(provider::Message::user(text_content));
-                }
-            }
-        }
-
-        if messages.is_empty() {
-            return None;
-        }
-
-        let tools = value.get("tools").and_then(|tools_value| {
-            let tools_array = tools_value.as_array()?;
-            let converted: Vec<_> = tools_array
-                .iter()
-                .filter_map(|tool| {
-                    let function = tool.get("function")?;
-                    let name = function.get("name").and_then(|n| n.as_str())?;
-                    let description = function
-                        .get("description")
-                        .and_then(|d| d.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let parameters = function
-                        .get("parameters")
-                        .cloned()
-                        .unwrap_or_else(|| json!({}));
-                    Some(provider::ToolDefinition::function(
-                        name.to_string(),
-                        description,
-                        parameters,
-                    ))
-                })
-                .collect();
-
-            if converted.is_empty() {
-                None
-            } else {
-                Some(converted)
-            }
-        });
-        let temperature = value
-            .get("temperature")
-            .and_then(|v| v.as_f64())
-            .map(|v| v as f32);
-        let stream = value
-            .get("stream")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        let tool_choice = value.get("tool_choice").and_then(Self::parse_tool_choice);
-        let _parallel_tool_calls = value.get("parallel_tool_calls").and_then(|v| v.as_bool());
-        let _reasoning_effort = value
-            .get("reasoning_effort")
-            .and_then(|v| v.as_str())
-            .and_then(ReasoningEffortLevel::parse)
-            .or_else(|| {
-                value
-                    .get("reasoning")
-                    .and_then(|r| r.get("effort"))
-                    .and_then(|effort| effort.as_str())
-                    .and_then(ReasoningEffortLevel::parse)
-            });
-
-        let model = value
-            .get("model")
-            .and_then(|m| m.as_str())
-            .unwrap_or(&self.model)
-            .to_string();
-
-        Some(provider::LLMRequest {
-            messages,
-            system_prompt,
-            tools,
-            model,
-            temperature,
-            stream,
-            tool_choice,
-            ..Default::default()
+        parse_client_prompt_common(prompt, &self.model, |value| {
+            message_parser::parse_chat_request(value, &self.model)
         })
-    }
-
-    fn extract_content_text(content: &Value) -> String {
-        match content {
-            Value::String(text) => text.to_string(),
-            Value::Array(parts) => parts
-                .iter()
-                .filter_map(|part| {
-                    part.get("text")
-                        .and_then(|t| t.as_str())
-                        .map(|s| s.to_string())
-                        .or_else(|| {
-                            part.get("content")
-                                .and_then(|c| c.as_str())
-                                .map(|s| s.to_string())
-                        })
-                })
-                .collect::<Vec<_>>()
-                .join(""),
-            _ => String::new(),
-        }
-    }
-
-    fn parse_tool_choice(choice: &Value) -> Option<provider::ToolChoice> {
-        match choice {
-            Value::String(value) => match value.as_str() {
-                "auto" => Some(provider::ToolChoice::auto()),
-                "none" => Some(provider::ToolChoice::none()),
-                "required" => Some(provider::ToolChoice::any()),
-                _ => None,
-            },
-            Value::Object(map) => {
-                let choice_type = map.get("type").and_then(|t| t.as_str())?;
-                match choice_type {
-                    "function" => map
-                        .get("function")
-                        .and_then(|f| f.get("name"))
-                        .and_then(|n| n.as_str())
-                        .map(|name| provider::ToolChoice::function(name.to_string())),
-                    "auto" => Some(provider::ToolChoice::auto()),
-                    "none" => Some(provider::ToolChoice::none()),
-                    "any" | "required" => Some(provider::ToolChoice::any()),
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
     }
 
     fn convert_to_openai_format(
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {
-        let mut messages = Vec::with_capacity(request.messages.len() + 1); // +1 for system prompt
-        let mut active_tool_call_ids: HashSet<String> = HashSet::with_capacity(16); // Typical tool call count
-
-        if let Some(system_prompt) = &request.system_prompt {
-            messages.push(json!({
-                "role": crate::config::constants::message_roles::SYSTEM,
-                "content": system_prompt
-            }));
-        }
-
-        for msg in &request.messages {
-            let role = msg.role.as_openai_str();
-            let mut message = json!({
-                "role": role,
-                "content": msg.content
-            });
-            let mut skip_message = false;
-
-            if msg.role == provider::MessageRole::Assistant
-                && let Some(tool_calls) = &msg.tool_calls
-                && !tool_calls.is_empty()
-            {
-                let tool_calls_json: Vec<Value> = tool_calls
-                    .iter()
-                    .filter_map(|tc| {
-                        tc.function.as_ref().map(|func| {
-                            active_tool_call_ids.insert(tc.id.clone());
-                            json!({
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": func.name,
-                                    "arguments": func.arguments
-                                }
-                            })
-                        })
-                    })
-                    .collect();
-
-                message["tool_calls"] = Value::Array(tool_calls_json);
-            }
-
-            if msg.role == provider::MessageRole::Tool {
-                match &msg.tool_call_id {
-                    Some(tool_call_id) if active_tool_call_ids.contains(tool_call_id) => {
-                        message["tool_call_id"] = Value::String(tool_call_id.clone());
-                        active_tool_call_ids.remove(tool_call_id);
-                    }
-                    Some(_) | None => {
-                        skip_message = true;
-                    }
-                }
-            }
-
-            if !skip_message {
-                messages.push(message);
-            }
-        }
-
-        if messages.is_empty() {
-            let formatted_error = error_display::format_llm_error("OpenAI", "No messages provided");
-            return Err(provider::LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
-
-        let mut openai_request = json!({
-            "model": request.model,
-            "messages": messages,
-            "stream": request.stream
-        });
-
-        let is_native_openai = self.base_url.contains("api.openai.com");
-        let _max_tokens_field = if !is_native_openai {
-            "max_tokens"
-        } else {
-            MAX_COMPLETION_TOKENS_FIELD
+        let ctx = request_builder::ChatRequestContext {
+            model: &self.model,
+            base_url: &self.base_url,
+            supports_tools: self.supports_tools(&request.model),
+            supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
+            supports_temperature: Self::supports_temperature_parameter(&request.model),
         };
 
-        if let Some(temperature) = request.temperature
-            && Self::supports_temperature_parameter(&request.model)
-        {
-            openai_request["temperature"] = json!(temperature);
-        }
-
-        if self.supports_tools(&request.model) {
-            if let Some(tools) = &request.tools
-                && let Some(serialized) = self.serialize_tools(tools)
-            {
-                openai_request["tools"] = serialized;
-
-                // Check if any tools are custom types - if so, disable parallel tool calls
-                // as per GPT-5 specification: "custom tool type does NOT support parallel tool calling"
-                let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
-                if has_custom_tool {
-                    // Override parallel tool calls to false if custom tools are present
-                    openai_request["parallel_tool_calls"] = Value::Bool(false);
-                }
-
-                // Only add tool_choice when tools are present
-                if let Some(tool_choice) = &request.tool_choice {
-                    openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
-                }
-
-                // Only set parallel tool calls if not overridden due to custom tools
-                if request.parallel_tool_calls.is_some()
-                    && openai_request.get("parallel_tool_calls").is_none()
-                {
-                    if let Some(parallel) = request.parallel_tool_calls {
-                        openai_request["parallel_tool_calls"] = Value::Bool(parallel);
-                    }
-                }
-
-                // Only add parallel_tool_config when tools are present
-                if self.supports_parallel_tool_config(&request.model) {
-                    if let Some(config) = &request.parallel_tool_config {
-                        if let Ok(config_value) = serde_json::to_value(config) {
-                            openai_request["parallel_tool_config"] = config_value;
-                        }
-                    }
-                }
-            }
-        }
-
-        // NOTE: The 'reasoning' parameter is NOT supported in Chat Completions API.
-        // It's only valid in the Responses API. Since this function builds Chat Completions
-        // requests, we explicitly skip adding the reasoning parameter here.
-        // Reasoning parameters are only added in convert_to_openai_responses_format().
-
-        Ok(openai_request)
+        request_builder::build_chat_request(request, &ctx)
     }
 
     fn convert_to_openai_responses_format(
@@ -1057,7 +511,7 @@ impl OpenAIProvider {
 
         if self.supports_tools(&request.model) {
             if let Some(tools) = &request.tools {
-                if let Some(serialized) = Self::serialize_tools_for_responses(tools) {
+                if let Some(serialized) = tool_serialization::serialize_tools_for_responses(tools) {
                     openai_request["tools"] = serialized;
 
                     // Check if any tools are custom types - if so, disable parallel tool calls
@@ -1183,158 +637,9 @@ impl OpenAIProvider {
         &self,
         response_json: Value,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
-        let choices = response_json
-            .get("choices")
-            .and_then(|c| c.as_array())
-            .ok_or_else(|| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    "Invalid response format: missing choices",
-                );
-                provider::LLMError::Provider {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
-
-        if choices.is_empty() {
-            let formatted_error =
-                error_display::format_llm_error("OpenAI", "No choices in response");
-            return Err(provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
-
-        let choice = &choices[0];
-        let message = choice.get("message").ok_or_else(|| {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                "Invalid response format: missing message",
-            );
-            provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
-
-        let content = match message.get("content") {
-            Some(Value::String(text)) => Some(text.to_string()),
-            Some(Value::Array(parts)) => {
-                let text = parts
-                    .iter()
-                    .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
-                    .collect::<Vec<_>>()
-                    .join("");
-                if text.is_empty() { None } else { Some(text) }
-            }
-            _ => None,
-        };
-
-        let tool_calls = message
-            .get("tool_calls")
-            .and_then(|tc| tc.as_array())
-            .map(|calls| {
-                calls
-                    .iter()
-                    .filter_map(|call| {
-                        let id = call.get("id").and_then(|v| v.as_str())?;
-                        let function = call.get("function")?;
-                        let name = function.get("name").and_then(|v| v.as_str())?;
-                        let arguments = function.get("arguments");
-                        let serialized = arguments.map_or("{}".to_string(), |value| {
-                            if value.is_string() {
-                                value.as_str().unwrap_or("").to_string()
-                            } else {
-                                value.to_string()
-                            }
-                        });
-                        Some(provider::ToolCall::function(
-                            id.to_string(),
-                            name.to_string(),
-                            serialized,
-                        ))
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .filter(|calls| !calls.is_empty());
-
-        let reasoning = message
-            .get("reasoning_content")
-            .and_then(extract_reasoning_trace)
-            .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
-            .or_else(|| {
-                choice
-                    .get("reasoning_content")
-                    .and_then(extract_reasoning_trace)
-            })
-            .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
-            .or_else(|| {
-                content.as_ref().and_then(|c| {
-                    let (reasoning_parts, _) = crate::llm::utils::extract_reasoning_content(c);
-                    if reasoning_parts.is_empty() {
-                        None
-                    } else {
-                        Some(reasoning_parts.join("\n\n"))
-                    }
-                })
-            });
-
-        let finish_reason = choice
-            .get("finish_reason")
-            .and_then(|fr| fr.as_str())
-            .map(|fr| match fr {
-                "stop" => crate::llm::provider::FinishReason::Stop,
-                "length" => crate::llm::provider::FinishReason::Length,
-                "tool_calls" => crate::llm::provider::FinishReason::ToolCalls,
-                "content_filter" => crate::llm::provider::FinishReason::ContentFilter,
-                other => crate::llm::provider::FinishReason::Error(other.to_string()),
-            })
-            .unwrap_or(crate::llm::provider::FinishReason::Stop);
-
-        Ok(provider::LLMResponse {
-            content,
-            tool_calls,
-            usage: response_json.get("usage").map(|usage_value| {
-                let cached_prompt_tokens =
-                    if self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics {
-                        usage_value
-                            .get("prompt_tokens_details")
-                            .and_then(|details| details.get("cached_tokens"))
-                            .and_then(|value| value.as_u64())
-                            .map(|value| value as u32)
-                    } else {
-                        None
-                    };
-
-                crate::llm::provider::Usage {
-                    prompt_tokens: usage_value
-                        .get("prompt_tokens")
-                        .and_then(|pt| pt.as_u64())
-                        .and_then(|v| u32::try_from(v).ok())
-                        .unwrap_or(0),
-                    completion_tokens: usage_value
-                        .get("completion_tokens")
-                        .and_then(|ct| ct.as_u64())
-                        .and_then(|v| u32::try_from(v).ok())
-                        .unwrap_or(0),
-                    total_tokens: usage_value
-                        .get("total_tokens")
-                        .and_then(|tt| tt.as_u64())
-                        .and_then(|v| u32::try_from(v).ok())
-                        .unwrap_or(0),
-                    cached_prompt_tokens,
-                    cache_creation_tokens: None,
-                    cache_read_tokens: None,
-                }
-            }),
-            finish_reason,
-            reasoning,
-            reasoning_details: None,
-            tool_references: Vec::new(),
-            request_id: None,
-            organization_id: None,
-        })
+        let include_cached_prompt_tokens =
+            self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+        response_parser::parse_chat_response(response_json, include_cached_prompt_tokens)
     }
 
     fn parse_openai_responses_response(
@@ -1767,6 +1072,7 @@ impl OpenAIProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::tool_serialization;
     use crate::llm::provider::ParallelToolConfig;
 
     fn sample_tool() -> provider::ToolDefinition {
@@ -1796,9 +1102,7 @@ mod tests {
     #[test]
     fn serialize_tools_wraps_function_definition() {
         let tools = vec![sample_tool()];
-        let provider = OpenAIProvider::new(String::new());
-        let serialized = provider
-            .serialize_tools(&tools)
+        let serialized = tool_serialization::serialize_tools(&tools, models::openai::DEFAULT_MODEL)
             .expect("tools should serialize");
         let serialized_tools = serialized
             .as_array()
@@ -1896,9 +1200,7 @@ mod tests {
             json!({"type": "object"}),
         );
         let tools = vec![sample_tool(), duplicate];
-        let provider = OpenAIProvider::new(String::new());
-        let serialized = provider
-            .serialize_tools(&tools)
+        let serialized = tool_serialization::serialize_tools(&tools, models::openai::DEFAULT_MODEL)
             .expect("tools should serialize cleanly");
         let arr = serialized.as_array().expect("array");
         assert_eq!(arr.len(), 1, "duplicate names should be dropped");
@@ -1913,7 +1215,7 @@ mod tests {
             json!({"type": "object"}),
         );
         let tools = vec![apply_builtin, apply_function];
-        let serialized = OpenAIProvider::serialize_tools_for_responses(&tools)
+        let serialized = tool_serialization::serialize_tools_for_responses(&tools)
             .expect("responses tools should serialize");
         let arr = serialized.as_array().expect("array");
         assert_eq!(arr.len(), 1, "apply_patch should be deduped");
@@ -2323,119 +1625,7 @@ impl provider::LLMProvider for OpenAIProvider {
                 });
             }
 
-            let stream = try_stream! {
-                let mut body_stream = response.bytes_stream();
-                let mut buffer = String::new();
-                let mut aggregated_content = String::new();
-                let mut reasoning_buffer = ReasoningBuffer::default();
-                let mut sanitizer = TagStreamSanitizer::new();
-                let mut tool_builders = Vec::new();
-                let mut finish_reason = provider::FinishReason::Stop;
-                let mut accumulated_usage = None;
-                let telemetry = OpenAIStreamTelemetry;
-
-                while let Some(chunk_result) = body_stream.next().await {
-                    let chunk = chunk_result.map_err(|err| {
-                        let formatted_error = error_display::format_llm_error(
-                            "OpenAI",
-                            &format!("Streaming error: {}", err),
-                        );
-                        provider::LLMError::Network { message: formatted_error, metadata: None }
-                    })?;
-
-                    buffer.push_str(&String::from_utf8_lossy(&chunk));
-
-                    while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
-                        let event = buffer[..split_idx].to_string();
-                        buffer.drain(..split_idx + delimiter_len);
-
-                        if let Some(data_payload) = extract_data_payload(&event) {
-                            let trimmed_payload = data_payload.trim();
-                            if trimmed_payload.is_empty() || trimmed_payload == "[DONE]" {
-                                continue;
-                            }
-
-                            let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
-                                StreamAssemblyError::InvalidPayload(err.to_string())
-                                    .into_llm_error("OpenAI")
-                            })?;
-
-                            // Capture usage if present (stream_options: include_usage)
-                            if let Some(usage_val) = payload.get("usage") {
-                                if let Ok(u) = serde_json::from_value::<provider::Usage>(usage_val.clone()) {
-                                    accumulated_usage = Some(u);
-                                }
-                            }
-
-                            if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
-                                if let Some(choice) = choices.first() {
-                                    if let Some(delta) = choice.get("delta") {
-                                        // 1. Content
-                                        if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
-                                            aggregated_content.push_str(content);
-                                            telemetry.on_content_delta(content);
-                                            for event in sanitizer.process_chunk(content) {
-                                                match &event {
-                                                    provider::LLMStreamEvent::Token { delta } => {
-                                                        yield provider::LLMStreamEvent::Token { delta: delta.clone() };
-                                                    }
-                                                    provider::LLMStreamEvent::Reasoning { delta } => {
-                                                        yield provider::LLMStreamEvent::Reasoning { delta: delta.clone() };
-                                                    }
-                                                    _ => {}
-                                                }
-                                            }
-                                        }
-
-                                        // 2. Reasoning (DeepSeek / O1 format)
-                                        if let Some(reasoning) = delta.get("reasoning_content").and_then(|v| v.as_str()) {
-                                            for fragment in append_reasoning_segments(&mut reasoning_buffer, reasoning, &telemetry) {
-                                                yield provider::LLMStreamEvent::Reasoning { delta: fragment };
-                                            }
-                                        }
-
-                                        // 3. Tool Calls
-                                        if let Some(tool_deltas) = delta.get("tool_calls").and_then(|v| v.as_array()) {
-                                            crate::llm::providers::shared::update_tool_calls(&mut tool_builders, tool_deltas);
-                                            telemetry.on_tool_call_delta();
-                                        }
-                                    }
-
-                                    if let Some(reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
-                                        finish_reason = match reason {
-                                            "stop" => provider::FinishReason::Stop,
-                                            "length" => provider::FinishReason::Length,
-                                            "tool_calls" => provider::FinishReason::ToolCalls,
-                                            "content_filter" => provider::FinishReason::ContentFilter,
-                                            _ => provider::FinishReason::Stop,
-                                        };
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                for event in sanitizer.finalize() {
-                    yield event;
-                }
-
-                let response = provider::LLMResponse {
-                    content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
-                    tool_calls: crate::llm::providers::shared::finalize_tool_calls(tool_builders),
-                    usage: accumulated_usage,
-                    finish_reason,
-                    reasoning: reasoning_buffer.finalize(),
-                    reasoning_details: None,
-                    tool_references: Vec::new(),
-                    request_id: None,
-                    organization_id: None,
-                };
-
-                yield provider::LLMStreamEvent::Completed { response };
-            };
-
-            return Ok(Box::pin(stream));
+            return Ok(stream_decoder::create_chat_stream(response));
         }
 
         let include_metrics =
@@ -2445,9 +1635,13 @@ impl provider::LLMProvider for OpenAIProvider {
 
         openai_request["stream"] = Value::Bool(true);
         #[cfg(debug_assertions)]
-        let debug_model = request.model.clone();
+        let debug_model = Some(request.model.clone());
+        #[cfg(not(debug_assertions))]
+        let debug_model: Option<String> = None;
         #[cfg(debug_assertions)]
-        let request_timer = Instant::now();
+        let request_timer = Some(std::time::Instant::now());
+        #[cfg(not(debug_assertions))]
+        let request_timer: Option<std::time::Instant> = None;
         #[cfg(debug_assertions)]
         {
             let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
@@ -2547,214 +1741,25 @@ impl provider::LLMProvider for OpenAIProvider {
 
         #[cfg(debug_assertions)]
         {
-            debug!(
-                target = "vtcode::llm::openai",
-                model = %request.model,
-                status = %response.status(),
-                handshake_ms = request_timer.elapsed().as_millis(),
-                "Streaming response headers received"
-            );
+            if let Some(ref debug_model) = debug_model {
+                if let Some(request_timer) = request_timer.as_ref() {
+                    debug!(
+                        target = "vtcode::llm::openai",
+                        model = %debug_model,
+                        status = %response.status(),
+                        handshake_ms = request_timer.elapsed().as_millis(),
+                        "Streaming response headers received"
+                    );
+                }
+            }
         }
 
-        let stream = try_stream! {
-            let mut body_stream = response.bytes_stream();
-            let mut buffer = String::new();
-            let mut aggregated_content = String::new();
-            let mut reasoning_buffer = ReasoningBuffer::default();
-            let mut final_response: Option<Value> = None;
-            let mut done = false;
-            let mut sanitizer = TagStreamSanitizer::new();
-            #[cfg(debug_assertions)]
-            let mut streamed_events_counter: usize = 0;
-            let telemetry = OpenAIStreamTelemetry;
-
-            while let Some(chunk_result) = body_stream.next().await {
-                let chunk = chunk_result.map_err(|err| {
-                    let formatted_error = error_display::format_llm_error(
-                        "OpenAI",
-                        &format!("Streaming error: {}", err),
-                    );
-                    provider::LLMError::Network { message: formatted_error, metadata: None }
-                })?;
-
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
-
-                while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
-                    let event = buffer[..split_idx].to_string();
-                    buffer.drain(..split_idx + delimiter_len);
-                    #[cfg(debug_assertions)]
-                    {
-                        streamed_events_counter = streamed_events_counter.saturating_add(1);
-                    }
-
-                    if let Some(data_payload) = extract_data_payload(&event) {
-                        let trimmed_payload = data_payload.trim();
-                        if trimmed_payload.is_empty() {
-                            continue;
-                        }
-
-                        if trimmed_payload == "[DONE]" {
-                            done = true;
-                            break;
-                        }
-
-                        let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
-                            StreamAssemblyError::InvalidPayload(err.to_string())
-                                .into_llm_error("OpenAI")
-                        })?;
-
-                        if let Some(event_type) = payload.get("type").and_then(|value| value.as_str()) {
-                            match event_type {
-                                // Per Responses API spec: text content streaming
-                                "response.output_text.delta" => {
-                                    let delta = payload
-                                        .get("delta")
-                                        .and_then(|value| value.as_str())
-                                        .ok_or_else(|| {
-                                            StreamAssemblyError::MissingField("delta")
-                                                .into_llm_error("OpenAI")
-                                        })?;
-                                    aggregated_content.push_str(delta);
-                                    telemetry.on_content_delta(delta);
-
-                                    for event in sanitizer.process_chunk(delta) {
-                                        match &event {
-                                            provider::LLMStreamEvent::Token { delta } => {
-                                                yield provider::LLMStreamEvent::Token { delta: delta.clone() };
-                                            }
-                                            provider::LLMStreamEvent::Reasoning { delta } => {
-                                                yield provider::LLMStreamEvent::Reasoning { delta: delta.clone() };
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                }
-                                // Refusal content (model declined to respond)
-                                "response.refusal.delta" => {
-                                    let delta = payload
-                                        .get("delta")
-                                        .and_then(|value| value.as_str())
-                                        .ok_or_else(|| {
-                                            StreamAssemblyError::MissingField("delta")
-                                                .into_llm_error("OpenAI")
-                                        })?;
-                                    aggregated_content.push_str(delta);
-                                    telemetry.on_content_delta(delta);
-                                }
-                                // Reasoning streams (thinking models like GPT-5 with reasoning)
-                                "response.reasoning_text.delta" => {
-                                    let delta = payload
-                                        .get("delta")
-                                        .and_then(|value| value.as_str())
-                                        .ok_or_else(|| {
-                                            StreamAssemblyError::MissingField("delta")
-                                                .into_llm_error("OpenAI")
-                                        })?;
-                                    for fragment in append_reasoning_segments(&mut reasoning_buffer, delta, &telemetry) {
-                                        yield provider::LLMStreamEvent::Reasoning { delta: fragment };
-                                    }
-                                }
-                                "response.reasoning_summary_text.delta" => {
-                                    let delta = payload
-                                        .get("delta")
-                                        .and_then(|value| value.as_str())
-                                        .ok_or_else(|| {
-                                            StreamAssemblyError::MissingField("delta")
-                                                .into_llm_error("OpenAI")
-                                        })?;
-                                    // Treat summary the same as reasoning for now
-                                    for fragment in append_reasoning_segments(&mut reasoning_buffer, delta, &telemetry) {
-                                        yield provider::LLMStreamEvent::Reasoning { delta: fragment };
-                                    }
-                                }
-                                // Function/tool call arguments streaming
-                                "response.function_call_arguments.delta" => {
-                                    // Tool arguments are streamed but we accumulate in response.completed's final object only.
-                                    // We DO NOT push to aggregated_content to avoid polluting the text stream.
-                                    // If strict tool call streaming is needed later, we can implement LLMStreamEvent::ToolCall here.
-                                }
-                                // Response completion with final state
-                                "response.completed" => {
-                                    if let Some(response_value) = payload.get("response") {
-                                        final_response = Some(response_value.clone());
-                                    }
-                                    done = true;
-                                }
-                                // Error states
-                                "response.failed" | "response.incomplete" => {
-                                    let error_message = if let Some(err) = payload.get("response")
-                                        .and_then(|r| r.get("error"))
-                                    {
-                                        err.get("message")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("Unknown error")
-                                    } else {
-                                        "Unknown error from Responses API"
-                                    };
-                                    let formatted_error = error_display::format_llm_error("OpenAI", error_message);
-                                    Err(provider::LLMError::Provider {
-                                        message: formatted_error,
-                                        metadata: None,
-                                    })?;
-                                }
-                                // Other stream events (in_progress, created, queued, etc.) - just ignore for now
-                                _ => {}
-                            }
-                        }
-                    }
-
-                    if done {
-                        break;
-                    }
-                }
-
-                if done {
-                    break;
-                }
-            }
-
-            // Finalize sanitizer and yield leftover events
-            for event in sanitizer.finalize() {
-                yield event;
-            }
-
-            let response_value = match final_response {
-                Some(value) => value,
-                None => {
-                    let formatted_error = error_display::format_llm_error(
-                        "OpenAI",
-                        "Stream ended without a completion event",
-                    );
-                    Err(provider::LLMError::Provider { message: formatted_error, metadata: None })?
-                }
-            };
-
-            let mut response = parse_responses_payload(response_value, include_metrics)?;
-
-            if response.content.is_none() && !aggregated_content.is_empty() {
-                response.content = Some(aggregated_content.clone());
-            }
-
-            if let Some(reasoning_text) = reasoning_buffer.finalize() {
-                response.reasoning = Some(reasoning_text);
-            }
-
-            #[cfg(debug_assertions)]
-            {
-                debug!(
-                    target = "vtcode::llm::openai",
-                    model = %debug_model,
-                    elapsed_ms = request_timer.elapsed().as_millis(),
-                    events = streamed_events_counter,
-                    content_len = aggregated_content.len(),
-                    "Completed streaming response"
-                );
-            }
-
-            yield provider::LLMStreamEvent::Completed { response };
-        };
-
-        Ok(Box::pin(stream))
+        Ok(stream_decoder::create_responses_stream(
+            response,
+            include_metrics,
+            debug_model,
+            request_timer,
+        ))
     }
 
     async fn generate(
