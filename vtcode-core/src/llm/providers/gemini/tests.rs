@@ -1,7 +1,7 @@
 use super::*;
-    use super::*;
-    use crate::config::constants::models;
-    use crate::llm::provider::{SpecificFunctionChoice, SpecificToolChoice, ToolDefinition};
+use crate::config::constants::models;
+use crate::llm::provider::{SpecificFunctionChoice, SpecificToolChoice, ToolDefinition};
+use serde_json::json;
 
     #[test]
     fn convert_to_gemini_request_maps_history_and_system_prompt() {
@@ -676,7 +676,6 @@ use super::*;
             Some("application/json")
         );
     }
-}
 #[cfg(test)]
 mod caching_tests {
     use super::*;
@@ -751,3 +750,4 @@ mod caching_tests {
             );
         }
     }
+}
