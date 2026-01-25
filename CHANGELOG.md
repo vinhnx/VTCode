@@ -3,6 +3,37 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.70.1] - 2026-01-25
+
+
+### Features
+    - feat: add human-readable slug generator for plan file naming, update TUI header editing mode handling
+    - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
+    - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
+    - feat: introduce `InputHistoryEntry` to manage input with attachments, enhance reverse search and history navigation
+    - feat: introduce `InputHistoryEntry` to manage input with attachments, enhance reverse search and history navigation
+    - feat: refine tool output styling, and enhance agent configuration
+    - feat: refine tool output styling, and enhance agent configuration
+    - feat: add nested discovery for Claude skills, enhance SKILL.md parsing with default values, and update validation rules
+    - feat: add subagent system with optional enablement, commands, and configuration updates
+
+
+### Refactors
+    - refactor: optimize memory usage and runtime efficiency, improve error handling, and enhance circuit breaker logic
+    - refactor: remove `ui.show_message_dividers` config, simplify divider logic, and enhance tool summary rendering
+    - refactor: transition `UnifiedCache` to use `RwLock` for interior mutability, enhance test coverage, and simplify cache operations
+    - refactor: disable subagents by default and update documentation with usage and configuration details
+    - refactor: remove unused fields and path handling from `HarnessEventEmitter` and `HarnessTurnState`
+
+
+### Documentation
+    - docs: update changelog for v0.70.0 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.70.0 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.69.1 version =  [skip ci]
 # [Version 0.70.0] - 2026-01-24
 
 
