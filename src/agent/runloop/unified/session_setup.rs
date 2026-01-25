@@ -14,7 +14,6 @@ use tokio::time::{Duration, sleep};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use vtcode_config::constants::tools as tool_constants;
-use vtcode_config::subagent::SubagentsConfig;
 use vtcode_core::subagents::SubagentRegistry;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::handlers::SpawnSubagentTool;
@@ -577,9 +576,7 @@ pub(crate) async fn initialize_session(
     }
 
     // 4. SpawnSubagent (optional)
-    let subagent_config = vt_cfg
-        .map(|cfg| cfg.subagents.clone())
-        .unwrap_or_else(SubagentsConfig::default);
+    let subagent_config = vt_cfg.map(|cfg| cfg.subagents.clone()).unwrap_or_default();
 
     if subagent_config.enabled {
         let subagent_registry =

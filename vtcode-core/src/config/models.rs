@@ -4,9 +4,9 @@
 //! replacing hardcoded model strings throughout the codebase for better maintainability.
 //! Read the model list in `docs/models.json`.
 
-mod errors;
 mod capabilities;
 mod catalog;
+mod errors;
 mod model_id;
 mod model_id_parse;
 mod openrouter;

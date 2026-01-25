@@ -296,13 +296,18 @@ pub struct SystemPromptConfig {
 
 impl SystemPromptConfig {
     /// Create a new config with a pre-computed hash of the base prompt
-    pub fn new(base_prompt: &str, enable_retry_context: bool, enable_token_tracking: bool, max_retry_attempts: usize) -> Self {
+    pub fn new(
+        base_prompt: &str,
+        enable_retry_context: bool,
+        enable_token_tracking: bool,
+        max_retry_attempts: usize,
+    ) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         base_prompt.hash(&mut hasher);
-        
+
         Self {
             base_prompt_hash: hasher.finish(),
             enable_retry_context,

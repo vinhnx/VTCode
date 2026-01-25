@@ -1,17 +1,15 @@
 use super::ZedAgent;
 use crate::acp::reports::TOOL_FAILURE_PREFIX;
-use crate::acp::tooling::{
-    SupportedTool, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_ARG,
-};
+use crate::acp::tooling::{SupportedTool, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_ARG};
 use agent_client_protocol as acp;
 use anyhow::Result;
 use path_clean::PathClean;
 use serde_json::Value;
 use shell_words::split;
 use std::path::{Path, PathBuf};
+use tracing::warn;
 use vtcode_core::llm::provider::ToolChoice;
 use vtcode_core::llm::provider::ToolDefinition;
-use tracing::warn;
 
 use super::super::constants::*;
 use super::super::helpers::text_chunk;
@@ -189,7 +187,10 @@ impl ZedAgent {
         )
     }
 
-    pub(super) fn resolve_terminal_working_dir(&self, args: &Value) -> Result<Option<PathBuf>, String> {
+    pub(super) fn resolve_terminal_working_dir(
+        &self,
+        args: &Value,
+    ) -> Result<Option<PathBuf>, String> {
         let requested = args
             .get("working_dir")
             .or_else(|| args.get("cwd"))
@@ -216,7 +217,10 @@ impl ZedAgent {
         Ok(Some(cleaned))
     }
 
-    pub(super) fn describe_terminal_location(&self, working_dir: Option<&PathBuf>) -> Option<String> {
+    pub(super) fn describe_terminal_location(
+        &self,
+        working_dir: Option<&PathBuf>,
+    ) -> Option<String> {
         let workspace = &self.config.workspace;
         working_dir.and_then(|path| {
             path.strip_prefix(workspace).ok().map(|relative| {
@@ -259,7 +263,11 @@ impl ZedAgent {
         }
     }
 
-    pub(super) fn log_tool_disable_reason(&self, tool: SupportedTool, reason: &ToolDisableReason<'_>) {
+    pub(super) fn log_tool_disable_reason(
+        &self,
+        tool: SupportedTool,
+        reason: &ToolDisableReason<'_>,
+    ) {
         match reason {
             ToolDisableReason::Provider { provider, model } => {
                 warn!(

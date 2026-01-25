@@ -5,7 +5,7 @@
 use crate::config::models::Provider as ModelProvider;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::error_display;
-use crate::llm::provider as provider;
+use crate::llm::provider;
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use serde_json::{Value, json};
 use std::collections::HashSet;

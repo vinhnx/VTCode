@@ -258,7 +258,10 @@ impl InputManager {
     }
 
     pub fn set_attachments(&mut self, attachments: Vec<ContentPart>) {
-        self.attachments = attachments.into_iter().filter(ContentPart::is_image).collect();
+        self.attachments = attachments
+            .into_iter()
+            .filter(ContentPart::is_image)
+            .collect();
     }
 
     pub fn current_history_entry(&self) -> InputHistoryEntry {
@@ -358,14 +361,23 @@ mod tests {
         ));
 
         assert_eq!(
-            manager.go_to_previous_history().map(|entry| entry.content.clone()),
+            manager
+                .go_to_previous_history()
+                .map(|entry| entry.content.clone()),
             Some("second".to_owned())
         );
         assert_eq!(
-            manager.go_to_previous_history().map(|entry| entry.content.clone()),
+            manager
+                .go_to_previous_history()
+                .map(|entry| entry.content.clone()),
             Some("first".to_owned())
         );
-        assert_eq!(manager.go_to_previous_history().map(|entry| entry.content.clone()), None);
+        assert_eq!(
+            manager
+                .go_to_previous_history()
+                .map(|entry| entry.content.clone()),
+            None
+        );
     }
 
     #[test]
@@ -379,7 +391,9 @@ mod tests {
 
         manager.go_to_previous_history();
         assert_eq!(
-            manager.go_to_next_history().map(|entry| entry.content.clone()),
+            manager
+                .go_to_next_history()
+                .map(|entry| entry.content.clone()),
             Some("current".to_owned())
         );
     }

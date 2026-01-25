@@ -79,7 +79,6 @@ pub(crate) async fn execute_request_user_input_tool(
             let items = if let Some(ref options) = q.options {
                 options
                     .iter()
-                    
                     .map(|opt| InlineListItem {
                         title: opt.label.clone(),
                         subtitle: Some(opt.description.clone()),
@@ -198,13 +197,7 @@ pub(crate) async fn execute_request_user_input_tool(
                         other,
                     } = selection
                     {
-                        answers.insert(
-                            question_id,
-                            RequestUserInputAnswer {
-                                selected,
-                                other,
-                            },
-                        );
+                        answers.insert(question_id, RequestUserInputAnswer { selected, other });
                     }
                 }
 

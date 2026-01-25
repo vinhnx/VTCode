@@ -2,7 +2,7 @@ use super::OpenAIProvider;
 use crate::config::constants::models;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
-use crate::llm::provider as provider;
+use crate::llm::provider;
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 

@@ -3,15 +3,15 @@ use ratatui::crossterm::terminal::disable_raw_mode;
 use std::collections::VecDeque;
 use std::io::Write;
 
-use std::time::Instant;
 use std::path::Path;
+use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 use tokio::time::{Duration, sleep, timeout};
 use vtcode::config_watcher::SimpleConfigWatcher;
 use vtcode_core::config::constants::defaults;
-use vtcode_core::config::resolve_timeout;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::resolve_timeout;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
 /// Optimization: Pre-computed idle detection thresholds to avoid repeated config lookups
@@ -23,13 +23,15 @@ struct IdleDetectionConfig {
     enabled: bool,
 }
 
-use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
-use vtcode_core::session::{SessionId, SessionState as PersistentSessionState, session_path};
+use crate::agent::runloop::unified::inline_events::harness::{
+    HarnessEventEmitter, resolve_event_log_path,
+};
+use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use chrono::Utc;
 use vtcode_core::exec::events::{ThreadEvent, ThreadStartedEvent};
-use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, resolve_event_log_path};
-use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
+use vtcode_core::session::{SessionId, SessionState as PersistentSessionState, session_path};
+use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerState;

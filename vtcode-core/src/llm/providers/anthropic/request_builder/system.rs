@@ -1,6 +1,6 @@
 use crate::llm::provider::LLMRequest;
 use crate::llm::providers::anthropic_types::CacheControl;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub(crate) fn build_system_prompt(
     request: &LLMRequest,
@@ -52,5 +52,8 @@ pub(crate) fn build_system_prompt(
         }
     }
 
-    (Some(Value::String(final_system_prompt.trim().to_string())), 0)
+    (
+        Some(Value::String(final_system_prompt.trim().to_string())),
+        0,
+    )
 }

@@ -14,7 +14,6 @@ use vtcode_core::utils::session_archive;
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
-use crate::agent::runloop::unified::turn::utils::{enforce_history_limits, truncate_message_content};
 use crate::agent::runloop::slash_commands::{AgentCommandAction, McpCommandAction};
 use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
 use crate::agent::runloop::unified::display::persist_theme_preference;
@@ -29,6 +28,9 @@ use crate::agent::runloop::unified::palettes::{
 };
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
+use crate::agent::runloop::unified::turn::utils::{
+    enforce_history_limits, truncate_message_content,
+};
 use crate::agent::runloop::unified::turn::workspace::{
     bootstrap_config_files, build_workspace_index,
 };

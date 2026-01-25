@@ -148,7 +148,10 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
         && !meta.is_empty()
     {
         if !block_lines.is_empty() {
-            block_lines.push(PanelContentLine::new(String::new(), MessageStyle::ToolDetail));
+            block_lines.push(PanelContentLine::new(
+                String::new(),
+                MessageStyle::ToolDetail,
+            ));
         }
         for (key, value) in meta {
             if let Some(text) = value.as_str() {
@@ -189,8 +192,6 @@ fn collect_text_with_code_blocks(lines: &mut Vec<PanelContentLine>, text: &str) 
                     ));
                 }
             }
-        } else if in_code_block {
-            lines.push(PanelContentLine::new(line, MessageStyle::ToolDetail));
         } else {
             lines.push(PanelContentLine::new(line, MessageStyle::ToolDetail));
         }

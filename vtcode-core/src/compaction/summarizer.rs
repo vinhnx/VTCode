@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
 use crate::llm::provider::{LLMProvider, LLMRequest, Message};
+use anyhow::{Context, Result};
 
 /// Summarize the provided text using the configured provider.
 pub async fn summarize_text(

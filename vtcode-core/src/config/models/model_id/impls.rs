@@ -1,5 +1,5 @@
-use crate::config::models::provider::Provider;
 use super::ModelId;
+use crate::config::models::provider::Provider;
 
 impl ModelId {
     /// Convert the model identifier to its string representation
@@ -318,6 +318,4 @@ impl ModelId {
             | ModelId::OpenRouterZaiGlm47Flash => Provider::OpenRouter,
         }
     }
-
-
 }

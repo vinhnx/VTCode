@@ -5,17 +5,19 @@
 //! - Execution with caching
 //! - Success/failure/timeout/cancelled handling
 
-mod helpers;
-mod handlers;
+mod apply;
+mod dispatch;
 mod execution;
 mod execution_result;
+mod handlers;
+mod helpers;
 mod messages;
-mod dispatch;
-mod apply;
 
-pub(crate) use messages::{handle_assistant_response, handle_text_response, HandleTextResponseParams};
-pub(crate) use dispatch::handle_tool_calls;
 pub(crate) use apply::apply_turn_outcome;
+pub(crate) use dispatch::handle_tool_calls;
+pub(crate) use messages::{
+    HandleTextResponseParams, handle_assistant_response, handle_text_response,
+};
 
 #[allow(dead_code)]
 pub enum PrepareToolCallResult {

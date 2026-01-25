@@ -230,7 +230,9 @@ pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
 
     // Optimize: Lowercase once and use pre-lowercased patterns
     let lower = error_text.to_lowercase();
-    RATE_LIMIT_PATTERNS.iter().any(|pattern| lower.contains(pattern))
+    RATE_LIMIT_PATTERNS
+        .iter()
+        .any(|pattern| lower.contains(pattern))
 }
 
 /// Handle network errors with consistent formatting

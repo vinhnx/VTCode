@@ -3,6 +3,8 @@ use serde_json::Value;
 use crate::llm::error_display;
 use crate::llm::provider::{FinishReason, LLMError, LLMResponse, ToolCall};
 
+use super::super::shared::{StreamDelta, ToolCallBuilder, finalize_tool_calls};
+use super::super::{ReasoningBuffer, extract_reasoning_trace, split_reasoning_from_text};
 use super::OpenRouterProvider;
 use super::response_helpers::{
     append_reasoning_segment, extract_reasoning_from_message_content,
@@ -11,8 +13,6 @@ use super::response_helpers::{
 use super::stream_decoder::{
     OpenRouterStreamTelemetry, map_finish_reason, parse_usage_value, process_content_value,
 };
-use super::super::{ReasoningBuffer, extract_reasoning_trace, split_reasoning_from_text};
-use super::super::shared::{StreamDelta, ToolCallBuilder, finalize_tool_calls};
 
 impl OpenRouterProvider {
     pub(super) fn parse_openrouter_response(

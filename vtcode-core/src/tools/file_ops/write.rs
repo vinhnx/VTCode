@@ -1,5 +1,5 @@
-use super::diff_preview::{build_diff_preview, diff_preview_error_skip, diff_preview_size_skip};
 use super::FileOpsTool;
+use super::diff_preview::{build_diff_preview, diff_preview_error_skip, diff_preview_size_skip};
 mod chunked;
 mod fs_ops;
 use crate::config::constants::diff;
@@ -165,5 +165,4 @@ impl FileOpsTool {
 
         Ok(response)
     }
-
 }

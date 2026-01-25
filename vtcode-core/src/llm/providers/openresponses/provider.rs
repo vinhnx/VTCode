@@ -458,7 +458,8 @@ impl OpenResponsesProvider {
                         } else if content.is_object() || content.is_array() {
                             // For complex content, serialize to string
                             let content_str = content.to_string();
-                            if !content_str.is_empty() && content_str != "{}" && content_str != "[]" {
+                            if !content_str.is_empty() && content_str != "{}" && content_str != "[]"
+                            {
                                 reasoning_fragments.push(content_str);
                             }
                         }
@@ -633,7 +634,10 @@ impl LLMProvider for OpenResponsesProvider {
                 }
                 _ => {
                     return Err(LLMError::InvalidRequest {
-                        message: format!("Unsupported message role for OpenResponses: {:?}", msg.role),
+                        message: format!(
+                            "Unsupported message role for OpenResponses: {:?}",
+                            msg.role
+                        ),
                         metadata: None,
                     });
                 }
@@ -730,7 +734,11 @@ impl LLMProvider for OpenResponsesProvider {
             let error_details: Option<Value> = serde_json::from_str(&error_text).ok();
             let error_code = error_details
                 .as_ref()
-                .and_then(|v| v.get("error").and_then(|e| e.get("code")).and_then(|c| c.as_str()))
+                .and_then(|v| {
+                    v.get("error")
+                        .and_then(|e| e.get("code"))
+                        .and_then(|c| c.as_str())
+                })
                 .map(|s| s.to_string());
 
             return Err(LLMError::Provider {
@@ -738,11 +746,11 @@ impl LLMProvider for OpenResponsesProvider {
                 metadata: Some(LLMErrorMetadata::new(
                     "openresponses",
                     Some(status.as_u16()),
-                    error_code,         // code
-                    None,               // request_id (will be extracted from headers if available)
-                    None,               // organization_id
-                    None,               // retry_after
-                    Some(error_text),   // message
+                    error_code,       // code
+                    None,             // request_id (will be extracted from headers if available)
+                    None,             // organization_id
+                    None,             // retry_after
+                    Some(error_text), // message
                 )),
             });
         }
@@ -810,7 +818,11 @@ impl LLMProvider for OpenResponsesProvider {
             let error_details: Option<Value> = serde_json::from_str(&error_text).ok();
             let error_code = error_details
                 .as_ref()
-                .and_then(|v| v.get("error").and_then(|e| e.get("code")).and_then(|c| c.as_str()))
+                .and_then(|v| {
+                    v.get("error")
+                        .and_then(|e| e.get("code"))
+                        .and_then(|c| c.as_str())
+                })
                 .map(|s| s.to_string());
 
             return Err(LLMError::Provider {
@@ -818,11 +830,11 @@ impl LLMProvider for OpenResponsesProvider {
                 metadata: Some(LLMErrorMetadata::new(
                     "openresponses",
                     Some(status.as_u16()),
-                    error_code,         // code
-                    None,               // request_id
-                    None,               // organization_id
-                    None,               // retry_after
-                    Some(error_text),   // message
+                    error_code,       // code
+                    None,             // request_id
+                    None,             // organization_id
+                    None,             // retry_after
+                    Some(error_text), // message
                 )),
             });
         }
@@ -851,7 +863,9 @@ impl LLMProvider for OpenResponsesProvider {
                             // Emit text deltas
                             match event.event_type.as_str() {
                                 "response.output_text.delta" => {
-                                    if let super::streaming::StreamEventData::TextDelta(data) = &event.data {
+                                    if let super::streaming::StreamEventData::TextDelta(data) =
+                                        &event.data
+                                    {
                                         return Some((
                                             Ok(LLMStreamEvent::Token {
                                                 delta: data.delta.clone(),
@@ -861,7 +875,9 @@ impl LLMProvider for OpenResponsesProvider {
                                     }
                                 }
                                 "response.reasoning_summary_text.delta" => {
-                                    if let super::streaming::StreamEventData::TextDelta(_data) = &event.data {
+                                    if let super::streaming::StreamEventData::TextDelta(_data) =
+                                        &event.data
+                                    {
                                         // For reasoning deltas, we could emit them separately if needed
                                         // For now, we accumulate them and include in final response
                                     }
@@ -873,7 +889,10 @@ impl LLMProvider for OpenResponsesProvider {
                                     }
                                 }
                                 "response.function_call_arguments.delta" => {
-                                    if let super::streaming::StreamEventData::FunctionCallDelta(_data) = &event.data {
+                                    if let super::streaming::StreamEventData::FunctionCallDelta(
+                                        _data,
+                                    ) = &event.data
+                                    {
                                         // For function call argument deltas, we accumulate them
                                         // and emit the completed call at the end
                                     }
@@ -935,14 +954,20 @@ impl LLMProvider for OpenResponsesProvider {
 
                                     // Return an error response
                                     let error_msg = if let Some(ref err) = accumulator.error {
-                                        format!("OpenResponses stream error: {} - {}", err.code, err.message)
+                                        format!(
+                                            "OpenResponses stream error: {} - {}",
+                                            err.code, err.message
+                                        )
                                     } else {
                                         "OpenResponses stream failed".to_string()
                                     };
 
                                     return Some((
                                         Err(LLMError::Provider {
-                                            message: error_display::format_llm_error("OpenResponses", &error_msg),
+                                            message: error_display::format_llm_error(
+                                                "OpenResponses",
+                                                &error_msg,
+                                            ),
                                             metadata: None,
                                         }),
                                         (byte_stream, buffer, accumulator, done),

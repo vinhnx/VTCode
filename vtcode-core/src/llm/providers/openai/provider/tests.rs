@@ -1,5 +1,5 @@
-use super::*;
 use super::super::tool_serialization;
+use super::*;
 use crate::llm::provider::ParallelToolConfig;
 use serde_json::{Value, json};
 
@@ -386,10 +386,8 @@ fn chat_completions_uses_max_completion_tokens_field() {
 
 #[test]
 fn chat_completions_applies_temperature_independent_of_max_tokens() {
-    let provider = OpenAIProvider::with_model(
-        String::new(),
-        models::openai::CODEX_MINI_LATEST.to_string(),
-    );
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::CODEX_MINI_LATEST.to_string());
     let mut request = sample_request(models::openai::CODEX_MINI_LATEST);
     request.temperature = Some(0.4);
 

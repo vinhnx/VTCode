@@ -47,10 +47,7 @@ fn finalize_outcome_tool_loop_limit() {
 
     assert_eq!(
         state.completion_outcome,
-        TaskOutcome::tool_loop_limit_reached(
-            state.max_tool_loops,
-            state.consecutive_tool_loops
-        )
+        TaskOutcome::tool_loop_limit_reached(state.max_tool_loops, state.consecutive_tool_loops)
     );
 }
 

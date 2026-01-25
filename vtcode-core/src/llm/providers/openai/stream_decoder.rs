@@ -1,13 +1,13 @@
 //! Streaming decoders for OpenAI Chat Completions and Responses APIs.
 
 use crate::llm::error_display;
-use crate::llm::provider as provider;
-use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
+use crate::llm::provider;
+use crate::llm::providers::ReasoningBuffer;
+use crate::llm::providers::shared::StreamTelemetry;
 use crate::llm::providers::shared::{
     StreamAssemblyError, append_reasoning_segments, extract_data_payload, find_sse_boundary,
 };
-use crate::llm::providers::shared::StreamTelemetry;
-use crate::llm::providers::ReasoningBuffer;
+use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use async_stream::try_stream;
 use futures::StreamExt;
 use serde_json::Value;

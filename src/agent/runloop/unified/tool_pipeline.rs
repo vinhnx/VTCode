@@ -26,11 +26,11 @@ use vtcode_core::ui::tui::PlanContent;
 use super::run_loop_context::RunLoopContext;
 use super::state::CtrlCState;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
-use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
-use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use crate::agent::runloop::unified::inline_events::harness::{
     tool_completed_event, tool_started_event,
 };
+use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
+use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use crate::hooks::lifecycle::LifecycleHookEngine;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::exec::events::CommandExecutionStatus;
@@ -312,7 +312,12 @@ pub(crate) async fn run_tool_call(
             } else {
                 CommandExecutionStatus::Failed
             };
-            let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+            let _ = emitter.emit(tool_completed_event(
+                tool_item_id.clone(),
+                &name,
+                status,
+                None,
+            ));
         }
         return Ok(outcome);
     }
@@ -344,7 +349,12 @@ pub(crate) async fn run_tool_call(
             } else {
                 CommandExecutionStatus::Failed
             };
-            let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+            let _ = emitter.emit(tool_completed_event(
+                tool_item_id.clone(),
+                &name,
+                status,
+                None,
+            ));
         }
         return Ok(outcome);
     }
@@ -390,7 +400,12 @@ pub(crate) async fn run_tool_call(
             } else {
                 CommandExecutionStatus::Failed
             };
-            let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+            let _ = emitter.emit(tool_completed_event(
+                tool_item_id.clone(),
+                &name,
+                status,
+                None,
+            ));
         }
         return Ok(outcome);
     }
@@ -552,7 +567,12 @@ pub(crate) async fn run_tool_call(
             } else {
                 CommandExecutionStatus::Failed
             };
-            let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+            let _ = emitter.emit(tool_completed_event(
+                tool_item_id.clone(),
+                &name,
+                status,
+                None,
+            ));
         }
         return Ok(outcome);
     }
@@ -739,7 +759,12 @@ pub(crate) async fn run_tool_call(
         } else {
             CommandExecutionStatus::Failed
         };
-        let _ = emitter.emit(tool_completed_event(tool_item_id.clone(), &name, status, None));
+        let _ = emitter.emit(tool_completed_event(
+            tool_item_id.clone(),
+            &name,
+            status,
+            None,
+        ));
     }
 
     // Ledger recording is left to the run loop where a decision id is available. Return the pipeline outcome only.

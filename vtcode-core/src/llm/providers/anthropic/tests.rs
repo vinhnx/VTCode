@@ -10,22 +10,46 @@ mod capabilities_tests {
 
     #[test]
     fn test_supports_structured_output() {
-        assert!(supports_structured_output(models::CLAUDE_SONNET_4_5, models::anthropic::DEFAULT_MODEL));
-        assert!(supports_structured_output(models::CLAUDE_OPUS_4_1_20250805, models::anthropic::DEFAULT_MODEL));
-        assert!(supports_structured_output("claude-3-7-sonnet-test", models::anthropic::DEFAULT_MODEL));
-        assert!(supports_structured_output("claude-3-5-sonnet-test", models::anthropic::DEFAULT_MODEL));
+        assert!(supports_structured_output(
+            models::CLAUDE_SONNET_4_5,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_structured_output(
+            models::CLAUDE_OPUS_4_1_20250805,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_structured_output(
+            "claude-3-7-sonnet-test",
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_structured_output(
+            "claude-3-5-sonnet-test",
+            models::anthropic::DEFAULT_MODEL
+        ));
     }
 
     #[test]
     fn test_supports_vision() {
-        assert!(supports_vision(models::CLAUDE_SONNET_4_5, models::anthropic::DEFAULT_MODEL));
-        assert!(supports_vision("claude-3-opus", models::anthropic::DEFAULT_MODEL));
-        assert!(supports_vision("claude-4-sonnet", models::anthropic::DEFAULT_MODEL));
+        assert!(supports_vision(
+            models::CLAUDE_SONNET_4_5,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_vision(
+            "claude-3-opus",
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_vision(
+            "claude-4-sonnet",
+            models::anthropic::DEFAULT_MODEL
+        ));
     }
 
     #[test]
     fn test_effective_context_size() {
-        assert_eq!(effective_context_size("claude-sonnet-4-5-latest"), 1_000_000);
+        assert_eq!(
+            effective_context_size("claude-sonnet-4-5-latest"),
+            1_000_000
+        );
         assert_eq!(effective_context_size("claude-haiku-4-5-latest"), 1_000_000);
         assert_eq!(effective_context_size("claude-3-opus"), 200_000);
     }
@@ -65,10 +89,10 @@ mod prompt_cache_tests {
 
 #[cfg(test)]
 mod validation_tests {
+    use crate::config::constants::models;
+    use crate::config::core::AnthropicConfig;
     use crate::llm::provider::{LLMRequest, Message};
     use crate::llm::providers::anthropic::validation::*;
-    use crate::config::core::AnthropicConfig;
-    use crate::config::constants::models;
     use serde_json::json;
 
     #[test]
@@ -142,16 +166,28 @@ mod validation_tests {
 
 #[cfg(test)]
 mod response_parser_tests {
-    use crate::llm::providers::anthropic::response_parser::*;
     use crate::llm::provider::FinishReason;
+    use crate::llm::providers::anthropic::response_parser::*;
     use serde_json::json;
 
     #[test]
     fn test_parse_finish_reason() {
-        assert!(matches!(parse_finish_reason("end_turn"), FinishReason::Stop));
-        assert!(matches!(parse_finish_reason("max_tokens"), FinishReason::Length));
-        assert!(matches!(parse_finish_reason("tool_use"), FinishReason::ToolCalls));
-        assert!(matches!(parse_finish_reason("refusal"), FinishReason::Refusal));
+        assert!(matches!(
+            parse_finish_reason("end_turn"),
+            FinishReason::Stop
+        ));
+        assert!(matches!(
+            parse_finish_reason("max_tokens"),
+            FinishReason::Length
+        ));
+        assert!(matches!(
+            parse_finish_reason("tool_use"),
+            FinishReason::ToolCalls
+        ));
+        assert!(matches!(
+            parse_finish_reason("refusal"),
+            FinishReason::Refusal
+        ));
     }
 
     #[test]

@@ -5,7 +5,9 @@ pub mod slash_commands;
 pub mod tool_dispatch;
 
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
-use crate::agent::runloop::unified::turn::utils::{enforce_history_limits, truncate_message_content};
+use crate::agent::runloop::unified::turn::utils::{
+    enforce_history_limits, truncate_message_content,
+};
 use anyhow::Result;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::llm::provider as uni;

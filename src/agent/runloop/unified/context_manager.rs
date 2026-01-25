@@ -6,8 +6,8 @@ use anyhow::{Result, bail};
 use vtcode_config::constants::context::{
     TOKEN_BUDGET_CRITICAL_THRESHOLD, TOKEN_BUDGET_HIGH_THRESHOLD, TOKEN_BUDGET_WARNING_THRESHOLD,
 };
-use vtcode_core::llm::provider as uni;
 use vtcode_core::compaction::{CompactionConfig, compact_history};
+use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
     IncrementalSystemPrompt, SystemPromptConfig, SystemPromptContext,
@@ -199,13 +199,15 @@ impl ContextManager {
     /// Get guidance message based on token budget status
     /// Returns actionable guidance for context management
     pub(crate) fn get_token_budget_guidance(&self, context_window_size: usize) -> &'static str {
-        self.get_token_budget_status_and_guidance(context_window_size).1
+        self.get_token_budget_status_and_guidance(context_window_size)
+            .1
     }
 
     /// Get current token budget status based on usage ratio
     #[allow(dead_code)]
     pub(crate) fn get_token_budget_status(&self, context_window_size: usize) -> TokenBudgetStatus {
-        self.get_token_budget_status_and_guidance(context_window_size).0
+        self.get_token_budget_status_and_guidance(context_window_size)
+            .0
     }
 
     /// Get current token usage

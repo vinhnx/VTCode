@@ -26,23 +26,23 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tracing::warn;
 
-mod constants;
 mod config_helpers;
+mod constants;
+mod execute;
+mod execute_checks;
+mod execute_tools;
 mod helpers;
 mod optimizer;
 mod output;
-mod summary;
+mod provider_response;
+mod retry;
 mod summarize;
+mod summary;
 mod telemetry;
 mod tool_access;
 mod tool_args;
 mod tool_exec;
 mod types;
-mod execute;
-mod execute_checks;
-mod execute_tools;
-mod retry;
-mod provider_response;
 mod validation;
 mod workspace_config;
 
@@ -222,5 +222,4 @@ impl AgentRunner {
 
         Ok(allowed_tools)
     }
-
 }

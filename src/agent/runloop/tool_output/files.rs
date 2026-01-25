@@ -113,7 +113,11 @@ pub(crate) fn render_list_dir_output(
         let display_path = if path.is_empty() { "/" } else { path };
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!("{}{}", display_path, if !path.is_empty() { "/" } else { "" }),
+            &format!(
+                "{}{}",
+                display_path,
+                if !path.is_empty() { "/" } else { "" }
+            ),
         )?;
     }
 

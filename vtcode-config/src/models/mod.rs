@@ -11,8 +11,8 @@ mod provider;
 
 pub use errors::ModelParseError;
 pub use model_id::ModelId;
-pub use openrouter::openrouter_generated;
 pub use openrouter::OpenRouterMetadata;
+pub use openrouter::openrouter_generated;
 pub use provider::Provider;
 
 #[cfg(test)]

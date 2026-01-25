@@ -14,6 +14,11 @@ use tokio::sync::Mutex as TokioMutex;
 use tracing::{debug, info, warn};
 use vt100::Parser;
 
+use super::command_utils::is_shell_program;
+use super::manager_utils::{clamp_timeout, exit_status_code, set_command_environment};
+use super::scrollback::PtyScrollback;
+use super::session::PtySessionHandle;
+use super::types::{PtyCommandRequest, PtyCommandResult};
 use crate::audit::PermissionAuditLog;
 use crate::config::{CommandsConfig, PtyConfig};
 use crate::tools::path_env;
@@ -21,11 +26,6 @@ use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::types::VTCodePtySession;
 use crate::utils::path::normalize_path;
 use crate::utils::unicode_monitor::UNICODE_MONITOR;
-use super::command_utils::is_shell_program;
-use super::manager_utils::{clamp_timeout, exit_status_code, set_command_environment};
-use super::scrollback::PtyScrollback;
-use super::session::PtySessionHandle;
-use super::types::{PtyCommandRequest, PtyCommandResult};
 
 mod session_ops;
 

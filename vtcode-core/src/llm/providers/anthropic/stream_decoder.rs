@@ -3,13 +3,13 @@
 //! Handles streaming responses from the Anthropic API, decoding SSE events
 //! and accumulating partial content into a complete LLMResponse.
 
+use crate::llm::provider::LLMError;
 use crate::llm::provider::{FinishReason, LLMResponse, LLMStreamEvent, Usage};
 use crate::llm::providers::anthropic_types::{
     AnthropicContentBlock, AnthropicStreamDelta, AnthropicStreamEvent,
 };
 use crate::llm::providers::error_handling::format_network_error;
 use crate::llm::providers::{ReasoningBuffer, shared};
-use crate::llm::provider::LLMError;
 
 use async_stream::try_stream;
 use futures::StreamExt;

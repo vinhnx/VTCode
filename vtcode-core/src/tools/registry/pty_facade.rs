@@ -7,8 +7,8 @@ use anyhow::Result;
 use crate::config::PtyConfig;
 use crate::tools::pty::PtyManager;
 
-use super::pty;
 use super::ToolRegistry;
+use super::pty;
 
 impl ToolRegistry {
     pub fn pty_manager(&self) -> &PtyManager {

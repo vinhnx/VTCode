@@ -4,7 +4,7 @@ use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole};
 use crate::llm::providers::anthropic_types::{
     AnthropicContentBlock, AnthropicMessage, CacheControl,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub(crate) fn hoist_largest_user_message(messages: &mut Vec<Message>) {
     let mut max_len = 0;

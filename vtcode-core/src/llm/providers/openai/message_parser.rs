@@ -1,7 +1,7 @@
 //! JSON message parsing for OpenAI-style chat payloads.
 
 use crate::config::types::ReasoningEffortLevel;
-use crate::llm::provider as provider;
+use crate::llm::provider;
 use crate::llm::providers::shared::parse_openai_tool_calls;
 use serde_json::{Value, json};
 

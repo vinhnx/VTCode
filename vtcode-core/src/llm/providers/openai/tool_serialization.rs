@@ -3,7 +3,7 @@
 //! Keeps tool JSON shaping isolated from the main provider logic.
 
 use crate::config::constants::models;
-use crate::llm::provider as provider;
+use crate::llm::provider;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 

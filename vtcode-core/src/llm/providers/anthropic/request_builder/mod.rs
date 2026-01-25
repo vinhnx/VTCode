@@ -7,7 +7,9 @@ mod tools;
 
 use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
 use crate::llm::provider::{LLMError, LLMRequest};
-use crate::llm::providers::anthropic_types::{AnthropicOutputConfig, AnthropicRequest, CacheControl};
+use crate::llm::providers::anthropic_types::{
+    AnthropicOutputConfig, AnthropicRequest, CacheControl,
+};
 use serde_json::Value;
 
 use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
@@ -109,11 +111,7 @@ pub fn convert_to_anthropic_format(
 
     let effort_value = request.effort.as_ref().or({
         let eff = &ctx.anthropic_config.effort;
-        if eff == "high" {
-            None
-        } else {
-            Some(eff)
-        }
+        if eff == "high" { None } else { Some(eff) }
     });
     let output_config = effort_value.map(|effort| AnthropicOutputConfig::Effort {
         effort: effort.clone(),
@@ -127,11 +125,9 @@ pub fn convert_to_anthropic_format(
 
     let anthropic_request = AnthropicRequest {
         model: request.model.clone(),
-        max_tokens: request.max_tokens.unwrap_or(if thinking_val.is_some() {
-            16000
-        } else {
-            4096
-        }),
+        max_tokens: request
+            .max_tokens
+            .unwrap_or(if thinking_val.is_some() { 16000 } else { 4096 }),
         messages,
         system: system_value,
         temperature: effective_temperature,

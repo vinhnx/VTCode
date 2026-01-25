@@ -12,7 +12,7 @@ pub struct ReverseSearchState {
     pub original_content: String, // Content before search started
     pub original_cursor: usize, // Cursor position before search started
     pub original_attachments: Vec<ContentPart>, // Attachments before search started
-    pub matches: Vec<usize>, // Indices of matching history entries
+    pub matches: Vec<usize>,    // Indices of matching history entries
     pub current_match_index: usize, // Current position in matches
 }
 

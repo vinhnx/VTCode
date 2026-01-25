@@ -8,16 +8,16 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{error, info, warn};
-use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::VTCodeConfig;
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::prompts::generate_system_instruction;
 
+use super::ZedAgent;
 use super::constants::{
     WORKSPACE_TRUST_ALREADY_SATISFIED_LOG, WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG,
     WORKSPACE_TRUST_UPGRADE_LOG,
 };
 use super::types::NotificationEnvelope;
-use super::ZedAgent;
 
 pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> Result<()> {
     let zed_config = &vt_cfg.acp.zed;

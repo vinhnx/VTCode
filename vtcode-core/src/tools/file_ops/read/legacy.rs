@@ -144,7 +144,9 @@ impl FileOpsTool {
 
         let mut tail_lines = input.chunk_lines.unwrap_or(head_lines);
         let remaining = max_lines.saturating_sub(head_lines);
-        tail_lines = tail_lines.min(remaining).min(total_lines.saturating_sub(head_lines));
+        tail_lines = tail_lines
+            .min(remaining)
+            .min(total_lines.saturating_sub(head_lines));
 
         let omitted = total_lines.saturating_sub(head_lines + tail_lines);
         let mut final_content = String::new();

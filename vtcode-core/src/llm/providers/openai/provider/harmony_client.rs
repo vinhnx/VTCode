@@ -1,10 +1,10 @@
-use super::OpenAIProvider;
 use super::super::errors::format_openai_error;
 use super::super::harmony;
 use super::super::headers;
+use super::OpenAIProvider;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::error_display;
-use crate::llm::provider as provider;
+use crate::llm::provider;
 use openai_harmony::chat::{
     Author as HarmonyAuthor, Content as HarmonyContent, Conversation, DeveloperContent,
     Message as HarmonyMessage, ReasoningEffort, Role as HarmonyRole, SystemContent,
@@ -430,25 +430,24 @@ impl OpenAIProvider {
 
         // Send HTTP request to inference server
         let response = headers::apply_json_content_type(
-            self.http_client
-                .post(format!("{}/generate", server_url)),
+            self.http_client.post(format!("{}/generate", server_url)),
         )
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!(
-                        "Failed to send request to harmony inference server at {}: {}",
-                        server_url, e
-                    ),
-                );
-                provider::LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!(
+                    "Failed to send request to harmony inference server at {}: {}",
+                    server_url, e
+                ),
+            );
+            provider::LLMError::Network {
+                message: formatted_error,
+                metadata: None,
+            }
+        })?;
 
         // Check response status
         if !response.status().is_success() {

@@ -59,7 +59,8 @@ impl AgentRunner {
                     }
 
                     // Sync MCP tools to files for dynamic context discovery
-                    if vt_cfg.context.dynamic.enabled && vt_cfg.context.dynamic.sync_mcp_tools
+                    if vt_cfg.context.dynamic.enabled
+                        && vt_cfg.context.dynamic.sync_mcp_tools
                         && let Err(err) = mcp_client.sync_tools_to_files(&self._workspace).await
                     {
                         warn!("Failed to sync MCP tools to files: {}", err);

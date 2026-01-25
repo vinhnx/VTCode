@@ -1891,9 +1891,7 @@ mod tests {
         let footer: Vec<String> = view.iter().rev().take(10).cloned().collect();
 
         assert!(
-            footer
-                .iter()
-                .any(|line| line.contains("Follow-ups (3)")),
+            footer.iter().any(|line| line.contains("Follow-ups (3)")),
             "follow-up header should be visible at the bottom of the transcript"
         );
         assert!(
@@ -1915,7 +1913,6 @@ mod tests {
             "hint line should show how to edit queue"
         );
     }
-
 
     #[test]
     fn timeline_visible_selects_latest_item() {

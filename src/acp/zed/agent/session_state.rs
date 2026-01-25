@@ -45,7 +45,11 @@ impl ZedAgent {
         session.data.borrow_mut().tool_notice_sent = true;
     }
 
-    pub(super) fn update_session_mode(&self, session: &SessionHandle, mode_id: acp::SessionModeId) -> bool {
+    pub(super) fn update_session_mode(
+        &self,
+        session: &SessionHandle,
+        mode_id: acp::SessionModeId,
+    ) -> bool {
         let mut data = session.data.borrow_mut();
         if data.current_mode == mode_id {
             return false;

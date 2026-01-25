@@ -52,8 +52,12 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
 }
 
 fn contains_chained_instruction(command_part: &str) -> bool {
-    let tokens = shell_split(command_part)
-        .unwrap_or_else(|_| command_part.split_whitespace().map(|s| s.to_string()).collect());
+    let tokens = shell_split(command_part).unwrap_or_else(|_| {
+        command_part
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect()
+    });
     if tokens.len() < 2 {
         return false;
     }

@@ -1,4 +1,4 @@
-use crate::models::{openrouter_generated, OpenRouterMetadata};
+use crate::models::{OpenRouterMetadata, openrouter_generated};
 
 use super::ModelId;
 

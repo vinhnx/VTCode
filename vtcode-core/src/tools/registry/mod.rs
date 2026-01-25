@@ -2,19 +2,19 @@
 
 mod approval_recorder;
 mod availability_facade;
-mod commands_facade;
+mod builder;
 mod builtins;
 mod cache;
 mod circuit_breaker;
+mod commands_facade;
 mod config_helpers;
 mod declarations;
+mod dual_output;
 mod error;
-mod execution_history;
 mod execution_facade;
+mod execution_history;
 mod executors;
 mod file_helpers;
-mod builder;
-mod dual_output;
 mod harness;
 mod harness_facade;
 mod history_facade;
@@ -23,14 +23,20 @@ mod inventory_facade;
 mod justification;
 mod justification_extractor;
 pub mod labels;
-mod policy;
-mod policy_facade;
+mod maintenance;
+mod mcp_facade;
+mod mcp_helpers;
+mod metrics_facade;
+mod optimization_facade;
+mod output_processing;
 mod plan_mode_checks;
 mod plan_mode_facade;
+mod policy;
+mod policy_facade;
+mod progress_facade;
 mod progressive_docs;
 mod pty;
 mod pty_facade;
-mod progress_facade;
 mod registration;
 mod registration_facade;
 mod resiliency;
@@ -38,19 +44,13 @@ mod resiliency_facade;
 mod risk_scorer;
 mod shell_policy;
 mod shell_policy_facade;
+mod spooler_facade;
 mod telemetry;
 mod timeout;
-mod timeout_facade;
 mod timeout_category;
-mod utils;
+mod timeout_facade;
 mod tool_executor_impl;
-mod mcp_helpers;
-mod mcp_facade;
-mod optimization_facade;
-mod metrics_facade;
-mod maintenance;
-mod output_processing;
-mod spooler_facade;
+mod utils;
 
 use std::borrow::Cow;
 
@@ -167,12 +167,12 @@ pub enum ToolPermissionDecision {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Result;
     use crate::config::TimeoutsConfig;
     use crate::tools::registry::mcp_helpers::normalize_mcp_tool_identifier;
+    use anyhow::Result;
     use async_trait::async_trait;
-    use serde_json::json;
     use serde_json::Value;
+    use serde_json::json;
     use std::time::Duration;
     use tempfile::TempDir;
 

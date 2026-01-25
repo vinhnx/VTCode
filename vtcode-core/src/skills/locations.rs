@@ -541,8 +541,11 @@ mod tests {
         )
         .unwrap();
 
-        let location =
-            SkillLocation::new(SkillLocationType::ClaudeProject, base_path.to_path_buf(), true);
+        let location = SkillLocation::new(
+            SkillLocationType::ClaudeProject,
+            base_path.to_path_buf(),
+            true,
+        );
 
         let skill_name = location.get_skill_name(&skill_path);
         assert_eq!(skill_name, Some("file-analyzer".to_string()));
