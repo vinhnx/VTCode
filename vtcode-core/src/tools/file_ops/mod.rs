@@ -4,7 +4,11 @@
 //! along with supporting utilities for diff previews and path helpers.
 
 mod diff_preview;
+mod list;
+mod path_policy;
+mod read;
 mod tool;
+mod write;
 
 pub use diff_preview::{
     build_diff_preview, diff_preview_error_skip, diff_preview_size_skip, diff_preview_suppressed,

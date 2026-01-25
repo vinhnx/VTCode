@@ -31,6 +31,11 @@ use crate::tools::{ToolRegistry, build_function_declarations};
 
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;
+use constants::{
+    IDLE_TURN_LIMIT, LOOP_THROTTLE_BASE_MS, LOOP_THROTTLE_MAX_MS, MAX_STREAMING_FAILURES,
+    ROLE_MODEL, ROLE_USER, STREAMING_COOLDOWN_SECS,
+};
+use helpers::detect_textual_run_pty_cmd;
 use anyhow::{Context, Result, anyhow};
 use futures::StreamExt;
 use serde_json::Value;
@@ -40,15 +45,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
+use types::{ProviderResponseSummary, ToolFailureContext};
 
-// Role constants to avoid repeated allocations
-const ROLE_USER: &str = "user";
-const ROLE_MODEL: &str = "model";
-const MAX_STREAMING_FAILURES: u8 = 2;
-const LOOP_THROTTLE_BASE_MS: u64 = 75;
-const LOOP_THROTTLE_MAX_MS: u64 = 500;
-const STREAMING_COOLDOWN_SECS: u64 = 60;
-const IDLE_TURN_LIMIT: usize = 3;
+mod constants;
+mod helpers;
+mod types;
 
 macro_rules! runner_println {
     ($runner:expr, $($arg:tt)*) => {
@@ -58,104 +59,8 @@ macro_rules! runner_println {
     };
 }
 
-struct ProviderResponseSummary {
-    response: crate::llm::provider::LLMResponse,
-    content: String,
-    reasoning: Option<String>,
-    agent_message_streamed: bool,
-    reasoning_recorded: bool,
-}
-
-struct ToolFailureContext<'a> {
-    agent_prefix: &'a str,
-    task_state: &'a mut TaskRunState,
-    event_recorder: &'a mut ExecEventRecorder,
-    command_event: &'a crate::core::agent::events::ActiveCommandHandle,
-    is_gemini: bool,
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::core::agent::state::record_turn_duration;
-
-    #[test]
-    fn record_turn_duration_records_once() {
-        let mut durations = Vec::with_capacity(5); // Test only needs capacity for a few durations
-        let mut recorded = false;
-        let start = std::time::Instant::now();
-
-        record_turn_duration(&mut durations, &mut recorded, &start);
-        record_turn_duration(&mut durations, &mut recorded, &start);
-
-        assert_eq!(durations.len(), 1);
-    }
-
-    #[test]
-    fn finalize_outcome_marks_success() {
-        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
-        state.has_completed = true;
-        state.turns_executed = 2;
-
-        state.finalize_outcome(4);
-
-        assert_eq!(state.completion_outcome, TaskOutcome::Success);
-    }
-
-    #[test]
-    fn finalize_outcome_turn_limit() {
-        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
-        state.turns_executed = 6;
-
-        state.finalize_outcome(6);
-
-        assert!(matches!(
-            state.completion_outcome,
-            TaskOutcome::TurnLimitReached { .. }
-        ));
-    }
-
-    #[test]
-    fn finalize_outcome_tool_loop_limit() {
-        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 2, 10000);
-        state.turns_executed = 2;
-        state.tool_loop_limit_hit = true;
-
-        state.finalize_outcome(10);
-
-        assert_eq!(
-            state.completion_outcome,
-            TaskOutcome::tool_loop_limit_reached(
-                state.max_tool_loops,
-                state.consecutive_tool_loops
-            )
-        );
-    }
-
-    #[test]
-    fn into_results_computes_metrics() {
-        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
-        state.turn_durations_ms = vec![100, 200, 300];
-        state.turns_executed = 3;
-        state.completion_outcome = TaskOutcome::Success;
-        state.modified_files = vec!["file.rs".to_owned()];
-        state.executed_commands = vec!["write_file".to_owned()];
-        state.warnings = vec!["warning".to_owned()];
-
-        let total_duration_ms = 1_000u128;
-        let results = state.into_results("summary".to_owned(), Vec::new(), total_duration_ms);
-
-        assert_eq!(results.outcome, TaskOutcome::Success);
-        assert_eq!(results.turns_executed, 3);
-        assert_eq!(results.total_duration_ms, total_duration_ms);
-        assert_eq!(results.max_turn_duration_ms, Some(300));
-        assert_eq!(results.average_turn_duration_ms, Some(200.0));
-        assert_eq!(results.modified_files, vec!["file.rs".to_owned()]);
-        assert_eq!(results.executed_commands, vec!["write_file".to_owned()]);
-        assert_eq!(results.summary, "summary");
-        assert_eq!(results.warnings, vec!["warning".to_owned()]);
-    }
-}
+mod tests;
 
 /// Individual agent runner for executing specialized agent tasks
 pub struct AgentRunner {
@@ -2417,32 +2322,4 @@ impl AgentRunner {
 
         summary.join("\n")
     }
-}
-
-fn detect_textual_run_pty_cmd(text: &str) -> Option<Value> {
-    const FENCE_PREFIXES: [&str; 2] = ["```tool:run_pty_cmd", "```run_pty_cmd"];
-
-    let (start_idx, prefix) = FENCE_PREFIXES
-        .iter()
-        .filter_map(|candidate| text.find(candidate).map(|idx| (idx, *candidate)))
-        .min_by_key(|(idx, _)| *idx)?;
-
-    // Require a fenced block owned by the model to avoid executing echoed examples.
-    let mut remainder = &text[start_idx + prefix.len()..];
-    if remainder.starts_with('\r') {
-        remainder = &remainder[1..];
-    }
-    remainder = remainder.strip_prefix('\n')?;
-
-    let fence_close = remainder.find("```")?;
-    let block = remainder[..fence_close].trim();
-    if block.is_empty() {
-        return None;
-    }
-
-    let parsed = serde_json::from_str::<Value>(block)
-        .or_else(|_| json5::from_str::<Value>(block))
-        .ok()?;
-    parsed.as_object()?;
-    Some(parsed)
 }
