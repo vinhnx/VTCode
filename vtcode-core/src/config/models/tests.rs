@@ -1,6 +1,6 @@
 use super::*;
-use vtcode_config::models::openrouter_generated;
 use crate::config::constants::models;
+use vtcode_config::models::openrouter_generated;
 
 #[test]
 fn test_model_string_conversion() {
@@ -209,7 +209,10 @@ fn test_model_from_string() {
     );
     // Moonshot models are deprecated; use OpenRouter variants instead
     for entry in openrouter_generated::ENTRIES {
-        assert_eq!(entry.id.parse::<ModelId>().unwrap().as_str(), entry.variant.as_str());
+        assert_eq!(
+            entry.id.parse::<ModelId>().unwrap().as_str(),
+            entry.variant.as_str()
+        );
     }
     // Invalid model
     assert!("invalid-model".parse::<ModelId>().is_err());
@@ -278,7 +281,10 @@ fn test_model_providers() {
     );
 
     for entry in openrouter_generated::ENTRIES {
-        assert_eq!(entry.variant.provider().to_string(), Provider::OpenRouter.to_string());
+        assert_eq!(
+            entry.variant.provider().to_string(),
+            Provider::OpenRouter.to_string()
+        );
     }
 }
 

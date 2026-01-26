@@ -122,7 +122,6 @@ pub use turn_diff_tracker::{
     FileChange as DiffFileChange, SharedTurnDiffTracker, TurnDiffTracker, new_shared_tracker,
 };
 
-
 // Router
 pub use router::{
     ConfiguredToolSpec as RouterConfiguredToolSpec, ToolCall, ToolRegistry, ToolRegistryBuilder,

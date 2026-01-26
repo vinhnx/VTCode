@@ -416,9 +416,7 @@ mod tests {
             active_agent_prompt: None,
         };
 
-        let result = manager
-            .build_system_prompt(&[], 0, params)
-            .await;
+        let result = manager.build_system_prompt(&[], 0, params).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));
     }

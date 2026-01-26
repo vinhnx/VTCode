@@ -4,8 +4,8 @@ use ratatui::prelude::*;
 use terminal_size::{Height, Width, terminal_size};
 use unicode_width::UnicodeWidthStr;
 
-use crate::ui::tui::session::measure_text_width;
 use super::state::{ModalListState, ModalSearchState};
+use crate::ui::tui::session::measure_text_width;
 
 pub struct ModalRenderStyles {
     pub border: Style,

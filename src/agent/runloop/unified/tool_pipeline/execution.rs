@@ -35,7 +35,7 @@ use vtcode_core::exec::events::CommandExecutionStatus;
 
 use super::cache::{cache_target_path, create_enhanced_cache_key, is_tool_cacheable};
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
-use super::timeout::{create_timeout_error, TimeoutWarningGuard};
+use super::timeout::{TimeoutWarningGuard, create_timeout_error};
 use super::{DEFAULT_TOOL_TIMEOUT, MAX_RETRY_BACKOFF, RETRY_BACKOFF_BASE};
 
 pub(crate) async fn run_tool_call(

@@ -945,7 +945,9 @@ impl LLMProvider for OpenResponsesProvider {
                                     };
 
                                     return Some((
-                                        Ok(LLMStreamEvent::Completed { response: Box::new(response) }),
+                                        Ok(LLMStreamEvent::Completed {
+                                            response: Box::new(response),
+                                        }),
                                         (byte_stream, buffer, accumulator, done),
                                     ));
                                 }
@@ -1076,7 +1078,9 @@ impl LLMProvider for OpenResponsesProvider {
                                 };
 
                                 return Some((
-                                    Ok(LLMStreamEvent::Completed { response: Box::new(response) }),
+                                    Ok(LLMStreamEvent::Completed {
+                                        response: Box::new(response),
+                                    }),
                                     (byte_stream, buffer, accumulator, done),
                                 ));
                             }

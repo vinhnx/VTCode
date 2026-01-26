@@ -7,8 +7,8 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     "gpt-5.2",
     "gpt-5.2-2025-12-11",
     "gpt-5.2-codex",
-    "gpt-5.1", // Enhanced version of GPT-5 with temperature support and streaming
-    "gpt-5.1-codex", // Enhanced version of GPT-5 Codex with temperature support and streaming
+    "gpt-5.1",           // Enhanced version of GPT-5 with temperature support and streaming
+    "gpt-5.1-codex",     // Enhanced version of GPT-5 Codex with temperature support and streaming
     "gpt-5.1-codex-max", // Enhanced version of GPT-5 Codex with temperature support and streaming
     "gpt-5.1-mini",      // Enhanced mini version with temperature support and streaming
     "codex-mini-latest",

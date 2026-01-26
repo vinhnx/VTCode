@@ -4,9 +4,9 @@ use std::time::Duration;
 mod cache;
 mod execution;
 mod status;
-mod timeout;
 #[cfg(test)]
 mod tests;
+mod timeout;
 
 pub(crate) use execution::{execute_tool_with_timeout_ref, run_tool_call};
 pub(crate) use status::{ToolExecutionStatus, ToolPipelineOutcome};

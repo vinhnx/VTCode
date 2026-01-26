@@ -47,14 +47,14 @@
 //! tool_response.validate_for_provider("openai").unwrap();
 //! ```
 
-mod request;
-mod message;
-mod tool;
 mod call;
-mod response;
+mod message;
 mod provider_trait;
+mod request;
+mod response;
 #[cfg(test)]
 mod tests;
+mod tool;
 
 pub use call::{FunctionCall, ToolCall};
 pub use message::{ContentPart, Message, MessageContent, MessageRole};
@@ -65,6 +65,5 @@ pub use request::{
 };
 pub use response::{FinishReason, LLMResponse, LLMStream, LLMStreamEvent, Usage};
 pub use tool::{
-    FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition,
-    ToolSearchAlgorithm,
+    FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolSearchAlgorithm,
 };

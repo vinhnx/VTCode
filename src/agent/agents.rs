@@ -19,7 +19,6 @@ impl ResumeSession {
     pub fn message_count(&self) -> usize {
         self.history.len()
     }
-
 }
 
 pub async fn run_single_agent_loop(

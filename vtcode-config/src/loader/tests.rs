@@ -43,7 +43,10 @@ fn test_layered_config_loading() {
         // User + Workspace
         assert_eq!(layers.len(), 2);
         assert!(matches!(layers[0].source, ConfigLayerSource::User { .. }));
-        assert!(matches!(layers[1].source, ConfigLayerSource::Workspace { .. }));
+        assert!(matches!(
+            layers[1].source,
+            ConfigLayerSource::Workspace { .. }
+        ));
     });
 }
 
@@ -79,7 +82,10 @@ fn test_config_builder_overrides() {
         let layers = manager.layer_stack().layers();
         // Workspace + Runtime
         assert_eq!(layers.len(), 2);
-        assert!(matches!(layers[0].source, ConfigLayerSource::Workspace { .. }));
+        assert!(matches!(
+            layers[0].source,
+            ConfigLayerSource::Workspace { .. }
+        ));
         assert!(matches!(layers[1].source, ConfigLayerSource::Runtime));
     });
 }
@@ -275,8 +281,8 @@ fn config_defaults_provider_overrides_paths_and_theme() {
         .with_syntax_languages(vec!["zig".to_string()]);
 
     defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
-        let manager =
-            ConfigManager::load_from_workspace(workspace_root).expect("failed to load workspace config");
+        let manager = ConfigManager::load_from_workspace(workspace_root)
+            .expect("failed to load workspace config");
 
         let resolved_path = manager
             .config_path()
@@ -306,8 +312,7 @@ show_sidebar = true
     fs::write(&config_path, initial_config).expect("failed to write initial config");
 
     // Load config
-    let mut manager =
-        ConfigManager::load_from_workspace(workspace).expect("failed to load config");
+    let mut manager = ConfigManager::load_from_workspace(workspace).expect("failed to load config");
     assert_eq!(manager.config().ui.display_mode, crate::UiDisplayMode::Full);
 
     // Modify config (simulating /config palette changes)

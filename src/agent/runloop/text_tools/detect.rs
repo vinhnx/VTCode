@@ -2,9 +2,7 @@ use memchr::memmem;
 use serde_json::Value;
 
 use crate::agent::runloop::text_tools::canonical::{
-    DIRECT_FUNCTION_ALIASES,
-    TEXTUAL_TOOL_PREFIXES,
-    canonicalize_tool_name,
+    DIRECT_FUNCTION_ALIASES, TEXTUAL_TOOL_PREFIXES, canonicalize_tool_name,
     canonicalize_tool_result,
 };
 use crate::agent::runloop::text_tools::parse_args::parse_textual_arguments;

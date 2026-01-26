@@ -116,12 +116,7 @@ impl AgentRunner {
                 Err(e) => {
                     let error_msg = format!("Error executing {}: {}", name, e);
                     if !self.quiet {
-                        println!(
-                            "{} {} {}",
-                            agent_prefix,
-                            style("(ERR)").red(),
-                            error_msg
-                        );
+                        println!("{} {} {}", agent_prefix, style("(ERR)").red(), error_msg);
                     }
                     let err_lower = error_msg.to_lowercase();
                     if err_lower.contains("rate limit") {

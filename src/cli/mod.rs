@@ -25,8 +25,6 @@ pub use vtcode_core::cli::args::AskCommandOptions;
 pub use benchmark::BenchmarkCommandOptions;
 pub use exec::ExecCommandOptions;
 
-
-
 // Marketplace command handlers - these are the new functions we're adding
 pub async fn handle_marketplace_add(source: String, id: Option<String>) -> Result<()> {
     println!("Adding marketplace: {} with id: {:?}", source, id);

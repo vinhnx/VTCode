@@ -1,12 +1,12 @@
 use super::super::stream_decoder::parse_usage_value;
 use super::*;
 
+use crate::llm::FinishReason;
 use crate::llm::provider::ToolDefinition;
 use crate::llm::providers::ReasoningBuffer;
-use crate::llm::FinishReason;
 use crate::llm::providers::openrouter::stream_decoder::parse_stream_payload;
-use crate::llm::providers::shared::{StreamFragment, extract_data_payload};
 use crate::llm::providers::shared::NoopStreamTelemetry;
+use crate::llm::providers::shared::{StreamFragment, extract_data_payload};
 use serde_json::json;
 
 fn sample_tool() -> ToolDefinition {

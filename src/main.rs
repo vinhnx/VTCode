@@ -401,9 +401,7 @@ async fn run() -> Result<()> {
             cli::handle_anthropic_api_command(core_cfg.clone(), *port, host.clone()).await?;
         }
         Some(Commands::SelfUpdate { check, force: _ }) => {
-            let options = cli::update::UpdateCommandOptions {
-                check_only: *check,
-            };
+            let options = cli::update::UpdateCommandOptions { check_only: *check };
             cli::update::handle_update_command(options).await?;
         }
         _ => {

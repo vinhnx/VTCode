@@ -193,8 +193,7 @@ pub(crate) async fn handle_tool_execution_result(
                             let content_for_model = if let Some(s) = output.as_str() {
                                 s.to_string()
                             } else {
-                                serde_json::to_string(&output)
-                                    .unwrap_or_else(|_| "{}".to_string())
+                                serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string())
                             };
                             push_tool_response(
                                 working_history,

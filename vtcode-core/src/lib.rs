@@ -172,7 +172,6 @@ pub mod utils;
 
 // New MCP enhancement modules
 // Re-exports for convenience
-pub use vtcode_bash_runner::BashRunner;
 pub use cli::args::{Cli, Commands};
 pub use code::code_completion::{CompletionEngine, CompletionSuggestion};
 pub use commands::stats::handle_stats_command;
@@ -194,6 +193,7 @@ pub use core::agent::task::{
 pub use core::memory_pool::{MemoryPool, global_pool};
 pub use core::optimized_agent::{AgentContext, AgentState, OptimizedAgentEngine};
 pub use core::performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
+pub use vtcode_bash_runner::BashRunner;
 
 pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, PromptOptimizer};
 pub use core::timeout_detector::TimeoutDetector;

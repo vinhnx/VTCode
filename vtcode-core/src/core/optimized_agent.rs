@@ -9,10 +9,10 @@ use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, error, info, warn};
 
 use crate::core::memory_pool::global_pool;
+use crate::tools::ToolCallRequest;
 use crate::tools::async_pipeline::{
     AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest,
 };
-use crate::tools::ToolCallRequest;
 
 /// Agent execution states
 #[derive(Debug, Clone, PartialEq, Eq)]

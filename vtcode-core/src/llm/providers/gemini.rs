@@ -36,11 +36,11 @@ use vtcode_config::types::ReasoningEffortLevel;
 use super::common::{extract_prompt_cache_settings, override_base_url, resolve_model};
 use super::error_handling::{format_network_error, format_parse_error, is_rate_limit_error};
 
-mod provider;
-mod llm_provider;
-mod helpers;
-mod sanitize;
 mod client;
+mod helpers;
+mod llm_provider;
+mod provider;
+mod sanitize;
 #[cfg(test)]
 mod tests;
 

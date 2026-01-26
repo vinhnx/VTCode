@@ -229,12 +229,12 @@ pub use registry::{
     ToolJustification, ToolRegistration, ToolRegistry, ToolRiskContext, ToolRiskScorer, ToolSource,
     WorkspaceTrust,
 };
+pub use request_response::{ToolCallRequest, ToolCallResponse};
 pub use result::{TokenCounts, ToolMetadata, ToolMetadataBuilder, ToolResult as SplitToolResult};
 pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
 };
-pub use request_response::{ToolCallRequest, ToolCallResponse};
 pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
 pub use smart_cache::{CachedResult as SmartCachedResult, SmartResultCache};
 pub use tool_effectiveness::{
