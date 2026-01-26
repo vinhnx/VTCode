@@ -60,5 +60,14 @@ fn generate(version: &str) {
     let mut out_file = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).to_path_buf();
     out_file.push(file_name);
 
-    fs::write(&out_file, contents).unwrap();
+    // Handle read-only file system gracefully
+    match fs::write(&out_file, contents) {
+        Ok(_) => {},
+        Err(e) if e.kind() == std::io::ErrorKind::ReadOnlyFilesystem => {
+            println!("cargo:warning=Read-only file system detected, skipping file write: {}", e);
+        },
+        Err(e) => {
+            panic!("Failed to write file: {}", e);
+        }
+    }
 }
