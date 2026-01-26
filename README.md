@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/Available%20on-Open%20VSX-4CAF50?style=for-the-badge&logo=opensearch&logoColor=white" alt="Open VSX Registry"/>
   </a>
 
-<a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=orange&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=blue&label=Release" alt="GitHub Release"/></a>
+<a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=black&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=black&label=Release" alt="GitHub Release"/></a>
 
 ---
 
