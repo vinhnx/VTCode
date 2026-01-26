@@ -42,7 +42,7 @@ fn generate_placeholder_artifacts() {
         "// Placeholder for docs.rs build\n",
     )
     .unwrap();
-    std::fs::write(out_dir.join("openrouter_constants.rs"), "    // Placeholder for docs.rs build\n    pub const SUPPORTED_MODELS: &[&str] = &[];\n    pub const REASONING_MODELS: &[&str] = &[];\n    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];\n    pub mod vendor {\n        pub mod openrouter {\n            pub const MODELS: &[&str] = &[];\n        }\n    }\n").unwrap();
+    std::fs::write(out_dir.join("openrouter_constants.rs"), "    // Placeholder for docs.rs build\n    pub const DEFAULT_MODEL: &str = \"openrouter/auto\";\n    pub const SUPPORTED_MODELS: &[&str] = &[];\n    pub const REASONING_MODELS: &[&str] = &[];\n    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];\n    pub mod vendor {\n        pub mod openrouter {\n            pub const MODELS: &[&str] = &[];\n        }\n    }\n").unwrap();
     std::fs::write(
         out_dir.join("openrouter_aliases.rs"),
         "// Placeholder for docs.rs build\n",

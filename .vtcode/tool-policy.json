@@ -51,7 +51,7 @@
     "git_log"
   ],
   "policies": {
-    "apply_patch": "allow",
+    "apply_patch": "prompt",
     "create_file": "prompt",
     "delete_file": "prompt",
     "edit_file": "prompt",
