@@ -674,7 +674,7 @@ pub(crate) async fn stream_and_render_response(
                 reasoning_emitted = true;
             }
             Ok(LLMStreamEvent::Completed { response }) => {
-                final_response = Some(response);
+                final_response = Some(*response);
             }
             Err(err) => {
                 finish_spinner(&mut spinner_active);
