@@ -12,6 +12,7 @@ use async_stream::try_stream;
 use futures::StreamExt;
 use serde_json::Value;
 use std::time::Instant;
+#[cfg(debug_assertions)]
 use tracing::debug;
 
 use super::responses_api::parse_responses_payload;
