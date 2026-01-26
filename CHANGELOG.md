@@ -3,6 +3,59 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.71.0] - 2026-01-26
+
+
+### Features
+    - feat: add UI support for modal layouts and wizard states in TUI session
+    - feat: add enhanced caching logic and tool execution pipeline improvements
+    - feat: streamline `file_ops` by removing legacy recursive search methods and enhance OpenAI provider with streaming logic
+    - feat: implement AgentRunner modularization for summarization, telemetry, tool access, and execution
+    - feat: modularize tool outcome handlers into separate files (failure, success, timeout, apply) and refactor implementation for better readability and maintainability
+    - feat: add `ZedAgent` implementation to support session management, tool execution, and client interaction
+    - feat: integrate `MCP client` with `ToolRegistry` and add functions for tool management
+    - feat: add `parse_openai_tool_calls` function to handle OpenAI tool call parsing logic
+    - feat: add OpenAI provider support for chat message parsing, request building, response parsing, and streaming decoder implementations
+    - feat: add human-readable slug generator for plan file naming, update TUI header editing mode handling
+    - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
+    - feat: migrate `XAIProvider` to use the new `Responses API`, improve support for tools, caching, and error handling
+
+
+### Bug Fixes
+    - fix: remove `check_output.txt` to clean up outdated and obsolete error logs
+    - fix: address unresolved imports and modules in tests across multiple components
+
+
+### Refactors
+    - refactor: adjust formatting, imports, and re-exports for improved consistency
+    - refactor: remove `read_file_handler.rs`, `bash_runner.rs`, and unused code
+    - refactor: remove `read_file_handler.rs`, `bash_runner.rs`, and unused code
+    - refactor: remove `text_tools.rs` to simplify codebase and eliminate unused functions
+    - refactor: remove unused LLM request structures and related configurations
+    - refactor: reorder imports across modules for consistency and readability
+    - refactor: reorder imports across modules for consistency and readability
+    - refactor: expand visibility for `parse_terminal_command` and `run_list_files` functions to improve module accessibility
+    - refactor: remove `models.rs` to simplify configuration and reduce redundancy in model management
+    - refactor: remove Anthropic provider and OpenRouter implementation for codebase simplification
+    - refactor: remove Anthropic provider and OpenRouter implementation for codebase simplification
+    - refactor: remove obsolete `src/acp/zed.rs` file and related references to streamline the codebase
+    - refactor: remove `AnthropicProvider` and related implementations from the codebase to clean up unused functionality
+    - refactor: remove `OpenAIPromptCacheSettings` import from `xai.rs` to clean up unused dependencies
+    - refactor: optimize memory usage and runtime efficiency, improve error handling, and enhance circuit breaker logic
+
+
+### Documentation
+    - docs: update changelog for v0.70.1 [skip ci]
+
+
+### Tests
+    - test: add environment variable handling and cleanup in `test_get_gemini_api_key_from_config`
+
+
+### Chores
+    - chore: update npm package.json to v0.70.1 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.70.0 version =  [skip ci]
 # [Version 0.70.1] - 2026-01-25
 
 
