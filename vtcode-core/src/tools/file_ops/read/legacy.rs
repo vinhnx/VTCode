@@ -22,7 +22,7 @@ impl FileOpsTool {
         }
 
         if is_image_path(file_path) {
-            let image_data = read_image_file(file_path.to_string_lossy().as_ref()).await?;
+            let image_data = read_image_file::<&str>(file_path.to_string_lossy().as_ref()).await?;
             let metadata = json!({
                 "size_bytes": image_data.size,
                 "size_lines": 0,
