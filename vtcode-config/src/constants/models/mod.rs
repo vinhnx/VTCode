@@ -1,15 +1,15 @@
-pub mod google;
-pub mod openai;
-pub mod huggingface;
-pub mod zai;
-pub mod moonshot;
-pub mod openrouter;
-pub mod lmstudio;
-pub mod ollama;
-pub mod deepseek;
 pub mod anthropic;
+pub mod deepseek;
+pub mod google;
+pub mod huggingface;
+pub mod lmstudio;
 pub mod minimax;
+pub mod moonshot;
+pub mod ollama;
+pub mod openai;
+pub mod openrouter;
 pub mod xai;
+pub mod zai;
 
 // Backwards compatibility - keep old constants working
 pub const GEMINI_2_5_FLASH_PREVIEW: &str = google::GEMINI_2_5_FLASH_PREVIEW;
@@ -68,7 +68,6 @@ pub const OPENROUTER_QWEN3_CODER: &str = openrouter::QWEN3_CODER;
 #[cfg(docsrs)]
 pub const OPENROUTER_QWEN3_CODER: &str = "qwen/qwen3-coder";
 #[cfg(not(docsrs))]
-pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str =
-    openrouter::ANTHROPIC_CLAUDE_SONNET_4_5;
+pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str = openrouter::ANTHROPIC_CLAUDE_SONNET_4_5;
 #[cfg(docsrs)]
 pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-sonnet-4.5";

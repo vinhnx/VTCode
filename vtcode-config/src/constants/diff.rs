@@ -26,7 +26,8 @@ pub const MAX_SINGLE_FILE_CHANGES: usize = 200;
 pub const MAX_FILES_IN_SUMMARY: usize = 20;
 
 /// Message shown when inline diffs are suppressed
-pub const SUPPRESSION_MESSAGE: &str = "Inline diffs have been suppressed for recent changes because there are too many to display.";
+pub const SUPPRESSION_MESSAGE: &str =
+    "Inline diffs have been suppressed for recent changes because there are too many to display.";
 
 /// Hint message shown with suppressed diffs
 pub const SUPPRESSION_HINT: &str = "Tip: Use `git diff` to view the full changes.";

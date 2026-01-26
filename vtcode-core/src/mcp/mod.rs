@@ -31,8 +31,6 @@ pub mod utils;
 
 pub use client::McpClient;
 
-
-
 pub use connection_pool::{
     ConnectionPoolStats, McpConnectionPool, McpPoolError, PooledMcpManager, PooledMcpStats,
 };
@@ -293,9 +291,11 @@ fn format_tool_markdown(tool: &McpToolInfo) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::rmcp_client::{build_elicitation_validator, validate_elicitation_payload, directory_to_file_uri};
-    use mcp_types::{InitializeRequestParams};
     use crate::config::mcp::{McpProviderConfig, McpStdioServerConfig, McpTransportConfig};
+    use crate::mcp::rmcp_client::{
+        build_elicitation_validator, directory_to_file_uri, validate_elicitation_payload,
+    };
+    use mcp_types::InitializeRequestParams;
     use mcp_types::{ClientCapabilities, ClientCapabilitiesRoots, Implementation};
     use serde_json::{Map, Value, json};
 

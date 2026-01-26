@@ -3,679 +3,679 @@ use crate::config::constants::models;
 use crate::llm::provider::{SpecificFunctionChoice, SpecificToolChoice, ToolDefinition};
 use serde_json::json;
 
-    #[test]
-    fn convert_to_gemini_request_maps_history_and_system_prompt() {
-        let provider = GeminiProvider::new("test-key".to_string());
-        let mut assistant_message = Message::assistant("Sure thing".to_string());
-        assistant_message.tool_calls = Some(vec![ToolCall::function(
-            "call_1".to_string(),
-            "list_files".to_string(),
-            json!({ "path": "." }).to_string(),
-        )]);
+#[test]
+fn convert_to_gemini_request_maps_history_and_system_prompt() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let mut assistant_message = Message::assistant("Sure thing".to_string());
+    assistant_message.tool_calls = Some(vec![ToolCall::function(
+        "call_1".to_string(),
+        "list_files".to_string(),
+        json!({ "path": "." }).to_string(),
+    )]);
 
-        let tool_response =
-            Message::tool_response("call_1".to_string(), json!({ "result": "ok" }).to_string());
+    let tool_response =
+        Message::tool_response("call_1".to_string(), json!({ "result": "ok" }).to_string());
 
-        let tool_def = ToolDefinition::function(
-            "list_files".to_string(),
-            "List files".to_string(),
-            json!({
+    let tool_def = ToolDefinition::function(
+        "list_files".to_string(),
+        "List files".to_string(),
+        json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string" }
+            }
+        }),
+    );
+
+    let request = LLMRequest {
+        messages: vec![
+            Message::user("hello".to_string()),
+            assistant_message,
+            tool_response,
+        ],
+        system_prompt: Some("System prompt".to_string()),
+        tools: Some(vec![tool_def]),
+        model: models::google::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+        max_tokens: Some(256),
+        temperature: Some(0.4),
+        tool_choice: Some(ToolChoice::Specific(SpecificToolChoice {
+            tool_type: "function".to_string(),
+            function: SpecificFunctionChoice {
+                name: "list_files".to_string(),
+            },
+        })),
+        ..Default::default()
+    };
+
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
+
+    let system_instruction = gemini_request
+        .system_instruction
+        .expect("system instruction should be present");
+    assert!(matches!(
+        system_instruction.parts.as_slice(),
+        [Part::Text {
+            text,
+            thought_signature: _
+        }] if text == "System prompt"
+    ));
+
+    assert_eq!(gemini_request.contents.len(), 3);
+    assert_eq!(gemini_request.contents[0].role, "user");
+    assert!(
+        gemini_request.contents[1]
+            .parts
+            .iter()
+            .any(|part| matches!(part, Part::FunctionCall { .. }))
+    );
+    let tool_part = gemini_request.contents[2]
+        .parts
+        .iter()
+        .find_map(|part| match part {
+            Part::FunctionResponse {
+                function_response, ..
+            } => Some(function_response),
+            _ => None,
+        })
+        .expect("tool response part should exist");
+    assert_eq!(tool_part.name, "list_files");
+}
+
+#[test]
+fn convert_from_gemini_response_extracts_tool_calls() {
+    let response = GenerateContentResponse {
+        candidates: vec![crate::gemini::Candidate {
+            content: Content {
+                role: "model".to_string(),
+                parts: vec![
+                    Part::Text {
+                        text: "Here you go".to_string(),
+                        thought_signature: None,
+                    },
+                    Part::FunctionCall {
+                        function_call: GeminiFunctionCall {
+                            name: "list_files".to_string(),
+                            args: json!({ "path": "." }),
+                            id: Some("call_1".to_string()),
+                        },
+                        thought_signature: None,
+                    },
+                ],
+            },
+            finish_reason: Some("FUNCTION_CALL".to_string()),
+        }],
+        prompt_feedback: None,
+        usage_metadata: None,
+    };
+
+    let llm_response =
+        GeminiProvider::convert_from_gemini_response(response).expect("conversion should succeed");
+
+    assert_eq!(llm_response.content.as_deref(), Some("Here you go"));
+    let calls = llm_response
+        .tool_calls
+        .expect("tool call should be present");
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].function.as_ref().unwrap().name, "list_files");
+    assert!(
+        calls[0]
+            .function
+            .as_ref()
+            .unwrap()
+            .arguments
+            .contains("path")
+    );
+    assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
+}
+
+#[test]
+fn sanitize_function_parameters_removes_additional_properties() {
+    let parameters = json!({
+        "type": "object",
+        "properties": {
+            "input": {
                 "type": "object",
                 "properties": {
                     "path": { "type": "string" }
-                }
-            }),
-        );
-
-        let request = LLMRequest {
-            messages: vec![
-                Message::user("hello".to_string()),
-                assistant_message,
-                tool_response,
-            ],
-            system_prompt: Some("System prompt".to_string()),
-            tools: Some(vec![tool_def]),
-            model: models::google::GEMINI_2_5_FLASH_PREVIEW.to_string(),
-            max_tokens: Some(256),
-            temperature: Some(0.4),
-            tool_choice: Some(ToolChoice::Specific(SpecificToolChoice {
-                tool_type: "function".to_string(),
-                function: SpecificFunctionChoice {
-                    name: "list_files".to_string(),
                 },
-            })),
-            ..Default::default()
-        };
-
-        let gemini_request = provider
-            .convert_to_gemini_request(&request)
-            .expect("conversion should succeed");
-
-        let system_instruction = gemini_request
-            .system_instruction
-            .expect("system instruction should be present");
-        assert!(matches!(
-            system_instruction.parts.as_slice(),
-            [Part::Text {
-                text,
-                thought_signature: _
-            }] if text == "System prompt"
-        ));
-
-        assert_eq!(gemini_request.contents.len(), 3);
-        assert_eq!(gemini_request.contents[0].role, "user");
-        assert!(
-            gemini_request.contents[1]
-                .parts
-                .iter()
-                .any(|part| matches!(part, Part::FunctionCall { .. }))
-        );
-        let tool_part = gemini_request.contents[2]
-            .parts
-            .iter()
-            .find_map(|part| match part {
-                Part::FunctionResponse {
-                    function_response, ..
-                } => Some(function_response),
-                _ => None,
-            })
-            .expect("tool response part should exist");
-        assert_eq!(tool_part.name, "list_files");
-    }
-
-    #[test]
-    fn convert_from_gemini_response_extracts_tool_calls() {
-        let response = GenerateContentResponse {
-            candidates: vec![crate::gemini::Candidate {
-                content: Content {
-                    role: "model".to_string(),
-                    parts: vec![
-                        Part::Text {
-                            text: "Here you go".to_string(),
-                            thought_signature: None,
-                        },
-                        Part::FunctionCall {
-                            function_call: GeminiFunctionCall {
-                                name: "list_files".to_string(),
-                                args: json!({ "path": "." }),
-                                id: Some("call_1".to_string()),
-                            },
-                            thought_signature: None,
-                        },
-                    ],
-                },
-                finish_reason: Some("FUNCTION_CALL".to_string()),
-            }],
-            prompt_feedback: None,
-            usage_metadata: None,
-        };
-
-        let llm_response = GeminiProvider::convert_from_gemini_response(response)
-            .expect("conversion should succeed");
-
-        assert_eq!(llm_response.content.as_deref(), Some("Here you go"));
-        let calls = llm_response
-            .tool_calls
-            .expect("tool call should be present");
-        assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].function.as_ref().unwrap().name, "list_files");
-        assert!(
-            calls[0]
-                .function
-                .as_ref()
-                .unwrap()
-                .arguments
-                .contains("path")
-        );
-        assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
-    }
-
-    #[test]
-    fn sanitize_function_parameters_removes_additional_properties() {
-        let parameters = json!({
-            "type": "object",
-            "properties": {
-                "input": {
-                    "type": "object",
-                    "properties": {
-                        "path": { "type": "string" }
-                    },
-                    "additionalProperties": false
-                }
-            },
-            "additionalProperties": false
-        });
-
-        let sanitized = sanitize_function_parameters(parameters);
-        let root = sanitized
-            .as_object()
-            .expect("root parameters should remain an object");
-        assert!(!root.contains_key("additionalProperties"));
-
-        let nested = root
-            .get("properties")
-            .and_then(|value| value.as_object())
-            .and_then(|props| props.get("input"))
-            .and_then(|value| value.as_object())
-            .expect("nested object should be preserved");
-        assert!(!nested.contains_key("additionalProperties"));
-    }
-
-    #[test]
-    fn sanitize_function_parameters_removes_exclusive_min_max() {
-        // Test case for the bug: exclusiveMaximum and exclusiveMinimum in nested properties
-        let parameters = json!({
-            "type": "object",
-            "properties": {
-                "max_length": {
-                    "type": "integer",
-                    "exclusiveMaximum": 1000000,
-                    "exclusiveMinimum": 0,
-                    "minimum": 1,
-                    "maximum": 999999,
-                    "description": "Maximum number of characters"
-                }
+                "additionalProperties": false
             }
-        });
+        },
+        "additionalProperties": false
+    });
 
-        let sanitized = sanitize_function_parameters(parameters);
-        let props = sanitized
-            .get("properties")
-            .and_then(|v| v.as_object())
-            .and_then(|p| p.get("max_length"))
-            .and_then(|v| v.as_object())
-            .expect("max_length property should exist");
+    let sanitized = sanitize_function_parameters(parameters);
+    let root = sanitized
+        .as_object()
+        .expect("root parameters should remain an object");
+    assert!(!root.contains_key("additionalProperties"));
 
-        // These unsupported fields should be removed
-        assert!(
-            !props.contains_key("exclusiveMaximum"),
-            "exclusiveMaximum should be removed"
-        );
-        assert!(
-            !props.contains_key("exclusiveMinimum"),
-            "exclusiveMinimum should be removed"
-        );
-        assert!(!props.contains_key("minimum"), "minimum should be removed");
-        assert!(!props.contains_key("maximum"), "maximum should be removed");
+    let nested = root
+        .get("properties")
+        .and_then(|value| value.as_object())
+        .and_then(|props| props.get("input"))
+        .and_then(|value| value.as_object())
+        .expect("nested object should be preserved");
+    assert!(!nested.contains_key("additionalProperties"));
+}
 
-        // These supported fields should be preserved
-        assert_eq!(props.get("type").and_then(|v| v.as_str()), Some("integer"));
-        assert_eq!(
-            props.get("description").and_then(|v| v.as_str()),
-            Some("Maximum number of characters")
-        );
-    }
+#[test]
+fn sanitize_function_parameters_removes_exclusive_min_max() {
+    // Test case for the bug: exclusiveMaximum and exclusiveMinimum in nested properties
+    let parameters = json!({
+        "type": "object",
+        "properties": {
+            "max_length": {
+                "type": "integer",
+                "exclusiveMaximum": 1000000,
+                "exclusiveMinimum": 0,
+                "minimum": 1,
+                "maximum": 999999,
+                "description": "Maximum number of characters"
+            }
+        }
+    });
 
-    #[test]
-    fn apply_stream_delta_handles_replayed_chunks() {
-        let mut acc = String::new();
-        assert_eq!(
-            GeminiProvider::apply_stream_delta(&mut acc, "Hello"),
-            Some("Hello".to_string())
-        );
-        assert_eq!(
-            GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
-            Some(" world".to_string())
-        );
-        assert_eq!(
-            GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
-            None
-        );
-        assert_eq!(acc, "Hello world");
-    }
+    let sanitized = sanitize_function_parameters(parameters);
+    let props = sanitized
+        .get("properties")
+        .and_then(|v| v.as_object())
+        .and_then(|p| p.get("max_length"))
+        .and_then(|v| v.as_object())
+        .expect("max_length property should exist");
 
-    #[test]
-    fn apply_stream_delta_handles_incremental_chunks() {
-        let mut acc = String::new();
-        assert_eq!(
-            GeminiProvider::apply_stream_delta(&mut acc, "Hello"),
-            Some("Hello".to_string())
-        );
-        assert_eq!(
-            GeminiProvider::apply_stream_delta(&mut acc, " there"),
-            Some(" there".to_string())
-        );
-        assert_eq!(acc, "Hello there");
-    }
+    // These unsupported fields should be removed
+    assert!(
+        !props.contains_key("exclusiveMaximum"),
+        "exclusiveMaximum should be removed"
+    );
+    assert!(
+        !props.contains_key("exclusiveMinimum"),
+        "exclusiveMinimum should be removed"
+    );
+    assert!(!props.contains_key("minimum"), "minimum should be removed");
+    assert!(!props.contains_key("maximum"), "maximum should be removed");
 
-    #[test]
-    fn apply_stream_delta_handles_rewrites() {
-        let mut acc = String::new();
-        assert_eq!(
-            GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
-            Some("Hello world".to_string())
-        );
-        assert_eq!(GeminiProvider::apply_stream_delta(&mut acc, "Hello"), None);
-        assert_eq!(acc, "Hello");
-    }
+    // These supported fields should be preserved
+    assert_eq!(props.get("type").and_then(|v| v.as_str()), Some("integer"));
+    assert_eq!(
+        props.get("description").and_then(|v| v.as_str()),
+        Some("Maximum number of characters")
+    );
+}
 
-    #[test]
-    fn convert_to_gemini_request_includes_reasoning_config() {
-        use crate::config::constants::models;
-        use crate::config::types::ReasoningEffortLevel;
+#[test]
+fn apply_stream_delta_handles_replayed_chunks() {
+    let mut acc = String::new();
+    assert_eq!(
+        GeminiProvider::apply_stream_delta(&mut acc, "Hello"),
+        Some("Hello".to_string())
+    );
+    assert_eq!(
+        GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
+        Some(" world".to_string())
+    );
+    assert_eq!(
+        GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
+        None
+    );
+    assert_eq!(acc, "Hello world");
+}
 
-        let provider = GeminiProvider::new("test-key".to_string());
+#[test]
+fn apply_stream_delta_handles_incremental_chunks() {
+    let mut acc = String::new();
+    assert_eq!(
+        GeminiProvider::apply_stream_delta(&mut acc, "Hello"),
+        Some("Hello".to_string())
+    );
+    assert_eq!(
+        GeminiProvider::apply_stream_delta(&mut acc, " there"),
+        Some(" there".to_string())
+    );
+    assert_eq!(acc, "Hello there");
+}
 
-        // Test High effort level for Gemini 3 Pro
-        let request = LLMRequest {
-            messages: vec![Message::user("test".to_string())],
-            model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
-            reasoning_effort: Some(ReasoningEffortLevel::High),
-            ..Default::default()
-        };
+#[test]
+fn apply_stream_delta_handles_rewrites() {
+    let mut acc = String::new();
+    assert_eq!(
+        GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
+        Some("Hello world".to_string())
+    );
+    assert_eq!(GeminiProvider::apply_stream_delta(&mut acc, "Hello"), None);
+    assert_eq!(acc, "Hello");
+}
 
-        let gemini_request = provider
-            .convert_to_gemini_request(&request)
-            .expect("conversion should succeed");
+#[test]
+fn convert_to_gemini_request_includes_reasoning_config() {
+    use crate::config::constants::models;
+    use crate::config::types::ReasoningEffortLevel;
 
-        // Check that thinkingConfig is present in generationConfig and has the correct value for High effort
-        let generation_config = gemini_request
-            .generation_config
-            .expect("generation_config should be present");
-        let thinking_config = generation_config
-            .thinking_config
-            .as_ref()
-            .expect("thinking_config should be present");
-        assert_eq!(thinking_config.thinking_level.as_deref().unwrap(), "high");
+    let provider = GeminiProvider::new("test-key".to_string());
 
-        // Test Low effort level for Gemini 3 Pro
-        let request_low = LLMRequest {
-            messages: vec![Message::user("test".to_string())],
-            model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
-            reasoning_effort: Some(ReasoningEffortLevel::Low),
-            ..Default::default()
-        };
+    // Test High effort level for Gemini 3 Pro
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::High),
+        ..Default::default()
+    };
 
-        let gemini_request_low = provider
-            .convert_to_gemini_request(&request_low)
-            .expect("conversion should succeed");
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
 
-        // Check that thinkingConfig is present in generationConfig and has "low" value for Low effort
-        let generation_config_low = gemini_request_low
-            .generation_config
-            .expect("generation_config should be present for low effort");
-        let thinking_config_low = generation_config_low
-            .thinking_config
-            .as_ref()
-            .expect("thinking_config should be present");
-        assert_eq!(
-            thinking_config_low.thinking_level.as_deref().unwrap(),
-            "low"
-        );
+    // Check that thinkingConfig is present in generationConfig and has the correct value for High effort
+    let generation_config = gemini_request
+        .generation_config
+        .expect("generation_config should be present");
+    let thinking_config = generation_config
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(thinking_config.thinking_level.as_deref().unwrap(), "high");
 
-        // Test that None effort results in low reasoning_config for Gemini (none is treated as low)
-        let request_none = LLMRequest {
-            messages: vec![Message::user("test".to_string())],
-            model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
-            reasoning_effort: Some(ReasoningEffortLevel::None),
-            ..Default::default()
-        };
+    // Test Low effort level for Gemini 3 Pro
+    let request_low = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::Low),
+        ..Default::default()
+    };
 
-        let gemini_request_none = provider
-            .convert_to_gemini_request(&request_none)
-            .expect("conversion should succeed");
+    let gemini_request_low = provider
+        .convert_to_gemini_request(&request_low)
+        .expect("conversion should succeed");
 
-        // Check that thinkingConfig is present with low level when effort is None (for Gemini)
-        let generation_config_none = gemini_request_none
-            .generation_config
-            .expect("generation_config should be present for None effort");
-        let thinking_config_none = generation_config_none
-            .thinking_config
-            .as_ref()
-            .expect("thinking_config should be present");
-        assert_eq!(
-            thinking_config_none.thinking_level.as_deref().unwrap(),
-            "low"
-        );
-    }
+    // Check that thinkingConfig is present in generationConfig and has "low" value for Low effort
+    let generation_config_low = gemini_request_low
+        .generation_config
+        .expect("generation_config should be present for low effort");
+    let thinking_config_low = generation_config_low
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(
+        thinking_config_low.thinking_level.as_deref().unwrap(),
+        "low"
+    );
 
-    #[test]
-    fn thought_signature_preserved_in_function_call_response() {
-        use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
-        use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
+    // Test that None effort results in low reasoning_config for Gemini (none is treated as low)
+    let request_none = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::None),
+        ..Default::default()
+    };
 
-        let test_signature = "encrypted_signature_xyz123".to_string();
+    let gemini_request_none = provider
+        .convert_to_gemini_request(&request_none)
+        .expect("conversion should succeed");
 
-        let response = GenerateContentResponse {
-            candidates: vec![Candidate {
-                content: Content {
-                    role: "model".to_string(),
-                    parts: vec![Part::FunctionCall {
+    // Check that thinkingConfig is present with low level when effort is None (for Gemini)
+    let generation_config_none = gemini_request_none
+        .generation_config
+        .expect("generation_config should be present for None effort");
+    let thinking_config_none = generation_config_none
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(
+        thinking_config_none.thinking_level.as_deref().unwrap(),
+        "low"
+    );
+}
+
+#[test]
+fn thought_signature_preserved_in_function_call_response() {
+    use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
+    use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
+
+    let test_signature = "encrypted_signature_xyz123".to_string();
+
+    let response = GenerateContentResponse {
+        candidates: vec![Candidate {
+            content: Content {
+                role: "model".to_string(),
+                parts: vec![Part::FunctionCall {
+                    function_call: GeminiFunctionCall {
+                        name: "get_weather".to_string(),
+                        args: json!({"city": "London"}),
+                        id: Some("call_123".to_string()),
+                    },
+                    thought_signature: Some(test_signature.clone()),
+                }],
+            },
+            finish_reason: Some("FUNCTION_CALL".to_string()),
+        }],
+        prompt_feedback: None,
+        usage_metadata: None,
+    };
+
+    let llm_response =
+        GeminiProvider::convert_from_gemini_response(response).expect("conversion should succeed");
+
+    let tool_calls = llm_response.tool_calls.expect("should have tool calls");
+    assert_eq!(tool_calls.len(), 1);
+    assert_eq!(
+        tool_calls[0].thought_signature,
+        Some(test_signature),
+        "thought signature should be preserved"
+    );
+}
+
+#[test]
+fn thought_signature_roundtrip_in_request() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let test_signature = "sig_abc_def_123".to_string();
+
+    let request = LLMRequest {
+        messages: vec![
+            Message::user("What's the weather?".to_string()),
+            Message {
+                role: MessageRole::Assistant,
+                content: MessageContent::Text(String::new()),
+                reasoning: None,
+                reasoning_details: None,
+                tool_calls: Some(vec![ToolCall {
+                    id: "call_456".to_string(),
+                    call_type: "function".to_string(),
+                    function: Some(FunctionCall {
+                        name: "get_weather".to_string(),
+                        arguments: r#"{"city":"Paris"}"#.to_string(),
+                    }),
+                    text: None,
+                    thought_signature: Some(test_signature.clone()),
+                }]),
+                tool_call_id: None,
+                origin_tool: None,
+            },
+        ],
+        model: "gemini-3-pro-preview".to_string(),
+        ..Default::default()
+    };
+
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
+
+    // Find the FunctionCall part with thought signature
+    let assistant_content = &gemini_request.contents[1];
+    let has_signature = assistant_content.parts.iter().any(|part| match part {
+        Part::FunctionCall {
+            thought_signature, ..
+        } => thought_signature.as_ref() == Some(&test_signature),
+        _ => false,
+    });
+
+    assert!(
+        has_signature,
+        "thought signature should be preserved in request"
+    );
+}
+
+#[test]
+fn parallel_function_calls_single_signature() {
+    use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
+    use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
+
+    let test_signature = "parallel_sig_123".to_string();
+
+    let response = GenerateContentResponse {
+        candidates: vec![Candidate {
+            content: Content {
+                role: "model".to_string(),
+                parts: vec![
+                    Part::FunctionCall {
+                        function_call: GeminiFunctionCall {
+                            name: "get_weather".to_string(),
+                            args: json!({"city": "Paris"}),
+                            id: Some("call_1".to_string()),
+                        },
+                        thought_signature: Some(test_signature.clone()),
+                    },
+                    Part::FunctionCall {
                         function_call: GeminiFunctionCall {
                             name: "get_weather".to_string(),
                             args: json!({"city": "London"}),
-                            id: Some("call_123".to_string()),
+                            id: Some("call_2".to_string()),
                         },
-                        thought_signature: Some(test_signature.clone()),
-                    }],
-                },
-                finish_reason: Some("FUNCTION_CALL".to_string()),
-            }],
-            prompt_feedback: None,
-            usage_metadata: None,
-        };
+                        thought_signature: None, // Only first has signature
+                    },
+                ],
+            },
+            finish_reason: Some("FUNCTION_CALL".to_string()),
+        }],
+        prompt_feedback: None,
+        usage_metadata: None,
+    };
 
-        let llm_response = GeminiProvider::convert_from_gemini_response(response)
-            .expect("conversion should succeed");
+    let llm_response =
+        GeminiProvider::convert_from_gemini_response(response).expect("conversion should succeed");
 
-        let tool_calls = llm_response.tool_calls.expect("should have tool calls");
-        assert_eq!(tool_calls.len(), 1);
-        assert_eq!(
-            tool_calls[0].thought_signature,
-            Some(test_signature),
-            "thought signature should be preserved"
-        );
-    }
+    let tool_calls = llm_response.tool_calls.expect("should have tool calls");
+    assert_eq!(tool_calls.len(), 2);
+    assert_eq!(
+        tool_calls[0].thought_signature,
+        Some(test_signature),
+        "first call should have signature"
+    );
+    assert_eq!(
+        tool_calls[1].thought_signature, None,
+        "second call should not have signature"
+    );
+}
 
-    #[test]
-    fn thought_signature_roundtrip_in_request() {
-        let provider = GeminiProvider::new("test-key".to_string());
-        let test_signature = "sig_abc_def_123".to_string();
+#[test]
+fn gemini_provider_supports_reasoning_effort_for_gemini3() {
+    use crate::config::constants::models;
+    use crate::config::models::ModelId;
+    use crate::config::models::Provider;
 
-        let request = LLMRequest {
-            messages: vec![
-                Message::user("What's the weather?".to_string()),
-                Message {
-                    role: MessageRole::Assistant,
-                    content: MessageContent::Text(String::new()),
-                    reasoning: None,
-                    reasoning_details: None,
-                    tool_calls: Some(vec![ToolCall {
-                        id: "call_456".to_string(),
-                        call_type: "function".to_string(),
-                        function: Some(FunctionCall {
-                            name: "get_weather".to_string(),
-                            arguments: r#"{"city":"Paris"}"#.to_string(),
-                        }),
-                        text: None,
-                        thought_signature: Some(test_signature.clone()),
-                    }]),
-                    tool_call_id: None,
-                    origin_tool: None,
-                },
-            ],
-            model: "gemini-3-pro-preview".to_string(),
-            ..Default::default()
-        };
+    // Test that the provider correctly identifies Gemini 3 Pro as supporting reasoning effort
+    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_PRO_PREVIEW));
+    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_2_5_PRO));
+    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_2_5_FLASH));
 
-        let gemini_request = provider
-            .convert_to_gemini_request(&request)
-            .expect("conversion should succeed");
+    // Test model IDs as well
+    assert!(ModelId::Gemini3ProPreview.supports_reasoning_effort());
+    assert!(ModelId::Gemini25Pro.supports_reasoning_effort());
+}
 
-        // Find the FunctionCall part with thought signature
-        let assistant_content = &gemini_request.contents[1];
-        let has_signature = assistant_content.parts.iter().any(|part| match part {
-            Part::FunctionCall {
-                thought_signature, ..
-            } => thought_signature.as_ref() == Some(&test_signature),
-            _ => false,
-        });
+#[test]
+fn gemini3_flash_extended_thinking_levels() {
+    use crate::config::constants::models;
 
-        assert!(
-            has_signature,
-            "thought signature should be preserved in request"
-        );
-    }
+    // Test that Gemini 3 Flash supports extended thinking levels
+    assert!(GeminiProvider::supports_extended_thinking(
+        models::google::GEMINI_3_FLASH_PREVIEW
+    ));
 
-    #[test]
-    fn parallel_function_calls_single_signature() {
-        use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
-        use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
+    // But Gemini 3 Pro does not
+    assert!(!GeminiProvider::supports_extended_thinking(
+        models::google::GEMINI_3_PRO_PREVIEW
+    ));
 
-        let test_signature = "parallel_sig_123".to_string();
+    // Get supported levels for each model
+    let flash_levels =
+        GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_FLASH_PREVIEW);
+    assert_eq!(flash_levels, vec!["minimal", "low", "medium", "high"]);
 
-        let response = GenerateContentResponse {
-            candidates: vec![Candidate {
-                content: Content {
-                    role: "model".to_string(),
-                    parts: vec![
-                        Part::FunctionCall {
-                            function_call: GeminiFunctionCall {
-                                name: "get_weather".to_string(),
-                                args: json!({"city": "Paris"}),
-                                id: Some("call_1".to_string()),
-                            },
-                            thought_signature: Some(test_signature.clone()),
-                        },
-                        Part::FunctionCall {
-                            function_call: GeminiFunctionCall {
-                                name: "get_weather".to_string(),
-                                args: json!({"city": "London"}),
-                                id: Some("call_2".to_string()),
-                            },
-                            thought_signature: None, // Only first has signature
-                        },
-                    ],
-                },
-                finish_reason: Some("FUNCTION_CALL".to_string()),
-            }],
-            prompt_feedback: None,
-            usage_metadata: None,
-        };
+    let pro_levels =
+        GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_PRO_PREVIEW);
+    assert_eq!(pro_levels, vec!["low", "high"]);
 
-        let llm_response = GeminiProvider::convert_from_gemini_response(response)
-            .expect("conversion should succeed");
+    let flash_25_levels =
+        GeminiProvider::supported_thinking_levels(models::google::GEMINI_2_5_FLASH);
+    assert_eq!(flash_25_levels, vec!["low", "high"]);
+}
 
-        let tool_calls = llm_response.tool_calls.expect("should have tool calls");
-        assert_eq!(tool_calls.len(), 2);
-        assert_eq!(
-            tool_calls[0].thought_signature,
-            Some(test_signature),
-            "first call should have signature"
-        );
-        assert_eq!(
-            tool_calls[1].thought_signature, None,
-            "second call should not have signature"
-        );
-    }
+#[test]
+fn gemini3_flash_minimal_thinking_mapping() {
+    use crate::config::constants::models;
+    use crate::config::types::ReasoningEffortLevel;
 
-    #[test]
-    fn gemini_provider_supports_reasoning_effort_for_gemini3() {
-        use crate::config::constants::models;
-        use crate::config::models::ModelId;
-        use crate::config::models::Provider;
+    let provider = GeminiProvider::new("test-key".to_string());
 
-        // Test that the provider correctly identifies Gemini 3 Pro as supporting reasoning effort
-        assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_PRO_PREVIEW));
-        assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_2_5_PRO));
-        assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_2_5_FLASH));
+    // Test Minimal thinking level for Gemini 3 Flash
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::Minimal),
+        ..Default::default()
+    };
 
-        // Test model IDs as well
-        assert!(ModelId::Gemini3ProPreview.supports_reasoning_effort());
-        assert!(ModelId::Gemini25Pro.supports_reasoning_effort());
-    }
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
 
-    #[test]
-    fn gemini3_flash_extended_thinking_levels() {
-        use crate::config::constants::models;
+    let generation_config = gemini_request
+        .generation_config
+        .expect("generation_config should be present");
+    let thinking_config = generation_config
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(
+        thinking_config.thinking_level.as_deref().unwrap(),
+        "minimal",
+        "Gemini 3 Flash should support minimal thinking level"
+    );
+}
 
-        // Test that Gemini 3 Flash supports extended thinking levels
-        assert!(GeminiProvider::supports_extended_thinking(
-            models::google::GEMINI_3_FLASH_PREVIEW
-        ));
+#[test]
+fn gemini3_flash_medium_thinking_mapping() {
+    use crate::config::constants::models;
+    use crate::config::types::ReasoningEffortLevel;
 
-        // But Gemini 3 Pro does not
-        assert!(!GeminiProvider::supports_extended_thinking(
-            models::google::GEMINI_3_PRO_PREVIEW
-        ));
+    let provider = GeminiProvider::new("test-key".to_string());
 
-        // Get supported levels for each model
-        let flash_levels =
-            GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_FLASH_PREVIEW);
-        assert_eq!(flash_levels, vec!["minimal", "low", "medium", "high"]);
+    // Test Medium thinking level for Gemini 3 Flash
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::Medium),
+        ..Default::default()
+    };
 
-        let pro_levels =
-            GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_PRO_PREVIEW);
-        assert_eq!(pro_levels, vec!["low", "high"]);
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
 
-        let flash_25_levels =
-            GeminiProvider::supported_thinking_levels(models::google::GEMINI_2_5_FLASH);
-        assert_eq!(flash_25_levels, vec!["low", "high"]);
-    }
+    let generation_config = gemini_request
+        .generation_config
+        .expect("generation_config should be present");
+    let thinking_config = generation_config
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(
+        thinking_config.thinking_level.as_deref().unwrap(),
+        "medium",
+        "Gemini 3 Flash should support medium thinking level"
+    );
+}
 
-    #[test]
-    fn gemini3_flash_minimal_thinking_mapping() {
-        use crate::config::constants::models;
-        use crate::config::types::ReasoningEffortLevel;
+#[test]
+fn gemini3_pro_medium_thinking_fallback() {
+    use crate::config::constants::models;
+    use crate::config::types::ReasoningEffortLevel;
 
-        let provider = GeminiProvider::new("test-key".to_string());
+    let provider = GeminiProvider::new("test-key".to_string());
 
-        // Test Minimal thinking level for Gemini 3 Flash
-        let request = LLMRequest {
-            messages: vec![Message::user("test".to_string())],
-            model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
-            reasoning_effort: Some(ReasoningEffortLevel::Minimal),
-            ..Default::default()
-        };
+    // Test Medium thinking level for Gemini 3 Pro (should fallback to high)
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::Medium),
+        ..Default::default()
+    };
 
-        let gemini_request = provider
-            .convert_to_gemini_request(&request)
-            .expect("conversion should succeed");
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
 
-        let generation_config = gemini_request
-            .generation_config
-            .expect("generation_config should be present");
-        let thinking_config = generation_config
-            .thinking_config
+    let generation_config = gemini_request
+        .generation_config
+        .expect("generation_config should be present");
+    let thinking_config = generation_config
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(
+        thinking_config.thinking_level.as_deref().unwrap(),
+        "high",
+        "Gemini 3 Pro should fallback to high for medium reasoning effort"
+    );
+}
+
+#[test]
+fn convert_to_gemini_request_includes_advanced_parameters() {
+    use crate::config::constants::models;
+
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        model: models::google::GEMINI_2_5_FLASH.to_string(),
+        top_p: Some(0.9),
+        top_k: Some(40),
+        presence_penalty: Some(0.6),
+        frequency_penalty: Some(0.5),
+        stop_sequences: Some(vec!["STOP".to_string()]),
+        ..Default::default()
+    };
+
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
+
+    let config = gemini_request
+        .generation_config
+        .expect("generation_config should be present");
+
+    assert_eq!(config.top_p, Some(0.9));
+    assert_eq!(config.top_k, Some(40));
+    assert_eq!(config.presence_penalty, Some(0.6));
+    assert_eq!(config.frequency_penalty, Some(0.5));
+    assert_eq!(
+        config
+            .stop_sequences
             .as_ref()
-            .expect("thinking_config should be present");
-        assert_eq!(
-            thinking_config.thinking_level.as_deref().unwrap(),
-            "minimal",
-            "Gemini 3 Flash should support minimal thinking level"
-        );
-    }
+            .and_then(|s| s.first().cloned()),
+        Some("STOP".to_string())
+    );
+}
 
-    #[test]
-    fn gemini3_flash_medium_thinking_mapping() {
-        use crate::config::constants::models;
-        use crate::config::types::ReasoningEffortLevel;
+#[test]
+fn convert_to_gemini_request_includes_json_mode() {
+    use crate::config::constants::models;
 
-        let provider = GeminiProvider::new("test-key".to_string());
+    let provider = GeminiProvider::new("test-key".to_string());
 
-        // Test Medium thinking level for Gemini 3 Flash
-        let request = LLMRequest {
-            messages: vec![Message::user("test".to_string())],
-            model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
-            reasoning_effort: Some(ReasoningEffortLevel::Medium),
-            ..Default::default()
-        };
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        model: models::google::GEMINI_2_5_FLASH.to_string(),
+        output_format: Some(json!("json")),
+        ..Default::default()
+    };
 
-        let gemini_request = provider
-            .convert_to_gemini_request(&request)
-            .expect("conversion should succeed");
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
 
-        let generation_config = gemini_request
-            .generation_config
-            .expect("generation_config should be present");
-        let thinking_config = generation_config
-            .thinking_config
-            .as_ref()
-            .expect("thinking_config should be present");
-        assert_eq!(
-            thinking_config.thinking_level.as_deref().unwrap(),
-            "medium",
-            "Gemini 3 Flash should support medium thinking level"
-        );
-    }
+    let config = gemini_request
+        .generation_config
+        .expect("generation_config should be present");
 
-    #[test]
-    fn gemini3_pro_medium_thinking_fallback() {
-        use crate::config::constants::models;
-        use crate::config::types::ReasoningEffortLevel;
-
-        let provider = GeminiProvider::new("test-key".to_string());
-
-        // Test Medium thinking level for Gemini 3 Pro (should fallback to high)
-        let request = LLMRequest {
-            messages: vec![Message::user("test".to_string())],
-            model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
-            reasoning_effort: Some(ReasoningEffortLevel::Medium),
-            ..Default::default()
-        };
-
-        let gemini_request = provider
-            .convert_to_gemini_request(&request)
-            .expect("conversion should succeed");
-
-        let generation_config = gemini_request
-            .generation_config
-            .expect("generation_config should be present");
-        let thinking_config = generation_config
-            .thinking_config
-            .as_ref()
-            .expect("thinking_config should be present");
-        assert_eq!(
-            thinking_config.thinking_level.as_deref().unwrap(),
-            "high",
-            "Gemini 3 Pro should fallback to high for medium reasoning effort"
-        );
-    }
-
-    #[test]
-    fn convert_to_gemini_request_includes_advanced_parameters() {
-        use crate::config::constants::models;
-
-        let provider = GeminiProvider::new("test-key".to_string());
-
-        let request = LLMRequest {
-            messages: vec![Message::user("test".to_string())],
-            model: models::google::GEMINI_2_5_FLASH.to_string(),
-            top_p: Some(0.9),
-            top_k: Some(40),
-            presence_penalty: Some(0.6),
-            frequency_penalty: Some(0.5),
-            stop_sequences: Some(vec!["STOP".to_string()]),
-            ..Default::default()
-        };
-
-        let gemini_request = provider
-            .convert_to_gemini_request(&request)
-            .expect("conversion should succeed");
-
-        let config = gemini_request
-            .generation_config
-            .expect("generation_config should be present");
-
-        assert_eq!(config.top_p, Some(0.9));
-        assert_eq!(config.top_k, Some(40));
-        assert_eq!(config.presence_penalty, Some(0.6));
-        assert_eq!(config.frequency_penalty, Some(0.5));
-        assert_eq!(
-            config
-                .stop_sequences
-                .as_ref()
-                .and_then(|s| s.first().cloned()),
-            Some("STOP".to_string())
-        );
-    }
-
-    #[test]
-    fn convert_to_gemini_request_includes_json_mode() {
-        use crate::config::constants::models;
-
-        let provider = GeminiProvider::new("test-key".to_string());
-
-        let request = LLMRequest {
-            messages: vec![Message::user("test".to_string())],
-            model: models::google::GEMINI_2_5_FLASH.to_string(),
-            output_format: Some(json!("json")),
-            ..Default::default()
-        };
-
-        let gemini_request = provider
-            .convert_to_gemini_request(&request)
-            .expect("conversion should succeed");
-
-        let config = gemini_request
-            .generation_config
-            .expect("generation_config should be present");
-
-        assert_eq!(
-            config.response_mime_type.as_deref(),
-            Some("application/json")
-        );
-    }
+    assert_eq!(
+        config.response_mime_type.as_deref(),
+        Some("application/json")
+    );
+}
 #[cfg(test)]
 mod caching_tests {
     use super::*;

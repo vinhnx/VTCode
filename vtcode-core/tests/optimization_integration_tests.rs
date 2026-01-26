@@ -7,10 +7,10 @@ use std::time::Duration;
 use vtcode_core::core::memory_pool::{MemoryPool, global_pool};
 use vtcode_core::core::optimized_agent::OptimizedAgentEngine;
 use vtcode_core::llm::optimized_client::OptimizedLLMClient;
+use vtcode_core::tools::ToolCallRequest;
 use vtcode_core::tools::async_pipeline::{
     AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest,
 };
-use vtcode_core::tools::ToolCallRequest;
 use vtcode_core::tools::optimized_registry::{OptimizedToolRegistry, ToolMetadata};
 
 #[tokio::test]

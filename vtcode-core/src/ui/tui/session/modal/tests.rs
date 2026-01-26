@@ -1,9 +1,9 @@
-use super::*;
-use crate::ui::InlineListSelection;
-use crate::ui::{InlineListItem, InlineListSearchConfig, WizardStep, InlineEvent};
-use crate::ui::tui::types::WizardModalMode;
-use crate::config::constants::ui;
 use super::render::highlight_segments;
+use super::*;
+use crate::config::constants::ui;
+use crate::ui::InlineListSelection;
+use crate::ui::tui::types::WizardModalMode;
+use crate::ui::{InlineEvent, InlineListItem, InlineListSearchConfig, WizardStep};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Modifier, Style};
 use tui_popup::PopupState;
@@ -246,7 +246,10 @@ fn highlight_segments_marks_matching_spans() {
     assert_eq!(segments[0].content.as_ref(), "H");
     assert_eq!(segments[0].style, Style::default());
     assert_eq!(segments[1].content.as_ref(), "el");
-    assert_eq!(segments[1].style, Style::default().add_modifier(Modifier::BOLD));
+    assert_eq!(
+        segments[1].style,
+        Style::default().add_modifier(Modifier::BOLD)
+    );
     assert_eq!(segments[2].content.as_ref(), "lo");
     assert_eq!(segments[2].style, Style::default());
 }
@@ -379,7 +382,10 @@ fn list_search_resets_selection_when_item_removed() {
 
     list.apply_search("general");
 
-    assert_eq!(list.current_selection(), Some(InlineListSelection::Model(0)));
+    assert_eq!(
+        list.current_selection(),
+        Some(InlineListSelection::Model(0))
+    );
 }
 
 #[test]

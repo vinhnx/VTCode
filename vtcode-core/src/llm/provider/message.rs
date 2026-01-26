@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::ToolCall;
+use serde::{Deserialize, Serialize};
 
 /// Content type for messages that can include both text and images
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

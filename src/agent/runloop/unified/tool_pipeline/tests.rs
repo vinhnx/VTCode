@@ -1,9 +1,10 @@
-use super::*;
 use super::execution::execute_tool_with_timeout;
 use super::timeout::create_timeout_error;
+use super::*;
 
 use serde_json::json;
 use std::sync::Arc;
+use tempfile::TempDir;
 use tokio::sync::Notify;
 use vtcode_core::acp::PermissionGrant;
 use vtcode_core::acp::permission_cache::ToolPermissionCache;
@@ -16,7 +17,6 @@ use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use tempfile::TempDir;
 
 /// Helper function to create test registry with common setup
 async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
@@ -245,7 +245,10 @@ async fn test_run_tool_call_unknown_tool_failure() {
     .await
     .expect("run_tool_call must run");
 
-    assert!(matches!(outcome.status, ToolExecutionStatus::Failure { .. }));
+    assert!(matches!(
+        outcome.status,
+        ToolExecutionStatus::Failure { .. }
+    ));
 }
 
 #[tokio::test]
@@ -389,29 +392,29 @@ async fn test_run_tool_call_read_file_success() {
         1,
     )
     .await
-    .expect(\"read_file run_tool_call should succeed\");
+    .expect("read_file run_tool_call should succeed");
 
     match outcome.status {
         ToolExecutionStatus::Success { output, .. } => {
-            assert_eq!(output.get(\"success\").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(output.get("success").and_then(|v| v.as_bool()), Some(true));
         }
-        other => panic!(\"Expected success, got: {:?}\", other),
+        other => panic!("Expected success, got: {:?}", other),
     }
 }
 
 #[test]
 fn test_create_timeout_error() {
     let status = create_timeout_error(
-        \"test_tool\",
+        "test_tool",
         ToolTimeoutCategory::Default,
         Some(Duration::from_secs(42)),
     );
     if let ToolExecutionStatus::Timeout { error } = status {
-        assert!(error.message.contains(\"test_tool\"));
-        assert!(error.message.contains(\"timeout ceiling\"));
-        assert!(error.message.contains(\"42\"));
+        assert!(error.message.contains("test_tool"));
+        assert!(error.message.contains("timeout ceiling"));
+        assert!(error.message.contains("42"));
     } else {
-        panic!(\"Expected Timeout variant\");
+        panic!("Expected Timeout variant");
     }
 }
 

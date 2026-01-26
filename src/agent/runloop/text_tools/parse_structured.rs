@@ -3,10 +3,7 @@ use vtcode_core::config::constants::tools;
 
 use crate::agent::runloop::text_tools::canonical::canonicalize_tool_name;
 use crate::agent::runloop::text_tools::parse_args::{
-    normalize_command_string,
-    parse_scalar_value,
-    split_function_arguments,
-    split_top_level_entries,
+    normalize_command_string, parse_scalar_value, split_function_arguments, split_top_level_entries,
 };
 
 pub(super) fn parse_rust_struct_tool_call(text: &str) -> Option<(String, Value)> {

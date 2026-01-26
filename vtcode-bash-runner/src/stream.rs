@@ -76,8 +76,7 @@ mod tests {
         let mut reader = BufReader::new(data.as_bytes());
         let mut buf = Vec::new();
 
-        let result = read_line_with_limit(&mut reader, &mut buf, 5)
-            .await?;
+        let result = read_line_with_limit(&mut reader, &mut buf, 5).await?;
         match result {
             ReadLineResult::Truncated(bytes) => {
                 assert!(!bytes.is_empty());

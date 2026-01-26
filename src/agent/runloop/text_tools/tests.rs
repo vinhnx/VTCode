@@ -12,8 +12,7 @@ fn test_detect_textual_tool_call_parses_python_style_arguments() {
 
 #[test]
 fn test_detect_textual_tool_call_supports_json_payload() {
-    let message =
-        "print(default_api.write_file({\"path\": \"notes.md\", \"content\": \"hi\"}))";
+    let message = "print(default_api.write_file({\"path\": \"notes.md\", \"content\": \"hi\"}))";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, "write_file");
     assert_eq!(
@@ -24,8 +23,7 @@ fn test_detect_textual_tool_call_supports_json_payload() {
 
 #[test]
 fn test_detect_textual_tool_call_parses_function_style_block() {
-    let message =
-        "```rust\nrun_pty_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_tokens=1000)\n```";
+    let message = "```rust\nrun_pty_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_tokens=1000)\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, "run_pty_cmd");
     assert_eq!(args["command"], serde_json::json!(["ls", "-a"]));
@@ -129,8 +127,7 @@ fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
 
 #[test]
 fn test_detect_rust_struct_tool_call_handles_semicolons() {
-    let message =
-        "```rust\nrun_pty_cmd {\n    command = \"pwd\";\n    workdir = \"/tmp\";\n}\n```";
+    let message = "```rust\nrun_pty_cmd {\n    command = \"pwd\";\n    workdir = \"/tmp\";\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, "run_pty_cmd");
     assert_eq!(
@@ -331,7 +328,8 @@ fn test_parse_harmony_channel_rejects_empty_command() {
 #[test]
 fn test_parse_harmony_channel_rejects_empty_array() {
     // Harmony format parser: should reject tool call if command array is empty
-    let message = "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[]}<|call|>";
+    let message =
+        "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[]}<|call|>";
     let result = parse_channel::parse_channel_tool_call(message);
     assert!(
         result.is_none(),

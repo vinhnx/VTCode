@@ -14,23 +14,12 @@ use vtcode_core::config::{HookCommandConfig, HooksConfig};
 
 use crate::hooks::lifecycle::compiled::CompiledLifecycleHooks;
 use crate::hooks::lifecycle::interpret::{
-    HookCommandResult,
-    interpret_post_tool,
-    interpret_pre_tool,
-    interpret_session_end,
-    interpret_session_start,
-    interpret_task_completion,
-    interpret_user_prompt,
+    HookCommandResult, interpret_post_tool, interpret_pre_tool, interpret_session_end,
+    interpret_session_start, interpret_task_completion, interpret_user_prompt,
 };
 use crate::hooks::lifecycle::types::{
-    HookMessage,
-    PostToolHookOutcome,
-    PreToolHookDecision,
-    PreToolHookOutcome,
-    SessionEndReason,
-    SessionStartHookOutcome,
-    SessionStartTrigger,
-    UserPromptHookOutcome,
+    HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome, SessionEndReason,
+    SessionStartHookOutcome, SessionStartTrigger, UserPromptHookOutcome,
 };
 use crate::hooks::lifecycle::utils::{generate_session_id, path_to_string};
 

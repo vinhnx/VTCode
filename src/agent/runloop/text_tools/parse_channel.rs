@@ -1,6 +1,5 @@
 use serde_json::Value;
 
-
 pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     // Harmony format: <|start|>{header}<|message|>{content}<|end|>
     // We look for a message that is a tool call (ends with <|call|> or has commentary channel)

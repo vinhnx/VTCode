@@ -4,10 +4,7 @@ use serde_json::{Map, Value};
 
 use crate::agent::runloop::text_tools::canonical::canonicalize_tool_result;
 use crate::agent::runloop::text_tools::parse_args::{
-    normalize_command_string,
-    parse_key_value_arguments,
-    parse_scalar_value,
-    split_indexed_key,
+    normalize_command_string, parse_key_value_arguments, parse_scalar_value, split_indexed_key,
 };
 
 pub(super) fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {

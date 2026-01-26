@@ -542,7 +542,9 @@ impl OpenAIProvider {
     }
 
     /// Parse harmony tool call from raw text content
-    pub(crate) fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, serde_json::Value)> {
+    pub(crate) fn parse_harmony_tool_call_from_text(
+        text: &str,
+    ) -> Option<(String, serde_json::Value)> {
         harmony::parse_harmony_tool_call_from_text(text)
     }
 }

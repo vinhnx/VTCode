@@ -3,11 +3,7 @@ use serde_json::Value;
 use vtcode_core::config::HookCommandConfig;
 
 use crate::hooks::lifecycle::types::{
-    HookMessage,
-    HookMessageLevel,
-    PostToolHookOutcome,
-    PreToolHookDecision,
-    PreToolHookOutcome,
+    HookMessage, HookMessageLevel, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome,
     UserPromptHookOutcome,
 };
 

@@ -30,6 +30,15 @@ use crate::ui::tui::widgets::SessionWidget;
 
 pub mod file_palette;
 mod header;
+mod impl_config;
+mod impl_events;
+mod impl_init;
+mod impl_input;
+mod impl_layout;
+mod impl_logs;
+mod impl_render;
+mod impl_scroll;
+mod impl_style;
 mod input;
 mod input_manager;
 mod message;
@@ -45,15 +54,6 @@ pub mod slash_palette;
 pub mod styling;
 mod text_utils;
 mod transcript;
-mod impl_config;
-mod impl_events;
-mod impl_init;
-mod impl_input;
-mod impl_layout;
-mod impl_logs;
-mod impl_render;
-mod impl_scroll;
-mod impl_style;
 
 // New modular components (refactored from main session.rs)
 mod ansi_utils;
@@ -72,10 +72,10 @@ mod reverse_search;
 mod spinner;
 mod state;
 pub mod terminal_capabilities;
-mod tool_renderer;
-mod trust;
 #[cfg(test)]
 mod tests;
+mod tool_renderer;
+mod trust;
 
 use self::config_palette::ConfigPalette;
 use self::file_palette::FilePalette;

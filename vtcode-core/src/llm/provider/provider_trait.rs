@@ -118,7 +118,9 @@ pub enum LLMError {
         metadata: Option<Box<LLMErrorMetadata>>,
     },
     #[error("Rate limit exceeded")]
-    RateLimit { metadata: Option<Box<LLMErrorMetadata>> },
+    RateLimit {
+        metadata: Option<Box<LLMErrorMetadata>>,
+    },
     #[error("Invalid request: {message}")]
     InvalidRequest {
         message: String,
