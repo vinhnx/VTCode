@@ -50,6 +50,19 @@ export OPENAI_API_KEY="sk-..."
 vtcode
 ```
 
+### AgentSkills Support
+
+VT Code includes comprehensive support for AgentSkills, following the [open Agent Skills standard](http://agentskills.io/). AgentSkills enable VT Code to leverage external capabilities and extend its functionality through a standardized skill system.
+
+Key features of AgentSkills support:
+
+- **Skill Discovery**: VT Code can discover and load skills from multiple locations with precedence handling
+- **Standard Compliance**: Fully compliant with the Agent Skills specification for interoperability
+- **Multi-Location Support**: Skills can be loaded from local directories, remote repositories, or embedded resources
+- **Extensible Ecosystem**: Integrate with the growing ecosystem of Agent Skills for enhanced capabilities
+
+For more information about AgentSkills implementation in VT Code, see [Agent Skills Guide](./docs/SKILLS_GUIDE.md).
+
 ### Supported Providers
 
 VT Code works with OpenAI, Anthropic, Google Gemini, xAI, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama (local & cloud), and LM Studio (local).
