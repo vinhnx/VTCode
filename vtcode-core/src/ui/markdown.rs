@@ -733,7 +733,8 @@ fn highlight_code_block(
     // Always normalize indentation first, regardless of highlighting
     let normalized_code = normalize_code_indentation(code, language);
     let code_to_display = &normalized_code;
-    let use_line_numbers = !is_diff_language(language);
+    let use_line_numbers =
+        language.is_some_and(|lang| !lang.trim().is_empty()) && !is_diff_language(language);
 
     if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
         && let Some(highlighted) = try_highlight(code_to_display, language, config)

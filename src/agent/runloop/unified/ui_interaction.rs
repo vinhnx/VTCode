@@ -432,6 +432,8 @@ struct StreamingReasoningState {
     buffered: String,
     // Whether reasoning should be rendered inline during streaming
     render_inline: bool,
+    // Defer rendering until we can compare content vs reasoning
+    defer_rendering: bool,
     // Track whether we've started streaming (for prefix)
     started: bool,
     // Whether reasoning output has been rendered
@@ -443,24 +445,25 @@ impl StreamingReasoningState {
         Self {
             buffered: String::new(),
             render_inline: inline_enabled,
+            defer_rendering: true,
             started: false,
             rendered_any: false,
         }
     }
 
-    fn handle_delta(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<()> {
-        if !self.render_inline {
+    fn handle_delta(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<bool> {
+        if !self.render_inline || self.defer_rendering {
             self.buffered.push_str(delta);
-            return Ok(());
+            return Ok(false);
         }
 
         // For inline rendering: stream reasoning like response tokens
         renderer.inline_with_style(MessageStyle::Reasoning, delta)?;
         self.rendered_any = true;
-        Ok(())
+        Ok(true)
     }
 
-    fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+    fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<bool> {
         if !self.buffered.is_empty() {
             let cleaned = clean_reasoning_text(&self.buffered);
             if !cleaned.is_empty() {
@@ -472,8 +475,9 @@ impl StreamingReasoningState {
                 self.rendered_any = true;
             }
             self.buffered.clear();
+            return Ok(self.rendered_any);
         }
-        Ok(())
+        Ok(false)
     }
 
     fn finalize(
@@ -490,6 +494,9 @@ impl StreamingReasoningState {
 
         // Flush any buffered reasoning first
         self.flush_pending(renderer)?;
+        if self.rendered_any {
+            return Ok(());
+        }
 
         // Only render final reasoning if it wasn't already emitted during streaming
         // This prevents duplicate reasoning output
@@ -526,6 +533,14 @@ impl StreamingReasoningState {
 
     fn rendered_reasoning(&self) -> bool {
         self.rendered_any
+    }
+
+    fn set_defer_rendering(&mut self, defer: bool) {
+        self.defer_rendering = defer;
+    }
+
+    fn is_deferred(&self) -> bool {
+        self.defer_rendering
     }
 }
 
@@ -630,13 +645,14 @@ pub(crate) async fn stream_and_render_response(
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
                 token_count += 1;
-
-                // Ensure any buffered reasoning is rendered before the first response token
-                if !reasoning_emitted && reasoning_token_count > 0 {
-                    reasoning_state
+                if !reasoning_emitted && reasoning_token_count > 0 && !reasoning_state.is_deferred()
+                {
+                    let rendered = reasoning_state
                         .flush_pending(renderer)
                         .map_err(|err| map_render_error(provider_name, err))?;
-                    reasoning_emitted = true;
+                    if rendered {
+                        reasoning_emitted = true;
+                    }
                 }
 
                 if !spinner_message_updated {
@@ -654,6 +670,19 @@ pub(crate) async fn stream_and_render_response(
                     let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
                     let reasoning_prefix = !reasoning_accumulated.is_empty()
                         && prefix_len == reasoning_accumulated.len();
+                    let pending_len = pending_content.len();
+                    let reasoning_len = reasoning_accumulated.len();
+                    if reasoning_state.is_deferred()
+                        && (!reasoning_prefix || pending_len > reasoning_len)
+                    {
+                        reasoning_state.set_defer_rendering(false);
+                        let rendered = reasoning_state
+                            .flush_pending(renderer)
+                            .map_err(|err| map_render_error(provider_name, err))?;
+                        if rendered {
+                            reasoning_emitted = true;
+                        }
+                    }
                     let should_flush =
                         !reasoning_prefix || pending_content.len() >= MAX_PENDING_CONTENT_BYTES;
 
@@ -730,11 +759,13 @@ pub(crate) async fn stream_and_render_response(
                 }
                 finish_spinner(&mut spinner_active);
                 reasoning_accumulated.push_str(&delta);
-                reasoning_state
+                let rendered = reasoning_state
                     .handle_delta(renderer, &delta)
                     .map_err(|err| map_render_error(provider_name, err))?;
                 // Mark reasoning as emitted to prevent duplicate rendering in finalize()
-                reasoning_emitted = true;
+                if rendered {
+                    reasoning_emitted = true;
+                }
             }
             Ok(LLMStreamEvent::Completed { response }) => {
                 final_response = Some(*response);
@@ -818,15 +849,13 @@ pub(crate) async fn stream_and_render_response(
     if !content_suppressed && let Some(content) = response.content.as_deref() {
         let content_trimmed = content.trim();
         if !content_trimmed.is_empty() {
-            let reasoning_dupes_content = response
-                .reasoning
-                .as_deref()
-                .map(|reasoning| reasoning_matches_content(reasoning, content))
-                .unwrap_or(false);
+        let reasoning_dupes_content = response
+            .reasoning
+            .as_deref()
+            .map(|reasoning| reasoning_matches_content(reasoning, content))
+            .unwrap_or(false);
             if reasoning_dupes_content
-                && (reasoning_state.rendered_reasoning()
-                    || reasoning_emitted
-                    || !reasoning_accumulated.is_empty())
+                && (reasoning_state.rendered_reasoning() || reasoning_emitted)
             {
                 // Skip rendering duplicated content when reasoning already rendered.
                 // Leave `aggregated` untouched to avoid showing content twice.
