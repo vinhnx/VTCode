@@ -11,7 +11,7 @@ pub async fn handle_create_project_command(
     name: &str,
     features: &[String],
 ) -> Result<()> {
-    println!("{}", style("[CREATE]").blue().bold());
+    println!("{}", style("[CREATE]").cyan().bold());
     println!("  {:16} {}", "name", name);
     println!("  {:16} {}", "workspace", config.workspace.display());
     if !features.is_empty() {

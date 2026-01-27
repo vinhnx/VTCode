@@ -29,7 +29,7 @@ impl UserConfirmation {
     /// This is critical for ensuring user control over potentially expensive operations
     pub fn confirm_pro_model_usage(current_model: &str) -> Result<bool> {
         use crate::config::constants::models;
-        println!("{}", style("Model Upgrade Required").yellow().bold());
+        println!("{}", style("Model Upgrade Required").red().bold());
         println!("Current model: {}", style(current_model).cyan());
         println!(
             "Requested model: {}",
@@ -71,7 +71,7 @@ impl UserConfirmation {
                 Ok(true)
             }
             2 => {
-                println!("{}", style("✗ Keeping current model").yellow());
+                println!("{}", style("✗ Keeping current model").red());
                 Ok(false)
             }
             _ => Ok(false),
@@ -123,13 +123,13 @@ impl UserConfirmation {
             TaskComplexity::Moderate => {
                 println!(
                     "{}",
-                    style("Moderate task - Single agent usually sufficient").yellow()
+                    style("Moderate task - Single agent usually sufficient").cyan()
                 );
             }
             TaskComplexity::Complex => {
                 println!(
                     "{}",
-                    style("Complex task detected - proceeding with single-agent mode").blue()
+                    style("Complex task detected - proceeding with single-agent mode").cyan()
                 );
             }
         }
@@ -148,7 +148,7 @@ impl UserConfirmation {
 
     /// Display a warning message and wait for user acknowledgment
     pub fn show_warning(message: &str) -> Result<()> {
-        println!("{}", style(" Warning").yellow().bold());
+        println!("{}", style(" Warning").red().bold());
         println!("{}", message);
         println!();
 
@@ -166,7 +166,7 @@ impl UserConfirmation {
         tool_args: Option<&str>,
     ) -> Result<ToolConfirmationResult> {
         println!("{}", style("Tool Execution Confirmation").cyan().bold());
-        println!("Tool: {}", style(tool_name).yellow().bold());
+        println!("Tool: {}", style(tool_name).cyan().bold());
         if let Some(args) = tool_args {
             println!("Args: {}", style(args).dim());
         }

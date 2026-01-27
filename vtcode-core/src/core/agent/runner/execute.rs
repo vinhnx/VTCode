@@ -53,7 +53,7 @@ impl AgentRunner {
 
             self.runner_println(format_args!(
                 "{} Executing {} task: {}",
-                style("[AGENT]").blue().bold().on_black(),
+                style("[AGENT]").magenta().bold().on_black(),
                 self.agent_type,
                 task.title
             ));
@@ -134,7 +134,7 @@ impl AgentRunner {
                 self.runner_println(format_args!(
                     "{} {} is processing turn {}...",
                     agent_prefix,
-                    style("(PROC)").yellow().bold(),
+                    style("(PROC)").cyan().bold(),
                     turn + 1
                 ));
 
@@ -357,7 +357,7 @@ impl AgentRunner {
                             style(
                                 "Repetitive assistant response detected. Breaking potential loop."
                             )
-                            .yellow()
+                            .red()
                             .bold()
                         ));
                         break;

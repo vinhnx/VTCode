@@ -1006,7 +1006,7 @@ impl ToolPolicyManager {
                 }
                 ToolPolicy::Prompt => {
                     prompt_count += 1;
-                    ("PROMPT", "yellow")
+                    ("PROMPT", "cyan")
                 }
                 ToolPolicy::Deny => {
                     deny_count += 1;
@@ -1016,7 +1016,7 @@ impl ToolPolicyManager {
 
             let status_styled = match color_name {
                 "green" => style(status).green(),
-                "yellow" => style(status).yellow(),
+                "cyan" => style(status).cyan(),
                 "red" => style(status).red(),
                 _ => style(status),
             };
@@ -1032,7 +1032,7 @@ impl ToolPolicyManager {
         println!(
             "Summary: {} allowed, {} prompt, {} denied",
             style(allow_count).green(),
-            style(prompt_count).yellow(),
+            style(prompt_count).cyan(),
             style(deny_count).red()
         );
     }

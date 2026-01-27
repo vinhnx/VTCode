@@ -80,9 +80,9 @@ impl Default for AppearanceConfig {
             min_content_width: 40,
             min_navigation_width: 20,
             navigation_width_percent: 25,
-            transcript_bottom_padding: 1,
+            transcript_bottom_padding: 0,
             dim_completed_todos: true,
-            message_block_spacing: 1,
+            message_block_spacing: 0,
             customization: CustomizationConfig::default(),
         }
     }
@@ -102,7 +102,7 @@ impl AppearanceConfig {
             min_content_width: 40,
             min_navigation_width: 20,
             navigation_width_percent: 25,
-            transcript_bottom_padding: 1,
+            transcript_bottom_padding: 0,
             dim_completed_todos: config.ui.dim_completed_todos,
             message_block_spacing: if config.ui.message_block_spacing {
                 1

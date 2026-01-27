@@ -8,10 +8,10 @@ use anstyle::{AnsiColor, Color, Style};
 pub struct ColorPalette {
     pub success: Color, // Green
     pub error: Color,   // Red
-    pub warning: Color, // Yellow
+    pub warning: Color, // Red
     pub info: Color,    // Cyan
-    pub accent: Color,  // Blue
-    pub primary: Color, // Bright white
+    pub accent: Color,  // Magenta
+    pub primary: Color, // Cyan
     pub muted: Color,   // Gray/Dim
 }
 
@@ -20,10 +20,10 @@ impl Default for ColorPalette {
         Self {
             success: Color::Ansi(AnsiColor::Green),
             error: Color::Ansi(AnsiColor::Red),
-            warning: Color::Ansi(AnsiColor::Yellow),
+            warning: Color::Ansi(AnsiColor::Red),
             info: Color::Ansi(AnsiColor::Cyan),
-            accent: Color::Ansi(AnsiColor::Blue),
-            primary: Color::Ansi(AnsiColor::BrightWhite),
+            accent: Color::Ansi(AnsiColor::Magenta),
+            primary: Color::Ansi(AnsiColor::Cyan),
             muted: Color::Ansi(AnsiColor::BrightBlack),
         }
     }
@@ -108,22 +108,22 @@ mod tests {
         let palette = ColorPalette::default();
         assert!(matches!(palette.success, Color::Ansi(AnsiColor::Green)));
         assert!(matches!(palette.error, Color::Ansi(AnsiColor::Red)));
-        assert!(matches!(palette.warning, Color::Ansi(AnsiColor::Yellow)));
+        assert!(matches!(palette.warning, Color::Ansi(AnsiColor::Red)));
         assert!(matches!(palette.info, Color::Ansi(AnsiColor::Cyan)));
-        assert!(matches!(palette.accent, Color::Ansi(AnsiColor::Blue)));
+        assert!(matches!(palette.accent, Color::Ansi(AnsiColor::Magenta)));
     }
 
     #[test]
     fn test_style_from_color_name_valid() {
         let style_red = style_from_color_name("red");
         let style_green = style_from_color_name("green");
-        let style_blue = style_from_color_name("blue");
+        let style_magenta = style_from_color_name("magenta");
         let style_cyan = style_from_color_name("cyan");
 
         // Just verify they're not empty/default
         assert!(!style_red.to_string().is_empty());
         assert!(!style_green.to_string().is_empty());
-        assert!(!style_blue.to_string().is_empty());
+        assert!(!style_magenta.to_string().is_empty());
         assert!(!style_cyan.to_string().is_empty());
     }
 
@@ -174,13 +174,13 @@ mod tests {
 
     #[test]
     fn test_bold_color() {
-        let style = bold_color(AnsiColor::Blue);
+        let style = bold_color(AnsiColor::Cyan);
         assert!(!style.to_string().is_empty());
     }
 
     #[test]
     fn test_dimmed_color() {
-        let style = dimmed_color(AnsiColor::Yellow);
+        let style = dimmed_color(AnsiColor::Cyan);
         assert!(!style.to_string().is_empty());
     }
 
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_style_from_color_name_without_modifier() {
-        let style = style_from_color_name("blue");
+        let style = style_from_color_name("cyan");
         assert!(!style.to_string().is_empty());
         assert!(!style.get_effects().contains(anstyle::Effects::DIMMED));
     }

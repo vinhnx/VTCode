@@ -36,7 +36,7 @@ pub async fn handle_resume_session_command(
     };
 
     let Some(mut resume) = resume else {
-        println!("{}", style("No session selected. Exiting.").yellow());
+        println!("{}", style("No session selected. Exiting.").red());
         return Ok(());
     };
 
@@ -58,7 +58,7 @@ async fn select_latest_session(is_fork: bool) -> Result<Option<ResumeSession>> {
     if let Some(listing) = listings.pop() {
         Ok(Some(convert_listing(&listing, is_fork)))
     } else {
-        println!("{}", style("No archived sessions were found.").yellow());
+        println!("{}", style("No archived sessions were found.").red());
         Ok(None)
     }
 }
@@ -75,7 +75,7 @@ async fn select_session_interactively(is_fork: bool) -> Result<Option<ResumeSess
         .await
         .context("failed to load recent sessions")?;
     if listings.is_empty() {
-        println!("{}", style("No archived sessions were found.").yellow());
+        println!("{}", style("No archived sessions were found.").red());
         return Ok(None);
     }
 
@@ -206,7 +206,7 @@ async fn run_single_agent_loop(
             println!(
                 "{}",
                 style("Archived session is missing workspace metadata; continuing with the current workspace.")
-                    .yellow()
+                    .red()
             );
         }
         ParsedWorkspace::Provided { path, exists } => {
@@ -218,7 +218,7 @@ async fn run_single_agent_loop(
                         path.display(),
                         config.workspace.display()
                     ))
-                    .yellow()
+                    .red()
                 );
             }
 
@@ -229,7 +229,7 @@ async fn run_single_agent_loop(
                         "Archived workspace {} could not be found on disk. Tools will operate relative to the archived path.",
                         path.display()
                     ))
-                    .yellow()
+                    .red()
                 );
             }
 

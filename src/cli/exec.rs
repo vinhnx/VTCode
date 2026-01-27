@@ -73,7 +73,7 @@ pub async fn handle_exec_command(
     tokio::select! {
         res = handle_exec_command_impl(config, vt_cfg, options, prompt_arg) => res,
         _ = tokio::signal::ctrl_c() => {
-            eprintln!("{}", style("\nCancelled by user.").yellow());
+            eprintln!("{}", style("\nCancelled by user.").red());
             bail!("Operation cancelled");
         }
     }
@@ -219,7 +219,7 @@ async fn handle_exec_command_impl(
         }
 
         if !result.warnings.is_empty() {
-            eprintln!("{}", style("[WARNINGS]").yellow().bold());
+            eprintln!("{}", style("[WARNINGS]").red().bold());
             for (idx, warning) in result.warnings.iter().enumerate() {
                 eprintln!("  {:>2}. {}", idx + 1, warning);
             }

@@ -849,11 +849,11 @@ pub(crate) async fn stream_and_render_response(
     if !content_suppressed && let Some(content) = response.content.as_deref() {
         let content_trimmed = content.trim();
         if !content_trimmed.is_empty() {
-        let reasoning_dupes_content = response
-            .reasoning
-            .as_deref()
-            .map(|reasoning| reasoning_matches_content(reasoning, content))
-            .unwrap_or(false);
+            let reasoning_dupes_content = response
+                .reasoning
+                .as_deref()
+                .map(|reasoning| reasoning_matches_content(reasoning, content))
+                .unwrap_or(false);
             if reasoning_dupes_content
                 && (reasoning_state.rendered_reasoning() || reasoning_emitted)
             {

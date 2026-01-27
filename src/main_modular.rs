@@ -167,12 +167,12 @@ async fn main() -> Result<()> {
             handle_chat_command(&config, args.skip_confirmations, false).await?;
         }
         Commands::ChatVerbose => {
-            println!("{}", style("Verbose chat mode selected").blue().bold());
+            println!("{}", style("Verbose chat mode selected").cyan().bold());
             handle_chat_command(&config, args.skip_confirmations, false).await?;
         }
         Commands::Ask { prompt } => {
             let prompt_text = prompt.join(" ");
-            println!("{}", style("Ask mode").blue().bold());
+            println!("{}", style("Ask mode").cyan().bold());
             println!("Question: {}", prompt_text);
 
             // Ask implementation

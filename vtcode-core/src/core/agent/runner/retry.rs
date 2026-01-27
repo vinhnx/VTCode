@@ -71,7 +71,7 @@ impl AgentRunner {
                         // Notify user about retry with visible message
                         self.runner_println(format_args!(
                             "{} Task failed (attempt {}/{}), retrying in {}s...",
-                            style("[Warning]").yellow().bold(),
+                            style("[Warning]").red().bold(),
                             attempt + 1,
                             max_retries + 1,
                             delay_secs

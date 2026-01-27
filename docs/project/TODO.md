@@ -18,25 +18,4 @@ The lock file is being held by a previous process. Let me kill any cargo process
 
 --
 
---
-
-style tools args in different ansi
-
-'/Users/vinhnguyenxuan/Desktop/Screenshot 2026-01-27 at 5.35.30 PM.png'
-
-example
-
-
-`Search text Grep if !buffer\.is_empty\(\) \{ in vtcode-core/src/a2a/client.rs`
-
--> 
-
-style `Grep if !buffer\.is_empty\(\) \{`, in different color
-
---
-
----
-
---
-
 make sure the agent properly wait for PTY tools output before processing turn, to avoid repeatly wait and retrigger for locked commands (eg: cargo check, cargo test) 

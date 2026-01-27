@@ -16,7 +16,7 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
 
     println!(
         "{} VT Code v{}",
-        "Checking for updates...".blue(),
+        "Checking for updates...".cyan(),
         current_version
     );
 
@@ -43,7 +43,7 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
 async fn handle_update_available(update: &UpdateInfo, options: UpdateCommandOptions) -> Result<()> {
     println!(
         "\n{} New version available: v{}",
-        "●".yellow(),
+        "●".cyan(),
         update.version
     );
 
@@ -58,7 +58,7 @@ async fn handle_update_available(update: &UpdateInfo, options: UpdateCommandOpti
                 "https://github.com/vinhnx/vtcode/releases/tag/v{}",
                 update.version
             )
-            .blue()
+            .cyan()
         );
         return Ok(());
     }

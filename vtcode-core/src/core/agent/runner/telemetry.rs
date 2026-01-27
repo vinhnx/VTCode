@@ -21,7 +21,7 @@ impl AgentRunner {
             println!(
                 "{} {} {}",
                 agent_prefix,
-                style("(WARN)").yellow().bold(),
+                style("(WARN)").red().bold(),
                 warning_message
             );
         }
@@ -90,7 +90,7 @@ impl AgentRunner {
             println!(
                 "{} {} {}",
                 agent_prefix,
-                style("(WARN)").yellow().bold(),
+                style("(WARN)").red().bold(),
                 detail
             );
         }

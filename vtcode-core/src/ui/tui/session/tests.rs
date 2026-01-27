@@ -513,8 +513,8 @@ fn scroll_end_displays_full_final_paragraph() {
         "expected final paragraph tail `{expected_tail}` to appear, got {view:?}"
     );
     assert!(
-        view.last().map_or(false, |line| line.is_empty()),
-        "expected bottom padding row to be blank, got {view:?}"
+        view.last().map_or(false, |line| !line.is_empty()),
+        "expected transcript to end with content, got {view:?}"
     );
 }
 

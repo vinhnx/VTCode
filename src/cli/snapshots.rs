@@ -5,7 +5,7 @@ use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::utils::colors::style;
 
 pub async fn handle_snapshots_command(config: &CoreAgentConfig) -> Result<()> {
-    println!("{}\n", style("[SNAPSHOTS]").blue().bold());
+    println!("{}\n", style("[SNAPSHOTS]").cyan().bold());
     let mut snapshot_cfg = SnapshotConfig::new(config.workspace.clone());
     snapshot_cfg.enabled = true;
     snapshot_cfg.storage_dir = config.checkpointing_storage_dir.clone();
@@ -43,7 +43,7 @@ pub async fn handle_cleanup_snapshots_command(
     config: &CoreAgentConfig,
     max: Option<usize>,
 ) -> Result<()> {
-    println!("{}\n", style("[CLEANUP]").blue().bold());
+    println!("{}\n", style("[CLEANUP]").cyan().bold());
     let mut cfg = SnapshotConfig::new(config.workspace.clone());
     cfg.enabled = true;
     cfg.storage_dir = config.checkpointing_storage_dir.clone();

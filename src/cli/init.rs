@@ -17,7 +17,7 @@ use vtcode_core::utils::colors::style;
 
 /// Handle the init command
 pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Result<()> {
-    println!("{}", style("[INIT]").blue().bold());
+    println!("{}", style("[INIT]").cyan().bold());
     println!("  {:16} {}", "workspace", workspace.display());
     println!("  {:16} {}", "force", force);
     println!("  {:16} {}\n", "run", run);

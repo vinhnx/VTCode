@@ -30,7 +30,7 @@ fn display_memory_report(report: &MemoryReport) {
     println!("\n{} Thresholds:", style("[LIMITS]").dim());
     println!(
         "  Soft Limit: {} MB (warning level)",
-        style(format!("{:.1}", report.soft_limit_mb)).yellow()
+        style(format!("{:.1}", report.soft_limit_mb)).cyan()
     );
     println!(
         "  Hard Limit: {} MB (critical level)",
@@ -41,7 +41,7 @@ fn display_memory_report(report: &MemoryReport) {
     let pressure_str = format!("{}", report.pressure);
     let pressure_colored = match report.pressure {
         MemoryPressure::Normal => style(pressure_str).green(),
-        MemoryPressure::Warning => style(pressure_str).yellow(),
+        MemoryPressure::Warning => style(pressure_str).red(),
         MemoryPressure::Critical => style(pressure_str).red().bold(),
     };
     println!("  Level: {}", pressure_colored);

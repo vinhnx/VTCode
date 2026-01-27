@@ -89,7 +89,7 @@ impl AgentRunner {
                                     println!(
                                         "{} {} Streaming error: {}",
                                         agent_prefix,
-                                        style("(WARN)").yellow().bold(),
+                                        style("(WARN)").red().bold(),
                                         err
                                     );
                                 }
@@ -114,7 +114,7 @@ impl AgentRunner {
                         println!(
                             "{} {} Streaming fallback: {}",
                             agent_prefix,
-                            style("(WARN)").yellow().bold(),
+                            style("(WARN)").red().bold(),
                             err
                         );
                     }
@@ -135,7 +135,7 @@ impl AgentRunner {
                         println!(
                             "{} {} Streaming timed out after {}",
                             agent_prefix,
-                            style("(WARN)").yellow().bold(),
+                            style("(WARN)").red().bold(),
                             timeout_display
                         );
                     }
@@ -258,7 +258,7 @@ impl AgentRunner {
                     println!(
                         "{} {} {}",
                         agent_prefix,
-                        style("(WARN)").yellow().bold(),
+                        style("(WARN)").red().bold(),
                         warning
                     );
                 }

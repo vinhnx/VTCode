@@ -42,7 +42,7 @@ pub async fn handle_create_project_command(
     // Step 1: Create project directory structure
     println!(
         "{}",
-        style("Step 1: Creating project directory structure...").yellow()
+        style("Step 1: Creating project directory structure...").cyan()
     );
     let create_dir_result = registry
         .execute_tool(
@@ -63,7 +63,7 @@ pub async fn handle_create_project_command(
     print_result("Created project directory", &create_dir_result);
 
     // Step 2: Create Cargo.toml
-    println!("{}", style("Step 2: Generating Cargo.toml...").yellow());
+    println!("{}", style("Step 2: Generating Cargo.toml...").cyan());
     let cargo_toml_content = format!(
         r#"[package]
 name = "{}"
@@ -97,7 +97,7 @@ edition = "2021"
     // Step 3: Create src directory and main.rs
     println!(
         "{}",
-        style("Step 3: Creating source code structure...").yellow()
+        style("Step 3: Creating source code structure...").cyan()
     );
 
     let main_rs_content = if features.iter().any(|s| s == "serde") {
@@ -143,7 +143,7 @@ fn main() {
     print_result("Created src/main.rs", &main_rs_result);
 
     // Step 4: Create README.md
-    println!("{}", style("Step 4: Generating documentation...").yellow());
+    println!("{}", style("Step 4: Generating documentation...").cyan());
     let readme_content = format!(
         r#"# {}
 
@@ -186,7 +186,7 @@ cargo test
     print_result("Created README.md", &readme_result);
 
     // Step 5: Create .gitignore
-    println!("{}", style("Step 5: Adding .gitignore...").yellow());
+    println!("{}", style("Step 5: Adding .gitignore...").cyan());
     let gitignore_content = r#"/target/
 Cargo.lock
 .DS_Store
@@ -209,7 +209,7 @@ Cargo.lock
     print_result("Created .gitignore", &gitignore_result);
 
     // Step 6: Test the build
-    println!("{}", style("Step 6: Testing project build...").yellow());
+    println!("{}", style("Step 6: Testing project build...").cyan());
     let test_build_result = registry
         .execute_tool(
             tools::LIST_FILES,

@@ -8,7 +8,7 @@ pub async fn handle_revert_command(
     turn: usize,
     partial: Option<String>,
 ) -> Result<()> {
-    println!("{}\n", style("[REVERT]").blue().bold());
+    println!("{}\n", style("[REVERT]").cyan().bold());
     let scope = partial
         .as_deref()
         .and_then(SnapshotManager::parse_revert_scope)

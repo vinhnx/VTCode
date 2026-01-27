@@ -84,11 +84,14 @@ impl Session {
             || (message.kind == InlineMessageKind::Agent
                 && prev_kind != Some(InlineMessageKind::Agent));
 
+        let spacing = self.appearance.message_block_spacing.min(2) as usize;
+
         // Add a subtle separator before User messages (single divider, not double)
         if message.kind == InlineMessageKind::User && is_new_turn && max_width > 0 {
-            // Add blank line for visual separation before user turn
             if prev_kind.is_some() {
-                wrapped.push(Line::default());
+                for _ in 0..spacing {
+                    wrapped.push(Line::default());
+                }
             }
             let divider = self.message_divider_line(max_width, message.kind);
             wrapped.push(divider);
@@ -109,7 +112,6 @@ impl Session {
         }
 
         // Add spacing after messages for visual grouping (respects message_block_spacing config)
-        let spacing = self.appearance.message_block_spacing.min(2) as usize;
         let next_kind = self.lines.get(index + 1).map(|l| l.kind);
         match message.kind {
             InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Warning => {
@@ -261,7 +263,7 @@ impl Session {
     /// Tool blocks are visually grouped with:
     /// - Consistent indentation (2 spaces)
     /// - Dimmed styling for less visual weight
-    /// - Blank line after tool block ends
+    /// - Optional spacing after tool block ends
     #[allow(dead_code)]
     pub(super) fn reflow_tool_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
         let Some(line) = self.lines.get(index) else {
@@ -305,9 +307,11 @@ impl Session {
 
         // Add visual separator at start of tool block
         if is_start {
-            // Blank line before tool block for visual separation
+            let spacing = self.appearance.message_block_spacing.min(2) as usize;
             if index > 0 {
-                lines.push(Line::default());
+                for _ in 0..spacing {
+                    lines.push(Line::default());
+                }
             }
         }
 
@@ -343,9 +347,12 @@ impl Session {
             }
         }
 
-        // Add blank line after tool block for clean separation
+        // Add optional spacing after tool block for clean separation
         if is_end {
-            lines.push(Line::default());
+            let spacing = self.appearance.message_block_spacing.min(2) as usize;
+            for _ in 0..spacing {
+                lines.push(Line::default());
+            }
         }
 
         if lines.is_empty() {
