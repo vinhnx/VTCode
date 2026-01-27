@@ -1,6 +1,18 @@
 //! OpenAI Responses API payload construction and parsing.
 //!
 //! This module handles the Responses API format used by GPT-5 and Codex models.
+//!
+//! ## Codex-Specific Considerations (from Cursor harness learnings)
+//!
+//! Codex models are especially dependent on reasoning trace continuity. When reasoning
+//! traces are dropped, performance degrades by ~30% (vs ~3% for standard GPT-5). This
+//! module ensures reasoning items are always preserved and forwarded correctly via:
+//!
+//! 1. **Parsing**: `reasoning_items` are extracted from response output and stored in
+//!    `reasoning_details` field of `LLMResponse`
+//! 2. **Re-injection**: When building payloads, `reasoning_details` from previous
+//!    assistant messages are injected back into the input sequence
+//! 3. **Validation**: The build functions ensure reasoning traces flow through correctly
 
 use std::collections::HashSet;
 
@@ -405,6 +417,15 @@ pub fn build_codex_responses_payload(
                 }));
             }
             provider::MessageRole::Assistant => {
+                // CRITICAL for Codex: Inject any persisted reasoning items from previous turns
+                // Codex models experience ~30% performance degradation when reasoning traces
+                // are dropped (vs ~3% for standard GPT-5). Always preserve reasoning continuity.
+                if let Some(reasoning_details) = &msg.reasoning_details {
+                    for item in reasoning_details {
+                        input.push(item.clone());
+                    }
+                }
+
                 let mut content_parts = Vec::new();
                 if !msg.content.is_empty() {
                     content_parts.push(json!({
