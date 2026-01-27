@@ -1,7 +1,7 @@
 <p align="center">
 <img src="./resources/logo/vt_code_adaptive.svg" alt="vtcode"/>
 
-<a href="./docs/SKILLS_GUIDE.md"><img src="https://img.shields.io/badge/Agent%20Skills-BFB38F?style=for-the-badge" alt="Agent Skills"/></a>
+<a href="./docs/SKILLS_GUIDE.md"><img src="https://img.shields.io/badge/Agent%20Skills-BFB38F?style=for-the-badge&logo=anthropic" alt="Agent Skills"/></a>
 <a href="./docs/guides/mcp-integration.md"><img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/></a>
 <a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/></a>
 
