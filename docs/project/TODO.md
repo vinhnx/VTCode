@@ -17,3 +17,8 @@ The lock file is being held by a previous process. Let me kill any cargo process
 -> for destructive commands, the vtcode agent should use human in the loop with persmission prompt
 
 --
+
+Nobody should be using up arrows to get previous commands in a terminal or shell. You have to move your hand and its linear complexity in keystrokes. Use ctrl+p (for low n) or ctrl+r. Use a real shell or history manager (fish, fzf, atuin) for ctrl+r.
+
+-> implement pseudo control+r -> show a list of all previous commands with fuzzy search (check @files picker impl)
+

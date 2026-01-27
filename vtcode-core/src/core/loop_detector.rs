@@ -98,7 +98,9 @@ impl LoopDetector {
         }
         let args_hash = hasher.finish();
 
-        if let Some(limit) = self.max_identical_call_limit {
+        if let Some(limit) = self.max_identical_call_limit
+            && Self::should_enforce_identical_limit(tool_name)
+        {
             let required_history = limit.saturating_sub(1);
             if required_history > 0 && self.recent_calls.len() >= required_history {
                 let identical = self
@@ -265,9 +267,27 @@ impl LoopDetector {
         match tool_name {
             tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => MAX_READONLY_TOOL_CALLS,
             tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
-            tools::RUN_PTY_CMD | "shell" => MAX_COMMAND_TOOL_CALLS,
+            tools::RUN_PTY_CMD
+            | tools::EXECUTE_CODE
+            | tools::EXEC_PTY_CMD
+            | tools::EXEC
+            | tools::UNIFIED_EXEC
+            | tools::SHELL => MAX_COMMAND_TOOL_CALLS,
             _ => MAX_OTHER_TOOL_CALLS,
         }
+    }
+
+    #[inline]
+    fn should_enforce_identical_limit(tool_name: &str) -> bool {
+        !matches!(
+            tool_name,
+            tools::RUN_PTY_CMD
+                | tools::EXECUTE_CODE
+                | tools::EXEC_PTY_CMD
+                | tools::EXEC
+                | tools::UNIFIED_EXEC
+                | tools::SHELL
+        )
     }
 
     /// Suggest alternatives for stuck tools (extracted to static method for efficiency)
@@ -378,6 +398,16 @@ mod tests {
         let warning = detector.record_call(tools::GREP_FILE, &args);
         assert!(warning.is_some());
         assert!(warning.unwrap().contains("HARD STOP"));
+    }
+
+    #[test]
+    fn test_command_tools_skip_identical_hard_stop() {
+        let mut detector = LoopDetector::new();
+        let args = json!({"command": "cargo test"});
+
+        assert!(detector.record_call(tools::RUN_PTY_CMD, &args).is_none());
+        assert!(detector.record_call(tools::RUN_PTY_CMD, &args).is_none());
+        assert!(detector.record_call(tools::RUN_PTY_CMD, &args).is_none());
     }
 
     #[test]
