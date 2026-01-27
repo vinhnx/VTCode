@@ -3,6 +3,34 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.71.7] - 2026-01-27
+
+
+### Features
+    - feat: add new logo assets and update existing images for branding consistency
+
+
+### Refactors
+    - refactor: switch default provider to Hugging Face and add Moonshot Kimi K2.5 model support
+    - refactor: switch default LLM provider to Anthropics, enhance reasoning deduplication, and apply Codex-inspired output limits
+    - refactor: update default model and tool policy permissions, add Codex harness learnings documentation
+    - refactor: update tool policy to allow file editing and enhance output spooling for PTY-related tools
+
+
+### Documentation
+    - docs: update changelog for v0.71.6 [skip ci]
+    - docs: update changelog for v0.71.5 [skip ci]
+    - docs: add comprehensive AgentSkills support section to README
+    - docs: update changelog for v0.71.4 [skip ci]
+
+
+### Chores
+    - chore: remove obsolete demo files and update README to reflect changes
+    - chore(release): bump version to {{version}}
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.71.4 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.71.3 version =  [skip ci]
 # [Version 0.71.6] - 2026-01-27
 
 
