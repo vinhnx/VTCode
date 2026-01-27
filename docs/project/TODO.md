@@ -1,5 +1,5 @@
 improve UX and responsive when agent about to edit/write file, currently the TUI is not responsive and not immediate feedback to the user when agent is about to edit/write file.
-
+-> instead of showing loading in spinner, show immediate ui/ux in the tui transcript log
 --
 
 the agent was able to use `rm` 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-                    
+
 use anyhow::{Context, Result, anyhow};
 use parking_lot::Mutex;
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
@@ -14,7 +14,9 @@ use tokio::sync::Mutex as TokioMutex;
 use tracing::{debug, info, warn};
 use vt100::Parser;
 
-use super::command_utils::{is_cargo_command, is_cargo_command_string, is_shell_program};
+use super::command_utils::{
+    is_long_running_command, is_long_running_command_string, is_shell_program,
+};
 use super::manager_utils::{clamp_timeout, exit_status_code, set_command_environment};
 use super::scrollback::PtyScrollback;
 use super::session::PtySessionHandle;
@@ -23,15 +25,15 @@ use super::types::{PtyCommandRequest, PtyCommandResult};
 use once_cell::sync::Lazy;
 use std::collections::hash_map::Entry;
 
-/// Per-workspace cargo locks to serialize cargo commands within each workspace.
-/// Keyed by canonicalized workspace path to prevent Cargo.lock file contention.
-/// This is more granular than a global lock - different workspaces can run cargo concurrently.
-static CARGO_WORKSPACE_LOCKS: Lazy<Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>> =
+/// Per-workspace command locks to serialize long-running toolchain commands.
+/// Keyed by canonicalized workspace path to prevent lockfile contention.
+/// This is more granular than a global lock - different workspaces can run concurrently.
+static WORKSPACE_COMMAND_LOCKS: Lazy<Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-/// Get or create a cargo lock for the given workspace root
-fn get_cargo_lock(workspace_root: &Path) -> Arc<tokio::sync::Mutex<()>> {
-    let mut locks = CARGO_WORKSPACE_LOCKS.lock();
+/// Get or create a command lock for the given workspace root
+fn get_command_lock(workspace_root: &Path) -> Arc<tokio::sync::Mutex<()>> {
+    let mut locks = WORKSPACE_COMMAND_LOCKS.lock();
     match locks.entry(workspace_root.to_path_buf()) {
         Entry::Occupied(entry) => entry.get().clone(),
         Entry::Vacant(entry) => {
@@ -127,25 +129,26 @@ impl PtyManager {
         let extra_paths = self.extra_paths.lock().clone();
         let max_tokens = request.max_tokens;
 
-        // Determine if this is a cargo command that needs serialization
-        let is_cargo = is_cargo_command(&program)
-            || (is_shell_program(&program) && args.iter().any(|arg| is_cargo_command_string(arg)));
+        // Determine if this command needs serialization to avoid contention
+        let needs_lock = is_long_running_command(&program)
+            || (is_shell_program(&program)
+                && args.iter().any(|arg| is_long_running_command_string(arg)));
 
-        // Acquire per-workspace cargo lock if needed to prevent Cargo.lock file contention
+        // Acquire per-workspace lock if needed to prevent lockfile contention.
         // This prevents "blocking waiting for file lock" errors when the agent
-        // triggers multiple cargo commands before previous ones complete
-        // Using per-workspace lock allows concurrent cargo in different workspaces
-        let cargo_lock = if is_cargo {
-            Some(get_cargo_lock(&workspace_root))
+        // triggers multiple long-running commands before previous ones complete.
+        // Using per-workspace lock allows concurrent commands in different workspaces.
+        let command_lock = if needs_lock {
+            Some(get_command_lock(&workspace_root))
         } else {
             None
         };
-        let _cargo_guard = if let Some(ref lock) = cargo_lock {
+        let _command_guard = if let Some(ref lock) = command_lock {
             debug!(
-                target: "vtcode.pty.cargo_lock",
+                target: "vtcode.pty.command_lock",
                 program = %program,
                 workspace = %workspace_root.display(),
-                "Acquiring per-workspace cargo lock to serialize cargo invocations"
+                "Acquiring per-workspace command lock to serialize long-running invocations"
             );
             Some(lock.lock().await)
         } else {
