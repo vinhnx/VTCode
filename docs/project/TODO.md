@@ -167,5 +167,3 @@ remove tool's preamble message
 }
 
 ==
-
-remove dot hardcode loading indicator view with indicatif loading modern style

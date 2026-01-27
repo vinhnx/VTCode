@@ -146,30 +146,7 @@ fn create_indeterminate_progress_indicator(tick: u64) -> String {
     patterns[pattern_index].to_string()
 }
 
-/// Get context-aware progress style based on operation type
-fn get_progress_style_context(message: &str) -> ProgressStyleContext {
-    if message.contains("thinking")
-        || message.contains("reasoning")
-        || message.contains("sending")
-        || message.contains("receiving")
-    {
-        ProgressStyleContext::Llm
-    } else if message.contains("tool")
-        || message.contains("executing")
-        || message.contains("running")
-    {
-        ProgressStyleContext::Tool
-    } else {
-        ProgressStyleContext::General
-    }
-}
 
-#[derive(Clone, Copy)]
-enum ProgressStyleContext {
-    Llm,
-    Tool,
-    General,
-}
 
 struct SpinnerFrameGenerator {
     style: ProgressStyle,
@@ -251,7 +228,6 @@ impl PlaceholderSpinner {
                 let progress_info = if let Some(progress_reporter) = progress_reporter_arc.as_ref()
                 {
                     let progress = progress_reporter.progress_info().await;
-                    let context = get_progress_style_context(&progress.message.to_lowercase());
                     let mut parts = vec![progress.message.clone()];
 
                     if progress.total > 0 && progress.percentage > 0 {
@@ -259,22 +235,9 @@ impl PlaceholderSpinner {
                         let progress_bar = create_mini_progress_bar(progress.percentage, 8);
                         parts.push(format!("{} {:.0}%", progress_bar, progress.percentage));
                     } else if progress.total == 0 && !progress.message.is_empty() {
-                        // For indeterminate progress, show context-aware activity indicator
-                        let activity_indicator = match context {
-                            ProgressStyleContext::Llm => {
-                                // Use pulsing dots for LLM operations (thinking/processing)
-                                let dots_count = (frames.tick / 3 % 4) as usize;
-                                "⠋⠙⠹⠸".chars().nth(dots_count).unwrap_or('⠋').to_string()
-                            }
-                            ProgressStyleContext::Tool => {
-                                // Use spinning indicator for tool operations
-                                create_indeterminate_progress_indicator(frames.tick)
-                            }
-                            ProgressStyleContext::General => {
-                                // Default indeterminate indicator
-                                create_indeterminate_progress_indicator(frames.tick)
-                            }
-                        };
+                        // Use modern indicatif-style spinner for all indeterminate progress
+                        let activity_indicator =
+                            create_indeterminate_progress_indicator(frames.tick);
                         parts.push(activity_indicator);
                     }
 
