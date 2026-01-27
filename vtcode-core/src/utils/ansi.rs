@@ -342,6 +342,12 @@ impl AnsiRenderer {
         Ok(())
     }
 
+    /// Render markdown content with proper syntax highlighting and indentation normalization.
+    /// Use this for tool output that contains markdown code blocks.
+    pub fn render_markdown_output(&mut self, style: MessageStyle, text: &str) -> Result<()> {
+        self.render_markdown(style, text)
+    }
+
     fn render_markdown(&mut self, style: MessageStyle, text: &str) -> Result<()> {
         let styles = theme::active_styles();
         let base_style = style.style();
