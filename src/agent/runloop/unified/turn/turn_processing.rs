@@ -67,13 +67,12 @@ pub(crate) async fn execute_llm_request(
         }
     });
     let provider_name = provider_client.name();
-    let temperature = if reasoning_effort.is_some()
-        && matches!(provider_name, "anthropic" | "minimax")
-    {
-        None
-    } else {
-        Some(0.7)
-    };
+    let temperature =
+        if reasoning_effort.is_some() && matches!(provider_name, "anthropic" | "minimax") {
+            None
+        } else {
+            Some(0.7)
+        };
 
     // HP-3: Use cached tools instead of acquiring lock and cloning
     let current_tools = ctx
