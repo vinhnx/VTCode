@@ -204,7 +204,7 @@ mod tests {
 [color "diff"]
     new = green
     old = red
-    context = white
+    context = cyan
 "#;
         let config = create_test_git_config(config_text).expect("Failed to parse test config");
 
@@ -218,9 +218,9 @@ mod tests {
         let config_text = r#"
 [color "status"]
     added = green bold
-    modified = red
+    modified = cyan
     deleted = red bold
-    untracked = magenta
+    untracked = cyan
 "#;
         let config = create_test_git_config(config_text).expect("Failed to parse test config");
 
@@ -263,9 +263,9 @@ mod tests {
     fn test_parse_git_config_branch_section() {
         let config_text = r#"
 [color "branch"]
-    current = green bold
+    current = cyan bold
     local = cyan
-    remote = red
+    remote = cyan
 "#;
         let config = create_test_git_config(config_text).expect("Failed to parse test config");
 
@@ -282,7 +282,7 @@ mod tests {
 
 [color "status"]
     added = green
-    modified = yellow
+    modified = cyan
 
 [color "branch"]
     current = cyan bold

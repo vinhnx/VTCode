@@ -36,7 +36,7 @@ impl AgentRunner {
             self.runner_println(format_args!(
                 "{} {} received empty response with no tool calls",
                 agent_prefix,
-                style("(WARN)").yellow().bold()
+                style("(WARN)").red().bold()
             ));
         }
     }

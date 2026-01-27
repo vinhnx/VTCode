@@ -199,7 +199,7 @@ pub fn render_markdown_to_lines(
             Event::Rule => {
                 ctx.flush_line();
                 let mut line = MarkdownLine::default();
-                line.push_segment(theme_styles.secondary.bold(), &"―".repeat(32));
+                line.push_segment(base_style.dimmed(), &"―".repeat(32));
                 ctx.lines.push(line);
                 push_blank_line(ctx.lines);
             }
@@ -312,8 +312,11 @@ fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
     match tag {
         Tag::Paragraph => {}
         Tag::Heading { level, .. } => {
-            ctx.style_stack
-                .push(heading_style(*level, ctx.theme_styles, ctx.base_style));
+            let style = heading_style(*level, ctx.theme_styles, ctx.base_style);
+            ctx.style_stack.push(style);
+            ctx.ensure_prefix();
+            let prefix = format!("{} ", "#".repeat(*level as usize));
+            ctx.current_line.push_segment(style, &prefix);
         }
         Tag::BlockQuote(_) => *ctx.blockquote_depth += 1,
         Tag::List(start) => {
@@ -490,7 +493,7 @@ fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
 
 fn render_table(
     table: &TableBuffer,
-    theme_styles: &ThemeStyles,
+    _theme_styles: &ThemeStyles,
     base_style: Style,
 ) -> Vec<MarkdownLine> {
     let mut lines = Vec::new();
@@ -519,7 +522,7 @@ fn render_table(
         }
     }
 
-    let border_style = theme_styles.secondary.dimmed();
+    let border_style = base_style.dimmed();
 
     let render_row = |cells: &[MarkdownLine], col_widths: &[usize], bold: bool| -> MarkdownLine {
         let mut line = MarkdownLine::default();
@@ -607,7 +610,7 @@ fn ensure_prefix(
     blockquote_depth: usize,
     list_stack: &[ListState],
     pending_list_prefix: &mut Option<String>,
-    theme_styles: &ThemeStyles,
+    _theme_styles: &ThemeStyles,
     base_style: Style,
 ) {
     if !current_line.segments.is_empty() {
@@ -615,7 +618,7 @@ fn ensure_prefix(
     }
 
     for _ in 0..blockquote_depth {
-        current_line.push_segment(theme_styles.secondary.italic(), "│ ");
+        current_line.push_segment(base_style.dimmed().italic(), "│ ");
     }
 
     if let Some(prefix) = pending_list_prefix.take() {
@@ -677,36 +680,23 @@ fn trim_trailing_blank_lines(lines: &mut Vec<MarkdownLine>) {
     }
 }
 
-fn inline_code_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
-    let fg = theme_styles
-        .secondary
-        .get_fg_color()
-        .or_else(|| base_style.get_fg_color());
-    let mut style = base_style;
-    if let Some(fg_color) = fg {
-        style = style.fg_color(Some(fg_color));
-    }
-    style.bold()
+fn inline_code_style(_theme_styles: &ThemeStyles, base_style: Style) -> Style {
+    base_style.bold()
 }
 
-fn heading_style(level: HeadingLevel, theme_styles: &ThemeStyles, base_style: Style) -> Style {
-    match level {
-        HeadingLevel::H1 => theme_styles.primary.bold().underline(),
-        HeadingLevel::H2 => theme_styles.primary.bold(),
-        HeadingLevel::H3 => theme_styles.secondary.bold(),
-        _ => base_style.bold(),
-    }
+fn heading_style(_level: HeadingLevel, _theme_styles: &ThemeStyles, base_style: Style) -> Style {
+    base_style.bold()
 }
 
 fn build_prefix_segments(
     blockquote_depth: usize,
     list_stack: &[ListState],
-    theme_styles: &ThemeStyles,
+    _theme_styles: &ThemeStyles,
     base_style: Style,
 ) -> Vec<MarkdownSegment> {
     let mut segments = Vec::new();
     for _ in 0..blockquote_depth {
-        segments.push(MarkdownSegment::new(theme_styles.secondary.italic(), "│ "));
+        segments.push(MarkdownSegment::new(base_style.dimmed().italic(), "│ "));
     }
     if !list_stack.is_empty() {
         let mut continuation = String::new();
@@ -744,7 +734,13 @@ fn highlight_code_block(
         for (index, segments) in highlighted.into_iter().enumerate() {
             let mut line = MarkdownLine::default();
             let line_prefix = if use_line_numbers {
-                line_prefix_segments(prefix_segments, theme_styles, index + 1, number_width)
+                line_prefix_segments(
+                    prefix_segments,
+                    theme_styles,
+                    base_style,
+                    index + 1,
+                    number_width,
+                )
             } else {
                 prefix_segments.to_vec()
             };
@@ -769,7 +765,13 @@ fn highlight_code_block(
         let trimmed = raw_line.trim_end_matches('\n');
         let mut line = MarkdownLine::default();
         let line_prefix = if use_line_numbers {
-            line_prefix_segments(prefix_segments, theme_styles, line_number, number_width)
+            line_prefix_segments(
+                prefix_segments,
+                theme_styles,
+                base_style,
+                line_number,
+                number_width,
+            )
         } else {
             prefix_segments.to_vec()
         };
@@ -784,7 +786,13 @@ fn highlight_code_block(
     if code_to_display.ends_with('\n') {
         let mut line = MarkdownLine::default();
         let line_prefix = if use_line_numbers {
-            line_prefix_segments(prefix_segments, theme_styles, line_number, number_width)
+            line_prefix_segments(
+                prefix_segments,
+                theme_styles,
+                base_style,
+                line_number,
+                number_width,
+            )
         } else {
             prefix_segments.to_vec()
         };
@@ -797,13 +805,14 @@ fn highlight_code_block(
 
 fn line_prefix_segments(
     prefix_segments: &[MarkdownSegment],
-    theme_styles: &ThemeStyles,
+    _theme_styles: &ThemeStyles,
+    base_style: Style,
     line_number: usize,
     width: usize,
 ) -> Vec<MarkdownSegment> {
     let mut segments = prefix_segments.to_vec();
     let number_text = format!("{:>width$}  ", line_number, width = width);
-    segments.push(MarkdownSegment::new(theme_styles.secondary, number_text));
+    segments.push(MarkdownSegment::new(base_style.dimmed(), number_text));
     segments
 }
 

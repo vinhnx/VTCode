@@ -150,11 +150,7 @@ fn render_styled_action_text(
                 || word.starts_with("Run"))
         {
             let action_style = InlineTextStyle::default()
-                .with_color(
-                    theme
-                        .tool_accent
-                        .or(Some(anstyle::AnsiColor::Yellow.into())),
-                )
+                .with_color(theme.tool_accent.or(Some(anstyle::AnsiColor::Cyan.into())))
                 .bold();
             spans.push(Span::styled(
                 word.to_owned(),
@@ -199,9 +195,9 @@ fn tool_inline_style(tool_name: &str, theme: &InlineTheme) -> InlineTextStyle {
     let mut style = InlineTextStyle::default().bold();
 
     style.color = match normalized_name {
-        "read" => Some(anstyle::AnsiColor::Blue.into()),
+        "read" => Some(anstyle::AnsiColor::Cyan.into()),
         "list" => Some(anstyle::AnsiColor::Green.into()),
-        "search" => Some(anstyle::AnsiColor::Yellow.into()),
+        "search" => Some(anstyle::AnsiColor::Cyan.into()),
         "write" => Some(anstyle::AnsiColor::Magenta.into()),
         "run" => Some(anstyle::AnsiColor::Red.into()),
         "git" | "version_control" => Some(anstyle::AnsiColor::Cyan.into()),

@@ -21,7 +21,7 @@ pub async fn handle_analyze_command(
         "standard" => AnalysisDepth::Standard,
         "deep" => AnalysisDepth::Deep,
         _ => {
-            println!("{}", style("Invalid depth. Using 'standard'.").yellow());
+            println!("{}", style("Invalid depth. Using 'standard'.").red());
             AnalysisDepth::Standard
         }
     };
@@ -31,7 +31,7 @@ pub async fn handle_analyze_command(
         "json" => OutputFormat::Json,
         "html" => OutputFormat::Html,
         _ => {
-            println!("{}", style("Invalid format. Using 'text'.").yellow());
+            println!("{}", style("Invalid format. Using 'text'.").red());
             OutputFormat::Text
         }
     };
@@ -149,7 +149,7 @@ pub async fn handle_analyze_command(
     if matches!(depth, AnalysisDepth::Deep) {
         println!(
             "{}",
-            style("6. Research-preview code analysis with tree-sitter...").yellow()
+            style("6. Research-preview code analysis with tree-sitter...").cyan()
         );
         match perform_tree_sitter_analysis(&config).await {
             Ok(_) => println!(

@@ -30,11 +30,7 @@ pub fn render_pty_output_fn(output: &str, title: &str, command: Option<&str>) ->
     println!("{}", style("=".repeat(80)).dim());
 
     // Print title
-    println!(
-        "{} {}",
-        style("==").blue().bold(),
-        style(title).blue().bold()
-    );
+    println!("{} {}", style("==").bold(), style(title).bold());
 
     // Print command if available
     if let Some(cmd) = command {
@@ -50,7 +46,7 @@ pub fn render_pty_output_fn(output: &str, title: &str, command: Option<&str>) ->
 
     // Print bottom border
     println!("{}", style("-".repeat(80)).dim());
-    println!("{}", style("==").blue().bold());
+    println!("{}", style("==").bold());
     println!("{}", style("=".repeat(80)).dim());
 
     Ok(())

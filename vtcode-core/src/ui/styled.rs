@@ -1,6 +1,5 @@
-use super::theme;
 use anstream::println as styled_println;
-use anstyle::{Color, Effects, Reset, Style};
+use anstyle::{AnsiColor, Color, Effects, Reset, Style};
 
 /// Style presets for consistent UI theming
 pub struct Styles;
@@ -8,27 +7,29 @@ pub struct Styles;
 impl Styles {
     /// Error message style (red)
     pub fn error() -> Style {
-        theme::active_styles().error
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)))
     }
 
-    /// Warning message style (yellow)
+    /// Warning message style (red)
     pub fn warning() -> Style {
-        theme::active_styles().secondary
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)))
     }
 
     /// Success message style (green)
     pub fn success() -> Style {
-        theme::active_styles().primary
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)))
     }
 
-    /// Info message style (blue)
+    /// Info message style (cyan)
     pub fn info() -> Style {
-        theme::active_styles().output
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)))
     }
 
     /// Debug message style (cyan)
     pub fn debug() -> Style {
-        theme::active_styles().response
+        Style::new()
+            .fg_color(Some(Color::Ansi(AnsiColor::Cyan)))
+            .dimmed()
     }
 
     /// Bold text style
@@ -38,30 +39,27 @@ impl Styles {
 
     /// Bold error style
     pub fn bold_error() -> Style {
-        theme::active_styles().error.bold()
+        Self::error().bold()
     }
 
     /// Bold success style
     pub fn bold_success() -> Style {
-        theme::active_styles().primary.bold()
+        Self::success().bold()
     }
 
     /// Bold warning style
     pub fn bold_warning() -> Style {
-        theme::active_styles().secondary.bold()
+        Self::warning().bold()
     }
 
-    /// Header style (bold blue)
+    /// Header style (bold)
     pub fn header() -> Style {
-        let accent = theme::banner_color();
-        Style::new()
-            .fg_color(Some(Color::Rgb(accent)))
-            .effects(Effects::BOLD)
+        Style::new().effects(Effects::BOLD)
     }
 
     /// Code style (magenta)
     pub fn code() -> Style {
-        theme::active_styles().secondary
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Magenta)))
     }
 
     /// Render style to ANSI string

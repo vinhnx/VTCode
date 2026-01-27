@@ -60,16 +60,16 @@ impl SessionStyles {
         // Assign distinctive colors based on normalized tool type
         style.color = match normalized_name.to_lowercase().as_str() {
             "read" => {
-                // Blue for file reading operations
-                Some(AnsiColor::Blue.into())
+                // Cyan for file reading operations
+                Some(AnsiColor::Cyan.into())
             }
             "list" => {
                 // Green for listing operations
                 Some(AnsiColor::Green.into())
             }
             "search" => {
-                // Yellow for search operations
-                Some(AnsiColor::Yellow.into())
+                // Cyan for search operations
+                Some(AnsiColor::Cyan.into())
             }
             "write" => {
                 // Magenta for write/edit operations
@@ -164,15 +164,13 @@ impl SessionStyles {
     /// Get the fallback text color for a message kind
     pub fn text_fallback(&self, kind: InlineMessageKind) -> Option<AnsiColorEnum> {
         match kind {
-            InlineMessageKind::Agent | InlineMessageKind::Policy => {
-                self.theme.primary.or(self.theme.foreground)
-            }
+            InlineMessageKind::Agent | InlineMessageKind::Policy => Some(AnsiColor::Magenta.into()),
             InlineMessageKind::User => self.theme.secondary.or(self.theme.foreground),
             InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => {
                 self.theme.primary.or(self.theme.foreground)
             }
             InlineMessageKind::Info => self.theme.foreground,
-            InlineMessageKind::Warning => Some(AnsiColor::Yellow.into()),
+            InlineMessageKind::Warning => Some(AnsiColor::Red.into()),
         }
     }
 

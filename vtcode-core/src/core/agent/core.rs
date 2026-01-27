@@ -347,10 +347,10 @@ impl Agent {
                 "  {} failed decisions",
                 style(report.failed_decisions).red()
             );
-            println!("  {} tool calls executed", style(report.tool_calls).blue());
+            println!("  {} tool calls executed", style(report.tool_calls).cyan());
             println!(
                 "  Session duration: {} seconds",
-                style(report.session_duration).yellow()
+                style(report.session_duration).cyan()
             );
             if let Some(avg_confidence) = report.avg_confidence {
                 println!(
@@ -379,7 +379,7 @@ impl Agent {
             );
             println!(
                 "  {:.1} average recovery attempts per error",
-                style(error_stats.avg_recovery_attempts).yellow()
+                style(error_stats.avg_recovery_attempts).cyan()
             );
         } else {
             // Brief summary for non-verbose mode

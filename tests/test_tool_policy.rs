@@ -176,7 +176,7 @@ impl ToolPolicyManager {
 
             let status_styled = match color_name {
                 "green" => style(status).green(),
-                "yellow" => style(status).yellow(),
+                "yellow" => style(status).cyan(),
                 "red" => style(status).red(),
                 _ => style(status),
             };
@@ -192,7 +192,7 @@ impl ToolPolicyManager {
         println!(
             "Summary: {} allowed, {} prompt, {} denied",
             style(allow_count).green(),
-            style(prompt_count).yellow(),
+            style(prompt_count).cyan(),
             style(deny_count).red()
         );
     }
@@ -210,7 +210,7 @@ fn main() -> Result<()> {
     let mut policy_manager = ToolPolicyManager::new_with_path(config_path)?;
 
     // Test 1: Update available tools
-    println!("{}", style("Test 1: Adding initial tools").yellow());
+    println!("{}", style("Test 1: Adding initial tools").cyan());
     let initial_tools = vec![
         "read_file".to_string(),
         "write_file".to_string(),
@@ -221,14 +221,14 @@ fn main() -> Result<()> {
     println!();
 
     // Test 2: Set specific policies
-    println!("{}", style("Test 2: Setting specific policies").yellow());
+    println!("{}", style("Test 2: Setting specific policies").cyan());
     policy_manager.set_policy("read_file", ToolPolicy::Allow)?;
     policy_manager.set_policy("write_file", ToolPolicy::Deny)?;
     policy_manager.print_status();
     println!();
 
     // Test 3: Add new tools
-    println!("{}", style("Test 3: Adding new tools").yellow());
+    println!("{}", style("Test 3: Adding new tools").cyan());
     let updated_tools = vec![
         "read_file".to_string(),
         "write_file".to_string(),
@@ -241,7 +241,7 @@ fn main() -> Result<()> {
     println!();
 
     // Test 4: Remove tools
-    println!("{}", style("Test 4: Removing tools").yellow());
+    println!("{}", style("Test 4: Removing tools").cyan());
     let final_tools = vec![
         "read_file".to_string(),
         "list_files".to_string(),
@@ -252,7 +252,7 @@ fn main() -> Result<()> {
     println!();
 
     // Test 5: Check policy retrieval
-    println!("{}", style("Test 5: Policy retrieval").yellow());
+    println!("{}", style("Test 5: Policy retrieval").cyan());
     println!(
         "read_file policy: {:?}",
         policy_manager.get_policy("read_file")

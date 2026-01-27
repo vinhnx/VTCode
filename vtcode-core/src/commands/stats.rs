@@ -52,7 +52,7 @@ fn display_text_stats(config: &AgentConfig, metrics: &PerformanceMetrics, detail
     if detailed {
         println!("  Tools:");
         for tool in build_function_declarations() {
-            println!("    • {}", style(&tool.name).yellow());
+            println!("    • {}", style(&tool.name).cyan());
         }
     }
 

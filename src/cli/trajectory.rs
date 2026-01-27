@@ -160,7 +160,7 @@ pub async fn handle_trajectory_command(
             let status = if rate >= 0.9 {
                 style("[OK]").green()
             } else if rate >= 0.7 {
-                style("[W]").yellow()
+                style("[W]").cyan()
             } else {
                 style("[NO]").red()
             };

@@ -132,23 +132,17 @@ pub(crate) fn render_tool_call_summary(
     let command_line =
         command_line_for_args(args).filter(|_| should_render_command_line(&highlights));
     let details = collect_param_details(args, &highlights);
+    let summary_highlights = highlight_texts_for_summary(args, &highlights);
     let palette = ColorPalette::default();
     let action_label = tool_action_label(tool_name, args);
     let summary = build_tool_summary(&action_label, &headline);
-    let path_hint = tool_path_hint(tool_name, args, &summary);
 
     let mut line = String::new();
-    if let Some(path_hint) = path_hint
-        && let Some(idx) = summary.find(&path_hint)
-    {
-        let (prefix, rest) = summary.split_at(idx);
-        let suffix = &rest[path_hint.len()..];
-        line.push_str(&render_styled(prefix, palette.primary, None));
-        line.push_str(&render_styled(&path_hint, palette.accent, None));
-        line.push_str(&render_styled(suffix, palette.primary, None));
-    } else {
-        line.push_str(&render_styled(&summary, palette.primary, None));
-    }
+    line.push_str(&render_summary_with_highlights(
+        &summary,
+        &summary_highlights,
+        &palette,
+    ));
 
     // Details in dim gray if present - these are the call parameters
     if !details.is_empty() {
@@ -172,6 +166,65 @@ pub(crate) fn render_tool_call_summary(
     }
 
     Ok(())
+}
+
+fn render_summary_with_highlights(
+    summary: &str,
+    highlights: &[String],
+    palette: &ColorPalette,
+) -> String {
+    if highlights.is_empty() {
+        return render_styled(summary, palette.primary, None);
+    }
+
+    let mut ranges: Vec<(usize, usize)> = highlights
+        .iter()
+        .filter_map(|text| {
+            if text.is_empty() {
+                return None;
+            }
+            summary.find(text).map(|start| (start, start + text.len()))
+        })
+        .collect();
+
+    if ranges.is_empty() {
+        return render_styled(summary, palette.primary, None);
+    }
+
+    ranges.sort_by_key(|(start, _)| *start);
+
+    let mut rendered = String::new();
+    let mut cursor = 0usize;
+    for (start, end) in ranges {
+        if start < cursor || start >= summary.len() || end > summary.len() {
+            continue;
+        }
+        if cursor < start {
+            rendered.push_str(&render_styled(&summary[cursor..start], palette.primary, None));
+        }
+        rendered.push_str(&render_styled(&summary[start..end], palette.accent, None));
+        cursor = end;
+    }
+    if cursor < summary.len() {
+        rendered.push_str(&render_styled(&summary[cursor..], palette.primary, None));
+    }
+
+    rendered
+}
+
+fn highlight_texts_for_summary(args: &Value, highlights: &HashSet<String>) -> Vec<String> {
+    let mut values = Vec::new();
+    for key in highlights {
+        if let Some(value) = lookup_string(args, key) {
+            let limit = match key.as_str() {
+                "pattern" | "name_pattern" | "content_pattern" => 40,
+                "command" | "bash_command" => 70,
+                _ => 60,
+            };
+            values.push(truncate_middle(&value, limit));
+        }
+    }
+    values
 }
 
 fn build_tool_summary(action_label: &str, headline: &str) -> String {
@@ -536,32 +589,6 @@ fn describe_path_action(
             used.insert((*key).to_string());
             let summary = truncate_middle(&value, 60);
             return Some((format!("{} {}", verb, summary), used));
-        }
-    }
-    None
-}
-
-fn tool_path_hint(tool_name: &str, args: &Value, summary: &str) -> Option<String> {
-    let keys = match tool_name {
-        name if name == tool_names::READ_FILE => &["path"][..],
-        name if name == tool_names::WRITE_FILE
-            || name == tool_names::CREATE_FILE
-            || name == tool_names::EDIT_FILE
-            || name == tool_names::APPLY_PATCH
-            || name == tool_names::DELETE_FILE =>
-        {
-            &["path"][..]
-        }
-        name if name == tool_names::UNIFIED_FILE => &["path", "file_path", "target_path"][..],
-        _ => &["path", "file_path", "target_path", "filename"][..],
-    };
-
-    for key in keys {
-        if let Some(value) = lookup_string(args, key) {
-            let trimmed = truncate_middle(&value, 60);
-            if summary.contains(&trimmed) {
-                return Some(trimmed);
-            }
         }
     }
     None

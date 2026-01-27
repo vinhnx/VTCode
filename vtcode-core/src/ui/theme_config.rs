@@ -93,9 +93,9 @@ impl Default for CliColors {
         Self {
             success: "green".into(),
             error: "red".into(),
-            warning: "yellow".into(),
+            warning: "red".into(),
             info: "cyan".into(),
-            prompt: "bold blue".into(),
+            prompt: "bold cyan".into(),
         }
     }
 }
@@ -133,10 +133,10 @@ impl Default for DiffColors {
         Self {
             new: "green".into(),
             old: "red".into(),
-            context: "white".into(),
-            header: "bold yellow".into(),
+            context: "dim".into(),
+            header: "bold cyan".into(),
             meta: "cyan".into(),
-            frag: "magenta".into(),
+            frag: "cyan".into(),
         }
     }
 }
@@ -177,12 +177,12 @@ impl Default for StatusColors {
     fn default() -> Self {
         Self {
             added: "green".into(),
-            modified: "red".into(),
+            modified: "cyan".into(),
             deleted: "red bold".into(),
-            untracked: "magenta".into(),
-            current: "green bold".into(),
+            untracked: "cyan".into(),
+            current: "cyan bold".into(),
             local: "cyan".into(),
-            remote: "blue".into(),
+            remote: "cyan".into(),
         }
     }
 }
@@ -215,15 +215,15 @@ impl Default for FileColors {
     fn default() -> Self {
         let mut extensions = std::collections::HashMap::new();
         extensions.insert("rs".into(), "cyan".into());
-        extensions.insert("js".into(), "yellow".into());
-        extensions.insert("ts".into(), "blue".into());
+        extensions.insert("js".into(), "cyan".into());
+        extensions.insert("ts".into(), "cyan".into());
         extensions.insert("py".into(), "green".into());
-        extensions.insert("toml".into(), "magenta".into());
-        extensions.insert("md".into(), "white".into());
+        extensions.insert("toml".into(), "cyan".into());
+        extensions.insert("md".into(), String::new());
 
         Self {
-            directory: "bold blue".into(),
-            symlink: "bold magenta".into(),
+            directory: "bold cyan".into(),
+            symlink: "cyan".into(),
             executable: "bold green".into(),
             regular: String::new(),
             extensions,
@@ -239,13 +239,13 @@ fn default_cli_error() -> String {
     "red".into()
 }
 fn default_cli_warning() -> String {
-    "yellow".into()
+    "red".into()
 }
 fn default_cli_info() -> String {
     "cyan".into()
 }
 fn default_cli_prompt() -> String {
-    "bold blue".into()
+    "bold cyan".into()
 }
 
 fn default_diff_new() -> String {
@@ -255,45 +255,45 @@ fn default_diff_old() -> String {
     "red".into()
 }
 fn default_diff_context() -> String {
-    "white".into()
+    "dim".into()
 }
 fn default_diff_header() -> String {
-    "bold yellow".into()
+    "bold cyan".into()
 }
 fn default_diff_meta() -> String {
     "cyan".into()
 }
 fn default_diff_frag() -> String {
-    "magenta".into()
+    "cyan".into()
 }
 
 fn default_status_added() -> String {
     "green".into()
 }
 fn default_status_modified() -> String {
-    "red".into()
+    "cyan".into()
 }
 fn default_status_deleted() -> String {
     "red bold".into()
 }
 fn default_status_untracked() -> String {
-    "magenta".into()
+    "cyan".into()
 }
 fn default_status_current() -> String {
-    "green bold".into()
+    "cyan bold".into()
 }
 fn default_status_local() -> String {
     "cyan".into()
 }
 fn default_status_remote() -> String {
-    "blue".into()
+    "cyan".into()
 }
 
 fn default_file_directory() -> String {
-    "bold blue".into()
+    "bold cyan".into()
 }
 fn default_file_symlink() -> String {
-    "bold magenta".into()
+    "cyan".into()
 }
 fn default_file_executable() -> String {
     "bold green".into()
@@ -419,7 +419,7 @@ mod tests {
         assert_eq!(config.cli.success, "green");
         assert_eq!(config.diff.new, "green");
         assert_eq!(config.status.added, "green");
-        assert_eq!(config.files.directory, "bold blue");
+        assert_eq!(config.files.directory, "bold cyan");
     }
 
     #[test]
@@ -435,15 +435,15 @@ old = "red"
 
 [status]
 added = "green"
-modified = "yellow"
+modified = "cyan"
 
 [files]
-directory = "bold blue"
+directory = "bold cyan"
 executable = "bold cyan"
 
 [files.extensions]
 "rs" = "bright cyan"
-"py" = "bright yellow"
+"py" = "bright cyan"
 "#;
 
         let temp_file = tempfile::NamedTempFile::new().unwrap();
@@ -458,7 +458,7 @@ executable = "bold cyan"
         );
         assert_eq!(
             config.files.extensions.get("py"),
-            Some(&"bright yellow".to_owned())
+            Some(&"bright cyan".to_owned())
         );
     }
 

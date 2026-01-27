@@ -179,7 +179,7 @@ impl AgentRunner {
             if !self.quiet {
                 println!(
                     "{} [{}] Calling tool: {}",
-                    style("[TOOL_CALL]").blue().bold(),
+                    style("[TOOL_CALL]").cyan().bold(),
                     self.agent_type,
                     name
                 );

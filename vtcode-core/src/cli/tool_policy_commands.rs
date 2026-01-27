@@ -63,7 +63,7 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
                     "? Tool '{}' will now prompt for confirmation",
                     tool
                 ))
-                .yellow()
+                .cyan()
             );
         }
         ToolPolicyCommands::AllowAll => {
@@ -78,7 +78,7 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
             policy_manager.reset_all_to_prompt().await?;
             println!(
                 "{}",
-                style("? All tools reset to prompt for confirmation").yellow()
+                style("? All tools reset to prompt for confirmation").cyan()
             );
         }
     }
@@ -98,7 +98,7 @@ pub fn print_tool_policy_help() {
     );
     println!(
         "  {} - Tool prompts for user confirmation each time",
-        style("prompt").yellow()
+        style("prompt").cyan()
     );
     println!(
         "  {} - Tool is never allowed to execute",

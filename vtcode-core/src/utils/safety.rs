@@ -35,7 +35,7 @@ impl SafetyValidator {
             if skip_confirmations {
                 println!(
                     "{}",
-                    style("Using Gemini 2.5 Pro model (confirmations skipped)").yellow()
+                    style("Using Gemini 2.5 Pro model (confirmations skipped)").cyan()
                 );
                 return Ok(requested_model.to_string());
             }
@@ -115,7 +115,7 @@ impl SafetyValidator {
                 println!("• Fast response times");
             }
             s if s == models::GEMINI_2_5_PRO => {
-                println!("{}", style("Using most capable model:").yellow());
+                println!("{}", style("Using most capable model:").cyan());
                 println!("• Highest quality responses");
                 println!("• Higher cost per token");
                 println!("• Slower response times");
@@ -126,7 +126,7 @@ impl SafetyValidator {
         // Agent mode recommendations
         match agent_mode {
             AgentMode::SingleCoder => {
-                println!("{}", style("Single-Agent System:").blue());
+                println!("{}", style("Single-Agent System:").cyan());
                 println!("• Streamlined execution");
                 println!("• Decision Ledger tracking");
                 println!("• Lower API costs");
@@ -162,7 +162,7 @@ impl SafetyValidator {
         }
 
         if !warnings.is_empty() {
-            println!("{}", style(" Resource Usage Warning").yellow().bold());
+            println!("{}", style(" Resource Usage Warning").red().bold());
             for warning in &warnings {
                 println!("• {}", warning);
             }

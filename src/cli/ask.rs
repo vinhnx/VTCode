@@ -82,7 +82,7 @@ pub async fn handle_ask_command(
     tokio::select! {
         res = handle_ask_command_impl(config, &prompt, options) => res,
         _ = tokio::signal::ctrl_c() => {
-            eprintln!("{}", style("\nCancelled by user.").yellow());
+            eprintln!("{}", style("\nCancelled by user.").red());
             // Standard generic error (1) or specialized exit code logic would go here,
             // but for now we bail which results in non-zero exit from main.
             anyhow::bail!("Operation cancelled");
@@ -101,7 +101,7 @@ async fn handle_ask_command_impl(
 
     let wants_json = options.wants_json();
     if !wants_json && !config.quiet {
-        eprintln!("{}", style("[ASK]").blue().bold());
+        eprintln!("{}", style("[ASK]").cyan().bold());
         eprintln!("  {:16} {}", "provider", &config.provider);
         eprintln!("  {:16} {}\n", "model", &config.model);
     }

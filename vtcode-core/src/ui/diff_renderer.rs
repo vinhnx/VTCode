@@ -28,7 +28,7 @@ impl GitDiffPalette {
                     match git_color {
                         "new" => style_from_color_name("green"),
                         "old" => style_from_color_name("red"),
-                        "context" => style_from_color_name("white"),
+                        "context" => Style::new().dimmed(),
                         "meta" | "header" => style_from_color_name("cyan"),
                         _ => Style::new(),
                     },
@@ -40,20 +40,12 @@ impl GitDiffPalette {
 
         Self {
             bullet: if use_colors {
-                style_from_color_name("yellow")
+                style_from_color_name("cyan")
             } else {
                 Style::new()
             }, // For summary bullets
-            label: if use_colors {
-                style_from_color_name("white")
-            } else {
-                Style::new()
-            }, // For summary labels
-            path: if use_colors {
-                style_from_color_name("white")
-            } else {
-                Style::new()
-            }, // For file paths
+            label: Style::new(), // For summary labels
+            path: Style::new(),  // For file paths
             stat_added: git_parse("new"),
             stat_removed: git_parse("old"),
             line_added: git_parse("new"),
@@ -61,7 +53,7 @@ impl GitDiffPalette {
             line_context: git_parse("context"),
             line_header: git_parse("meta"), // Git uses "meta" for headers
             line_number: if use_colors {
-                style_from_color_name("yellow")
+                style_from_color_name("cyan")
             } else {
                 Style::new()
             }, // For line numbers
@@ -75,16 +67,16 @@ impl GitDiffPalette {
         }
 
         Self {
-            bullet: style_from_color_name("yellow"),
-            label: style_from_color_name("white"),
-            path: style_from_color_name("white"),
+            bullet: style_from_color_name("cyan"),
+            label: Style::new(),
+            path: Style::new(),
             stat_added: config.diff_new,
             stat_removed: config.diff_old,
             line_added: config.diff_new,
             line_removed: config.diff_old,
             line_context: config.diff_context,
             line_header: config.diff_header, // Use the configuration from Git
-            line_number: style_from_color_name("yellow"),
+            line_number: style_from_color_name("cyan"),
         }
     }
 }

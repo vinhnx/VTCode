@@ -16,7 +16,7 @@ pub async fn handle_init_project_command(
     println!(
         "{}",
         style("Initialize project with dot-folder structure")
-            .blue()
+            .cyan()
             .bold()
     );
 
@@ -44,7 +44,7 @@ pub async fn handle_init_project_command(
     if project_dir.exists() && !force {
         println!(
             "{} Project directory already exists: {}",
-            style("Warning").yellow(),
+            style("Warning").red(),
             project_dir.display()
         );
         println!("Use --force to overwrite existing project structure.");
@@ -96,7 +96,7 @@ async fn migrate_existing_files(
 ) -> Result<()> {
     println!(
         "\n{} Checking for existing config/cache files to migrate...",
-        style("Info").blue()
+        style("Info").cyan()
     );
 
     let mut files_to_migrate = Vec::new();

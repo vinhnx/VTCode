@@ -148,7 +148,7 @@ old = "red"
 added = "green"
 
 [files]
-directory = "bold blue"
+directory = "bold cyan"
 "#;
 
         let theme_path = vtcode_dir.join("theme.toml");
@@ -189,7 +189,7 @@ success = "cyan"
         let temp_dir = tempdir().unwrap();
         let theme_content = r#"
 [cli]
-success = "yellow"
+success = "red"
 "#;
 
         let theme_path = temp_dir.path().join("custom_theme.toml");

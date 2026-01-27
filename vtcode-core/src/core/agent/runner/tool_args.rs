@@ -35,7 +35,7 @@ impl AgentRunner {
                 return true;
             }
             if !self.quiet {
-                println!("{}", style(&warning).yellow().bold());
+                println!("{}", style(&warning).red().bold());
             }
             task_state.warnings.push(warning);
         }

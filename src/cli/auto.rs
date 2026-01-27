@@ -121,7 +121,7 @@ pub async fn handle_auto_task_command(
 
     if !result.warnings.is_empty() {
         for warning in result.warnings {
-            println!("{} {}", style("[WARNING]").yellow().bold(), warning);
+            println!("{} {}", style("[WARNING]").red().bold(), warning);
         }
     }
 
