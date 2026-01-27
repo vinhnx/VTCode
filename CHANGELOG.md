@@ -3,6 +3,21 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.71.4] - 2026-01-27
+
+
+### Refactors
+    - refactor: update tool policy to allow file editing and enhance output spooling for PTY-related tools
+
+
+### Documentation
+    - docs: update changelog for v0.71.3 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.71.3 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.71.2 version =  [skip ci]
 # [Version 0.71.3] - 2026-01-26
 
 
