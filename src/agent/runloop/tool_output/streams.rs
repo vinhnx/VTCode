@@ -327,7 +327,7 @@ pub(crate) fn render_code_fence_blocks(
             }
             markdown.push_str("```");
 
-            renderer.line(MessageStyle::ToolDetail, &markdown)?;
+            renderer.render_markdown_output(MessageStyle::ToolDetail, &markdown)?;
 
             if truncated {
                 renderer.line(
