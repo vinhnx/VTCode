@@ -56,8 +56,8 @@ use std::borrow::Cow;
 
 pub use approval_recorder::ApprovalRecorder;
 pub use declarations::{
-    build_function_declarations, build_function_declarations_for_level,
-    build_function_declarations_with_mode,
+    build_function_declarations, build_function_declarations_cached,
+    build_function_declarations_for_level, build_function_declarations_with_mode,
 };
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use execution_history::{HarnessContextSnapshot, ToolExecutionHistory, ToolExecutionRecord};

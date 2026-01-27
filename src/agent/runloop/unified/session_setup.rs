@@ -41,7 +41,7 @@ use vtcode_core::mcp::{McpClient, McpToolInfo};
 use vtcode_core::models::ModelId;
 use vtcode_core::prompts::CustomPromptRegistry;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::tools::build_function_declarations_with_mode;
+use vtcode_core::tools::build_function_declarations_cached;
 use vtcode_core::tools::{SearchMetrics, ToolResultCache};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
@@ -230,14 +230,17 @@ pub(crate) async fn initialize_session(
 
     let mut full_auto_allowlist: Option<Vec<String>> = None;
 
-    let base_declarations = build_function_declarations_with_mode(tool_documentation_mode);
+    // Use cached declarations to avoid per-session rebuilds (HP-3 optimization)
+    let base_declarations = build_function_declarations_cached(tool_documentation_mode);
     let mut tool_definitions: Vec<uni::ToolDefinition> = base_declarations
-        .into_iter()
+        .iter()
         .map(|decl| {
             uni::ToolDefinition::function(
-                decl.name,
-                decl.description,
-                vtcode_core::llm::providers::gemini::sanitize_function_parameters(decl.parameters),
+                decl.name.clone(),
+                decl.description.clone(),
+                vtcode_core::llm::providers::gemini::sanitize_function_parameters(
+                    decl.parameters.clone(),
+                ),
             )
         })
         .collect();
