@@ -17,6 +17,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     ZAI_GLM_47_NOVITA,
     ZAI_GLM_47_FLASH_NOVITA,
     MOONSHOT_KIMI_K2_THINKING,
+    MOONSHOT_KIMI_K2_5_NOVITA,
     // Recommended VLM
     ZAI_GLM_45V,
     // Novita inference provider models
@@ -43,6 +44,7 @@ pub const ZAI_GLM_47: &str = "zai-org/GLM-4.7:zai-org";
 pub const ZAI_GLM_47_NOVITA: &str = "zai-org/GLM-4.7:novita";
 pub const ZAI_GLM_47_FLASH_NOVITA: &str = "zai-org/GLM-4.7-Flash:novita";
 pub const MOONSHOT_KIMI_K2_THINKING: &str = "moonshotai/Kimi-K2-Thinking";
+pub const MOONSHOT_KIMI_K2_5_NOVITA: &str = "moonshotai/Kimi-K2.5:novita";
 
 // Recommended VLM
 pub const ZAI_GLM_45V: &str = "zai-org/GLM-4.5V:zai-org";
@@ -65,6 +67,7 @@ pub const REASONING_MODELS: &[&str] = &[
     ZAI_GLM_47_NOVITA,
     ZAI_GLM_47_FLASH_NOVITA,
     MOONSHOT_KIMI_K2_THINKING,
+    MOONSHOT_KIMI_K2_5_NOVITA,
     ZAI_GLM_45V,
     DEEPSEEK_V32_NOVITA,
     MINIMAX_M2_1_NOVITA,

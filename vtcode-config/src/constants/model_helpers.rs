@@ -32,6 +32,7 @@ pub fn default_for(provider: &str) -> Option<&'static str> {
         "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
         #[cfg(docsrs)]
         "openrouter" => Some("openrouter/auto"), // Fallback for docs.rs build
+        "moonshot" => Some(models::moonshot::DEFAULT_MODEL),
         "xai" => Some(models::xai::DEFAULT_MODEL),
         "zai" => Some(models::zai::DEFAULT_MODEL),
         "ollama" => Some(models::ollama::DEFAULT_MODEL),

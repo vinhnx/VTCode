@@ -41,6 +41,10 @@ fn test_model_string_conversion() {
         ModelId::HuggingFaceOpenAIGptOss20b.as_str(),
         models::huggingface::OPENAI_GPT_OSS_20B
     );
+    assert_eq!(
+        ModelId::HuggingFaceKimiK25Novita.as_str(),
+        models::huggingface::MOONSHOT_KIMI_K2_5_NOVITA
+    );
     // xAI models
     assert_eq!(ModelId::XaiGrok4.as_str(), models::xai::GROK_4);
     assert_eq!(ModelId::XaiGrok4Mini.as_str(), models::xai::GROK_4_MINI);
@@ -110,6 +114,12 @@ fn test_model_from_string() {
     assert_eq!(
         models::openai::GPT_OSS_120B.parse::<ModelId>().unwrap(),
         ModelId::OpenAIGptOss120b
+    );
+    assert_eq!(
+        models::huggingface::MOONSHOT_KIMI_K2_5_NOVITA
+            .parse::<ModelId>()
+            .unwrap(),
+        ModelId::HuggingFaceKimiK25Novita
     );
     // Anthropic models
     assert_eq!(
@@ -207,7 +217,10 @@ fn test_model_from_string() {
         models::zai::GLM_4_32B_0414_128K.parse::<ModelId>().unwrap(),
         ModelId::ZaiGlm432b0414128k
     );
-    // Moonshot models are deprecated; use OpenRouter variants instead
+    assert_eq!(
+        models::moonshot::KIMI_K2_5.parse::<ModelId>().unwrap(),
+        ModelId::MoonshotKimiK25
+    );
     for entry in openrouter_generated::ENTRIES {
         assert_eq!(
             entry.id.parse::<ModelId>().unwrap().as_str(),
@@ -326,6 +339,10 @@ fn test_provider_defaults() {
         ModelId::default_orchestrator_for_provider(Provider::ZAI),
         ModelId::ZaiGlm47
     );
+    assert_eq!(
+        ModelId::default_orchestrator_for_provider(Provider::Moonshot),
+        ModelId::MoonshotKimiK25
+    );
 
     assert_eq!(
         ModelId::default_subagent_for_provider(Provider::Gemini),
@@ -365,7 +382,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_subagent_for_provider(Provider::Moonshot),
-        ModelId::OpenRouterGrokCodeFast1
+        ModelId::MoonshotKimiK25
     );
 
     assert_eq!(
@@ -374,7 +391,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_single_for_provider(Provider::Moonshot),
-        ModelId::OpenRouterGrokCodeFast1
+        ModelId::MoonshotKimiK25
     );
     assert_eq!(
         ModelId::default_single_for_provider(Provider::Ollama),
@@ -572,7 +589,7 @@ fn test_models_for_provider() {
     assert!(zai_models.contains(&ModelId::ZaiGlm432b0414128k));
 
     let moonshot_models = ModelId::models_for_provider(Provider::Moonshot);
-    assert_eq!(moonshot_models.len(), 0); // No Moonshot models available
+    assert!(moonshot_models.contains(&ModelId::MoonshotKimiK25));
 
     let ollama_models = ModelId::models_for_provider(Provider::Ollama);
     assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));

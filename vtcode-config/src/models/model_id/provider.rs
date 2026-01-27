@@ -33,6 +33,7 @@ impl ModelId {
             | ModelId::HuggingFaceGlm47
             | ModelId::HuggingFaceGlm47FlashNovita
             | ModelId::HuggingFaceKimiK2Thinking
+            | ModelId::HuggingFaceKimiK25Novita
             | ModelId::HuggingFaceMinimaxM21Novita
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita => Provider::HuggingFace,
@@ -59,6 +60,7 @@ impl ModelId {
             | ModelId::ZaiGlm45Flash
             | ModelId::ZaiGlm45V
             | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
+            ModelId::MoonshotKimiK25 => Provider::Moonshot,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud

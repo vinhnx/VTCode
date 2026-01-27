@@ -42,7 +42,7 @@ impl ModelId {
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm46,
-            Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1,
+            Provider::Moonshot => ModelId::MoonshotKimiK25,
             Provider::Minimax => ModelId::MinimaxM21,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
         }
@@ -60,7 +60,7 @@ impl ModelId {
             Provider::Ollama => ModelId::OllamaQwen317b,
             Provider::LmStudio => ModelId::LmStudioQwen257BInstruct,
             Provider::ZAI => ModelId::ZaiGlm45Flash,
-            Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1,
+            Provider::Moonshot => ModelId::MoonshotKimiK25,
             Provider::Minimax => ModelId::MinimaxM21Lightning,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss20b,
         }
@@ -78,7 +78,7 @@ impl ModelId {
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm46,
-            Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1,
+            Provider::Moonshot => ModelId::MoonshotKimiK25,
             Provider::Minimax => ModelId::MinimaxM21,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
         }

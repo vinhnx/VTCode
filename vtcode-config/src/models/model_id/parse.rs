@@ -61,6 +61,8 @@ impl FromStr for ModelId {
             s if s == models::zai::GLM_4_5_FLASH => Ok(ModelId::ZaiGlm45Flash),
             s if s == models::zai::GLM_4_5V => Ok(ModelId::ZaiGlm45V),
             s if s == models::zai::GLM_4_32B_0414_128K => Ok(ModelId::ZaiGlm432b0414128k),
+            // Moonshot models
+            s if s == models::moonshot::KIMI_K2_5 => Ok(ModelId::MoonshotKimiK25),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
@@ -118,6 +120,9 @@ impl FromStr for ModelId {
             s if s == models::huggingface::ZAI_GLM_47 => Ok(ModelId::HuggingFaceGlm47),
             s if s == models::huggingface::MOONSHOT_KIMI_K2_THINKING => {
                 Ok(ModelId::HuggingFaceKimiK2Thinking)
+            }
+            s if s == models::huggingface::MOONSHOT_KIMI_K2_5_NOVITA => {
+                Ok(ModelId::HuggingFaceKimiK25Novita)
             }
             s if s == models::huggingface::MINIMAX_M2_1_NOVITA => {
                 Ok(ModelId::HuggingFaceMinimaxM21Novita)

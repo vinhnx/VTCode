@@ -51,6 +51,7 @@ impl ModelId {
             ModelId::HuggingFaceGlm47Novita => models::huggingface::ZAI_GLM_47_NOVITA,
             ModelId::HuggingFaceGlm47FlashNovita => models::huggingface::ZAI_GLM_47_FLASH_NOVITA,
             ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
+            ModelId::HuggingFaceKimiK25Novita => models::huggingface::MOONSHOT_KIMI_K2_5_NOVITA,
             ModelId::HuggingFaceMinimaxM21Novita => models::huggingface::MINIMAX_M2_1_NOVITA,
             ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
@@ -75,6 +76,8 @@ impl ModelId {
             ModelId::ZaiGlm45Airx => models::zai::GLM_4_5_AIRX,
             ModelId::ZaiGlm45Flash => models::zai::GLM_4_5_FLASH,
             ModelId::ZaiGlm432b0414128k => models::zai::GLM_4_32B_0414_128K,
+            // Moonshot models
+            ModelId::MoonshotKimiK25 => models::moonshot::KIMI_K2_5,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
@@ -212,6 +215,7 @@ impl ModelId {
             | ModelId::HuggingFaceGlm47Novita
             | ModelId::HuggingFaceGlm47FlashNovita
             | ModelId::HuggingFaceKimiK2Thinking
+            | ModelId::HuggingFaceKimiK25Novita
             | ModelId::HuggingFaceMinimaxM21Novita
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita => Provider::HuggingFace,
@@ -232,6 +236,7 @@ impl ModelId {
             | ModelId::ZaiGlm45Airx
             | ModelId::ZaiGlm45Flash
             | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
+            ModelId::MoonshotKimiK25 => Provider::Moonshot,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud

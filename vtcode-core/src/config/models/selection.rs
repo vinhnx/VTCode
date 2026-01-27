@@ -55,7 +55,7 @@ impl ModelId {
             Provider::Minimax => ModelId::MinimaxM21,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
-            Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
+            Provider::Moonshot => ModelId::MoonshotKimiK25,
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaGptOss20b,
@@ -73,7 +73,7 @@ impl ModelId {
             Provider::Minimax => ModelId::MinimaxM21Lightning,
             Provider::DeepSeek => ModelId::DeepSeekChat,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss20b,
-            Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
+            Provider::Moonshot => ModelId::MoonshotKimiK25,
             Provider::XAI => ModelId::XaiGrok4Code,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaQwen317b,
@@ -91,7 +91,7 @@ impl ModelId {
             Provider::Minimax => ModelId::MinimaxM21,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
-            Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
+            Provider::Moonshot => ModelId::MoonshotKimiK25,
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaGptOss20b,

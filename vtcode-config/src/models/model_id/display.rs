@@ -53,6 +53,8 @@ impl ModelId {
             ModelId::ZaiGlm45Flash => "GLM 4.5 Flash",
             ModelId::ZaiGlm45V => "GLM 4.5V",
             ModelId::ZaiGlm432b0414128k => "GLM 4 32B 0414 128K",
+            // Moonshot models
+            ModelId::MoonshotKimiK25 => "Kimi K2.5",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
@@ -84,6 +86,7 @@ impl ModelId {
             ModelId::HuggingFaceGlm47 => "GLM-4.7 (HF)",
             ModelId::HuggingFaceGlm47FlashNovita => "GLM-4.7-Flash (Novita)",
             ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
+            ModelId::HuggingFaceKimiK25Novita => "Kimi K2.5 (Novita)",
             ModelId::HuggingFaceMinimaxM21Novita => "MiniMax-M2.1 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",

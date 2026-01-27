@@ -35,6 +35,7 @@ impl ModelId {
                 | ModelId::MinimaxM21
                 | ModelId::OllamaGlm47Cloud
                 | ModelId::OllamaMinimaxM21Cloud
+                | ModelId::MoonshotKimiK25
         )
     }
 
@@ -83,6 +84,7 @@ impl ModelId {
                 | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm46
                 | ModelId::ZaiGlm46DeepThinking
+                | ModelId::MoonshotKimiK25
         )
     }
 
@@ -151,6 +153,7 @@ impl ModelId {
             | ModelId::ZaiGlm45Flash
             | ModelId::ZaiGlm45V => "4.5",
             ModelId::ZaiGlm432b0414128k => "4-32B",
+            ModelId::MoonshotKimiK25 => "K2.5",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
@@ -174,6 +177,7 @@ impl ModelId {
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
             ModelId::HuggingFaceGlm47 => "4.7",
             ModelId::HuggingFaceKimiK2Thinking => "k2",
+            ModelId::HuggingFaceKimiK25Novita => "k2.5",
             ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
             ModelId::HuggingFaceOpenAIGptOss20b | ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             _ => unreachable!(),

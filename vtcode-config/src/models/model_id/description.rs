@@ -91,6 +91,9 @@ impl ModelId {
             ModelId::ZaiGlm432b0414128k => {
                 "Legacy GLM 4 32B deployment offering extended 128K context window"
             }
+            ModelId::MoonshotKimiK25 => {
+                "Kimi K2.5 multimodal model supporting text + vision, thinking modes, tool calls, JSON mode, and long-context reasoning"
+            }
             ModelId::OllamaGptOss20b => {
                 "Local GPT-OSS 20B deployment served via Ollama with no external API dependency"
             }
@@ -175,6 +178,9 @@ impl ModelId {
             }
             ModelId::HuggingFaceKimiK2Thinking => {
                 "MoonshotAI Kimi K2 Thinking via Hugging Face router"
+            }
+            ModelId::HuggingFaceKimiK25Novita => {
+                "MoonshotAI Kimi K2.5 via Novita inference provider on Hugging Face router"
             }
             ModelId::HuggingFaceMinimaxM21Novita => {
                 "MiniMax-M2.1 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."

@@ -50,6 +50,7 @@ impl ModelId {
             ModelId::HuggingFaceGlm47Novita => "GLM-4.7 (Novita)",
             ModelId::HuggingFaceGlm47FlashNovita => "GLM-4.7-Flash (Novita)",
             ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
+            ModelId::HuggingFaceKimiK25Novita => "Kimi K2.5 (Novita)",
             ModelId::HuggingFaceMinimaxM21Novita => "MiniMax-M2.1 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
@@ -73,6 +74,7 @@ impl ModelId {
             ModelId::ZaiGlm45Flash => "GLM 4.5 Flash",
             ModelId::ZaiGlm432b0414128k => "GLM 4 32B 0414 128K",
             // Moonshot models
+            ModelId::MoonshotKimiK25 => "Kimi K2.5",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
@@ -197,6 +199,9 @@ impl ModelId {
             ModelId::HuggingFaceKimiK2Thinking => {
                 "MoonshotAI Kimi K2 Thinking routed through Hugging Face"
             }
+            ModelId::HuggingFaceKimiK25Novita => {
+                "MoonshotAI Kimi K2.5 via Novita inference provider on Hugging Face router"
+            }
             ModelId::HuggingFaceMinimaxM21Novita => {
                 "MiniMax-M2.1 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
             }
@@ -242,6 +247,9 @@ impl ModelId {
                 "Legacy GLM 4 32B deployment offering extended 128K context window"
             }
             // Moonshot models
+            ModelId::MoonshotKimiK25 => {
+                "Kimi K2.5 multimodal model supporting text + vision, thinking modes, tool calls, JSON mode, and long-context reasoning"
+            }
             ModelId::OllamaGptOss20b => {
                 "Local GPT-OSS 20B deployment served via Ollama with no external API dependency"
             }
@@ -431,6 +439,7 @@ impl ModelId {
             ModelId::HuggingFaceGlm47Novita,
             ModelId::HuggingFaceGlm47FlashNovita,
             ModelId::HuggingFaceKimiK2Thinking,
+            ModelId::HuggingFaceKimiK25Novita,
             ModelId::HuggingFaceMinimaxM21Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
@@ -454,7 +463,7 @@ impl ModelId {
             ModelId::ZaiGlm45Flash,
             ModelId::ZaiGlm432b0414128k,
             // Moonshot models
-
+            ModelId::MoonshotKimiK25,
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
