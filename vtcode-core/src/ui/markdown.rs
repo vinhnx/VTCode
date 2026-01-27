@@ -14,7 +14,7 @@ use syntect::util::LinesWithEndings;
 use unicode_width::UnicodeWidthStr;
 
 const LIST_INDENT_WIDTH: usize = 2;
-const CODE_EXTRA_INDENT: &str = "    ";
+const CODE_LINE_NUMBER_MIN_WIDTH: usize = 3;
 
 /// A styled text segment.
 #[derive(Clone, Debug)]
@@ -729,8 +729,6 @@ fn highlight_code_block(
     prefix_segments: &[MarkdownSegment],
 ) -> Vec<MarkdownLine> {
     let mut lines = Vec::new();
-    let mut augmented_prefix = prefix_segments.to_vec();
-    augmented_prefix.push(MarkdownSegment::new(base_style, CODE_EXTRA_INDENT));
 
     // Always normalize indentation first, regardless of highlighting
     let normalized_code = normalize_code_indentation(code, language);
@@ -739,9 +737,13 @@ fn highlight_code_block(
     if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
         && let Some(highlighted) = try_highlight(code_to_display, language, config)
     {
-        for segments in highlighted {
+        let line_count = highlighted.len();
+        let number_width = line_number_width(line_count);
+        for (index, segments) in highlighted.into_iter().enumerate() {
             let mut line = MarkdownLine::default();
-            line.prepend_segments(&augmented_prefix);
+            let line_prefix =
+                line_prefix_segments(prefix_segments, theme_styles, index + 1, number_width);
+            line.prepend_segments(&line_prefix);
             for (style, text) in segments {
                 line.push_segment(style, &text);
             }
@@ -751,23 +753,52 @@ fn highlight_code_block(
     }
 
     // Fallback: render without syntax highlighting, but still with normalized indentation
+    let mut line_number = 1usize;
+    let mut line_count = LinesWithEndings::from(code_to_display).count();
+    if code_to_display.ends_with('\n') {
+        line_count = line_count.saturating_add(1);
+    }
+    let number_width = line_number_width(line_count);
+
     for raw_line in LinesWithEndings::from(code_to_display) {
         let trimmed = raw_line.trim_end_matches('\n');
         let mut line = MarkdownLine::default();
-        line.prepend_segments(&augmented_prefix);
+        let line_prefix =
+            line_prefix_segments(prefix_segments, theme_styles, line_number, number_width);
+        line.prepend_segments(&line_prefix);
         if !trimmed.is_empty() {
             line.push_segment(code_block_style(theme_styles, base_style), trimmed);
         }
         lines.push(line);
+        line_number = line_number.saturating_add(1);
     }
 
     if code_to_display.ends_with('\n') {
         let mut line = MarkdownLine::default();
-        line.prepend_segments(&augmented_prefix);
+        let line_prefix =
+            line_prefix_segments(prefix_segments, theme_styles, line_number, number_width);
+        line.prepend_segments(&line_prefix);
         lines.push(line);
     }
 
     lines
+}
+
+fn line_prefix_segments(
+    prefix_segments: &[MarkdownSegment],
+    theme_styles: &ThemeStyles,
+    line_number: usize,
+    width: usize,
+) -> Vec<MarkdownSegment> {
+    let mut segments = prefix_segments.to_vec();
+    let number_text = format!("{:>width$}  ", line_number, width = width);
+    segments.push(MarkdownSegment::new(theme_styles.secondary, number_text));
+    segments
+}
+
+fn line_number_width(line_count: usize) -> usize {
+    let digits = line_count.max(1).to_string().len();
+    digits.max(CODE_LINE_NUMBER_MIN_WIDTH)
 }
 
 fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
