@@ -677,7 +677,8 @@ impl InlineSink {
             .enabled
             .then_some(&self.highlight_config);
         let mut rendered = render_markdown_to_lines(text, base_style, &theme_styles, highlight_cfg);
-
+        // TUI space is constrained; drop blank lines to keep transcripts compact.
+        rendered.retain(|line| !line.is_empty());
         if rendered.is_empty() {
             rendered.push(MarkdownLine::default());
         }
