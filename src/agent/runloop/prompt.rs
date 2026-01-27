@@ -88,10 +88,17 @@ pub(crate) async fn refine_user_prompt_if_enabled(
     } else {
         None
     };
+    let temperature = if reasoning_effort.is_some()
+        && matches!(provider_name.as_str(), "anthropic" | "minimax")
+    {
+        None
+    } else {
+        Some(vtc.agent.refine_temperature)
+    };
     let req = uni::LLMRequest {
         messages: vec![uni::Message::user(raw.to_string())],
         model: refiner_model,
-        temperature: Some(vtc.agent.refine_temperature),
+        temperature,
         tool_choice: Some(uni::ToolChoice::none()),
         reasoning_effort,
         ..Default::default()
