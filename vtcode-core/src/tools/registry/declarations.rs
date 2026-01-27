@@ -1,6 +1,31 @@
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
+
+/// Cache key combining documentation mode ordinal and optional capability level ordinal
+/// Using u8 tuple for efficient hashing (both enums have < 256 variants)
+type DeclarationCacheKey = (u8, Option<u8>);
+
+/// Cached declarations by (mode, level) to avoid per-turn rebuilds
+static DECLARATION_CACHE: OnceLock<
+    RwLock<HashMap<DeclarationCacheKey, Arc<Vec<FunctionDeclaration>>>>,
+> = OnceLock::new();
+
+fn get_declaration_cache()
+-> &'static RwLock<HashMap<DeclarationCacheKey, Arc<Vec<FunctionDeclaration>>>> {
+    DECLARATION_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+/// Convert ToolDocumentationMode to cache key component
+#[inline]
+fn mode_to_key(mode: ToolDocumentationMode) -> u8 {
+    match mode {
+        ToolDocumentationMode::Minimal => 0,
+        ToolDocumentationMode::Progressive => 1,
+        ToolDocumentationMode::Full => 2,
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -647,6 +672,37 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
 pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
     build_function_declarations_with_mode(ToolDocumentationMode::default())
+}
+
+/// Get cached declarations or build and cache them (avoids per-turn rebuilds)
+///
+/// This is the preferred API for runloop/agent code - it caches declarations
+/// per documentation mode to avoid expensive per-turn rebuilds.
+pub fn build_function_declarations_cached(
+    tool_documentation_mode: ToolDocumentationMode,
+) -> Arc<Vec<FunctionDeclaration>> {
+    let cache_key = (mode_to_key(tool_documentation_mode), None);
+
+    // Fast path: check read lock first
+    {
+        let cache = get_declaration_cache().read();
+        if let Some(cached) = cache.get(&cache_key) {
+            tracing::trace!(mode = ?tool_documentation_mode, "Declaration cache hit");
+            return Arc::clone(cached);
+        }
+    }
+
+    // Slow path: build and cache
+    tracing::debug!(mode = ?tool_documentation_mode, "Building and caching declarations");
+    let declarations = Arc::new(build_function_declarations_with_mode(
+        tool_documentation_mode,
+    ));
+    {
+        let mut cache = get_declaration_cache().write();
+        cache.insert(cache_key, Arc::clone(&declarations));
+    }
+
+    declarations
 }
 
 pub fn build_function_declarations_with_mode(

@@ -146,6 +146,7 @@ pub mod generation_helpers;
 pub mod grep_cache;
 pub mod grep_file;
 pub mod handlers;
+pub mod invocation;
 pub mod lsp;
 pub mod mcp;
 pub mod names;
@@ -157,6 +158,7 @@ pub mod registry;
 pub mod result;
 pub mod result_cache;
 pub mod result_metadata;
+pub mod safety_gateway;
 pub mod search_metrics;
 pub mod shell;
 pub mod skills;
@@ -179,6 +181,7 @@ pub mod health; // Pre-emptively exporting for next step
 pub mod optimized_registry;
 pub mod output_spooler;
 pub mod parallel_executor; // Pre-emptively exporting for next step
+pub mod parallel_tool_batch;
 pub mod request_response;
 
 // Production-grade improvements modules
@@ -190,7 +193,10 @@ pub mod improvements_errors;
 pub mod improvements_registry_ext;
 pub mod middleware;
 
+pub mod golden_path_orchestrator;
 pub mod pattern_engine;
+pub mod unified_error;
+pub mod unified_executor;
 
 #[cfg(test)]
 mod improvements_integration_tests;
@@ -220,6 +226,9 @@ pub use file_search_rpc::{
     RpcResponse, SearchFilesRequest, SearchFilesResponse,
 };
 pub use grep_file::GrepSearchManager;
+pub use invocation::{
+    InvocationBuilder, ToolInvocation as UnifiedToolInvocation, ToolInvocationId,
+};
 pub use lsp::LspTool;
 pub use optimized_registry::{OptimizedToolRegistry, ToolMetadata as OptimizedToolMetadata};
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
@@ -234,6 +243,9 @@ pub use result::{TokenCounts, ToolMetadata, ToolMetadataBuilder, ToolResult as S
 pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
+};
+pub use safety_gateway::{
+    SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
 };
 pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
 pub use smart_cache::{CachedResult as SmartCachedResult, SmartResultCache};
@@ -277,8 +289,25 @@ pub use middleware::{
 };
 pub use pattern_engine::{DetectedPattern, ExecutionEvent, ExecutionSummary, PatternEngine};
 
+// Golden Path Enforcement - Unified Executor
+pub use unified_executor::{
+    ApprovalState, ExecutionContextBuilder, PolicyConfig,
+    ToolExecutionContext as UnifiedExecutionContext, ToolRegistryAdapter, TrustLevel,
+    UnifiedExecutionResult, UnifiedToolExecutor,
+};
+
+// Parallel tool batch execution
+pub use parallel_tool_batch::{ParallelToolBatch, QueuedToolCall};
+
+// Golden Path Orchestrator - Consolidated execution entry point
+pub use golden_path_orchestrator::{
+    ExecutionBuilder, GoldenPathConfig, GoldenPathResult, execute_batch_golden_path,
+    execute_golden_path, execute_golden_path_simple,
+};
+
 // Re-export function declarations for external use
 pub use registry::build_function_declarations;
+pub use registry::build_function_declarations_cached;
 pub use registry::build_function_declarations_for_level;
 pub use registry::build_function_declarations_with_mode;
 
