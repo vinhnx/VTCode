@@ -27,9 +27,9 @@ Type "clear"
 Enter
 Sleep 1s
 
-# Enter vtcode interactive chat mode
+# Enter vtcode interactive chat mode with Ollama and Minimax model
 Hide
-Type "vtcode"
+Type "vtcode --provider ollama --model minimax-m2.1:cloud"
 Enter
 Show
 Sleep 3s
@@ -81,8 +81,8 @@ Enter
 Show
 Sleep 1s
 
-# Demonstrate single ask mode with tool usage
-Type "vtcode ask 'Check current directory using pwd command'"
+# Demonstrate single ask mode with tool usage and Ollama Minimax model
+Type "vtcode ask 'Check current directory using pwd command' --provider ollama --model minimax-m2.1:cloud"
 Enter
 Sleep 5s
 

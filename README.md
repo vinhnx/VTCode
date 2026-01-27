@@ -4,7 +4,7 @@
 
 <a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=D99A4E&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=383B73&label=Release" alt="GitHub Release"/></a>
 
-<img src="./resources/vhs/demo-agentic.gif" alt="VT Code demo"/>
+<img src="./resources/vhs/demo-tools.gif" alt="VT Code demo"/>
 
 ---
 

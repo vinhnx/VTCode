@@ -32,9 +32,9 @@ Type "clear"
 Enter
 Sleep 1s
 
-# Enter vtcode interactive chat mode
+# Enter vtcode interactive chat mode with Ollama and Minimax model
 Hide
-Type "vtcode chat"
+Type "vtcode --provider ollama --model minimax-m2.1:cloud"
 Enter
 Show
 Sleep 3s
@@ -51,8 +51,8 @@ Enter
 Show
 Sleep 1s
 
-# Demonstrate single ask mode (using single quotes to avoid escaping issues)
-Type "vtcode ask 'What are the main features of VT Code?'"
+# Demonstrate single ask mode with Ollama and Minimax model (using single quotes to avoid escaping issues)
+Type "vtcode ask 'What are the main features of VT Code?' --provider ollama --model minimax-m2.1:cloud"
 Enter
 Sleep 5s
 

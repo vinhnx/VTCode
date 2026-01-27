@@ -1,0 +1,246 @@
+{
+  "version": 1,
+  "available_tools": [
+    "agent_info",
+    "apply_patch",
+    "ask_user_question",
+    "close_pty_session",
+    "code_intelligence",
+    "copy_file",
+    "create_file",
+    "create_pty_session",
+    "delete_file",
+    "edit_file",
+    "enter_plan",
+    "enter_plan_mode",
+    "exec",
+    "exec_pty_cmd",
+    "execute_code",
+    "exit_plan",
+    "exit_plan_mode",
+    "file_op",
+    "find",
+    "get_errors",
+    "grep_file",
+    "implement_plan",
+    "list_files",
+    "list_pty_sessions",
+    "move_file",
+    "plan_exit",
+    "plan_mode",
+    "read_file",
+    "read_pty_session",
+    "request_user_input",
+    "run_pty_cmd",
+    "search",
+    "search_tools",
+    "send_pty_input",
+    "shell",
+    "skill",
+    "start_implementation",
+    "start_planning",
+    "unified_exec",
+    "unified_file",
+    "unified_search",
+    "web_fetch",
+    "write_file",
+    "cargo_check",
+    "cargo_test",
+    "git_status",
+    "git_diff",
+    "git_log"
+  ],
+  "policies": {
+    "grep_file": "allow",
+    "list_files": "allow",
+    "read_file": "allow",
+    "search_tools": "allow",
+    "list_pty_sessions": "allow",
+    "read_pty_session": "allow",
+    "run_pty_cmd": "allow",
+    "agent_info": "prompt",
+    "apply_patch": "prompt",
+    "ask_user_question": "prompt",
+    "close_pty_session": "allow",
+    "code_intelligence": "prompt",
+    "copy_file": "prompt",
+    "create_file": "allow",
+    "create_pty_session": "allow",
+    "delete_file": "prompt",
+    "edit_file": "allow",
+    "enter_plan": "prompt",
+    "enter_plan_mode": "prompt",
+    "exec": "prompt",
+    "exec_pty_cmd": "prompt",
+    "execute_code": "prompt",
+    "exit_plan": "prompt",
+    "exit_plan_mode": "prompt",
+    "file_op": "prompt",
+    "find": "prompt",
+    "get_errors": "prompt",
+    "implement_plan": "prompt",
+    "move_file": "prompt",
+    "plan_exit": "prompt",
+    "plan_mode": "prompt",
+    "request_user_input": "prompt",
+    "search": "prompt",
+    "send_pty_input": "prompt",
+    "shell": "prompt",
+    "skill": "allow",
+    "start_implementation": "prompt",
+    "start_planning": "prompt",
+    "unified_exec": "allow",
+    "unified_file": "prompt",
+    "unified_search": "prompt",
+    "web_fetch": "prompt",
+    "write_file": "allow",
+    "cargo_check": "allow",
+    "cargo_test": "allow",
+    "git_status": "allow",
+    "git_diff": "allow",
+    "git_log": "allow"
+  },
+  "constraints": {},
+  "mcp": {
+    "allowlist": {
+      "enforce": true,
+      "default": {
+        "tools": null,
+        "resources": null,
+        "prompts": null,
+        "logging": [
+          "mcp.provider_initialized",
+          "mcp.provider_initialization_failed",
+          "mcp.tool_filtered",
+          "mcp.tool_execution",
+          "mcp.tool_failed",
+          "mcp.tool_denied"
+        ],
+        "configuration": {
+          "client": [
+            "max_concurrent_connections",
+            "request_timeout_seconds",
+            "retry_attempts",
+            "startup_timeout_seconds",
+            "tool_timeout_seconds",
+            "experimental_use_rmcp_client"
+          ],
+          "server": [
+            "enabled",
+            "bind_address",
+            "port",
+            "transport",
+            "name",
+            "version"
+          ],
+          "ui": [
+            "mode",
+            "max_events",
+            "show_provider_names"
+          ]
+        }
+      },
+      "providers": {
+        "context7": {
+          "tools": [
+            "search_*",
+            "fetch_*",
+            "list_*",
+            "context7_*",
+            "get_*"
+          ],
+          "resources": [
+            "docs::*",
+            "snippets::*",
+            "repositories::*",
+            "context7::*"
+          ],
+          "prompts": [
+            "context7::*",
+            "support::*",
+            "docs::*"
+          ],
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "context7": [
+              "workspace",
+              "search_scope",
+              "max_results"
+            ],
+            "provider": [
+              "max_concurrent_requests"
+            ]
+          }
+        },
+        "sequential-thinking": {
+          "tools": [
+            "plan",
+            "critique",
+            "reflect",
+            "decompose",
+            "sequential_*"
+          ],
+          "resources": null,
+          "prompts": [
+            "sequential-thinking::*",
+            "plan",
+            "reflect",
+            "critique"
+          ],
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
+            "sequencing": [
+              "max_depth",
+              "max_branches"
+            ]
+          }
+        },
+        "time": {
+          "tools": [
+            "get_*",
+            "list_*",
+            "convert_timezone",
+            "describe_timezone",
+            "time_*"
+          ],
+          "resources": [
+            "timezone:*",
+            "location:*"
+          ],
+          "prompts": null,
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
+            "time": [
+              "local_timezone_override"
+            ]
+          }
+        }
+      }
+    },
+    "providers": {}
+  }
+}

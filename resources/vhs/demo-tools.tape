@@ -17,9 +17,9 @@ Type "# VT Code - Agentic Tool Usage Demo"
 Enter
 Sleep 1s
 
-# Launch the interactive TUI
+# Launch the interactive TUI with Ollama and Minimax model
 Hide
-Type "vtcode"
+Type "vtcode --provider ollama --model minimax-m2.1:cloud"
 Enter
 Show
 Sleep 3s
@@ -66,9 +66,9 @@ Type "/exit"
 Enter
 Sleep 1s
 
-# Show the advanced chat-verbose mode to see tool usage details
+# Show the advanced chat-verbose mode to see tool usage details with Ollama and Minimax model
 Hide
-Type "vtcode chat-verbose"
+Type "vtcode chat-verbose --provider ollama --model minimax-m2.1:cloud"
 Enter
 Show
 Sleep 3s
