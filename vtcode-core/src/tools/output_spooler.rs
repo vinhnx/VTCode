@@ -397,13 +397,12 @@ impl ToolOutputSpooler {
             let path = entry.path();
             if let Ok(metadata) = entry.metadata().await {
                 if let Ok(modified) = metadata.modified() {
-                    if let Ok(age) = now.duration_since(modified) {
-                        if age.as_secs() > MAX_SPOOL_AGE_SECS
-                            && fs::remove_file(&path).await.is_ok()
-                        {
-                            removed += 1;
-                            debug!(path = %path.display(), "Removed old spooled file");
-                        }
+                    if let Ok(age) = now.duration_since(modified)
+                        && age.as_secs() > MAX_SPOOL_AGE_SECS
+                        && fs::remove_file(&path).await.is_ok()
+                    {
+                        removed += 1;
+                        debug!(path = %path.display(), "Removed old spooled file");
                     }
                 }
             }

@@ -654,16 +654,13 @@ pub(crate) async fn stream_and_render_response(
                     let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
                     let reasoning_prefix = !reasoning_accumulated.is_empty()
                         && prefix_len == reasoning_accumulated.len();
-                    let should_flush = !reasoning_prefix
-                        || pending_content.len() >= MAX_PENDING_CONTENT_BYTES;
+                    let should_flush =
+                        !reasoning_prefix || pending_content.len() >= MAX_PENDING_CONTENT_BYTES;
 
                     if should_flush {
                         let pending = std::mem::take(&mut pending_content);
                         let render_text = if reasoning_prefix {
-                            pending
-                                .get(prefix_len..)
-                                .unwrap_or("")
-                                .to_string()
+                            pending.get(prefix_len..).unwrap_or("").to_string()
                         } else {
                             pending
                         };
@@ -773,8 +770,8 @@ pub(crate) async fn stream_and_render_response(
 
     if !pending_content.is_empty() && !content_suppressed {
         let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
-        let reasoning_prefix = !reasoning_accumulated.is_empty()
-            && prefix_len == reasoning_accumulated.len();
+        let reasoning_prefix =
+            !reasoning_accumulated.is_empty() && prefix_len == reasoning_accumulated.len();
         let pending = std::mem::take(&mut pending_content);
         let render_text = if reasoning_prefix {
             pending.get(prefix_len..).unwrap_or("").to_string()
@@ -809,9 +806,7 @@ pub(crate) async fn stream_and_render_response(
                 .map_err(|err| map_render_error(provider_name, err))?;
             }
             emitted_tokens = true;
-            if reasoning_prefix
-                && (reasoning_state.rendered_reasoning() || reasoning_emitted)
-            {
+            if reasoning_prefix && (reasoning_state.rendered_reasoning() || reasoning_emitted) {
                 content_suppressed = true;
             }
         }
@@ -836,52 +831,52 @@ pub(crate) async fn stream_and_render_response(
                 // Skip rendering duplicated content when reasoning already rendered.
                 // Leave `aggregated` untouched to avoid showing content twice.
             } else {
-            // Check if we already rendered this content via Token events
-            let already_rendered =
-                !aggregated.trim().is_empty() && aggregated.trim() == content_trimmed;
+                // Check if we already rendered this content via Token events
+                let already_rendered =
+                    !aggregated.trim().is_empty() && aggregated.trim() == content_trimmed;
 
-            if !already_rendered {
-                // Content wasn't rendered yet - render it now
-                // First, flush any pending reasoning
-                let suppress_reasoning = response
-                    .reasoning
-                    .as_deref()
-                    .map(|reasoning| reasoning_matches_content(reasoning, content))
-                    .unwrap_or(false);
-                reasoning_state
-                    .finalize(
-                        renderer,
-                        response.reasoning.as_deref(),
-                        reasoning_emitted,
-                        suppress_reasoning,
-                    )
-                    .map_err(|err| map_render_error(provider_name, err))?;
-
-                // Now render the actual content
-                if supports_streaming_markdown {
-                    // If we had some streamed content, replace it; otherwise add new
-                    let prev_count = if aggregated.trim().is_empty() {
-                        0
-                    } else {
-                        rendered_line_count
-                    };
-                    renderer
-                        .stream_markdown_response(content, prev_count)
+                if !already_rendered {
+                    // Content wasn't rendered yet - render it now
+                    // First, flush any pending reasoning
+                    let suppress_reasoning = response
+                        .reasoning
+                        .as_deref()
+                        .map(|reasoning| reasoning_matches_content(reasoning, content))
+                        .unwrap_or(false);
+                    reasoning_state
+                        .finalize(
+                            renderer,
+                            response.reasoning.as_deref(),
+                            reasoning_emitted,
+                            suppress_reasoning,
+                        )
                         .map_err(|err| map_render_error(provider_name, err))?;
-                } else {
-                    // Add newline after reasoning if needed
-                    if !aggregated.is_empty() {
+
+                    // Now render the actual content
+                    if supports_streaming_markdown {
+                        // If we had some streamed content, replace it; otherwise add new
+                        let prev_count = if aggregated.trim().is_empty() {
+                            0
+                        } else {
+                            rendered_line_count
+                        };
                         renderer
-                            .line(MessageStyle::Response, "")
+                            .stream_markdown_response(content, prev_count)
+                            .map_err(|err| map_render_error(provider_name, err))?;
+                    } else {
+                        // Add newline after reasoning if needed
+                        if !aggregated.is_empty() {
+                            renderer
+                                .line(MessageStyle::Response, "")
+                                .map_err(|err| map_render_error(provider_name, err))?;
+                        }
+                        renderer
+                            .line(MessageStyle::Response, content)
                             .map_err(|err| map_render_error(provider_name, err))?;
                     }
-                    renderer
-                        .line(MessageStyle::Response, content)
-                        .map_err(|err| map_render_error(provider_name, err))?;
+                    emitted_tokens = true;
+                    aggregated = content.to_string();
                 }
-                emitted_tokens = true;
-                aggregated = content.to_string();
-            }
             }
         }
     }

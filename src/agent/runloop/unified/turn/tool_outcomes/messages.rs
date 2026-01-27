@@ -53,7 +53,8 @@ pub(crate) fn handle_assistant_response(
         let msg_with_reasoning = if let Some(reasoning_text) = reasoning {
             let cleaned_reasoning =
                 vtcode_core::llm::providers::clean_reasoning_text(&reasoning_text);
-            let duplicates_content = reasoning_duplicates_content(&cleaned_reasoning, &assistant_text);
+            let duplicates_content =
+                reasoning_duplicates_content(&cleaned_reasoning, &assistant_text);
             if duplicates_content {
                 msg
             } else {
