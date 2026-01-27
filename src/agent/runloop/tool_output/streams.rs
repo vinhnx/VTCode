@@ -196,30 +196,35 @@ pub(crate) async fn render_stream_section(
             renderer.line(MessageStyle::ToolDetail, &msg_buffer)?;
         }
 
-        for line in &tail {
-            // Truncate very long lines to prevent TUI hang
-            let display_line = if line.len() > MAX_LINE_LENGTH {
-                let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
-                Cow::Owned(format!("{}...", truncated))
-            } else {
-                Cow::Borrowed(*line)
-            };
+        if should_render_as_code_block(fallback_style) && !apply_line_styles {
+            let markdown = build_markdown_code_block(&tail);
+            renderer.render_markdown_output(fallback_style, &markdown)?;
+        } else {
+            for line in &tail {
+                // Truncate very long lines to prevent TUI hang
+                let display_line = if line.len() > MAX_LINE_LENGTH {
+                    let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
+                    Cow::Owned(format!("{}...", truncated))
+                } else {
+                    Cow::Borrowed(*line)
+                };
 
-            if display_line.is_empty() {
-                // Skip empty lines to avoid extra line breaks in TUI rendering
-                continue;
-            } else {
-                msg_buffer.clear();
-                msg_buffer.push_str(&display_line);
+                if display_line.is_empty() {
+                    // Skip empty lines to avoid extra line breaks in TUI rendering
+                    continue;
+                } else {
+                    msg_buffer.clear();
+                    msg_buffer.push_str(&display_line);
+                }
+                if apply_line_styles
+                    && let Some(style) =
+                        select_line_style(tool_name, &display_line, git_styles, ls_styles)
+                {
+                    renderer.line_with_style(style, &msg_buffer)?;
+                    continue;
+                }
+                renderer.line(fallback_style, &msg_buffer)?;
             }
-            if apply_line_styles
-                && let Some(style) =
-                    select_line_style(tool_name, &display_line, git_styles, ls_styles)
-            {
-                renderer.line_with_style(style, &msg_buffer)?;
-                continue;
-            }
-            renderer.line(fallback_style, &msg_buffer)?;
         }
         return Ok(());
     }
@@ -282,22 +287,27 @@ pub(crate) async fn render_stream_section(
 
     let mut display_buffer = String::with_capacity(128);
 
-    for line in &lines_vec {
-        if line.is_empty() {
-            // Skip empty lines to avoid extra line breaks in TUI rendering
-            continue;
-        } else {
-            display_buffer.clear();
-            display_buffer.push_str(line);
-        }
+    if should_render_as_code_block(fallback_style) && !apply_line_styles {
+        let markdown = build_markdown_code_block(&lines_vec);
+        renderer.render_markdown_output(fallback_style, &markdown)?;
+    } else {
+        for line in &lines_vec {
+            if line.is_empty() {
+                // Skip empty lines to avoid extra line breaks in TUI rendering
+                continue;
+            } else {
+                display_buffer.clear();
+                display_buffer.push_str(line);
+            }
 
-        if apply_line_styles
-            && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
-        {
-            renderer.line_with_style(style, &display_buffer)?;
-            continue;
+            if apply_line_styles
+                && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
+            {
+                renderer.line_with_style(style, &display_buffer)?;
+                continue;
+            }
+            renderer.line(fallback_style, &display_buffer)?;
         }
-        renderer.line(fallback_style, &display_buffer)?;
     }
 
     Ok(())
@@ -346,6 +356,27 @@ pub(crate) fn render_code_fence_blocks(
     }
 
     Ok(())
+}
+
+fn should_render_as_code_block(style: MessageStyle) -> bool {
+    matches!(style, MessageStyle::ToolOutput | MessageStyle::Output)
+}
+
+fn build_markdown_code_block(lines: &[&str]) -> String {
+    let mut markdown = String::with_capacity(lines.len() * 80 + 16);
+    markdown.push_str("```\n");
+    for line in lines {
+        let display_line = if line.len() > MAX_LINE_LENGTH {
+            let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
+            Cow::Owned(format!("{}...", truncated))
+        } else {
+            Cow::Borrowed(*line)
+        };
+        markdown.push_str(&display_line);
+        markdown.push('\n');
+    }
+    markdown.push_str("```");
+    markdown
 }
 
 pub(crate) fn resolve_stdout_tail_limit(config: Option<&VTCodeConfig>) -> usize {
