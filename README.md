@@ -2,7 +2,7 @@
 
 <a href="./docs/SKILLS_GUIDE.md"><img src="https://img.shields.io/badge/Agent%20Skills-BFB38F?style=for-the-badge&logo=anthropic" alt="Agent Skills"/></a> <a href="./docs/guides/mcp-integration.md"><img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/></a> <a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/></a>
 
-<a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=D99A4E&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=383B73&label=Release" alt="GitHub Release"/></a>
+<a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=BFB38F&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=171C26&label=Release" alt="GitHub Release"/></a>
 
 ---
 
