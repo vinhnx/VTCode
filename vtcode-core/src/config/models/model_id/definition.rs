@@ -83,6 +83,8 @@ pub enum ModelId {
     HuggingFaceGlm47FlashNovita,
     /// MoonshotAI Kimi K2 Thinking via Hugging Face router
     HuggingFaceKimiK2Thinking,
+    /// MoonshotAI Kimi K2.5 via Novita on Hugging Face router
+    HuggingFaceKimiK25Novita,
     /// MiniMax M2.1 via Novita on Hugging Face router - Enhanced reasoning
     HuggingFaceMinimaxM21Novita,
     /// DeepSeek V3.2 via Novita on Hugging Face router
@@ -127,6 +129,10 @@ pub enum ModelId {
     ZaiGlm45Flash,
     /// GLM-4-32B-0414-128K - Legacy long-context GLM deployment
     ZaiGlm432b0414128k,
+
+    // Moonshot models
+    /// Kimi K2.5 - Versatile multimodal model with reasoning support
+    MoonshotKimiK25,
 
     // Ollama models
     /// GPT-OSS 20B - Open-weight GPT-OSS 20B model served via Ollama locally

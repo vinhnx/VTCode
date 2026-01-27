@@ -117,6 +117,7 @@ impl ModelId {
                 | ModelId::MinimaxM21
                 | ModelId::OllamaGlm47Cloud
                 | ModelId::OllamaMinimaxM21Cloud
+                | ModelId::MoonshotKimiK25
         )
     }
 
@@ -168,6 +169,7 @@ impl ModelId {
                 | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm46
                 | ModelId::ZaiGlm46DeepThinking
+                | ModelId::MoonshotKimiK25
         )
     }
 
@@ -228,6 +230,7 @@ impl ModelId {
             | ModelId::HuggingFaceGlm47Novita
             | ModelId::HuggingFaceGlm47FlashNovita => "4.7",
             ModelId::HuggingFaceKimiK2Thinking => "k2",
+            ModelId::HuggingFaceKimiK25Novita => "k2.5",
             ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
             ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
@@ -248,6 +251,7 @@ impl ModelId {
             | ModelId::ZaiGlm45Flash => "4.5",
             ModelId::ZaiGlm432b0414128k => "4-32B",
             // Moonshot generations
+            ModelId::MoonshotKimiK25 => "K2.5",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
