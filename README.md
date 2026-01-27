@@ -4,8 +4,6 @@
 
 <a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=D99A4E&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=383B73&label=Release" alt="GitHub Release"/></a>
 
-<img src="./resources/vhs/demo-tools.gif" alt="VT Code demo"/>
-
 ---
 
 <strong>VT Code</strong> is an open-source coding agent, with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.
