@@ -555,6 +555,12 @@ impl ToolRegistry {
         if truncated {
             response["truncated"] = json!(true);
         }
+        if truncated || capture.exit_code.is_none() {
+            response["follow_up_prompt"] = json!(format!(
+                "Command output incomplete. Read more with read_pty_session session_id=\"{}\" before rerunning the command.",
+                session_id
+            ));
+        }
 
         Ok(response)
     }
@@ -615,6 +621,12 @@ impl ToolRegistry {
 
         if truncated {
             response["truncated"] = json!(true);
+        }
+        if truncated || capture.exit_code.is_none() {
+            response["follow_up_prompt"] = json!(format!(
+                "Command output incomplete. Read more with read_pty_session session_id=\"{}\" before rerunning the command.",
+                sid
+            ));
         }
 
         Ok(response)

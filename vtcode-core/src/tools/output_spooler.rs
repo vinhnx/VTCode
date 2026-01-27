@@ -350,6 +350,11 @@ impl ToolOutputSpooler {
                 "Full output saved to spooled file. Read it with: read_file path=\"{}\"",
                 spool_result.file_path.display()
             ),
+            "follow_up_prompt": format!(
+                "Output spooled to {}. Read it with read_file path=\"{}\" before rerunning the command.",
+                spool_result.file_path.display(),
+                spool_result.file_path.display()
+            ),
             "tip": "The spooled file contains the raw content. Use read_file or grep_file on it directly.",
             "success": true
         });
