@@ -98,8 +98,7 @@
     "cargo_test": "allow",
     "git_status": "allow",
     "git_diff": "allow",
-    "git_log": "allow",
-    "git_diff_file": "allow"
+    "git_log": "allow"
   },
   "constraints": {},
   "mcp": {
