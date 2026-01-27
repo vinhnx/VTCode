@@ -89,8 +89,8 @@ impl ReasoningBuffer {
 pub fn clean_reasoning_text(text: &str) -> String {
     let lines: Vec<&str> = text
         .lines()
-        .map(|line| line.trim())
-        .filter(|line| !line.is_empty())
+        .map(|line| line.trim_end())
+        .filter(|line| !line.trim().is_empty())
         .collect();
     lines.join("\n")
 }
@@ -459,6 +459,6 @@ mod tests {
     fn handles_mixed_whitespace_lines() {
         let input = "  line1  \n   \n  \n  line2  \n\t\n     \nline3";
         let cleaned = clean_reasoning_text(input);
-        assert_eq!(cleaned, "line1\nline2\nline3");
+        assert_eq!(cleaned, "  line1\n  line2\nline3");
     }
 }

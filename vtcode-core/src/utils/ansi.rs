@@ -249,8 +249,14 @@ impl AnsiRenderer {
 
     /// Convenience for writing a single line
     pub fn line(&mut self, style: MessageStyle, text: &str) -> Result<()> {
-        if matches!(style, MessageStyle::Response) {
+        if matches!(style, MessageStyle::Response | MessageStyle::Reasoning) {
             return self.render_markdown(style, text);
+        }
+        if matches!(style, MessageStyle::Output | MessageStyle::ToolOutput)
+            && contains_markdown_fence(text)
+        {
+            let stripped = crate::utils::ansi_parser::strip_ansi(text);
+            return self.render_markdown(style, &stripped);
         }
         let indent = style.indent();
         let dont_split = matches!(style, MessageStyle::Tool | MessageStyle::ToolDetail);
@@ -571,6 +577,10 @@ impl AnsiRenderer {
         self.last_line_was_empty = plain.trim().is_empty();
         Ok(())
     }
+}
+
+fn contains_markdown_fence(text: &str) -> bool {
+    text.contains("```") || text.contains("~~~")
 }
 
 struct InlineSink {
