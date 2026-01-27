@@ -335,7 +335,17 @@ impl Session {
 
         // Add left content (git status)
         if let Some(left_value) = left.as_ref() {
-            spans.extend(self.create_git_status_spans(left_value, dim_style));
+            if let Some((indicator, rest)) = split_running_command_status(left_value) {
+                let indicator_style = ratatui_style_from_inline(
+                    &self.styles.tool_inline_style("run"),
+                    self.theme.foreground,
+                );
+                spans.push(Span::styled(indicator, indicator_style));
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(rest, dim_style));
+            } else {
+                spans.extend(self.create_git_status_spans(left_value, dim_style));
+            }
         }
 
         // Build right side spans (scroll indicator + optional right content)
@@ -463,6 +473,15 @@ impl Session {
     /// Build input status line for external widgets
     pub fn build_input_status_widget_data(&self, width: u16) -> Option<Vec<Span<'static>>> {
         self.render_input_status_line(width).map(|line| line.spans)
+    }
+}
+
+fn split_running_command_status(text: &str) -> Option<(String, String)> {
+    let (indicator, rest) = text.split_once(' ')?;
+    if indicator.chars().count() == 1 && rest.starts_with("Running command:") {
+        Some((indicator.to_string(), rest.to_string()))
+    } else {
+        None
     }
 }
 

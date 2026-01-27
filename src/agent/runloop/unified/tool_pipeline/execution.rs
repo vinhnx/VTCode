@@ -501,11 +501,12 @@ pub(crate) async fn run_tool_call(
         .set_message(format!("Starting {}...", name))
         .await;
 
+    let status_message = build_tool_status_message(&name, &args_val);
     let tool_spinner = PlaceholderSpinner::with_progress(
         ctx.handle,
         Some("".to_string()),
         Some("".to_string()),
-        format!("Running tool: {}", name),
+        status_message,
         Some(&progress_reporter),
     );
 
@@ -634,6 +635,30 @@ pub(crate) async fn run_tool_call(
 
     // Ledger recording is left to the run loop where a decision id is available. Return the pipeline outcome only.
     Ok(pipeline_outcome)
+}
+
+fn build_tool_status_message(tool_name: &str, args: &Value) -> String {
+    if is_command_tool(tool_name) {
+        let command = args
+            .get("command")
+            .and_then(|value| value.as_str())
+            .unwrap_or(tool_name);
+        format!("Running command: {}", command)
+    } else {
+        format!("Running tool: {}", tool_name)
+    }
+}
+
+fn is_command_tool(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        tools::RUN_PTY_CMD
+            | tools::SHELL
+            | tools::UNIFIED_EXEC
+            | tools::EXECUTE_CODE
+            | tools::EXEC_PTY_CMD
+            | tools::EXEC
+    )
 }
 
 /// Execute a tool with a timeout and progress reporting
