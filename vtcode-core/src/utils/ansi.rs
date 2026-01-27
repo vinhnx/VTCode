@@ -252,11 +252,25 @@ impl AnsiRenderer {
         if matches!(style, MessageStyle::Response | MessageStyle::Reasoning) {
             return self.render_markdown(style, text);
         }
-        if matches!(style, MessageStyle::Output | MessageStyle::ToolOutput)
-            && contains_markdown_fence(text)
-        {
+        if matches!(style, MessageStyle::Output | MessageStyle::ToolOutput) {
             let stripped = crate::utils::ansi_parser::strip_ansi(text);
-            return self.render_markdown(style, &stripped);
+            let fenced = if looks_like_diff(&stripped) {
+                format!("```diff\n{stripped}\n```")
+            } else {
+                format!("```\n{stripped}\n```")
+            };
+            return self.render_markdown(style, &fenced);
+        }
+        if matches!(style, MessageStyle::ToolDetail) {
+            if contains_markdown_fence(text) {
+                let stripped = crate::utils::ansi_parser::strip_ansi(text);
+                return self.render_markdown(style, &stripped);
+            }
+            if looks_like_diff(text) {
+                let stripped = crate::utils::ansi_parser::strip_ansi(text);
+                let fenced = format!("```diff\n{stripped}\n```");
+                return self.render_markdown(style, &fenced);
+            }
         }
         let indent = style.indent();
         let dont_split = matches!(style, MessageStyle::Tool | MessageStyle::ToolDetail);
@@ -581,6 +595,19 @@ impl AnsiRenderer {
 
 fn contains_markdown_fence(text: &str) -> bool {
     text.contains("```") || text.contains("~~~")
+}
+
+fn looks_like_diff(text: &str) -> bool {
+    text.lines().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("diff --git ")
+            || trimmed.starts_with("@@ ")
+            || trimmed.starts_with("+++ ")
+            || trimmed.starts_with("--- ")
+            || trimmed.starts_with("index ")
+            || trimmed.starts_with("new file mode ")
+            || trimmed.starts_with("deleted file mode ")
+    })
 }
 
 struct InlineSink {

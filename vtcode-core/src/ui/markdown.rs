@@ -3,7 +3,7 @@
 use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::syntax_highlight::{find_syntax_by_token, load_theme, syntax_set};
 use crate::ui::theme::{self, ThemeStyles};
-use anstyle::Style;
+use anstyle::{Effects, Style};
 use anstyle_syntect::to_anstyle;
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::cmp::max;
@@ -733,6 +733,7 @@ fn highlight_code_block(
     // Always normalize indentation first, regardless of highlighting
     let normalized_code = normalize_code_indentation(code, language);
     let code_to_display = &normalized_code;
+    let use_line_numbers = !is_diff_language(language);
 
     if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
         && let Some(highlighted) = try_highlight(code_to_display, language, config)
@@ -741,8 +742,11 @@ fn highlight_code_block(
         let number_width = line_number_width(line_count);
         for (index, segments) in highlighted.into_iter().enumerate() {
             let mut line = MarkdownLine::default();
-            let line_prefix =
-                line_prefix_segments(prefix_segments, theme_styles, index + 1, number_width);
+            let line_prefix = if use_line_numbers {
+                line_prefix_segments(prefix_segments, theme_styles, index + 1, number_width)
+            } else {
+                prefix_segments.to_vec()
+            };
             line.prepend_segments(&line_prefix);
             for (style, text) in segments {
                 line.push_segment(style, &text);
@@ -763,8 +767,11 @@ fn highlight_code_block(
     for raw_line in LinesWithEndings::from(code_to_display) {
         let trimmed = raw_line.trim_end_matches('\n');
         let mut line = MarkdownLine::default();
-        let line_prefix =
-            line_prefix_segments(prefix_segments, theme_styles, line_number, number_width);
+        let line_prefix = if use_line_numbers {
+            line_prefix_segments(prefix_segments, theme_styles, line_number, number_width)
+        } else {
+            prefix_segments.to_vec()
+        };
         line.prepend_segments(&line_prefix);
         if !trimmed.is_empty() {
             line.push_segment(code_block_style(theme_styles, base_style), trimmed);
@@ -775,8 +782,11 @@ fn highlight_code_block(
 
     if code_to_display.ends_with('\n') {
         let mut line = MarkdownLine::default();
-        let line_prefix =
-            line_prefix_segments(prefix_segments, theme_styles, line_number, number_width);
+        let line_prefix = if use_line_numbers {
+            line_prefix_segments(prefix_segments, theme_styles, line_number, number_width)
+        } else {
+            prefix_segments.to_vec()
+        };
         line.prepend_segments(&line_prefix);
         lines.push(line);
     }
@@ -801,11 +811,23 @@ fn line_number_width(line_count: usize) -> usize {
     digits.max(CODE_LINE_NUMBER_MIN_WIDTH)
 }
 
+fn is_diff_language(language: Option<&str>) -> bool {
+    language.is_some_and(|lang| {
+        matches!(
+            lang.to_ascii_lowercase().as_str(),
+            "diff" | "patch" | "udiff" | "git"
+        )
+    })
+}
+
 fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
-    let fg = theme_styles
-        .output
-        .get_fg_color()
-        .or_else(|| base_style.get_fg_color());
+    let base_fg = base_style.get_fg_color();
+    let theme_fg = theme_styles.output.get_fg_color();
+    let fg = if base_style.get_effects().contains(Effects::DIMMED) {
+        base_fg.or(theme_fg)
+    } else {
+        theme_fg.or(base_fg)
+    };
     let mut style = base_style;
     if let Some(color) = fg {
         style = style.fg_color(Some(color));
