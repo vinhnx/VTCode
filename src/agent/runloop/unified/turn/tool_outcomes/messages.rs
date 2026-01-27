@@ -49,9 +49,16 @@ pub(crate) fn handle_assistant_response(
     }
 
     if !assistant_text.trim().is_empty() {
-        let msg = uni::Message::assistant(assistant_text);
+        let msg = uni::Message::assistant(assistant_text.clone());
         let msg_with_reasoning = if let Some(reasoning_text) = reasoning {
-            msg.with_reasoning(Some(reasoning_text))
+            let cleaned_reasoning =
+                vtcode_core::llm::providers::clean_reasoning_text(&reasoning_text);
+            let duplicates_content = reasoning_duplicates_content(&cleaned_reasoning, &assistant_text);
+            if duplicates_content {
+                msg
+            } else {
+                msg.with_reasoning(Some(reasoning_text))
+            }
         } else {
             msg
         };
@@ -304,7 +311,14 @@ pub(crate) async fn handle_text_response(
     } else {
         let msg = uni::Message::assistant(params.text.clone());
         let msg_with_reasoning = if let Some(reasoning_text) = params.reasoning {
-            msg.with_reasoning(Some(reasoning_text))
+            let cleaned_reasoning =
+                vtcode_core::llm::providers::clean_reasoning_text(&reasoning_text);
+            let duplicates_content = reasoning_duplicates_content(&cleaned_reasoning, &params.text);
+            if duplicates_content {
+                msg
+            } else {
+                msg.with_reasoning(Some(reasoning_text))
+            }
         } else {
             msg
         };

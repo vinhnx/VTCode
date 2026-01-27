@@ -71,6 +71,17 @@ pub(super) fn push_tool_response(
 }
 
 pub(super) fn push_assistant_message(history: &mut Vec<uni::Message>, mut message: uni::Message) {
+    if message.role == uni::MessageRole::Assistant {
+        if let Some(reasoning) = message.reasoning.as_ref()
+            && let Some(content) = message.content.as_text_borrowed()
+        {
+            let cleaned_reasoning = vtcode_core::llm::providers::clean_reasoning_text(reasoning);
+            let cleaned_content = vtcode_core::llm::providers::clean_reasoning_text(content);
+            if !cleaned_reasoning.is_empty() && cleaned_reasoning == cleaned_content {
+                message.reasoning = None;
+            }
+        }
+    }
     if let Some(text) = message.content.as_text_borrowed() {
         let limited = truncate_message_content(text);
         message.content = uni::MessageContent::text(limited);

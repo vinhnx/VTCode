@@ -207,21 +207,31 @@ impl AgentRunner {
                     task_state.last_processed_message_idx = task_state.conversation.len();
                 }
 
+                let reasoning_effort =
+                    if self.provider_client.supports_reasoning_effort(&turn_model) {
+                        turn_reasoning
+                    } else {
+                        None
+                    };
+                let temperature = if reasoning_effort.is_some()
+                    && matches!(
+                        provider_kind,
+                        ModelProvider::Anthropic | ModelProvider::Minimax
+                    ) {
+                    None
+                } else {
+                    Some(0.7)
+                };
                 let request = LLMRequest {
                     messages: task_state.conversation_messages.clone(),
                     system_prompt: Some(system_instruction.clone()),
                     tools: Some(tools.clone()),
                     model: turn_model.clone(),
                     max_tokens,
-                    temperature: Some(0.7),
+                    temperature,
                     stream: self.provider_client.supports_streaming(),
                     parallel_tool_config,
-                    reasoning_effort: if self.provider_client.supports_reasoning_effort(&turn_model)
-                    {
-                        turn_reasoning
-                    } else {
-                        None
-                    },
+                    reasoning_effort,
                     verbosity: turn_verbosity,
                     ..Default::default()
                 };

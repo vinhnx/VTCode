@@ -415,6 +415,17 @@ fn reasoning_matches_content(reasoning: &str, content: &str) -> bool {
         && cleaned_reasoning == cleaned_content
 }
 
+fn common_prefix_len(a: &str, b: &str) -> usize {
+    let mut len = 0;
+    for (left, right) in a.chars().zip(b.chars()) {
+        if left != right {
+            break;
+        }
+        len += left.len_utf8();
+    }
+    len
+}
+
 #[derive(Default)]
 struct StreamingReasoningState {
     // Tracks buffered reasoning delta during streaming
@@ -576,6 +587,10 @@ pub(crate) async fn stream_and_render_response(
     let mut emitted_tokens = false;
     let mut reasoning_state = StreamingReasoningState::new(supports_streaming_markdown);
     let mut spinner_message_updated = false;
+    let mut reasoning_accumulated = String::new();
+    let mut pending_content = String::new();
+    let mut content_suppressed = false;
+    const MAX_PENDING_CONTENT_BYTES: usize = 4_096;
 
     // Track streaming progress
     let mut token_count = 0;
@@ -634,9 +649,59 @@ pub(crate) async fn stream_and_render_response(
                     last_progress_update = std::time::Instant::now();
                 }
                 finish_spinner(&mut spinner_active);
-                aggregated.push_str(&delta);
+                if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
+                    pending_content.push_str(&delta);
+                    let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
+                    let reasoning_prefix = !reasoning_accumulated.is_empty()
+                        && prefix_len == reasoning_accumulated.len();
+                    let should_flush = !reasoning_prefix
+                        || pending_content.len() >= MAX_PENDING_CONTENT_BYTES;
 
-                // Always render token content without skipping
+                    if should_flush {
+                        let pending = std::mem::take(&mut pending_content);
+                        let render_text = if reasoning_prefix {
+                            pending
+                                .get(prefix_len..)
+                                .unwrap_or("")
+                                .to_string()
+                        } else {
+                            pending
+                        };
+
+                        if reasoning_prefix
+                            && render_text.is_empty()
+                            && (reasoning_state.rendered_reasoning() || reasoning_emitted)
+                        {
+                            content_suppressed = true;
+                            continue;
+                        }
+
+                        aggregated.push_str(&render_text);
+                        if supports_streaming_markdown {
+                            rendered_line_count = renderer
+                                .stream_markdown_response(&aggregated, rendered_line_count)
+                                .map_err(|err| map_render_error(provider_name, err))?;
+                        } else {
+                            stream_plain_response_delta(
+                                renderer,
+                                response_style,
+                                response_indent,
+                                &mut needs_indent,
+                                &render_text,
+                            )
+                            .map_err(|err| map_render_error(provider_name, err))?;
+                        }
+                        emitted_tokens = true;
+                        if reasoning_prefix
+                            && (reasoning_state.rendered_reasoning() || reasoning_emitted)
+                        {
+                            content_suppressed = true;
+                        }
+                    }
+                    continue;
+                }
+
+                aggregated.push_str(&delta);
                 if supports_streaming_markdown {
                     rendered_line_count = renderer
                         .stream_markdown_response(&aggregated, rendered_line_count)
@@ -667,6 +732,7 @@ pub(crate) async fn stream_and_render_response(
                     last_progress_update = std::time::Instant::now();
                 }
                 finish_spinner(&mut spinner_active);
+                reasoning_accumulated.push_str(&delta);
                 reasoning_state
                     .handle_delta(renderer, &delta)
                     .map_err(|err| map_render_error(provider_name, err))?;
@@ -705,12 +771,71 @@ pub(crate) async fn stream_and_render_response(
         }
     };
 
+    if !pending_content.is_empty() && !content_suppressed {
+        let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
+        let reasoning_prefix = !reasoning_accumulated.is_empty()
+            && prefix_len == reasoning_accumulated.len();
+        let pending = std::mem::take(&mut pending_content);
+        let render_text = if reasoning_prefix {
+            pending.get(prefix_len..).unwrap_or("").to_string()
+        } else {
+            pending
+        };
+
+        if reasoning_prefix
+            && render_text.is_empty()
+            && (reasoning_state.rendered_reasoning() || reasoning_emitted)
+        {
+            content_suppressed = true;
+        } else {
+            aggregated.push_str(&render_text);
+            if supports_streaming_markdown {
+                let prev_count = if aggregated.trim().is_empty() {
+                    0
+                } else {
+                    rendered_line_count
+                };
+                renderer
+                    .stream_markdown_response(&aggregated, prev_count)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+            } else {
+                stream_plain_response_delta(
+                    renderer,
+                    response_style,
+                    response_indent,
+                    &mut needs_indent,
+                    &render_text,
+                )
+                .map_err(|err| map_render_error(provider_name, err))?;
+            }
+            emitted_tokens = true;
+            if reasoning_prefix
+                && (reasoning_state.rendered_reasoning() || reasoning_emitted)
+            {
+                content_suppressed = true;
+            }
+        }
+    }
+
     // CRITICAL: Ensure content is ALWAYS displayed.
     // If response has content but we didn't stream any tokens, render it now.
     // This handles providers that send content only in the Completed event.
-    if let Some(content) = response.content.as_deref() {
+    if !content_suppressed && let Some(content) = response.content.as_deref() {
         let content_trimmed = content.trim();
         if !content_trimmed.is_empty() {
+            let reasoning_dupes_content = response
+                .reasoning
+                .as_deref()
+                .map(|reasoning| reasoning_matches_content(reasoning, content))
+                .unwrap_or(false);
+            if reasoning_dupes_content
+                && (reasoning_state.rendered_reasoning()
+                    || reasoning_emitted
+                    || !reasoning_accumulated.is_empty())
+            {
+                // Skip rendering duplicated content when reasoning already rendered.
+                // Leave `aggregated` untouched to avoid showing content twice.
+            } else {
             // Check if we already rendered this content via Token events
             let already_rendered =
                 !aggregated.trim().is_empty() && aggregated.trim() == content_trimmed;
@@ -756,6 +881,7 @@ pub(crate) async fn stream_and_render_response(
                 }
                 emitted_tokens = true;
                 aggregated = content.to_string();
+            }
             }
         }
     }
