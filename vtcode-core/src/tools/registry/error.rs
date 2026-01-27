@@ -46,17 +46,16 @@ impl ToolExecutionError {
     #[inline]
     pub fn new(tool_name: String, error_type: ToolErrorType, message: String) -> Self {
         let (is_recoverable, recovery_suggestions) = generate_recovery_info(error_type);
-        
+
         // PTY/command tool timeouts should NOT be retried - the underlying process
         // may still be running and retrying will cause Cargo.lock contention or
         // other resource conflicts
-        let is_recoverable = if matches!(error_type, ToolErrorType::Timeout)
-            && is_command_tool(&tool_name)
-        {
-            false
-        } else {
-            is_recoverable
-        };
+        let is_recoverable =
+            if matches!(error_type, ToolErrorType::Timeout) && is_command_tool(&tool_name) {
+                false
+            } else {
+                is_recoverable
+            };
 
         Self {
             tool_name,
