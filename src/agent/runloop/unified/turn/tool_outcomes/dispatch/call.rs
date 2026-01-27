@@ -211,16 +211,56 @@ pub(crate) async fn handle_tool_call(
                 );
 
             let progress_reporter_clone = progress_reporter.clone();
+            let handle_clone = ctx.handle.clone();
+            let is_pty_command = tool_name == vtcode_core::config::constants::tools::RUN_PTY_CMD
+                || tool_name == vtcode_core::config::constants::tools::UNIFIED_EXEC
+                || tool_name == vtcode_core::config::constants::tools::SEND_PTY_INPUT;
+
             ctx.tool_registry
-                .set_progress_callback(Arc::new(move |_name, output| {
+                .set_progress_callback(Arc::new(move |name, output| {
                     let reporter = progress_reporter_clone.clone();
                     let output_owned = output.to_string();
+                    let handle = handle_clone.clone();
+                    let is_pty = is_pty_command || name == "run_pty_cmd" || name == "unified_exec";
+
                     tokio::spawn(async move {
-                        if let Some(last_line) = output_owned.lines().last() {
-                            let clean_line = vtcode_core::utils::ansi_parser::strip_ansi(last_line);
-                            let trimmed = clean_line.trim();
-                            if !trimmed.is_empty() {
-                                reporter.set_message(trimmed.to_string()).await;
+                        // For PTY commands, stream full output lines to the TUI
+                        if is_pty && !output_owned.is_empty() {
+                            // Stream each complete line to TUI
+                            for line in output_owned.lines() {
+                                let clean_line = vtcode_core::utils::ansi_parser::strip_ansi(line);
+                                let trimmed = clean_line.trim();
+                                if !trimmed.is_empty() {
+                                    // Append the line as PTY output in the TUI
+                                    handle.append_line(
+                                        vtcode_core::ui::tui::InlineMessageKind::Pty,
+                                        vec![vtcode_core::ui::tui::InlineSegment {
+                                            text: trimmed.to_string(),
+                                            style: std::sync::Arc::new(
+                                                vtcode_core::ui::tui::InlineTextStyle::default(),
+                                            ),
+                                        }],
+                                    );
+                                }
+                            }
+                            // Update spinner with last line for status
+                            if let Some(last_line) = output_owned.lines().last() {
+                                let clean_line =
+                                    vtcode_core::utils::ansi_parser::strip_ansi(last_line);
+                                let trimmed = clean_line.trim();
+                                if !trimmed.is_empty() {
+                                    reporter.set_message(trimmed.to_string()).await;
+                                }
+                            }
+                        } else {
+                            // For non-PTY tools, just update the spinner message
+                            if let Some(last_line) = output_owned.lines().last() {
+                                let clean_line =
+                                    vtcode_core::utils::ansi_parser::strip_ansi(last_line);
+                                let trimmed = clean_line.trim();
+                                if !trimmed.is_empty() {
+                                    reporter.set_message(trimmed.to_string()).await;
+                                }
                             }
                         }
                     });

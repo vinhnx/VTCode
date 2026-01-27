@@ -200,7 +200,11 @@ fn render_summary_with_highlights(
             continue;
         }
         if cursor < start {
-            rendered.push_str(&render_styled(&summary[cursor..start], palette.primary, None));
+            rendered.push_str(&render_styled(
+                &summary[cursor..start],
+                palette.primary,
+                None,
+            ));
         }
         rendered.push_str(&render_styled(&summary[start..end], palette.accent, None));
         cursor = end;

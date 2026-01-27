@@ -776,12 +776,29 @@ impl ToolRegistry {
         let start = Instant::now();
         let poll_interval = Duration::from_millis(50);
 
+        // Get the progress callback for streaming output to the TUI
+        let progress_callback = self.progress_callback();
+        let tool_name = "run_pty_cmd";
+
+        // Throttle TUI updates to prevent excessive redraws
+        let mut last_ui_update = Instant::now();
+        let ui_update_interval = Duration::from_millis(100);
+        let mut pending_lines = String::new();
+
         loop {
             if let Ok(Some(code)) = self.pty_manager().is_session_completed(session_id) {
                 if let Ok(Some(final_output)) =
                     self.pty_manager().read_session_output(session_id, true)
                 {
                     output.push_str(&final_output);
+
+                    // Stream final output to TUI
+                    if let Some(ref callback) = progress_callback {
+                        pending_lines.push_str(&final_output);
+                        if !pending_lines.is_empty() {
+                            callback(tool_name, &pending_lines);
+                        }
+                    }
                 }
                 return PtyEphemeralCapture {
                     output,
@@ -792,9 +809,31 @@ impl ToolRegistry {
 
             if let Ok(Some(new_output)) = self.pty_manager().read_session_output(session_id, true) {
                 output.push_str(&new_output);
+                pending_lines.push_str(&new_output);
+
+                // Stream output to TUI with throttling
+                if let Some(ref callback) = progress_callback {
+                    let now = Instant::now();
+                    // Flush pending lines if interval elapsed or if we have a complete line
+                    if now.duration_since(last_ui_update) >= ui_update_interval
+                        || pending_lines.contains('\n')
+                    {
+                        if !pending_lines.is_empty() {
+                            callback(tool_name, &pending_lines);
+                            pending_lines.clear();
+                            last_ui_update = now;
+                        }
+                    }
+                }
             }
 
             if start.elapsed() >= yield_duration {
+                // Flush any remaining pending lines
+                if let Some(ref callback) = progress_callback {
+                    if !pending_lines.is_empty() {
+                        callback(tool_name, &pending_lines);
+                    }
+                }
                 return PtyEphemeralCapture {
                     output,
                     exit_code: None,

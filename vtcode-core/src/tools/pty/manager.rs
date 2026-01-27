@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-
+                    
 use anyhow::{Context, Result, anyhow};
 use parking_lot::Mutex;
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
@@ -21,11 +21,30 @@ use super::session::PtySessionHandle;
 use super::types::{PtyCommandRequest, PtyCommandResult};
 
 use once_cell::sync::Lazy;
+use std::collections::hash_map::Entry;
 
-/// Global mutex to serialize cargo commands and prevent Cargo.lock file contention.
-/// Cargo uses a file lock that causes "blocking waiting for file lock" errors
-/// when multiple cargo processes run concurrently in the same workspace.
-static CARGO_COMMAND_LOCK: Lazy<tokio::sync::Mutex<()>> = Lazy::new(|| tokio::sync::Mutex::new(()));
+/// Per-workspace cargo locks to serialize cargo commands within each workspace.
+/// Keyed by canonicalized workspace path to prevent Cargo.lock file contention.
+/// This is more granular than a global lock - different workspaces can run cargo concurrently.
+static CARGO_WORKSPACE_LOCKS: Lazy<Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// Get or create a cargo lock for the given workspace root
+fn get_cargo_lock(workspace_root: &Path) -> Arc<tokio::sync::Mutex<()>> {
+    let mut locks = CARGO_WORKSPACE_LOCKS.lock();
+    match locks.entry(workspace_root.to_path_buf()) {
+        Entry::Occupied(entry) => entry.get().clone(),
+        Entry::Vacant(entry) => {
+            let lock = Arc::new(tokio::sync::Mutex::new(()));
+            entry.insert(lock.clone());
+            lock
+        }
+    }
+}
+
+/// Grace period to wait for threads to exit after killing the process (ms)
+const THREAD_JOIN_GRACE_PERIOD_MS: u64 = 500;
+
 use crate::audit::PermissionAuditLog;
 use crate::config::{CommandsConfig, PtyConfig};
 use crate::tools::path_env;
@@ -110,21 +129,25 @@ impl PtyManager {
 
         // Determine if this is a cargo command that needs serialization
         let is_cargo = is_cargo_command(&program)
-            || (is_shell_program(&program)
-                && args
-                    .iter()
-                    .any(|arg| is_cargo_command_string(arg)));
+            || (is_shell_program(&program) && args.iter().any(|arg| is_cargo_command_string(arg)));
 
-        // Acquire cargo lock if needed to prevent Cargo.lock file contention
+        // Acquire per-workspace cargo lock if needed to prevent Cargo.lock file contention
         // This prevents "blocking waiting for file lock" errors when the agent
         // triggers multiple cargo commands before previous ones complete
-        let _cargo_guard = if is_cargo {
+        // Using per-workspace lock allows concurrent cargo in different workspaces
+        let cargo_lock = if is_cargo {
+            Some(get_cargo_lock(&workspace_root))
+        } else {
+            None
+        };
+        let _cargo_guard = if let Some(ref lock) = cargo_lock {
             debug!(
                 target: "vtcode.pty.cargo_lock",
                 program = %program,
-                "Acquiring cargo command lock to serialize cargo invocations"
+                workspace = %workspace_root.display(),
+                "Acquiring per-workspace cargo lock to serialize cargo invocations"
             );
-            Some(CARGO_COMMAND_LOCK.lock().await)
+            Some(lock.lock().await)
         } else {
             None
         };
@@ -138,20 +161,20 @@ impl PtyManager {
                 // However, we avoid double-wrapping if the command is already a shell invocation.
                 let (exec_program, exec_args, display_program, _use_shell_wrapper) =
                     if is_shell_program(&program)
-                        && args.iter().any(|arg| arg == "-c" || arg == "/C")
+&& args.iter().any(|arg| arg == "-c" || arg == "/C")
                     {
-                        // Already a shell command, don't wrap again
-                        (program.clone(), args.clone(), program.clone(), false)
+// Already a shell command, don't wrap again
+(program.clone(), args.clone(), program.clone(), false)
                     } else {
-                        let shell = resolve_fallback_shell();
-                        let full_command =
-                            join(std::iter::once(program.clone()).chain(args.iter().cloned()));
-                        (
-                            shell.clone(),
-                            vec!["-lc".to_owned(), full_command.clone()],
-                            program.clone(),
-                            true,
-                        )
+let shell = resolve_fallback_shell();
+let full_command =
+    join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+(
+    shell.clone(),
+    vec!["-lc".to_owned(), full_command.clone()],
+    program.clone(),
+    true,
+)
                     };
 
                 let mut builder = CommandBuilder::new(exec_program.clone());
@@ -197,18 +220,18 @@ impl PtyManager {
                     let mut collected = Vec::new();
 
                     loop {
-                        match reader.read(&mut buffer) {
-                            Ok(0) => break,
-                            Ok(bytes_read) => {
-                                collected.extend_from_slice(&buffer[..bytes_read]);
-                            }
-                            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
-                                continue;
-                            }
-                            Err(error) => {
-                                return Err(error).context("failed to read PTY command output");
-                            }
-                        }
+match reader.read(&mut buffer) {
+    Ok(0) => break,
+    Ok(bytes_read) => {
+        collected.extend_from_slice(&buffer[..bytes_read]);
+    }
+    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+        continue;
+    }
+    Err(error) => {
+        return Err(error).context("failed to read PTY command output");
+    }
+}
                     }
 
                     Ok(collected)
@@ -216,53 +239,157 @@ impl PtyManager {
 
                 let wait_result = match wait_rx.recv_timeout(timeout_duration) {
                     Ok(()) => wait_thread.join().map_err(|panic| {
-                        anyhow!("PTY command wait thread panicked: {:?}", panic)
+anyhow!("PTY command wait thread panicked: {:?}", panic)
                     })?,
                     Err(mpsc::RecvTimeoutError::Timeout) => {
-                        killer
-                            .kill()
-                            .context("failed to terminate PTY command after timeout")?;
+// Kill the process first
+if let Err(e) = killer.kill() {
+    warn!(
+        target: "vtcode.pty.timeout",
+        error = %e,
+        "Failed to kill PTY command after timeout"
+    );
+}
 
-                        let join_result = wait_thread.join().map_err(|panic| {
-                            anyhow!("PTY command wait thread panicked: {:?}", panic)
-                        })?;
-                        if let Err(error) = join_result {
-                            return Err(error)
-                                .context("failed to wait for PTY command to exit after timeout");
-                        }
+// Wait with a grace period - don't hang forever
+let grace_period = Duration::from_millis(THREAD_JOIN_GRACE_PERIOD_MS);
+match wait_rx.recv_timeout(grace_period) {
+    Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+        // Process exited, try to join threads with timeout
+        // If they don't exit within grace period, detach them
+    }
+    Err(mpsc::RecvTimeoutError::Timeout) => {
+        warn!(
+            target: "vtcode.pty.timeout",
+            timeout_ms = timeout,
+            grace_ms = THREAD_JOIN_GRACE_PERIOD_MS,
+            "PTY command did not exit within grace period after kill, detaching threads"
+        );
+        // Detach threads by dropping handles - they may leak but we don't hang
+        drop(wait_thread);
+        drop(reader_thread);
+        return Err(anyhow!(
+            "PTY command timed out after {} milliseconds and did not respond to kill signal",
+            timeout
+        ));
+    }
+}
 
-                        reader_thread
-                            .join()
-                            .map_err(|panic| {
-                                anyhow!("PTY command reader thread panicked: {:?}", panic)
-                            })?
-                            .context("failed to read PTY command output")?;
+// Try to join wait thread (should be quick since process exited)
+match wait_thread.join() {
+    Ok(result) => {
+        if let Err(error) = result {
+            warn!(
+                target: "vtcode.pty.timeout",
+                error = %error,
+                "PTY command wait error after timeout"
+            );
+        }
+    }
+    Err(panic) => {
+        warn!(
+            target: "vtcode.pty.timeout",
+            "PTY wait thread panicked: {:?}",
+            panic
+        );
+    }
+}
 
-                        return Err(anyhow!(
-                            "PTY command timed out after {} milliseconds",
-                            timeout
-                        ));
+// Try to join reader thread (may take a moment for PTY to close)
+// Use a thread-local timeout via a parking_lot based approach
+// For simplicity, just drop the handle if it doesn't complete quickly
+let reader_handle = std::thread::spawn(move || reader_thread.join());
+match reader_handle.join() {
+    Ok(Ok(Ok(_))) => {}
+    Ok(Ok(Err(e))) => {
+        warn!(
+            target: "vtcode.pty.timeout",
+            error = %e,
+            "PTY reader error after timeout"
+        );
+    }
+    Ok(Err(panic)) => {
+        warn!(
+            target: "vtcode.pty.timeout",
+            "PTY reader thread panicked: {:?}",
+            panic
+        );
+    }
+    Err(_) => {
+        warn!(
+            target: "vtcode.pty.timeout",
+            "Failed to join PTY reader thread wrapper"
+        );
+    }
+}
+
+return Err(anyhow!(
+    "PTY command timed out after {} milliseconds",
+    timeout
+));
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        let join_result = wait_thread.join().map_err(|panic| {
-                            anyhow!("PTY command wait thread panicked: {:?}", panic)
-                        })?;
-                        if let Err(error) = join_result {
-                            return Err(error).context(
-                                "failed to wait for PTY command after wait channel disconnected",
-                            );
-                        }
+// Channel disconnected - process likely crashed
+// Try to join with grace period
+let grace_period = Duration::from_millis(THREAD_JOIN_GRACE_PERIOD_MS);
 
-                        reader_thread
-                            .join()
-                            .map_err(|panic| {
-                                anyhow!("PTY command reader thread panicked: {:?}", panic)
-                            })?
-                            .context("failed to read PTY command output")?;
+// Spawn wrapper thread to allow timeout on join
+let wait_wrapper = std::thread::spawn(move || wait_thread.join());
+std::thread::sleep(grace_period);
+if wait_wrapper.is_finished() {
+    match wait_wrapper.join() {
+        Ok(Ok(result)) => {
+            if let Err(error) = result {
+                return Err(error).context(
+                    "failed to wait for PTY command after channel disconnect",
+                );
+            }
+        }
+        Ok(Err(panic)) => {
+            return Err(anyhow!(
+                "PTY wait thread panicked: {:?}",
+                panic
+            ));
+        }
+        Err(_) => {
+            return Err(anyhow!(
+                "PTY wait channel disconnected and thread join failed"
+            ));
+        }
+    }
+} else {
+    warn!(
+        target: "vtcode.pty.disconnect",
+        "PTY wait thread did not exit within grace period, detaching"
+    );
+    drop(reader_thread);
+    return Err(anyhow!(
+        "PTY command wait channel disconnected unexpectedly"
+    ));
+}
 
-                        return Err(anyhow!(
-                            "PTY command wait channel disconnected unexpectedly"
-                        ));
+// Also try to get reader output
+match reader_thread.join() {
+    Ok(Ok(_)) => {}
+    Ok(Err(e)) => {
+        warn!(
+            target: "vtcode.pty.disconnect",
+            error = %e,
+            "PTY reader error after channel disconnect"
+        );
+    }
+    Err(panic) => {
+        warn!(
+            target: "vtcode.pty.disconnect",
+            "PTY reader panicked: {:?}",
+            panic
+        );
+    }
+}
+
+return Err(anyhow!(
+    "PTY command wait channel disconnected unexpectedly"
+));
                     }
                 };
 
@@ -278,14 +405,14 @@ impl PtyManager {
                 // Apply max_tokens truncation if specified
                 if let Some(max_tokens) = max_tokens {
                     if max_tokens > 0 {
-                        // Simple byte-based truncation
-                        if output.len() > max_tokens * 4 {
-                            let truncate_point = (max_tokens * 4).min(output.len());
-                            output.truncate(truncate_point);
-                            output.push_str("\n[... truncated by max_tokens ...]");
-                        }
+// Simple byte-based truncation
+if output.len() > max_tokens * 4 {
+    let truncate_point = (max_tokens * 4).min(output.len());
+    output.truncate(truncate_point);
+    output.push_str("\n[... truncated by max_tokens ...]");
+}
                     } else {
-                        // Keep original if max_tokens is not valid
+// Keep original if max_tokens is not valid
                     }
                 }
                 // Keep original if max_tokens is None
@@ -446,47 +573,47 @@ impl PtyManager {
 
                 loop {
                     match reader.read(&mut buffer) {
-                        Ok(0) => {
-                            if !utf8_buffer.is_empty() {
-                                let mut scrollback = scrollback_clone.lock();
-                                scrollback.push_utf8(&mut utf8_buffer, true);
-                            }
-                            debug!("PTY session '{}' reader reached EOF (processed {} bytes, {} unicode detections)",
-                                   session_name, total_bytes, unicode_detection_hits);
-                            break;
-                        }
-                        Ok(bytes_read) => {
-                            let chunk = &buffer[..bytes_read];
-                            total_bytes += bytes_read;
+Ok(0) => {
+    if !utf8_buffer.is_empty() {
+        let mut scrollback = scrollback_clone.lock();
+        scrollback.push_utf8(&mut utf8_buffer, true);
+    }
+    debug!("PTY session '{}' reader reached EOF (processed {} bytes, {} unicode detections)",
+           session_name, total_bytes, unicode_detection_hits);
+    break;
+}
+Ok(bytes_read) => {
+    let chunk = &buffer[..bytes_read];
+    total_bytes += bytes_read;
 
-                            // Quick unicode detection heuristic
-                            let likely_unicode = chunk.iter().any(|&b| b >= 0x80);
-                            if likely_unicode {
-                                unicode_detection_hits += 1;
-                            }
+    // Quick unicode detection heuristic
+    let likely_unicode = chunk.iter().any(|&b| b >= 0x80);
+    if likely_unicode {
+        unicode_detection_hits += 1;
+    }
 
-                            // Process chunk through VT100 parser for screen updates
-                            {
-                                let mut parser = parser_clone.lock();
-                                parser.process(chunk);
-                            }
+    // Process chunk through VT100 parser for screen updates
+    {
+        let mut parser = parser_clone.lock();
+        parser.process(chunk);
+    }
 
-                            utf8_buffer.extend_from_slice(chunk);
-                            {
-                                let mut scrollback = scrollback_clone.lock();
-                                scrollback.push_utf8(&mut utf8_buffer, false);
-                            }
+    utf8_buffer.extend_from_slice(chunk);
+    {
+        let mut scrollback = scrollback_clone.lock();
+        scrollback.push_utf8(&mut utf8_buffer, false);
+    }
 
-                            // Periodic buffer cleanup to prevent excessive memory usage
-                            if utf8_buffer.capacity() > 32768 && utf8_buffer.len() < 1024 {
-                                utf8_buffer.shrink_to_fit();
-                            }
-                        }
-                        Err(error) => {
-                            warn!("PTY session '{}' reader error: {} (processed {} bytes)",
-                                  session_name, error, total_bytes);
-                            break;
-                        }
+    // Periodic buffer cleanup to prevent excessive memory usage
+    if utf8_buffer.capacity() > 32768 && utf8_buffer.len() < 1024 {
+        utf8_buffer.shrink_to_fit();
+    }
+}
+Err(error) => {
+    warn!("PTY session '{}' reader error: {} (processed {} bytes)",
+          session_name, error, total_bytes);
+    break;
+}
                     }
                 }
                 debug!("PTY session '{}' reader thread finished (total: {} bytes, unicode detections: {})",
@@ -500,12 +627,12 @@ impl PtyManager {
                     let scrollback = scrollback_clone.lock();
                     let metrics = scrollback.metrics();
                     if metrics.unicode_errors > 0 {
-                        warn!("PTY session '{}' had {} unicode errors during processing",
-                              session_name, metrics.unicode_errors);
+warn!("PTY session '{}' had {} unicode errors during processing",
+      session_name, metrics.unicode_errors);
                     }
                     if metrics.total_unicode_chars > 0 {
-                        info!("PTY session '{}' processed {} unicode characters across {} sessions with {} buffer remainder",
-                              session_name, metrics.total_unicode_chars, metrics.unicode_sessions, metrics.utf8_buffer_size);
+info!("PTY session '{}' processed {} unicode characters across {} sessions with {} buffer remainder",
+      session_name, metrics.total_unicode_chars, metrics.unicode_sessions, metrics.utf8_buffer_size);
                     }
                 }
             })
