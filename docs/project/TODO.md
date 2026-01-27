@@ -17,5 +17,3 @@ The lock file is being held by a previous process. Let me kill any cargo process
 -> for destructive commands, the vtcode agent should use human in the loop with persmission prompt
 
 --
-
-make sure the agent properly wait for PTY tools output before processing turn, to avoid repeatly wait and retrigger for locked commands (eg: cargo check, cargo test) 

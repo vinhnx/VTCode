@@ -14,11 +14,18 @@ use tokio::sync::Mutex as TokioMutex;
 use tracing::{debug, info, warn};
 use vt100::Parser;
 
-use super::command_utils::is_shell_program;
+use super::command_utils::{is_cargo_command, is_cargo_command_string, is_shell_program};
 use super::manager_utils::{clamp_timeout, exit_status_code, set_command_environment};
 use super::scrollback::PtyScrollback;
 use super::session::PtySessionHandle;
 use super::types::{PtyCommandRequest, PtyCommandResult};
+
+use once_cell::sync::Lazy;
+
+/// Global mutex to serialize cargo commands and prevent Cargo.lock file contention.
+/// Cargo uses a file lock that causes "blocking waiting for file lock" errors
+/// when multiple cargo processes run concurrently in the same workspace.
+static CARGO_COMMAND_LOCK: Lazy<tokio::sync::Mutex<()>> = Lazy::new(|| tokio::sync::Mutex::new(()));
 use crate::audit::PermissionAuditLog;
 use crate::config::{CommandsConfig, PtyConfig};
 use crate::tools::path_env;
@@ -99,7 +106,28 @@ impl PtyManager {
         self.ensure_within_workspace(&work_dir)?;
         let workspace_root = self.workspace_root.clone();
         let extra_paths = self.extra_paths.lock().clone();
-        let max_tokens = request.max_tokens; // Get max_tokens from request
+        let max_tokens = request.max_tokens;
+
+        // Determine if this is a cargo command that needs serialization
+        let is_cargo = is_cargo_command(&program)
+            || (is_shell_program(&program)
+                && args
+                    .iter()
+                    .any(|arg| is_cargo_command_string(arg)));
+
+        // Acquire cargo lock if needed to prevent Cargo.lock file contention
+        // This prevents "blocking waiting for file lock" errors when the agent
+        // triggers multiple cargo commands before previous ones complete
+        let _cargo_guard = if is_cargo {
+            debug!(
+                target: "vtcode.pty.cargo_lock",
+                program = %program,
+                "Acquiring cargo command lock to serialize cargo invocations"
+            );
+            Some(CARGO_COMMAND_LOCK.lock().await)
+        } else {
+            None
+        };
 
         let result =
             tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {

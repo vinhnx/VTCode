@@ -3,6 +3,23 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::borrow::Cow;
 
+use crate::config::constants::tools as tool_names;
+
+/// Check if a tool is a command/PTY tool that spawns external processes.
+/// These tools should not have their timeouts retried, as the underlying
+/// process may still be running and cause resource conflicts.
+fn is_command_tool(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        n if n == tool_names::RUN_PTY_CMD
+            || n == tool_names::UNIFIED_EXEC
+            || n == tool_names::CREATE_PTY_SESSION
+            || n == tool_names::SEND_PTY_INPUT
+            || n == "shell"
+            || n == "bash"
+    )
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionError {
     pub tool_name: String,
@@ -29,6 +46,17 @@ impl ToolExecutionError {
     #[inline]
     pub fn new(tool_name: String, error_type: ToolErrorType, message: String) -> Self {
         let (is_recoverable, recovery_suggestions) = generate_recovery_info(error_type);
+        
+        // PTY/command tool timeouts should NOT be retried - the underlying process
+        // may still be running and retrying will cause Cargo.lock contention or
+        // other resource conflicts
+        let is_recoverable = if matches!(error_type, ToolErrorType::Timeout)
+            && is_command_tool(&tool_name)
+        {
+            false
+        } else {
+            is_recoverable
+        };
 
         Self {
             tool_name,
