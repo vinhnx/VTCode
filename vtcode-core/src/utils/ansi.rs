@@ -715,7 +715,7 @@ impl InlineSink {
                 if let Some(bg) = converted.bg_color {
                     inline_style.bg_color = Some(bg);
                 }
-                inline_style.effects = converted.effects;
+                inline_style.effects = converted.effects | fallback.effects;
                 plain_line.push_str(&segment.text);
                 segments.push(InlineSegment {
                     text: segment.text,
