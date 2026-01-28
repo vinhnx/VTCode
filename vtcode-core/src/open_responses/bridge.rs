@@ -1,7 +1,7 @@
 //! Bridge layer for converting VT Code events to Open Responses format.
 //!
 //! This module provides adapters to convert VT Code's internal `ThreadEvent`
-//! and `ThreadItem` types to Open Responses-compliant structures, enabling
+//! and `ThreadItem` types to Open Responses-conformant structures, enabling
 //! backwards compatibility during migration.
 
 use serde_json::json;

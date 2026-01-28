@@ -147,6 +147,22 @@ pub(crate) async fn run_single_agent_loop_unified(
                 HarnessEventEmitter::new(resolved).ok()
             });
         if let Some(emitter) = harness_emitter.as_ref() {
+            // Enable Open Responses if configured
+            let open_responses_config = vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.agent.open_responses.clone())
+                .unwrap_or_default();
+            if open_responses_config.enabled {
+                let or_path = harness_config.event_log_path.as_ref().map(|base| {
+                    let parent = std::path::Path::new(base)
+                        .parent()
+                        .unwrap_or(std::path::Path::new("."));
+                    let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
+                    parent.join(format!("open-responses-{}-{}.jsonl", turn_run_id.0, timestamp))
+                });
+                let _ = emitter.enable_open_responses(open_responses_config, &config.model, or_path);
+            }
+
             let _ = emitter.emit(ThreadEvent::ThreadStarted(ThreadStartedEvent {
                 thread_id: turn_run_id.0.clone(),
             }));
@@ -563,6 +579,11 @@ pub(crate) async fn run_single_agent_loop_unified(
         if let Some(archive) = session_archive.as_mut() {
             let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
             archive.set_loaded_skills(skill_names);
+        }
+
+        // Finish Open Responses session and write terminal marker
+        if let Some(emitter) = harness_emitter.as_ref() {
+            emitter.finish_open_responses();
         }
 
         if let Err(err) = finalize_session(

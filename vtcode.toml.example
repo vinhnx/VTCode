@@ -170,10 +170,10 @@ max_open_circuits = 3
 # Cooldown period between recovery prompts (seconds)
 recovery_cooldown = 60
 
-# Open Responses specification compliance configuration
+# Open Responses specification conformance configuration
 # Enables vendor-neutral LLM API format per https://www.openresponses.org/
 [agent.open_responses]
-# Enable Open Responses specification compliance layer
+# Enable Open Responses specification conformance layer
 # When true, VT Code emits semantic streaming events alongside internal events
 # Default: false (opt-in feature)
 enabled = false

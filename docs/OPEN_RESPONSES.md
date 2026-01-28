@@ -1,10 +1,28 @@
-# Open Responses Specification Compliance
+# Open Responses Specification Conformance
 
-VT Code implements the [Open Responses](https://www.openresponses.org/) specification, an open, vendor-neutral standard for large language model APIs. This enables interoperable LLM workflows across different providers.
+<a href="https://www.openresponses.org/"><img src="https://img.shields.io/badge/Open%20Responses-Conformant-4CAF50?style=flat-square" alt="Open Responses Conformant"/></a>
 
-## Overview
+VT Code conforms to the [Open Responses](https://www.openresponses.org/) specification, an open, vendor-neutral standard for large language model APIs. This enables interoperable LLM workflows across different providers.
 
-The Open Responses implementation is located in `vtcode-core/src/open_responses/` and provides:
+## Conformance Overview
+
+VT Code provides full conformance with the Open Responses specification in two ways:
+
+1.  **Producer Conformance**: VT Code can emit Open Responses-conformant events and objects from its internal agent loop, allowing external tools to monitor and interact with VT Code using a standardized protocol.
+2.  **Consumer Conformance**: VT Code can use any Open Responses-compatible API as a backend provider, enabling seamless switching between different LLM providers that support the standard.
+
+## What is Open Responses?
+
+Open Responses is an open-source specification for building **multi-provider, interoperable LLM interfaces** based on the OpenAI Responses API. It defines:
+
+- **Shared Schema**: Unified request/response structures across providers
+- **Semantic Streaming**: Events describe meaningful transitions, not raw token deltas
+- **Agentic Loop Support**: Composable tool invocation and message orchestration
+- **Extension Points**: Provider-specific features via namespaced extensions
+
+## Implementation Details
+
+The Open Responses implementation is located in `vtcode-core/src/open_responses/` (for production) and `vtcode-core/src/llm/providers/openresponses/` (for consumption). It provides:
 
 - **Unified Item Types**: State machine-based items with defined lifecycle states
 - **Semantic Streaming Events**: Meaningful events (not raw token deltas) for predictable streaming
@@ -12,9 +30,11 @@ The Open Responses implementation is located in `vtcode-core/src/open_responses/
 - **Error Handling**: Structured errors with type, code, param, and message fields
 - **Extension Points**: Support for VT Code-specific item types and events
 
-## Core Concepts
+## Conformance Levels
 
-### Items as State Machines
+VT Code implements the following core components of the specification:
+
+### 1. Items as State Machines
 
 All items follow a state machine model with defined lifecycle states:
 
@@ -271,7 +291,7 @@ Enable Open Responses in your `vtcode.toml`:
 
 ```toml
 [agent.open_responses]
-# Enable Open Responses specification compliance layer
+# Enable Open Responses specification conformance layer
 # Default: false (opt-in feature)
 enabled = true
 
