@@ -152,6 +152,7 @@ pub mod metrics;
 pub mod models;
 pub mod models_manager; // Models discovery, caching, and selection (Codex patterns)
 pub mod notifications;
+pub mod open_responses; // Open Responses specification compliance layer
 pub mod orchestrator;
 pub mod plugins;
 pub mod project_doc;
@@ -234,6 +235,16 @@ pub use prompts::{
 };
 pub use security::{IntegrityTag, PayloadEnvelope, ZeroTrustContext};
 pub use telemetry::{TelemetryEvent, TelemetryPipeline};
+
+// Open Responses specification types
+pub use open_responses::{
+    ContentPart, CustomItem, DualEventEmitter, FunctionCallItem, FunctionCallOutputItem,
+    IncompleteDetails, IncompleteReason, InputTokensDetails, ItemStatus, MessageItem, MessageRole,
+    OpenResponseError, OpenResponseErrorCode, OpenResponseErrorType, OpenUsage, OutputItem,
+    OutputItemId, OutputTokensDetails, ReasoningItem as OpenReasoningItem,
+    Response as OpenResponse, ResponseBuilder, ResponseId, ResponseStatus, ResponseStreamEvent,
+    StreamEventEmitter, VecStreamEmitter, generate_item_id, generate_response_id,
+};
 
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
 
