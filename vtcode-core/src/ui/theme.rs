@@ -129,10 +129,8 @@ impl ThemePalette {
             ],
         );
 
-        // Tool output style: dimmed for less visual prominence, non-italic for readability
-        let tool_output_style = Style::new()
-            .fg_color(Some(Color::Rgb(tool_body_color)))
-            .effects(Effects::DIMMED);
+        // Tool output style: use default terminal styling (no color/bold/dim effects)
+        let tool_output_style = Style::new();
 
         ThemeStyles {
             info: Self::style_from(info_color, true),

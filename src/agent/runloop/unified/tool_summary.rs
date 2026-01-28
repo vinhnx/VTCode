@@ -147,7 +147,7 @@ pub(crate) fn render_tool_call_summary(
     // Details in dim gray if present - these are the call parameters
     if !details.is_empty() {
         line.push_str(" .. ");
-        line.push_str(&render_styled(&details.join(" .. "), palette.muted, None));
+        line.push_str(&render_styled(&details.join(" .. "), palette.success, None));
     }
 
     if let Some(stream) = stream_label {
