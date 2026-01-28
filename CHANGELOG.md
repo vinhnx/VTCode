@@ -3,6 +3,17 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.72.2] - 2026-01-28
+
+
+### Documentation
+    - docs: update changelog for v0.72.1 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.72.1 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.72.0 version =  [skip ci]
 # [Version 0.72.1] - 2026-01-28
 
 
