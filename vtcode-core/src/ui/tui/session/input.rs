@@ -7,6 +7,7 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
+use tui_shimmer::shimmer_spans_with_style;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 struct InputRender {
@@ -342,7 +343,7 @@ impl Session {
                 );
                 spans.push(Span::styled(indicator, indicator_style));
                 spans.push(Span::raw(" "));
-                spans.push(Span::styled(rest, dim_style));
+                spans.extend(shimmer_spans_with_style(&rest, dim_style));
             } else {
                 spans.extend(self.create_git_status_spans(left_value, dim_style));
             }
@@ -418,7 +419,7 @@ impl Session {
     }
 
     fn cursor_should_be_visible(&self) -> bool {
-        self.cursor_visible && self.input_enabled
+        self.cursor_visible && self.input_enabled && !self.is_running_activity()
     }
 
     fn secure_prompt_active(&self) -> bool {
@@ -478,7 +479,13 @@ impl Session {
 
 fn split_running_command_status(text: &str) -> Option<(String, String)> {
     let (indicator, rest) = text.split_once(' ')?;
-    if indicator.chars().count() == 1 && rest.starts_with("Running command:") {
+    if indicator.chars().count() != 1 {
+        return None;
+    }
+    if rest.starts_with("Running command:")
+        || rest.starts_with("Running tool:")
+        || rest.starts_with("Running:")
+    {
         Some((indicator.to_string(), rest.to_string()))
     } else {
         None

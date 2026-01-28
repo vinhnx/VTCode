@@ -191,6 +191,9 @@ impl Widget for &mut SessionWidget<'_> {
         if self.session.thinking_spinner.is_active {
             self.session.needs_redraw = true;
         }
+        if self.session.is_running_activity() {
+            self.session.needs_redraw = true;
+        }
 
         // Handle deferred triggers
         if self.session.deferred_file_browser_trigger {

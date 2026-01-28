@@ -2,7 +2,7 @@
 name = "vtcode"
 version = "0.71.7"
 edition = "2024"
-authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers"
 license = "MIT"
 readme = "README.md"

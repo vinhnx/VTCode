@@ -133,7 +133,7 @@ pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 
 // TUI tick rate constants for smooth scrolling
 /// Tick rate (Hz) when user is actively interacting with the TUI
-pub const TUI_ACTIVE_TICK_RATE_HZ: f64 = 16.0;
+pub const TUI_ACTIVE_TICK_RATE_HZ: f64 = 60.0;
 /// Tick rate (Hz) when TUI is idle to save CPU
 pub const TUI_IDLE_TICK_RATE_HZ: f64 = 4.0;
 /// Duration (ms) to remain in active mode after last input

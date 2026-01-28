@@ -2,7 +2,7 @@
 name = "vtcode-tools"
 version = "0.71.7"
 edition = "2024"
-authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Prototype extraction of VT Code's modular tool registry"
 license = "MIT"
 publish = false

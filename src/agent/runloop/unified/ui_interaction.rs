@@ -146,8 +146,6 @@ fn create_indeterminate_progress_indicator(tick: u64) -> String {
     patterns[pattern_index].to_string()
 }
 
-
-
 struct SpinnerFrameGenerator {
     style: ProgressStyle,
     tick: u64,
