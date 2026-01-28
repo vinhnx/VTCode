@@ -3,6 +3,11 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.73.1] - 2026-01-28
+
+
+### Chores
+    - chore: update homebrew formula to v0.73.0 and fix update script
 # [Version 0.73.0] - 2026-01-28
 
 
