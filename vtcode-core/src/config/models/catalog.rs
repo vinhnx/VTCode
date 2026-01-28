@@ -386,7 +386,8 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIO1Pro
             | ModelId::OpenRouterZaiGlm46V
             | ModelId::OpenRouterZaiGlm47
-            | ModelId::OpenRouterZaiGlm47Flash => {
+            | ModelId::OpenRouterZaiGlm47Flash
+            | ModelId::OpenRouterMoonshotaiKimiK25 => {
                 // Fallback description for OpenRouter models
                 // In production, these should have metadata
                 "Model available via OpenRouter marketplace"

@@ -336,7 +336,8 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIO1Pro
             | ModelId::OpenRouterZaiGlm46V
             | ModelId::OpenRouterZaiGlm47
-            | ModelId::OpenRouterZaiGlm47Flash => "unknown", // fallback generation for OpenRouter models
+            | ModelId::OpenRouterZaiGlm47Flash
+            | ModelId::OpenRouterMoonshotaiKimiK25 => "unknown", // fallback generation for OpenRouter models
         }
     }
 
