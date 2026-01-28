@@ -4,6 +4,8 @@
 [build]
 # Force Docker usage for cross-compilation
 default-target = "x86_64-unknown-linux-gnu"
+container-engine = "docker"
+target = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
 
 # Environment variables needed for cross-compilation
 [build.env]
@@ -20,11 +22,6 @@ passthrough = [
     "OPENSSL_STATIC",
     "CROSS_CONTAINER_ENGINE",
 ]
-
-# Force Docker for all targets to ensure cross-compilation works
-[build]
-container-engine = "docker"
-target = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
 
 # Target-specific configurations - these will use Docker by default
 # To build without Docker, use `cargo build` directly or set CROSS_CONTAINER_ENGINE=
