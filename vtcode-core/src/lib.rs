@@ -240,10 +240,11 @@ pub use telemetry::{TelemetryEvent, TelemetryPipeline};
 pub use open_responses::{
     ContentPart, CustomItem, DualEventEmitter, FunctionCallItem, FunctionCallOutputItem,
     IncompleteDetails, IncompleteReason, InputTokensDetails, ItemStatus, MessageItem, MessageRole,
-    OpenResponseError, OpenResponseErrorCode, OpenResponseErrorType, OpenUsage, OutputItem,
-    OutputItemId, OutputTokensDetails, ReasoningItem as OpenReasoningItem,
-    Response as OpenResponse, ResponseBuilder, ResponseId, ResponseStatus, ResponseStreamEvent,
-    StreamEventEmitter, VecStreamEmitter, generate_item_id, generate_response_id,
+    OpenResponseError, OpenResponseErrorCode, OpenResponseErrorType, OpenResponsesCallback,
+    OpenResponsesIntegration, OpenResponsesProvider, OpenUsage, OutputItem, OutputItemId,
+    OutputTokensDetails, ReasoningItem as OpenReasoningItem, Response as OpenResponse,
+    ResponseBuilder, ResponseId, ResponseStatus, ResponseStreamEvent, StreamEventEmitter,
+    ToOpenResponse, VecStreamEmitter, generate_item_id, generate_response_id,
 };
 
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
