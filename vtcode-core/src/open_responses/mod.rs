@@ -1,4 +1,4 @@
-//! Open Responses specification compliance layer.
+//! Open Responses specification conformance layer.
 //!
 //! This module implements the [Open Responses](https://www.openresponses.org/) specification
 //! for vendor-neutral LLM interfaces. It provides:
@@ -25,7 +25,7 @@ mod usage;
 pub use bridge::{DualEventEmitter, ResponseBuilder};
 pub use content::{ContentPart, ContentPartId};
 pub use error::{OpenResponseError, OpenResponseErrorCode, OpenResponseErrorType};
-pub use events::{ResponseStreamEvent, StreamEventEmitter, VecStreamEmitter};
+pub use events::{ResponseStreamEvent, SequencedEvent, StreamEventEmitter, VecStreamEmitter};
 pub use integration::{
     OpenResponsesCallback, OpenResponsesIntegration, OpenResponsesProvider, ToOpenResponse,
 };

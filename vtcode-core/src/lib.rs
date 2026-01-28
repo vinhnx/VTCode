@@ -152,7 +152,7 @@ pub mod metrics;
 pub mod models;
 pub mod models_manager; // Models discovery, caching, and selection (Codex patterns)
 pub mod notifications;
-pub mod open_responses; // Open Responses specification compliance layer
+pub mod open_responses; // Open Responses specification conformance layer
 pub mod orchestrator;
 pub mod plugins;
 pub mod project_doc;

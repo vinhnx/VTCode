@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "openai"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "minimax-m2.1:cloud"
+default_model = "gpt-5-nano"
 
 # Visual theme for the terminal interface
 theme = "vitesse-light-soft"
@@ -144,6 +144,13 @@ recovery_cooldown = 60
 max_tool_calls_per_turn = 32
 max_tool_wall_clock_secs = 600
 max_tool_retries = 2
+
+[agent.open_responses]
+enabled = false
+emit_events = true
+include_extensions = true
+map_tool_calls = true
+include_reasoning = true
 
 # Status line configuration
 [ui.status_line]

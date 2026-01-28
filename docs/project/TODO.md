@@ -39,3 +39,23 @@ review https://www.openresponses.org/specification carefully and update if neede
 on feature/openresponse-api-spec branch
 
 check vtcode-core/src/open_responses/integration.rs for full integration
+
+✅ DONE - Open Responses Spec Compliance (2026-01-28)
+
+**Spec Compliance Fixes:**
+1. **Streaming Event Order** - Fixed content part lifecycle (added → delta → done → content_part.done)
+2. **Extension Type Convention** - Custom items serialize with `custom_type` as actual `"type"` field
+3. **Required Fields** - Removed `skip_serializing_if` from `error`, `usage`, `tools` (now serialize as `null`)
+4. **Item Status** - Added `completed_message()` and `completed_function_call_output()` constructors
+5. **Sequence Numbers** - Added `SequencedEvent<'a>` wrapper for SSE transport
+
+**Main Flow Integration:**
+- `HarnessEventEmitter` now supports Open Responses via `enable_open_responses()`
+- Events are dual-written: harness JSONL + Open Responses SSE format
+- Terminal `[DONE]` marker written on session finish
+- Configured via `[agent.open_responses]` in vtcode.toml
+
+**Files Changed:**
+- vtcode-core/src/open_responses/{bridge,events,items,response,integration,mod}.rs
+- src/agent/runloop/unified/inline_events/harness.rs
+- src/agent/runloop/unified/turn/session_loop.rs
