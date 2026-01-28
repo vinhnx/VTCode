@@ -1,6 +1,10 @@
 # Changelog - vtcode
 
 All notable changes to vtcode will be documented in this file.
+## v0.73.2 - 2026-01-29
+
+* fix: update GitHub release title format and improve changelog generation (97571aa2)
+* chore: update homebrew formula to v0.73.1 (4ca75038)
 
 ## [Unreleased] - 2025-12-14
 # [Version 0.73.1] - 2026-01-28
