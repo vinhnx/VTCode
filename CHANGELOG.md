@@ -3,6 +3,34 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.72.1] - 2026-01-28
+
+
+### Refactors
+    - refactor: enhance rendering logic for consistent tool output styling, simplify message spans, and update spinner handling for better readability
+    - refactor: remove DESIGN_SYSTEM.md, update default model to minimax-m2.1:cloud, and improve TUI spinner handling with `is_spinner_frame` function
+    - refactor: update authorship information across multiple crates, enhance TUI performance with increased tick rates, and integrate new tui-shimmer dependency for improved UI effects
+    - refactor: add follow-up prompts for truncated outputs and improve spooled file handling messages for enhanced user guidance
+    - refactor: enhance command status handling, improve loop detection logic, and update tool execution messages for clarity
+    - refactor: enhance rendering logic with dimming style, standardize long-running command locks, and update tooling policies for improved usability
+    - refactor: add cargo command serialization to prevent file lock contention, improve PTY tool timeout handling, and enhance error recovery logic
+    - refactor: add cargo command serialization to prevent file lock contention, improve PTY tool timeout handling, and enhance error recovery logic
+    - refactor: standardize color palette, update UI feedback styles, and improve markdown spacing configuration
+    - refactor: improve reasoning rendering logic, add deferred rendering support, and optimize duplicate content handling
+    - refactor: optimize markdown rendering with conditional line numbering, add diff language detection, and improve
+    - refactor: enhance line numbering in markdown code blocks, improve text trimming logic, and add support for "Reasoning" style rendering
+    - refactor: update default model to GPT-OSS, improve markdown rendering, and apply conditional/indentation optimizations
+    - refactor: switch default provider to Ollama, update model and API key configurations, and apply "if-let" refactoring for cleaner conditionals
+
+
+### Documentation
+    - docs: update changelog for v0.72.0 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.72.0 version =  [skip ci]
+    - chore(release): bump version to {{version}}
+    - chore: update npm package.json to v0.71.7 version =  [skip ci]
 # [Version 0.72.0] - 2026-01-28
 
 
