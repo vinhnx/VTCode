@@ -208,6 +208,8 @@ pub enum ModelId {
     OpenRouterMoonshotaiKimiK20905,
     /// Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
     OpenRouterMoonshotaiKimiK2Thinking,
+    /// Kimi K2.5 - MoonshotAI Kimi K2.5 versatile multimodal model supporting text and vision input
+    OpenRouterMoonshotaiKimiK25,
     /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
     OpenRouterQwen3Max,
     /// Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model
