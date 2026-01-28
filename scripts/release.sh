@@ -315,8 +315,10 @@ main() {
     if [[ "$skip_binaries" == 'false' ]]; then
         print_info "Step 4: Uploading binaries to GitHub Release v$released_version..."
         if ! ./scripts/build-and-upload-binaries.sh -v "$released_version" --only-upload --notes-file "$RELEASE_NOTES_FILE"; then
-            print_error "Step 4 failed. If this is a permission error, try:"
-            print_info "gh auth refresh -h github.com -s workflow"
+            print_error "Step 4 failed locally."
+            print_info "You can trigger the release via GitHub Actions instead:"
+            print_info "gh workflow run release.yml -f tag=v$released_version"
+            print_info "Alternatively, refresh your token: gh auth refresh -h github.com -s workflow"
             exit 1
         fi
     fi
