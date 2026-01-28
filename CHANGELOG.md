@@ -3,6 +3,28 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.72.3] - 2026-01-28
+
+
+### Documentation
+    - docs: update changelog for v0.73.0 [skip ci]
+    - docs: center align VT Code GIF in README
+
+
+### Chores
+    - chore: fix Cross.toml warnings and sync vtcode.toml version
+    - chore: update Cargo.toml to exclude resources directory and add VT Code GIF to README
+    - chore: update npm package.json to v0.72.2 version =  [skip ci]
+
+
+### Other Changes
+    - Refactor Cross.toml to consolidate Docker configuration for cross-compilation
+    - Enhance Open Responses specification conformance and update documentation
+    - Add technical whitepapers on security architecture and modular design principles
+    - Enhance Open Responses with sequenced events and improved item serialization
+    - Refactor code structure for improved readability and maintainability
+    - Implement Open Responses integration and configuration options
+    - Implement Open Responses specification with streaming events, output items, and response handling
 # [Version 0.73.0] - 2026-01-28
 
 
