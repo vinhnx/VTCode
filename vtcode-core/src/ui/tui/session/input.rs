@@ -482,14 +482,19 @@ fn split_running_command_status(text: &str) -> Option<(String, String)> {
     if indicator.chars().count() != 1 {
         return None;
     }
-    if rest.starts_with("Running command:")
-        || rest.starts_with("Running tool:")
-        || rest.starts_with("Running:")
-    {
+    if is_spinner_frame(indicator) && !rest.trim().is_empty() {
         Some((indicator.to_string(), rest.to_string()))
     } else {
         None
     }
+}
+
+fn is_spinner_frame(indicator: &str) -> bool {
+    matches!(
+        indicator,
+        "⠋" | "⠙" | "⠹" | "⠸" | "⠼" | "⠴" | "⠦" | "⠧" | "⠇" | "⠏"
+            | "-" | "\\" | "|" | "/" | "."
+    )
 }
 
 /// Data structure for input widget rendering
