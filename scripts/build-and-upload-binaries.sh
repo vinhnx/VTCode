@@ -349,12 +349,12 @@ with open('$formula_path', 'r') as f:
 content = re.sub(r'version\s+"[^\"]*"', 'version "$version"', content)
 content = re.sub(
     r'(aarch64-apple-darwin.tar.gz"\s+sha256\s+")[^\"]*(")', 
-    r'\1$aarch64_macos_sha\2',
+    r'\g<1>$aarch64_macos_sha\g<2>',
     content
 )
 content = re.sub(
     r'(x86_64-apple-darwin.tar.gz"\s+sha256\s+")[^\"]*(")', 
-    r'\1$x86_64_macos_sha\2',
+    r'\g<1>$x86_64_macos_sha\g<2>',
     content
 )
 
