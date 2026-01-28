@@ -55,10 +55,16 @@ check_dependencies() {
         exit 1
     fi
 
-    # Verify GitHub CLI authentication
+    # Verify GitHub CLI authentication and scopes
     if ! gh auth status >/dev/null 2>&1; then
         print_error "GitHub CLI is not authenticated. Please run: gh auth login"
         exit 1
+    fi
+
+    # Check for required 'workflow' scope which is often needed for release actions
+    if ! gh auth status --show-token 2>&1 | grep -q "workflow"; then
+        print_warning "GitHub CLI may lack 'workflow' scope required for some release operations."
+        print_info "If release creation fails, run: gh auth refresh -s workflow"
     fi
 
     print_success "All required tools are available"
@@ -247,11 +253,11 @@ calculate_checksums() {
 # Function to poll for GitHub release existence
 poll_github_release() {
     local tag=$1
-    local max_attempts=12
-    local wait_seconds=10
+    local max_attempts=3
+    local wait_seconds=5
     local attempt=1
 
-    print_info "Polling GitHub for release $tag..."
+    print_info "Polling GitHub for release $tag (short-circuiting as we create it if missing)..."
     while [ $attempt -le $max_attempts ]; do
         if gh release view "$tag" >/dev/null 2>&1; then
             print_success "GitHub release $tag is available"

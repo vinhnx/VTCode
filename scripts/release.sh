@@ -241,6 +241,14 @@ main() {
     check_clean_tree
     ensure_cargo_release
 
+    # Pre-flight GitHub scope check
+    if command -v gh >/dev/null 2>&1; then
+        if ! gh auth status --show-token 2>&1 | grep -q "workflow"; then
+            print_warning "GitHub CLI lacks 'workflow' scope. This may cause Step 4 to fail."
+            print_info "Recommendation: run 'gh auth refresh -s workflow' before proceeding."
+        fi
+    fi
+
     local current_version
     current_version=$(get_current_version)
     print_info "Current version: $current_version"
@@ -306,7 +314,11 @@ main() {
     # 4. Upload Binaries to GitHub with the captured Release Notes
     if [[ "$skip_binaries" == 'false' ]]; then
         print_info "Step 4: Uploading binaries to GitHub Release v$released_version..."
-        ./scripts/build-and-upload-binaries.sh -v "$released_version" --only-upload --notes-file "$RELEASE_NOTES_FILE"
+        if ! ./scripts/build-and-upload-binaries.sh -v "$released_version" --only-upload --notes-file "$RELEASE_NOTES_FILE"; then
+            print_error "Step 4 failed. If this is a permission error, try:"
+            print_info "gh auth refresh -h github.com -s workflow"
+            exit 1
+        fi
     fi
 
     # 5. Update Homebrew
