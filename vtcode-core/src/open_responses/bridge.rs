@@ -126,10 +126,16 @@ impl ResponseBuilder {
         let output_item = self.convert_thread_item(item, ItemStatus::InProgress);
 
         // Track active item state for streaming
+        // Initialize prev_text from initial content to prevent duplicate deltas
+        let initial_text = match &item.details {
+            ThreadItemDetails::AgentMessage(msg) => msg.text.clone(),
+            ThreadItemDetails::Reasoning(r) => r.text.clone(),
+            _ => String::new(),
+        };
         let active_state = ActiveItemState {
             output_index,
             content_index: 0,
-            prev_text: String::new(),
+            prev_text: initial_text,
         };
         self.active_items.insert(item.id.clone(), active_state);
 
@@ -230,9 +236,35 @@ impl ResponseBuilder {
         let status = self.determine_item_status(&item.details);
         let output_item = self.convert_thread_item(item, status);
 
-        // For atomic completions (never started), emit Added first
+        // For atomic completions (never started), emit Added first, then ContentPartAdded
         if !was_started {
             emitter.output_item_added(&self.response.id, output_index, output_item.clone());
+
+            // Emit ContentPartAdded for Message and Reasoning items
+            match &output_item {
+                OutputItem::Message(msg) => {
+                    if !msg.content.is_empty() {
+                        emitter.emit(ResponseStreamEvent::ContentPartAdded {
+                            response_id: self.response.id.clone(),
+                            item_id: item.id.clone(),
+                            output_index,
+                            content_index: 0,
+                            part: msg.content[0].clone(),
+                        });
+                    }
+                }
+                OutputItem::Reasoning(r) => {
+                    let text = r.content.clone().unwrap_or_default();
+                    emitter.emit(ResponseStreamEvent::ContentPartAdded {
+                        response_id: self.response.id.clone(),
+                        item_id: item.id.clone(),
+                        output_index,
+                        content_index: 0,
+                        part: ContentPart::output_text(text),
+                    });
+                }
+                _ => {}
+            }
         }
 
         // Update the response output
@@ -263,13 +295,21 @@ impl ResponseBuilder {
                     });
                 }
             }
-            OutputItem::Reasoning(_) => {
-                // Emit ReasoningDone
+            OutputItem::Reasoning(r) => {
+                // Emit ReasoningDone then ContentPartDone
                 emitter.emit(ResponseStreamEvent::ReasoningDone {
                     response_id: self.response.id.clone(),
                     item_id: item.id.clone(),
                     output_index,
                     item: output_item.clone(),
+                });
+                let text = r.content.clone().unwrap_or_default();
+                emitter.emit(ResponseStreamEvent::ContentPartDone {
+                    response_id: self.response.id.clone(),
+                    item_id: item.id.clone(),
+                    output_index,
+                    content_index: 0,
+                    part: ContentPart::output_text(text),
                 });
             }
             OutputItem::FunctionCall(fc) => {

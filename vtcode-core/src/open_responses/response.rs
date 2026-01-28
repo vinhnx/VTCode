@@ -117,15 +117,12 @@ pub struct Response {
     pub output: Vec<OutputItem>,
 
     /// Error that occurred, if the response failed.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<OpenResponseError>,
 
     /// Tools that were available to the model.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<ToolDefinition>>,
 
     /// Token usage statistics.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<OpenUsage>,
 
     /// Whether parallel tool calls were allowed.

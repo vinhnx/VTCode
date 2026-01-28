@@ -206,7 +206,7 @@ impl ToOpenResponse for crate::llm::provider::LLMResponse {
         // Add content as message item if present
         if let Some(content) = &self.content {
             if !content.is_empty() {
-                let item = OutputItem::message(
+                let item = OutputItem::completed_message(
                     super::response::generate_item_id(),
                     super::items::MessageRole::Assistant,
                     vec![super::ContentPart::output_text(content)],
