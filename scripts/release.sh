@@ -67,7 +67,7 @@ update_changelog_from_commits() {
     local version=$1
     local dry_run_flag=$2
 
-    print_info "Generating changelog for version $version from commits..."
+    print_info "Generating changelog for version v$version from commits..."
 
     local previous_tag
     previous_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
@@ -83,67 +83,68 @@ update_changelog_from_commits() {
     local date_str
     date_str=$(date +%Y-%m-%d)
 
-    # Generate the categorization logic once and use it for both CHANGELOG.md and GitHub Release
-    local raw_commits
-    raw_commits=$(git log "$commits_range" --no-merges --pretty=format:"%s")
-    
     local changelog_content
-    changelog_content=$(echo "$raw_commits" | awk -v vers="$version" -v date="$date_str" \
-    '{
-        line = $0
-        if (match(line, /^(feat|feature)/)) feat = feat "    - " line "\n"
-        else if (match(line, /^(fix|bug)/)) fix = fix "    - " line "\n"
-        else if (match(line, /^(perf|performance)/)) perf = perf "    - " line "\n"
-        else if (match(line, /^(refactor)/)) refactor = refactor "    - " line "\n"
-        else if (match(line, /^(docs|documentation)/)) docs = docs "    - " line "\n"
-        else if (match(line, /^(style)/)) style = style "    - " line "\n"
-        else if (match(line, /^(test)/)) test = test "    - " line "\n"
-        else if (match(line, /^(build)/)) build = build "    - " line "\n"
-        else if (match(line, /^(ci)/)) ci = ci "    - " line "\n"
-        else if (match(line, /^(chore)/)) chore = chore "    - " line "\n"
-        else other = other "    - " line "\n"
-    }
-    END {
-        print "# [Version " vers "] - " date "\n"
-        print ""
-        if (feat != "") print "### Features\n" feat "\n"
-        if (fix != "") print "### Bug Fixes\n" fix "\n"
-        if (perf != "") print "### Performance Improvements\n" perf "\n"
-        if (refactor != "") print "### Refactors\n" refactor "\n"
-        if (docs != "") print "### Documentation\n" docs "\n"
-        if (style != "") print "### Style Changes\n" style "\n"
-        if (test != "") print "### Tests\n" test "\n"
-        if (build != "") print "### Build System\n" build "\n"
-        if (ci != "") print "### CI Changes\n" ci "\n"
-        if (chore != "") print "### Chores\n" chore "\n"
-        if (other != "") print "### Other Changes\n" other "\n"
-    }')
+    if command -v npx >/dev/null 2>&1; then
+        print_info "Using npx changelogithub for formatting..."
+        # Capture changelogithub output
+        local full_output
+        if [[ -n "$previous_tag" ]]; then
+            full_output=$(npx changelogithub --dry --from "$previous_tag" --to HEAD 2>/dev/null || echo "")
+        else
+            full_output=$(npx changelogithub --dry 2>/dev/null || echo "")
+        fi
+        
+        # Extract content between separators (14 dashes)
+        changelog_content=$(echo "$full_output" | sed -n '/^--------------$/,/^--------------$/p' | sed '1d;$d')
+        
+        # Replace ...HEAD with ...v$version in the comparison link
+        changelog_content=$(echo "$changelog_content" | sed "s/\.\.\.HEAD/...v$version/g")
+        
+        # If extraction failed or empty, fallback to simple log
+        if [[ -z "$(echo "$changelog_content" | tr -d '[:space:]')" ]]; then
+            changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"* %s (%h)")
+        fi
+    else
+        # Fallback if npx is missing
+        changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"* %s (%h)")
+    fi
 
-    # Save to global variable for release notes use
-    echo "$changelog_content" > "$RELEASE_NOTES_FILE"
+    # Save to global variable for release notes use (GitHub Release body)
+    echo -e "$changelog_content" > "$RELEASE_NOTES_FILE"
 
     if [[ "$dry_run_flag" == 'true' ]]; then
         print_info "Dry run - would update CHANGELOG.md"
         return 0
     fi
 
+    # Format for CHANGELOG.md (with version header)
+    local changelog_entry
+    changelog_entry="## v$version - $date_str\n\n$changelog_content\n"
+
     if [[ -f CHANGELOG.md ]]; then
-        local header
-        header=$(head -n 5 CHANGELOG.md)
-        local remainder
-        remainder=$(tail -n +6 CHANGELOG.md)
-        {
-            printf '%s\n' "$header"
-            printf '%s\n' "$changelog_content"
-            printf '%s\n' "$remainder"
-        } > CHANGELOG.md
+        # Check if file has enough lines
+        local line_count
+        line_count=$(wc -l < CHANGELOG.md)
+        if [[ $line_count -gt 4 ]]; then
+            local header
+            header=$(head -n 4 CHANGELOG.md)
+            local remainder
+            remainder=$(tail -n +5 CHANGELOG.md)
+            {
+                printf '%s\n' "$header"
+                printf '%b\n' "$changelog_entry"
+                printf '%s\n' "$remainder"
+            } > CHANGELOG.md
+        else
+            printf '%b\n' "$changelog_entry" >> CHANGELOG.md
+        fi
     else
         {
             printf '%s\n' "# Changelog - vtcode"
             printf '%s\n' ""
             printf '%s\n' "All notable changes to vtcode will be documented in this file."
             printf '%s\n' ""
-            printf '%s\n' "$changelog_content"
+            printf '%b\n' "$changelog_entry"
         } > CHANGELOG.md
     fi
 
@@ -153,7 +154,7 @@ update_changelog_from_commits() {
     GIT_COMMITTER_NAME="vtcode-release-bot" \
     GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
     git commit -m "docs: update changelog for v$version [skip ci]"
-    print_success "Changelog updated and committed for version $version"
+    print_success "Changelog updated and committed for version v$version"
 }
 
 get_current_version() {
@@ -309,6 +310,25 @@ main() {
     released_version=$(get_current_version)
     if [[ "$released_version" != "$next_version" ]]; then
         print_warning "Released version $released_version differs from expected $next_version"
+    fi
+
+    # 3.5 GitHub Release Creation via changelogithub
+    # This matches the workflow used in GitHub Actions and ensures consistent formatting
+    print_info "Step 3.5: Creating GitHub Release via npx changelogithub..."
+    if command -v npx >/dev/null 2>&1; then
+        # Ensure GITHUB_TOKEN is available for changelogithub
+        if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+            export GITHUB_TOKEN=$(gh auth token)
+        fi
+        
+        # Run changelogithub to create the release on GitHub
+        if npx changelogithub; then
+            print_success "GitHub Release v$released_version created successfully"
+        else
+            print_warning "changelogithub failed, falling back to manual release creation in Step 4"
+        fi
+    else
+        print_warning "npx not found, skipping changelogithub step"
     fi
 
     # 4. Upload Binaries to GitHub with the captured Release Notes
