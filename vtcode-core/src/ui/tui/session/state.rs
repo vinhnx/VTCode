@@ -8,6 +8,8 @@
 /// - Modal management
 /// - Timeline pane toggling
 /// - Scroll management operations
+use std::sync::atomic::Ordering;
+
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
@@ -53,6 +55,19 @@ impl Session {
     /// Mark the session as needing a redraw
     pub fn mark_dirty(&mut self) {
         self.needs_redraw = true;
+    }
+
+    pub(crate) fn is_running_activity(&self) -> bool {
+        let left = self.input_status_left.as_deref().unwrap_or("");
+        let running_status = left.contains("Running command:")
+            || left.contains("Running tool:")
+            || left.contains("Running:");
+        let active_pty = self
+            .active_pty_sessions
+            .as_ref()
+            .map(|counter| counter.load(Ordering::Relaxed) > 0)
+            .unwrap_or(false);
+        running_status || active_pty
     }
 
     /// Mark a specific line as dirty to optimize reflow scans

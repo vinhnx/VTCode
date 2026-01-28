@@ -40,6 +40,9 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
         session.needs_redraw = true;
         // Note: The spinner is displayed in the status bar, not in transcript lines
     }
+    if session.is_running_activity() {
+        session.needs_redraw = true;
+    }
 
     // Clear entire frame if modal was just closed to remove artifacts
     if session.needs_full_clear {

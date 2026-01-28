@@ -10,6 +10,7 @@ use super::layout_mode::LayoutMode;
 use super::panel::PanelStyles;
 use crate::ui::tui::session::styling::SessionStyles;
 use crate::ui::tui::session::terminal_capabilities;
+use tui_shimmer::shimmer_spans_with_style;
 
 /// Widget for rendering the footer area with status and hints
 ///
@@ -98,7 +99,13 @@ impl<'a> FooterWidget<'a> {
 
         // Left status
         if let Some(left) = self.left_status {
-            spans.push(Span::styled(left.to_string(), self.styles.accent_style()));
+            if let Some((indicator, rest)) = split_running_command_status(left) {
+                spans.push(Span::styled(indicator, self.styles.accent_style()));
+                spans.push(Span::raw(" "));
+                spans.extend(shimmer_spans_with_style(&rest, self.styles.muted_style()));
+            } else {
+                spans.push(Span::styled(left.to_string(), self.styles.accent_style()));
+            }
         }
 
         // Spinner (if active)
@@ -175,6 +182,21 @@ impl Widget for FooterWidget<'_> {
 
         let paragraph = Paragraph::new(lines);
         paragraph.render(inner, buf);
+    }
+}
+
+fn split_running_command_status(text: &str) -> Option<(String, String)> {
+    let (indicator, rest) = text.split_once(' ')?;
+    if indicator.chars().count() != 1 {
+        return None;
+    }
+    if rest.starts_with("Running command:")
+        || rest.starts_with("Running tool:")
+        || rest.starts_with("Running:")
+    {
+        Some((indicator.to_string(), rest.to_string()))
+    } else {
+        None
     }
 }
 

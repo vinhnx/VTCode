@@ -507,6 +507,10 @@ async fn drive_terminal<B: Backend>(
             }
         }
 
+        if session.thinking_spinner.is_active || session.is_running_activity() {
+            event_channels.record_input();
+        }
+
         // Only redraw if not suspended
         if !event_channels
             .rx_paused

@@ -2,7 +2,7 @@
 name = "vtcode-config"
 version = "0.71.7"
 edition = "2024"
-authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Config loader components shared across VT Code and downstream adopters"
 license = "MIT"
 readme = "../README.md"

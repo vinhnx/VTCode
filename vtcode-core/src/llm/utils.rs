@@ -166,6 +166,15 @@ pub fn parse_stream_event_openai_format(
 
 /// Extract reasoning content from text (for providers that support reasoning)
 pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>) {
+    if let Some((deprecated_reasoning, deprecated_content)) =
+        extract_deprecated_reasoning_sections(content)
+    {
+        let reasoning_parts = deprecated_reasoning
+            .map(|value| vec![value])
+            .unwrap_or_default();
+        return (reasoning_parts, deprecated_content);
+    }
+
     // Look for reasoning tags or patterns - use static arrays
     const REASONING_PATTERNS: [&str; 3] = ["<reasoning>", "<think>", "<thought>"];
     const CLOSING_PATTERNS: [&str; 3] = ["</reasoning>", "</think>", "</thought>"];
@@ -193,6 +202,94 @@ pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>)
     };
 
     (reasoning_parts, final_content)
+}
+
+fn extract_deprecated_reasoning_sections(
+    content: &str,
+) -> Option<(Option<String>, Option<String>)> {
+    let mut reasoning_lines: Vec<String> = Vec::new();
+    let mut content_lines: Vec<String> = Vec::new();
+    let mut active_section: Option<&str> = None;
+    let mut saw_reasoning = false;
+    let mut saw_content = false;
+    let mut saw_first_key = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim_end();
+        let trimmed_start = trimmed.trim_start();
+
+        if trimmed_start.is_empty() {
+            if let Some(section) = active_section {
+                match section {
+                    "reasoning" => reasoning_lines.push(String::new()),
+                    "content" => content_lines.push(String::new()),
+                    _ => {}
+                }
+            }
+            continue;
+        }
+
+        if let Some(rest) = trimmed_start.strip_prefix("reasoning:") {
+            saw_first_key = true;
+            saw_reasoning = true;
+            active_section = Some("reasoning");
+            let value = rest.trim_start();
+            if !matches!(value, "|" | "|-" | "|+" | ">" | ">-" | ">+") && !value.is_empty() {
+                reasoning_lines.push(value.to_string());
+            }
+            continue;
+        }
+
+        if let Some(rest) = trimmed_start.strip_prefix("content:") {
+            saw_first_key = true;
+            saw_content = true;
+            active_section = Some("content");
+            let value = rest.trim_start();
+            if !matches!(value, "|" | "|-" | "|+" | ">" | ">-" | ">+") && !value.is_empty() {
+                content_lines.push(value.to_string());
+            }
+            continue;
+        }
+
+        if !saw_first_key {
+            return None;
+        }
+
+        if let Some(section) = active_section {
+            match section {
+                "reasoning" => reasoning_lines.push(trimmed_start.to_string()),
+                "content" => content_lines.push(trimmed_start.to_string()),
+                _ => {}
+            }
+        }
+    }
+
+    if !(saw_reasoning && saw_content) {
+        return None;
+    }
+
+    let reasoning = join_deprecated_section(&reasoning_lines);
+    let content = join_deprecated_section(&content_lines);
+
+    if reasoning.is_none() && content.is_none() {
+        None
+    } else {
+        Some((reasoning, content))
+    }
+}
+
+fn join_deprecated_section(lines: &[String]) -> Option<String> {
+    if lines.is_empty() {
+        return None;
+    }
+
+    let joined = lines.join("\n");
+    let trimmed = joined.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 /// Estimate token count for text (rough approximation)
@@ -308,6 +405,16 @@ mod tests {
         assert_eq!(reasoning.len(), 1);
         assert_eq!(reasoning[0], "This is reasoning");
         assert_eq!(main.unwrap(), "Some text  More text");
+    }
+
+    #[test]
+    fn test_extract_reasoning_content_deprecated_format() {
+        let content = "reasoning: Need to run cargo clippy.\ncontent: Need to run cargo clippy.";
+        let (reasoning, main) = extract_reasoning_content(content);
+
+        assert_eq!(reasoning.len(), 1);
+        assert_eq!(reasoning[0], "Need to run cargo clippy.");
+        assert_eq!(main.as_deref(), Some("Need to run cargo clippy."));
     }
 
     #[test]
