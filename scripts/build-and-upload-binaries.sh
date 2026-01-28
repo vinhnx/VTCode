@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # VT Code Binary Build and Upload Script
-# This script builds binaries for macOS and uploads them to GitHub Releases
+# This script builds binaries locally and uploads them to GitHub Releases
 
 set -e
 
@@ -14,6 +14,7 @@ NC='\033[0m' # No Color
 
 BUILD_TOOL="cargo"
 TARGET_ENV_ASSIGNMENTS=()
+DRY_RUN=false
 
 # Function to print colored output
 print_info() {
@@ -54,45 +55,10 @@ check_dependencies() {
         exit 1
     fi
 
-    # Verify correct GitHub account is active
-    local expected_account="vinhnx"
+    # Verify GitHub CLI authentication
     if ! gh auth status >/dev/null 2>&1; then
         print_error "GitHub CLI is not authenticated. Please run: gh auth login"
         exit 1
-    fi
-
-    # If GITHUB_TOKEN is set, we're in CI or using token auth - skip detailed account checks
-    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        print_success "GitHub CLI authenticated with GITHUB_TOKEN"
-    else
-        # Check if we're logged in to the expected account and it's active
-        if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
-            print_error "Not logged in to GitHub account: $expected_account"
-            print_info "Run: gh auth login --hostname github.com"
-            exit 1
-        fi
-
-        if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
-            print_error "GitHub account '$expected_account' is not active"
-            print_info "Run: gh auth switch --hostname github.com --user $expected_account"
-            exit 1
-        fi
-
-        print_success "GitHub CLI authenticated with correct account: $expected_account"
-    fi
-
-    # Check if cross is available and should be used
-    if command -v cross &> /dev/null; then
-        BUILD_TOOL="cross"
-        print_success "Detected cross – using it for reproducible cross-compilation builds"
-        # Set default container engine if not set
-        if [[ -z "${CROSS_CONTAINER_ENGINE:-}" ]]; then
-            export CROSS_CONTAINER_ENGINE="docker"
-        fi
-    else
-        BUILD_TOOL="cargo"
-        print_warning "cross not found. Install with 'cargo install cross' for faster, sandboxed cross-compilation."
-        print_info "Falling back to cargo with native compilation"
     fi
 
     print_success "All required tools are available"
@@ -100,15 +66,14 @@ check_dependencies() {
 
 # Function to get version from Cargo.toml
 get_version() {
-    grep '^version = ' Cargo.toml | head -1 | sed 's/version = \"\(.*\)\"/\1/'
+    grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"//'
 }
 
 # Function to install Rust targets if needed
 install_rust_targets() {
     print_info "Checking and installing required Rust targets..."
 
-    # Check if targets are installed
-    local targets=$(rustc --print target-list)
+    local targets=$(rustup target list --installed)
 
     # macOS targets
     if ! echo "$targets" | grep -q "x86_64-apple-darwin"; then
@@ -121,18 +86,13 @@ install_rust_targets() {
         rustup target add aarch64-apple-darwin
     fi
 
-    # Linux targets
+    # Linux targets (optional)
     if ! echo "$targets" | grep -q "x86_64-unknown-linux-gnu"; then
-        print_info "Installing x86_64-unknown-linux-gnu target..."
-        rustup target add x86_64-unknown-linux-gnu
+        print_info "Attempting to install x86_64-unknown-linux-gnu target..."
+        rustup target add x86_64-unknown-linux-gnu || print_warning "Failed to add Linux target"
     fi
 
-    if ! echo "$targets" | grep -q "aarch64-unknown-linux-gnu"; then
-        print_info "Installing aarch64-unknown-linux-gnu target..."
-        rustup target add aarch64-unknown-linux-gnu
-    fi
-
-    print_success "Required Rust targets are installed"
+    print_success "Rust targets check completed"
 }
 
 configure_target_env() {
@@ -149,70 +109,15 @@ configure_target_env() {
             TARGET_ENV_ASSIGNMENTS+=("OPENSSL_DIR=$openssl_prefix")
             TARGET_ENV_ASSIGNMENTS+=("OPENSSL_LIB_DIR=$openssl_prefix/lib")
             TARGET_ENV_ASSIGNMENTS+=("OPENSSL_INCLUDE_DIR=$openssl_prefix/include")
-
+            
             local pkg_config_path="$openssl_prefix/lib/pkgconfig"
             if [[ -n "${PKG_CONFIG_PATH:-}" ]]; then
                 pkg_config_path+=":${PKG_CONFIG_PATH}"
             fi
             TARGET_ENV_ASSIGNMENTS+=("PKG_CONFIG_PATH=$pkg_config_path")
-            TARGET_ENV_ASSIGNMENTS+=("PKG_CONFIG_ALLOW_CROSS=1")
-        else
-            print_warning "Homebrew OpenSSL not found. Install with 'brew install openssl@3' for reliable macOS builds."
         fi
 
-        if command -v xcrun &> /dev/null; then
-            local sdkroot
-            sdkroot=$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)
-            if [[ -n "$sdkroot" ]]; then
-                TARGET_ENV_ASSIGNMENTS+=("SDKROOT=$sdkroot")
-            fi
-        fi
-
-        TARGET_ENV_ASSIGNMENTS+=("MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-11.0}")
-
-        case "$target" in
-            x86_64-apple-darwin)
-                local cflags="-arch x86_64"
-                local combined_cflags="${CFLAGS:-}"
-                if [[ -n "$combined_cflags" ]]; then
-                    cflags="$combined_cflags $cflags"
-                fi
-                TARGET_ENV_ASSIGNMENTS+=("CFLAGS=$cflags")
-
-                local cxxflags="-arch x86_64"
-                local combined_cxxflags="${CXXFLAGS:-}"
-                if [[ -n "$combined_cxxflags" ]]; then
-                    cxxflags="$combined_cxxflags $cxxflags"
-                fi
-                TARGET_ENV_ASSIGNMENTS+=("CXXFLAGS=$cxxflags")
-
-                local ldflags="-arch x86_64"
-                local combined_ldflags="${LDFLAGS:-}"
-                if [[ -n "$combined_ldflags" ]]; then
-                    ldflags="$combined_ldflags $ldflags"
-                fi
-                TARGET_ENV_ASSIGNMENTS+=("LDFLAGS=$ldflags")
-                ;;
-            aarch64-apple-darwin)
-                local cflags="-arch arm64"
-                if [[ -n "${CFLAGS:-}" ]]; then
-                    cflags="${CFLAGS} $cflags"
-                fi
-                TARGET_ENV_ASSIGNMENTS+=("CFLAGS=$cflags")
-
-                local cxxflags="-arch arm64"
-                if [[ -n "${CXXFLAGS:-}" ]]; then
-                    cxxflags="${CXXFLAGS} $cxxflags"
-                fi
-                TARGET_ENV_ASSIGNMENTS+=("CXXFLAGS=$cxxflags")
-
-                local ldflags="-arch arm64"
-                if [[ -n "${LDFLAGS:-}" ]]; then
-                    ldflags="${LDFLAGS} $ldflags"
-                fi
-                TARGET_ENV_ASSIGNMENTS+=("LDFLAGS=$ldflags")
-                ;;
-        esac
+        TARGET_ENV_ASSIGNMENTS+=("MACOSX_DEPLOYMENT_TARGET=11.0")
     fi
 }
 
@@ -221,7 +126,14 @@ build_with_tool() {
     TARGET_ENV_ASSIGNMENTS=()
     configure_target_env "$target"
 
-    local cmd=("${BUILD_TOOL:-cargo}" build --release --target "$target")
+    print_info "Building for $target using $BUILD_TOOL..."
+    
+    if [ "$DRY_RUN" = true ]; then
+        print_info "Dry run: would build $target"
+        return 0
+    fi
+
+    local cmd=("$BUILD_TOOL" build --release --target "$target")
 
     if [[ ${#TARGET_ENV_ASSIGNMENTS[@]} -gt 0 ]]; then
         env "${TARGET_ENV_ASSIGNMENTS[@]}" "${cmd[@]}"
@@ -234,67 +146,78 @@ build_with_tool() {
 build_binaries() {
     local version=$1
     local dist_dir="dist"
-
-    print_info "Building binaries for version $version..."
-
-    # Create dist directory
-    mkdir -p "$dist_dir"
-
-    # macOS builds - always build these
-    # Build for x86_64 macOS
-    print_info "Building for x86_64 macOS..."
-    build_with_tool x86_64-apple-darwin
-
-    # Package x86_64 binary
-    print_info "Packaging x86_64 macOS binary..."
-    cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/"
-    cd "$dist_dir"
-    tar -czf "vtcode-v$version-x86_64-apple-darwin.tar.gz" vtcode
-    cd ..
-
-    # Build for aarch64 macOS
-    print_info "Building for aarch64 macOS..."
-    build_with_tool aarch64-apple-darwin
-
-    # Package aarch64 binary
-    print_info "Packaging aarch64 macOS binary..."
-    cp "target/aarch64-apple-darwin/release/vtcode" "$dist_dir/"
-    cd "$dist_dir"
-    tar -czf "vtcode-v$version-aarch64-apple-darwin.tar.gz" vtcode
-    cd ..
-
-    # Linux builds - skip on macOS due to cross-compilation issues
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        print_warning "Linux cross-compilation skipped on macOS"
-        print_info "Linux binaries can be built via:"
-        print_info "  1. GitHub Actions CI/CD (recommended)"
-        print_info "  2. Linux VM or container"
-        print_info "  3. cargo install vtcode (from source)"
-    else
-        # Build for x86_64 Linux
-        print_info "Building for x86_64 Linux..."
-        build_with_tool x86_64-unknown-linux-gnu
-
-        # Package x86_64 Linux binary
-        print_info "Packaging x86_64 Linux binary..."
-        cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/"
-        cd "$dist_dir"
-        tar -czf "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" vtcode
-        cd ..
-
-        # Build for aarch64 Linux
-        print_info "Building for aarch64 Linux..."
-        build_with_tool aarch64-unknown-linux-gnu
-
-        # Package aarch64 Linux binary
-        print_info "Packaging aarch64 Linux binary..."
-        cp "target/aarch64-unknown-linux-gnu/release/vtcode" "$dist_dir/"
-        cd "$dist_dir"
-        tar -czf "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" vtcode
-        cd ..
+    
+    print_info "Building binaries locally for version $version..."
+    
+    if [ "$DRY_RUN" = false ]; then
+        rm -rf "$dist_dir"
+        mkdir -p "$dist_dir"
     fi
 
-    print_success "Binaries built and packaged successfully"
+    # Build targets in parallel where possible (background jobs)
+    local pids=()
+
+    # macOS x86_64
+    build_with_tool x86_64-apple-darwin &
+    pids+=($!)
+
+    # macOS aarch64
+    build_with_tool aarch64-apple-darwin &
+    pids+=($!)
+
+    # Linux x86_64 (only if on Linux or have cross setup)
+    local build_linux=false
+    if [[ "$OSTYPE" == "linux-gnu"* ]] || command -v cross &>/dev/null; then
+        build_linux=true
+        local tool=$BUILD_TOOL
+        if command -v cross &>/dev/null; then tool="cross"; fi
+        
+        print_info "Attempting Linux build using $tool..."
+        ( $tool build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
+        pids+=($!)
+    fi
+
+    # Wait for all builds to complete
+    print_info "Waiting for all parallel builds to finish..."
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+
+    if [ "$DRY_RUN" = true ]; then
+        print_success "Dry run: Build process simulation complete"
+        return 0
+    fi
+
+    # Packaging
+    print_info "Packaging binaries..."
+    
+    # macOS x86_64
+    cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
+    (cd "$dist_dir" && tar -czf "vtcode-v$version-x86_64-apple-darwin.tar.gz" vtcode && rm vtcode)
+
+    # macOS aarch64
+    cp "target/aarch64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
+    (cd "$dist_dir" && tar -czf "vtcode-v$version-aarch64-apple-darwin.tar.gz" vtcode && rm vtcode)
+
+    # Create macOS Universal Binary
+    if [ -f "target/x86_64-apple-darwin/release/vtcode" ] && [ -f "target/aarch64-apple-darwin/release/vtcode" ]; then
+        print_info "Creating macOS Universal Binary using lipo..."
+        lipo -create \
+            "target/x86_64-apple-darwin/release/vtcode" \
+            "target/aarch64-apple-darwin/release/vtcode" \
+            -output "$dist_dir/vtcode-universal"
+        
+        (cd "$dist_dir" && tar -czf "vtcode-v$version-universal-apple-darwin.tar.gz" vtcode-universal && rm vtcode-universal)
+        print_success "macOS Universal Binary created"
+    fi
+
+    # Linux
+    if [ "$build_linux" = true ] && [ -f "target/x86_64-unknown-linux-gnu/release/vtcode" ]; then
+        cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/vtcode"
+        (cd "$dist_dir" && tar -czf "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" vtcode && rm vtcode)
+    fi
+
+    print_success "Binaries build and packaging process completed"
 }
 
 # Function to calculate SHA256 checksums
@@ -302,37 +225,45 @@ calculate_checksums() {
     local version=$1
     local dist_dir="dist"
 
-    print_info "Calculating SHA256 checksums..."
+    if [ "$DRY_RUN" = true ]; then
+        print_info "Dry run: would calculate checksums"
+        return 0
+    fi
 
+    print_info "Calculating SHA256 checksums..."
     cd "$dist_dir"
 
-    # macOS checksums (always built)
-    local x86_64_macos_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
-    local aarch64_macos_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
-
-    # Write macOS checksum files
-    echo "$x86_64_macos_sha256" > "$dist_dir/vtcode-v$version-x86_64-apple-darwin.sha256"
-    echo "$aarch64_macos_sha256" > "$dist_dir/vtcode-v$version-aarch64-apple-darwin.sha256"
-
-    # Linux checksums (if binaries exist regardless of platform)
-    if [[ -f "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" ]]; then
-        local x86_64_linux_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
-        echo "$x86_64_linux_sha256" > "$dist_dir/vtcode-v$version-x86_64-unknown-linux-gnu.sha256"
-        print_info "x86_64 Linux SHA256: $x86_64_linux_sha256"
-    fi
-
-    if [[ -f "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" ]]; then
-        local aarch64_linux_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
-        echo "$aarch64_linux_sha256" > "$dist_dir/vtcode-v$version-aarch64-unknown-linux-gnu.sha256"
-        print_info "aarch64 Linux SHA256: $aarch64_linux_sha256"
-    fi
+    for f in *.tar.gz; do
+        if [ -f "$f" ]; then
+            shasum -a 256 "$f" | cut -d' ' -f1 > "${f%.tar.gz}.sha256"
+            print_info "Checksum for $f: $(cat ${f%.tar.gz}.sha256)"
+        fi
+    done
 
     cd ..
-
-    print_info "x86_64 macOS SHA256: $x86_64_macos_sha256"
-    print_info "aarch64 macOS SHA256: $aarch64_macos_sha256"
-
     print_success "SHA256 checksums calculated"
+}
+
+# Function to poll for GitHub release existence
+poll_github_release() {
+    local tag=$1
+    local max_attempts=12
+    local wait_seconds=10
+    local attempt=1
+
+    print_info "Polling GitHub for release $tag..."
+    while [ $attempt -le $max_attempts ]; do
+        if gh release view "$tag" >/dev/null 2>&1; then
+            print_success "GitHub release $tag is available"
+            return 0
+        fi
+        print_info "Attempt $attempt/$max_attempts: Release $tag not found yet. Waiting ${wait_seconds}s..."
+        sleep $wait_seconds
+        attempt=$((attempt + 1))
+    done
+
+    print_warning "Timed out waiting for GitHub release $tag"
+    return 1
 }
 
 # Function to upload binaries to GitHub Release
@@ -340,267 +271,151 @@ upload_binaries() {
     local version=$1
     local dist_dir="dist"
     local tag="v$version"
+    local notes_file="$2"
 
-    print_info "Uploading binaries to GitHub Release $tag..."
+    if [ "$DRY_RUN" = true ]; then
+        print_info "Dry run: would upload binaries to $tag"
+        return 0
+    fi
 
-    # Verify the release exists before attempting upload
+    print_info "Checking GitHub Release $tag..."
+
+    # Check if release exists, if not poll then create
     if ! gh release view "$tag" >/dev/null 2>&1; then
-        print_error "GitHub release '$tag' does not exist. Please ensure the release is created first."
-        print_info "You may need to wait a moment for the release to be created by cargo-release."
-        return 1
-    fi
-
-    cd "$dist_dir"
-
-    # Upload all files in batch for better performance
-    print_info "Uploading assets to GitHub release..."
-
-    local files_to_upload=()
-    # macOS files (always built)
-    files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.tar.gz")
-    files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.sha256")
-    files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.tar.gz")
-    files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.sha256")
-
-    # Linux files (if they exist regardless of platform)
-    if [[ -f "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" ]]; then
-        files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz")
-        files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.sha256")
-    fi
-    if [[ -f "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" ]]; then
-        files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz")
-        files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.sha256")
-    fi
-
-    # Verify all files exist before uploading (filter out missing files)
-    local files_to_upload_filtered=()
-    for file in "${files_to_upload[@]}"; do
-        if [[ -f "$file" ]]; then
-            files_to_upload_filtered+=("$file")
-        else
-            print_warning "File not found, skipping: $file"
+        if ! poll_github_release "$tag"; then
+            print_info "Creating GitHub release $tag..."
+            local notes_args=("--title" "VT Code v$version")
+            if [ -n "$notes_file" ] && [ -f "$notes_file" ]; then
+                notes_args+=("--notes-file" "$notes_file")
+            else
+                notes_args+=("--notes" "Release v$version")
+            fi
+            gh release create "$tag" "${notes_args[@]}"
         fi
-    done
-
-    if [[ ${#files_to_upload_filtered[@]} -eq 0 ]]; then
-        print_error "No files to upload"
-        cd ..
-        return 1
     fi
 
-    # Upload files
-    print_info "Uploading ${#files_to_upload_filtered[@]} files to release $tag..."
-    if ! gh release upload "$tag" "${files_to_upload_filtered[@]}" --clobber; then
-        print_error "Failed to upload assets to GitHub release"
-        cd ..
-        return 1
-    fi
-
-    # Verify upload was successful
-    print_info "Verifying uploaded assets..."
-    sleep 2  # Give GitHub a moment to process the upload
-    local asset_count=$(gh release view "$tag" --json assets --jq '.assets | length' 2>/dev/null || echo "0")
-    if [[ $asset_count -lt ${#files_to_upload_filtered[@]} ]]; then
-        print_warning "Expected ${#files_to_upload_filtered[@]} assets, but found $asset_count in release"
-        print_info "This may be temporary - check the release on GitHub to confirm all assets uploaded"
+    # Upload all files
+    cd "$dist_dir"
+    local files=(*)
+    if [ ${#files[@]} -gt 0 ]; then
+        print_info "Uploading ${#files[@]} assets to $tag..."
+        gh release upload "$tag" "${files[@]}" --clobber
+        print_success "Uploaded assets to $tag"
     else
-        print_success "All $asset_count assets uploaded successfully"
+        print_error "No assets found in $dist_dir to upload"
+        cd ..
+        return 1
     fi
-
     cd ..
-
-    print_success "Binary upload process completed"
 }
 
 # Function to update Homebrew formula
 update_homebrew_formula() {
     local version=$1
-
-    print_info "Updating Homebrew formula..."
-
-    # Verify required checksum files exist
     local formula_path="homebrew/vtcode.rb"
 
     if [ ! -f "$formula_path" ]; then
-        print_error "Homebrew formula not found at $formula_path"
+        print_warning "Homebrew formula not found at $formula_path"
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        print_info "Dry run: would update Homebrew formula to v$version"
+        return 0
+    fi
+
+    print_info "Updating Homebrew formula at $formula_path..."
+
+    local x86_64_macos_sha=$(cat "dist/vtcode-v$version-x86_64-apple-darwin.sha256" 2>/dev/null || echo "")
+    local aarch64_macos_sha=$(cat "dist/vtcode-v$version-aarch64-apple-darwin.sha256" 2>/dev/null || echo "")
+    local universal_macos_sha=$(cat "dist/vtcode-v$version-universal-apple-darwin.sha256" 2>/dev/null || echo "")
+
+    if [ -z "$x86_64_macos_sha" ] || [ -z "$aarch64_macos_sha" ]; then
+        print_error "Missing macOS checksums, cannot update Homebrew formula"
         return 1
     fi
 
-    # Check if we have the required macOS checksums
-    if [ ! -f "dist/vtcode-v$version-x86_64-apple-darwin.sha256" ]; then
-        print_error "Missing x86_64 macOS checksum file"
-        return 1
-    fi
-
-    if [ ! -f "dist/vtcode-v$version-aarch64-apple-darwin.sha256" ]; then
-        print_error "Missing aarch64 macOS checksum file"
-        return 1
-    fi
-
-    # Read all checksums
-    local x86_64_sha256=$(cat "dist/vtcode-v$version-x86_64-apple-darwin.sha256")
-    local aarch64_sha256=$(cat "dist/vtcode-v$version-aarch64-apple-darwin.sha256")
-    
-    # Read Linux checksums if they exist
-    local x86_64_linux_sha256=""
-    local aarch64_linux_sha256=""
-    if [ -f "dist/vtcode-v$version-x86_64-unknown-linux-gnu.sha256" ]; then
-        x86_64_linux_sha256=$(cat "dist/vtcode-v$version-x86_64-unknown-linux-gnu.sha256")
-    fi
-    if [ -f "dist/vtcode-v$version-aarch64-unknown-linux-gnu.sha256" ]; then
-        aarch64_linux_sha256=$(cat "dist/vtcode-v$version-aarch64-unknown-linux-gnu.sha256")
-    fi
-
-    # Validate checksums are not empty
-    if [ -z "$x86_64_sha256" ] || [ -z "$aarch64_sha256" ]; then
-        print_error "Invalid or empty checksums"
-        return 1
-    fi
-
-    # Update all values using Python for reliable cross-platform compatibility
-    python3 << 'PYTHON_SCRIPT' || {
-        print_error "Failed to update checksums via Python"
-        exit 1
-    }
+    python3 << PYTHON_SCRIPT
 import re
-
-# Read the file
-formula_path = '%s'
-version = '%s'
-x86_64_sha256 = '%s'
-aarch64_sha256 = '%s'
-x86_64_linux_sha256 = '%s'
-aarch64_linux_sha256 = '%s'
-
-with open(formula_path, 'r') as f:
+with open('$formula_path', 'r') as f:
     content = f.read()
 
-# Update version
-content = re.sub(r'version\s+"[^"]*"', 'version "' + version + '"', content)
-
-# Replace aarch64 macOS SHA256 (after aarch64-apple-darwin URL line)
+content = re.sub(r'version\s+"[^\"]*"', 'version "$version"', content)
 content = re.sub(
-    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*(")',
-    r'\1' + aarch64_sha256 + r'\2',
+    r'(aarch64-apple-darwin.tar.gz"\s+sha256\s+")[^\"]*(")', 
+    r'\1$aarch64_macos_sha\2',
+    content
+)
+content = re.sub(
+    r'(x86_64-apple-darwin.tar.gz"\s+sha256\s+")[^\"]*(")', 
+    r'\1$x86_64_macos_sha\2',
     content
 )
 
-# Replace x86_64 macOS SHA256 (after x86_64-apple-darwin URL line)
-content = re.sub(
-    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")[^"]*(")',
-    r'\1' + x86_64_sha256 + r'\2',
-    content
-)
+# If universal SHA is available, we could update that too if the formula supports it
+# For now, we update the primary architecture-specific ones
 
-# Replace x86_64 Linux SHA256 if we have it
-if x86_64_linux_sha256:
-    content = re.sub(
-        r'(x86_64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*(")',
-        r'\1' + x86_64_linux_sha256 + r'\2',
-        content
-    )
-
-# Replace aarch64 Linux SHA256 if we have it
-if aarch64_linux_sha256:
-    content = re.sub(
-        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")[^"]*(")',
-        r'\1' + aarch64_linux_sha256 + r'\2',
-        content
-    )
-
-# Write back
-with open(formula_path, 'w') as f:
+with open('$formula_path', 'w') as f:
     f.write(content)
-PYTHON_SCRIPT "$formula_path" "$version" "$x86_64_sha256" "$aarch64_sha256" "$x86_64_linux_sha256" "$aarch64_linux_sha256"
+PYTHON_SCRIPT
 
-    print_success "Homebrew formula updated (version $version)"
-    print_info "  x86_64 macOS SHA256: $x86_64_sha256"
-    print_info "  aarch64 macOS SHA256: $aarch64_sha256"
-    [ -n "$x86_64_linux_sha256" ] && print_info "  x86_64 Linux SHA256: $x86_64_linux_sha256"
-    [ -n "$aarch64_linux_sha256" ] && print_info "  aarch64 Linux SHA256: $aarch64_linux_sha256"
-
-    # Commit and push the formula update
-    if git add "$formula_path" 2>/dev/null; then
-        if git commit -m "chore: update homebrew formula to v$version" 2>/dev/null; then
-            if git push origin main 2>/dev/null; then
-                print_success "Homebrew formula committed and pushed"
-            else
-                print_warning "Failed to push homebrew formula update (may already be staged)"
-            fi
-        else
-            print_warning "No changes to commit for homebrew formula"
-        fi
-    else
-        print_warning "Failed to stage homebrew formula"
-    fi
+    print_success "Homebrew formula updated locally"
+    
+    # Commit and push
+    git add "$formula_path"
+    git commit -m "chore: update homebrew formula to v$version" || true
+    git push origin main || print_warning "Failed to push Homebrew update"
 }
 
 # Main function
 main() {
     local version=""
-    local skip_upload=false
-    local skip_homebrew=false
+    local only_build=false
+    local only_upload=false
+    local only_homebrew=false
+    local notes_file=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -v|--version)
-                version="$2"
-                shift 2
-                ;;
-            --skip-upload)
-                skip_upload=true
-                shift
-                ;;
-            -h|--help)
-                echo "Usage: $0 [OPTIONS]"
-                echo ""
-                echo "Options:"
-                echo "  -v, --version VERSION    Specify the version to build (default: read from Cargo.toml)"
-                echo "  --skip-upload            Skip uploading binaries to GitHub Release"
-                echo "  -h, --help               Show this help message"
-                exit 0
-                ;;
-            *)
-                print_error "Unknown option: $1"
-                exit 1
-                ;;
+            -v|--version) version="$2"; shift 2 ;;
+            --only-build) only_build=true; shift ;;
+            --only-upload) only_upload=true; shift ;;
+            --only-homebrew) only_homebrew=true; shift ;;
+            --notes-file) notes_file="$2"; shift 2 ;;
+            --dry-run) DRY_RUN=true; shift ;;
+            *) shift ;;
         esac
     done
 
-    # Get version if not specified
     if [ -z "$version" ]; then
         version=$(get_version)
-        print_info "Using version from Cargo.toml: $version"
     fi
 
-    # Check dependencies
     check_dependencies
 
-    # Install Rust targets
-    install_rust_targets
-
-    # Build binaries
-    build_binaries "$version"
-
-    # Calculate checksums
-    calculate_checksums "$version"
-
-    # Upload binaries (unless skipped)
-    if [ "$skip_upload" = false ]; then
-        upload_binaries "$version"
-    else
-        print_info "Skipping binary upload as requested"
-    fi
-
-    # Update Homebrew formula (unless skipped)
-    if [ "$skip_homebrew" = false ]; then
+    # If no specific flags are set, run everything
+    if [ "$only_build" = false ] && [ "$only_upload" = false ] && [ "$only_homebrew" = false ]; then
+        install_rust_targets
+        build_binaries "$version"
+        calculate_checksums "$version"
+        upload_binaries "$version" "$notes_file"
         update_homebrew_formula "$version"
     else
-        print_info "Skipping Homebrew formula update as requested"
+        if [ "$only_build" = true ]; then
+            install_rust_targets
+            build_binaries "$version"
+            calculate_checksums "$version"
+        fi
+        if [ "$only_upload" = true ]; then
+            upload_binaries "$version" "$notes_file"
+        fi
+        if [ "$only_homebrew" = true ]; then
+            update_homebrew_formula "$version"
+        fi
     fi
 
-    print_success "Binary build and upload process completed for version $version"
+    print_success "Process completed for v$version"
 }
 
 # Run main function
