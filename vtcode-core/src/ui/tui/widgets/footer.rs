@@ -200,8 +200,20 @@ fn split_running_command_status(text: &str) -> Option<(String, String)> {
 fn is_spinner_frame(indicator: &str) -> bool {
     matches!(
         indicator,
-        "⠋" | "⠙" | "⠹" | "⠸" | "⠼" | "⠴" | "⠦" | "⠧" | "⠇" | "⠏"
-            | "-" | "\\" | "|" | "/" | "."
+        "⠋" | "⠙"
+            | "⠹"
+            | "⠸"
+            | "⠼"
+            | "⠴"
+            | "⠦"
+            | "⠧"
+            | "⠇"
+            | "⠏"
+            | "-"
+            | "\\"
+            | "|"
+            | "/"
+            | "."
     )
 }
 

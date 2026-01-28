@@ -327,24 +327,16 @@ impl Session {
                 border_style,
             ));
         } else {
-            // For simple tool output, render with consistent indent
-            let mut combined_text = String::new();
-            for segment in &line.segments {
-                let stripped_text = render::strip_ansi_codes(&segment.text);
-                combined_text.push_str(&stripped_text);
-            }
-
-            // Collapse multiple consecutive newlines
-            let processed_text = collapse_excess_newlines(&combined_text);
-
-            // Add indent for visual grouping
-            let indented_text = format!("  {}", processed_text);
-            let base_line = Line::from(indented_text).style(border_style);
-            if max_width > 0 {
-                lines.extend(self.wrap_line(base_line, max_width));
-            } else {
-                lines.push(base_line);
-            }
+            // For tool call summaries, preserve inline colors and add padded borders.
+            let content = render::render_tool_segments(self, line);
+            let body_prefix = format!("  {} ", ui::INLINE_BLOCK_BODY_LEFT);
+            lines.extend(self.wrap_block_lines(
+                &body_prefix,
+                &body_prefix,
+                content,
+                max_width,
+                border_style,
+            ));
         }
 
         // Add optional spacing after tool block for clean separation

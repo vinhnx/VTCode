@@ -137,35 +137,10 @@ fn render_styled_action_text(
             spans.push(Span::raw(" "));
         }
 
-        if word == "in" {
-            let in_style = InlineTextStyle::default()
-                .with_color(Some(anstyle::AnsiColor::Cyan.into()))
-                .italic();
-            spans.push(Span::styled(
-                word.to_owned(),
-                ratatui_style_from_inline(&in_style, theme.foreground),
-            ));
-        } else if i < 2
-            && (word.starts_with("List")
-                || word.starts_with("Read")
-                || word.starts_with("Write")
-                || word.starts_with("Find")
-                || word.starts_with("Search")
-                || word.starts_with("Run"))
-        {
-            let action_style = InlineTextStyle::default()
-                .with_color(theme.tool_accent.or(Some(anstyle::AnsiColor::Cyan.into())))
-                .bold();
-            spans.push(Span::styled(
-                word.to_owned(),
-                ratatui_style_from_inline(&action_style, theme.foreground),
-            ));
-        } else {
-            spans.push(Span::styled(
-                word.to_owned(),
-                ratatui_style_from_inline(body_style, theme.foreground),
-            ));
-        }
+        spans.push(Span::styled(
+            word.to_owned(),
+            ratatui_style_from_inline(body_style, theme.foreground),
+        ));
     }
 }
 
