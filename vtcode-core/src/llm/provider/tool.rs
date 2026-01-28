@@ -35,7 +35,7 @@ impl std::str::FromStr for ToolSearchAlgorithm {
 
 /// Universal tool definition that matches OpenAI/Anthropic/Gemini specifications
 /// Based on official API documentation from Context7
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolDefinition {
     /// The type of tool: "function", "apply_patch" (GPT-5.1), "shell" (GPT-5.1), or "custom" (GPT-5 freeform)
     /// Also supports Anthropic tool search types: "tool_search_tool_regex_20251119", "tool_search_tool_bm25_20251119"
@@ -68,7 +68,7 @@ pub struct ToolDefinition {
 
 /// Shell tool definition for GPT-5.1 shell tool type
 /// Allows controlled command-line interface interactions
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ShellToolDefinition {
     /// Description of shell tool capabilities
     pub description: String,
@@ -84,7 +84,7 @@ pub struct ShellToolDefinition {
 }
 
 /// Grammar definition for GPT-5 context-free grammar (CFG) constraints
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GrammarDefinition {
     /// The syntax of the grammar: "lark" or "regex"
     pub syntax: String,
@@ -122,7 +122,7 @@ impl Default for ShellToolDefinition {
 }
 
 /// Function definition within a tool
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionDefinition {
     /// The name of the function to be called
     pub name: String,
