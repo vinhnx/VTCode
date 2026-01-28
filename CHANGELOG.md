@@ -3,6 +3,15 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.73.0] - 2026-01-28
+
+
+### Features
+    - feat: add GitHub Actions release workflow and update release script for better error handling
+
+
+### Chores
+    - chore: enhance GitHub CLI authentication checks in release scripts
 # [Version 0.72.4] - 2026-01-28
 
 
