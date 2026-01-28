@@ -3,7 +3,9 @@
 //! Items are the fundamental unit of context in Open Responses. They represent
 //! atomic units of model output, tool invocation, or reasoning state.
 
-use serde::{Deserialize, Serialize};
+use serde::de::{self, MapAccess, Visitor};
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 use super::{ContentPart, ItemStatus};
@@ -15,8 +17,10 @@ pub type OutputItemId = String;
 ///
 /// Per the Open Responses specification, items are polymorphic (discriminated by `type`),
 /// state machines (with status transitions), and streamable (through delta events).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+///
+/// Custom items serialize with their `custom_type` as the actual `type` field value
+/// (e.g., `"type": "vtcode:file_change"`), per the extension convention.
+#[derive(Debug, Clone, PartialEq)]
 pub enum OutputItem {
     /// A message from the assistant, user, system, or developer.
     Message(MessageItem),
@@ -31,8 +35,185 @@ pub enum OutputItem {
     FunctionCallOutput(FunctionCallOutputItem),
 
     /// Custom/extension item type (prefixed with implementor slug).
-    #[serde(rename = "custom")]
     Custom(CustomItem),
+}
+
+impl Serialize for OutputItem {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Message(item) => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", "message")?;
+                map.serialize_entry("id", &item.id)?;
+                map.serialize_entry("status", &item.status)?;
+                map.serialize_entry("role", &item.role)?;
+                map.serialize_entry("content", &item.content)?;
+                map.end()
+            }
+            Self::Reasoning(item) => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", "reasoning")?;
+                map.serialize_entry("id", &item.id)?;
+                map.serialize_entry("status", &item.status)?;
+                if let Some(ref summary) = item.summary {
+                    map.serialize_entry("summary", summary)?;
+                }
+                if let Some(ref content) = item.content {
+                    map.serialize_entry("content", content)?;
+                }
+                if let Some(ref encrypted) = item.encrypted_content {
+                    map.serialize_entry("encrypted_content", encrypted)?;
+                }
+                map.end()
+            }
+            Self::FunctionCall(item) => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", "function_call")?;
+                map.serialize_entry("id", &item.id)?;
+                map.serialize_entry("status", &item.status)?;
+                map.serialize_entry("name", &item.name)?;
+                map.serialize_entry("arguments", &item.arguments)?;
+                if let Some(ref call_id) = item.call_id {
+                    map.serialize_entry("call_id", call_id)?;
+                }
+                map.end()
+            }
+            Self::FunctionCallOutput(item) => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", "function_call_output")?;
+                map.serialize_entry("id", &item.id)?;
+                map.serialize_entry("status", &item.status)?;
+                if let Some(ref call_id) = item.call_id {
+                    map.serialize_entry("call_id", call_id)?;
+                }
+                map.serialize_entry("output", &item.output)?;
+                map.end()
+            }
+            Self::Custom(item) => {
+                // Custom items use their custom_type as the type discriminator
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("type", &item.custom_type)?;
+                map.serialize_entry("id", &item.id)?;
+                map.serialize_entry("status", &item.status)?;
+                map.serialize_entry("data", &item.data)?;
+                map.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for OutputItem {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct OutputItemVisitor;
+
+        impl<'de> Visitor<'de> for OutputItemVisitor {
+            type Value = OutputItem;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("an output item object with a type field")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut type_field: Option<String> = None;
+                let mut id: Option<String> = None;
+                let mut status: Option<ItemStatus> = None;
+                let mut role: Option<MessageRole> = None;
+                let mut content: Option<Vec<ContentPart>> = None;
+                let mut summary: Option<String> = None;
+                let mut reasoning_content: Option<String> = None;
+                let mut encrypted_content: Option<String> = None;
+                let mut name: Option<String> = None;
+                let mut arguments: Option<Value> = None;
+                let mut call_id: Option<String> = None;
+                let mut output: Option<String> = None;
+                let mut data: Option<Value> = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "type" => type_field = Some(map.next_value()?),
+                        "id" => id = Some(map.next_value()?),
+                        "status" => status = Some(map.next_value()?),
+                        "role" => role = Some(map.next_value()?),
+                        "content" => {
+                            // content can be Vec<ContentPart> or String
+                            let val: Value = map.next_value()?;
+                            if let Value::Array(_) = &val {
+                                content = Some(
+                                    serde_json::from_value(val).map_err(de::Error::custom)?,
+                                );
+                            } else if let Value::String(s) = val {
+                                reasoning_content = Some(s);
+                            }
+                        }
+                        "summary" => summary = Some(map.next_value()?),
+                        "encrypted_content" => encrypted_content = Some(map.next_value()?),
+                        "name" => name = Some(map.next_value()?),
+                        "arguments" => arguments = Some(map.next_value()?),
+                        "call_id" => call_id = Some(map.next_value()?),
+                        "output" => output = Some(map.next_value()?),
+                        "data" => data = Some(map.next_value()?),
+                        _ => {
+                            // Skip unknown fields
+                            let _: Value = map.next_value()?;
+                        }
+                    }
+                }
+
+                let type_str = type_field.ok_or_else(|| de::Error::missing_field("type"))?;
+                let id = id.ok_or_else(|| de::Error::missing_field("id"))?;
+                let status = status.unwrap_or(ItemStatus::InProgress);
+
+                match type_str.as_str() {
+                    "message" => Ok(OutputItem::Message(MessageItem {
+                        id,
+                        status,
+                        role: role.unwrap_or_default(),
+                        content: content.unwrap_or_default(),
+                    })),
+                    "reasoning" => Ok(OutputItem::Reasoning(ReasoningItem {
+                        id,
+                        status,
+                        summary,
+                        content: reasoning_content,
+                        encrypted_content,
+                    })),
+                    "function_call" => Ok(OutputItem::FunctionCall(FunctionCallItem {
+                        id,
+                        status,
+                        name: name.ok_or_else(|| de::Error::missing_field("name"))?,
+                        arguments: arguments.unwrap_or(Value::Null),
+                        call_id,
+                    })),
+                    "function_call_output" => {
+                        Ok(OutputItem::FunctionCallOutput(FunctionCallOutputItem {
+                            id,
+                            status,
+                            call_id,
+                            output: output.ok_or_else(|| de::Error::missing_field("output"))?,
+                        }))
+                    }
+                    // Any other type is treated as a custom extension type
+                    custom_type => Ok(OutputItem::Custom(CustomItem {
+                        id,
+                        status,
+                        custom_type: custom_type.to_string(),
+                        data: data.unwrap_or(Value::Null),
+                    })),
+                }
+            }
+        }
+
+        deserializer.deserialize_map(OutputItemVisitor)
+    }
 }
 
 impl OutputItem {
@@ -69,11 +250,25 @@ impl OutputItem {
         }
     }
 
-    /// Creates a new message item with the given parameters.
+    /// Creates a new message item with the given parameters (status: `InProgress`).
     pub fn message(id: impl Into<String>, role: MessageRole, content: Vec<ContentPart>) -> Self {
         Self::Message(MessageItem {
             id: id.into(),
             status: ItemStatus::InProgress,
+            role,
+            content,
+        })
+    }
+
+    /// Creates a new completed message item with the given parameters.
+    pub fn completed_message(
+        id: impl Into<String>,
+        role: MessageRole,
+        content: Vec<ContentPart>,
+    ) -> Self {
+        Self::Message(MessageItem {
+            id: id.into(),
+            status: ItemStatus::Completed,
             role,
             content,
         })
@@ -105,7 +300,10 @@ impl OutputItem {
         })
     }
 
-    /// Creates a new function call output item.
+    /// Creates a new function call output item (status: `InProgress`).
+    ///
+    /// Use this for streaming scenarios. For completed tool results, use
+    /// [`completed_function_call_output`](Self::completed_function_call_output).
     pub fn function_call_output(
         id: impl Into<String>,
         call_id: Option<String>,
@@ -114,6 +312,22 @@ impl OutputItem {
         Self::FunctionCallOutput(FunctionCallOutputItem {
             id: id.into(),
             status: ItemStatus::InProgress,
+            call_id,
+            output: output.into(),
+        })
+    }
+
+    /// Creates a new completed function call output item.
+    ///
+    /// Use this when the tool execution has finished and the output is final.
+    pub fn completed_function_call_output(
+        id: impl Into<String>,
+        call_id: Option<String>,
+        output: impl Into<String>,
+    ) -> Self {
+        Self::FunctionCallOutput(FunctionCallOutputItem {
+            id: id.into(),
+            status: ItemStatus::Completed,
             call_id,
             output: output.into(),
         })
@@ -282,5 +496,77 @@ mod tests {
             serde_json::json!({"path": "test.rs", "kind": "update"}),
         );
         assert_eq!(item.custom_type, "vtcode:file_change");
+    }
+
+    #[test]
+    fn test_custom_item_serializes_with_custom_type_as_type() {
+        let item = OutputItem::Custom(CustomItem::vtcode(
+            "custom_1",
+            "file_change",
+            serde_json::json!({"path": "test.rs"}),
+        ));
+        let json = serde_json::to_string(&item).unwrap();
+        // Custom type should be the type discriminator, not "custom"
+        assert!(json.contains("\"type\":\"vtcode:file_change\""));
+        assert!(!json.contains("\"type\":\"custom\""));
+        assert!(!json.contains("\"custom_type\""));
+    }
+
+    #[test]
+    fn test_custom_item_roundtrip() {
+        let original = OutputItem::Custom(CustomItem::vtcode(
+            "custom_1",
+            "file_change",
+            serde_json::json!({"path": "test.rs", "kind": "update"}),
+        ));
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: OutputItem = serde_json::from_str(&json).unwrap();
+        assert_eq!(original, parsed);
+
+        if let OutputItem::Custom(c) = &parsed {
+            assert_eq!(c.custom_type, "vtcode:file_change");
+            assert_eq!(c.data["path"], "test.rs");
+        } else {
+            panic!("Expected Custom variant");
+        }
+    }
+
+    #[test]
+    fn test_deserialize_unknown_type_as_custom() {
+        let json = r#"{"type":"vendor:special_item","id":"item_1","status":"completed","data":{"key":"value"}}"#;
+        let item: OutputItem = serde_json::from_str(json).unwrap();
+        if let OutputItem::Custom(c) = item {
+            assert_eq!(c.custom_type, "vendor:special_item");
+            assert_eq!(c.id, "item_1");
+            assert_eq!(c.status, ItemStatus::Completed);
+            assert_eq!(c.data["key"], "value");
+        } else {
+            panic!("Expected Custom variant for unknown type");
+        }
+    }
+
+    #[test]
+    fn test_completed_message_has_completed_status() {
+        let item = OutputItem::completed_message("msg_1", MessageRole::Assistant, vec![]);
+        assert_eq!(item.status(), ItemStatus::Completed);
+        if let OutputItem::Message(m) = item {
+            assert_eq!(m.status, ItemStatus::Completed);
+        } else {
+            panic!("Expected Message variant");
+        }
+    }
+
+    #[test]
+    fn test_completed_function_call_output_has_completed_status() {
+        let item =
+            OutputItem::completed_function_call_output("fco_1", Some("fc_1".to_string()), "result");
+        assert_eq!(item.status(), ItemStatus::Completed);
+        if let OutputItem::FunctionCallOutput(f) = item {
+            assert_eq!(f.status, ItemStatus::Completed);
+            assert_eq!(f.call_id, Some("fc_1".to_string()));
+            assert_eq!(f.output, "result");
+        } else {
+            panic!("Expected FunctionCallOutput variant");
+        }
     }
 }
