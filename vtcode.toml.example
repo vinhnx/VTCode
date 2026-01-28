@@ -170,6 +170,27 @@ max_open_circuits = 3
 # Cooldown period between recovery prompts (seconds)
 recovery_cooldown = 60
 
+# Open Responses specification compliance configuration
+# Enables vendor-neutral LLM API format per https://www.openresponses.org/
+[agent.open_responses]
+# Enable Open Responses specification compliance layer
+# When true, VT Code emits semantic streaming events alongside internal events
+# Default: false (opt-in feature)
+enabled = false
+
+# Emit Open Responses events to the event sink
+# (response.created, response.output_item.added, response.output_text.delta, etc.)
+emit_events = true
+
+# Include VT Code extension items (vtcode:file_change, vtcode:web_search, etc.)
+include_extensions = true
+
+# Map internal tool calls to Open Responses function_call items
+map_tool_calls = true
+
+# Include reasoning items in Open Responses output
+include_reasoning = true
+
 [agent.custom_api_keys]
 # Moonshot AI API key (for specific provider access)
 moonshot = "sk-sDj3JUXDbfARCYKNL4q7iGWRtWuhL1M4O6zzgtDpN3Yxt9EA"

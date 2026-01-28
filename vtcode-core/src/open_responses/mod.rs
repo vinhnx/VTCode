@@ -16,6 +16,7 @@ mod bridge;
 mod content;
 mod error;
 mod events;
+mod integration;
 mod items;
 mod response;
 mod status;
@@ -25,6 +26,9 @@ pub use bridge::{DualEventEmitter, ResponseBuilder};
 pub use content::{ContentPart, ContentPartId};
 pub use error::{OpenResponseError, OpenResponseErrorCode, OpenResponseErrorType};
 pub use events::{ResponseStreamEvent, StreamEventEmitter, VecStreamEmitter};
+pub use integration::{
+    OpenResponsesCallback, OpenResponsesIntegration, OpenResponsesProvider, ToOpenResponse,
+};
 pub use items::{
     CustomItem, FunctionCallItem, FunctionCallOutputItem, MessageItem, MessageRole, OutputItem,
     OutputItemId, ReasoningItem,

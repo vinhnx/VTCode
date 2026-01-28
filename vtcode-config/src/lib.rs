@@ -56,10 +56,10 @@ pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
     DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig,
     MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
-    PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig, ProviderPromptCachingConfig,
-    ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig, SandboxMode, SeccompConfig,
-    SeccompProfilePreset, SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode,
-    ToolPolicy, ToolsConfig, WebFetchConfig,
+    OpenResponsesConfig, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
+    ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig,
+    SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
+    SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{

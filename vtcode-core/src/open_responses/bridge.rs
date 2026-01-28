@@ -9,7 +9,7 @@ use serde_json::json;
 use super::{
     ContentPart, CustomItem, FunctionCallItem, ItemStatus, MessageItem, MessageRole,
     OpenResponseError, OpenUsage, OutputItem, ReasoningItem, Response, ResponseStatus,
-    StreamEventEmitter, response::generate_response_id,
+    ResponseStreamEvent, StreamEventEmitter, response::generate_response_id,
 };
 use vtcode_exec_events::{
     CommandExecutionStatus, McpToolCallStatus, PatchApplyStatus, ThreadEvent, ThreadItem,
@@ -33,7 +33,8 @@ pub struct ResponseBuilder {
 struct ActiveItemState {
     output_index: usize,
     content_index: usize,
-    last_emitted_len: usize,
+    /// Previous text content for safe delta computation (avoids UTF-8 slicing issues)
+    prev_text: String,
 }
 
 impl ResponseBuilder {
@@ -128,26 +129,48 @@ impl ResponseBuilder {
         let active_state = ActiveItemState {
             output_index,
             content_index: 0,
-            last_emitted_len: 0,
+            prev_text: String::new(),
         };
         self.active_items.insert(item.id.clone(), active_state);
 
         self.response.add_output(output_item.clone());
-        emitter.output_item_added(&self.response.id, output_index, output_item);
+        emitter.output_item_added(&self.response.id, output_index, output_item.clone());
+
+        // Emit ContentPartAdded for items with text content
+        if let OutputItem::Message(ref msg) = output_item {
+            if !msg.content.is_empty() {
+                emitter.emit(ResponseStreamEvent::ContentPartAdded {
+                    response_id: self.response.id.clone(),
+                    item_id: item.id.clone(),
+                    output_index,
+                    content_index: 0,
+                    part: msg.content[0].clone(),
+                });
+            }
+        }
     }
 
     fn handle_item_updated<E: StreamEventEmitter>(&mut self, item: &ThreadItem, emitter: &mut E) {
-        let Some(state) = self.active_items.get_mut(&item.id) else {
-            return;
+        // Handle updates for items not yet started (implicit start)
+        let state = if let Some(state) = self.active_items.get_mut(&item.id) {
+            state
+        } else {
+            // Implicit start: create item and emit Added event
+            self.handle_item_started(item, emitter);
+            match self.active_items.get_mut(&item.id) {
+                Some(s) => s,
+                None => return,
+            }
         };
 
         match &item.details {
             ThreadItemDetails::AgentMessage(msg) => {
-                // Emit text delta
-                let delta = if msg.text.len() > state.last_emitted_len {
-                    &msg.text[state.last_emitted_len..]
+                // Use strip_prefix for safe UTF-8 delta computation
+                let delta = if let Some(suffix) = msg.text.strip_prefix(&state.prev_text) {
+                    suffix
                 } else {
-                    ""
+                    // Non-append update: emit full text as delta (fallback)
+                    &msg.text
                 };
 
                 if !delta.is_empty() {
@@ -158,16 +181,17 @@ impl ResponseBuilder {
                         state.content_index,
                         delta,
                     );
-                    state.last_emitted_len = msg.text.len();
+                    state.prev_text = msg.text.clone();
                 }
             }
 
             ThreadItemDetails::Reasoning(r) => {
-                // Emit reasoning delta
-                let delta = if r.text.len() > state.last_emitted_len {
-                    &r.text[state.last_emitted_len..]
+                // Use strip_prefix for safe UTF-8 delta computation
+                let delta = if let Some(suffix) = r.text.strip_prefix(&state.prev_text) {
+                    suffix
                 } else {
-                    ""
+                    // Non-append update: emit full text as delta (fallback)
+                    &r.text
                 };
 
                 if !delta.is_empty() {
@@ -177,7 +201,7 @@ impl ResponseBuilder {
                         state.output_index,
                         delta,
                     );
-                    state.last_emitted_len = r.text.len();
+                    state.prev_text = r.text.clone();
                 }
             }
 
@@ -188,6 +212,8 @@ impl ResponseBuilder {
     }
 
     fn handle_item_completed<E: StreamEventEmitter>(&mut self, item: &ThreadItem, emitter: &mut E) {
+        let was_started = self.item_id_to_index.contains_key(&item.id);
+
         let output_index = self
             .item_id_to_index
             .get(&item.id)
@@ -204,11 +230,60 @@ impl ResponseBuilder {
         let status = self.determine_item_status(&item.details);
         let output_item = self.convert_thread_item(item, status);
 
+        // For atomic completions (never started), emit Added first
+        if !was_started {
+            emitter.output_item_added(&self.response.id, output_index, output_item.clone());
+        }
+
         // Update the response output
         if output_index < self.response.output.len() {
             self.response.output[output_index] = output_item.clone();
         } else {
             self.response.add_output(output_item.clone());
+        }
+
+        // Emit content-specific "done" events based on item type
+        match &output_item {
+            OutputItem::Message(msg) => {
+                // Emit OutputTextDone for text content
+                if let Some(ContentPart::OutputText(text_content)) = msg.content.first() {
+                    emitter.emit(ResponseStreamEvent::OutputTextDone {
+                        response_id: self.response.id.clone(),
+                        item_id: item.id.clone(),
+                        output_index,
+                        content_index: 0,
+                        text: text_content.text.clone(),
+                    });
+                    emitter.emit(ResponseStreamEvent::ContentPartDone {
+                        response_id: self.response.id.clone(),
+                        item_id: item.id.clone(),
+                        output_index,
+                        content_index: 0,
+                        part: msg.content[0].clone(),
+                    });
+                }
+            }
+            OutputItem::Reasoning(_) => {
+                // Emit ReasoningDone
+                emitter.emit(ResponseStreamEvent::ReasoningDone {
+                    response_id: self.response.id.clone(),
+                    item_id: item.id.clone(),
+                    output_index,
+                    item: output_item.clone(),
+                });
+            }
+            OutputItem::FunctionCall(fc) => {
+                // Emit FunctionCallArgumentsDone
+                if let Ok(args_str) = serde_json::to_string(&fc.arguments) {
+                    emitter.emit(ResponseStreamEvent::FunctionCallArgumentsDone {
+                        response_id: self.response.id.clone(),
+                        item_id: item.id.clone(),
+                        output_index,
+                        arguments: args_str,
+                    });
+                }
+            }
+            _ => {}
         }
 
         // Clean up active state
@@ -461,5 +536,150 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e, ResponseStreamEvent::OutputItemDone { .. })));
+        // Verify ContentPartAdded is emitted
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, ResponseStreamEvent::ContentPartAdded { .. })));
+        // Verify OutputTextDone is emitted
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, ResponseStreamEvent::OutputTextDone { .. })));
+    }
+
+    #[test]
+    fn test_atomic_completion_emits_added_and_done() {
+        let mut builder = ResponseBuilder::new("gpt-4");
+        let mut emitter = VecStreamEmitter::new();
+
+        // Complete item without prior start (atomic)
+        let item = ThreadItem {
+            id: "msg_atomic".to_string(),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                text: "Atomic message".to_string(),
+            }),
+        };
+        builder.process_event(
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
+            &mut emitter,
+        );
+
+        let events = emitter.into_events();
+        // Must emit Added before Done for atomic completions
+        let added_pos = events
+            .iter()
+            .position(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. }));
+        let done_pos = events
+            .iter()
+            .position(|e| matches!(e, ResponseStreamEvent::OutputItemDone { .. }));
+
+        assert!(added_pos.is_some(), "OutputItemAdded should be emitted");
+        assert!(done_pos.is_some(), "OutputItemDone should be emitted");
+        assert!(
+            added_pos.unwrap() < done_pos.unwrap(),
+            "Added must come before Done"
+        );
+    }
+
+    #[test]
+    fn test_update_without_start_handles_implicit_start() {
+        let mut builder = ResponseBuilder::new("gpt-4");
+        let mut emitter = VecStreamEmitter::new();
+
+        // Update without prior start
+        let item = ThreadItem {
+            id: "msg_implicit".to_string(),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                text: "Hello".to_string(),
+            }),
+        };
+        builder.process_event(
+            &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item }),
+            &mut emitter,
+        );
+
+        let events = emitter.into_events();
+        // Should have implicitly started
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. })));
+    }
+
+    #[test]
+    fn test_unicode_delta_safety() {
+        let mut builder = ResponseBuilder::new("gpt-4");
+        let mut emitter = VecStreamEmitter::new();
+
+        // Start with emoji
+        let item1 = ThreadItem {
+            id: "msg_unicode".to_string(),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                text: "Hello 👋".to_string(),
+            }),
+        };
+        builder.process_event(
+            &ThreadEvent::ItemStarted(ItemStartedEvent { item: item1 }),
+            &mut emitter,
+        );
+
+        // Update with more content
+        let item2 = ThreadItem {
+            id: "msg_unicode".to_string(),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                text: "Hello 👋 World 🌍".to_string(),
+            }),
+        };
+        builder.process_event(
+            &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item: item2 }),
+            &mut emitter,
+        );
+
+        // Should not panic and should emit delta
+        let events = emitter.into_events();
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, ResponseStreamEvent::OutputTextDelta { .. })));
+    }
+
+    #[test]
+    fn test_non_append_update_fallback() {
+        let mut builder = ResponseBuilder::new("gpt-4");
+        let mut emitter = VecStreamEmitter::new();
+
+        // Start with some text
+        let item1 = ThreadItem {
+            id: "msg_edit".to_string(),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                text: "Original text".to_string(),
+            }),
+        };
+        builder.process_event(
+            &ThreadEvent::ItemStarted(ItemStartedEvent { item: item1 }),
+            &mut emitter,
+        );
+
+        // Update with completely different text (non-append)
+        let item2 = ThreadItem {
+            id: "msg_edit".to_string(),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                text: "Completely different".to_string(),
+            }),
+        };
+        builder.process_event(
+            &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item: item2 }),
+            &mut emitter,
+        );
+
+        // Should fallback to emitting full text as delta
+        let events = emitter.into_events();
+        let delta_event = events.iter().find(|e| {
+            matches!(
+                e,
+                ResponseStreamEvent::OutputTextDelta { delta, .. } if delta == "Completely different"
+            )
+        });
+        assert!(
+            delta_event.is_some(),
+            "Should emit full text as delta for non-append updates"
+        );
     }
 }

@@ -267,7 +267,69 @@ response.created
 
 ## Configuration
 
-No additional configuration is required. The Open Responses layer integrates with VT Code's existing event system automatically.
+Enable Open Responses in your `vtcode.toml`:
+
+```toml
+[agent.open_responses]
+# Enable Open Responses specification compliance layer
+# Default: false (opt-in feature)
+enabled = true
+
+# Emit Open Responses events to the event sink
+# (response.created, response.output_item.added, response.output_text.delta, etc.)
+emit_events = true
+
+# Include VT Code extension items (vtcode:file_change, vtcode:web_search, etc.)
+include_extensions = true
+
+# Map internal tool calls to Open Responses function_call items
+map_tool_calls = true
+
+# Include reasoning items in Open Responses output
+include_reasoning = true
+```
+
+### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `false` | Enable the Open Responses layer (opt-in) |
+| `emit_events` | `true` | Emit semantic streaming events |
+| `include_extensions` | `true` | Include VT Code-specific extension items |
+| `map_tool_calls` | `true` | Map tool calls to `function_call` items |
+| `include_reasoning` | `true` | Include reasoning/thinking items |
+
+### Programmatic Integration
+
+```rust
+use vtcode_core::{OpenResponsesIntegration, OpenResponsesCallback};
+use vtcode_config::OpenResponsesConfig;
+use std::sync::{Arc, Mutex};
+
+// Create integration with config
+let config = OpenResponsesConfig {
+    enabled: true,
+    ..Default::default()
+};
+let mut integration = OpenResponsesIntegration::new(config);
+
+// Set up a callback for events
+let callback: OpenResponsesCallback = Arc::new(Mutex::new(Box::new(|event| {
+    println!("Open Responses event: {:?}", event.event_type());
+})));
+integration.set_callback(callback);
+
+// Start a response session
+integration.start_response("gpt-4");
+
+// Process VT Code events (automatically converts to Open Responses)
+// integration.process_event(&thread_event);
+
+// Get the final response
+if let Some(response) = integration.finish_response() {
+    println!("Response completed: {}", response.id);
+}
+```
 
 ## References
 

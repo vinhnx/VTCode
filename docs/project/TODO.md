@@ -32,3 +32,10 @@ idea '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-2
 ---
 
 '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-28 at 11.19.28 AM.png'
+
+--
+
+review https://www.openresponses.org/specification carefully and update if needed
+on feature/openresponse-api-spec branch
+
+check vtcode-core/src/open_responses/integration.rs for full integration
