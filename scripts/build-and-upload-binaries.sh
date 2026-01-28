@@ -290,7 +290,7 @@ upload_binaries() {
     if ! gh release view "$tag" >/dev/null 2>&1; then
         if ! poll_github_release "$tag"; then
             print_info "Creating GitHub release $tag..."
-            local notes_args=("--title" "VT Code v$version")
+            local notes_args=("--title" "v$version")
             if [ -n "$notes_file" ] && [ -f "$notes_file" ]; then
                 notes_args+=("--notes-file" "$notes_file")
             else
