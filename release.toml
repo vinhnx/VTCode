@@ -1,5 +1,5 @@
 allow-branch = ["main"]
-shared-version = true
+shared-version = false
 dependent-version = "upgrade"
 consolidate-commits = true
 push = true
@@ -7,6 +7,6 @@ push-remote = "origin"
 publish = true
 tag-name = "v{{version}}"
 tag-message = "Release v{{version}}"
-pre-release-commit-message = "chore(release): bump version to {{version}}"
+pre-release-commit-message = "chore(release): bump version to {{version}} [skip ci]"
 sign-commit = false
 sign-tag = false

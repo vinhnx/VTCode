@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Core library for VT Code - a Rust-based terminal coding agent"
 license = "MIT"
-readme = "../README.md"
+readme = "README.md"
 homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-core"
@@ -15,6 +15,7 @@ include = [
     "src/",
     "tests/",
     "examples/",
+    "benches/",
     "build.rs",
     "Cargo.toml",
     "README.md",
