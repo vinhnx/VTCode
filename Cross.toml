@@ -4,8 +4,6 @@
 [build]
 # Force Docker usage for cross-compilation
 default-target = "x86_64-unknown-linux-gnu"
-container-engine = "docker"
-target = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
 
 # Environment variables needed for cross-compilation
 [build.env]

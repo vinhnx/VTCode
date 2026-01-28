@@ -736,7 +736,7 @@ bind_address = "127.0.0.1"
 port = 3000
 transport = "sse"
 name = "vtcode-mcp-server"
-version = "0.55.1"
+version = "0.72.2"
 exposed_tools = []
 
 [mcp.allowlist]
