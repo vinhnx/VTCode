@@ -22,6 +22,7 @@ exclude = [
     "dist/",
     "npm/",
     "vtcode-core/embedded_assets_source/",
+    "resources/",
 ]
 default-run = "vtcode"
 

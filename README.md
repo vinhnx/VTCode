@@ -8,6 +8,8 @@
 
 <strong>VT Code</strong> is an open-source coding agent, with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.
 
+![VT Code](./resources/gif/vtcode.gif)
+
 ---
 
 ## Installation

@@ -22,3 +22,13 @@ Nobody should be using up arrows to get previous commands in a terminal or shell
 -> implement pseudo control+r -> show a list of all previous commands with fuzzy search (check @files picker impl)
 
 ===
+
+idea '/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-28 at 2.43.32 PM.png'
+
+---
+
+'/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-28 at 2.43.39 PM.png'
+
+---
+
+'/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-28 at 11.19.28 AM.png'
