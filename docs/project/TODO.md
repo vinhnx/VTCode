@@ -65,7 +65,7 @@ check vtcode-core/src/open_responses/integration.rs for full integration
 
 ---
 
-check Jetbrain (rustrover) ACP integration doesn't wokr
+check Jetbrain (rustrover) ACP integration doesn't work
 
 ```
 {
