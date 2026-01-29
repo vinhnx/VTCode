@@ -7,6 +7,7 @@ use crate::gemini::{Content, GenerateContentRequest};
 use crate::llm::make_client;
 use crate::prompts::{generate_lightweight_instruction, generate_system_instruction};
 use anyhow::Result;
+use std::io::IsTerminal;
 
 /// Handle the ask command - single prompt without tools
 pub async fn handle_ask_command(
@@ -22,7 +23,7 @@ pub async fn handle_ask_command(
     let prompt_text = prompt.join(" ");
 
     if config.verbose {
-        println!("Sending prompt to {}: {}", config.model, prompt_text);
+        eprintln!("Sending prompt to {}: {}", config.model, prompt_text);
     }
 
     let contents = vec![Content::user_text(prompt_text)];
@@ -90,9 +91,110 @@ pub async fn handle_ask_command(
         });
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        // Print the response content directly (default behavior)
-        println!("{}", response.content);
+        if is_pipe_output() {
+            if let Some(code_only) = extract_code_only(&response.content) {
+                print!("{code_only}");
+            } else {
+                println!("{}", response.content);
+            }
+        } else {
+            // Print the response content directly (default behavior)
+            println!("{}", response.content);
+        }
     }
 
     Ok(())
+}
+
+fn is_pipe_output() -> bool {
+    !std::io::stdout().is_terminal()
+}
+
+fn extract_code_only(text: &str) -> Option<String> {
+    let blocks = extract_code_fence_blocks(text);
+    let block = select_best_code_block(&blocks)?;
+    let mut output = block.lines.join("\n");
+    if !output.ends_with('\n') {
+        output.push('\n');
+    }
+    Some(output)
+}
+
+fn extract_code_fence_blocks(text: &str) -> Vec<CodeFenceBlock> {
+    let mut blocks = Vec::new();
+    let mut current_language: Option<String> = None;
+    let mut current_lines: Vec<String> = Vec::new();
+
+    for raw_line in text.lines() {
+        let trimmed_start = raw_line.trim_start();
+        if let Some(rest) = trimmed_start.strip_prefix("```") {
+            let rest_clean = rest.trim_matches('\r');
+            let rest_trimmed = rest_clean.trim();
+            if current_language.is_some() {
+                if rest_trimmed.is_empty() {
+                    let language = current_language.take().and_then(|lang| {
+                        let cleaned = lang.trim_matches(|ch| matches!(ch, '"' | '\'' | '`'));
+                        let cleaned = cleaned.trim();
+                        if cleaned.is_empty() {
+                            None
+                        } else {
+                            Some(cleaned.to_string())
+                        }
+                    });
+                    let block_lines = std::mem::take(&mut current_lines);
+                    blocks.push(CodeFenceBlock {
+                        language,
+                        lines: block_lines,
+                    });
+                    continue;
+                }
+            } else {
+                let token = rest_trimmed.split_whitespace().next().unwrap_or_default();
+                let normalized = token
+                    .trim_matches(|ch| matches!(ch, '"' | '\'' | '`'))
+                    .trim();
+                current_language = Some(normalized.to_ascii_lowercase());
+                current_lines.clear();
+                continue;
+            }
+        }
+
+        if current_language.is_some() {
+            current_lines.push(raw_line.trim_end_matches('\r').to_string());
+        }
+    }
+
+    blocks
+}
+
+fn select_best_code_block<'a>(blocks: &'a [CodeFenceBlock]) -> Option<&'a CodeFenceBlock> {
+    let mut best = None;
+    let mut best_score = (0usize, 0u8);
+    for block in blocks {
+        let score = score_code_block(block);
+        if score > best_score {
+            best_score = score;
+            best = Some(block);
+        }
+    }
+    best
+}
+
+fn score_code_block(block: &CodeFenceBlock) -> (usize, u8) {
+    let line_count = block
+        .lines
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .count();
+    let has_language = block
+        .language
+        .as_ref()
+        .is_some_and(|lang| !lang.trim().is_empty());
+    (line_count, if has_language { 1 } else { 0 })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CodeFenceBlock {
+    language: Option<String>,
+    lines: Vec<String>,
 }
