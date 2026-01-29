@@ -248,6 +248,12 @@ main() {
             print_warning "GitHub CLI lacks 'workflow' scope. This may cause Step 4 to fail."
             print_info "Recommendation: run 'gh auth refresh -s workflow' before proceeding."
         fi
+
+        # Check current GitHub user and warn if not the expected one
+        current_user=$(gh api user --jq '.login' 2>/dev/null || echo "unknown")
+        if [[ "$current_user" != "vinhnx" ]]; then
+            print_warning "Current GitHub user is '$current_user', expected 'vinhnx'. Will attempt to switch in Step 3.5."
+        fi
     fi
 
     local current_version
@@ -315,6 +321,17 @@ main() {
     # 3.5 GitHub Release Creation via changelogithub
     # This matches the workflow used in GitHub Actions and ensures consistent formatting
     print_info "Step 3.5: Creating GitHub Release via npx changelogithub..."
+
+    # Switch to the correct GitHub account before creating the release
+    if command -v gh >/dev/null 2>&1; then
+        print_info "Switching to GitHub account vinhnx..."
+        if ! gh auth switch -u vinhnx; then
+            print_warning "Could not switch to GitHub account vinhnx, continuing with current account..."
+        fi
+    else
+        print_warning "GitHub CLI not found, skipping account switch..."
+    fi
+
     if command -v npx >/dev/null 2>&1; then
         # Ensure GITHUB_TOKEN is available for changelogithub
         if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
