@@ -222,7 +222,6 @@ pub async fn handle_ask_single_command(
     prompt: Option<String>,
     _options: AskCommandOptions,
 ) -> Result<()> {
-    // Import the actual implementation from the ask module
     let prompt_vec = if let Some(p) = prompt {
         vec![p]
     } else {
