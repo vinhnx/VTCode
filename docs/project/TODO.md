@@ -59,3 +59,27 @@ check vtcode-core/src/open_responses/integration.rs for full integration
 - vtcode-core/src/open_responses/{bridge,events,items,response,integration,mod}.rs
 - src/agent/runloop/unified/inline_events/harness.rs
 - src/agent/runloop/unified/turn/session_loop.rs
+
+---
+
+check Jetbrain (rustrover) ACP integration doesn't wokr
+
+```
+{
+  "agent_servers": {
+    "vtcode": {
+      "command": "/Users/vinhnguyenxuan/.cargo/bin/vtcode",
+      "args": ["acp"],
+      "env": {
+        "VT_ACP_ENABLED": "1",
+//
+//        "VT_ACP_ZED_ENABLED": "1",
+      },
+    },
+  }
+}
+```
+
+reference 
+https://docs.factory.ai/integrations/jetbrains
+https://agentclientprotocol.com/llms.txt
