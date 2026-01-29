@@ -72,38 +72,27 @@ detect_platform() {
     echo "${arch}-${os}"
 }
 
-# Fetch the latest release info from GitHub API
-fetch_latest_release() {
-    log_info "Fetching latest VT Code release..."
-    
+# Fetch limited releases info from GitHub API (last 5 versions)
+fetch_recent_releases() {
+    log_info "Fetching recent VT Code releases..."
+
     local response
-    response=$(curl -fsSL "$GITHUB_API" 2>/dev/null || true)
-    
+    response=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=5" 2>/dev/null || true)
+
     if [[ -z "$response" ]]; then
-        log_error "Failed to fetch release info from GitHub API"
+        log_error "Failed to fetch releases info from GitHub API"
         log_info "Ensure you have internet connection and GitHub is accessible"
         exit 1
     fi
-    
+
     echo "$response"
 }
 
 # Extract download URL for the detected platform
 get_download_url() {
-    local json="$1"
+    local release_tag="$1"
     local platform="$2"
-    local release_tag
-    
-    # Extract tag name
-    release_tag=$(echo "$json" | grep -o '"tag_name": "[^"]*' | cut -d'"' -f4)
-    
-    if [[ -z "$release_tag" ]]; then
-        log_error "Could not parse release tag from GitHub API"
-        exit 1
-    fi
-    
-    log_info "Latest version: $release_tag" >&2
-    
+
     # Determine file extension based on platform
     local file_ext
     if [[ "$platform" == *"darwin"* ]]; then
@@ -113,10 +102,60 @@ get_download_url() {
     else
         file_ext="zip"
     fi
-    
+
     # Build download URL (must be on its own line, only echo output is captured)
     local filename="vtcode-${release_tag}-${platform}.${file_ext}"
     echo "${GITHUB_RELEASES}/${release_tag}/${filename}"
+}
+
+# Try to download a specific version, return success (0) or failure (1)
+try_download_version() {
+    local version="$1"
+    local platform="$2"
+    local temp_dir="$3"
+
+    local download_url
+    download_url=$(get_download_url "$version" "$platform")
+
+    log_info "Trying version $version..."
+    log_info "URL: $download_url"
+
+    # Try to download the file
+    if curl -fSL --connect-timeout 10 --max-time 30 -o "$temp_dir/vtcode-binary.tmp" "$download_url" 2>/dev/null; then
+        mv "$temp_dir/vtcode-binary.tmp" "$temp_dir/vtcode-binary.tar.gz"
+        log_success "Successfully downloaded version $version"
+        return 0
+    else
+        log_info "Version $version not available, trying older version..."
+        return 1
+    fi
+}
+
+# Find and download the most recent release with assets for the given platform
+find_and_download_latest_with_assets() {
+    local all_releases="$1"
+    local platform="$2"
+    local temp_dir="$3"
+
+    # Extract all tag names - they appear in the format "tag_name": "vX.Y.Z"
+    local tags
+    tags=$(echo "$all_releases" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
+
+    log_info "Checking releases for available binaries..."
+
+    # Iterate through tags to find one with assets
+    for tag in $tags; do
+        if [[ -n "$tag" ]]; then
+            if try_download_version "$tag" "$platform" "$temp_dir"; then
+                log_info "Using version: $tag"
+                echo "$tag"
+                return 0
+            fi
+        fi
+    done
+
+    log_error "No releases with binaries found for platform: $platform"
+    exit 1
 }
 
 # Download binary with progress
@@ -288,61 +327,56 @@ cleanup() {
 main() {
     log_info "VT Code Native Installer"
     echo ""
-    
+
     # Detect platform
     local platform
     platform=$(detect_platform)
     log_info "Detected platform: $platform"
-    
+
     # Create temporary directory for downloads
     local temp_dir
     temp_dir=$(mktemp -d)
     trap "rm -rf $temp_dir cleanup" EXIT
-    
-    # Fetch latest release
-    local release_json
-    release_json=$(fetch_latest_release)
-    
-    # Get download URL
-    local download_url
-    download_url=$(get_download_url "$release_json" "$platform")
-    
-    # Extract version for checksum verification
+
+    # Fetch recent releases to check for available binaries
+    local all_releases
+    all_releases=$(fetch_recent_releases)
+
+    # Find and download the most recent release with assets for this platform
     local release_tag
-    release_tag=$(echo "$release_json" | grep -o '"tag_name": "[^"]*' | cut -d'"' -f4)
-    
-    # Download binary
+    release_tag=$(find_and_download_latest_with_assets "$all_releases" "$platform" "$temp_dir")
+
+    # Archive file is already downloaded by find_and_download_latest_with_assets
     local archive_file="$temp_dir/vtcode-binary.tar.gz"
-    download_binary "$download_url" "$archive_file"
-    
+
     # Verify checksum
     verify_checksum "$archive_file" "$release_tag"
-    
+
     # Extract binary
     local binary_path
     binary_path=$(extract_binary "$archive_file" "$platform")
-    
+
     # Install binary
     local target_path="$INSTALL_DIR/$BIN_NAME"
     install_binary "$binary_path" "$target_path"
-    
+
     # Check if in PATH
     if ! check_path "$INSTALL_DIR"; then
         add_to_path "$INSTALL_DIR"
     fi
-    
+
     echo ""
     log_success "Installation complete!"
     log_info "VT Code is ready to use"
     echo ""
-    
+
     # Test installation
     if "$target_path" --version &>/dev/null; then
         log_success "Version check passed: $($target_path --version)"
     else
         log_warning "Could not verify installation, but binary appears to be installed"
     fi
-    
+
     echo ""
     log_info "To get started, run: vtcode ask 'hello world'"
 }
