@@ -236,8 +236,7 @@ impl ToOpenResponse for crate::llm::provider::LLMResponse {
                 let (name, arguments) = if let Some(ref func) = tc.function {
                     (
                         func.name.clone(),
-                        serde_json::from_str(&func.arguments)
-                            .unwrap_or(serde_json::json!({})),
+                        serde_json::from_str(&func.arguments).unwrap_or(serde_json::json!({})),
                     )
                 } else {
                     (tc.call_type.clone(), serde_json::json!({}))

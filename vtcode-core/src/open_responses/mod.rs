@@ -52,9 +52,7 @@ pub fn is_valid_extension_type(type_name: &str) -> bool {
             && prefix
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_')
-            && name
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     } else {
         false
     }

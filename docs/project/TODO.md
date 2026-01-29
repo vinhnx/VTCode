@@ -43,6 +43,7 @@ check vtcode-core/src/open_responses/integration.rs for full integration
 ✅ DONE - Open Responses Spec Compliance (2026-01-28)
 
 **Spec Compliance Fixes:**
+
 1. **Streaming Event Order** - Fixed content part lifecycle (added → delta → done → content_part.done)
 2. **Extension Type Convention** - Custom items serialize with `custom_type` as actual `"type"` field
 3. **Required Fields** - Removed `skip_serializing_if` from `error`, `usage`, `tools` (now serialize as `null`)
@@ -50,12 +51,14 @@ check vtcode-core/src/open_responses/integration.rs for full integration
 5. **Sequence Numbers** - Added `SequencedEvent<'a>` wrapper for SSE transport
 
 **Main Flow Integration:**
+
 - `HarnessEventEmitter` now supports Open Responses via `enable_open_responses()`
 - Events are dual-written: harness JSONL + Open Responses SSE format
 - Terminal `[DONE]` marker written on session finish
 - Configured via `[agent.open_responses]` in vtcode.toml
 
 **Files Changed:**
+
 - vtcode-core/src/open_responses/{bridge,events,items,response,integration,mod}.rs
 - src/agent/runloop/unified/inline_events/harness.rs
 - src/agent/runloop/unified/turn/session_loop.rs
@@ -80,6 +83,54 @@ check Jetbrain (rustrover) ACP integration doesn't wokr
 }
 ```
 
-reference 
+reference
 https://docs.factory.ai/integrations/jetbrains
 https://agentclientprotocol.com/llms.txt
+
+--
+
+fix unix pipe, the file should just contains the code only, not the full prompt and response
+
+eg:
+
+```
+vtcode ask 'write a hello world rust program' > hello.rs
+```
+
+currently:
+
+````
+~/Developer/learn-by-doing/vtcode main* ⇡
+14:00:25 ❯ cat hello.rs
+Here's a simple "Hello, World!" program in Rust:
+```rust
+fn main() {
+    println!("Hello, World!");                                                                           }                                                                                                        ```
+### Explanation:
+1. `fn main()`: The entry point of the program where execution begins.
+2. `println!`: A Rust macro (note the `!`) that prints text to the console.
+3. The program prints "Hello, World!" followed by a newline.
+
+### How to run it:
+1. Save the code in a file named `main.rs`
+2. Compile and run using:
+   ```bash
+   rustc main.rs   # Compile to an executable
+   ./main          # Run the program (use `main.exe` on Windows)
+````
+
+### Output:
+
+```
+Hello, World!
+```
+
+For larger projects, you can use Cargo (Rust's package manager) by running `cargo new hello_world` and placing the code in `src/main.rs`.
+
+```
+
+it should just contains the code only, not the full prompt and response.
+
+```
+
+https://github.com/vinhnx/vtcodetab=readme-ov-file#cli-design-principles
