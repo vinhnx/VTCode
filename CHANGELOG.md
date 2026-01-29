@@ -2,6 +2,15 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.73.4 - 2026-01-29
+
+* Fix vtcode-file-search build error (8437a13d)
+* chore(release): bump version to 0.73.3 [skip ci] (48dd4c9b)
+* docs: update changelog for v0.73.3 [skip ci] (d1c5e175)
+* fix: streamline output handling in ask command and improve code extraction logic (8de09e16)
+* chore: switch LLM provider to Ollama and update related configs, fix minor lint issues in release script (dc2e637d)
+* chore: update homebrew formula to v0.73.2 (bf537280)
+
 ## v0.73.3 - 2026-01-29
 
 * fix: streamline output handling in ask command and improve code extraction logic (8de09e16)
