@@ -93,13 +93,13 @@ update_changelog_from_commits() {
         else
             full_output=$(npx changelogithub --dry 2>/dev/null || echo "")
         fi
-        
+
         # Extract content between separators (14 dashes)
         changelog_content=$(echo "$full_output" | sed -n '/^--------------$/,/^--------------$/p' | sed '1d;$d')
-        
+
         # Replace ...HEAD with ...v$version in the comparison link
         changelog_content=$(echo "$changelog_content" | sed "s/\.\.\.HEAD/...v$version/g")
-        
+
         # If extraction failed or empty, fallback to simple log
         if [[ -z "$(echo "$changelog_content" | tr -d '[:space:]')" ]]; then
             changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"* %s (%h)")
@@ -219,14 +219,14 @@ main() {
             --skip-crates) skip_crates=true; shift ;;
             --skip-binaries) skip_binaries=true; shift ;;
             --skip-docs) skip_docs=true; shift ;;
-            *) 
+            *)
                 if [[ -n "$release_argument" ]]; then
                     print_error 'Multiple versions specified'
                     exit 1
                 fi
                 release_argument=$1
                 shift
-                ;; 
+                ;;
         esac
     done
 
@@ -261,9 +261,9 @@ main() {
     else
         IFS='.' read -ra v <<< "$current_version"
         case "$release_argument" in
-            major) next_version="$((v[0] + 1)).0.0" ;; 
-            minor) next_version="${v[0]}.$((v[1] + 1)).0" ;; 
-            patch) next_version="${v[0]}.${v[1]}.$((v[2] + 1))" ;; 
+            major) next_version="$((v[0] + 1)).0.0" ;;
+            minor) next_version="${v[0]}.$((v[1] + 1)).0" ;;
+            patch) next_version="${v[0]}.${v[1]}.$((v[2] + 1))" ;;
         esac
     fi
 
@@ -320,7 +320,7 @@ main() {
         if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
             export GITHUB_TOKEN=$(gh auth token)
         fi
-        
+
         # Run changelogithub to create the release on GitHub
         if npx changelogithub; then
             print_success "GitHub Release v$released_version created successfully"
