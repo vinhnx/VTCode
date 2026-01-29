@@ -72,6 +72,7 @@ vtcode-markdown-store = { path = "vtcode-markdown-store" }
 vtcode-indexer = { path = "vtcode-indexer" }
 vtcode-bash-runner = { path = "vtcode-bash-runner" }
 vtcode-exec-events = { path = "vtcode-exec-events" }
+vtcode-file-search = { path = "vtcode-file-search" }
 mcp-types = { path = "third-party/mcp-types" }
 
 [workspace.lints]
