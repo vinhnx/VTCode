@@ -49,6 +49,10 @@ check_dependencies() {
         missing_tools+=("gh (GitHub CLI)")
     fi
 
+    if ! command -v shasum &> /dev/null && ! command -v sha256sum &> /dev/null; then
+        missing_tools+=("shasum or sha256sum")
+    fi
+
     if [ ${#missing_tools[@]} -ne 0 ]; then
         print_error "Missing required tools: ${missing_tools[*]}"
         print_info "Please install the missing tools and try again"
@@ -319,16 +323,53 @@ calculate_checksums() {
     fi
 
     print_info "Calculating SHA256 checksums..."
-    cd "$dist_dir"
+    
+    # Use a subshell to avoid changing directory in the main script
+    (
+        cd "$dist_dir"
+        # Clear/create checksums.txt
+        rm -f checksums.txt
+        touch checksums.txt
 
-    for f in *.tar.gz; do
-        if [ -f "$f" ]; then
-            shasum -a 256 "$f" | cut -d' ' -f1 > "${f%.tar.gz}.sha256"
-            print_info "Checksum for $f: $(cat ${f%.tar.gz}.sha256)"
+        # Determine available checksum tool
+        local shacmd=""
+        if command -v sha256sum &> /dev/null; then
+            shacmd="sha256sum"
+        elif command -v shasum &> /dev/null; then
+            shacmd="shasum -a 256"
+        else
+            print_error "Neither sha256sum nor shasum found"
+            exit 1
         fi
-    done
 
-    cd ..
+        for f in *; do
+            # Process common archive formats
+            if [[ "$f" == *.tar.gz ]] || [[ "$f" == *.zip ]] || [[ "$f" == *.tar.xz ]]; then
+                if [ -f "$f" ]; then
+                    # Standard format: hash  filename
+                    $shacmd "$f" >> checksums.txt
+                    # Keep individual files for Homebrew formula update (use original filename with .sha256 suffix)
+                    # We keep the old naming convention for .tar.gz for compatibility
+                    local shafile=""
+                    if [[ "$f" == *.tar.gz ]]; then
+                        shafile="${f%.tar.gz}.sha256"
+                    else
+                        shafile="${f}.sha256"
+                    fi
+                    $shacmd "$f" | cut -d' ' -f1 > "$shafile"
+                    print_info "Checksum for $f: $(cat "$shafile")"
+                fi
+            fi
+        done
+        
+        if [ -s checksums.txt ]; then
+            print_info "Generated checksums.txt:"
+            cat checksums.txt
+        else
+            print_warning "No binaries found to checksum"
+        fi
+    )
+
     print_success "SHA256 checksums calculated"
 }
 
@@ -503,6 +544,7 @@ main() {
             calculate_checksums "$version"
         fi
         if [ "$only_upload" = true ]; then
+            calculate_checksums "$version"
             upload_binaries "$version" "$notes_file"
         fi
         if [ "$only_homebrew" = true ]; then

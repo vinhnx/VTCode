@@ -116,45 +116,58 @@ function Verify-Checksum {
     
     Write-Info "Verifying binary integrity..."
     
-    # Try to download checksums from GitHub
-    $ChecksumsUrl = "$GitHubReleases/$ReleaseTag/checksums.txt"
+    $Filename = (Get-Item $BinaryPath).Name
     $TempChecksumFile = Join-Path $env:TEMP "vtcode-checksums.txt"
-    
+    $ExpectedChecksum = ""
+
+    # Try to download checksums.txt first
+    $ChecksumsUrl = "$GitHubReleases/$ReleaseTag/checksums.txt"
     try {
         Invoke-WebRequest -Uri $ChecksumsUrl -OutFile $TempChecksumFile -ErrorAction SilentlyContinue
+        if (Test-Path $TempChecksumFile) {
+            $ExpectedChecksum = (Get-Content $TempChecksumFile | Select-String $Filename | ForEach-Object { $_ -split '\s+' } | Select-Object -First 1).Trim()
+        }
     }
     catch {
-        Write-Warning "Checksums file not found, skipping verification"
-        return
+        # Continue to try individual file
     }
-    
-    if (-not (Test-Path $TempChecksumFile)) {
-        Write-Warning "Checksums file not found, skipping verification"
-        return
+
+    # If not found in checksums.txt, try individual .sha256 file
+    if ([string]::IsNullOrEmpty($ExpectedChecksum)) {
+        $ShaUrl = "$GitHubReleases/$ReleaseTag/$Filename.sha256"
+        try {
+            Invoke-WebRequest -Uri $ShaUrl -OutFile $TempChecksumFile -ErrorAction SilentlyContinue
+            if (Test-Path $TempChecksumFile) {
+                $ExpectedChecksum = (Get-Content $TempChecksumFile | Select-Object -First 1).Trim()
+            }
+        }
+        catch {
+            # Both failed
+        }
     }
-    
-    $Filename = (Get-Item $BinaryPath).Name
-    $ExpectedChecksum = (Get-Content $TempChecksumFile | Select-String $Filename | ForEach-Object { $_ -split '\s+' } | Select-Object -First 1).Trim()
     
     if ([string]::IsNullOrEmpty($ExpectedChecksum)) {
-        Write-Warning "Checksum not found for this platform, skipping verification"
+        Write-Warning "Checksum not found for $Filename, skipping verification"
+        if (Test-Path $TempChecksumFile) { Remove-Item -Path $TempChecksumFile -Force }
         return
     }
     
     # Compute actual checksum
     $ActualChecksum = (Get-FileHash -Path $BinaryPath -Algorithm SHA256).Hash
     
-    if ($ActualChecksum -ne $ExpectedChecksum) {
-        Write-Error "Checksum mismatch!"
+    # PowerShell Get-FileHash returns uppercase, while shasum usually returns lowercase
+    if ($ActualChecksum.ToLower() -ne $ExpectedChecksum.ToLower()) {
+        Write-Error "Checksum mismatch for $Filename!"
         Write-Error "Expected: $ExpectedChecksum"
         Write-Error "Got:      $ActualChecksum"
+        if (Test-Path $TempChecksumFile) { Remove-Item -Path $TempChecksumFile -Force }
         exit 1
     }
     
-    Write-Success "Checksum verified"
+    Write-Success "Checksum verified: $ExpectedChecksum"
     
     # Clean up temporary file
-    Remove-Item -Path $TempChecksumFile -Force -ErrorAction SilentlyContinue
+    if (Test-Path $TempChecksumFile) { Remove-Item -Path $TempChecksumFile -Force }
 }
 
 # Extract binary from zip

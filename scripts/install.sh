@@ -198,46 +198,56 @@ verify_checksum() {
     
     log_info "Verifying binary integrity..."
     
-    # Try to download checksums from GitHub release
-    local checksums_url="${GITHUB_RELEASES}/${release_tag}/checksums.txt"
-    local temp_checksums="/tmp/vtcode-checksums.txt"
-    
-    if ! curl -fsSL -o "$temp_checksums" "$checksums_url" 2>/dev/null; then
-        log_warning "Checksums file not found, skipping verification"
-        return 0
-    fi
-    
     local basename_file
     basename_file=$(basename "$binary_file")
     
-    # Extract checksum for this platform
-    local expected_checksum
-    expected_checksum=$(grep "$basename_file" "$temp_checksums" 2>/dev/null | awk '{print $1}' || true)
+    local temp_checksums
+    temp_checksums=$(mktemp)
+    
+    # Try to download checksums.txt first
+    local checksums_url="${GITHUB_RELEASES}/${release_tag}/checksums.txt"
+    local expected_checksum=""
+    
+    if curl -fsSL -o "$temp_checksums" "$checksums_url" 2>/dev/null; then
+        expected_checksum=$(grep "$basename_file" "$temp_checksums" 2>/dev/null | awk '{print $1}' || true)
+    fi
+    
+    # If not found in checksums.txt, try individual .sha256 file
+    if [[ -z "$expected_checksum" ]]; then
+        local sha_url="${GITHUB_RELEASES}/${release_tag}/${basename_file%.tar.gz}.sha256"
+        if curl -fsSL -o "$temp_checksums" "$sha_url" 2>/dev/null; then
+            expected_checksum=$(cat "$temp_checksums" | awk '{print $1}')
+        fi
+    fi
+    
+    rm -f "$temp_checksums"
     
     if [[ -z "$expected_checksum" ]]; then
-        log_warning "Checksum not found for this platform, skipping verification"
+        log_warning "Checksum not found for $basename_file, skipping verification"
         return 0
     fi
     
     # Compute actual checksum
-    local actual_checksum
+    local actual_checksum=""
     if command -v sha256sum &> /dev/null; then
         actual_checksum=$(sha256sum "$binary_file" | awk '{print $1}')
     elif command -v shasum &> /dev/null; then
         actual_checksum=$(shasum -a 256 "$binary_file" | awk '{print $1}')
+    elif command -v sha256 &> /dev/null; then
+        actual_checksum=$(sha256 -q "$binary_file")
     else
-        log_warning "sha256sum/shasum not found, skipping verification"
+        log_warning "No checksum tool (sha256sum/shasum/sha256) found, skipping verification"
         return 0
     fi
     
     if [[ "$actual_checksum" != "$expected_checksum" ]]; then
-        log_error "Checksum mismatch!"
+        log_error "Checksum mismatch for $basename_file!"
         log_error "Expected: $expected_checksum"
         log_error "Got:      $actual_checksum"
         exit 1
     fi
     
-    log_success "Checksum verified"
+    log_success "Checksum verified: $expected_checksum"
 }
 
 # Extract binary from archive
