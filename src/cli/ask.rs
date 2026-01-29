@@ -1,9 +1,6 @@
-use crate::agent::runloop::text_tools::{CodeFenceBlock, extract_code_fence_blocks};
-use crate::cli::AskCommandOptions;
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use serde_json::{Map, Value, json};
-use std::io::IsTerminal;
 use std::io::{self, Write};
 use vtcode_core::utils::colors::style;
 use vtcode_core::{
@@ -15,8 +12,9 @@ use vtcode_core::{
             FinishReason, LLMRequest, LLMResponse, LLMStreamEvent, Message, ToolChoice, Usage,
         },
     },
-    tools::{ToolPermissionPolicy, ToolRegistry},
+    tools::{ToolRegistry, ToolPermissionPolicy},
 };
+use crate::cli::AskCommandOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AskRequestMode {
@@ -74,57 +72,6 @@ fn print_final_response(printed_any: bool, response: Option<LLMResponse>) {
     }
 }
 
-fn is_pipe_output() -> bool {
-    !io::stdout().is_terminal()
-}
-
-fn extract_code_only(text: &str) -> Option<String> {
-    let blocks = extract_code_fence_blocks(text);
-    let block = select_best_code_block(&blocks)?;
-    if block.lines.is_empty() {
-        return None;
-    }
-    let mut output = block.lines.join("\n");
-    if !output.ends_with('\n') {
-        output.push('\n');
-    }
-    Some(output)
-}
-
-fn select_best_code_block<'a>(blocks: &'a [CodeFenceBlock]) -> Option<&'a CodeFenceBlock> {
-    let mut best = None;
-    let mut best_score = (0usize, 0u8);
-    for block in blocks {
-        let score = score_code_block(block);
-        if score > best_score {
-            best_score = score;
-            best = Some(block);
-        }
-    }
-    best
-}
-
-fn score_code_block(block: &CodeFenceBlock) -> (usize, u8) {
-    let line_count = block
-        .lines
-        .iter()
-        .filter(|line| !line.trim().is_empty())
-        .count();
-    let has_language = block
-        .language
-        .as_ref()
-        .is_some_and(|lang| !lang.trim().is_empty());
-    (line_count, if has_language { 1 } else { 0 })
-}
-
-fn render_pipe_response(text: &str) {
-    if let Some(code_only) = extract_code_only(text) {
-        print!("{code_only}");
-    } else {
-        println!("{}", text);
-    }
-}
-
 /// Handle the ask command - single prompt, no tools
 pub async fn handle_ask_command(
     config: &CoreAgentConfig,
@@ -153,8 +100,7 @@ async fn handle_ask_command_impl(
     }
 
     let wants_json = options.wants_json();
-    let pipe_output = is_pipe_output();
-    if !wants_json && !config.quiet && !pipe_output {
+    if !wants_json && !config.quiet {
         eprintln!("{}", style("[ASK]").cyan().bold());
         eprintln!("  {:16} {}", "provider", &config.provider);
         eprintln!("  {:16} {}\n", "model", &config.model);
@@ -178,7 +124,6 @@ async fn run_ask_without_tools(
     options: AskCommandOptions,
 ) -> Result<()> {
     let wants_json = options.wants_json();
-    let pipe_output = is_pipe_output();
 
     let provider = match create_provider_for_model(
         &config.model,
@@ -229,7 +174,7 @@ async fn run_ask_without_tools(
             while let Some(event) = stream.next().await {
                 match event {
                     Ok(LLMStreamEvent::Token { delta }) => {
-                        if wants_json || pipe_output {
+                        if wants_json {
                             // The final response carries the content; suppress streaming output.
                         } else {
                             if printed_reasoning && !reasoning_line_finished {
@@ -244,7 +189,7 @@ async fn run_ask_without_tools(
                     Ok(LLMStreamEvent::Reasoning { delta }) => {
                         if wants_json {
                             streamed_reasoning.push_str(&delta);
-                        } else if !pipe_output {
+                        } else {
                             if !printed_reasoning {
                                 eprint!("");
                                 printed_reasoning = true;
@@ -273,9 +218,6 @@ async fn run_ask_without_tools(
                     Some(streamed_reasoning)
                 };
                 emit_json_response(config, final_response, reasoning)?;
-            } else if pipe_output {
-                let text = final_response.content.unwrap_or_default();
-                render_pipe_response(&text);
             } else {
                 if printed_reasoning && !reasoning_line_finished {
                     eprintln!();
@@ -292,9 +234,6 @@ async fn run_ask_without_tools(
 
             if wants_json {
                 emit_json_response(config, response, None)?;
-            } else if pipe_output {
-                let text = response.content.unwrap_or_default();
-                render_pipe_response(&text);
             } else {
                 print_final_response(false, Some(response));
             }
@@ -309,9 +248,9 @@ async fn run_ask_with_tools(
     prompt: &str,
     options: AskCommandOptions,
 ) -> Result<()> {
+    use vtcode_core::core::agent::runner::{AgentRunner, Task, ContextItem};
     use vtcode_core::config::VTCodeConfig;
     use vtcode_core::config::loader::ConfigManager;
-    use vtcode_core::core::agent::runner::{AgentRunner, ContextItem, Task};
 
     // Load the full configuration for the agent runner
     let full_config = ConfigManager::load_from_workspace(&config.workspace)?
@@ -319,8 +258,11 @@ async fn run_ask_with_tools(
         .clone();
 
     // Create the agent runner
-    let mut runner =
-        AgentRunner::new(config.clone(), full_config, config.workspace.clone()).await?;
+    let mut runner = AgentRunner::new(
+        config.clone(),
+        full_config,
+        config.workspace.clone(),
+    ).await?;
 
     // Apply tool permissions based on CLI options
     if options.skip_confirmations {
@@ -342,13 +284,10 @@ async fn run_ask_with_tools(
     // the default behavior (with confirmations) will apply, which is appropriate
 
     // Create a single task for the prompt
-    let task_id = format!(
-        "ask-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    );
+    let task_id = format!("ask-{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs());
     let task = Task {
         id: task_id,
         title: "CLI Ask Task".to_string(),
@@ -370,16 +309,11 @@ async fn run_ask_with_tools(
         payload.insert("turns_executed".to_string(), json!(result.turns_executed));
         payload.insert("outcome".to_string(), json!(result.outcome.code()));
         payload.insert("modified_files".to_string(), json!(result.modified_files));
-        payload.insert(
-            "executed_commands".to_string(),
-            json!(result.executed_commands),
-        );
+        payload.insert("executed_commands".to_string(), json!(result.executed_commands));
 
         let serialized = serde_json::to_string_pretty(&Value::Object(payload))
             .context("failed to serialize ask response as JSON")?;
         println!("{serialized}");
-    } else if is_pipe_output() {
-        render_pipe_response(&result.summary);
     } else {
         // Print the summary response
         println!("{}", result.summary);
