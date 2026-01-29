@@ -2,6 +2,11 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.73.5 - 2026-01-29
+
+* fix: improve release fetching with fallback for older versions, enhance platform-specific binary handling (5d1344a8)
+* Improve deploy release (6b931dd7)
+
 ## v0.73.4 - 2026-01-29
 
 * Fix vtcode-file-search build error (8437a13d)
