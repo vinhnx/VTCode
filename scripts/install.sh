@@ -24,6 +24,11 @@ GITHUB_RELEASES="https://github.com/$REPO/releases/download"
 INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
 mkdir -p "$INSTALL_DIR"
 
+# Hide/show cursor
+show_cursor() { printf "\033[?25h"; }
+hide_cursor() { printf "\033[?25l"; }
+trap show_cursor EXIT INT TERM
+
 # Logging functions (all output to stderr to avoid interfering with command output)
 log_info() {
     printf '%b\n' "${BLUE}INFO:${NC} $1" >&2
@@ -39,6 +44,25 @@ log_error() {
 
 log_warning() {
     printf '%b\n' "${YELLOW}⚠${NC} $1" >&2
+}
+
+# Spinner for long running tasks
+show_spinner() {
+    local pid=$1
+    local msg=$2
+    local frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local n=${#frames}
+    local i=0
+    
+    hide_cursor
+    while kill -0 "$pid" 2>/dev/null; do
+        local frame="${frames:i:1}"
+        printf "\r${BLUE}%s${NC} %s" "$frame" "$msg" >&2
+        i=$(( (i + 1) % n ))
+        sleep 0.1
+    done
+    printf "\r\033[K" >&2 # Clear line
+    show_cursor
 }
 
 # Detect OS and architecture
@@ -74,10 +98,17 @@ detect_platform() {
 
 # Fetch limited releases info from GitHub API (last 5 versions)
 fetch_recent_releases() {
-    log_info "Fetching recent VT Code releases..."
+    local response_file
+    response_file=$(mktemp)
+    
+    (curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=5" > "$response_file" 2>/dev/null) &
+    local pid=$!
+    show_spinner "$pid" "Fetching recent releases..."
+    wait "$pid" || true
 
     local response
-    response=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=5" 2>/dev/null || true)
+    response=$(cat "$response_file")
+    rm -f "$response_file"
 
     if [[ -z "$response" ]]; then
         log_error "Failed to fetch releases info from GitHub API"
@@ -108,54 +139,42 @@ get_download_url() {
     echo "${GITHUB_RELEASES}/${release_tag}/${filename}"
 }
 
-# Try to download a specific version, return success (0) or failure (1)
-try_download_version() {
+# Check if a specific version is available for the platform
+check_version_available() {
     local version="$1"
     local platform="$2"
-    local temp_dir="$3"
 
     local download_url
     download_url=$(get_download_url "$version" "$platform")
 
-    log_info "Trying version $version..."
-    log_info "URL: $download_url"
-
-    # Try to download the file
-    if curl -fSL --connect-timeout 10 --max-time 30 -o "$temp_dir/vtcode-binary.tmp" "$download_url" 2>/dev/null; then
-        mv "$temp_dir/vtcode-binary.tmp" "$temp_dir/vtcode-binary.tar.gz"
-        log_success "Successfully downloaded version $version"
+    # Use HEAD request to check availability
+    if curl -fIsL --connect-timeout 5 "$download_url" > /dev/null 2>&1; then
         return 0
     else
-        log_info "Version $version not available, trying older version..."
         return 1
     fi
 }
 
 # Find and download the most recent release with assets for the given platform
-find_and_download_latest_with_assets() {
+find_latest_release_tag() {
     local all_releases="$1"
     local platform="$2"
-    local temp_dir="$3"
 
     # Extract all tag names - they appear in the format "tag_name": "vX.Y.Z"
     local tags
     tags=$(echo "$all_releases" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
 
-    log_info "Checking releases for available binaries..."
-
     # Iterate through tags to find one with assets
     for tag in $tags; do
         if [[ -n "$tag" ]]; then
-            if try_download_version "$tag" "$platform" "$temp_dir"; then
-                log_info "Using version: $tag"
+            if check_version_available "$tag" "$platform"; then
                 echo "$tag"
                 return 0
             fi
         fi
     done
 
-    log_error "No releases with binaries found for platform: $platform"
-    exit 1
+    return 1
 }
 
 # Download binary with progress
@@ -163,15 +182,13 @@ download_binary() {
     local url="$1"
     local output_file="$2"
     
-    log_info "Downloading binary from GitHub..."
-    log_info "URL: $url"
+    log_info "Downloading binary..."
     
-    if ! curl -fSL -o "$output_file" "$url"; then
+    # Use curl -# for a simple progress bar
+    if ! curl -fSL -# -o "$output_file" "$url"; then
         log_error "Failed to download binary"
         exit 1
     fi
-    
-    log_success "Downloaded successfully"
 }
 
 # Verify checksum if available
@@ -336,18 +353,39 @@ main() {
     # Create temporary directory for downloads
     local temp_dir
     temp_dir=$(mktemp -d)
-    trap "rm -rf $temp_dir cleanup" EXIT
+    trap "rm -rf $temp_dir; show_cursor" EXIT INT TERM
 
     # Fetch recent releases to check for available binaries
     local all_releases
     all_releases=$(fetch_recent_releases)
 
-    # Find and download the most recent release with assets for this platform
+    # Find the most recent release with assets for this platform
     local release_tag
-    release_tag=$(find_and_download_latest_with_assets "$all_releases" "$platform" "$temp_dir")
+    local tag_file
+    tag_file=$(mktemp)
+    
+    (find_latest_release_tag "$all_releases" "$platform" > "$tag_file") &
+    local pid=$!
+    show_spinner "$pid" "Checking for compatible binaries..."
+    wait "$pid"
+    
+    release_tag=$(cat "$tag_file")
+    rm -f "$tag_file"
 
-    # Archive file is already downloaded by find_and_download_latest_with_assets
+    if [[ -z "$release_tag" ]]; then
+        log_error "No releases with binaries found for platform: $platform"
+        exit 1
+    fi
+
+    log_success "Found compatible version: $release_tag"
+
+    # Download binary
     local archive_file="$temp_dir/vtcode-binary.tar.gz"
+    local download_url
+    download_url=$(get_download_url "$release_tag" "$platform")
+    
+    download_binary "$download_url" "$archive_file"
+    log_success "Downloaded successfully"
 
     # Verify checksum
     verify_checksum "$archive_file" "$release_tag"
