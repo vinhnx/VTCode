@@ -1,8 +1,10 @@
+use crate::agent::runloop::text_tools::{CodeFenceBlock, extract_code_fence_blocks};
+use crate::cli::AskCommandOptions;
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use serde_json::{Map, Value, json};
-use std::io::{self, Write};
 use std::io::IsTerminal;
+use std::io::{self, Write};
 use vtcode_core::utils::colors::style;
 use vtcode_core::{
     cli::args::AskOutputFormat,
@@ -13,10 +15,8 @@ use vtcode_core::{
             FinishReason, LLMRequest, LLMResponse, LLMStreamEvent, Message, ToolChoice, Usage,
         },
     },
-    tools::{ToolRegistry, ToolPermissionPolicy},
+    tools::{ToolPermissionPolicy, ToolRegistry},
 };
-use crate::agent::runloop::text_tools::{CodeFenceBlock, extract_code_fence_blocks};
-use crate::cli::AskCommandOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AskRequestMode {
@@ -105,8 +105,15 @@ fn select_best_code_block<'a>(blocks: &'a [CodeFenceBlock]) -> Option<&'a CodeFe
 }
 
 fn score_code_block(block: &CodeFenceBlock) -> (usize, u8) {
-    let line_count = block.lines.iter().filter(|line| !line.trim().is_empty()).count();
-    let has_language = block.language.as_ref().is_some_and(|lang| !lang.trim().is_empty());
+    let line_count = block
+        .lines
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .count();
+    let has_language = block
+        .language
+        .as_ref()
+        .is_some_and(|lang| !lang.trim().is_empty());
     (line_count, if has_language { 1 } else { 0 })
 }
 
@@ -302,9 +309,9 @@ async fn run_ask_with_tools(
     prompt: &str,
     options: AskCommandOptions,
 ) -> Result<()> {
-    use vtcode_core::core::agent::runner::{AgentRunner, Task, ContextItem};
     use vtcode_core::config::VTCodeConfig;
     use vtcode_core::config::loader::ConfigManager;
+    use vtcode_core::core::agent::runner::{AgentRunner, ContextItem, Task};
 
     // Load the full configuration for the agent runner
     let full_config = ConfigManager::load_from_workspace(&config.workspace)?
@@ -312,11 +319,8 @@ async fn run_ask_with_tools(
         .clone();
 
     // Create the agent runner
-    let mut runner = AgentRunner::new(
-        config.clone(),
-        full_config,
-        config.workspace.clone(),
-    ).await?;
+    let mut runner =
+        AgentRunner::new(config.clone(), full_config, config.workspace.clone()).await?;
 
     // Apply tool permissions based on CLI options
     if options.skip_confirmations {
@@ -338,10 +342,13 @@ async fn run_ask_with_tools(
     // the default behavior (with confirmations) will apply, which is appropriate
 
     // Create a single task for the prompt
-    let task_id = format!("ask-{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs());
+    let task_id = format!(
+        "ask-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    );
     let task = Task {
         id: task_id,
         title: "CLI Ask Task".to_string(),
@@ -363,7 +370,10 @@ async fn run_ask_with_tools(
         payload.insert("turns_executed".to_string(), json!(result.turns_executed));
         payload.insert("outcome".to_string(), json!(result.outcome.code()));
         payload.insert("modified_files".to_string(), json!(result.modified_files));
-        payload.insert("executed_commands".to_string(), json!(result.executed_commands));
+        payload.insert(
+            "executed_commands".to_string(),
+            json!(result.executed_commands),
+        );
 
         let serialized = serde_json::to_string_pretty(&Value::Object(payload))
             .context("failed to serialize ask response as JSON")?;

@@ -105,7 +105,8 @@ configure_target_env() {
     local target=$1
     TARGET_ENV_ASSIGNMENTS=()
 
-    if [[ "$OSTYPE" == "darwin"* ]]; then
+    if [[ "$target" == *"-apple-"* ]]; then
+        # macOS targets
         local openssl_prefix=""
         if command -v brew &> /dev/null; then
             openssl_prefix=$(brew --prefix openssl@3 2>/dev/null || true)
@@ -115,7 +116,7 @@ configure_target_env() {
             TARGET_ENV_ASSIGNMENTS+=("OPENSSL_DIR=$openssl_prefix")
             TARGET_ENV_ASSIGNMENTS+=("OPENSSL_LIB_DIR=$openssl_prefix/lib")
             TARGET_ENV_ASSIGNMENTS+=("OPENSSL_INCLUDE_DIR=$openssl_prefix/include")
-            
+
             local pkg_config_path="$openssl_prefix/lib/pkgconfig"
             if [[ -n "${PKG_CONFIG_PATH:-}" ]]; then
                 pkg_config_path+=":${PKG_CONFIG_PATH}"
@@ -124,6 +125,26 @@ configure_target_env() {
         fi
 
         TARGET_ENV_ASSIGNMENTS+=("MACOSX_DEPLOYMENT_TARGET=11.0")
+    elif [[ "$target" == *"-linux-"* ]]; then
+        # Linux targets - don't set host-specific OpenSSL paths for cross-compilation
+        # Cross compilation should handle this automatically
+        if command -v cross &>/dev/null; then
+            # When using cross, we don't need to set these variables
+            :
+        else
+            # For direct cross-compilation, we might need to set different variables
+            local openssl_prefix=""
+            if command -v brew &> /dev/null; then
+                openssl_prefix=$(brew --prefix openssl@3 2>/dev/null || true)
+            fi
+
+            if [[ -n "$openssl_prefix" ]]; then
+                # Only set these if we're not using cross
+                TARGET_ENV_ASSIGNMENTS+=("OPENSSL_DIR=$openssl_prefix")
+                TARGET_ENV_ASSIGNMENTS+=("OPENSSL_LIB_DIR=$openssl_prefix/lib")
+                TARGET_ENV_ASSIGNMENTS+=("OPENSSL_INCLUDE_DIR=$openssl_prefix/include")
+            fi
+        fi
     fi
 }
 
@@ -148,13 +169,13 @@ build_with_tool() {
     fi
 }
 
-# Function to build binaries
+# Function to build binaries for all platforms
 build_binaries() {
     local version=$1
     local dist_dir="dist"
-    
-    print_info "Building binaries locally for version $version..."
-    
+
+    print_info "Building binaries for all platforms for version $version..."
+
     if [ "$DRY_RUN" = false ]; then
         rm -rf "$dist_dir"
         mkdir -p "$dist_dir"
@@ -173,14 +194,21 @@ build_binaries() {
 
     # Linux x86_64 (only if on Linux or have cross setup)
     local build_linux=false
-    if [[ "$OSTYPE" == "linux-gnu"* ]] || command -v cross &>/dev/null; then
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # On Linux, build directly
         build_linux=true
-        local tool=$BUILD_TOOL
-        if command -v cross &>/dev/null; then tool="cross"; fi
-        
-        print_info "Attempting Linux build using $tool..."
-        ( $tool build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
+        print_info "Building Linux binary natively..."
+        ( $BUILD_TOOL build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
         pids+=($!)
+    elif command -v cross &>/dev/null; then
+        # Use cross for cross-compilation which handles dependencies better
+        build_linux=true
+        print_info "Attempting Linux build using cross..."
+        ( cross build --release --target x86_64-unknown-linux-gnu || print_warning "Linux build failed" ) &
+        pids+=($!)
+    else
+        print_warning "Skipping Linux build - not on Linux and 'cross' tool not available"
+        print_info "To enable Linux builds, install cross: cargo install cross"
     fi
 
     # Wait for all builds to complete
@@ -196,7 +224,7 @@ build_binaries() {
 
     # Packaging
     print_info "Packaging binaries..."
-    
+
     # macOS x86_64
     cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
     (cd "$dist_dir" && tar -czf "vtcode-v$version-x86_64-apple-darwin.tar.gz" vtcode && rm vtcode)
@@ -212,7 +240,7 @@ build_binaries() {
             "target/x86_64-apple-darwin/release/vtcode" \
             "target/aarch64-apple-darwin/release/vtcode" \
             -output "$dist_dir/vtcode-universal"
-        
+
         (cd "$dist_dir" && tar -czf "vtcode-v$version-universal-apple-darwin.tar.gz" vtcode-universal && rm vtcode-universal)
         print_success "macOS Universal Binary created"
     fi
@@ -224,6 +252,60 @@ build_binaries() {
     fi
 
     print_success "Binaries build and packaging process completed"
+}
+
+# Function to build binaries for current platform only (for local sanity check)
+build_binaries_local() {
+    local version=$1
+    local dist_dir="dist"
+
+    print_info "Building binaries for current platform only (sanity check) for version $version..."
+
+    if [ "$DRY_RUN" = false ]; then
+        rm -rf "$dist_dir"
+        mkdir -p "$dist_dir"
+    fi
+
+    # Determine current platform and build for it only
+    local current_target=""
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if [[ $(uname -m) == "arm64" ]]; then
+            current_target="aarch64-apple-darwin"
+        else
+            current_target="x86_64-apple-darwin"
+        fi
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        current_target="x86_64-unknown-linux-gnu"
+    else
+        print_error "Unsupported platform: $OSTYPE"
+        exit 1
+    fi
+
+    print_info "Building for current platform: $current_target"
+    build_with_tool "$current_target"
+
+    if [ "$DRY_RUN" = true ]; then
+        print_success "Dry run: Local build process simulation complete"
+        return 0
+    fi
+
+    # Packaging for current platform only
+    print_info "Packaging current platform binary..."
+
+    # Copy and package the current platform binary
+    cp "target/$current_target/release/vtcode" "$dist_dir/vtcode"
+    local platform_suffix=""
+    if [[ "$current_target" == "aarch64-apple-darwin" ]]; then
+        platform_suffix="aarch64-apple-darwin"
+    elif [[ "$current_target" == "x86_64-apple-darwin" ]]; then
+        platform_suffix="x86_64-apple-darwin"
+    elif [[ "$current_target" == "x86_64-unknown-linux-gnu" ]]; then
+        platform_suffix="x86_64-unknown-linux-gnu"
+    fi
+
+    (cd "$dist_dir" && tar -czf "vtcode-v$version-$platform_suffix.tar.gz" vtcode && rm vtcode)
+
+    print_success "Local binary build and packaging completed for $platform_suffix"
 }
 
 # Function to calculate SHA256 checksums
@@ -377,6 +459,7 @@ PYTHON_SCRIPT
 main() {
     local version=""
     local only_build=false
+    local only_build_local=false
     local only_upload=false
     local only_homebrew=false
     local notes_file=""
@@ -386,6 +469,7 @@ main() {
         case $1 in
             -v|--version) version="$2"; shift 2 ;;
             --only-build) only_build=true; shift ;;
+            --only-build-local) only_build_local=true; shift ;;
             --only-upload) only_upload=true; shift ;;
             --only-homebrew) only_homebrew=true; shift ;;
             --notes-file) notes_file="$2"; shift 2 ;;
@@ -401,7 +485,7 @@ main() {
     check_dependencies
 
     # If no specific flags are set, run everything
-    if [ "$only_build" = false ] && [ "$only_upload" = false ] && [ "$only_homebrew" = false ]; then
+    if [ "$only_build" = false ] && [ "$only_build_local" = false ] && [ "$only_upload" = false ] && [ "$only_homebrew" = false ]; then
         install_rust_targets
         build_binaries "$version"
         calculate_checksums "$version"
@@ -411,6 +495,11 @@ main() {
         if [ "$only_build" = true ]; then
             install_rust_targets
             build_binaries "$version"
+            calculate_checksums "$version"
+        fi
+        if [ "$only_build_local" = true ]; then
+            install_rust_targets
+            build_binaries_local "$version"
             calculate_checksums "$version"
         fi
         if [ "$only_upload" = true ]; then

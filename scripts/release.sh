@@ -279,10 +279,10 @@ main() {
         print_warning "Releasing version: $next_version"
     fi
 
-    # 1. Local Build Sanity Check (using background parallel builds)
+    # 1. Local Build Sanity Check (only for current platform to avoid cross-compilation issues)
     if [[ "$skip_binaries" == 'false' ]]; then
-        print_info "Step 1: Local binary build sanity check..."
-        local build_args=(-v "$next_version" --only-build)
+        print_info "Step 1: Local binary build sanity check (current platform only)..."
+        local build_args=(-v "$next_version" --only-build-local)
         if [[ "$dry_run" == 'true' ]]; then
             build_args+=(--dry-run)
         fi
