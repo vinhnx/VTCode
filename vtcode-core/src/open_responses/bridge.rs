@@ -70,11 +70,7 @@ impl ResponseBuilder {
     }
 
     /// Processes a VT Code `ThreadEvent` and emits corresponding Open Responses events.
-    pub fn process_event<E: StreamEventEmitter>(
-        &mut self,
-        event: &ThreadEvent,
-        emitter: &mut E,
-    ) {
+    pub fn process_event<E: StreamEventEmitter>(&mut self, event: &ThreadEvent, emitter: &mut E) {
         match event {
             ThreadEvent::ThreadStarted(_) => {
                 emitter.response_created(self.response.clone());
@@ -95,7 +91,8 @@ impl ResponseBuilder {
             }
 
             ThreadEvent::TurnFailed(evt) => {
-                self.response.fail(OpenResponseError::model_error(&evt.message));
+                self.response
+                    .fail(OpenResponseError::model_error(&evt.message));
                 emitter.response_failed(self.response.clone());
             }
 
@@ -112,7 +109,8 @@ impl ResponseBuilder {
             }
 
             ThreadEvent::Error(evt) => {
-                self.response.fail(OpenResponseError::server_error(&evt.message));
+                self.response
+                    .fail(OpenResponseError::server_error(&evt.message));
                 emitter.response_failed(self.response.clone());
             }
         }
@@ -201,12 +199,7 @@ impl ResponseBuilder {
                 };
 
                 if !delta.is_empty() {
-                    emitter.reasoning_delta(
-                        &self.response.id,
-                        &item.id,
-                        state.output_index,
-                        delta,
-                    );
+                    emitter.reasoning_delta(&self.response.id, &item.id, state.output_index, delta);
                     state.prev_text = r.text.clone();
                 }
             }
@@ -355,24 +348,20 @@ impl ResponseBuilder {
 
     fn convert_thread_item(&self, item: &ThreadItem, status: ItemStatus) -> OutputItem {
         match &item.details {
-            ThreadItemDetails::AgentMessage(msg) => {
-                OutputItem::Message(MessageItem {
-                    id: item.id.clone(),
-                    status,
-                    role: MessageRole::Assistant,
-                    content: vec![ContentPart::output_text(&msg.text)],
-                })
-            }
+            ThreadItemDetails::AgentMessage(msg) => OutputItem::Message(MessageItem {
+                id: item.id.clone(),
+                status,
+                role: MessageRole::Assistant,
+                content: vec![ContentPart::output_text(&msg.text)],
+            }),
 
-            ThreadItemDetails::Reasoning(r) => {
-                OutputItem::Reasoning(ReasoningItem {
-                    id: item.id.clone(),
-                    status,
-                    summary: None,
-                    content: Some(r.text.clone()),
-                    encrypted_content: None,
-                })
-            }
+            ThreadItemDetails::Reasoning(r) => OutputItem::Reasoning(ReasoningItem {
+                id: item.id.clone(),
+                status,
+                summary: None,
+                content: Some(r.text.clone()),
+                encrypted_content: None,
+            }),
 
             ThreadItemDetails::CommandExecution(cmd) => {
                 OutputItem::FunctionCall(FunctionCallItem {
@@ -409,28 +398,24 @@ impl ResponseBuilder {
                 })
             }
 
-            ThreadItemDetails::McpToolCall(tc) => {
-                OutputItem::FunctionCall(FunctionCallItem {
-                    id: item.id.clone(),
-                    status,
-                    name: tc.tool_name.clone(),
-                    arguments: tc.arguments.clone().unwrap_or(json!({})),
-                    call_id: Some(item.id.clone()),
-                })
-            }
+            ThreadItemDetails::McpToolCall(tc) => OutputItem::FunctionCall(FunctionCallItem {
+                id: item.id.clone(),
+                status,
+                name: tc.tool_name.clone(),
+                arguments: tc.arguments.clone().unwrap_or(json!({})),
+                call_id: Some(item.id.clone()),
+            }),
 
-            ThreadItemDetails::WebSearch(ws) => {
-                OutputItem::Custom(CustomItem {
-                    id: item.id.clone(),
-                    status,
-                    custom_type: "vtcode:web_search".to_string(),
-                    data: json!({
-                        "query": ws.query,
-                        "provider": ws.provider,
-                        "results": ws.results,
-                    }),
-                })
-            }
+            ThreadItemDetails::WebSearch(ws) => OutputItem::Custom(CustomItem {
+                id: item.id.clone(),
+                status,
+                custom_type: "vtcode:web_search".to_string(),
+                data: json!({
+                    "query": ws.query,
+                    "provider": ws.provider,
+                    "results": ws.results,
+                }),
+            }),
 
             ThreadItemDetails::Error(err) => {
                 // Errors are represented as custom items
@@ -524,12 +509,16 @@ mod tests {
         assert!(builder.response().usage.is_some());
 
         let events = emitter.into_events();
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, ResponseStreamEvent::ResponseCreated { .. })));
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, ResponseStreamEvent::ResponseCompleted { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, ResponseStreamEvent::ResponseCreated { .. }))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, ResponseStreamEvent::ResponseCompleted { .. }))
+        );
     }
 
     #[test]
@@ -570,20 +559,28 @@ mod tests {
         ));
 
         let events = emitter.into_events();
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. })));
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, ResponseStreamEvent::OutputItemDone { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. }))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, ResponseStreamEvent::OutputItemDone { .. }))
+        );
         // Verify ContentPartAdded is emitted
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, ResponseStreamEvent::ContentPartAdded { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, ResponseStreamEvent::ContentPartAdded { .. }))
+        );
         // Verify OutputTextDone is emitted
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, ResponseStreamEvent::OutputTextDone { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, ResponseStreamEvent::OutputTextDone { .. }))
+        );
     }
 
     #[test]
@@ -639,9 +636,11 @@ mod tests {
 
         let events = emitter.into_events();
         // Should have implicitly started
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. }))
+        );
     }
 
     #[test]
@@ -675,9 +674,11 @@ mod tests {
 
         // Should not panic and should emit delta
         let events = emitter.into_events();
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, ResponseStreamEvent::OutputTextDelta { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, ResponseStreamEvent::OutputTextDelta { .. }))
+        );
     }
 
     #[test]

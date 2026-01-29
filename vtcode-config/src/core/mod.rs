@@ -11,7 +11,9 @@ pub mod security;
 pub mod skills;
 pub mod tools;
 
-pub use agent::{AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, OpenResponsesConfig};
+pub use agent::{
+    AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, OpenResponsesConfig,
+};
 pub use automation::{AutomationConfig, FullAutoConfig};
 pub use commands::CommandsConfig;
 pub use model::ModelConfig;

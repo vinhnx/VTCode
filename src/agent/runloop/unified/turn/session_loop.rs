@@ -158,9 +158,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                         .parent()
                         .unwrap_or(std::path::Path::new("."));
                     let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
-                    parent.join(format!("open-responses-{}-{}.jsonl", turn_run_id.0, timestamp))
+                    parent.join(format!(
+                        "open-responses-{}-{}.jsonl",
+                        turn_run_id.0, timestamp
+                    ))
                 });
-                let _ = emitter.enable_open_responses(open_responses_config, &config.model, or_path);
+                let _ =
+                    emitter.enable_open_responses(open_responses_config, &config.model, or_path);
             }
 
             let _ = emitter.emit(ThreadEvent::ThreadStarted(ThreadStartedEvent {

@@ -65,10 +65,7 @@ impl HarnessEventEmitter {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            let file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&path)?;
+            let file = OpenOptions::new().create(true).append(true).open(&path)?;
             Some(BufWriter::new(file))
         } else {
             None
@@ -288,7 +285,9 @@ mod tests {
             }))
             .expect("emit");
         emitter.emit(turn_started_event()).expect("emit turn");
-        emitter.emit(turn_completed_event()).expect("emit completed");
+        emitter
+            .emit(turn_completed_event())
+            .expect("emit completed");
         emitter.finish_open_responses();
 
         // Verify harness log

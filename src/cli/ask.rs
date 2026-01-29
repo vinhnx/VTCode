@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use futures::StreamExt;
 use serde_json::{Map, Value, json};
 use std::io::{self, Write};
+use std::io::IsTerminal;
 use vtcode_core::utils::colors::style;
 use vtcode_core::{
     cli::args::AskOutputFormat,
@@ -14,6 +15,7 @@ use vtcode_core::{
     },
     tools::{ToolRegistry, ToolPermissionPolicy},
 };
+use crate::agent::runloop::text_tools::{CodeFenceBlock, extract_code_fence_blocks};
 use crate::cli::AskCommandOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +74,50 @@ fn print_final_response(printed_any: bool, response: Option<LLMResponse>) {
     }
 }
 
+fn is_pipe_output() -> bool {
+    !io::stdout().is_terminal()
+}
+
+fn extract_code_only(text: &str) -> Option<String> {
+    let blocks = extract_code_fence_blocks(text);
+    let block = select_best_code_block(&blocks)?;
+    if block.lines.is_empty() {
+        return None;
+    }
+    let mut output = block.lines.join("\n");
+    if !output.ends_with('\n') {
+        output.push('\n');
+    }
+    Some(output)
+}
+
+fn select_best_code_block<'a>(blocks: &'a [CodeFenceBlock]) -> Option<&'a CodeFenceBlock> {
+    let mut best = None;
+    let mut best_score = (0usize, 0u8);
+    for block in blocks {
+        let score = score_code_block(block);
+        if score > best_score {
+            best_score = score;
+            best = Some(block);
+        }
+    }
+    best
+}
+
+fn score_code_block(block: &CodeFenceBlock) -> (usize, u8) {
+    let line_count = block.lines.iter().filter(|line| !line.trim().is_empty()).count();
+    let has_language = block.language.as_ref().is_some_and(|lang| !lang.trim().is_empty());
+    (line_count, if has_language { 1 } else { 0 })
+}
+
+fn render_pipe_response(text: &str) {
+    if let Some(code_only) = extract_code_only(text) {
+        print!("{code_only}");
+    } else {
+        println!("{}", text);
+    }
+}
+
 /// Handle the ask command - single prompt, no tools
 pub async fn handle_ask_command(
     config: &CoreAgentConfig,
@@ -100,7 +146,8 @@ async fn handle_ask_command_impl(
     }
 
     let wants_json = options.wants_json();
-    if !wants_json && !config.quiet {
+    let pipe_output = is_pipe_output();
+    if !wants_json && !config.quiet && !pipe_output {
         eprintln!("{}", style("[ASK]").cyan().bold());
         eprintln!("  {:16} {}", "provider", &config.provider);
         eprintln!("  {:16} {}\n", "model", &config.model);
@@ -124,6 +171,7 @@ async fn run_ask_without_tools(
     options: AskCommandOptions,
 ) -> Result<()> {
     let wants_json = options.wants_json();
+    let pipe_output = is_pipe_output();
 
     let provider = match create_provider_for_model(
         &config.model,
@@ -174,7 +222,7 @@ async fn run_ask_without_tools(
             while let Some(event) = stream.next().await {
                 match event {
                     Ok(LLMStreamEvent::Token { delta }) => {
-                        if wants_json {
+                        if wants_json || pipe_output {
                             // The final response carries the content; suppress streaming output.
                         } else {
                             if printed_reasoning && !reasoning_line_finished {
@@ -189,7 +237,7 @@ async fn run_ask_without_tools(
                     Ok(LLMStreamEvent::Reasoning { delta }) => {
                         if wants_json {
                             streamed_reasoning.push_str(&delta);
-                        } else {
+                        } else if !pipe_output {
                             if !printed_reasoning {
                                 eprint!("");
                                 printed_reasoning = true;
@@ -218,6 +266,9 @@ async fn run_ask_without_tools(
                     Some(streamed_reasoning)
                 };
                 emit_json_response(config, final_response, reasoning)?;
+            } else if pipe_output {
+                let text = final_response.content.unwrap_or_default();
+                render_pipe_response(&text);
             } else {
                 if printed_reasoning && !reasoning_line_finished {
                     eprintln!();
@@ -234,6 +285,9 @@ async fn run_ask_without_tools(
 
             if wants_json {
                 emit_json_response(config, response, None)?;
+            } else if pipe_output {
+                let text = response.content.unwrap_or_default();
+                render_pipe_response(&text);
             } else {
                 print_final_response(false, Some(response));
             }
@@ -314,6 +368,8 @@ async fn run_ask_with_tools(
         let serialized = serde_json::to_string_pretty(&Value::Object(payload))
             .context("failed to serialize ask response as JSON")?;
         println!("{serialized}");
+    } else if is_pipe_output() {
+        render_pipe_response(&result.summary);
     } else {
         // Print the summary response
         println!("{}", result.summary);

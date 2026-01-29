@@ -147,9 +147,8 @@ impl<'de> Deserialize<'de> for OutputItem {
                             // content can be Vec<ContentPart> or String
                             let val: Value = map.next_value()?;
                             if let Value::Array(_) = &val {
-                                content = Some(
-                                    serde_json::from_value(val).map_err(de::Error::custom)?,
-                                );
+                                content =
+                                    Some(serde_json::from_value(val).map_err(de::Error::custom)?);
                             } else if let Value::String(s) = val {
                                 reasoning_content = Some(s);
                             }
@@ -286,11 +285,7 @@ impl OutputItem {
     }
 
     /// Creates a new function call item.
-    pub fn function_call(
-        id: impl Into<String>,
-        name: impl Into<String>,
-        arguments: Value,
-    ) -> Self {
+    pub fn function_call(id: impl Into<String>, name: impl Into<String>, arguments: Value) -> Self {
         Self::FunctionCall(FunctionCallItem {
             id: id.into(),
             status: ItemStatus::InProgress,
