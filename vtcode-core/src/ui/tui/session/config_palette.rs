@@ -33,7 +33,11 @@ pub struct ConfigPalette {
 
 impl ConfigPalette {
     pub fn new(manager: ConfigManager) -> Self {
-        let config = manager.config().clone();
+        let mut config = manager.config().clone();
+        let active_theme = crate::ui::theme::active_theme_id();
+        if !active_theme.is_empty() && active_theme != config.agent.theme {
+            config.agent.theme = active_theme;
+        }
         let mut palette = Self {
             items: Vec::new(),
             list_state: ListState::default(),
