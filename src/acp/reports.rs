@@ -81,12 +81,8 @@ pub fn create_diff_content(
     old_text: Option<&str>,
     new_text: &str,
 ) -> acp::ToolCallContent {
-    acp::ToolCallContent::Diff {
-        diff: acp::Diff {
-            path: PathBuf::from(path),
-            old_text: old_text.map(|s| s.to_string()),
-            new_text: new_text.to_string(),
-            meta: None,
-        },
-    }
+    acp::ToolCallContent::Diff(
+        acp::Diff::new(PathBuf::from(path), new_text.to_string())
+            .old_text(old_text.map(|s| s.to_string())),
+    )
 }

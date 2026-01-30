@@ -21,9 +21,9 @@ impl acp::Agent for ZedAgent {
         self.client_capabilities
             .replace(Some(args.client_capabilities.clone()));
 
-        if args.protocol_version != acp::V1 {
+        if args.protocol_version != acp::ProtocolVersion::V1 {
             warn!(
-                requested = ?args.protocol_version,
+                requested = %args.protocol_version,
                 "{}",
                 INITIALIZE_VERSION_MISMATCH_LOG
             );
@@ -34,15 +34,11 @@ impl acp::Agent for ZedAgent {
         capabilities.prompt_capabilities.audio = true;
         capabilities.mcp_capabilities.http = true;
         capabilities.mcp_capabilities.sse = false;
-        capabilities.load_session = false;
+        capabilities.load_session = true;
 
-        Ok(acp::InitializeResponse {
-            protocol_version: acp::V1,
-            agent_capabilities: capabilities,
-            auth_methods: Vec::new(),
-            agent_info: Some(agent_implementation_info(self.title.clone())),
-            meta: None,
-        })
+        Ok(acp::InitializeResponse::new(acp::ProtocolVersion::V1)
+            .agent_capabilities(capabilities)
+            .agent_info(agent_implementation_info(self.title.clone())))
     }
 
     async fn authenticate(
@@ -61,21 +57,41 @@ impl acp::Agent for ZedAgent {
 
         self.send_available_commands_update(&session_id).await?;
 
-        Ok(acp::NewSessionResponse {
-            session_id,
-            modes: Some(acp::SessionModeState {
-                current_mode_id: acp::SessionModeId(MODE_ID_CODE.into()),
-                available_modes,
-                meta: None,
-            }),
-            meta: None,
-        })
+        let modes = acp::SessionModeState::new(
+            acp::SessionModeId::from(MODE_ID_CODE),
+            available_modes,
+        );
+
+        Ok(acp::NewSessionResponse::new(session_id).modes(modes))
+    }
+
+    async fn load_session(
+        &self,
+        args: acp::LoadSessionRequest,
+    ) -> Result<acp::LoadSessionResponse, acp::Error> {
+        let Some(session) = self.session_handle(&args.session_id) else {
+            return Err(acp::Error::invalid_params().data(json!({
+                "reason": "unknown_session",
+                "session_id": args.session_id.0
+            })));
+        };
+
+        self.send_available_commands_update(&args.session_id)
+            .await?;
+
+        let modes = acp::SessionModeState::new(
+            session.data.borrow().current_mode.clone(),
+            acp_session_modes(),
+        );
+
+        Ok(acp::LoadSessionResponse::new().modes(modes))
     }
 
     async fn prompt(&self, args: acp::PromptRequest) -> Result<acp::PromptResponse, acp::Error> {
         let Some(session) = self.session_handle(&args.session_id) else {
             return Err(
-                acp::Error::invalid_params().with_data(json!({ "reason": "unknown_session" }))
+                acp::Error::invalid_params()
+                    .data(json!({ "reason": "unknown_session" }))
             );
         };
 
@@ -87,10 +103,9 @@ impl acp::Agent for ZedAgent {
             if let acp::ContentBlock::Text(text) = block {
                 self.send_update(
                     &args.session_id,
-                    acp::SessionUpdate::UserMessageChunk(acp::ContentChunk {
-                        content: acp::ContentBlock::from(text.text.clone()),
-                        meta: None,
-                    }),
+                    acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(
+                        acp::ContentBlock::Text(acp::TextContent::new(text.text.clone())),
+                    )),
                 )
                 .await?;
             }
@@ -371,10 +386,7 @@ impl acp::Agent for ZedAgent {
             }
         }
 
-        Ok(acp::PromptResponse {
-            stop_reason,
-            meta: None,
-        })
+        Ok(acp::PromptResponse::new(stop_reason))
     }
 
     async fn set_session_mode(
@@ -383,7 +395,8 @@ impl acp::Agent for ZedAgent {
     ) -> Result<acp::SetSessionModeResponse, acp::Error> {
         let Some(session) = self.session_handle(&args.session_id) else {
             return Err(
-                acp::Error::invalid_params().with_data(json!({ "reason": "unknown_session" }))
+                acp::Error::invalid_params()
+                    .data(json!({ "reason": "unknown_session" }))
             );
         };
 
@@ -396,21 +409,20 @@ impl acp::Agent for ZedAgent {
         .collect();
         if !valid_modes.contains(&args.mode_id.0) {
             return Err(acp::Error::invalid_params()
-                .with_data(json!({ "reason": "unknown_mode", "mode_id": args.mode_id.0 })));
+                .data(json!({ "reason": "unknown_mode", "mode_id": args.mode_id.0 })));
         }
 
         if self.update_session_mode(&session, args.mode_id.clone()) {
             self.send_update(
                 &args.session_id,
-                acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate {
-                    current_mode_id: args.mode_id.clone(),
-                    meta: None,
-                }),
+                acp::SessionUpdate::CurrentModeUpdate(
+                    acp::CurrentModeUpdate::new(args.mode_id.clone()),
+                ),
             )
             .await?;
         }
 
-        Ok(acp::SetSessionModeResponse { meta: None })
+        Ok(acp::SetSessionModeResponse::new())
     }
 
     async fn cancel(&self, args: acp::CancelNotification) -> Result<(), acp::Error> {

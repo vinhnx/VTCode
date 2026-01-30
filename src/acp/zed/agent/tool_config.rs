@@ -84,6 +84,7 @@ impl ZedAgent {
                             }
                         }
                         SupportedTool::ListFiles => ToolRuntime::Enabled,
+                        SupportedTool::SwitchMode => ToolRuntime::Enabled,
                     }
                 };
                 (tool, runtime)

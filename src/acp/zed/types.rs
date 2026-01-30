@@ -36,33 +36,30 @@ impl PlanProgress {
         let mut entries = Vec::with_capacity(3); // Pre-allocate for typical plan entries (analyze, gather, respond)
 
         let analyze_index = entries.len();
-        entries.push(acp::PlanEntry {
-            content: PLAN_STEP_ANALYZE.to_string(),
-            priority: acp::PlanEntryPriority::High,
-            status: acp::PlanEntryStatus::InProgress,
-            meta: None,
-        });
+        entries.push(acp::PlanEntry::new(
+            PLAN_STEP_ANALYZE,
+            acp::PlanEntryPriority::High,
+            acp::PlanEntryStatus::InProgress,
+        ));
 
         let gather_index = if include_context_step {
             let index = entries.len();
-            entries.push(acp::PlanEntry {
-                content: PLAN_STEP_GATHER_CONTEXT.to_string(),
-                priority: acp::PlanEntryPriority::Medium,
-                status: acp::PlanEntryStatus::Pending,
-                meta: None,
-            });
+            entries.push(acp::PlanEntry::new(
+                PLAN_STEP_GATHER_CONTEXT,
+                acp::PlanEntryPriority::Medium,
+                acp::PlanEntryStatus::Pending,
+            ));
             Some(index)
         } else {
             None
         };
 
         let respond_index = entries.len();
-        entries.push(acp::PlanEntry {
-            content: PLAN_STEP_RESPOND.to_string(),
-            priority: acp::PlanEntryPriority::High,
-            status: acp::PlanEntryStatus::Pending,
-            meta: None,
-        });
+        entries.push(acp::PlanEntry::new(
+            PLAN_STEP_RESPOND,
+            acp::PlanEntryPriority::High,
+            acp::PlanEntryStatus::Pending,
+        ));
 
         Self {
             entries,
@@ -146,10 +143,7 @@ impl PlanProgress {
     }
 
     pub(crate) fn to_plan(&self) -> acp::Plan {
-        acp::Plan {
-            entries: self.entries.clone(),
-            meta: None,
-        }
+        acp::Plan::new(self.entries.clone())
     }
 }
 
@@ -165,6 +159,7 @@ pub(crate) struct SessionHandle {
 }
 
 pub(crate) struct SessionData {
+    pub(crate) session_id: acp::SessionId,
     pub(crate) messages: Vec<Message>,
     pub(crate) tool_notice_sent: bool,
     pub(crate) current_mode: acp::SessionModeId,
