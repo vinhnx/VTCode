@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider::ToolDefinition;
 
+use crate::acp::zed::constants::{MODE_ID_ARCHITECT, MODE_ID_ASK, MODE_ID_CODE};
+
 pub const TOOL_READ_FILE_DESCRIPTION: &str =
     "Read the contents of a text file accessible to the IDE workspace";
 pub const TOOL_READ_FILE_URI_ARG: &str = "uri";
@@ -293,14 +295,19 @@ impl AcpToolRegistry {
             });
         }
 
-        let switch_mode_description = "Switch the current session mode (e.g., from architect to code). Possible modes: ask, architect, code.";
+        let switch_mode_description = format!(
+            "Switch the current session mode (e.g., from {architect} to {code}). Possible modes: {ask}, {architect}, {code}.",
+            ask = MODE_ID_ASK,
+            architect = MODE_ID_ARCHITECT,
+            code = MODE_ID_CODE
+        );
         let switch_mode_schema = json!({
             "type": "object",
             "required": ["mode_id"],
             "properties": {
                 "mode_id": {
                     "type": "string",
-                    "enum": ["ask", "architect", "code"],
+                    "enum": [MODE_ID_ASK, MODE_ID_ARCHITECT, MODE_ID_CODE],
                     "description": "The ID of the mode to switch to"
                 }
             },

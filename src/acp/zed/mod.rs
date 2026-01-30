@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use vtcode_core::core::interfaces::acp::{AcpClientAdapter, AcpLaunchParams};
 
 mod agent;
-mod constants;
+pub(crate) mod constants;
 mod helpers;
 mod session;
 mod types;
@@ -42,7 +42,8 @@ mod tests {
     use crate::acp::tooling::{
         TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_URI_ARG,
     };
-    use agent_client_protocol::ToolCallStatus;
+    use crate::acp::zed::types::NotificationEnvelope;
+    use agent_client_protocol::{Agent, LoadSessionRequest, SessionModeId, ToolCallStatus};
     use assert_fs::TempDir;
     use serde_json::{Value, json};
     use std::collections::BTreeMap;
@@ -86,7 +87,13 @@ mod tests {
         zed_config.tools.read_file = false;
 
         let tools_config = ToolsConfig::default();
-        let (tx, _rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::unbounded_channel::<NotificationEnvelope>();
+        // Spawn a task to handle session updates so send_update doesn't fail
+        tokio::spawn(async move {
+            while let Some(envelope) = rx.recv().await {
+                let _ = envelope.completion.send(());
+            }
+        });
 
         ZedAgent::new(
             core_config,
@@ -95,6 +102,7 @@ mod tests {
             CommandsConfig::default(),
             String::new(),
             tx,
+            Some("Zed".to_string()),
         )
         .await
     }
@@ -253,5 +261,55 @@ mod tests {
             result.unwrap_err(),
             "command array must contain only strings"
         );
+    }
+
+    #[tokio::test]
+    async fn load_session_returns_existing_session_state() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        // Change the mode of the registered session
+        {
+            let session = agent.session_handle(&session_id).unwrap();
+            let mut data = session.data.borrow_mut();
+            data.current_mode = SessionModeId::new("architect");
+        }
+
+        let args = LoadSessionRequest::new(session_id, temp.path());
+        let response = agent.load_session(args).await.unwrap();
+
+        assert_eq!(response.modes.unwrap().current_mode_id, SessionModeId::new("architect"));
+    }
+
+    #[tokio::test]
+    async fn run_switch_mode_updates_session_mode() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        // Verify initial mode is "code" (default in register_session)
+        {
+            let session = agent.session_handle(&session_id).unwrap();
+            assert_eq!(
+                session.data.borrow().current_mode,
+                SessionModeId::new("code")
+            );
+        }
+
+        // Switch to "architect"
+        let args = json!({ "mode_id": "architect" });
+        let report = agent.run_switch_mode(&session_id, &args).await.unwrap();
+
+        assert!(matches!(report.status, ToolCallStatus::Completed));
+
+        // Verify session mode was updated
+        {
+            let session = agent.session_handle(&session_id).unwrap();
+            assert_eq!(
+                session.data.borrow().current_mode,
+                SessionModeId::new("architect")
+            );
+        }
     }
 }

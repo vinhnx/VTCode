@@ -303,7 +303,7 @@ impl ZedAgent {
         }
     }
 
-    async fn run_switch_mode(
+    pub(crate) async fn run_switch_mode(
         &self,
         session_id: &acp::SessionId,
         args: &Value,
@@ -320,12 +320,18 @@ impl ZedAgent {
         let acp_mode_id = acp::SessionModeId::new(mode_id);
 
         if self.update_session_mode(&session, acp_mode_id.clone()) {
+            // Signal mode change to the client
             self.send_update(
                 session_id,
                 acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new(acp_mode_id)),
             )
             .await
             .map_err(|e| format!("Failed to send mode update: {e}"))?;
+
+            // Refresh available commands for the new mode
+            self.send_available_commands_update(session_id)
+                .await
+                .map_err(|e| format!("Failed to refresh available commands: {e}"))?;
         }
 
         let payload = json!({
