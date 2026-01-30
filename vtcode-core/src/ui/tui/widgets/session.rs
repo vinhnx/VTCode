@@ -186,15 +186,6 @@ impl Widget for &mut SessionWidget<'_> {
             .layout_mode
             .unwrap_or_else(|| LayoutMode::from_area(area));
 
-        // Update spinner animation if active
-        self.session.thinking_spinner.update();
-        if self.session.thinking_spinner.is_active {
-            self.session.needs_redraw = true;
-        }
-        if self.session.is_running_activity() {
-            self.session.needs_redraw = true;
-        }
-
         // Handle deferred triggers
         if self.session.deferred_file_browser_trigger {
             self.session.deferred_file_browser_trigger = false;
@@ -338,7 +329,8 @@ impl<'a> SessionWidget<'a> {
             .left_status(left_status)
             .right_status(right_status)
             .hint(hint)
-            .mode(mode);
+            .mode(mode)
+            .shimmer_phase(self.session.shimmer_state.phase());
 
         if let Some(spinner_frame) = spinner {
             footer = footer.spinner(spinner_frame);

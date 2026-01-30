@@ -138,6 +138,10 @@ pub const TUI_ACTIVE_TICK_RATE_HZ: f64 = 60.0;
 pub const TUI_IDLE_TICK_RATE_HZ: f64 = 4.0;
 /// Duration (ms) to remain in active mode after last input
 pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 500;
+/// Shimmer frame interval in milliseconds
+pub const TUI_SHIMMER_FRAME_INTERVAL_MS: u64 = 50;
+/// Shimmer sweep duration in milliseconds
+pub const TUI_SHIMMER_SWEEP_DURATION_MS: u64 = 2000;
 
 // Theme and color constants
 pub const THEME_MIN_CONTRAST_RATIO: f64 = 4.5;

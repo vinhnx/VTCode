@@ -14,11 +14,11 @@ use tokio::time::{Duration, sleep};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use vtcode_config::constants::tools as tool_constants;
+use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::subagents::SubagentRegistry;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::handlers::SpawnSubagentTool;
 use vtcode_core::tools::traits::Tool;
-use vtcode_core::config::WorkspaceTrustLevel;
 
 use super::async_mcp_manager::AsyncMcpManager;
 use super::palettes::apply_prompt_style;
@@ -849,6 +849,11 @@ pub(crate) async fn initialize_session_ui(
         })
     };
 
+    let pty_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    session_state
+        .tool_registry
+        .set_active_pty_sessions(pty_counter.clone());
+
     let session = spawn_session_with_prompts(
         theme_spec.clone(),
         default_placeholder.clone(),
@@ -856,7 +861,7 @@ pub(crate) async fn initialize_session_ui(
         inline_rows,
         Some(interrupt_callback),
         Some(session_state.custom_prompts.clone()),
-        None,
+        Some(pty_counter.clone()),
         vt_cfg
             .map(|cfg| cfg.ui.keyboard_protocol.clone())
             .unwrap_or_default(),
@@ -1099,12 +1104,6 @@ pub(crate) async fn initialize_session_ui(
             }
         }
     }
-
-    // Connect PTY session tracking from tool registry to session state
-    let pty_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    session_state
-        .tool_registry
-        .set_active_pty_sessions(pty_counter.clone());
 
     // Display full-auto mode information if enabled
     if full_auto && let Some(allowlist) = session_state.full_auto_allowlist.as_ref() {

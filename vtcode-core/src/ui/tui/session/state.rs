@@ -57,6 +57,24 @@ impl Session {
         self.needs_redraw = true;
     }
 
+    /// Advance animation state on tick and request redraw when a frame changes.
+    pub fn handle_tick(&mut self) {
+        let mut animation_updated = false;
+        if self.thinking_spinner.is_active {
+            if self.thinking_spinner.update() {
+                animation_updated = true;
+            }
+        }
+        if self.is_running_activity() || self.has_status_spinner() {
+            if self.shimmer_state.update() {
+                animation_updated = true;
+            }
+        }
+        if animation_updated {
+            self.needs_redraw = true;
+        }
+    }
+
     pub(crate) fn is_running_activity(&self) -> bool {
         let left = self.input_status_left.as_deref().unwrap_or("");
         let running_status = left.contains("Running command:")
@@ -68,6 +86,19 @@ impl Session {
             .map(|counter| counter.load(Ordering::Relaxed) > 0)
             .unwrap_or(false);
         running_status || active_pty
+    }
+
+    pub(crate) fn has_status_spinner(&self) -> bool {
+        let Some(left) = self.input_status_left.as_deref() else {
+            return false;
+        };
+        let Some((indicator, rest)) = left.split_once(' ') else {
+            return false;
+        };
+        if indicator.chars().count() != 1 || rest.trim().is_empty() {
+            return false;
+        }
+        is_spinner_frame(indicator)
     }
 
     /// Mark a specific line as dirty to optimize reflow scans
@@ -393,4 +424,24 @@ impl Session {
         self.mark_dirty();
         self.emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
     }
+}
+
+fn is_spinner_frame(indicator: &str) -> bool {
+    matches!(
+        indicator,
+        "⠋" | "⠙"
+            | "⠹"
+            | "⠸"
+            | "⠼"
+            | "⠴"
+            | "⠦"
+            | "⠧"
+            | "⠇"
+            | "⠏"
+            | "-"
+            | "\\"
+            | "|"
+            | "/"
+            | "."
+    )
 }

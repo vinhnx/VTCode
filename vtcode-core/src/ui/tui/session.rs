@@ -88,7 +88,7 @@ use self::prompt_palette::PromptPalette;
 use self::queue::QueueOverlay;
 use self::scroll::ScrollManager;
 use self::slash_palette::SlashPalette;
-use self::spinner::ThinkingSpinner;
+use self::spinner::{ShimmerState, ThinkingSpinner};
 use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;
 #[cfg(test)]
@@ -183,6 +183,7 @@ pub struct Session {
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,
+    pub(crate) shimmer_state: ShimmerState,
 
     // --- Reverse Search ---
     pub(crate) reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState,

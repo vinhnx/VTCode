@@ -10,7 +10,7 @@ use super::layout_mode::LayoutMode;
 use super::panel::PanelStyles;
 use crate::ui::tui::session::styling::SessionStyles;
 use crate::ui::tui::session::terminal_capabilities;
-use tui_shimmer::shimmer_spans_with_style;
+use tui_shimmer::{shimmer_spans_with_style, shimmer_spans_with_style_at_phase};
 
 /// Widget for rendering the footer area with status and hints
 ///
@@ -36,6 +36,7 @@ pub struct FooterWidget<'a> {
     mode: LayoutMode,
     show_border: bool,
     spinner: Option<&'a str>,
+    shimmer_phase: Option<f32>,
 }
 
 impl<'a> FooterWidget<'a> {
@@ -49,6 +50,7 @@ impl<'a> FooterWidget<'a> {
             mode: LayoutMode::Standard,
             show_border: false,
             spinner: None,
+            shimmer_phase: None,
         }
     }
 
@@ -94,6 +96,13 @@ impl<'a> FooterWidget<'a> {
         self
     }
 
+    /// Set shimmer phase for animated status text
+    #[must_use]
+    pub fn shimmer_phase(mut self, phase: f32) -> Self {
+        self.shimmer_phase = Some(phase);
+        self
+    }
+
     fn build_status_line(&self, width: u16) -> Line<'static> {
         let mut spans = Vec::new();
 
@@ -102,7 +111,15 @@ impl<'a> FooterWidget<'a> {
             if let Some((indicator, rest)) = split_running_command_status(left) {
                 spans.push(Span::styled(indicator, self.styles.accent_style()));
                 spans.push(Span::raw(" "));
-                spans.extend(shimmer_spans_with_style(&rest, self.styles.muted_style()));
+                if let Some(phase) = self.shimmer_phase {
+                    spans.extend(shimmer_spans_with_style_at_phase(
+                        &rest,
+                        self.styles.muted_style(),
+                        phase,
+                    ));
+                } else {
+                    spans.extend(shimmer_spans_with_style(&rest, self.styles.muted_style()));
+                }
             } else {
                 spans.push(Span::styled(left.to_string(), self.styles.accent_style()));
             }
