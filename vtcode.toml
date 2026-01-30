@@ -12,7 +12,7 @@ api_key_env = "OLLAMA_API_KEY"
 default_model = "minimax-m2.1:cloud"
 
 # Visual theme for the terminal interface
-theme = "vitesse-light"
+theme = "ciapre-dark"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -29,7 +29,7 @@ reasoning_effort = "low"
 system_prompt_mode = "default"
 tool_documentation_mode = "minimal"
 enable_split_tool_results = true
-todo_planning_mode = false
+todo_planning_mode = true
 verbosity = "low"
 refine_temperature = 0.3
 enable_self_review = false
@@ -111,7 +111,7 @@ max_file_size_kb = 64
 # UI configuration
 [ui]
 # Tool output display mode
-tool_output_mode = "full"
+tool_output_mode = "compact"
 
 # Maximum number of lines to display in tool output (prevents transcript flooding)
 tool_output_max_lines = 50
@@ -123,8 +123,8 @@ reasoning_visible_default = false
 layout_mode = "auto"
 show_message_dividers = false
 dim_completed_todos = true
-message_block_spacing = true
-display_mode = "minimal"
+message_block_spacing = false
+display_mode = "full"
 show_sidebar = false
 
 [agent.custom_slash_commands]
@@ -231,7 +231,7 @@ enter_plan_mode = "prompt"
 plan_mode = "prompt"
 enter_plan = "prompt"
 start_planning = "prompt"
-exit_plan_mode = "prompt"
+exit_plan_mode = "allow"
 exit_plan = "prompt"
 plan_exit = "prompt"
 start_implementation = "prompt"
@@ -239,6 +239,8 @@ implement_plan = "prompt"
 request_user_input = "allow"
 ask_user_question = "allow"
 run_pty_cmd = "allow"
+list_skills = "allow"
+web_fetch = "allow"
 
 [sandbox]
 enabled = true
@@ -726,7 +728,7 @@ surface_metrics = true
 enabled = false
 
 [mcp]
-enabled = false
+enabled = true
 providers = []
 max_concurrent_connections = 5
 request_timeout_seconds = 30

@@ -43,12 +43,7 @@
     "unified_file",
     "unified_search",
     "web_fetch",
-    "write_file",
-    "cargo_check",
-    "cargo_test",
-    "git_status",
-    "git_diff",
-    "git_log"
+    "write_file"
   ],
   "policies": {
     "apply_patch": "prompt",
@@ -61,7 +56,7 @@
     "read_file": "allow",
     "run_pty_cmd": "allow",
     "search_tools": "allow",
-    "web_fetch": "prompt",
+    "web_fetch": "allow",
     "write_file": "prompt",
     "skill": "prompt",
     "code_intelligence": "prompt",
@@ -87,18 +82,13 @@
     "enter_plan": "prompt",
     "enter_plan_mode": "prompt",
     "exit_plan": "prompt",
-    "exit_plan_mode": "prompt",
+    "exit_plan_mode": "allow",
     "implement_plan": "prompt",
     "plan_exit": "prompt",
     "plan_mode": "prompt",
     "start_implementation": "prompt",
     "start_planning": "prompt",
-    "request_user_input": "allow",
-    "cargo_check": "allow",
-    "cargo_test": "allow",
-    "git_status": "allow",
-    "git_diff": "allow",
-    "git_log": "allow"
+    "request_user_input": "allow"
   },
   "constraints": {},
   "mcp": {
@@ -238,18 +228,6 @@
         }
       }
     },
-    "providers": {
-      "time": {
-        "tools": {
-          "get_current_time": "prompt",
-          "convert_time": "prompt"
-        }
-      },
-      "fetch": {
-        "tools": {
-          "fetch": "prompt"
-        }
-      }
-    }
+    "providers": {}
   }
 }
