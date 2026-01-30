@@ -54,6 +54,21 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
 
+fn indent_block(text: &str, indent: &str) -> String {
+    if indent.is_empty() || text.is_empty() {
+        return text.to_string();
+    }
+    let mut indented = String::with_capacity(text.len() + indent.len());
+    for (idx, line) in text.split('\n').enumerate() {
+        if idx > 0 {
+            indented.push('\n');
+        }
+        indented.push_str(indent);
+        indented.push_str(line);
+    }
+    indented
+}
+
 /// Convert agent.circuit_breaker config to core CircuitBreakerConfig
 /// Maps user-facing settings to the actual circuit breaker parameters
 #[allow(clippy::unnecessary_cast)]
@@ -959,12 +974,11 @@ pub(crate) async fn initialize_session_ui(
 
                 match &msg.content {
                     uni::MessageContent::Text(text) => {
-                        for line in text.lines() {
-                            renderer.line(style, &format!("    {}", line))?;
-                        }
+                        let indented = indent_block(text, "  ");
+                        renderer.line(style, &indented)?;
                     }
                     uni::MessageContent::Parts(parts) => {
-                        renderer.line(style, &format!("    [content parts: {}]", parts.len()))?;
+                        renderer.line(style, &format!("  [content parts: {}]", parts.len()))?;
                     }
                 }
 

@@ -227,6 +227,17 @@ post_tool_use = []
 task_completion = []
 
 [tools.policies]
+enter_plan_mode = "prompt"
+plan_mode = "prompt"
+enter_plan = "prompt"
+start_planning = "prompt"
+exit_plan_mode = "prompt"
+exit_plan = "prompt"
+plan_exit = "prompt"
+start_implementation = "prompt"
+implement_plan = "prompt"
+request_user_input = "allow"
+ask_user_question = "allow"
 
 [sandbox]
 enabled = true

@@ -43,7 +43,7 @@ pub(crate) fn handle_assistant_response(
                 && reasoning_duplicates_content(&cleaned_reasoning, &assistant_text);
             if !cleaned_reasoning.trim().is_empty() && !duplicates_content {
                 ctx.renderer
-                    .line(MessageStyle::Info, &format!(" {}", cleaned_reasoning))?;
+                    .line(MessageStyle::Reasoning, &cleaned_reasoning)?;
             }
         }
     }
@@ -116,7 +116,7 @@ pub(crate) async fn handle_text_response(
                 params
                     .ctx
                     .renderer
-                    .line(MessageStyle::Info, &format!(" {}", cleaned_reasoning))?;
+                    .line(MessageStyle::Reasoning, &cleaned_reasoning)?;
             }
         }
     }
