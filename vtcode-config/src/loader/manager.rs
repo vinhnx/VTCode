@@ -20,6 +20,30 @@ pub struct ConfigManager {
 impl ConfigManager {
     /// Load configuration from the default locations
     pub fn load() -> Result<Self> {
+        if let Ok(config_path) = std::env::var("VTCODE_CONFIG_PATH") {
+            let trimmed = config_path.trim();
+            if !trimmed.is_empty() {
+                return Self::load_from_file(trimmed).with_context(|| {
+                    format!(
+                        "Failed to load configuration from VTCODE_CONFIG_PATH={}",
+                        trimmed
+                    )
+                });
+            }
+        }
+
+        if let Ok(workspace_path) = std::env::var("VTCODE_WORKSPACE") {
+            let trimmed = workspace_path.trim();
+            if !trimmed.is_empty() {
+                return Self::load_from_workspace(trimmed).with_context(|| {
+                    format!(
+                        "Failed to load configuration from VTCODE_WORKSPACE={}",
+                        trimmed
+                    )
+                });
+            }
+        }
+
         Self::load_from_workspace(std::env::current_dir()?)
     }
 

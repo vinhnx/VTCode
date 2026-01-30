@@ -187,6 +187,9 @@ impl StartupContext {
         let mut builder = ConfigBuilder::new().workspace(workspace.clone());
         if let Some(path_override) = config_path_override {
             let resolved_path = resolve_config_path(&workspace, &path_override);
+            unsafe {
+                std::env::set_var("VTCODE_CONFIG_PATH", &resolved_path);
+            }
             builder = builder.config_file(resolved_path);
         }
 
