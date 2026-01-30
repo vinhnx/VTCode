@@ -2,6 +2,23 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.73.6 - 2026-01-30
+
+* fix: update default theme, enable todo planning, refine tool output and display settings, and adjust tool policies for streamlined configuration (dcc7043e)
+* fix: add persistence for editing and autonomous mode settings, and align theme with active configuration (ecacbc19)
+* fix: add persistence for editing and autonomous mode settings, and align theme with active configuration (bfea2f52)
+* fix: update default theme and reasoning effort, improve config overrides, adjust workspace trust mode, and enhance contribution docs (85c1ba7f)
+* fix: add support for VTCODE_CONFIG_PATH, enhance configuration loading logic, and remove unused `.aiignore` file (bf6547aa)
+* fix: improve shimmer animation handling, refactor spinner updates, and enhance status rendering logic (0a40ad46)
+* fix: adjust tool policies, refactor text styling logic, and optimize message rendering indentation (8123ac34)
+* fix: adjust color mappings, enhance markdown rendering logic, and add tests for new edge cases in tool policies and UI interactions (8309ffc1)
+* fix: enforce tools_policy prompts, refactor workspace trust application, and enhance command safety checks (394aa59b)
+* fix: enhance checksum verification logic across scripts, add fallback for individual sha256 files, and improve error handling (5abd7c60)
+* fix: refactor ask command output handling, enhance pipeline detection, and centralize code extraction logic (b2aee725)
+* fix: add spinner for long-running tasks, improve cursor handling, and streamline release fetching logic (484bfef1)
+* fix: streamline platform-specific binary builds, refactor `ask` command implementation, and enhance local release workflow (d3bca9c2)
+* chore: update homebrew formula to v0.73.5 (fd22abb9)
+
 ## v0.73.5 - 2026-01-29
 
 * fix: improve release fetching with fallback for older versions, enhance platform-specific binary handling (5d1344a8)
