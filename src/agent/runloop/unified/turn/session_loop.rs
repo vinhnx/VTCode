@@ -29,7 +29,7 @@ use crate::agent::runloop::unified::inline_events::harness::{
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use chrono::Utc;
 use vtcode_core::exec::events::{ThreadEvent, ThreadStartedEvent};
-use vtcode_core::session::{SessionId, SessionState as PersistentSessionState, session_path};
+use vtcode_core::session::{SessionId, session_path};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
 
@@ -124,8 +124,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         let session_id = resume_ref
             .map(|resume| SessionId::from_string(resume.identifier.clone()))
             .unwrap_or_else(SessionId::new);
-        let session_created_at = Utc::now();
-        let session_state_path = session_path(Path::new(&config.workspace), &session_id);
+        let _session_created_at = Utc::now();
+        let _session_state_path = session_path(Path::new(&config.workspace), &session_id);
 
         let _session_trigger = if resume_ref.is_some() {
             SessionStartTrigger::Resume
@@ -529,6 +529,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             // Check session tool result cache pressure
             tool_result_cache.write().await.check_pressure_and_evict();
 
+            // Persist session progress to global archive (~/.vtcode/sessions/)
+            // This provides historical session data and resumable checkpoints
             if let Some(archive) = session_archive.as_ref() {
                 let mut recent_messages: Vec<SessionMessage> = conversation_history
                     .iter()
@@ -555,20 +557,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                     tracing::warn!("Failed to persist session progress: {}", err);
                 }
             }
-            {
-                let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
-                let mut session_state = PersistentSessionState::new(
-                    session_id.clone(),
-                    session_created_at,
-                    conversation_history.clone(),
-                    skill_names,
-                    Path::new(&config.workspace).to_path_buf(),
-                );
-                session_state.last_updated = Utc::now();
-                if let Err(err) = session_state.save(&session_state_path) {
-                    tracing::warn!("Failed to persist session state: {}", err);
-                }
-            }
+            // Note: PersistentSessionState (for workspace-local session resumption)
+            // is intentionally NOT written here to reduce I/O load. It will be written
+            // once at session end in finalize_session if needed for resume functionality.
             let _turn_result = outcome.result;
 
             // Check for session exit and continue to next iteration otherwise.

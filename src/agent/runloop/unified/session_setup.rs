@@ -1276,6 +1276,10 @@ fn emergency_terminal_cleanup() {
 
     let mut stderr = io::stderr();
 
+    // Clear current line to remove any echoed ^C characters from rapid Ctrl+C presses
+    // \r returns to start of line, \x1b[K clears to end of line
+    let _ = stderr.write_all(b"\r\x1b[K");
+
     // Attempt to leave alternate screen - this is the most critical
     // operation to prevent ANSI escape codes from leaking
     let _ = execute!(stderr, LeaveAlternateScreen);

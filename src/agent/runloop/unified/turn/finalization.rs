@@ -23,6 +23,10 @@ fn restore_terminal_on_exit() -> io::Result<()> {
     // We avoid aggressive cleanup here to prevent conflicts with TUI cleanup
     let mut stdout = io::stdout();
 
+    // Clear current line to remove any echoed ^C characters from rapid Ctrl+C presses
+    // \r returns to start of line, \x1b[K clears to end of line
+    let _ = stdout.write_all(b"\r\x1b[K");
+
     // Only attempt minimal, safe cleanup
     // Disable raw mode if still enabled
     let _ = disable_raw_mode();
