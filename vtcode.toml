@@ -25,7 +25,7 @@ ui_surface = "auto"
 max_conversation_turns = 150
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "medium"
+reasoning_effort = "low"
 system_prompt_mode = "default"
 tool_documentation_mode = "minimal"
 enable_split_tool_results = true
@@ -48,7 +48,7 @@ include_working_directory = true
 # "edit" - Full tool access for file modifications and command execution (default)
 # "plan" - Read-only mode that produces implementation plans without making changes
 # Toggle during session with Shift+Tab or /plan command
-default_editing_mode = "edit"
+default_editing_mode = "plan"
 require_plan_confirmation = true
 autonomous_mode = false
 

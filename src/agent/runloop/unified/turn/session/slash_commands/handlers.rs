@@ -54,7 +54,7 @@ fn persist_mode_settings(
         return Ok(());
     }
 
-    let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
+    let mut manager = ConfigManager::load().with_context(|| {
         format!(
             "Failed to load configuration for workspace {}",
             workspace.display()

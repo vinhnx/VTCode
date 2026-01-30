@@ -33,11 +33,7 @@ pub struct ConfigPalette {
 
 impl ConfigPalette {
     pub fn new(manager: ConfigManager) -> Self {
-        let mut config = manager.config().clone();
-        let active_theme = crate::ui::theme::active_theme_id();
-        if !active_theme.is_empty() && active_theme != config.agent.theme {
-            config.agent.theme = active_theme;
-        }
+        let config = manager.config().clone();
         let mut palette = Self {
             items: Vec::new(),
             list_state: ListState::default(),
@@ -70,9 +66,11 @@ impl ConfigPalette {
                 value: config.agent.reasoning_effort.to_string(),
                 options: vec![
                     "none".to_string(),
+                    "minimal".to_string(),
                     "low".to_string(),
                     "medium".to_string(),
                     "high".to_string(),
+                    "xhigh".to_string(),
                 ],
             },
             description: Some("Model reasoning depth (e.g. for Gemini thinking)".to_string()),
@@ -111,7 +109,7 @@ impl ConfigPalette {
 
         // Verbosity Level
         items.push(ConfigItem {
-            key: "agent.verbosity_level".to_string(),
+            key: "agent.verbosity".to_string(),
             label: "Verbosity Level".to_string(),
             kind: ConfigItemKind::Enum {
                 value: config.agent.verbosity.to_string(),
@@ -198,6 +196,47 @@ impl ConfigPalette {
             description: Some("Trust mode for ACP sessions (tools_policy/full_auto)".to_string()),
         });
 
+        // -- Automation & Safety Section --
+
+        // Full Auto
+        items.push(ConfigItem {
+            key: "automation.full_auto.enabled".to_string(),
+            label: "Full Auto".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.automation.full_auto.enabled,
+            },
+            description: Some("Enable full-auto automation mode".to_string()),
+        });
+
+        // Default Tool Policy
+        items.push(ConfigItem {
+            key: "tools.default_policy".to_string(),
+            label: "Tool Policy".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: match config.tools.default_policy {
+                    ToolPolicy::Allow => "allow".to_string(),
+                    ToolPolicy::Prompt => "prompt".to_string(),
+                    ToolPolicy::Deny => "deny".to_string(),
+                },
+                options: vec![
+                    "allow".to_string(),
+                    "prompt".to_string(),
+                    "deny".to_string(),
+                ],
+            },
+            description: Some("Default confirmation policy for tools".to_string()),
+        });
+
+        // Human In The Loop
+        items.push(ConfigItem {
+            key: "security.human_in_the_loop".to_string(),
+            label: "Human In The Loop".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.security.human_in_the_loop,
+            },
+            description: Some("Require confirmations for critical actions".to_string()),
+        });
+
         // -- Limits & Session Section --
 
         // Max Context Tokens
@@ -210,6 +249,18 @@ impl ConfigPalette {
                 max: 200000,
             },
             description: Some("Maximum tokens to preserve in conversation context".to_string()),
+        });
+
+        // Trim Context Percent
+        items.push(ConfigItem {
+            key: "context.trim_to_percent".to_string(),
+            label: "Context Trim %".to_string(),
+            kind: ConfigItemKind::Number {
+                value: config.context.trim_to_percent as i64,
+                min: 10,
+                max: 95,
+            },
+            description: Some("Trim context to this percent when over budget".to_string()),
         });
 
         // Max Turns
@@ -313,6 +364,16 @@ impl ConfigPalette {
             description: Some("Preserve ANSI color codes from tool output".to_string()),
         });
 
+        // Syntax Highlighting
+        items.push(ConfigItem {
+            key: "syntax_highlighting.enabled".to_string(),
+            label: "Syntax Highlighting".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.syntax_highlighting.enabled,
+            },
+            description: Some("Enable syntax highlighting in UI output".to_string()),
+        });
+
         // -- Keyboard Protocol Section --
 
         // Keyboard Protocol Enabled
@@ -357,7 +418,17 @@ impl ConfigPalette {
             description: Some("Height of the main TUI viewport".to_string()),
         });
 
-        // PTY Rows/Cols info
+        // PTY Enabled
+        items.push(ConfigItem {
+            key: "pty.enabled".to_string(),
+            label: "PTY Enabled".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.pty.enabled,
+            },
+            description: Some("Enable PTY-backed command execution".to_string()),
+        });
+
+        // PTY Rows
         items.push(ConfigItem {
             key: "pty.default_rows".to_string(),
             label: "PTY Rows".to_string(),
@@ -367,6 +438,30 @@ impl ConfigPalette {
                 max: 100,
             },
             description: Some("Default rows for PTY sessions".to_string()),
+        });
+
+        // PTY Columns
+        items.push(ConfigItem {
+            key: "pty.default_cols".to_string(),
+            label: "PTY Cols".to_string(),
+            kind: ConfigItemKind::Number {
+                value: config.pty.default_cols as i64,
+                min: 40,
+                max: 200,
+            },
+            description: Some("Default columns for PTY sessions".to_string()),
+        });
+
+        // PTY Timeout
+        items.push(ConfigItem {
+            key: "pty.command_timeout_seconds".to_string(),
+            label: "PTY Timeout (s)".to_string(),
+            kind: ConfigItemKind::Number {
+                value: config.pty.command_timeout_seconds as i64,
+                min: 10,
+                max: 3600,
+            },
+            description: Some("Command timeout for PTY sessions".to_string()),
         });
 
         // Read-only model info
@@ -514,11 +609,16 @@ impl ConfigPalette {
                 }
                 "agent.theme" => {
                     let themes = crate::ui::theme::available_themes();
-                    let current = &self.config.agent.theme;
-                    let index = themes.iter().position(|&t| t == current).unwrap_or(0);
-                    let next_index = (index + 1) % themes.len();
-                    self.config.agent.theme = themes[next_index].to_string();
-                    changed = true;
+                    if !themes.is_empty() {
+                        let current = &self.config.agent.theme;
+                        let next_index = themes
+                            .iter()
+                            .position(|&t| t == current)
+                            .map(|index| (index + 1) % themes.len())
+                            .unwrap_or(0);
+                        self.config.agent.theme = themes[next_index].to_string();
+                        changed = true;
+                    }
                 }
                 "pty.enabled" => {
                     self.config.pty.enabled = !self.config.pty.enabled;
@@ -567,7 +667,7 @@ impl ConfigPalette {
                         };
                     changed = true;
                 }
-                "agent.verbosity_level" => {
+                "agent.verbosity" => {
                     self.config.agent.verbosity = match self.config.agent.verbosity {
                         VerbosityLevel::Low => VerbosityLevel::Medium,
                         VerbosityLevel::Medium => VerbosityLevel::High,

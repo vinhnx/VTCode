@@ -37,7 +37,7 @@ fn prepare_config_modal_content(
     vt_cfg: Option<VTCodeConfig>,
     trust_label: Option<String>,
 ) -> Result<ConfigModalContent> {
-    let manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
+    let manager = ConfigManager::load().with_context(|| {
         format!(
             "failed to resolve configuration for workspace {}",
             workspace.display()
