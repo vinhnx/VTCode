@@ -581,11 +581,33 @@ fn header_lines_include_provider_model_and_metadata() {
     for value in session.header_chain_values() {
         assert!(line_text.contains(&value));
     }
+    // Trust is now shown as a badge, not in chain values
+    assert!(line_text.contains("[FULL AUTO]"));
     // Removed assertion for HEADER_MCP_PREFIX since we're no longer showing MCP info in header
     assert!(!line_text.contains("Languages"));
     assert!(!line_text.contains(ui::HEADER_STATUS_LABEL));
     assert!(!line_text.contains(ui::HEADER_MESSAGES_LABEL));
     assert!(!line_text.contains(ui::HEADER_INPUT_LABEL));
+}
+
+#[test]
+fn header_shows_safe_badge_for_tools_policy_trust() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.workspace_trust = format!("{}tools policy", ui::HEADER_TRUST_PREFIX);
+    session.input_manager.set_content("test".to_string());
+    session
+        .input_manager
+        .set_cursor(session.input_manager.content().len());
+
+    let lines = session.header_lines();
+    assert_eq!(lines.len(), 1);
+
+    let line_text: String = lines[0]
+        .spans
+        .iter()
+        .map(|span| span.content.clone().into_owned())
+        .collect();
+    assert!(line_text.contains("[SAFE]"));
 }
 
 #[test]

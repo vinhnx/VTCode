@@ -59,7 +59,7 @@
     "grep_file": "allow",
     "list_files": "allow",
     "read_file": "allow",
-    "run_pty_cmd": "allow",
+    "run_pty_cmd": "prompt",
     "search_tools": "allow",
     "web_fetch": "prompt",
     "write_file": "prompt",

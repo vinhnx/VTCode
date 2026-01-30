@@ -56,27 +56,40 @@ impl AgentRunner {
         tool_name: &str,
         args: &Value,
     ) -> Result<Value> {
-        // Enforce per-agent shell policies for RUN_PTY_CMD
-        let is_shell = tool_name == tools::RUN_PTY_CMD;
-        if is_shell {
-            let cfg = self.config();
-            let cmd_text = if let Some(cmd_val) = args.get("command") {
-                if cmd_val.is_array() {
-                    cmd_val
-                        .as_array()
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|v| v.as_str())
-                                .collect::<Vec<_>>()
-                                .join(" ")
-                        })
-                        .unwrap_or_default()
+        let extract_command_text = |args: &Value| {
+            if let Some(cmd_val) = args.get("command") {
+                if let Some(arr) = cmd_val.as_array() {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
                 } else {
                     cmd_val.as_str().unwrap_or("").to_owned()
                 }
             } else {
                 String::new()
-            };
+            }
+        };
+
+        let shell_command = match tool_name {
+            n if n == tools::RUN_PTY_CMD || n == "shell" => Some(extract_command_text(args)),
+            n if n == tools::UNIFIED_EXEC => {
+                let action = args
+                    .get("action")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| args.get("command").map(|_| "run"));
+                if action == Some("run") {
+                    Some(extract_command_text(args))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        // Enforce per-agent shell policies for shell-executed commands.
+        if let Some(cmd_text) = shell_command {
+            let cfg = self.config();
 
             let agent_prefix = format!(
                 "VTCODE_{}_COMMANDS_",

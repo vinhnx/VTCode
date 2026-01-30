@@ -36,6 +36,7 @@ pub struct CommandsConfig {
 }
 
 const DEFAULT_ALLOW_LIST: &[&str] = &[
+    // File and directory operations
     "ls",
     "pwd",
     "cat",
@@ -44,12 +45,36 @@ const DEFAULT_ALLOW_LIST: &[&str] = &[
     "head",
     "tail",
     "wc",
+    "tree",
+    "stat",
+    "file",
+    "sort",
+    "uniq",
+    "cut",
+    "awk",
+    "sed",
+    // Archive operations
+    "tar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    // Build tools
+    "make",
+    "cmake",
+    "ninja",
+    "which",
+    "echo",
+    "printf",
+    "date",
+    // Version control
     "git status",
     "git diff",
     "git log",
     "git show",
     "git branch",
     "git remote",
+    // Rust ecosystem
     "cargo check",
     "cargo build",
     "cargo build --release",
@@ -62,26 +87,7 @@ const DEFAULT_ALLOW_LIST: &[&str] = &[
     "cargo metadata",
     "cargo doc",
     "rustc",
-    "which",
-    "echo",
-    "printf",
-    "date",
-    "tree",
-    "stat",
-    "file",
-    "sort",
-    "uniq",
-    "cut",
-    "awk",
-    "sed",
-    "tar",
-    "zip",
-    "unzip",
-    "gzip",
-    "gunzip",
-    "make",
-    "cmake",
-    "ninja",
+    // Python ecosystem
     "python3",
     "python3 -m pip install",
     "python3 -m pytest",
@@ -90,6 +96,7 @@ const DEFAULT_ALLOW_LIST: &[&str] = &[
     "pip3",
     "pip",
     "virtualenv",
+    // Node.js ecosystem
     "node",
     "npm",
     "npm run build",
@@ -106,17 +113,21 @@ const DEFAULT_ALLOW_LIST: &[&str] = &[
     "bun run",
     "bun test",
     "npx",
+    // Go ecosystem
     "go",
     "go build",
     "go test",
+    // C/C++
     "gcc",
     "g++",
     "clang",
     "clang++",
+    // Java ecosystem
     "javac",
     "java",
     "mvn",
     "gradle",
+    // Container operations
     "docker",
     "docker-compose",
 ];
@@ -127,6 +138,8 @@ impl Default for CommandsConfig {
             allow_list: DEFAULT_ALLOW_LIST.iter().map(|s| (*s).into()).collect(),
             extra_path_entries: default_extra_path_entries(),
             deny_list: vec![
+                // Dangerous file deletion
+                "rm".into(),
                 "rm -rf /".into(),
                 "rm -rf ~".into(),
                 "rm -rf /*".into(),
@@ -138,6 +151,7 @@ impl Default for CommandsConfig {
                 "rmdir /".into(),
                 "rmdir /home".into(),
                 "rmdir /usr".into(),
+                // System control
                 "shutdown".into(),
                 "reboot".into(),
                 "halt".into(),
@@ -147,6 +161,7 @@ impl Default for CommandsConfig {
                 "systemctl poweroff".into(),
                 "systemctl reboot".into(),
                 "systemctl halt".into(),
+                // Privilege escalation
                 "sudo rm".into(),
                 "sudo chmod 777".into(),
                 "sudo chown".into(),
@@ -156,6 +171,7 @@ impl Default for CommandsConfig {
                 "sudo bash".into(),
                 "su root".into(),
                 "su -".into(),
+                // Disk operations
                 "format".into(),
                 "fdisk".into(),
                 "mkfs".into(),
@@ -165,19 +181,24 @@ impl Default for CommandsConfig {
                 "dd if=/dev/zero".into(),
                 "dd if=/dev/random".into(),
                 "dd if=/dev/urandom".into(),
+                // Security risks
                 "wget --no-check-certificate".into(),
                 ":(){ :|:& };:".into(), // Fork bomb
                 "nohup bash -i".into(),
                 "exec bash -i".into(),
                 "eval".into(),
+                // Shell configuration
                 "source /etc/bashrc".into(),
                 "source ~/.bashrc".into(),
+                // Permission changes
                 "chmod 777".into(),
                 "chmod -R 777".into(),
                 "chown -R".into(),
                 "chgrp -R".into(),
+                // SSH key destruction
                 "rm ~/.ssh/*".into(),
                 "rm -r ~/.ssh".into(),
+                // Sensitive file access
                 "cat /etc/passwd".into(),
                 "cat /etc/shadow".into(),
                 "cat ~/.ssh/id_*".into(),
@@ -185,13 +206,18 @@ impl Default for CommandsConfig {
                 "head -n 1 /var/log".into(),
             ],
             allow_glob: vec![
+                // Version control
                 "git *".into(),
+                // Rust ecosystem
                 "cargo *".into(),
                 "rustc *".into(),
+                // Python ecosystem
                 "python *".into(),
                 "python3 *".into(),
                 "pip *".into(),
                 "pip3 *".into(),
+                "virtualenv *".into(),
+                // Node.js ecosystem
                 "node *".into(),
                 "npm *".into(),
                 "npm run *".into(),
@@ -202,21 +228,26 @@ impl Default for CommandsConfig {
                 "bun *".into(),
                 "bun run *".into(),
                 "npx *".into(),
+                // Go
                 "go *".into(),
+                // C/C++
                 "gcc *".into(),
                 "g++ *".into(),
                 "clang *".into(),
                 "clang++ *".into(),
+                // Java
                 "javac *".into(),
                 "java *".into(),
                 "mvn *".into(),
                 "gradle *".into(),
+                // Build tools
                 "make *".into(),
                 "cmake *".into(),
                 "ninja *".into(),
+                // Containers
                 "docker *".into(),
                 "docker-compose *".into(),
-                "virtualenv *".into(),
+                // Archive tools
                 "tar *".into(),
                 "zip *".into(),
                 "unzip *".into(),
@@ -224,41 +255,64 @@ impl Default for CommandsConfig {
                 "gunzip *".into(),
             ],
             deny_glob: vec![
+                // File deletion
                 "rm *".into(),
+                // Privilege escalation
                 "sudo *".into(),
+                // Permission changes
                 "chmod *".into(),
                 "chown *".into(),
+                // Process termination
                 "kill *".into(),
                 "pkill *".into(),
+                // System services
                 "systemctl *".into(),
                 "service *".into(),
+                // Mount operations
                 "mount *".into(),
                 "umount *".into(),
+                // Dangerous container operations
                 "docker run *".into(),
+                // Kubernetes (admin access)
                 "kubectl *".into(),
             ],
             allow_regex: vec![
+                // File and text utilities
                 r"^(ls|pwd|cat|grep|find|head|tail|wc|echo|printf|date|tree|stat|file|sort|uniq|cut|awk|sed|tar|zip|unzip|gzip|gunzip)\b".into(),
+                // Version control
                 r"^git (status|diff|log|show|branch|remote)\b".into(),
+                // Rust
                 r"^cargo (check|build|test|run|doc|clippy|fmt|tree|metadata)\b".into(),
                 r"^rustc\b".into(),
+                // Python
                 r"^(python|python3) (-m | )?\w*".into(),
                 r"^(pip|pip3)\b".into(),
                 r"^virtualenv\b".into(),
+                // Node.js
                 r"^(node|npm|yarn|pnpm|bun|npx)\b".into(),
+                // Go
                 r"^go\b".into(),
+                // C/C++
                 r"^(gcc|g\+\+|clang|clang\++)\b".into(),
+                // Java
                 r"^(javac|java)\b".into(),
                 r"^(mvn|gradle)\b".into(),
+                // Build tools
                 r"^(make|cmake)\b".into(),
+                // Containers
                 r"^(docker|docker-compose)\b".into(),
             ],
             deny_regex: vec![
+                // Force removal
                 r"rm\s+(-rf|--force)".into(),
+                // Sudo commands
                 r"sudo\s+.*".into(),
+                // Permission changes
                 r"chmod\s+.*".into(),
                 r"chown\s+.*".into(),
+                // Privileged containers
                 r"docker\s+run\s+.*--privileged".into(),
+                // Dangerous kubectl operations
                 r"kubectl\s+(delete|drain|uncordon)".into(),
             ],
         }

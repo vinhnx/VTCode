@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use tracing::warn;
+use vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode;
 use vtcode_core::config::constants::{
     instructions as instruction_constants, project_doc as project_doc_constants, ui as ui_constants,
 };
@@ -21,6 +22,7 @@ pub(crate) struct SessionBootstrap {
     pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
     pub mcp_error: Option<String>,
     pub header_highlights: Vec<InlineHeaderHighlight>,
+    pub acp_workspace_trust: Option<AgentClientProtocolZedWorkspaceTrustMode>,
 }
 
 pub(crate) async fn prepare_session_bootstrap(
@@ -88,6 +90,10 @@ pub(crate) async fn prepare_session_bootstrap(
         None
     };
 
+    let acp_workspace_trust = vt_cfg
+        .filter(|cfg| cfg.acp.zed.enabled)
+        .map(|cfg| cfg.acp.zed.workspace_trust);
+
     SessionBootstrap {
         placeholder,
         prompt_addendum,
@@ -95,6 +101,7 @@ pub(crate) async fn prepare_session_bootstrap(
         mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
         mcp_error,
         header_highlights,
+        acp_workspace_trust,
     }
 }
 

@@ -63,3 +63,12 @@ pub(crate) async fn refresh_vt_config(
     *vt_cfg = Some(snapshot);
     Ok(())
 }
+
+pub(crate) fn apply_workspace_config_to_registry(
+    tool_registry: &vtcode_core::tools::registry::ToolRegistry,
+    vt_cfg: &VTCodeConfig,
+) -> Result<()> {
+    tool_registry.apply_commands_config(&vt_cfg.commands);
+    tool_registry.apply_timeout_policy(&vt_cfg.timeouts);
+    Ok(())
+}

@@ -12,11 +12,27 @@ use crate::tools::names::canonical_tool_name;
 use super::ToolPermissionDecision;
 use super::risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
 
+const ALWAYS_PROMPT_IN_SAFE_MODE: &[&str] = &[
+    tools::RUN_PTY_CMD,
+    tools::SEND_PTY_INPUT,
+    tools::CREATE_PTY_SESSION,
+    tools::WRITE_FILE,
+    tools::EDIT_FILE,
+    tools::CREATE_FILE,
+    tools::DELETE_FILE,
+    tools::APPLY_PATCH,
+    "exec",
+    "shell",
+    "unified_exec",
+    "exec_pty_cmd",
+];
+
 #[derive(Clone, Default)]
 pub(super) struct ToolPolicyGateway {
     tool_policy: Option<ToolPolicyManager>,
     preapproved_tools: HashSet<String>,
     full_auto_allowlist: Option<HashSet<String>>,
+    enforce_safe_mode_prompts: bool,
 }
 
 impl ToolPolicyGateway {
@@ -33,6 +49,7 @@ impl ToolPolicyGateway {
             tool_policy,
             preapproved_tools: HashSet::new(),
             full_auto_allowlist: None,
+            enforce_safe_mode_prompts: false,
         }
     }
 
@@ -41,7 +58,20 @@ impl ToolPolicyGateway {
             tool_policy: Some(manager),
             preapproved_tools: HashSet::new(),
             full_auto_allowlist: None,
+            enforce_safe_mode_prompts: false,
         }
+    }
+
+    pub fn set_enforce_safe_mode_prompts(&mut self, enabled: bool) {
+        self.enforce_safe_mode_prompts = enabled;
+    }
+
+    fn requires_safe_mode_prompt(&self, tool_name: &str) -> bool {
+        if !self.enforce_safe_mode_prompts {
+            return false;
+        }
+        let canonical = canonical_tool_name(tool_name);
+        ALWAYS_PROMPT_IN_SAFE_MODE.contains(&canonical.as_ref())
     }
 
     pub fn has_policy_manager(&self) -> bool {
@@ -254,6 +284,16 @@ impl ToolPolicyGateway {
     pub async fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
         let canonical = canonical_tool_name(name);
         let normalized = canonical.as_ref();
+
+        // In safe mode (tools_policy), high-risk tools always require a prompt
+        // regardless of persisted policy
+        if self.requires_safe_mode_prompt(normalized) {
+            tracing::debug!(
+                "Tool '{}' requires prompt in safe mode (tools_policy)",
+                normalized
+            );
+            return Ok(ToolPermissionDecision::Prompt);
+        }
 
         if let Some(allowlist) = self.full_auto_allowlist.as_ref() {
             if !allowlist.contains(normalized) {

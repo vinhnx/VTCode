@@ -503,6 +503,11 @@ pub async fn handle_execute_tool(
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
             autonomous_mode: ctx.session_stats.is_autonomous_mode(),
+            human_in_the_loop: ctx
+                .vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.security.human_in_the_loop)
+                .unwrap_or(true),
         },
         &name,
         Some(&args),

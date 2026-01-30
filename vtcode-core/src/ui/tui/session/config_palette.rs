@@ -1,8 +1,8 @@
 use crate::config::ToolOutputMode;
 use crate::config::loader::{ConfigManager, VTCodeConfig};
 use crate::config::{
-    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, ToolPolicy, UiDisplayMode,
-    VerbosityLevel,
+    AgentClientProtocolZedWorkspaceTrustMode, ReasoningEffortLevel, SystemPromptMode,
+    ToolDocumentationMode, ToolPolicy, UiDisplayMode, VerbosityLevel,
 };
 use ratatui::widgets::ListState;
 
@@ -176,6 +176,22 @@ impl ConfigPalette {
                 value: config.mcp.enabled,
             },
             description: Some("Enable Model Context Protocol support".to_string()),
+        });
+
+        // ACP Workspace Trust
+        items.push(ConfigItem {
+            key: "acp.zed.workspace_trust".to_string(),
+            label: "ACP Workspace Trust".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: match config.acp.zed.workspace_trust {
+                    AgentClientProtocolZedWorkspaceTrustMode::FullAuto => "full_auto".to_string(),
+                    AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy => {
+                        "tools_policy".to_string()
+                    }
+                },
+                options: vec!["tools_policy".to_string(), "full_auto".to_string()],
+            },
+            description: Some("Trust mode for ACP sessions (tools_policy/full_auto)".to_string()),
         });
 
         // -- Limits & Session Section --
@@ -588,6 +604,18 @@ impl ConfigPalette {
                 }
                 "mcp.enabled" => {
                     self.config.mcp.enabled = !self.config.mcp.enabled;
+                    changed = true;
+                }
+                "acp.zed.workspace_trust" => {
+                    self.config.acp.zed.workspace_trust = match self.config.acp.zed.workspace_trust
+                    {
+                        AgentClientProtocolZedWorkspaceTrustMode::FullAuto => {
+                            AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy
+                        }
+                        AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy => {
+                            AgentClientProtocolZedWorkspaceTrustMode::FullAuto
+                        }
+                    };
                     changed = true;
                 }
                 "ui.keyboard_protocol.enabled" => {

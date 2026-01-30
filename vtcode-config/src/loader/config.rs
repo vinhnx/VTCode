@@ -719,6 +719,7 @@ enabled = true
 [acp.zed]
 enabled = true
 transport = "stdio"
+# workspace_trust controls ACP trust mode: "tools_policy" (prompts) or "full_auto" (no prompts)
 workspace_trust = "full_auto"
 
 [acp.zed.tools]

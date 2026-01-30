@@ -21,6 +21,13 @@ impl ToolRegistry {
         self.policy_gateway.write().await.disable_full_auto_mode();
     }
 
+    pub async fn set_enforce_safe_mode_prompts(&self, enabled: bool) {
+        self.policy_gateway
+            .write()
+            .await
+            .set_enforce_safe_mode_prompts(enabled);
+    }
+
     pub async fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
         self.policy_gateway
             .read()
