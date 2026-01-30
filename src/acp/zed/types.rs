@@ -159,7 +159,7 @@ pub(crate) struct SessionHandle {
 }
 
 pub(crate) struct SessionData {
-    pub(crate) session_id: acp::SessionId,
+    pub(crate) _session_id: acp::SessionId,
     pub(crate) messages: Vec<Message>,
     pub(crate) tool_notice_sent: bool,
     pub(crate) current_mode: acp::SessionModeId,

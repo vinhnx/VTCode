@@ -11,13 +11,13 @@ use super::super::constants::*;
 use super::super::types::{SessionData, SessionHandle};
 
 impl ZedAgent {
-    pub(super) fn register_session(&self) -> acp::SessionId {
+    pub(crate) fn register_session(&self) -> acp::SessionId {
         let raw_id = self.next_session_id.get();
         self.next_session_id.set(raw_id + 1);
         let session_id = acp::SessionId::new(Arc::from(format!("{SESSION_PREFIX}-{raw_id}")));
         let handle = SessionHandle {
             data: Rc::new(RefCell::new(SessionData {
-                session_id: session_id.clone(),
+                _session_id: session_id.clone(),
                 messages: Vec::with_capacity(20),
                 tool_notice_sent: false,
                 current_mode: acp::SessionModeId::new(MODE_ID_CODE),
@@ -30,7 +30,7 @@ impl ZedAgent {
         session_id
     }
 
-    pub(super) fn session_handle(&self, session_id: &acp::SessionId) -> Option<SessionHandle> {
+    pub(crate) fn session_handle(&self, session_id: &acp::SessionId) -> Option<SessionHandle> {
         self.sessions.borrow().get(session_id).cloned()
     }
 
