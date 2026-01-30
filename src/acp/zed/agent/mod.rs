@@ -39,6 +39,7 @@ pub(crate) struct ZedAgent {
     local_tool_registry: Mutex<CoreToolRegistry>,
     file_ops_tool: Option<FileOpsTool>,
     client_capabilities: Rc<RefCell<Option<acp::ClientCapabilities>>>,
+    title: Option<String>,
 }
 
 impl ZedAgent {
@@ -49,6 +50,7 @@ impl ZedAgent {
         commands_config: CommandsConfig,
         system_prompt: String,
         session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
+        title: Option<String>,
     ) -> Self {
         let read_file_enabled = zed_config.tools.read_file;
         let workspace_root = config.workspace.clone();
@@ -130,6 +132,7 @@ impl ZedAgent {
             local_tool_registry: Mutex::new(core_tool_registry),
             file_ops_tool,
             client_capabilities: Rc::new(RefCell::new(None)),
+            title,
         }
     }
 }

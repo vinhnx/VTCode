@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use vtcode::acp::ZedAcpAdapter;
+use vtcode::acp::{StandardAcpAdapter, ZedAcpAdapter};
 use vtcode_core::cli::args::AgentClientProtocolTarget;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::{AgentClientProtocolTransport, VTCodeConfig};
@@ -29,6 +29,11 @@ pub async fn handle_acp_command(
             }
 
             let adapter = ZedAcpAdapter;
+            let params = AcpLaunchParams::new(config, vt_cfg);
+            adapter.serve(params).await?
+        }
+        AgentClientProtocolTarget::Standard => {
+            let adapter = StandardAcpAdapter;
             let params = AcpLaunchParams::new(config, vt_cfg);
             adapter.serve(params).await?
         }
