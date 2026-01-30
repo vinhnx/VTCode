@@ -86,10 +86,3 @@ check Jetbrain (rustrover) ACP integration doesn't work
 reference
 https://docs.factory.ai/integrations/jetbrains
 https://agentclientprotocol.com/llms.txt
-
---
-
-check agent's message's markdown bold and code `quote` styling, it should use different color and reference from the current's theme
-'/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-30 at 8.31.08 PM.png'
-
----

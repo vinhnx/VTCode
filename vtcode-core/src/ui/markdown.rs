@@ -357,7 +357,11 @@ fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
             }
         }
         Tag::Emphasis => ctx.push_style(Style::italic),
-        Tag::Strong => ctx.push_style(Style::bold),
+        Tag::Strong => {
+            let theme_styles = ctx.theme_styles;
+            let base_style = ctx.base_style;
+            ctx.push_style(|style| strong_style(style, theme_styles, base_style));
+        }
         Tag::Strikethrough => ctx.push_style(Style::strikethrough),
         Tag::Superscript | Tag::Subscript => ctx.push_style(Style::italic),
         Tag::Link { .. } | Tag::Image { .. } => ctx.push_style(Style::underline),
@@ -680,12 +684,71 @@ fn trim_trailing_blank_lines(lines: &mut Vec<MarkdownLine>) {
     }
 }
 
-fn inline_code_style(_theme_styles: &ThemeStyles, base_style: Style) -> Style {
-    base_style.bold()
+fn inline_code_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
+    let mut style = base_style.bold();
+    if should_apply_markdown_accent(base_style, theme_styles)
+        && let Some(color) = choose_markdown_accent(
+            base_style,
+            &[
+                theme_styles.secondary,
+                theme_styles.primary,
+                theme_styles.tool_detail,
+                theme_styles.status,
+            ],
+        )
+    {
+        style = style.fg_color(Some(color));
+    }
+    style
 }
 
-fn heading_style(_level: HeadingLevel, _theme_styles: &ThemeStyles, base_style: Style) -> Style {
-    base_style.bold()
+fn heading_style(_level: HeadingLevel, theme_styles: &ThemeStyles, base_style: Style) -> Style {
+    let mut style = base_style.bold();
+    if should_apply_markdown_accent(base_style, theme_styles)
+        && let Some(color) = choose_markdown_accent(
+            base_style,
+            &[
+                theme_styles.primary,
+                theme_styles.secondary,
+                theme_styles.status,
+                theme_styles.tool,
+            ],
+        )
+    {
+        style = style.fg_color(Some(color));
+    }
+    style
+}
+
+fn strong_style(current: Style, theme_styles: &ThemeStyles, base_style: Style) -> Style {
+    let mut style = current.bold();
+    if should_apply_markdown_accent(base_style, theme_styles)
+        && let Some(color) = choose_markdown_accent(
+            base_style,
+            &[
+                theme_styles.primary,
+                theme_styles.secondary,
+                theme_styles.status,
+                theme_styles.tool,
+            ],
+        )
+    {
+        style = style.fg_color(Some(color));
+    }
+    style
+}
+
+fn should_apply_markdown_accent(base_style: Style, theme_styles: &ThemeStyles) -> bool {
+    base_style == theme_styles.response
+}
+
+fn choose_markdown_accent(base_style: Style, candidates: &[Style]) -> Option<anstyle::Color> {
+    let base_fg = base_style.get_fg_color();
+    candidates.iter().find_map(|candidate| {
+        candidate
+            .get_fg_color()
+            .filter(|color| base_fg.map_or(true, |base| base != *color))
+    })
 }
 
 fn build_prefix_segments(
