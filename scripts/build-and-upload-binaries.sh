@@ -76,10 +76,9 @@ check_dependencies() {
 
 # Function to get version from Cargo.toml
 get_version() {
-    grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"//'
+    grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
 }
 
-# Function to install Rust targets if needed
 install_rust_targets() {
     print_info "Checking and installing required Rust targets..."
 
@@ -548,6 +547,7 @@ main() {
             upload_binaries "$version" "$notes_file"
         fi
         if [ "$only_homebrew" = true ]; then
+            calculate_checksums "$version"
             update_homebrew_formula "$version"
         fi
     fi
