@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 
+use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_theme_preference;
 
@@ -12,6 +13,25 @@ pub(crate) async fn persist_theme_preference(
             MessageStyle::Error,
             &format!("Failed to persist theme preference: {}", err),
         )?;
+    }
+    if let Err(err) = persist_theme_config(theme_id) {
+        renderer.line(
+            MessageStyle::Error,
+            &format!("Failed to persist theme in vtcode.toml: {}", err),
+        )?;
+    }
+    Ok(())
+}
+
+fn persist_theme_config(theme_id: &str) -> Result<()> {
+    let mut manager =
+        ConfigManager::load().context("Failed to load configuration for theme update")?;
+    let mut config = manager.config().clone();
+    if config.agent.theme != theme_id {
+        config.agent.theme = theme_id.to_string();
+        manager
+            .save_config(&config)
+            .context("Failed to save theme to configuration")?;
     }
     Ok(())
 }

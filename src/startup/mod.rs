@@ -521,11 +521,12 @@ async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
         }
     });
 
+    let config_theme = config.agent.theme.trim();
     let mut theme_selection = args
         .theme
         .clone()
+        .or_else(|| (!config_theme.is_empty()).then(|| config_theme.to_string()))
         .or(user_theme_pref)
-        .or_else(|| Some(config.agent.theme.clone()))
         .unwrap_or_else(|| DEFAULT_THEME_ID.to_owned());
 
     if let Err(err) = ui_theme::set_active_theme(&theme_selection) {
