@@ -370,11 +370,11 @@ struct StreamingReasoningState {
 }
 
 impl StreamingReasoningState {
-    fn new(inline_enabled: bool) -> Self {
+    fn new(_inline_enabled: bool) -> Self {
         Self {
             buffered: String::new(),
-            render_inline: inline_enabled,
-            render_output: inline_enabled,
+            render_inline: false,
+            render_output: true,
             defer_rendering: true,
             started: false,
             rendered_any: false,

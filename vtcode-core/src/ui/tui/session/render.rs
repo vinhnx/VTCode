@@ -791,10 +791,7 @@ pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<
 
     let fallback = text_fallback(session, line.kind).or(session.theme.foreground);
     for segment in &line.segments {
-        let mut style = ratatui_style_from_inline(&segment.style, fallback);
-        if line.kind == InlineMessageKind::Agent {
-            style = style.remove_modifier(Modifier::BOLD);
-        }
+        let style = ratatui_style_from_inline(&segment.style, fallback);
         spans.push(Span::styled(segment.text.clone(), style));
     }
 
