@@ -5,6 +5,8 @@ use serde_json;
 
 use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
 use vtcode_core::config::constants::tools as tools_consts;
+use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::types::EditingMode as ConfigEditingMode;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::theme;
@@ -41,6 +43,48 @@ use webbrowser;
 
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::unified::turn::config_modal::load_config_modal_content;
+
+fn persist_mode_settings(
+    workspace: &std::path::Path,
+    vt_cfg: &mut Option<VTCodeConfig>,
+    editing_mode: Option<ConfigEditingMode>,
+    autonomous_mode: Option<bool>,
+) -> Result<()> {
+    if editing_mode.is_none() && autonomous_mode.is_none() {
+        return Ok(());
+    }
+
+    let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
+        format!(
+            "Failed to load configuration for workspace {}",
+            workspace.display()
+        )
+    })?;
+    let mut config = manager.config().clone();
+
+    if let Some(mode) = editing_mode {
+        config.agent.default_editing_mode = mode;
+    }
+
+    if let Some(enabled) = autonomous_mode {
+        config.agent.autonomous_mode = enabled;
+    }
+
+    manager
+        .save_config(&config)
+        .context("Failed to persist mode settings")?;
+
+    if let Some(cfg) = vt_cfg.as_mut() {
+        if let Some(mode) = editing_mode {
+            cfg.agent.default_editing_mode = mode;
+        }
+        if let Some(enabled) = autonomous_mode {
+            cfg.agent.autonomous_mode = enabled;
+        }
+    }
+
+    Ok(())
+}
 
 pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     // Prefer tool-driven diagnostics when available
@@ -1277,6 +1321,23 @@ pub async fn handle_toggle_plan_mode(
         )?;
     }
 
+    let persisted_mode = if new_state {
+        ConfigEditingMode::Plan
+    } else {
+        ConfigEditingMode::Edit
+    };
+    if let Err(err) = persist_mode_settings(
+        ctx.config.workspace.as_path(),
+        ctx.vt_cfg,
+        Some(persisted_mode),
+        None,
+    ) {
+        ctx.renderer.line(
+            MessageStyle::Error,
+            &format!("Failed to persist plan mode preference: {}", err),
+        )?;
+    }
+
     Ok(SlashCommandControl::Continue)
 }
 
@@ -1325,6 +1386,18 @@ pub async fn handle_toggle_autonomous_mode(
         )?;
     }
 
+    if let Err(err) = persist_mode_settings(
+        ctx.config.workspace.as_path(),
+        ctx.vt_cfg,
+        None,
+        Some(new_state),
+    ) {
+        ctx.renderer.line(
+            MessageStyle::Error,
+            &format!("Failed to persist autonomous mode preference: {}", err),
+        )?;
+    }
+
     Ok(SlashCommandControl::Continue)
 }
 
@@ -1358,6 +1431,22 @@ pub async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashComm
                 "  Read-only mode for analysis and planning. Mutating tools disabled.",
             )?;
         }
+    }
+
+    let persisted_mode = match new_mode {
+        EditingMode::Plan => ConfigEditingMode::Plan,
+        EditingMode::Edit => ConfigEditingMode::Edit,
+    };
+    if let Err(err) = persist_mode_settings(
+        ctx.config.workspace.as_path(),
+        ctx.vt_cfg,
+        Some(persisted_mode),
+        None,
+    ) {
+        ctx.renderer.line(
+            MessageStyle::Error,
+            &format!("Failed to persist editing mode preference: {}", err),
+        )?;
     }
 
     Ok(SlashCommandControl::Continue)
