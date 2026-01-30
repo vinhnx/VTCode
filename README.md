@@ -253,6 +253,33 @@ For installation instructions and download links for other IDEs, visit our [IDE 
 
 ---
 
+### Contributing
+
+I warmly welcome contributions of all kinds! Whether you're looking to fix bugs, add new features, improve documentation, or enhance the user experience, your help is greatly appreciated. Please feel free to explore the [issues page](https://github.com/vinhnx/vtcode/issues) to see where you can contribute. Thank you for considering contributing to this project!
+
+How To Contribute:
+
+- Report issues you're experiencing
+- Upvote issues that matter to you
+- Help answer questions on the issue tracker
+
+If you're not sure where to start:
+
+- Check out the [issues page](https://github.com/vinhnx/vtcode/issues)
+- Browse by labels that interest you
+- Look for [good first issue](https://github.com/vinhnx/vtcode/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22) labeled items
+- Feel free to browse all open issues and pick one that resonates with you!
+
+Steps to get started:
+
+1. Fork the repository by clicking the Fork button in the top-right corner
+2. Clone your forked repository to your local machine
+3. Create a new branch for your changes and start contributing!
+
+When reporting an issue, please include enough details for others to reproduce the problem effectively.
+
+---
+
 ## License
 
 This repository is licensed under the [MIT License](LICENSE).

@@ -12,7 +12,7 @@ api_key_env = "OLLAMA_API_KEY"
 default_model = "minimax-m2.1:cloud"
 
 # Visual theme for the terminal interface
-theme = "vitesse-light-soft"
+theme = "vitesse-light"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -25,7 +25,7 @@ ui_surface = "auto"
 max_conversation_turns = 150
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "low"
+reasoning_effort = "medium"
 system_prompt_mode = "default"
 tool_documentation_mode = "minimal"
 enable_split_tool_results = true
@@ -778,7 +778,7 @@ enabled = true
 enabled = true
 transport = "stdio"
 # workspace_trust controls ACP trust mode: "tools_policy" (prompts) or "full_auto" (no prompts)
-workspace_trust = "tools_policy"
+workspace_trust = "full_auto"
 
 [acp.zed.tools]
 read_file = true
