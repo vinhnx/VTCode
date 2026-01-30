@@ -199,6 +199,11 @@ pub(crate) async fn handle_text_response(
                     .map(|cfg| cfg.security.hitl_notification_bell)
                     .unwrap_or(true),
                 autonomous_mode: params.ctx.session_stats.is_autonomous_mode(),
+                human_in_the_loop: params
+                    .ctx
+                    .vt_cfg
+                    .map(|cfg| cfg.security.human_in_the_loop)
+                    .unwrap_or(true),
             },
             call_tool_name,
             Some(&call_args_val),

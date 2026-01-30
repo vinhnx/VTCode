@@ -134,3 +134,94 @@ it should just contains the code only, not the full prompt and response.
 ```
 
 https://github.com/vinhnx/vtcodetab=readme-ov-file#cli-design-principles
+
+---
+
+check agent message markdown doesn't render correctly and has no line break properly
+'/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/Screenshot 2026-01-30 at 10.22.26 AM.png'
+
+```
+Based on my exploration of the vtcode codebase, I can provide you w
+ith a clear answer:
+Yes, vtcode does support custom base URLs, but the configuration me
+thod depends on how you're using it:
+## Current Support
+### 1. Environment Variables (Recommended)
+vtcode supports custom base URLs through environment variables for
+each provider:
+1  # For Anthropic-compatible APIs like Zenmux:
+2  export ANTHROPIC_BASE_URL="https://your-zenmux-endpoint.com/v1
+"
+3
+Similarly for other providers:
+• OPENAI_BASE_URL
+• GEMINI_BASE_URL
+• HUGGINGFACE_BASE_URL
+### 2. Configuration File (Limited)
+The configuration schema supports base_url for some providers, but
+the implementation varies. Let me verify the exact configuration opti
+ons available.
+## Recommendation for Zenmux
+Since Zenmux provides an Anthropic-compatible API, you have two opt
+ions:
+1. Set the environment variable before running vtcode:
+1  export ANTHROPIC_BASE_URL="https://api.zenmux.com/v1"
+2  vtcode
+3
+2. Check if your vtcode.toml configuration supports base_url for th
+e Anthropic provider section
+## Next Steps
+Would you like me to:
+1. Check the exact configuration schema to see if base_url can be s
+et in vtcode.toml?
+2. Verify if there's a more direct way to configure this in the UI?
+The environment variable approach should work immediately with your
+Zenmux setup.
+```
+
+--
+
+
+the /config Configuration model doesn't load properly on apply selection and it seems to be 
+
+Configuration───────────────────────────────────────────────────────────────╮
+│  Reasoning Effort               < low >                                    │
+│     (no out│    Model reasoning depth (e.g. for Gemini thinking)                        │           │
+│  System Prompt Mode             < default >                                │
+The user want│    Complexity of instructions sent to the model                            │ne that and
+it completed │  Tool Doc Mode                  < minimal >                                │plied correctl
+y. I should p│    How much tool documentation to include in context                       │
+cargo fmt com│  Verbosity Level                < low >                                    │s style guid
+elines.      │    Control model verbosity and detail level                                │
+│  Planning Mode                  [ ]                                        │
+│    Enable planning mode and onboarding hints                               │
+─────────────│  Auto Checkpoints               [ ]                                        │──────────────
+run rm test.t│    Take snapshots after each successful turn                               │
+│  Small Model Tier               [ ]                                        │
+│    Use cheaper model for logs/reading (>80% savings)                       │
+│     (no out│  Vibe Coding                    [ ]                                        │           │
+│    Enable lazy/casual request support                                      │
+The user aske│  Prompt Caching                 [X]                                        │ng at the to
+ol call resul│    Enable local prompt caching to reduce API costs                         │
+│  MCP Support                    [ ]                                        │
+• exit_code: │    Enable Model Context Protocol support                                   │
+│> ACP Workspace Trust            < tools_policy >                           │
+• success: tr│    Trust mode for ACP sessions (tools_policy/full_auto)                    │
+│  Max Context Tokens             128000                                     │
+• stdout: (em│    Maximum tokens to preserve in conversation context                      │
+│  Max Turns                      150                                        │
+• wall_time: │    Auto-terminate session after this many turns                            │deleted.
+rm test.txt c│  UI Theme                       < vitesse-light-soft >                     │
+│    UI color theme                                                          │
+│  UI Display Mode                < minimal >                                │
+│    UI preset: full (all features), minimal, or focused                     │
+│  Show Sidebar                   [ ]                                        │
+│    Show right pane with queue/context/tools                                │
+│  Dim Completed Todos            [X]                                        │
+│    Dim completed todo items (- [x]) in output                              │
+│  Message Spacing                [X]                                        │
+│    Add blank lines between message blocks                                  │
+│  Tool Output Mode               < full >                                   │
+│    Control verbosity of tool output                                        │
+│                                                                            │
+╰ ↑↓ Navigate · Space/Enter Toggle · ←→ Adjust · Esc Close/Save ─────────────╯

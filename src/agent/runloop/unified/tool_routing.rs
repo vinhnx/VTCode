@@ -9,7 +9,6 @@ use tokio::task;
 
 use serde_json::Value;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
-use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
@@ -61,6 +60,63 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub hitl_notification_bell: bool,
     pub autonomous_mode: bool,
+    pub human_in_the_loop: bool,
+}
+
+fn extract_shell_command_text(tool_name: &str, tool_args: Option<&Value>) -> Option<String> {
+    let args = tool_args?;
+    let command_value = match tool_name {
+        "run_pty_cmd" | "shell" => args.get("command").or_else(|| args.get("raw_command")),
+        "unified_exec" | "exec_pty_cmd" | "exec" => {
+            let action = args
+                .get("action")
+                .and_then(|v| v.as_str())
+                .or_else(|| args.get("command").map(|_| "run"));
+            if action == Some("run") {
+                args.get("command").or_else(|| args.get("raw_command"))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }?;
+
+    if let Some(arr) = command_value.as_array() {
+        let parts = arr
+            .iter()
+            .filter_map(|value| value.as_str())
+            .collect::<Vec<_>>();
+        if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join(" "))
+        }
+    } else {
+        command_value.as_str().map(|value| value.to_owned())
+    }
+}
+
+fn shell_command_requires_prompt(command: &str) -> bool {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let tokens = shell_words::split(trimmed).unwrap_or_else(|_| {
+        trimmed
+            .split_whitespace()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>()
+    });
+    if tokens.is_empty() {
+        return false;
+    }
+
+    if vtcode_core::command_safety::command_might_be_dangerous(&tokens) {
+        return true;
+    }
+
+    matches!(tokens[0].as_str(), "rm" | "rmdir")
 }
 
 pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
@@ -346,7 +402,12 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         tool_permission_cache,
         hitl_notification_bell,
         autonomous_mode,
+        human_in_the_loop,
     } = ctx;
+
+    if !human_in_the_loop {
+        return Ok(ToolPermissionFlow::Approved);
+    }
 
     // Autonomous mode auto-approval for safe tools
     if autonomous_mode && !tool_registry.is_mutating_tool(tool_name) {
@@ -405,7 +466,23 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Denied);
     }
 
-    let should_prompt = hook_requires_prompt || policy_decision == ToolPermissionDecision::Prompt;
+    let command_requires_prompt = extract_shell_command_text(tool_name, tool_args)
+        .map(|command| {
+            let requires_prompt = shell_command_requires_prompt(&command);
+            if requires_prompt {
+                tracing::debug!(
+                    "Command '{}' requires interactive approval for tool '{}'",
+                    command,
+                    tool_name
+                );
+            }
+            requires_prompt
+        })
+        .unwrap_or(false);
+
+    let should_prompt = hook_requires_prompt
+        || policy_decision == ToolPermissionDecision::Prompt
+        || command_requires_prompt;
 
     if !should_prompt {
         return Ok(ToolPermissionFlow::Approved);
@@ -421,33 +498,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             "Auto-approved tool '{}' based on approval pattern history",
             tool_name
         );
-        return Ok(ToolPermissionFlow::Approved);
-    }
-
-    if !hook_requires_prompt && tool_name == tool_names::RUN_PTY_CMD {
-        tool_registry.mark_tool_preapproved(tool_name).await;
-
-        // Persist policy in background to avoid blocking
-        let tool_name_owned = tool_name.to_string();
-        let registry_for_persist = tool_registry.clone();
-        tokio::spawn(async move {
-            if let Err(err) = registry_for_persist
-                .set_tool_policy(&tool_name_owned, ToolPolicy::Allow)
-                .await
-            {
-                tracing::warn!(
-                    "[background] Failed to persist auto-approval for '{}': {}",
-                    tool_name_owned,
-                    err
-                );
-            } else {
-                tracing::debug!(
-                    "[background] Successfully persisted auto-approval for '{}'",
-                    tool_name_owned
-                );
-            }
-        });
-
         return Ok(ToolPermissionFlow::Approved);
     }
 

@@ -178,6 +178,10 @@ pub(crate) async fn handle_tool_call(
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
             autonomous_mode: ctx.session_stats.is_autonomous_mode(),
+            human_in_the_loop: ctx
+                .vt_cfg
+                .map(|cfg| cfg.security.human_in_the_loop)
+                .unwrap_or(true),
         },
         tool_name,
         Some(&args_val),

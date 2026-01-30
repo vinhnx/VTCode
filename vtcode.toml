@@ -359,6 +359,7 @@ extra_path_entries = [
     "$HOME/go/bin",
 ]
 deny_list = [
+    "rm",
     "rm -rf /",
     "rm -rf ~",
     "rm -rf /*",
@@ -764,7 +765,8 @@ enabled = true
 [acp.zed]
 enabled = true
 transport = "stdio"
-workspace_trust = "full_auto"
+# workspace_trust controls ACP trust mode: "tools_policy" (prompts) or "full_auto" (no prompts)
+workspace_trust = "tools_policy"
 
 [acp.zed.tools]
 read_file = true

@@ -18,6 +18,7 @@ use vtcode_core::subagents::SubagentRegistry;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::handlers::SpawnSubagentTool;
 use vtcode_core::tools::traits::Tool;
+use vtcode_core::config::WorkspaceTrustLevel;
 
 use super::async_mcp_manager::AsyncMcpManager;
 use super::palettes::apply_prompt_style;
@@ -29,6 +30,7 @@ use crate::agent::runloop::unified::turn::utils::render_hook_messages;
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::hooks::lifecycle::LifecycleHookEngine;
 use crate::ide_context::IdeContextBridge;
+use crate::workspace_trust;
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -464,6 +466,26 @@ pub(crate) async fn initialize_session(
             full_auto_allowlist = Some(allowlist);
         }
     }
+
+    let workspace_trust_level = match session_bootstrap.acp_workspace_trust {
+        Some(level) => Some(level.to_workspace_trust_level()),
+        None => workspace_trust::workspace_trust_level(&config.workspace)
+            .await
+            .context("Failed to determine workspace trust level for tool policy")?,
+    };
+
+    let enforce_safe_mode_prompts = if full_auto {
+        false
+    } else {
+        match workspace_trust_level {
+            Some(WorkspaceTrustLevel::FullAuto) => false,
+            Some(WorkspaceTrustLevel::ToolsPolicy) | None => true,
+        }
+    };
+
+    tool_registry
+        .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
+        .await;
 
     // Now register all on-demand skill tools in the registry
 

@@ -99,7 +99,9 @@ pub fn create_safety_gateway(ctx: &RunLoopContext<'_>) -> SafetyGateway {
         approval_risk_threshold: vtcode_core::tools::RiskLevel::Medium,
     };
 
-    SafetyGateway::with_config(config)
+    let gateway = SafetyGateway::with_config(config);
+    let commands_config = ctx.tool_registry.commands_config();
+    gateway.with_commands_config(&commands_config)
 }
 
 /// Check safety for a tool call using the safety gateway.

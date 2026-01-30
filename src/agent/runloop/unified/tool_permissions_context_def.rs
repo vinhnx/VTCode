@@ -14,4 +14,6 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub decision_ledger: Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub hitl_notification_bell: bool,
+    pub autonomous_mode: bool,
+    pub human_in_the_loop: bool,
 }

@@ -303,11 +303,8 @@ impl Session {
 
     pub fn header_chain_values(&self) -> Vec<String> {
         let defaults = InlineHeaderContext::default();
+        // Trust is now shown as a badge in header_meta_line, so we skip it here
         let fields = [
-            (
-                &self.header_context.workspace_trust,
-                defaults.workspace_trust.clone(),
-            ),
             (&self.header_context.tools, defaults.tools.clone()),
             (&self.header_context.git, defaults.git.clone()),
             // Removed MCP info from header as requested
@@ -324,11 +321,6 @@ impl Session {
                 let trimmed = selected.trim();
                 if trimmed.is_empty() {
                     return None;
-                }
-
-                if let Some(body) = trimmed.strip_prefix(ui::HEADER_TRUST_PREFIX) {
-                    selected = format!("Trust: {}", body.trim());
-                    return Some(selected);
                 }
 
                 if let Some(body) = trimmed.strip_prefix(ui::HEADER_TOOLS_PREFIX) {
@@ -389,10 +381,40 @@ impl Session {
             ));
         }
 
+        // Show trust level badge with color coding
+        let trust_value = self.header_context.workspace_trust.to_lowercase();
+        if trust_value.contains("full auto") || trust_value.contains("full_auto") {
+            // Cyan badge for full auto trust
+            let badge_style = Style::default()
+                .fg(ratatui::style::Color::Cyan)
+                .add_modifier(Modifier::BOLD);
+            spans.push(Span::styled("[FULL AUTO]".to_string(), badge_style));
+            spans.push(Span::styled(
+                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                self.header_secondary_style(),
+            ));
+        } else if trust_value.contains("tools policy") || trust_value.contains("tools_policy") {
+            // Green badge for tools policy (safeguarded)
+            let badge_style = Style::default()
+                .fg(ratatui::style::Color::Green)
+                .add_modifier(Modifier::BOLD);
+            spans.push(Span::styled("[SAFE]".to_string(), badge_style));
+            spans.push(Span::styled(
+                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                self.header_secondary_style(),
+            ));
+        }
+
         let mut first_section = spans.is_empty();
         let mode_label = self.header_mode_short_label();
         if !mode_label.trim().is_empty() {
-            spans.push(Span::styled(mode_label, self.header_primary_style()));
+            let mut mode_style = self.header_primary_style().add_modifier(Modifier::BOLD);
+            if self.header_context.editing_mode == EditingMode::Plan {
+                mode_style = mode_style.fg(ratatui::style::Color::Yellow);
+            } else if self.header_context.autonomous_mode {
+                mode_style = mode_style.fg(ratatui::style::Color::Green);
+            }
+            spans.push(Span::styled(mode_label, mode_style));
             first_section = false;
         }
 

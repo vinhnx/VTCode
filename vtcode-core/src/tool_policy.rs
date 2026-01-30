@@ -24,7 +24,8 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::SEARCH_TOOLS,
     tools::LIST_PTY_SESSIONS,
     tools::READ_PTY_SESSION,
-    tools::RUN_PTY_CMD,
+    // RUN_PTY_CMD removed - should require prompt in tools_policy mode
+    // since it can execute arbitrary shell commands
     "cargo_check",
     "cargo_test",
     "git_status",

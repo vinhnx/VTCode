@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use tokio::task;
 use toml::Value as TomlValue;
+use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::utils::dot_config::load_user_config;
 
 pub(crate) const CONFIG_MODAL_TITLE: &str = "VT Code Configuration";
 #[allow(dead_code)]
@@ -15,6 +17,8 @@ pub(crate) struct ConfigModalContent {
     #[allow(dead_code)]
     pub(crate) title: String,
     pub(crate) source_label: String,
+    #[allow(dead_code)]
+    pub(crate) trust_label: Option<String>,
     pub(crate) config_lines: Vec<String>,
 }
 
@@ -22,7 +26,8 @@ pub(crate) async fn load_config_modal_content(
     workspace: PathBuf,
     vt_cfg: Option<VTCodeConfig>,
 ) -> Result<ConfigModalContent> {
-    task::spawn_blocking(move || prepare_config_modal_content(&workspace, vt_cfg))
+    let trust_label = resolve_workspace_trust_label(&workspace, &vt_cfg).await;
+    task::spawn_blocking(move || prepare_config_modal_content(&workspace, vt_cfg, trust_label))
         .await
         .map_err(|err| anyhow::anyhow!("failed to join configuration load task: {}", err))?
 }
@@ -30,6 +35,7 @@ pub(crate) async fn load_config_modal_content(
 fn prepare_config_modal_content(
     workspace: &Path,
     vt_cfg: Option<VTCodeConfig>,
+    trust_label: Option<String>,
 ) -> Result<ConfigModalContent> {
     let manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
         format!(
@@ -64,8 +70,44 @@ fn prepare_config_modal_content(
     Ok(ConfigModalContent {
         title: CONFIG_MODAL_TITLE.to_string(),
         source_label,
+        trust_label,
         config_lines,
     })
+}
+
+async fn resolve_workspace_trust_label(
+    workspace: &Path,
+    vt_cfg: &Option<VTCodeConfig>,
+) -> Option<String> {
+    if let Some(cfg) = vt_cfg
+        && cfg.acp.zed.enabled
+    {
+        let mode_label = match cfg.acp.zed.workspace_trust {
+            vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto => "full_auto",
+            vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy => {
+                "tools_policy"
+            }
+        };
+        return Some(format!("Trust: acp:{}", mode_label));
+    }
+
+    let Ok(config) = load_user_config().await else {
+        return None;
+    };
+
+    let workspace_key = workspace
+        .canonicalize()
+        .unwrap_or_else(|_| workspace.to_path_buf())
+        .to_string_lossy()
+        .into_owned();
+    config
+        .workspace_trust
+        .entries
+        .get(&workspace_key)
+        .map(|record| match record.level {
+            WorkspaceTrustLevel::FullAuto => "Trust: full auto".to_string(),
+            WorkspaceTrustLevel::ToolsPolicy => "Trust: tools policy".to_string(),
+        })
 }
 
 fn mask_sensitive_config(value: &mut TomlValue) {

@@ -266,6 +266,16 @@ pub(crate) async fn run_interaction_loop(
             )?;
         }
 
+        if let Some(cfg) = ctx.vt_cfg.as_ref()
+            && let Err(err) =
+                crate::agent::runloop::unified::turn::workspace::apply_workspace_config_to_registry(
+                    ctx.tool_registry,
+                    cfg,
+                )
+        {
+            tracing::warn!("Failed to apply workspace configuration to tools: {}", err);
+        }
+
         // Check for MCP errors
         if let Some(mcp_manager) = ctx.async_mcp_manager {
             let mcp_status = mcp_manager.get_status().await;

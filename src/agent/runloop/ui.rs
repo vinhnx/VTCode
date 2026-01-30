@@ -46,9 +46,13 @@ async fn gather_inline_status_details(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
 ) -> Result<InlineStatusDetails> {
-    let workspace_trust = workspace_trust::workspace_trust_level(&config.workspace)
-        .await
-        .context("Failed to determine workspace trust level for banner")?;
+    let workspace_trust = if session_bootstrap.acp_workspace_trust.is_some() {
+        None
+    } else {
+        workspace_trust::workspace_trust_level(&config.workspace)
+            .await
+            .context("Failed to determine workspace trust level for banner")?
+    };
 
     let tool_status = match ToolPolicyManager::new_with_workspace(&config.workspace).await {
         Ok(manager) => {
@@ -206,13 +210,26 @@ pub(crate) async fn build_inline_header_context(
         format!("{}{}", ui::HEADER_REASONING_PREFIX, reasoning_label.trim())
     };
 
-    let trust_value = match workspace_trust {
-        Some(level) => format!("{}{}", ui::HEADER_TRUST_PREFIX, level),
-        None => format!(
-            "{}{}",
-            ui::HEADER_TRUST_PREFIX,
-            ui::HEADER_UNKNOWN_PLACEHOLDER
-        ),
+    let trust_value = match session_bootstrap.acp_workspace_trust {
+        Some(level) => {
+            let level_str = match level {
+                vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto => {
+                    "full_auto"
+                }
+                vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy => {
+                    "tools_policy"
+                }
+            };
+            format!("{}acp:{}", ui::HEADER_TRUST_PREFIX, level_str)
+        }
+        None => match workspace_trust {
+            Some(level) => format!("{}{}", ui::HEADER_TRUST_PREFIX, level),
+            None => format!(
+                "{}{}",
+                ui::HEADER_TRUST_PREFIX,
+                ui::HEADER_UNKNOWN_PLACEHOLDER
+            ),
+        },
     };
 
     let tools_value = match tool_status {

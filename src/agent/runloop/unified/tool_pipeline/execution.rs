@@ -16,6 +16,7 @@ use crate::agent::runloop::unified::request_user_input;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_routing::ToolPermissionFlow;
+use crate::agent::runloop::unified::turn::guards::validate_tool_args_security;
 use vtcode_core::config::constants::tools;
 use vtcode_core::exec::cancellation;
 use vtcode_core::tools::registry::ToolErrorType;
@@ -95,6 +96,17 @@ pub(crate) async fn run_tool_call(
     }
     ctx.harness_state.record_tool_call();
 
+    if let Some(validation_failures) = validate_tool_args_security(&name, &args_val, None) {
+        return Ok(ToolPipelineOutcome::from_status(
+            ToolExecutionStatus::Failure {
+                error: anyhow!(
+                    "Tool argument validation failed: {}",
+                    validation_failures.join("; ")
+                ),
+            },
+        ));
+    }
+
     if let Some(emitter) = ctx.harness_emitter {
         let _ = emitter.emit(tool_started_event(tool_item_id.clone(), &name));
     }
@@ -119,6 +131,9 @@ pub(crate) async fn run_tool_call(
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
             autonomous_mode: ctx.session_stats.is_autonomous_mode(),
+            human_in_the_loop: vt_cfg
+                .map(|cfg| cfg.security.human_in_the_loop)
+                .unwrap_or(true),
         },
         &name,
         Some(&args_val),

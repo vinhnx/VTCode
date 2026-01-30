@@ -13,11 +13,15 @@ pub struct ShellPolicyCacheEntry {
 
 pub struct ShellPolicyChecker {
     cache: Option<ShellPolicyCacheEntry>,
+    commands_config: Option<crate::config::CommandsConfig>,
 }
 
 impl ShellPolicyChecker {
     pub fn new() -> Self {
-        Self { cache: None }
+        Self {
+            cache: None,
+            commands_config: None,
+        }
     }
 }
 
@@ -28,6 +32,15 @@ impl Default for ShellPolicyChecker {
 }
 
 impl ShellPolicyChecker {
+    pub fn set_commands_config(&mut self, commands_config: &crate::config::CommandsConfig) {
+        self.commands_config = Some(commands_config.clone());
+        self.reset_cache();
+    }
+
+    pub fn commands_config(&self) -> Option<&crate::config::CommandsConfig> {
+        self.commands_config.as_ref()
+    }
+
     pub fn check_command(
         &mut self,
         command: &str,
