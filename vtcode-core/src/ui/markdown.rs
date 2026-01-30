@@ -194,7 +194,7 @@ pub fn render_markdown_to_lines(
                 ctx.current_line
                     .push_segment(inline_code_style(theme_styles, base_style), &code);
             }
-            Event::SoftBreak => append_text(" ", &mut ctx),
+            Event::SoftBreak => ctx.flush_line(),
             Event::HardBreak => ctx.flush_line(),
             Event::Rule => {
                 ctx.flush_line();
@@ -1085,6 +1085,66 @@ pub fn highlight_code_to_ansi(code: &str, language: Option<&str>, theme_name: &s
 mod tests {
     use super::*;
 
+    fn lines_to_text(lines: &[MarkdownLine]) -> Vec<String> {
+        lines
+            .iter()
+            .map(|line| {
+                line.segments
+                    .iter()
+                    .map(|seg| seg.text.as_str())
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_markdown_heading_renders_prefixes() {
+        let markdown = "# Heading\n\n## Subheading\n";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        assert!(text_lines.iter().any(|line| line == "# Heading"));
+        assert!(text_lines.iter().any(|line| line == "## Subheading"));
+    }
+
+    #[test]
+    fn test_markdown_blockquote_prefix() {
+        let markdown = "> Quote line\n> Second line\n";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        assert!(
+            text_lines
+                .iter()
+                .any(|line| line.starts_with("│ ") && line.contains("Quote line"))
+        );
+        assert!(
+            text_lines
+                .iter()
+                .any(|line| line.starts_with("│ ") && line.contains("Second line"))
+        );
+    }
+
+    #[test]
+    fn test_markdown_inline_code_strips_backticks() {
+        let markdown = "Use `code` here.";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        assert!(text_lines.iter().any(|line| line.contains("Use code here.")));
+    }
+
+    #[test]
+    fn test_markdown_soft_break_renders_line_break() {
+        let markdown = "first line\nsecond line";
+        let lines = render_markdown(markdown);
+        let text_lines: Vec<String> = lines_to_text(&lines)
+            .into_iter()
+            .filter(|line| !line.is_empty())
+            .collect();
+        assert_eq!(
+            text_lines,
+            vec!["first line".to_string(), "second line".to_string()]
+        );
+    }
+
     #[test]
     fn test_markdown_unordered_list_bullets() {
         let markdown = r#"
@@ -1140,6 +1200,39 @@ mod tests {
             output.contains("│"),
             "Should use box-drawing character (│) for table cells instead of pipe"
         );
+    }
+
+    #[test]
+    fn test_markdown_code_block_with_language_renders_line_numbers() {
+        let markdown = "```rust\nfn main() {}\n```\n";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let code_line = text_lines
+            .iter()
+            .find(|line| line.contains("fn main() {}"))
+            .expect("code line exists");
+        assert!(code_line.contains("  1  "));
+    }
+
+    #[test]
+    fn test_markdown_code_block_without_language_skips_line_numbers() {
+        let markdown = "```\nfn main() {}\n```\n";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let code_line = text_lines
+            .iter()
+            .find(|line| line.contains("fn main() {}"))
+            .expect("code line exists");
+        assert!(!code_line.contains("  1  "));
+    }
+
+    #[test]
+    fn test_markdown_task_list_markers() {
+        let markdown = "- [x] Done\n- [ ] Todo\n";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        assert!(text_lines.iter().any(|line| line.contains("[x]")));
+        assert!(text_lines.iter().any(|line| line.contains("[ ]")));
     }
 
     #[test]

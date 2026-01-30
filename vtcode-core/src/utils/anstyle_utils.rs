@@ -15,17 +15,17 @@ pub fn ansi_color_to_ratatui_color(color: &AnsiColorType) -> Color {
             AnsiColor::Green => Color::Green,
             AnsiColor::Yellow => Color::Yellow,
             AnsiColor::Blue => Color::Blue,
-            AnsiColor::Magenta => Color::Magenta,
+            AnsiColor::Magenta => Color::DarkGray,
             AnsiColor::Cyan => Color::Cyan,
             AnsiColor::White => Color::White,
-            AnsiColor::BrightBlack => Color::Gray,
-            AnsiColor::BrightRed => Color::LightRed,
-            AnsiColor::BrightGreen => Color::LightGreen,
-            AnsiColor::BrightYellow => Color::LightYellow,
-            AnsiColor::BrightBlue => Color::LightBlue,
-            AnsiColor::BrightMagenta => Color::LightMagenta,
-            AnsiColor::BrightCyan => Color::LightCyan,
-            AnsiColor::BrightWhite => Color::White, // or maybe a custom RGB white
+            AnsiColor::BrightBlack => Color::DarkGray,
+            AnsiColor::BrightRed => Color::Red,
+            AnsiColor::BrightGreen => Color::Green,
+            AnsiColor::BrightYellow => Color::Yellow,
+            AnsiColor::BrightBlue => Color::Blue,
+            AnsiColor::BrightMagenta => Color::DarkGray,
+            AnsiColor::BrightCyan => Color::Cyan,
+            AnsiColor::BrightWhite => Color::Gray,
         },
         AnsiColorType::Rgb(rgb_color) => Color::Rgb(rgb_color.r(), rgb_color.g(), rgb_color.b()),
         // For custom color handling, you can add more mappings
@@ -184,15 +184,15 @@ mod tests {
     fn test_bright_colors() {
         assert_eq!(
             ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::BrightRed)),
-            Color::LightRed
+            Color::Red
         );
         assert_eq!(
             ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::BrightGreen)),
-            Color::LightGreen
+            Color::Green
         );
         assert_eq!(
             ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::BrightBlue)),
-            Color::LightBlue
+            Color::Blue
         );
     }
 }

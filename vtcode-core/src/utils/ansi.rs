@@ -424,7 +424,7 @@ impl AnsiRenderer {
         let indent = style.indent();
         if let Some(sink) = &mut self.sink {
             let (prepared, plain_lines, last_empty) =
-                sink.prepare_markdown_lines(text, indent, base_style);
+                sink.prepare_markdown_lines(text, indent, base_style, true);
             let line_count = prepared.len();
             sink.replace_inline_lines(
                 previous_line_count,
@@ -626,15 +626,15 @@ impl InlineSink {
             RatColor::Blue => Some(AnsiColorEnum::Ansi(AnsiColor::Blue)),
             RatColor::Magenta => Some(AnsiColorEnum::Ansi(AnsiColor::Magenta)),
             RatColor::Cyan => Some(AnsiColorEnum::Ansi(AnsiColor::Cyan)),
-            RatColor::Gray => Some(AnsiColorEnum::Ansi(AnsiColor::White)),
-            RatColor::DarkGray => Some(AnsiColorEnum::Ansi(AnsiColor::BrightBlack)),
-            RatColor::LightRed => Some(AnsiColorEnum::Ansi(AnsiColor::BrightRed)),
-            RatColor::LightGreen => Some(AnsiColorEnum::Ansi(AnsiColor::BrightGreen)),
-            RatColor::LightYellow => Some(AnsiColorEnum::Ansi(AnsiColor::BrightYellow)),
-            RatColor::LightBlue => Some(AnsiColorEnum::Ansi(AnsiColor::BrightBlue)),
-            RatColor::LightMagenta => Some(AnsiColorEnum::Ansi(AnsiColor::BrightMagenta)),
-            RatColor::LightCyan => Some(AnsiColorEnum::Ansi(AnsiColor::BrightCyan)),
-            RatColor::White => Some(AnsiColorEnum::Ansi(AnsiColor::BrightWhite)),
+            RatColor::Gray => Some(AnsiColorEnum::Rgb(RgbColor(0x88, 0x88, 0x88))),
+            RatColor::DarkGray => Some(AnsiColorEnum::Rgb(RgbColor(0x66, 0x66, 0x66))),
+            RatColor::LightRed => Some(AnsiColorEnum::Ansi(AnsiColor::Red)),
+            RatColor::LightGreen => Some(AnsiColorEnum::Ansi(AnsiColor::Green)),
+            RatColor::LightYellow => Some(AnsiColorEnum::Ansi(AnsiColor::Yellow)),
+            RatColor::LightBlue => Some(AnsiColorEnum::Ansi(AnsiColor::Blue)),
+            RatColor::LightMagenta => Some(AnsiColorEnum::Ansi(AnsiColor::Magenta)),
+            RatColor::LightCyan => Some(AnsiColorEnum::Ansi(AnsiColor::Cyan)),
+            RatColor::White => Some(AnsiColorEnum::Ansi(AnsiColor::White)),
             RatColor::Rgb(r, g, b) => Some(AnsiColorEnum::Rgb(RgbColor(r, g, b))),
             RatColor::Indexed(value) => Some(AnsiColorEnum::Ansi256(Ansi256Color(value))),
         }
@@ -668,6 +668,7 @@ impl InlineSink {
         text: &str,
         indent: &str,
         base_style: Style,
+        preserve_blank_lines: bool,
     ) -> (Vec<Vec<InlineSegment>>, Vec<String>, bool) {
         let fallback = self.resolve_fallback_style(base_style);
         let fallback_arc = Arc::new(fallback.clone());
@@ -677,8 +678,26 @@ impl InlineSink {
             .enabled
             .then_some(&self.highlight_config);
         let mut rendered = render_markdown_to_lines(text, base_style, &theme_styles, highlight_cfg);
-        // TUI space is constrained; drop blank lines to keep transcripts compact.
-        rendered.retain(|line| !line.is_empty());
+        if preserve_blank_lines {
+            let mut cleaned = Vec::with_capacity(rendered.len());
+            let mut last_blank = false;
+            for line in rendered {
+                let is_blank = line.is_empty();
+                if is_blank {
+                    if last_blank {
+                        continue;
+                    }
+                    last_blank = true;
+                } else {
+                    last_blank = false;
+                }
+                cleaned.push(line);
+            }
+            rendered = cleaned;
+        } else {
+            // TUI space is constrained; drop blank lines to keep transcripts compact.
+            rendered.retain(|line| !line.is_empty());
+        }
         if rendered.is_empty() {
             rendered.push(MarkdownLine::default());
         }
@@ -748,7 +767,8 @@ impl InlineSink {
         base_style: Style,
         kind: InlineMessageKind,
     ) -> Result<bool> {
-        let (prepared, plain, last_empty) = self.prepare_markdown_lines(text, indent, base_style);
+        let (prepared, plain, last_empty) =
+            self.prepare_markdown_lines(text, indent, base_style, true);
         for (segments, line) in prepared.into_iter().zip(plain.iter()) {
             if segments.is_empty() {
                 self.handle.append_line(kind, Vec::new());
@@ -1192,7 +1212,7 @@ mod tests {
         let base_style = MessageStyle::Response.style();
         let markdown = "```rust\nlet value = 1;\n```";
 
-        let (prepared, plain, _) = sink.prepare_markdown_lines(markdown, "", base_style);
+        let (prepared, plain, _) = sink.prepare_markdown_lines(markdown, "", base_style, true);
 
         let (segments, plain_line) = prepared
             .iter()

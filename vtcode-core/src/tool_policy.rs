@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::constants::tools;
 use crate::config::core::tools::{ToolPolicy as ConfigToolPolicy, ToolsConfig};
+use crate::config::loader::{ConfigManager, VTCodeConfig};
 use crate::config::mcp::{McpAllowListConfig, McpAllowListRules};
 use crate::tools::names::canonical_tool_name;
 
@@ -354,6 +355,7 @@ pub struct ToolPolicyManager {
     config_path: PathBuf,
     config: ToolPolicyConfig,
     permission_handler: Option<Box<dyn PermissionPromptHandler>>,
+    workspace_root: Option<PathBuf>,
 }
 
 impl Clone for ToolPolicyManager {
@@ -364,6 +366,7 @@ impl Clone for ToolPolicyManager {
             config_path: self.config_path.clone(),
             config: self.config.clone(),
             permission_handler: None, // Handler is not cloned
+            workspace_root: self.workspace_root.clone(),
         }
     }
 }
@@ -378,6 +381,7 @@ impl ToolPolicyManager {
             config_path,
             config,
             permission_handler: None,
+            workspace_root: None,
         })
     }
 
@@ -390,6 +394,7 @@ impl ToolPolicyManager {
             config_path,
             config,
             permission_handler: None,
+            workspace_root: Some(workspace_root.to_path_buf()),
         })
     }
 
@@ -415,6 +420,7 @@ impl ToolPolicyManager {
             config_path,
             config,
             permission_handler: None,
+            workspace_root: None,
         })
     }
 
@@ -922,9 +928,12 @@ impl ToolPolicyManager {
             return self.set_mcp_tool_policy(&provider, &tool, policy).await;
         }
 
-        let canonical = canonical_tool_name(tool_name);
-        self.config.policies.insert(canonical.into_owned(), policy);
-        self.save_config().await
+        let canonical = canonical_tool_name(tool_name).into_owned();
+        self.config
+            .policies
+            .insert(canonical.clone(), policy.clone());
+        self.save_config().await?;
+        self.persist_policy_to_workspace_config(&canonical, policy)
     }
 
     /// Reset all tools to prompt
@@ -980,6 +989,47 @@ impl ToolPolicyManager {
     /// Save configuration to file
     async fn save_config(&self) -> Result<()> {
         Self::write_config(&self.config_path, &self.config).await
+    }
+
+    fn persist_policy_to_workspace_config(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
+        let Some(workspace_root) = self.workspace_root.as_ref() else {
+            return Ok(());
+        };
+
+        let config_path = workspace_root.join("vtcode.toml");
+        let mut config = if config_path.exists() {
+            ConfigManager::load_from_file(&config_path)
+                .with_context(|| {
+                    format!(
+                        "Failed to load config for tool policy persistence at {}",
+                        config_path.display()
+                    )
+                })?
+                .config()
+                .clone()
+        } else {
+            VTCodeConfig::default()
+        };
+
+        config
+            .tools
+            .policies
+            .insert(tool_name.to_string(), Self::to_config_policy(policy));
+
+        ConfigManager::save_config_to_path(&config_path, &config).with_context(|| {
+            format!(
+                "Failed to persist tool policy to {}",
+                config_path.display()
+            )
+        })
+    }
+
+    fn to_config_policy(policy: ToolPolicy) -> ConfigToolPolicy {
+        match policy {
+            ToolPolicy::Allow => ConfigToolPolicy::Allow,
+            ToolPolicy::Prompt => ConfigToolPolicy::Prompt,
+            ToolPolicy::Deny => ConfigToolPolicy::Deny,
+        }
     }
 
     /// Print current policy status

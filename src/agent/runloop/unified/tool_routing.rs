@@ -31,6 +31,7 @@ pub(crate) enum HitlDecision {
     ApprovedSession,
     ApprovedPermanent,
     Denied,
+    DeniedOnce,
     Exit,
     Interrupt,
 }
@@ -216,12 +217,20 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             search_value: None,
         },
         InlineListItem {
-            title: "Deny".to_string(),
-            subtitle: Some("Reject this tool execution".to_string()),
+            title: "Deny Once".to_string(),
+            subtitle: Some("Reject this tool for now (ask again next time)".to_string()),
             badge: None,
             indent: 0,
+            selection: Some(InlineListSelection::ToolApprovalDenyOnce),
+            search_value: Some("deny no reject once temporary 4".to_string()),
+        },
+        InlineListItem {
+            title: "Always Deny".to_string(),
+            subtitle: Some("Block this tool until policy is changed".to_string()),
+            badge: Some("Persistent".to_string()),
+            indent: 0,
             selection: Some(InlineListSelection::ToolApproval(false)),
-            search_value: Some("deny no reject cancel n 4".to_string()),
+            search_value: Some("deny no reject cancel never always 5".to_string()),
         },
     ];
 
@@ -308,6 +317,9 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                     }
                     InlineListSelection::ToolApprovalPermanent => {
                         return Ok(HitlDecision::ApprovedPermanent);
+                    }
+                    InlineListSelection::ToolApprovalDenyOnce => {
+                        return Ok(HitlDecision::DeniedOnce);
                     }
                     InlineListSelection::ToolApproval(false) => {
                         return Ok(HitlDecision::Denied);
@@ -678,7 +690,43 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::Denied => {
+            // Persist denial to policy so future runs honor the choice.
+            if let Some(cache) = tool_permission_cache {
+                let mut perm_cache = cache.write().await;
+                perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Denied);
+            }
+
+            if let Err(err) = tool_registry
+                .set_tool_policy(tool_name, ToolPolicy::Deny)
+                .await
+            {
+                tracing::warn!(
+                    "Failed to persist denial for tool '{}': {}",
+                    tool_name,
+                    err
+                );
+            }
+
+            if let Err(err) = tool_registry
+                .persist_mcp_tool_policy(tool_name, ToolPolicy::Deny)
+                .await
+            {
+                tracing::warn!(
+                    "Failed to persist MCP denial for tool '{}': {}",
+                    tool_name,
+                    err
+                );
+            }
+
             // Record denial decision for pattern learning
+            if let Some(recorder) = approval_recorder {
+                let _ = recorder.record_approval(tool_name, false, None).await;
+            }
+
+            Ok(ToolPermissionFlow::Denied)
+        }
+        HitlDecision::DeniedOnce => {
+            // Record denial decision for pattern learning without persisting policy.
             if let Some(recorder) = approval_recorder {
                 let _ = recorder.record_approval(tool_name, false, None).await;
             }
