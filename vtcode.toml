@@ -238,6 +238,7 @@ start_implementation = "prompt"
 implement_plan = "prompt"
 request_user_input = "allow"
 ask_user_question = "allow"
+run_pty_cmd = "allow"
 
 [sandbox]
 enabled = true

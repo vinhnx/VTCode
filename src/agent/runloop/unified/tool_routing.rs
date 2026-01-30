@@ -700,11 +700,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 .set_tool_policy(tool_name, ToolPolicy::Deny)
                 .await
             {
-                tracing::warn!(
-                    "Failed to persist denial for tool '{}': {}",
-                    tool_name,
-                    err
-                );
+                tracing::warn!("Failed to persist denial for tool '{}': {}", tool_name, err);
             }
 
             if let Err(err) = tool_registry

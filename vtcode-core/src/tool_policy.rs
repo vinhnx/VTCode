@@ -991,7 +991,11 @@ impl ToolPolicyManager {
         Self::write_config(&self.config_path, &self.config).await
     }
 
-    fn persist_policy_to_workspace_config(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
+    fn persist_policy_to_workspace_config(
+        &self,
+        tool_name: &str,
+        policy: ToolPolicy,
+    ) -> Result<()> {
         let Some(workspace_root) = self.workspace_root.as_ref() else {
             return Ok(());
         };
@@ -1016,12 +1020,8 @@ impl ToolPolicyManager {
             .policies
             .insert(tool_name.to_string(), Self::to_config_policy(policy));
 
-        ConfigManager::save_config_to_path(&config_path, &config).with_context(|| {
-            format!(
-                "Failed to persist tool policy to {}",
-                config_path.display()
-            )
-        })
+        ConfigManager::save_config_to_path(&config_path, &config)
+            .with_context(|| format!("Failed to persist tool policy to {}", config_path.display()))
     }
 
     fn to_config_policy(policy: ToolPolicy) -> ConfigToolPolicy {

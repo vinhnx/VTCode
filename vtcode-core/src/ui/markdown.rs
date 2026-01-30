@@ -1128,7 +1128,11 @@ mod tests {
         let markdown = "Use `code` here.";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
-        assert!(text_lines.iter().any(|line| line.contains("Use code here.")));
+        assert!(
+            text_lines
+                .iter()
+                .any(|line| line.contains("Use code here."))
+        );
     }
 
     #[test]

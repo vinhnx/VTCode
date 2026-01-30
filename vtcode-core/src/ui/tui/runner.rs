@@ -507,7 +507,10 @@ async fn drive_terminal<B: Backend>(
             }
         }
 
-        if session.thinking_spinner.is_active || session.is_running_activity() {
+        if session.thinking_spinner.is_active
+            || session.is_running_activity()
+            || session.has_status_spinner()
+        {
             event_channels.record_input();
         }
 
@@ -615,7 +618,7 @@ async fn drive_terminal<B: Backend>(
                         }
                     }
                     Some(TerminalEvent::Tick) => {
-                        // Periodic tick for animations or state updates
+                        session.handle_tick();
                     }
                     None => {
                         if commands.is_closed() {

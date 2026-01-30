@@ -7,7 +7,7 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
-use tui_shimmer::shimmer_spans_with_style;
+use tui_shimmer::shimmer_spans_with_style_at_phase;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 struct InputRender {
@@ -343,7 +343,11 @@ impl Session {
                 );
                 spans.push(Span::styled(indicator, indicator_style));
                 spans.push(Span::raw(" "));
-                spans.extend(shimmer_spans_with_style(&rest, dim_style));
+                spans.extend(shimmer_spans_with_style_at_phase(
+                    &rest,
+                    dim_style,
+                    self.shimmer_state.phase(),
+                ));
             } else {
                 spans.extend(self.create_git_status_spans(left_value, dim_style));
             }

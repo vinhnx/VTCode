@@ -145,6 +145,7 @@ impl Session {
 
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),
+            shimmer_state: ShimmerState::new(),
 
             // --- Reverse Search ---
             reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState::new(
