@@ -471,7 +471,7 @@ impl ConfigPalette {
             kind: ConfigItemKind::Display {
                 value: config.agent.default_model.clone(),
             },
-            description: Some("Main AI model (read-only)".to_string()),
+            description: Some("Main AI model (read-only), to change model, please use /model command.".to_string()),
         });
 
         self.items = items;
