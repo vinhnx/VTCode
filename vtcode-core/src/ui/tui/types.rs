@@ -197,6 +197,7 @@ pub enum InlineListSelection {
     Session(String),
     SlashCommand(String),
     ToolApproval(bool),
+    ToolApprovalDenyOnce,
     ToolApprovalSession,
     ToolApprovalPermanent,
     SessionLimitIncrease(usize),
@@ -781,9 +782,6 @@ impl InlineHandle {
     }
 
     pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
-        if segments.is_empty() {
-            return;
-        }
         self.send_command(InlineCommand::AppendLine { kind, segments });
     }
 

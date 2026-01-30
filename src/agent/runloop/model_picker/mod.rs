@@ -344,6 +344,7 @@ impl ModelPickerState {
                 | InlineListSelection::RefreshDynamicModels
                 | InlineListSelection::DynamicModel(_)
                 | InlineListSelection::ToolApproval(_)
+                | InlineListSelection::ToolApprovalDenyOnce
                 | InlineListSelection::ToolApprovalSession
                 | InlineListSelection::ToolApprovalPermanent => {
                     renderer.line(

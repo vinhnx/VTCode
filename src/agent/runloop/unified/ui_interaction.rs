@@ -334,40 +334,6 @@ fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError {
     }
 }
 
-fn stream_plain_response_delta(
-    renderer: &mut AnsiRenderer,
-    style: MessageStyle,
-    indent: &str,
-    pending_indent: &mut bool,
-    delta: &str,
-) -> Result<()> {
-    for chunk in delta.split_inclusive('\n') {
-        if chunk.is_empty() {
-            continue;
-        }
-
-        if let Some(text) = chunk.strip_suffix('\n') {
-            if !text.is_empty() {
-                if *pending_indent && !indent.is_empty() {
-                    renderer.inline_with_style(style, indent)?;
-                }
-                renderer.inline_with_style(style, text)?;
-                *pending_indent = false;
-            }
-            renderer.inline_with_style(style, "\n")?;
-            *pending_indent = true;
-        } else {
-            if *pending_indent && !indent.is_empty() {
-                renderer.inline_with_style(style, indent)?;
-                *pending_indent = false;
-            }
-            renderer.inline_with_style(style, chunk)?;
-        }
-    }
-
-    Ok(())
-}
-
 fn reasoning_matches_content(reasoning: &str, content: &str) -> bool {
     let cleaned_reasoning = clean_reasoning_text(reasoning);
     let cleaned_content = clean_reasoning_text(content);
@@ -393,6 +359,8 @@ struct StreamingReasoningState {
     buffered: String,
     // Whether reasoning should be rendered inline during streaming
     render_inline: bool,
+    // Whether reasoning output should be rendered at all during streaming
+    render_output: bool,
     // Defer rendering until we can compare content vs reasoning
     defer_rendering: bool,
     // Track whether we've started streaming (for prefix)
@@ -406,6 +374,7 @@ impl StreamingReasoningState {
         Self {
             buffered: String::new(),
             render_inline: inline_enabled,
+            render_output: inline_enabled,
             defer_rendering: true,
             started: false,
             rendered_any: false,
@@ -413,7 +382,7 @@ impl StreamingReasoningState {
     }
 
     fn handle_delta(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<bool> {
-        if !self.render_inline || self.defer_rendering {
+        if !self.render_output || !self.render_inline || self.defer_rendering {
             self.buffered.push_str(delta);
             return Ok(false);
         }
@@ -425,6 +394,10 @@ impl StreamingReasoningState {
     }
 
     fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<bool> {
+        if !self.render_output {
+            self.buffered.clear();
+            return Ok(false);
+        }
         if !self.buffered.is_empty() {
             let cleaned = clean_reasoning_text(&self.buffered);
             if !cleaned.is_empty() {
@@ -448,6 +421,10 @@ impl StreamingReasoningState {
         reasoning_already_emitted: bool,
         suppress_reasoning: bool,
     ) -> Result<()> {
+        if !self.render_output {
+            self.buffered.clear();
+            return Ok(());
+        }
         if suppress_reasoning {
             self.buffered.clear();
             return Ok(());
@@ -551,9 +528,6 @@ pub(crate) async fn stream_and_render_response(
     let mut aggregated = String::new();
     let mut spinner_active = true;
     let mut rendered_line_count = 0usize;
-    let response_style = MessageStyle::Response;
-    let response_indent = response_style.indent();
-    let mut needs_indent = true;
     let finish_spinner = |active: &mut bool| {
         if *active {
             spinner.finish();
@@ -668,17 +642,8 @@ pub(crate) async fn stream_and_render_response(
                             rendered_line_count = renderer
                                 .stream_markdown_response(&aggregated, rendered_line_count)
                                 .map_err(|err| map_render_error(provider_name, err))?;
-                        } else {
-                            stream_plain_response_delta(
-                                renderer,
-                                response_style,
-                                response_indent,
-                                &mut needs_indent,
-                                &render_text,
-                            )
-                            .map_err(|err| map_render_error(provider_name, err))?;
+                            emitted_tokens = true;
                         }
-                        emitted_tokens = true;
                         if reasoning_prefix
                             && (reasoning_state.rendered_reasoning() || reasoning_emitted)
                         {
@@ -693,17 +658,8 @@ pub(crate) async fn stream_and_render_response(
                     rendered_line_count = renderer
                         .stream_markdown_response(&aggregated, rendered_line_count)
                         .map_err(|err| map_render_error(provider_name, err))?;
-                } else {
-                    stream_plain_response_delta(
-                        renderer,
-                        response_style,
-                        response_indent,
-                        &mut needs_indent,
-                        &delta,
-                    )
-                    .map_err(|err| map_render_error(provider_name, err))?;
+                    emitted_tokens = true;
                 }
-                emitted_tokens = true;
             }
             Ok(LLMStreamEvent::Reasoning { delta }) => {
                 reasoning_token_count += 1;
@@ -787,17 +743,8 @@ pub(crate) async fn stream_and_render_response(
                 renderer
                     .stream_markdown_response(&aggregated, prev_count)
                     .map_err(|err| map_render_error(provider_name, err))?;
-            } else {
-                stream_plain_response_delta(
-                    renderer,
-                    response_style,
-                    response_indent,
-                    &mut needs_indent,
-                    &render_text,
-                )
-                .map_err(|err| map_render_error(provider_name, err))?;
+                emitted_tokens = true;
             }
-            emitted_tokens = true;
             if reasoning_prefix && (reasoning_state.rendered_reasoning() || reasoning_emitted) {
                 content_suppressed = true;
             }
@@ -822,8 +769,9 @@ pub(crate) async fn stream_and_render_response(
                 // Leave `aggregated` untouched to avoid showing content twice.
             } else {
                 // Check if we already rendered this content via Token events
-                let already_rendered =
-                    !aggregated.trim().is_empty() && aggregated.trim() == content_trimmed;
+                let already_rendered = emitted_tokens
+                    && !aggregated.trim().is_empty()
+                    && aggregated.trim() == content_trimmed;
 
                 if !already_rendered {
                     // Content wasn't rendered yet - render it now
@@ -853,18 +801,8 @@ pub(crate) async fn stream_and_render_response(
                         renderer
                             .stream_markdown_response(content, prev_count)
                             .map_err(|err| map_render_error(provider_name, err))?;
-                    } else {
-                        // Add newline after reasoning if needed
-                        if !aggregated.is_empty() {
-                            renderer
-                                .line(MessageStyle::Response, "")
-                                .map_err(|err| map_render_error(provider_name, err))?;
-                        }
-                        renderer
-                            .line(MessageStyle::Response, content)
-                            .map_err(|err| map_render_error(provider_name, err))?;
+                        emitted_tokens = true;
                     }
-                    emitted_tokens = true;
                     aggregated = content.to_string();
                 }
             }
@@ -909,14 +847,7 @@ pub(crate) async fn stream_and_render_response(
                     .map_err(|err| map_render_error(provider_name, err))?;
             }
             emitted_tokens = true;
-            aggregated = reasoning_trimmed.to_string();
         }
-    }
-
-    if !supports_streaming_markdown && !aggregated.trim().is_empty() {
-        renderer
-            .line(MessageStyle::Response, "")
-            .map_err(|err| map_render_error(provider_name, err))?;
     }
 
     Ok((response, emitted_tokens))
