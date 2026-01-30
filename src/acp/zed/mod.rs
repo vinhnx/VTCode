@@ -9,7 +9,7 @@ mod session;
 mod types;
 
 pub(crate) use agent::ZedAgent;
-use session::run_zed_agent;
+use session::run_acp_agent;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ZedAcpAdapter;
@@ -17,7 +17,22 @@ pub struct ZedAcpAdapter;
 #[async_trait(?Send)]
 impl AcpClientAdapter for ZedAcpAdapter {
     async fn serve(&self, params: AcpLaunchParams<'_>) -> Result<()> {
-        run_zed_agent(params.agent_config, params.runtime_config).await
+        run_acp_agent(
+            params.agent_config,
+            params.runtime_config,
+            Some("Zed".to_string()),
+        )
+        .await
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct StandardAcpAdapter;
+
+#[async_trait(?Send)]
+impl AcpClientAdapter for StandardAcpAdapter {
+    async fn serve(&self, params: AcpLaunchParams<'_>) -> Result<()> {
+        run_acp_agent(params.agent_config, params.runtime_config, None).await
     }
 }
 

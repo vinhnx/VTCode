@@ -40,7 +40,7 @@ impl acp::Agent for ZedAgent {
             protocol_version: acp::V1,
             agent_capabilities: capabilities,
             auth_methods: Vec::new(),
-            agent_info: Some(agent_implementation_info()),
+            agent_info: Some(agent_implementation_info(self.title.clone())),
             meta: None,
         })
     }

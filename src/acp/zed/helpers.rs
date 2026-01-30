@@ -34,10 +34,10 @@ pub(crate) fn text_chunk(text: impl Into<String>) -> acp::ContentChunk {
     }
 }
 
-pub(crate) fn agent_implementation_info() -> acp::Implementation {
+pub(crate) fn agent_implementation_info(title_override: Option<String>) -> acp::Implementation {
     acp::Implementation {
         name: "vtcode".to_string(),
-        title: Some("VT Code".to_string()),
+        title: title_override.or_else(|| Some("VT Code".to_string())),
         version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }

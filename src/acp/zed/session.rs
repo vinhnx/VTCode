@@ -19,7 +19,11 @@ use super::constants::{
 };
 use super::types::NotificationEnvelope;
 
-pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> Result<()> {
+pub async fn run_acp_agent(
+    config: &CoreAgentConfig,
+    vt_cfg: &VTCodeConfig,
+    title: Option<String>,
+) -> Result<()> {
     let zed_config = &vt_cfg.acp.zed;
     let desired_trust_level = zed_config.workspace_trust.to_workspace_trust_level();
     let trust_synchronizer = DefaultWorkspaceTrustSynchronizer::new();
@@ -58,6 +62,7 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
     let local_set = tokio::task::LocalSet::new();
     let config_clone = config.clone();
     let zed_config_clone = zed_config.clone();
+    let title_clone = title.clone();
 
     local_set
         .run_until(async move {
@@ -71,6 +76,7 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
                 commands_config_clone,
                 system_prompt,
                 tx,
+                title_clone,
             )
             .await;
             let (raw_conn, io_task) =

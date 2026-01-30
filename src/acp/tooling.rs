@@ -7,7 +7,7 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider::ToolDefinition;
 
 pub const TOOL_READ_FILE_DESCRIPTION: &str =
-    "Read the contents of a text file accessible to the Zed workspace";
+    "Read the contents of a text file accessible to the IDE workspace";
 pub const TOOL_READ_FILE_URI_ARG: &str = "uri";
 pub const TOOL_READ_FILE_PATH_ARG: &str = "path";
 pub const TOOL_READ_FILE_LINE_ARG: &str = "line";
@@ -31,7 +31,7 @@ pub const TOOL_LIST_FILES_MESSAGE_KEY: &str = "message";
 pub const TOOL_LIST_FILES_RESULT_KEY: &str = "result";
 pub const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 
-/// Enum of tools available via the Agent Client Protocol (ACP) integration with Zed
+/// Enum of tools available via the Agent Client Protocol (ACP) integration
 ///
 /// Only a subset of VT Code tools are exposed via ACP for security and integration reasons:
 /// - **ReadFile**: Safe, non-invasive file reading within workspace bounds
@@ -126,7 +126,7 @@ impl AcpToolRegistry {
             let workspace_display = workspace_root.display().to_string();
             let sample_path = workspace_root.join("README.md");
             let sample_path_string = sample_path.to_string_lossy().into_owned();
-            let sample_uri = format!("zed-fs://{}", sample_path_string);
+            let sample_uri = format!("file://{}", sample_path_string);
             let read_file_description = format!(
                 "{TOOL_READ_FILE_DESCRIPTION}. Workspace root: {workspace}. Provide {path} or {uri} inside the workspace. Paths must be absolute (see ACP file system spec). Optional {line} and {limit} control slicing.",
                 workspace = workspace_display,
@@ -159,7 +159,7 @@ impl AcpToolRegistry {
                     },
                     TOOL_READ_FILE_URI_ARG: {
                         "type": "string",
-                        "description": "File URI using file://, zed://, or zed-fs:// schemes",
+                        "description": "File URI using file:// or editor-specific schemes",
                         "minLength": 1,
                     },
                     TOOL_READ_FILE_LINE_ARG: {
@@ -210,7 +210,7 @@ impl AcpToolRegistry {
                     TOOL_LIST_FILES_PER_PAGE_ARG: 100,
                 }),
                 json!({
-                    TOOL_LIST_FILES_URI_ARG: format!("zed-fs://{}/src", workspace_display_str),
+                    TOOL_LIST_FILES_URI_ARG: format!("file://{}/src", workspace_display_str),
                 }),
             ];
             let list_files_schema = json!({
