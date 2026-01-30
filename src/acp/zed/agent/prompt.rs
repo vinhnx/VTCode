@@ -119,6 +119,7 @@ impl ZedAgent {
                         );
                         Self::append_segment(&mut aggregated, &rendered);
                     }
+                    _ => {}
                 },
                 acp::ContentBlock::Image(image) => {
                     let identifier = image.uri.as_deref().unwrap_or(image.mime_type.as_str());
@@ -135,6 +136,7 @@ impl ZedAgent {
                     );
                     Self::append_segment(&mut aggregated, &placeholder);
                 }
+                _ => {}
             }
         }
 
@@ -161,13 +163,7 @@ impl ZedAgent {
             }
         };
 
-        let request = acp::ReadTextFileRequest {
-            session_id: session_id.clone(),
-            path,
-            line: None,
-            limit: None,
-            meta: None,
-        };
+        let request = acp::ReadTextFileRequest::new(session_id.clone(), path);
 
         match client.read_text_file(request).await {
             Ok(response) => Ok(Self::render_context_block(

@@ -12,11 +12,7 @@ impl ZedAgent {
         update: acp::SessionUpdate,
     ) -> Result<(), acp::Error> {
         let (completion, completion_rx) = oneshot::channel();
-        let notification = acp::SessionNotification {
-            session_id: session_id.clone(),
-            update,
-            meta: None,
-        };
+        let notification = acp::SessionNotification::new(session_id.clone(), update);
 
         self.session_update_tx
             .send(NotificationEnvelope {
@@ -50,10 +46,9 @@ impl ZedAgent {
         let available_commands = build_available_commands();
         self.send_update(
             session_id,
-            acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate {
+            acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(
                 available_commands,
-                meta: None,
-            }),
+            )),
         )
         .await
     }

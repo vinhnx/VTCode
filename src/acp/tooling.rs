@@ -52,13 +52,15 @@ pub const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 pub enum SupportedTool {
     ReadFile,
     ListFiles,
+    SwitchMode,
 }
 
 impl SupportedTool {
     pub fn kind(&self) -> agent_client_protocol::ToolKind {
         match self {
-            Self::ReadFile => agent_client_protocol::ToolKind::Fetch,
+            Self::ReadFile => agent_client_protocol::ToolKind::Read,
             Self::ListFiles => agent_client_protocol::ToolKind::Search,
+            Self::SwitchMode => agent_client_protocol::ToolKind::Other,
         }
     }
 
@@ -66,6 +68,7 @@ impl SupportedTool {
         match self {
             Self::ReadFile => "Read file",
             Self::ListFiles => "List files",
+            Self::SwitchMode => "Switch session mode",
         }
     }
 
@@ -73,6 +76,7 @@ impl SupportedTool {
         match self {
             Self::ReadFile => tools::READ_FILE,
             Self::ListFiles => tools::LIST_FILES,
+            Self::SwitchMode => "switch_mode",
         }
     }
 
@@ -80,6 +84,7 @@ impl SupportedTool {
         match self {
             Self::ReadFile => 0,
             Self::ListFiles => 1,
+            Self::SwitchMode => 2,
         }
     }
 }
@@ -288,6 +293,34 @@ impl AcpToolRegistry {
             });
         }
 
+        let switch_mode_description = "Switch the current session mode (e.g., from architect to code). Possible modes: ask, architect, code.";
+        let switch_mode_schema = json!({
+            "type": "object",
+            "required": ["mode_id"],
+            "properties": {
+                "mode_id": {
+                    "type": "string",
+                    "enum": ["ask", "architect", "code"],
+                    "description": "The ID of the mode to switch to"
+                }
+            },
+            "additionalProperties": false,
+            "description": switch_mode_description,
+        });
+        let switch_mode = ToolDefinition::function(
+            "switch_mode".to_string(),
+            switch_mode_description.to_string(),
+            switch_mode_schema,
+        );
+        mapping.insert(
+            switch_mode.function_name().to_string(),
+            ToolDescriptor::Acp(SupportedTool::SwitchMode),
+        );
+        entries.push(ToolRegistryEntry {
+            tool: SupportedTool::SwitchMode,
+            definition: switch_mode,
+        });
+
         for definition in local_definitions {
             mapping.insert(
                 definition.function_name().to_string(),
@@ -377,6 +410,11 @@ impl AcpToolRegistry {
                         tool.default_title().to_string()
                     }
                 }
+                SupportedTool::SwitchMode => args
+                    .get("mode_id")
+                    .and_then(Value::as_str)
+                    .map(|mode| format!("Switch to {mode} mode"))
+                    .unwrap_or_else(|| tool.default_title().to_string()),
             },
             ToolDescriptor::Local => Self::format_local_title(function_name),
         }
@@ -384,15 +422,14 @@ impl AcpToolRegistry {
 
     pub fn tool_kind(&self, function_name: &str) -> agent_client_protocol::ToolKind {
         match function_name {
-            n if n == tools::READ_FILE => agent_client_protocol::ToolKind::Fetch,
+            n if n == tools::READ_FILE => agent_client_protocol::ToolKind::Read,
             n if n == tools::GREP_FILE || n == tools::LIST_FILES => {
                 agent_client_protocol::ToolKind::Search
             }
             n if n == tools::RUN_PTY_CMD => agent_client_protocol::ToolKind::Execute,
-            n if n == tools::WRITE_FILE || n == tools::CREATE_FILE => {
+            n if n == tools::WRITE_FILE || n == tools::CREATE_FILE || n == tools::EDIT_FILE => {
                 agent_client_protocol::ToolKind::Edit
             }
-            n if n == tools::EDIT_FILE => agent_client_protocol::ToolKind::Edit,
             n if n == tools::DELETE_FILE => agent_client_protocol::ToolKind::Delete,
             n if n == tools::WEB_FETCH => agent_client_protocol::ToolKind::Fetch,
             n if n == tools::CODE_INTELLIGENCE => agent_client_protocol::ToolKind::Search,

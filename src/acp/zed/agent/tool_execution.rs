@@ -72,21 +72,14 @@ impl ZedAgent {
                 (None, _) => format!("{} (unsupported)", func_ref.name),
             };
 
-            let call_id = acp::ToolCallId(Arc::from(call.id.clone()));
+            let call_id = acp::ToolCallId::new(Arc::from(call.id.clone()));
             let kind = tool_descriptor
                 .map(|d| d.kind())
                 .unwrap_or_else(|| self.acp_tool_registry.tool_kind(&func_ref.name));
-            let initial_call = acp::ToolCall {
-                id: call_id.clone(),
-                title,
-                kind,
-                status: acp::ToolCallStatus::Pending,
-                content: Vec::with_capacity(1),
-                locations: Vec::with_capacity(1),
-                raw_input: args_value_for_input.clone(),
-                raw_output: None,
-                meta: None,
-            };
+            let initial_call = acp::ToolCall::new(call_id.clone(), title)
+                .kind(kind)
+                .status(acp::ToolCallStatus::Pending)
+                .raw_input(args_value_for_input.clone());
 
             self.send_update(
                 session_id,
@@ -116,15 +109,9 @@ impl ZedAgent {
                 && permission_override.is_none()
                 && !session.cancel_flag.get()
             {
-                let in_progress_fields = acp::ToolCallUpdateFields {
-                    status: Some(acp::ToolCallStatus::InProgress),
-                    ..Default::default()
-                };
-                let progress_update = acp::ToolCallUpdate {
-                    id: call_id.clone(),
-                    fields: in_progress_fields,
-                    meta: None,
-                };
+                let in_progress_fields = acp::ToolCallUpdateFields::default()
+                    .status(acp::ToolCallStatus::InProgress);
+                let progress_update = acp::ToolCallUpdate::new(call_id.clone(), in_progress_fields);
                 self.send_update(
                     session_id,
                     acp::SessionUpdate::ToolCallUpdate(progress_update),
@@ -163,25 +150,19 @@ impl ZedAgent {
                 report = ToolExecutionReport::cancelled(&func_ref.name);
             }
 
-            let mut update_fields = acp::ToolCallUpdateFields {
-                status: Some(report.status),
-                ..Default::default()
-            };
+            let mut update_fields = acp::ToolCallUpdateFields::default()
+                .status(report.status);
             if !report.content.is_empty() {
-                update_fields.content = Some(report.content.clone());
+                update_fields = update_fields.content(report.content.clone());
             }
             if !report.locations.is_empty() {
-                update_fields.locations = Some(report.locations.clone());
+                update_fields = update_fields.locations(report.locations.clone());
             }
             if let Some(raw_output) = &report.raw_output {
-                update_fields.raw_output = Some(raw_output.clone());
+                update_fields = update_fields.raw_output(raw_output.clone());
             }
 
-            let update = acp::ToolCallUpdate {
-                id: call_id.clone(),
-                fields: update_fields,
-                meta: None,
-            };
+            let update = acp::ToolCallUpdate::new(call_id.clone(), update_fields);
 
             self.send_update(session_id, acp::SessionUpdate::ToolCallUpdate(update))
                 .await?;
@@ -261,15 +242,9 @@ impl ZedAgent {
         let location_display = self.describe_terminal_location(working_dir.as_ref());
         let command_display = command_parts.join(" ");
 
-        let request = acp::CreateTerminalRequest {
-            session_id: session_id.clone(),
-            command: program.to_string(),
-            args: rest.to_vec(),
-            env: Vec::with_capacity(5), // Pre-allocate for typical environment variables
-            cwd: working_dir.clone(),
-            output_byte_limit: None,
-            meta: None,
-        };
+        let request = acp::CreateTerminalRequest::new(session_id.clone(), program.to_string())
+            .args(rest.to_vec())
+            .cwd(working_dir.clone());
 
         let response = client
             .create_terminal(request)
@@ -285,9 +260,9 @@ impl ZedAgent {
             }
         };
         content.push(acp::ToolCallContent::from(summary));
-        content.push(acp::ToolCallContent::Terminal {
-            terminal_id: terminal_id.clone(),
-        });
+        content.push(acp::ToolCallContent::Terminal(acp::Terminal::new(
+            terminal_id.clone(),
+        )));
 
         let payload = json!({
             TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
@@ -322,7 +297,52 @@ impl ZedAgent {
             SupportedTool::ListFiles => self.run_list_files(args).await.unwrap_or_else(|message| {
                 ToolExecutionReport::failure(tools::LIST_FILES, &message)
             }),
+            SupportedTool::SwitchMode => self.run_switch_mode(session_id, args).await.unwrap_or_else(
+                |message| ToolExecutionReport::failure("switch_mode", &message),
+            ),
         }
+    }
+
+    async fn run_switch_mode(
+        &self,
+        session_id: &acp::SessionId,
+        args: &Value,
+    ) -> Result<ToolExecutionReport, String> {
+        let mode_id = args
+            .get("mode_id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "missing mode_id".to_string())?;
+
+        let session = self
+            .session_handle(session_id)
+            .ok_or_else(|| "unknown session".to_string())?;
+
+        let acp_mode_id = acp::SessionModeId::new(mode_id);
+
+        if self.update_session_mode(&session, acp_mode_id.clone()) {
+            self.send_update(
+                session_id,
+                acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new(acp_mode_id)),
+            )
+            .await
+            .map_err(|e| format!("Failed to send mode update: {e}"))?;
+        }
+
+        let payload = json!({
+            TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
+            TOOL_RESPONSE_KEY_TOOL: "switch_mode",
+            "result": {
+                "mode_id": mode_id,
+            }
+        });
+
+        Ok(ToolExecutionReport::success(
+            vec![acp::ToolCallContent::from(format!(
+                "Successfully switched to mode: {mode_id}"
+            ))],
+            Vec::new(),
+            payload,
+        ))
     }
 
     async fn execute_local_tool(&self, tool_name: &str, args: &Value) -> ToolExecutionReport {
@@ -468,13 +488,9 @@ impl ZedAgent {
         let line = Self::parse_positive_argument(args, TOOL_READ_FILE_LINE_ARG)?;
         let limit = Self::parse_positive_argument(args, TOOL_READ_FILE_LIMIT_ARG)?;
 
-        let request = acp::ReadTextFileRequest {
-            session_id: session_id.clone(),
-            path: path.clone(),
-            line,
-            limit,
-            meta: None,
-        };
+        let request = acp::ReadTextFileRequest::new(session_id.clone(), path.clone())
+            .line(line)
+            .limit(limit);
 
         let response = client.read_text_file(request).await.map_err(|error| {
             warn!(%error, path = ?path, "Failed to read file via ACP client");
@@ -496,11 +512,7 @@ impl ZedAgent {
             TOOL_RESPONSE_KEY_TRUNCATED: truncated,
         });
 
-        let locations = vec![acp::ToolCallLocation {
-            path: path.clone(),
-            line,
-            meta: None,
-        }];
+        let locations = vec![acp::ToolCallLocation::new(path.clone()).line(line)];
 
         Ok(ToolExecutionReport::success(
             vec![acp::ToolCallContent::from(tool_content)],
@@ -661,11 +673,7 @@ impl ZedAgent {
                     .map(PathBuf::from)
             })
             .take(TOOL_LIST_FILES_SUMMARY_MAX_ITEMS)
-            .map(|path| acp::ToolCallLocation {
-                path,
-                line: None,
-                meta: None,
-            })
+            .map(acp::ToolCallLocation::new)
             .collect()
     }
 }
