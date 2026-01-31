@@ -9,6 +9,16 @@ use crate::agent::runloop::unified::turn::utils::{
     enforce_history_limits, truncate_message_content,
 };
 
+/// Checks if reasoning content is a duplicate of the main content.
+/// Used to avoid showing redundant reasoning when it matches the response.
+pub(super) fn reasoning_duplicates_content(reasoning: &str, content: &str) -> bool {
+    let cleaned_reasoning = vtcode_core::llm::providers::clean_reasoning_text(reasoning);
+    let cleaned_content = vtcode_core::llm::providers::clean_reasoning_text(content);
+    !cleaned_reasoning.is_empty()
+        && !cleaned_content.is_empty()
+        && cleaned_reasoning == cleaned_content
+}
+
 pub(super) fn normalize_signature_args(
     tool_name: &str,
     args: &serde_json::Value,
@@ -75,9 +85,7 @@ pub(super) fn push_assistant_message(history: &mut Vec<uni::Message>, mut messag
         if let Some(reasoning) = message.reasoning.as_ref()
             && let Some(content) = message.content.as_text_borrowed()
         {
-            let cleaned_reasoning = vtcode_core::llm::providers::clean_reasoning_text(reasoning);
-            let cleaned_content = vtcode_core::llm::providers::clean_reasoning_text(content);
-            if !cleaned_reasoning.is_empty() && cleaned_reasoning == cleaned_content {
+            if reasoning_duplicates_content(reasoning, content) {
                 message.reasoning = None;
             }
         }
@@ -105,25 +113,3 @@ pub(super) fn signature_key_for(tool_name: &str, args: &serde_json::Value) -> St
     format!("{}:{}", tool_name, args_str)
 }
 
-#[allow(dead_code)]
-pub(super) fn classify_error_type(
-    error_message: &str,
-) -> vtcode_core::core::agent::error_recovery::ErrorType {
-    let error_lower = error_message.to_lowercase();
-    if error_lower.contains("timeout") || error_lower.contains("timed out") {
-        vtcode_core::core::agent::error_recovery::ErrorType::Timeout
-    } else if error_lower.contains("permission") || error_lower.contains("denied") {
-        vtcode_core::core::agent::error_recovery::ErrorType::PermissionDenied
-    } else if error_lower.contains("invalid")
-        || error_lower.contains("argument")
-        || error_lower.contains("missing")
-    {
-        vtcode_core::core::agent::error_recovery::ErrorType::InvalidArguments
-    } else if error_lower.contains("not found") || error_lower.contains("no such") {
-        vtcode_core::core::agent::error_recovery::ErrorType::ResourceNotFound
-    } else if error_lower.contains("circuit") || error_lower.contains("breaker") {
-        vtcode_core::core::agent::error_recovery::ErrorType::CircuitBreaker
-    } else {
-        vtcode_core::core::agent::error_recovery::ErrorType::Other
-    }
-}

@@ -15,15 +15,16 @@ use crate::agent::runloop::unified::turn::turn_helpers::display_status;
 use super::helpers::push_tool_response;
 
 #[allow(clippy::too_many_arguments)]
+use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_tool_execution_result(
-    ctx: &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_>,
+    ctx: &mut TurnProcessingContext<'_>,
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
     pipeline_outcome: &ToolPipelineOutcome,
-    working_history: &mut Vec<uni::Message>,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
     traj: &vtcode_core::core::trajectory::TrajectoryLogger,
     tool_start_time: std::time::Instant,
 ) -> Result<()> {
@@ -47,10 +48,11 @@ pub(crate) async fn handle_tool_execution_result(
                 serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
             };
 
-            push_tool_response(working_history, tool_call_id, content_for_model, tool_name);
+            push_tool_response(ctx.working_history, tool_call_id, content_for_model, tool_name);
 
+            let vt_cfg = ctx.vt_cfg;
             let (_any_write, mod_files, last_stdout) = handle_pipeline_output_from_turn_ctx(
-                ctx,
+                &mut ctx.as_turn_loop_context(),
                 tool_name,
                 args_val,
                 pipeline_outcome,
@@ -76,7 +78,7 @@ pub(crate) async fn handle_tool_execution_result(
                         )?;
                         for context in outcome.additional_context {
                             if !context.trim().is_empty() {
-                                working_history.push(uni::Message::system(context));
+                                ctx.working_history.push(uni::Message::system(context));
                             }
                         }
                     }
@@ -118,7 +120,7 @@ pub(crate) async fn handle_tool_execution_result(
 
             let error_content = serde_json::json!({"error": error_msg});
             push_tool_response(
-                working_history,
+                ctx.working_history,
                 tool_call_id,
                 error_content.to_string(),
                 tool_name,
@@ -173,7 +175,7 @@ pub(crate) async fn handle_tool_execution_result(
                     ctx.default_placeholder.clone(),
                     ctx.lifecycle_hooks,
                     true,
-                    vt_cfg,
+                    ctx.vt_cfg,
                     0,
                 )
                 .await;
@@ -196,15 +198,16 @@ pub(crate) async fn handle_tool_execution_result(
                                 serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string())
                             };
                             push_tool_response(
-                                working_history,
+                                ctx.working_history,
                                 exit_call_id.clone(),
                                 content_for_model,
                                 tool_names::EXIT_PLAN_MODE,
                             );
 
+                            let vt_cfg = ctx.vt_cfg;
                             let (_any_write, mod_files, _last_stdout) =
                                 handle_pipeline_output_from_turn_ctx(
-                                    ctx,
+                                    &mut ctx.as_turn_loop_context(),
                                     tool_names::EXIT_PLAN_MODE,
                                     &exit_args,
                                     &exit_pipeline_outcome,
@@ -238,7 +241,7 @@ pub(crate) async fn handle_tool_execution_result(
                             );
                             let error_content = serde_json::json!({"error": err_msg});
                             push_tool_response(
-                                working_history,
+                                ctx.working_history,
                                 exit_call_id.clone(),
                                 error_content.to_string(),
                                 tool_names::EXIT_PLAN_MODE,
@@ -265,7 +268,7 @@ pub(crate) async fn handle_tool_execution_result(
                             );
                             let error_content = serde_json::json!({"error": err_msg});
                             push_tool_response(
-                                working_history,
+                                ctx.working_history,
                                 exit_call_id.clone(),
                                 error_content.to_string(),
                                 tool_names::EXIT_PLAN_MODE,
@@ -288,7 +291,7 @@ pub(crate) async fn handle_tool_execution_result(
 
             let error_content = serde_json::json!({"error": error_msg});
             push_tool_response(
-                working_history,
+                ctx.working_history,
                 tool_call_id,
                 error_content.to_string(),
                 tool_name,
@@ -300,7 +303,7 @@ pub(crate) async fn handle_tool_execution_result(
 
             let error_content = serde_json::json!({"error": error_msg});
             push_tool_response(
-                working_history,
+                ctx.working_history,
                 tool_call_id,
                 error_content.to_string(),
                 tool_name,

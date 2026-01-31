@@ -1,5 +1,4 @@
 //! Tool outcome handling helpers for turn execution.
-
-pub(crate) mod failure;
-pub(crate) mod success;
-pub(crate) mod timeout;
+//!
+//! Note: Handler logic is consolidated in execution_result.rs.
+//! Individual handler modules were removed as dead code.
