@@ -154,6 +154,8 @@ pub enum ModelId {
     OllamaMistralLarge3675bCloud,
     /// Kimi K2 Thinking Cloud - MoonshotAI Kimi K2 thinking model via Ollama Cloud
     OllamaKimiK2ThinkingCloud,
+    /// Kimi K2.5 Cloud - MoonshotAI Kimi K2.5 multimodal model via Ollama Cloud
+    OllamaKimiK25Cloud,
     /// Qwen3 Coder 480B Cloud - Cloud-hosted Qwen3 Coder model served via Ollama Cloud
     OllamaQwen3Coder480bCloud,
     /// GLM-4.6 Cloud - Cloud-hosted GLM-4.6 model served via Ollama Cloud

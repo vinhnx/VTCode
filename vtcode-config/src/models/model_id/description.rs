@@ -118,6 +118,9 @@ impl ModelId {
             ModelId::OllamaKimiK2ThinkingCloud => {
                 "MoonshotAI Kimi K2 thinking model via Ollama Cloud with explicit reasoning traces"
             }
+            ModelId::OllamaKimiK25Cloud => {
+                "MoonshotAI Kimi K2.5 versatile multimodal model via Ollama Cloud with reasoning support"
+            }
             ModelId::OllamaGlm47Cloud => "Advancing the Coding Capability",
             ModelId::OllamaMinimaxM21Cloud => {
                 "Exceptional multilingual capabilities to elevate code engineering"

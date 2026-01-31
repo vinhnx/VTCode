@@ -162,6 +162,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
             ModelId::OllamaMistralLarge3675bCloud => "mistral-large-3",
             ModelId::OllamaKimiK2ThinkingCloud => "kimi-k2-thinking",
+            ModelId::OllamaKimiK25Cloud => "kimi-k2.5",
             ModelId::OllamaQwen3Coder480bCloud => "qwen3-coder-cloud",
             ModelId::OllamaGlm46Cloud => "glm-cloud",
             ModelId::OllamaMinimaxM2Cloud => "minimax-cloud",

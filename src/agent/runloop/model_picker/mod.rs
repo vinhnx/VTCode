@@ -873,6 +873,7 @@ mod tests {
         assert!(has_model(options, ModelId::OllamaQwen3Next80bCloud));
         assert!(has_model(options, ModelId::OllamaMistralLarge3675bCloud));
         assert!(has_model(options, ModelId::OllamaKimiK2ThinkingCloud));
+        assert!(has_model(options, ModelId::OllamaKimiK25Cloud));
         assert!(has_model(options, ModelId::OllamaQwen3Coder480bCloud));
         assert!(has_model(options, ModelId::OllamaGlm46Cloud));
         assert!(has_model(options, ModelId::OllamaGlm47Cloud));

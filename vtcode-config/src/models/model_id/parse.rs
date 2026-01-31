@@ -75,6 +75,7 @@ impl FromStr for ModelId {
             s if s == models::ollama::KIMI_K2_THINKING_CLOUD => {
                 Ok(ModelId::OllamaKimiK2ThinkingCloud)
             }
+            s if s == models::ollama::KIMI_K2_5_CLOUD => Ok(ModelId::OllamaKimiK25Cloud),
             s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
             }

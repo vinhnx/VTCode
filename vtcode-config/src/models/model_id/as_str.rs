@@ -68,6 +68,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud => models::ollama::QWEN3_NEXT_80B_CLOUD,
             ModelId::OllamaMistralLarge3675bCloud => models::ollama::MISTRAL_LARGE_3_675B_CLOUD,
             ModelId::OllamaKimiK2ThinkingCloud => models::ollama::KIMI_K2_THINKING_CLOUD,
+            ModelId::OllamaKimiK25Cloud => models::ollama::KIMI_K2_5_CLOUD,
             ModelId::OllamaGlm47Cloud => models::ollama::GLM_47_CLOUD,
             ModelId::OllamaMinimaxM21Cloud => models::ollama::MINIMAX_M21_CLOUD,
             ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,

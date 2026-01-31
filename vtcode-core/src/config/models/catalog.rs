@@ -84,6 +84,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
             ModelId::OllamaMistralLarge3675bCloud => "Mistral Large 3 675B (cloud)",
             ModelId::OllamaKimiK2ThinkingCloud => "Kimi K2 Thinking (cloud)",
+            ModelId::OllamaKimiK25Cloud => "Kimi K2.5 (cloud)",
 
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGlm46Cloud => "GLM 4.6 (cloud)",
@@ -273,6 +274,9 @@ impl ModelId {
             }
             ModelId::OllamaKimiK2ThinkingCloud => {
                 "MoonshotAI Kimi K2 thinking model via Ollama Cloud with explicit reasoning traces"
+            }
+            ModelId::OllamaKimiK25Cloud => {
+                "MoonshotAI Kimi K2.5 versatile multimodal model via Ollama Cloud with reasoning support"
             }
             ModelId::OllamaGlm47Cloud => "Advancing the Coding Capability",
             ModelId::OllamaMinimaxM21Cloud => {
@@ -474,6 +478,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud,
             ModelId::OllamaMistralLarge3675bCloud,
             ModelId::OllamaKimiK2ThinkingCloud,
+            ModelId::OllamaKimiK25Cloud,
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm46Cloud,
             ModelId::OllamaGlm47Cloud,
