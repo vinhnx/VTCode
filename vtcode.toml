@@ -12,7 +12,7 @@ api_key_env = "OLLAMA_API_KEY"
 default_model = "minimax-m2.1:cloud"
 
 # Visual theme for the terminal interface
-theme = "vitesse-light"
+theme = "ciapre-dark"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
