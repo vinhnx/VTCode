@@ -143,20 +143,20 @@ match result {
 
 ### Functions
 
-| Function                                     | Platform | Description                               |
-| -------------------------------------------- | -------- | ----------------------------------------- |
-| `set_parent_death_signal(pid)`               | Linux    | Child receives SIGTERM when parent dies   |
-| `detach_from_tty()`                          | Unix     | Detach from controlling terminal          |
-| `set_process_group()`                        | Unix     | Start own process group                   |
-| `kill_process_group(pgid)`                   | Unix     | Kill entire process group (SIGKILL)       |
-| `kill_process_group_with_signal(pgid, sig)`  | Unix     | Kill group with specific signal           |
-| `kill_process_group_by_pid(pid)`             | Unix     | Resolve PGID and kill group               |
-| `kill_process_group_by_pid_with_signal(...)` | Unix     | Resolve PGID and kill with signal         |
-| `kill_child_process_group(child)`            | Unix     | Kill group for tokio Child                |
-| `kill_child_process_group_with_signal(...)`  | Unix     | Kill child group with signal              |
-| `graceful_kill_process_group(pid, sig, dur)` | All      | SIGTERM → wait → SIGKILL pattern          |
-| `graceful_kill_process_group_default(pid)`   | All      | Graceful kill with 500ms default timeout  |
-| `kill_process(pid)`                          | Windows  | Terminate process by PID                  |
+| Function                                     | Platform | Description                              |
+| -------------------------------------------- | -------- | ---------------------------------------- |
+| `set_parent_death_signal(pid)`               | Linux    | Child receives SIGTERM when parent dies  |
+| `detach_from_tty()`                          | Unix     | Detach from controlling terminal         |
+| `set_process_group()`                        | Unix     | Start own process group                  |
+| `kill_process_group(pgid)`                   | Unix     | Kill entire process group (SIGKILL)      |
+| `kill_process_group_with_signal(pgid, sig)`  | Unix     | Kill group with specific signal          |
+| `kill_process_group_by_pid(pid)`             | Unix     | Resolve PGID and kill group              |
+| `kill_process_group_by_pid_with_signal(...)` | Unix     | Resolve PGID and kill with signal        |
+| `kill_child_process_group(child)`            | Unix     | Kill group for tokio Child               |
+| `kill_child_process_group_with_signal(...)`  | Unix     | Kill child group with signal             |
+| `graceful_kill_process_group(pid, sig, dur)` | All      | SIGTERM → wait → SIGKILL pattern         |
+| `graceful_kill_process_group_default(pid)`   | All      | Graceful kill with 500ms default timeout |
+| `kill_process(pid)`                          | Windows  | Terminate process by PID                 |
 
 ### Pre-exec Pattern (Unix)
 
@@ -206,11 +206,13 @@ match result {
 ### Platform-Specific Behavior
 
 **Unix (Linux/macOS):**
+
 - Uses `SIGTERM` (or `SIGINT`) followed by `SIGKILL`
 - Targets entire process group via `killpg()`
 - Properly handles `ESRCH` (no such process)
 
 **Windows:**
+
 - Sends `CTRL_C_EVENT` (for `Int`) or `CTRL_BREAK_EVENT` (for `Term`)
 - Falls back to `TerminateProcess` if process doesn't exit
 
@@ -288,9 +290,9 @@ When a `PtySessionHandle` is dropped:
 
 1. Writer is closed with an `exit\n` command
 2. Process group receives graceful termination via `graceful_kill_process_group()`
-   - First: `SIGTERM` to the process group
-   - Wait: Up to 500ms for graceful exit
-   - Then: `SIGKILL` if still running
+    - First: `SIGTERM` to the process group
+    - Wait: Up to 500ms for graceful exit
+    - Then: `SIGKILL` if still running
 3. Reader thread is joined with timeout
 
 This ensures that:
