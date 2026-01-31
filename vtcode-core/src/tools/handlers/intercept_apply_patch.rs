@@ -301,18 +301,11 @@ fn save_file_change(
     new_content: &str,
 ) {
     let change = if is_new_file {
-        FileChange::Add {
-            content: new_content.to_string(),
-        }
+        FileChange::add(new_content)
     } else if is_deleted {
-        FileChange::Delete {
-            original_content: old_content.to_string(),
-        }
+        FileChange::delete(old_content)
     } else {
-        FileChange::Update {
-            old_content: old_content.to_string(),
-            new_content: new_content.to_string(),
-        }
+        FileChange::update(old_content, new_content)
     };
     changes.insert(path, change);
 }
@@ -411,13 +404,11 @@ mod tests {
 "#;
         let changes = parse_patch_changes(patch).unwrap();
         assert!(changes.contains_key(&PathBuf::from("new_file.txt")));
-        match changes.get(&PathBuf::from("new_file.txt")).unwrap() {
-            FileChange::Add { content } => {
-                assert!(content.contains("line 1"));
-                assert!(content.contains("line 2"));
-            }
-            _ => panic!("Expected Add"),
-        }
+        let change = changes.get(&PathBuf::from("new_file.txt")).unwrap();
+        assert!(change.is_add());
+        let content = change.new_content().unwrap();
+        assert!(content.contains("line 1"));
+        assert!(content.contains("line 2"));
     }
 
     #[test]
@@ -430,12 +421,10 @@ mod tests {
 "#;
         let changes = parse_patch_changes(patch).unwrap();
         assert!(changes.contains_key(&PathBuf::from("old_file.txt")));
-        match changes.get(&PathBuf::from("old_file.txt")).unwrap() {
-            FileChange::Delete { original_content } => {
-                assert!(original_content.contains("line 1"));
-            }
-            _ => panic!("Expected Delete"),
-        }
+        let change = changes.get(&PathBuf::from("old_file.txt")).unwrap();
+        assert!(change.is_delete());
+        let original_content = change.old_content().unwrap();
+        assert!(original_content.contains("line 1"));
     }
 
     #[test]
@@ -450,16 +439,12 @@ mod tests {
 "#;
         let changes = parse_patch_changes(patch).unwrap();
         assert!(changes.contains_key(&PathBuf::from("file.txt")));
-        match changes.get(&PathBuf::from("file.txt")).unwrap() {
-            FileChange::Update {
-                old_content,
-                new_content,
-            } => {
-                assert!(old_content.contains("old line"));
-                assert!(new_content.contains("new line"));
-            }
-            _ => panic!("Expected Update"),
-        }
+        let change = changes.get(&PathBuf::from("file.txt")).unwrap();
+        assert!(change.is_update());
+        let old_content = change.old_content().unwrap();
+        let new_content = change.new_content().unwrap();
+        assert!(old_content.contains("old line"));
+        assert!(new_content.contains("new line"));
     }
 
     #[test]

@@ -6480,11 +6480,13 @@ dependencies = [
 name = "vtcode-exec-events"
 version = "0.74.2"
 dependencies = [
+ "chrono",
  "log",
  "schemars 0.8.22",
  "serde",
  "serde_json",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

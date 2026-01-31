@@ -26,6 +26,8 @@ schemars = { workspace = true, optional = true, features = [
     "derive",
     "indexmap2",
 ] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 [lints]
 workspace = true
