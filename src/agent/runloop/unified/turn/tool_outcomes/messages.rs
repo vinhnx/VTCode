@@ -62,19 +62,22 @@ pub(crate) fn handle_assistant_response(
     Ok(())
 }
 
-pub(crate) struct HandleTextResponseParams<'a, 'b> {
-    pub t_ctx: &'b mut super::handlers::ToolOutcomeContext<'a>,
+pub(crate) struct HandleTextResponseParams<'a> {
+    pub ctx: &'a mut TurnProcessingContext<'a>,
+    pub repeated_tool_attempts: &'a mut std::collections::HashMap<String, usize>,
+    pub turn_modified_files: &'a mut std::collections::BTreeSet<std::path::PathBuf>,
+    pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     pub text: String,
     pub reasoning: Option<String>,
     pub response_streamed: bool,
     pub step_count: usize,
-    pub session_end_reason: &'b mut crate::hooks::lifecycle::SessionEndReason,
+    pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
     pub max_tool_loops: usize,
     pub tool_repeat_limit: usize,
 }
 
-pub(crate) async fn handle_text_response<'a, 'b>(
-    mut params: HandleTextResponseParams<'a, 'b>,
+pub(crate) async fn handle_text_response<'a>(
+    mut params: HandleTextResponseParams<'a>,
 ) -> Result<TurnHandlerOutcome> {
     if !params.response_streamed {
         if !params.text.trim().is_empty() {
@@ -121,16 +124,13 @@ pub(crate) async fn handle_text_response<'a, 'b>(
 
         use super::handlers::handle_single_tool_call;
         let tool_name_owned = call_tool_name.to_string();
-        let outcome_result = {
-            let t_ctx_inner = &mut **&mut params.t_ctx;
-            handle_single_tool_call(
-                t_ctx_inner,
-                tool_call_str,
-                &tool_name_owned,
-                call_args_val,
-            )
-            .await?
-        };
+        let outcome_result = handle_single_tool_call(
+            params.t_ctx,
+            tool_call_str,
+            &tool_name_owned,
+            call_args_val,
+        )
+        .await?;
 
         if let Some(outcome) = outcome_result {
             return Ok(outcome);

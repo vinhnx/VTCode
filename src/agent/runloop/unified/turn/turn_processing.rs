@@ -359,29 +359,31 @@ pub(crate) async fn handle_turn_processing_result(
                 params.response_streamed,
             )?;
 
-            let mut t_ctx = ToolOutcomeContext {
-                ctx: params.ctx,
-                repeated_tool_attempts: params.repeated_tool_attempts,
-                turn_modified_files: params.turn_modified_files,
-                traj: params.traj,
-            };
-
-            if let Some(outcome) =
-                crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls(
-                    &mut t_ctx,
-                    &tool_calls,
-                )
-                .await?
             {
-                return Ok(outcome);
+                let mut t_ctx = ToolOutcomeContext {
+                    ctx: &mut *params.ctx,
+                    repeated_tool_attempts: &mut *params.repeated_tool_attempts,
+                    turn_modified_files: &mut *params.turn_modified_files,
+                    traj: params.traj,
+                };
+
+                if let Some(outcome) =
+                    crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls(
+                        &mut t_ctx,
+                        &tool_calls,
+                    )
+                    .await?
+                {
+                    return Ok(outcome);
+                }
             }
             // Fall through to balancer
         }
         TurnProcessingResult::TextResponse { text, reasoning } => {
             let mut t_ctx = ToolOutcomeContext {
-                ctx: params.ctx,
-                repeated_tool_attempts: params.repeated_tool_attempts,
-                turn_modified_files: params.turn_modified_files,
+                ctx: &mut *params.ctx,
+                repeated_tool_attempts: &mut *params.repeated_tool_attempts,
+                turn_modified_files: &mut *params.turn_modified_files,
                 traj: params.traj,
             };
 

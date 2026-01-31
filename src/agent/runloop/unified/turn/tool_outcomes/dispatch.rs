@@ -9,7 +9,7 @@ mod call;
 
 pub(crate) async fn handle_tool_calls<'a>(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
-    tool_calls: &'a [uni::ToolCall],
+    tool_calls: &[uni::ToolCall],
 ) -> Result<Option<TurnHandlerOutcome>> {
     if tool_calls.is_empty() {
         return Ok(None);
@@ -27,7 +27,10 @@ pub(crate) async fn handle_tool_calls<'a>(
     let groups = planner.plan(&planner_calls);
 
     for group in groups {
-        let is_parallel = group.len() > 1 && t_ctx.ctx.full_auto;
+        let is_parallel = group.len() > 1 && {
+            let inner_ctx = &*t_ctx.ctx;
+            inner_ctx.full_auto
+        };
         if is_parallel {
             // HP-5: Implement true parallel execution for non-conflicting groups in full-auto mode
             let mut group_tool_calls = Vec::with_capacity(group.len());
