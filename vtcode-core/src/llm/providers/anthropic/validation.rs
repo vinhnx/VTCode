@@ -27,23 +27,26 @@ pub fn validate_request(
         });
     }
 
-    let is_anthropic = models::anthropic::SUPPORTED_MODELS.contains(&request.model.as_str());
-    let is_minimax = models::minimax::SUPPORTED_MODELS.contains(&request.model.as_str());
+    // Skip model validation if configured (useful for third-party aggregators/proxies)
+    if !anthropic_config.skip_model_validation {
+        let is_anthropic = models::anthropic::SUPPORTED_MODELS.contains(&request.model.as_str());
+        let is_minimax = models::minimax::SUPPORTED_MODELS.contains(&request.model.as_str());
 
-    if !is_anthropic && !is_minimax {
-        let formatted_error = error_display::format_llm_error(
-            "Anthropic",
-            &format!(
-                "Unsupported model: {}. Supported Anthropic models: {:?}. Supported MiniMax models: {:?}",
-                request.model,
-                models::anthropic::SUPPORTED_MODELS,
-                models::minimax::SUPPORTED_MODELS
-            ),
-        );
-        return Err(LLMError::InvalidRequest {
-            message: formatted_error,
-            metadata: None,
-        });
+        if !is_anthropic && !is_minimax {
+            let formatted_error = error_display::format_llm_error(
+                "Anthropic",
+                &format!(
+                    "Unsupported model: {}. Supported Anthropic models: {:?}. Supported MiniMax models: {:?}",
+                    request.model,
+                    models::anthropic::SUPPORTED_MODELS,
+                    models::minimax::SUPPORTED_MODELS
+                ),
+            );
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
     }
 
     if request.output_format.is_some() && !supports_structured_output(&request.model, default_model)

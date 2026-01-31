@@ -4,6 +4,14 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnthropicConfig {
+    /// Skip model name validation against the hardcoded allowlist.
+    /// Enable this when using third-party aggregators or proxies (e.g., OpenRouter,
+    /// LiteLLM) that provide Anthropic-compatible APIs but use different model names.
+    /// When true, any model string is accepted without validation.
+    /// Default: false (validation enabled)
+    #[serde(default)]
+    pub skip_model_validation: bool,
+
     /// Enable extended thinking feature for Anthropic models
     /// When enabled, Claude uses internal reasoning before responding, providing
     /// enhanced reasoning capabilities for complex tasks.
@@ -50,6 +58,7 @@ pub struct AnthropicConfig {
 impl Default for AnthropicConfig {
     fn default() -> Self {
         Self {
+            skip_model_validation: false,
             extended_thinking_enabled: default_extended_thinking_enabled(),
             interleaved_thinking_beta: default_interleaved_thinking_beta(),
             interleaved_thinking_budget_tokens: default_interleaved_thinking_budget_tokens(),

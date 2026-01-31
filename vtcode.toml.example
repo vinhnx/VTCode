@@ -1179,6 +1179,13 @@ post_tool_use = [
 
 # Provider-specific configuration
 [provider.anthropic]
+# Skip model name validation against the hardcoded allowlist.
+# Enable this when using third-party aggregators or proxies (e.g., OpenRouter,
+# LiteLLM, your own proxy) that provide Anthropic-compatible APIs but use different model names.
+# When true, any model string is accepted without validation.
+# Default: false
+skip_model_validation = false
+
 # Extended thinking gives Claude enhanced reasoning capabilities for complex tasks.
 # When enabled, Claude creates internal reasoning blocks before delivering its final answer.
 # Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models.
