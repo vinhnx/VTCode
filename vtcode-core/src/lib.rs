@@ -204,10 +204,10 @@ pub use diagnostics::{
     RecoveryPlaybook,
 };
 pub use dotfile_protection::{
-    get_global_guardian, init_global_guardian, is_protected_dotfile,
     AccessType as DotfileAccessType, AuditEntry as DotfileAuditEntry, AuditLog as DotfileAuditLog,
-    AuditOutcome as DotfileAuditOutcome, BackupManager as DotfileBackupManager,
-    DotfileBackup, DotfileGuardian, ProtectionDecision, ProtectionViolation,
+    AuditOutcome as DotfileAuditOutcome, BackupManager as DotfileBackupManager, DotfileBackup,
+    DotfileGuardian, ProtectionDecision, ProtectionViolation, get_global_guardian,
+    init_global_guardian, is_protected_dotfile,
 };
 pub use exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION,

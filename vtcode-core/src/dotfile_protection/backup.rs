@@ -177,11 +177,7 @@ impl BackupManager {
         // Cleanup old backups
         self.cleanup_old_backups(file_path).await?;
 
-        tracing::info!(
-            "Created backup for {:?} at {:?}",
-            file_path,
-            backup_path
-        );
+        tracing::info!("Created backup for {:?} at {:?}", file_path, backup_path);
 
         Ok(backup)
     }
@@ -352,9 +348,7 @@ mod tests {
         let test_file = dir.path().join(".testrc");
 
         // Create test file
-        tokio::fs::write(&test_file, "test content")
-            .await
-            .unwrap();
+        tokio::fs::write(&test_file, "test content").await.unwrap();
 
         let manager = BackupManager::new(&backup_dir, 5).await.unwrap();
         let backup = manager

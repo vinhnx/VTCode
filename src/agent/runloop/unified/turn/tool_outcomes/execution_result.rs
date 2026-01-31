@@ -7,9 +7,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
-use crate::agent::runloop::unified::tool_pipeline::{
-    ToolExecutionStatus, ToolPipelineOutcome,
-};
+use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 use crate::agent::runloop::unified::turn::turn_helpers::display_status;
 
 use super::helpers::{check_is_argument_error, push_tool_response, serialize_output};
@@ -55,12 +53,13 @@ pub(crate) async fn handle_tool_execution_result<'a>(
 ) -> Result<()> {
     // 1. Record metrics and outcome
     let is_success = matches!(pipeline_outcome.status, ToolExecutionStatus::Success { .. });
-    let is_argument_error = if let ToolExecutionStatus::Failure { error } = &pipeline_outcome.status {
+    let is_argument_error = if let ToolExecutionStatus::Failure { error } = &pipeline_outcome.status
+    {
         check_is_argument_error(&error.to_string())
     } else {
         false
     };
-    
+
     self::record_tool_execution(
         t_ctx.ctx,
         tool_name,
@@ -82,14 +81,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
             .await?;
         }
         ToolExecutionStatus::Failure { error } => {
-            handle_failure(
-                t_ctx,
-                tool_call_id,
-                tool_name,
-                error,
-                tool_start_time,
-            )
-            .await?;
+            handle_failure(t_ctx, tool_call_id, tool_name, error, tool_start_time).await?;
         }
         ToolExecutionStatus::Timeout { error } => {
             handle_timeout(t_ctx, tool_call_id, tool_name, error).await?;
@@ -184,7 +176,7 @@ async fn handle_timeout(
         tool_call_id,
         error_content.to_string(),
     );
-    
+
     Ok(())
 }
 
@@ -202,7 +194,7 @@ async fn handle_cancelled(
         tool_call_id,
         error_content.to_string(),
     );
-    
+
     Ok(())
 }
 
@@ -239,9 +231,6 @@ async fn run_post_tool_hooks<'a>(
     Ok(())
 }
 
-
-
-
 async fn handle_plan_mode_auto_exit<'a, 'b>(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'a, 'b>,
     trigger_start_time: std::time::Instant,
@@ -258,7 +247,7 @@ async fn handle_plan_mode_auto_exit<'a, 'b>(
     let exit_args = serde_json::json!({
         "reason": "auto_trigger_on_plan_denial"
     });
-    
+
     // Generate a unique ID for the injected call
     let exit_call_id = format!(
         "call_auto_exit_plan_mode_{}",
@@ -276,7 +265,7 @@ async fn handle_plan_mode_auto_exit<'a, 'b>(
         None,
     )
     .await?;
-    
+
     Ok(())
 }
 
@@ -303,11 +292,8 @@ fn record_mcp_tool_event(
         ToolExecutionStatus::Progress(_) => None,
     };
 
-    let mut mcp_event = mcp_events::McpEvent::new(
-        "mcp".to_string(),
-        tool_name.to_string(),
-        data_preview,
-    );
+    let mut mcp_event =
+        mcp_events::McpEvent::new("mcp".to_string(), tool_name.to_string(), data_preview);
 
     match status {
         ToolExecutionStatus::Success { .. } => {

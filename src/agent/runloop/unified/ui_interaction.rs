@@ -902,7 +902,9 @@ mod tests {
         async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
             let response = self.generate(request).await?;
             Ok(Box::pin(stream::once(async {
-                Ok(uni::LLMStreamEvent::Completed { response: Box::new(response) })
+                Ok(uni::LLMStreamEvent::Completed {
+                    response: Box::new(response),
+                })
             })))
         }
 

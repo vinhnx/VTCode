@@ -178,7 +178,9 @@ impl<'a> TurnLoopContext<'a> {
         }
     }
 
-    pub fn as_run_loop_context(&mut self) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
+    pub fn as_run_loop_context(
+        &mut self,
+    ) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
         crate::agent::runloop::unified::run_loop_context::RunLoopContext {
             renderer: self.renderer,
             handle: self.handle,
@@ -232,7 +234,8 @@ pub async fn run_turn_loop(
     // Do NOT add it again here, as it will cause duplicate messages in the conversation
 
     // Process up to max_tool_loops iterations to handle tool calls
-    let max_tool_loops = ctx.vt_cfg
+    let max_tool_loops = ctx
+        .vt_cfg
         .map(|cfg| cfg.tools.max_tool_loops)
         .filter(|&value| value > 0)
         .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS);
@@ -244,7 +247,8 @@ pub async fn run_turn_loop(
 
     // Reset safety validator for a new turn
     {
-        let max_session_turns = ctx.vt_cfg
+        let max_session_turns = ctx
+            .vt_cfg
             .map(|c| c.agent.max_conversation_turns)
             .unwrap_or(150);
         let mut validator = ctx.safety_validator.write().await;
@@ -253,7 +257,8 @@ pub async fn run_turn_loop(
     }
 
     // Optimization: Pre-compute tool repeat limit once
-    let tool_repeat_limit = ctx.vt_cfg
+    let tool_repeat_limit = ctx
+        .vt_cfg
         .map(|cfg| cfg.tools.max_repeated_tool_calls)
         .filter(|&value| value > 0)
         .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
@@ -263,7 +268,9 @@ pub async fn run_turn_loop(
         ctx.telemetry.record_turn();
 
         // Check session boundaries
-        let context_window_size = ctx.provider_client.effective_context_size(&ctx.config.model);
+        let context_window_size = ctx
+            .provider_client
+            .effective_context_size(&ctx.config.model);
         match ctx
             .context_manager
             .pre_request_check(&working_history, context_window_size)

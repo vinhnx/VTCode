@@ -17,6 +17,7 @@ pub use agent::{
 };
 pub use automation::{AutomationConfig, FullAutoConfig};
 pub use commands::CommandsConfig;
+pub use dotfile_protection::DotfileProtectionConfig;
 pub use model::ModelConfig;
 pub use permissions::PermissionsConfig;
 pub use plugins::{PluginRuntimeConfig, PluginTrustLevel};
@@ -32,7 +33,6 @@ pub use sandbox::{
     NetworkAllowlistEntryConfig, NetworkConfig, ResourceLimitsConfig, ResourceLimitsPreset,
     SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
 };
-pub use dotfile_protection::DotfileProtectionConfig;
 pub use security::SecurityConfig;
 pub use skills::{PromptFormat, SkillsConfig, SkillsRenderMode};
 pub use tools::{ToolPolicy, ToolsConfig, WebFetchConfig};

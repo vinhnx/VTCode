@@ -385,12 +385,10 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             .await);
         }
         TurnProcessingResult::TextResponse { text, reasoning } => {
-            params.ctx.handle_text_response(
-                text.clone(),
-                reasoning.clone(),
-                params.response_streamed,
-            )
-            .await
+            params
+                .ctx
+                .handle_text_response(text.clone(), reasoning.clone(), params.response_streamed)
+                .await
         }
         TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
             Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
@@ -399,9 +397,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             *params.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
             Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled))
         }
-        TurnProcessingResult::Aborted => {
-            Ok(TurnHandlerOutcome::Break(TurnLoopResult::Aborted))
-        }
+        TurnProcessingResult::Aborted => Ok(TurnHandlerOutcome::Break(TurnLoopResult::Aborted)),
     }
 }
 

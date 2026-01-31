@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 
 use crate::config::CommandsConfig;
 use crate::dotfile_protection::{
-    get_global_guardian, AccessContext, AccessType, DotfileGuardian, ProtectionDecision,
+    AccessContext, AccessType, DotfileGuardian, ProtectionDecision, get_global_guardian,
 };
 use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::invocation::ToolInvocationId;
@@ -538,7 +538,11 @@ impl SafetyGateway {
                 "Content ({} bytes):\n{}{}",
                 content.len(),
                 &content[..preview_len],
-                if content.len() > preview_len { "..." } else { "" }
+                if content.len() > preview_len {
+                    "..."
+                } else {
+                    ""
+                }
             )
         } else if let Some(old_str) = args.get("old_str").and_then(|v| v.as_str()) {
             let new_str = args.get("new_str").and_then(|v| v.as_str()).unwrap_or("");
@@ -585,24 +589,20 @@ impl SafetyGateway {
                     req.warning
                 )))
             }
-            Ok(ProtectionDecision::Blocked(violation)) => {
-                Some(SafetyDecision::Deny(format!(
-                    "DOTFILE MODIFICATION BLOCKED\n\n\
+            Ok(ProtectionDecision::Blocked(violation)) => Some(SafetyDecision::Deny(format!(
+                "DOTFILE MODIFICATION BLOCKED\n\n\
                     File: {}\n\
                     Reason: {}\n\n\
                     Suggestion: {}",
-                    violation.file_path, violation.reason, violation.suggestion
-                )))
-            }
-            Ok(ProtectionDecision::Denied(violation)) => {
-                Some(SafetyDecision::Deny(format!(
-                    "DOTFILE ACCESS DENIED\n\n\
+                violation.file_path, violation.reason, violation.suggestion
+            ))),
+            Ok(ProtectionDecision::Denied(violation)) => Some(SafetyDecision::Deny(format!(
+                "DOTFILE ACCESS DENIED\n\n\
                     File: {}\n\
                     Reason: {}\n\n\
                     Suggestion: {}",
-                    violation.file_path, violation.reason, violation.suggestion
-                )))
-            }
+                violation.file_path, violation.reason, violation.suggestion
+            ))),
             Err(e) => {
                 tracing::error!("Dotfile protection check failed: {}", e);
                 Some(SafetyDecision::Deny(format!(

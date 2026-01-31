@@ -372,10 +372,7 @@ impl DotfileGuardian {
                 backup_manager
                     .create_backup(
                         &context.file_path,
-                        format!(
-                            "Before {} by {}",
-                            context.access_type, context.initiator
-                        ),
+                        format!("Before {} by {}", context.access_type, context.initiator),
                         &context.session_id,
                     )
                     .await?;
@@ -592,8 +589,13 @@ mod tests {
     async fn test_requires_confirmation() {
         let guardian = create_test_guardian().await;
 
-        let context = AccessContext::new(".gitignore", AccessType::Write, "write_file", "test-session")
-            .with_proposed_changes("Adding node_modules to ignore list");
+        let context = AccessContext::new(
+            ".gitignore",
+            AccessType::Write,
+            "write_file",
+            "test-session",
+        )
+        .with_proposed_changes("Adding node_modules to ignore list");
 
         let decision = guardian.request_access(&context).await.unwrap();
 
@@ -610,8 +612,9 @@ mod tests {
     async fn test_blocks_during_automation() {
         let guardian = create_test_guardian().await;
 
-        let context = AccessContext::new(".npmrc", AccessType::Write, "npm_install", "test-session")
-            .as_automated();
+        let context =
+            AccessContext::new(".npmrc", AccessType::Write, "npm_install", "test-session")
+                .as_automated();
 
         let decision = guardian.request_access(&context).await.unwrap();
 
@@ -623,10 +626,12 @@ mod tests {
         let guardian = create_test_guardian().await;
 
         // First modification
-        let context1 =
-            AccessContext::new(".gitignore", AccessType::Write, "test", "test-session");
+        let context1 = AccessContext::new(".gitignore", AccessType::Write, "test", "test-session");
         let _ = guardian.request_access(&context1).await.unwrap();
-        guardian.confirm_modification(&context1, false).await.unwrap();
+        guardian
+            .confirm_modification(&context1, false)
+            .await
+            .unwrap();
 
         // Cascading modification
         let context2 =
@@ -658,8 +663,12 @@ mod tests {
 
         let guardian = DotfileGuardian::new(config).await.unwrap();
 
-        let context =
-            AccessContext::new(".gitignore", AccessType::Write, "write_file", "test-session");
+        let context = AccessContext::new(
+            ".gitignore",
+            AccessType::Write,
+            "write_file",
+            "test-session",
+        );
 
         let decision = guardian.request_access(&context).await.unwrap();
         assert!(decision.is_allowed());

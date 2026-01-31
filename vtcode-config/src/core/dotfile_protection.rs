@@ -308,7 +308,11 @@ impl DotfileProtectionConfig {
     fn is_in_dotfile_directory(path: &str) -> bool {
         let components: Vec<&str> = path.split('/').collect();
         for component in &components {
-            if component.starts_with('.') && !component.is_empty() && *component != "." && *component != ".." {
+            if component.starts_with('.')
+                && !component.is_empty()
+                && *component != "."
+                && *component != ".."
+            {
                 return true;
             }
         }
@@ -331,7 +335,8 @@ impl DotfileProtectionConfig {
             // Handle wildcard patterns
             if pattern.ends_with("/*") {
                 let prefix = &pattern[..pattern.len() - 2];
-                path.starts_with(prefix) || path.contains(&format!("/{}/", prefix.trim_start_matches('.')))
+                path.starts_with(prefix)
+                    || path.contains(&format!("/{}/", prefix.trim_start_matches('.')))
             } else if pattern.ends_with(".*") {
                 let prefix = &pattern[..pattern.len() - 1];
                 path.starts_with(prefix)
@@ -391,8 +396,17 @@ mod tests {
 
     #[test]
     fn test_pattern_matching() {
-        assert!(DotfileProtectionConfig::matches_pattern(".env.local", ".env.*"));
-        assert!(DotfileProtectionConfig::matches_pattern(".env.production", ".env.*"));
-        assert!(DotfileProtectionConfig::matches_pattern(".vscode/settings.json", ".vscode/*"));
+        assert!(DotfileProtectionConfig::matches_pattern(
+            ".env.local",
+            ".env.*"
+        ));
+        assert!(DotfileProtectionConfig::matches_pattern(
+            ".env.production",
+            ".env.*"
+        ));
+        assert!(DotfileProtectionConfig::matches_pattern(
+            ".vscode/settings.json",
+            ".vscode/*"
+        ));
     }
 }
