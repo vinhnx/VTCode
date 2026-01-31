@@ -343,8 +343,8 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
 }
 
 /// Dispatch the appropriate response handler based on the processing result.
-pub(crate) async fn handle_turn_processing_result(
-    params: HandleTurnProcessingResultParams<'_>,
+pub(crate) async fn handle_turn_processing_result<'a>(
+    params: HandleTurnProcessingResultParams<'a>,
 ) -> Result<TurnHandlerOutcome> {
     match params.processing_result {
         TurnProcessingResult::ToolCalls {
@@ -353,48 +353,53 @@ pub(crate) async fn handle_turn_processing_result(
             reasoning,
         } => {
             crate::agent::runloop::unified::turn::tool_outcomes::handle_assistant_response(
-                params.ctx,
+                &mut *params.ctx,
                 assistant_text,
                 reasoning,
                 params.response_streamed,
             )?;
 
-            {
-                let mut t_ctx = ToolOutcomeContext {
+            let outcome = {
+                let mut t_ctx_inner = ToolOutcomeContext {
                     ctx: &mut *params.ctx,
                     repeated_tool_attempts: &mut *params.repeated_tool_attempts,
                     turn_modified_files: &mut *params.turn_modified_files,
                     traj: params.traj,
                 };
 
-                if let Some(outcome) =
-                    crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls(
-                        &mut t_ctx,
-                        &tool_calls,
-                    )
-                    .await?
-                {
-                    return Ok(outcome);
-                }
-            }
-            // Fall through to balancer
-        }
-        TurnProcessingResult::TextResponse { text, reasoning } => {
-            let mut t_ctx = ToolOutcomeContext {
-                ctx: &mut *params.ctx,
-                repeated_tool_attempts: &mut *params.repeated_tool_attempts,
-                turn_modified_files: &mut *params.turn_modified_files,
-                traj: params.traj,
+                crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls(
+                    &mut t_ctx_inner,
+                    &tool_calls,
+                )
+                .await?
             };
 
+            if let Some(res) = outcome {
+                return Ok(res);
+            }
+
+            // Call balancer and return directly to release borrows
+            return Ok(handle_turn_balancer(
+                &mut *params.ctx,
+                params.step_count,
+                &mut *params.repeated_tool_attempts,
+                params.max_tool_loops,
+                params.tool_repeat_limit,
+            )
+            .await);
+        }
+        TurnProcessingResult::TextResponse { text, reasoning } => {
             return crate::agent::runloop::unified::turn::tool_outcomes::handle_text_response(
                 HandleTextResponseParams {
-                    t_ctx: &mut t_ctx,
-                    text,
-                    reasoning,
+                    ctx: &mut *params.ctx,
+                    repeated_tool_attempts: &mut *params.repeated_tool_attempts,
+                    turn_modified_files: &mut *params.turn_modified_files,
+                    traj: params.traj,
+                    text: text.clone(),
+                    reasoning: reasoning.clone(),
                     response_streamed: params.response_streamed,
                     step_count: params.step_count,
-                    session_end_reason: params.session_end_reason,
+                    session_end_reason: &mut *params.session_end_reason,
                     max_tool_loops: params.max_tool_loops,
                     tool_repeat_limit: params.tool_repeat_limit,
                 },
@@ -411,16 +416,7 @@ pub(crate) async fn handle_turn_processing_result(
         TurnProcessingResult::Aborted => {
             return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Aborted));
         }
-    };
-
-    Ok(handle_turn_balancer(
-        params.ctx,
-        params.step_count,
-        params.repeated_tool_attempts,
-        params.max_tool_loops,
-        params.tool_repeat_limit,
-    )
-    .await)
+    }
 }
 
 /// Process an LLM response and return a `TurnProcessingResult` describing whether

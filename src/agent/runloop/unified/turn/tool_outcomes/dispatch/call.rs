@@ -3,14 +3,14 @@ use anyhow::Result;
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnProcessingContext,
+    TurnHandlerOutcome,
 };
 
 use super::super::handlers::handle_single_tool_call;
 
-pub(crate) async fn handle_tool_call<'a>(
-    t_ctx: &mut super::super::handlers::ToolOutcomeContext<'a>,
-    tool_call: &'a uni::ToolCall,
+pub(crate) async fn handle_tool_call<'a, 'b>(
+    t_ctx: &mut super::super::handlers::ToolOutcomeContext<'a, 'b>,
+    tool_call: &uni::ToolCall,
 ) -> Result<Option<TurnHandlerOutcome>> {
     let function = tool_call
         .function

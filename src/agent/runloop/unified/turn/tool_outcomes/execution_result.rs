@@ -8,7 +8,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{
-    ToolExecutionStatus, ToolPipelineOutcome, run_tool_call,
+    ToolExecutionStatus, ToolPipelineOutcome,
 };
 use crate::agent::runloop::unified::turn::turn_helpers::display_status;
 
@@ -46,7 +46,7 @@ fn record_tool_execution(
 /// - Dispatching MCP events
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_tool_execution_result<'a>(
-    t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a, '_>,
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
@@ -109,7 +109,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
 }
 
 async fn handle_success<'a>(
-    t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a, '_>,
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
@@ -142,7 +142,7 @@ async fn handle_success<'a>(
 }
 
 async fn handle_failure<'a>(
-    t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a, '_>,
     tool_call_id: String,
     tool_name: &str,
     error: &anyhow::Error,
@@ -171,7 +171,7 @@ async fn handle_failure<'a>(
 }
 
 async fn handle_timeout(
-    t_ctx: &mut super::handlers::ToolOutcomeContext<'_>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
     tool_call_id: String,
     tool_name: &str,
     error: &vtcode_core::tools::registry::ToolExecutionError,
@@ -190,7 +190,7 @@ async fn handle_timeout(
 }
 
 async fn handle_cancelled(
-    t_ctx: &mut super::handlers::ToolOutcomeContext<'_>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
     tool_call_id: String,
     tool_name: &str,
 ) -> Result<()> {
@@ -243,8 +243,8 @@ async fn run_post_tool_hooks<'a>(
 
 
 
-async fn handle_plan_mode_auto_exit<'a>(
-    t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
+async fn handle_plan_mode_auto_exit<'a, 'b>(
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a, 'b>,
     trigger_start_time: std::time::Instant,
 ) -> Result<()> {
     if *t_ctx.ctx.auto_exit_plan_mode_attempted {
@@ -283,7 +283,7 @@ async fn handle_plan_mode_auto_exit<'a>(
 }
 
 fn record_mcp_tool_event(
-    t_ctx: &mut super::handlers::ToolOutcomeContext<'_>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
     tool_name: &str,
     status: &ToolExecutionStatus,
 ) {
