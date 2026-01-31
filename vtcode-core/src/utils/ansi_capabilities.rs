@@ -1,7 +1,13 @@
 //! ANSI terminal capabilities detection and feature support
 //!
 //! This module provides utilities to detect terminal capabilities such as color depth,
-//! unicode support, and advanced formatting features.
+//! unicode support, advanced formatting features, and color scheme (light/dark mode).
+//!
+//! Standards implemented:
+//! - NO_COLOR: https://no-color.org/
+//! - CLICOLOR/CLICOLOR_FORCE: De-facto standard
+//! - COLORTERM: True-color detection
+//! - COLORFGBG: Terminal foreground/background detection
 
 use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
 use once_cell::sync::Lazy;
@@ -92,6 +98,109 @@ impl AnsiCapabilities {
     }
 }
 
+/// Detected terminal color scheme (light or dark background)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ColorScheme {
+    /// Light background (dark text preferred)
+    Light,
+    /// Dark background (light text preferred)
+    #[default]
+    Dark,
+    /// Unable to detect, assume dark
+    Unknown,
+}
+
+impl ColorScheme {
+    /// Check if this is a light color scheme
+    pub fn is_light(self) -> bool {
+        matches!(self, ColorScheme::Light)
+    }
+
+    /// Check if this is a dark color scheme
+    pub fn is_dark(self) -> bool {
+        matches!(self, ColorScheme::Dark | ColorScheme::Unknown)
+    }
+
+    /// Get a human-readable name
+    pub fn name(self) -> &'static str {
+        match self {
+            ColorScheme::Light => "light",
+            ColorScheme::Dark => "dark",
+            ColorScheme::Unknown => "unknown",
+        }
+    }
+}
+
+/// Detect terminal color scheme from environment.
+///
+/// Detection methods (in order of priority):
+/// 1. COLORFGBG environment variable (format: "fg;bg" or "fg;ignored;bg")
+/// 2. Terminal-specific environment variables
+/// 3. Default to dark (most common terminal configuration)
+///
+/// Based on: https://no-color.org/ and terminal color research
+pub fn detect_color_scheme() -> ColorScheme {
+    // Check cached value first
+    static CACHED: Lazy<ColorScheme> = Lazy::new(detect_color_scheme_uncached);
+    *CACHED
+}
+
+fn detect_color_scheme_uncached() -> ColorScheme {
+    // Method 1: COLORFGBG (used by rxvt, xterm, and many others)
+    // Format: "foreground;background" or "foreground;ignored;background"
+    if let Ok(colorfgbg) = std::env::var("COLORFGBG") {
+        let parts: Vec<&str> = colorfgbg.split(';').collect();
+        // Background color is the last component
+        if let Some(bg_str) = parts.last() {
+            if let Ok(bg) = bg_str.parse::<u8>() {
+                // ANSI colors 0-7: 0=black, 7=white (light), 15=bright white
+                // If background is white or near-white, it's a light theme
+                // Colors 7 (white), 15 (bright white) indicate light background
+                return if bg == 7 || bg == 15 {
+                    ColorScheme::Light
+                } else if bg == 0 || bg == 8 {
+                    // 0=black, 8=bright black (gray)
+                    ColorScheme::Dark
+                } else if bg > 230 {
+                    // 256-color: 230+ are light grays/white
+                    ColorScheme::Light
+                } else {
+                    ColorScheme::Dark
+                };
+            }
+        }
+    }
+
+    // Method 2: Check for known light terminal indicators
+    // TERM_PROGRAM can hint at default color scheme
+    if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
+        let term_lower = term_program.to_lowercase();
+        // These typically default to dark
+        if term_lower.contains("iterm")
+            || term_lower.contains("ghostty")
+            || term_lower.contains("warp")
+            || term_lower.contains("alacritty")
+        {
+            // Modern terminals typically default to dark, but don't override COLORFGBG
+            return ColorScheme::Dark;
+        }
+    }
+
+    // Method 3: macOS Terminal.app often uses light background by default
+    if cfg!(target_os = "macos") {
+        if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
+            if term_program == "Apple_Terminal" {
+                // Apple Terminal defaults to light, but user may have changed it
+                // Without more info, assume light for Apple_Terminal
+                return ColorScheme::Light;
+            }
+        }
+    }
+
+    // Default to dark (most common for development terminals)
+    ColorScheme::Unknown
+}
+
 // Cache detection results to avoid repeated system calls
 static COLOR_DEPTH_CACHE: AtomicU8 = AtomicU8::new(255); // 255 = not cached yet
 
@@ -160,6 +269,16 @@ fn detect_unicode_support() -> bool {
 /// Global capabilities instance (cached)
 pub static CAPABILITIES: Lazy<AnsiCapabilities> = Lazy::new(AnsiCapabilities::detect);
 
+/// Check if NO_COLOR environment variable is set (re-exported for convenience)
+pub fn is_no_color() -> bool {
+    no_color()
+}
+
+/// Check if CLICOLOR_FORCE is set (re-exported for convenience)
+pub fn is_clicolor_force() -> bool {
+    clicolor_force()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,5 +310,16 @@ mod tests {
         assert!(ColorDepth::Color256.supports_256());
         assert!(!ColorDepth::Color256.supports_true_color());
         assert!(ColorDepth::TrueColor.supports_true_color());
+    }
+
+    #[test]
+    fn test_color_scheme_methods() {
+        assert!(ColorScheme::Light.is_light());
+        assert!(!ColorScheme::Light.is_dark());
+        assert!(ColorScheme::Dark.is_dark());
+        assert!(!ColorScheme::Dark.is_light());
+        assert!(ColorScheme::Unknown.is_dark()); // Unknown defaults to dark
+        assert_eq!(ColorScheme::Light.name(), "light");
+        assert_eq!(ColorScheme::Dark.name(), "dark");
     }
 }

@@ -517,6 +517,14 @@ fn resolve_config_path(workspace: &Path, candidate: &Path) -> PathBuf {
 }
 
 async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
+    // Apply color accessibility settings from config
+    let color_config = ui_theme::ColorAccessibilityConfig {
+        minimum_contrast: config.ui.minimum_contrast,
+        bold_is_bright: config.ui.bold_is_bright,
+        safe_colors_only: config.ui.safe_colors_only,
+    };
+    ui_theme::set_color_accessibility_config(color_config);
+
     let user_theme_pref = load_user_config().await.ok().and_then(|dot| {
         let trimmed = dot.preferences.theme.trim();
         if trimmed.is_empty() {
@@ -527,11 +535,22 @@ async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
     });
 
     let config_theme = config.agent.theme.trim();
+
+    // Handle auto theme selection based on color_scheme_mode
+    let auto_theme = match config.ui.color_scheme_mode {
+        vtcode_config::root::ColorSchemeMode::Auto => {
+            Some(ui_theme::suggest_theme_for_terminal().to_owned())
+        }
+        vtcode_config::root::ColorSchemeMode::Light => Some("vitesse-light".to_owned()),
+        vtcode_config::root::ColorSchemeMode::Dark => None, // Use default dark theme
+    };
+
     let mut theme_selection = args
         .theme
         .clone()
         .or_else(|| (!config_theme.is_empty()).then(|| config_theme.to_string()))
         .or(user_theme_pref)
+        .or(auto_theme)
         .unwrap_or_else(|| DEFAULT_THEME_ID.to_owned());
 
     if let Err(err) = ui_theme::set_active_theme(&theme_selection) {
@@ -542,6 +561,12 @@ async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
         theme_selection = DEFAULT_THEME_ID.to_owned();
         ui_theme::set_active_theme(&theme_selection)
             .with_context(|| format!("Failed to activate theme '{}'", theme_selection))?;
+    }
+
+    // Validate theme contrast if user wants feedback
+    let validation = ui_theme::validate_theme_contrast(&theme_selection);
+    for warning in &validation.warnings {
+        tracing::debug!(theme = %theme_selection, warning = %warning, "Theme contrast warning");
     }
 
     Ok(theme_selection)
