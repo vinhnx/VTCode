@@ -481,7 +481,7 @@ impl DotfileGuardian {
     async fn log_access(&self, context: &AccessContext, outcome: AuditOutcome) -> Result<()> {
         if let Some(ref log) = self.audit_log {
             let mut entry = AuditEntry::new(
-                context.file_path.to_string_lossy().as_ref(),
+                context.file_path.to_string_lossy().to_string(),
                 context.access_type,
                 outcome,
                 &context.initiator,
