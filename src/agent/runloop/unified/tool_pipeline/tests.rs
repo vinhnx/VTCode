@@ -1,4 +1,3 @@
-use super::execution::execute_tool_with_timeout;
 use super::timeout::create_timeout_error;
 use super::execution::process_llm_tool_output;
 use super::*;
@@ -6,13 +5,11 @@ use crate::agent::runloop::unified::state::CtrlCState;
 
 use serde_json::json;
 use std::sync::Arc;
-use tempfile::TempDir;
 use tokio::sync::Notify;
 use vtcode_core::acp::PermissionGrant;
 use vtcode_core::acp::permission_cache::ToolPermissionCache;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::tools::result_cache::ToolResultCache;
