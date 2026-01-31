@@ -2,8 +2,6 @@ extract vtcode-\* module as separate crates like tui-shimmer.
 
 --
 
---
-
 Review the overall
 
 @tool_dispatch.rs
