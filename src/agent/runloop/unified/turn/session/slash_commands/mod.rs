@@ -138,6 +138,15 @@ pub async fn handle_outcome(
             handlers::handle_toggle_autonomous_mode(ctx, enable).await
         }
         SlashCommandOutcome::CycleMode => handlers::handle_cycle_mode(ctx).await,
+        SlashCommandOutcome::OAuthLogin { provider } => {
+            handlers::handle_oauth_login(ctx, provider).await
+        }
+        SlashCommandOutcome::OAuthLogout { provider } => {
+            handlers::handle_oauth_logout(ctx, provider).await
+        }
+        SlashCommandOutcome::ShowAuthStatus { provider } => {
+            handlers::handle_show_auth_status(ctx, provider).await
+        }
         SlashCommandOutcome::Exit => handlers::handle_exit(ctx).await,
     }
 }

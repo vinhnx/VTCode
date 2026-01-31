@@ -260,6 +260,8 @@ pub enum ModelId {
     OpenRouterDeepSeekR1,
     /// OpenAI gpt-oss-120b - Open-weight 120B reasoning model via OpenRouter
     OpenRouterOpenAIGptOss120b,
+    /// OpenAI gpt-oss-120b:free - Open-weight 120B reasoning model free tier via OpenRouter
+    OpenRouterOpenAIGptOss120bFree,
     /// OpenAI gpt-oss-20b - Open-weight 20B deployment via OpenRouter
     OpenRouterOpenAIGptOss20b,
     /// OpenAI GPT-5 - OpenAI GPT-5 model accessed through OpenRouter

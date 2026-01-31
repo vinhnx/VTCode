@@ -309,7 +309,19 @@ fn get_openai_api_key(sources: &ApiKeySources) -> Result<String> {
 }
 
 /// Get OpenRouter API key with secure fallback
+///
+/// This function checks for credentials in the following order:
+/// 1. OAuth token from encrypted storage (if OAuth is enabled)
+/// 2. Environment variable (OPENROUTER_API_KEY)
+/// 3. Configuration file value
 fn get_openrouter_api_key(sources: &ApiKeySources) -> Result<String> {
+    // First, try to load OAuth token from encrypted storage
+    if let Ok(Some(token)) = crate::auth::load_oauth_token() {
+        tracing::debug!("Using OAuth token for OpenRouter authentication");
+        return Ok(token.api_key);
+    }
+
+    // Fall back to standard API key retrieval
     get_api_key_with_fallback(
         &sources.openrouter_env,
         sources.openrouter_config.as_ref(),

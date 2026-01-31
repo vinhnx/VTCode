@@ -348,6 +348,7 @@ impl Session {
 
     pub fn header_meta_line(&self) -> Line<'static> {
         use super::super::types::EditingMode;
+        use crate::ui::tui::oauth_status::OAuthTuiStatus;
 
         let mut spans = Vec::new();
 
@@ -379,6 +380,18 @@ impl Session {
                 ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
                 self.header_secondary_style(),
             ));
+        }
+
+        // Show OAuth badge if using OpenRouter with OAuth authentication
+        let provider_lower = self.header_context.provider.to_lowercase();
+        if provider_lower.contains("openrouter") {
+            if let Some(oauth_span) = OAuthTuiStatus::current().badge_span() {
+                spans.push(oauth_span);
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
         }
 
         // Show trust level badge with color coding

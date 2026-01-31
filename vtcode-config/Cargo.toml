@@ -15,20 +15,31 @@ categories = ["config", "development-tools"]
 
 [dependencies]
 anyhow = "1.0"
+base64 = { workspace = true }
 dirs = "6.0"
 directories = "6.0"
+hostname = "0.4"
 indexmap = { version = "2.12", features = ["serde"] }
 once_cell = "1.19"
 regex = "1.12"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+ring = "0.17"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9"
+sha2 = "0.10"
 toml = "0.9.10"
 toml_edit = "0.24.0"
 tracing = "0.1"
+urlencoding = "2.1"
 vtcode-commons = { path = "../vtcode-commons", version = "0.74.1" }
 dotenvy = "0.15"
 schemars = { workspace = true, optional = true, features = ["indexmap2"] }
+
+# Unix-specific dependencies
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30", features = ["user"] }
+
 
 [features]
 default = ["bootstrap"]

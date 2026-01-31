@@ -6,9 +6,9 @@ use std::path::Path;
 use crate::acp::AgentClientProtocolConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
-    AgentConfig, AnthropicConfig, AutomationConfig, CommandsConfig, DotfileProtectionConfig,
-    ModelConfig, PermissionsConfig, PromptCachingConfig, SandboxConfig, SecurityConfig,
-    SkillsConfig, ToolsConfig,
+    AgentConfig, AnthropicConfig, AuthConfig, AutomationConfig, CommandsConfig,
+    DotfileProtectionConfig, ModelConfig, PermissionsConfig, PromptCachingConfig, SandboxConfig,
+    SecurityConfig, SkillsConfig, ToolsConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider};
@@ -39,6 +39,10 @@ pub struct VTCodeConfig {
     /// Agent-wide settings
     #[serde(default)]
     pub agent: AgentConfig,
+
+    /// Authentication configuration for OAuth flows
+    #[serde(default)]
+    pub auth: AuthConfig,
 
     /// Tool execution policies
     #[serde(default)]

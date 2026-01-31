@@ -88,6 +88,18 @@ pub enum SlashCommandOutcome {
     },
     /// /mode command - cycle through Edit → Plan → Edit
     CycleMode,
+    /// /login command - OAuth login for a provider
+    OAuthLogin {
+        provider: String,
+    },
+    /// /logout command - Clear OAuth authentication for a provider
+    OAuthLogout {
+        provider: String,
+    },
+    /// /auth command - Show authentication status
+    ShowAuthStatus {
+        provider: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -874,6 +886,62 @@ pub async fn handle_slash_command(
                 return Ok(SlashCommandOutcome::Handled);
             }
             Ok(SlashCommandOutcome::CycleMode)
+        }
+        "login" => {
+            let provider = args.trim().to_ascii_lowercase();
+            if provider.is_empty() {
+                // Show available OAuth providers
+                renderer.line(MessageStyle::Info, "OAuth Authentication")?;
+                renderer.line(MessageStyle::Output, "")?;
+                renderer.line(MessageStyle::Output, "Available providers:")?;
+                renderer.line(MessageStyle::Output, "  openrouter  - OpenRouter API (OAuth PKCE)")?;
+                renderer.line(MessageStyle::Output, "")?;
+                renderer.line(MessageStyle::Info, "Usage: /login <provider>")?;
+                renderer.line(MessageStyle::Output, "  Example: /login openrouter")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            if provider != "openrouter" {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Provider '{}' does not support OAuth.", provider),
+                )?;
+                renderer.line(MessageStyle::Info, "Supported OAuth providers: openrouter")?;
+                renderer.line(MessageStyle::Output, "")?;
+                renderer.line(
+                    MessageStyle::Output,
+                    "For other providers, set the API key via environment variable or .env file.",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::OAuthLogin { provider })
+        }
+        "logout" => {
+            let provider = args.trim().to_ascii_lowercase();
+            if provider.is_empty() {
+                renderer.line(MessageStyle::Info, "Clear OAuth Authentication")?;
+                renderer.line(MessageStyle::Output, "")?;
+                renderer.line(MessageStyle::Output, "Usage: /logout <provider>")?;
+                renderer.line(MessageStyle::Output, "  Example: /logout openrouter")?;
+                renderer.line(MessageStyle::Output, "")?;
+                renderer.line(MessageStyle::Info, "Use /auth to check current authentication status.")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            if provider != "openrouter" {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Provider '{}' does not use OAuth authentication.", provider),
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::OAuthLogout { provider })
+        }
+        "auth" => {
+            let provider = if args.trim().is_empty() {
+                None
+            } else {
+                Some(args.trim().to_ascii_lowercase())
+            };
+            Ok(SlashCommandOutcome::ShowAuthStatus { provider })
         }
         "help" => {
             let specific_cmd = if args.trim().is_empty() {

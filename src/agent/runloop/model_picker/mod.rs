@@ -629,6 +629,16 @@ impl ModelPickerState {
         let mut selection = selection;
         if selection.requires_api_key {
             match self.find_existing_api_key(&selection.env_key) {
+                Ok(Some(ExistingKey::OAuthToken)) => {
+                    selection.requires_api_key = false;
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "Using OAuth authentication for {}.",
+                            selection.provider_label
+                        ),
+                    )?;
+                }
                 Ok(Some(ExistingKey::Environment)) => {
                     selection.requires_api_key = false;
                     renderer.line(
@@ -705,6 +715,22 @@ impl ModelPickerState {
         };
         if input.eq_ignore_ascii_case("skip") {
             match self.find_existing_api_key(&selection.env_key) {
+                Ok(Some(ExistingKey::OAuthToken)) => {
+                    renderer.close_modal();
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "Using OAuth authentication for {}.",
+                            selection.provider_label
+                        ),
+                    )?;
+                    self.pending_api_key = None;
+                    if let Some(current) = self.selection.as_mut() {
+                        current.requires_api_key = false;
+                    }
+                    let result = self.build_result();
+                    return Ok(ModelPickerProgress::Completed(result?));
+                }
                 Ok(Some(ExistingKey::Environment)) => {
                     renderer.close_modal();
                     renderer.line(
@@ -773,6 +799,13 @@ impl ModelPickerState {
     }
 
     fn find_existing_api_key(&self, env_key: &str) -> Result<Option<ExistingKey>> {
+        // For OpenRouter, check OAuth token first
+        if env_key == "OPENROUTER_API_KEY" {
+            if let Ok(Some(_token)) = vtcode_config::auth::load_oauth_token() {
+                return Ok(Some(ExistingKey::OAuthToken));
+            }
+        }
+
         if let Ok(value) = std::env::var(env_key)
             && !value.trim().is_empty()
         {

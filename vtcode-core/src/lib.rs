@@ -127,6 +127,7 @@ pub mod acp;
 #[cfg(feature = "anthropic-api")]
 pub mod anthropic_api;
 pub mod audit;
+pub mod auth; // OAuth PKCE authentication for providers
 pub mod cache; // Unified caching system
 pub mod cli;
 pub mod code;

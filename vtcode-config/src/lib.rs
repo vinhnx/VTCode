@@ -24,6 +24,7 @@
 //! or syntax highlighting defaults exposed by the loader.
 
 pub mod acp;
+pub mod auth;
 pub mod api_keys;
 pub mod constants;
 pub mod context;
@@ -53,13 +54,13 @@ pub use acp::{
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
-    AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
-    DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig,
-    MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
-    OpenResponsesConfig, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
-    ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig,
-    SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
-    SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
+    AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AuthConfig, AutomationConfig,
+    CommandsConfig, DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType,
+    FullAutoConfig, MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
+    OpenResponsesConfig, OpenRouterAuthConfig, PluginRuntimeConfig, PluginTrustLevel,
+    PromptCachingConfig, ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset,
+    SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig,
+    SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{
@@ -98,4 +99,11 @@ pub use timeouts::{TimeoutsConfig, resolve_timeout};
 pub use types::{
     EditingMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,
     UiSurfacePreference, VerbosityLevel,
+};
+
+// Re-export auth module types
+pub use auth::{
+    OpenRouterOAuthConfig, OpenRouterToken, generate_pkce_challenge, get_auth_url,
+    load_oauth_token, save_oauth_token, clear_oauth_token, AuthStatus, get_auth_status,
+    PkceChallenge,
 };

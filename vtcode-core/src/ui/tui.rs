@@ -8,6 +8,7 @@ pub mod alternate_screen;
 pub mod log;
 pub mod modern_integration;
 pub mod modern_tui;
+pub mod oauth_status;
 pub mod panic_hook;
 mod runner;
 mod session;
@@ -16,6 +17,7 @@ mod theme_parser;
 mod types;
 pub mod widgets;
 
+pub use oauth_status::{OAuthTuiStatus, get_oauth_display_status, is_oauth_active};
 pub use style::{convert_style, theme_from_styles};
 pub use theme_parser::ThemeConfigParser;
 pub use types::{
