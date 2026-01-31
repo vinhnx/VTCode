@@ -405,7 +405,12 @@ fn test_parse_tagged_tool_call_handles_nested_json() {
     let (name, args) = result.unwrap();
     assert_eq!(name, "run_pty_cmd");
     assert!(args.get("command").and_then(|v| v.as_array()).is_some());
-    assert_eq!(args.get("command").and_then(|v| v.get(0)).and_then(|v| v.as_str()), Some("echo"));
+    assert_eq!(
+        args.get("command")
+            .and_then(|v| v.get(0))
+            .and_then(|v| v.as_str()),
+        Some("echo")
+    );
     assert!(args.get("env").and_then(|v| v.as_object()).is_some());
 }
 

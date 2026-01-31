@@ -109,8 +109,8 @@ impl ZedAgent {
                 && permission_override.is_none()
                 && !session.cancel_flag.get()
             {
-                let in_progress_fields = acp::ToolCallUpdateFields::default()
-                    .status(acp::ToolCallStatus::InProgress);
+                let in_progress_fields =
+                    acp::ToolCallUpdateFields::default().status(acp::ToolCallStatus::InProgress);
                 let progress_update = acp::ToolCallUpdate::new(call_id.clone(), in_progress_fields);
                 self.send_update(
                     session_id,
@@ -150,8 +150,7 @@ impl ZedAgent {
                 report = ToolExecutionReport::cancelled(&func_ref.name);
             }
 
-            let mut update_fields = acp::ToolCallUpdateFields::default()
-                .status(report.status);
+            let mut update_fields = acp::ToolCallUpdateFields::default().status(report.status);
             if !report.content.is_empty() {
                 update_fields = update_fields.content(report.content.clone());
             }
@@ -297,9 +296,10 @@ impl ZedAgent {
             SupportedTool::ListFiles => self.run_list_files(args).await.unwrap_or_else(|message| {
                 ToolExecutionReport::failure(tools::LIST_FILES, &message)
             }),
-            SupportedTool::SwitchMode => self.run_switch_mode(session_id, args).await.unwrap_or_else(
-                |message| ToolExecutionReport::failure("switch_mode", &message),
-            ),
+            SupportedTool::SwitchMode => self
+                .run_switch_mode(session_id, args)
+                .await
+                .unwrap_or_else(|message| ToolExecutionReport::failure("switch_mode", &message)),
         }
     }
 

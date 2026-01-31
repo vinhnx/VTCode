@@ -168,7 +168,10 @@ impl ToolInventory {
 
         // Add to frequently used set if it's a common tool
         if self.is_common_tool(&name_lower) {
-            self.frequently_used.write().unwrap().insert(name_lower.clone());
+            self.frequently_used
+                .write()
+                .unwrap()
+                .insert(name_lower.clone());
         }
 
         // Register case-insensitive aliases and track metrics
@@ -286,7 +289,7 @@ impl ToolInventory {
         let name_lower = name.to_ascii_lowercase();
         let tools = self.tools.read().unwrap();
         let aliases = self.aliases.read().unwrap();
-        
+
         let resolved_name = if tools.contains_key(&name_lower) {
             &name_lower
         } else if let Some(aliased) = aliases.get(&name_lower) {
@@ -534,10 +537,12 @@ mod tests {
         let result = inventory.register_tool(tool2);
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("already registered"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("already registered")
+        );
     }
 
     #[test]

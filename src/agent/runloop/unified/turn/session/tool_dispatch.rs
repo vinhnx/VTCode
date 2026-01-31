@@ -4,14 +4,12 @@ use std::collections::{BTreeSet, HashMap};
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use crate::agent::runloop::unified::status_line::InputStatusState;
-use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnLoopResult,
-};
+use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult};
 use crate::agent::runloop::unified::turn::session::interaction_loop::{
     InteractionLoopContext, InteractionOutcome,
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::handlers::{
-    handle_single_tool_call, ToolOutcomeContext,
+    ToolOutcomeContext, handle_single_tool_call,
 };
 use vtcode_core::llm::provider as uni;
 use vtcode_core::session::SessionId;
@@ -103,7 +101,10 @@ pub(crate) async fn handle_direct_tool_execution(
     // 4. Cleanup UI and return outcome
     t_ctx.ctx.handle.clear_input();
     if let Some(placeholder) = t_ctx.ctx.default_placeholder {
-        t_ctx.ctx.handle.set_placeholder(Some(placeholder.to_string()));
+        t_ctx
+            .ctx
+            .handle
+            .set_placeholder(Some(placeholder.to_string()));
     }
 
     if let Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)) = outcome {
@@ -112,9 +113,6 @@ pub(crate) async fn handle_direct_tool_execution(
         }));
     }
 
-    let follow_up = format!(
-        "I ran `{}`. How would you like to proceed?",
-        tool_name_str
-    );
+    let follow_up = format!("I ran `{}`. How would you like to proceed?", tool_name_str);
     Ok(Some(InteractionOutcome::Continue { input: follow_up }))
 }

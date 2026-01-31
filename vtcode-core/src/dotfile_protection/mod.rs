@@ -18,6 +18,6 @@ mod guardian;
 pub use audit::{AccessType, AuditEntry, AuditLog, AuditOutcome};
 pub use backup::{BackupManager, DotfileBackup};
 pub use guardian::{
-    get_global_guardian, init_global_guardian, is_protected_dotfile, AccessContext,
-    ConfirmationRequest, DotfileGuardian, ProtectionDecision, ProtectionViolation,
+    AccessContext, ConfirmationRequest, DotfileGuardian, ProtectionDecision, ProtectionViolation,
+    get_global_guardian, init_global_guardian, is_protected_dotfile,
 };

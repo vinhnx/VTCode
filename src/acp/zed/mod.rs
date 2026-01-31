@@ -279,7 +279,10 @@ mod tests {
         let args = LoadSessionRequest::new(session_id, temp.path());
         let response = agent.load_session(args).await.unwrap();
 
-        assert_eq!(response.modes.unwrap().current_mode_id, SessionModeId::new("architect"));
+        assert_eq!(
+            response.modes.unwrap().current_mode_id,
+            SessionModeId::new("architect")
+        );
     }
 
     #[tokio::test]

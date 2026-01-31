@@ -249,8 +249,8 @@ impl<'a> TurnProcessingContext<'a> {
             if let Some(reasoning_text) = reasoning.as_ref()
                 && !reasoning_text.trim().is_empty()
             {
-                let duplicates_content = !text.trim().is_empty()
-                    && reasoning_duplicates_content(reasoning_text, &text);
+                let duplicates_content =
+                    !text.trim().is_empty() && reasoning_duplicates_content(reasoning_text, &text);
                 if !reasoning_text.trim().is_empty() && !duplicates_content {
                     let cleaned_for_display =
                         vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
@@ -309,5 +309,3 @@ fn push_assistant_message(history: &mut Vec<uni::Message>, msg: uni::Message) {
         history.push(msg);
     }
 }
-
-

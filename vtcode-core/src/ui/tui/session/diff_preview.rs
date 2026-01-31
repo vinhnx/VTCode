@@ -13,8 +13,8 @@ use ratatui::{
 use crate::ui::markdown::highlight_line_for_diff;
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{DiffPreviewState, TrustMode};
-use crate::utils::diff_styles::DiffColorPalette;
 use crate::utils::diff::{DiffLineKind, DiffOptions, compute_diff};
+use crate::utils::diff_styles::DiffColorPalette;
 
 fn ratatui_rgb(rgb: anstyle::RgbColor) -> Color {
     Color::Rgb(rgb.0, rgb.1, rgb.2)
@@ -46,7 +46,10 @@ fn render_file_header(
     palette: &DiffColorPalette,
 ) {
     let header = Line::from(vec![
-        Span::styled("← Edit ", Style::default().fg(ratatui_rgb(palette.header_fg))),
+        Span::styled(
+            "← Edit ",
+            Style::default().fg(ratatui_rgb(palette.header_fg)),
+        ),
         Span::styled(
             &preview.file_path,
             Style::default().fg(ratatui_rgb(palette.header_fg)),

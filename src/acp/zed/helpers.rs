@@ -24,13 +24,21 @@ pub(crate) fn agent_implementation_info(title_override: Option<String>) -> acp::
 
 pub(crate) fn build_available_commands() -> Vec<acp::AvailableCommand> {
     vec![
-        acp::AvailableCommand::new("init", "Create vtcode.toml and index the workspace")
-            .input(acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new("Optional: --force flag"))),
+        acp::AvailableCommand::new("init", "Create vtcode.toml and index the workspace").input(
+            acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new(
+                "Optional: --force flag",
+            )),
+        ),
         acp::AvailableCommand::new("config", "View the effective vtcode.toml configuration"),
         acp::AvailableCommand::new("status", "Show model, provider, workspace, and tool status"),
         acp::AvailableCommand::new("doctor", "Run installation and configuration diagnostics"),
-        acp::AvailableCommand::new("plan", "Toggle Plan Mode: read-only exploration and planning")
-            .input(acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new("Optional: on | off"))),
+        acp::AvailableCommand::new(
+            "plan",
+            "Toggle Plan Mode: read-only exploration and planning",
+        )
+        .input(acp::AvailableCommandInput::Unstructured(
+            acp::UnstructuredCommandInput::new("Optional: on | off"),
+        )),
         acp::AvailableCommand::new("mode", "Cycle through Edit -> Plan -> Agent modes"),
         acp::AvailableCommand::new("help", "Show slash command help"),
         acp::AvailableCommand::new("reset", "Reset conversation context"),

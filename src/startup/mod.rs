@@ -184,16 +184,14 @@ impl StartupContext {
 
         let (cli_config_path_override, inline_config_overrides) =
             parse_cli_config_entries(&args.config);
-        let env_config_path_override = std::env::var("VTCODE_CONFIG_PATH")
-            .ok()
-            .and_then(|value| {
-                let trimmed = value.trim();
-                if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(PathBuf::from(trimmed))
-                }
-            });
+        let env_config_path_override = std::env::var("VTCODE_CONFIG_PATH").ok().and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(trimmed))
+            }
+        });
         let config_path_override = cli_config_path_override.or(env_config_path_override);
 
         let mut builder = ConfigBuilder::new().workspace(workspace.clone());

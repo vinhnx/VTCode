@@ -57,10 +57,8 @@ impl acp::Agent for ZedAgent {
 
         self.send_available_commands_update(&session_id).await?;
 
-        let modes = acp::SessionModeState::new(
-            acp::SessionModeId::from(MODE_ID_CODE),
-            available_modes,
-        );
+        let modes =
+            acp::SessionModeState::new(acp::SessionModeId::from(MODE_ID_CODE), available_modes);
 
         Ok(acp::NewSessionResponse::new(session_id).modes(modes))
     }
@@ -89,10 +87,7 @@ impl acp::Agent for ZedAgent {
 
     async fn prompt(&self, args: acp::PromptRequest) -> Result<acp::PromptResponse, acp::Error> {
         let Some(session) = self.session_handle(&args.session_id) else {
-            return Err(
-                acp::Error::invalid_params()
-                    .data(json!({ "reason": "unknown_session" }))
-            );
+            return Err(acp::Error::invalid_params().data(json!({ "reason": "unknown_session" })));
         };
 
         session.cancel_flag.set(false);
@@ -394,10 +389,7 @@ impl acp::Agent for ZedAgent {
         args: acp::SetSessionModeRequest,
     ) -> Result<acp::SetSessionModeResponse, acp::Error> {
         let Some(session) = self.session_handle(&args.session_id) else {
-            return Err(
-                acp::Error::invalid_params()
-                    .data(json!({ "reason": "unknown_session" }))
-            );
+            return Err(acp::Error::invalid_params().data(json!({ "reason": "unknown_session" })));
         };
 
         let valid_modes: HashSet<Arc<str>> = [
@@ -415,9 +407,9 @@ impl acp::Agent for ZedAgent {
         if self.update_session_mode(&session, args.mode_id.clone()) {
             self.send_update(
                 &args.session_id,
-                acp::SessionUpdate::CurrentModeUpdate(
-                    acp::CurrentModeUpdate::new(args.mode_id.clone()),
-                ),
+                acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new(
+                    args.mode_id.clone(),
+                )),
             )
             .await?;
         }

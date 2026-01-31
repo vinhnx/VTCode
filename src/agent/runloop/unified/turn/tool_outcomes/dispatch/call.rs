@@ -2,9 +2,7 @@ use anyhow::Result;
 
 use vtcode_core::llm::provider as uni;
 
-use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome,
-};
+use crate::agent::runloop::unified::turn::context::TurnHandlerOutcome;
 
 use super::super::handlers::handle_single_tool_call;
 
@@ -21,10 +19,5 @@ pub(crate) async fn handle_tool_call<'a, 'b>(
         .parsed_arguments()
         .unwrap_or_else(|_| serde_json::json!({}));
 
-    handle_single_tool_call(
-        t_ctx,
-        tool_call.id.clone(),
-        tool_name,
-        args_val,
-    ).await
+    handle_single_tool_call(t_ctx, tool_call.id.clone(), tool_name, args_val).await
 }

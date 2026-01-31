@@ -256,7 +256,8 @@ impl AuditLog {
         }
 
         // Serialize and append to log
-        let json = serde_json::to_string(&entry).with_context(|| "Failed to serialize audit entry")?;
+        let json =
+            serde_json::to_string(&entry).with_context(|| "Failed to serialize audit entry")?;
 
         let mut file = OpenOptions::new()
             .create(true)

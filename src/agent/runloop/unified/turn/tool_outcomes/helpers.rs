@@ -7,10 +7,7 @@ pub(crate) fn push_tool_response(
     tool_call_id: String,
     content: String,
 ) {
-    history.push(uni::Message::tool_response(
-        tool_call_id,
-        content,
-    ));
+    history.push(uni::Message::tool_response(tool_call_id, content));
 }
 
 pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String {
@@ -37,10 +34,7 @@ pub(crate) fn update_repetition_tracker(
     name: &str,
     args: &serde_json::Value,
 ) {
-    if matches!(
-        &outcome.status,
-        ToolExecutionStatus::Success { .. }
-    ) {
+    if matches!(&outcome.status, ToolExecutionStatus::Success { .. }) {
         let signature_key = signature_key_for(name, args);
         let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
         *current_count += 1;
