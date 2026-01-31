@@ -6,7 +6,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Clear, List, ListItem, Paragraph, Widget, Wrap},
+    widgets::{Block, Clear, List, ListItem, Paragraph, Widget},
 };
 
 use crate::config::constants::ui;
