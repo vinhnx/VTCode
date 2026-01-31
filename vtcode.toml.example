@@ -1226,6 +1226,66 @@ max_results = 5
 # Default: []
 always_available_tools = []
 
+# Dotfile Protection Configuration
+# Prevents automatic modification of hidden configuration files (dotfiles)
+# See docs/DOTFILE_PROTECTION.md for complete documentation
+[dotfile_protection]
+# Enable dotfile protection globally
+# Default: true
+enabled = true
+
+# Require explicit user confirmation for any dotfile modification
+# Default: true
+require_explicit_confirmation = true
+
+# Enable immutable audit logging of all dotfile access attempts
+# Default: true
+audit_logging_enabled = true
+
+# Path to the audit log file
+# Default: "~/.vtcode/dotfile_audit.log"
+audit_log_path = "~/.vtcode/dotfile_audit.log"
+
+# Prevent cascading modifications (one dotfile change triggering others)
+# Default: true
+prevent_cascading_modifications = true
+
+# Create backup before any permitted modification
+# Default: true
+create_backups = true
+
+# Directory for storing dotfile backups
+# Default: "~/.vtcode/dotfile_backups"
+backup_directory = "~/.vtcode/dotfile_backups"
+
+# Maximum number of backups to retain per file
+# Default: 10
+max_backups_per_file = 10
+
+# Preserve original file permissions and ownership
+# Default: true
+preserve_permissions = true
+
+# Block modifications during automated operations (npm install, cargo build, etc.)
+# Default: true
+block_during_automation = true
+
+# Require secondary authentication for whitelisted files
+# Default: true
+require_secondary_auth_for_whitelist = true
+
+# Whitelist specific files (still require secondary confirmation)
+# Default: []
+whitelist = []
+
+# Additional dotfile patterns to protect beyond defaults
+# Default: []
+additional_protected_patterns = []
+
+# Operations that should never automatically modify dotfiles
+# Default: ["dependency_installation", "code_formatting", "git_operations", ...]
+# blocked_operations = ["dependency_installation", "code_formatting"]
+
 # Model-specific behavior configuration
 [model]
 # Enable loop hang detection to identify when model is stuck in repetitive behavior

@@ -138,6 +138,7 @@ pub mod constants;
 pub mod context; // Vibe coding support: entity resolution, workspace state, conversation memory
 pub mod core;
 pub mod diagnostics;
+pub mod dotfile_protection; // Comprehensive dotfile protection system
 pub mod exec;
 pub mod exec_policy; // Codex-style execution policy management
 pub mod execpolicy;
@@ -201,6 +202,12 @@ pub use core::timeout_detector::TimeoutDetector;
 pub use diagnostics::{
     DiagnosticReport, HealthSample, LabeledAction, PredictiveMonitor, RecoveryAction,
     RecoveryPlaybook,
+};
+pub use dotfile_protection::{
+    get_global_guardian, init_global_guardian, is_protected_dotfile,
+    AccessType as DotfileAccessType, AuditEntry as DotfileAuditEntry, AuditLog as DotfileAuditLog,
+    AuditOutcome as DotfileAuditOutcome, BackupManager as DotfileBackupManager,
+    DotfileBackup, DotfileGuardian, ProtectionDecision, ProtectionViolation,
 };
 pub use exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION,

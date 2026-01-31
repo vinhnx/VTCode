@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow, bail};
+use vtcode_core::dotfile_protection::init_global_guardian;
 
 mod first_run;
 
@@ -326,6 +327,12 @@ impl StartupContext {
         };
 
         initialize_dot_folder().await.ok();
+
+        // Initialize dotfile protection with configuration
+        if let Err(e) = init_global_guardian(config.dotfile_protection.clone()).await {
+            tracing::warn!("Failed to initialize dotfile protection: {}", e);
+        }
+
         let theme_selection = determine_theme(args, &config).await?;
 
         update_theme_preference(&theme_selection).await.ok();

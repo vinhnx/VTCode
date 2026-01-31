@@ -65,6 +65,23 @@ pub fn generate_tool_guidelines(
              modifications to existing files."
                 .to_string(),
         );
+
+        guidelines.push(
+            "**Dotfile Protection**: Hidden configuration files (dotfiles like .gitignore, .env, \
+             .bashrc, .ssh/*, etc.) are PROTECTED and require explicit user confirmation before \
+             modification. If a dotfile modification is blocked, do NOT retry - instead inform \
+             the user that dotfile protection requires their explicit approval. Never attempt to \
+             modify dotfiles repeatedly or work around the protection."
+                .to_string(),
+        );
+
+        guidelines.push(
+            "**Loop Detection**: If you see 'Loop Detected' or similar errors, STOP retrying the \
+             same operation. Instead: (1) Acknowledge the issue to the user, (2) Explain what you \
+             were trying to do, (3) Ask the user for guidance or try a completely different approach. \
+             Never retry the same tool call more than 2-3 times with identical or similar arguments."
+                .to_string(),
+        );
     }
 
     // Capability-based guidance

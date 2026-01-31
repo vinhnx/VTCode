@@ -29,7 +29,7 @@ reasoning_effort = "low"
 system_prompt_mode = "default"
 tool_documentation_mode = "minimal"
 enable_split_tool_results = true
-todo_planning_mode = true
+todo_planning_mode = false
 verbosity = "low"
 refine_temperature = 0.3
 enable_self_review = false
@@ -48,7 +48,7 @@ include_working_directory = true
 # "edit" - Full tool access for file modifications and command execution (default)
 # "plan" - Read-only mode that produces implementation plans without making changes
 # Toggle during session with Shift+Tab or /plan command
-default_editing_mode = "plan"
+default_editing_mode = "edit"
 require_plan_confirmation = true
 autonomous_mode = false
 
@@ -241,6 +241,10 @@ ask_user_question = "allow"
 run_pty_cmd = "allow"
 list_skills = "allow"
 web_fetch = "allow"
+execute_code = "allow"
+write_file = "allow"
+apply_patch = "allow"
+agent_info = "allow"
 
 [sandbox]
 enabled = true
@@ -837,6 +841,31 @@ enabled = false
 max_concurrent = 3
 default_timeout_seconds = 300
 additional_agent_dirs = []
+
+[dotfile_protection]
+enabled = true
+require_explicit_confirmation = true
+audit_logging_enabled = true
+audit_log_path = "~/.vtcode/dotfile_audit.log"
+prevent_cascading_modifications = true
+create_backups = true
+backup_directory = "~/.vtcode/dotfile_backups"
+max_backups_per_file = 10
+preserve_permissions = true
+whitelist = []
+additional_protected_patterns = []
+block_during_automation = true
+blocked_operations = [
+    "dependency_installation",
+    "code_formatting",
+    "git_operations",
+    "project_initialization",
+    "build_operations",
+    "test_execution",
+    "linting",
+    "auto_fix",
+]
+require_secondary_auth_for_whitelist = true
 # Pre-tool use hooks - Run before tools execute, can block or validate
 # pre_tool_use = [
 #   # Example: Block modifications to sensitive files
