@@ -38,17 +38,16 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         // Notify the user that attention is required
         notify_attention(self.hitl_notification_bell, Some("MCP input required"));
 
-        println!();
-        println!("=== MCP elicitation request from '{}' ===", provider);
-        println!("{}", request.message);
+        tracing::info!("MCP elicitation request from '{}'", provider);
+        tracing::info!("{}", request.message);
 
         if !request.requested_schema.is_null() {
             let schema_display = serde_json::to_string_pretty(&request.requested_schema)
                 .context("Failed to format MCP elicitation schema")?;
-            println!("Expected response schema:\n{}", schema_display);
+            tracing::debug!("Expected response schema:\n{}", schema_display);
         }
 
-        println!(
+        tracing::info!(
             "Enter JSON to accept, press Enter to decline, or type 'cancel' to cancel the operation."
         );
         print!("Response> ");
@@ -64,7 +63,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         let trimmed = input.trim();
 
         if trimmed.eq_ignore_ascii_case("cancel") {
-            println!("Cancelling elicitation request from '{}'.", provider);
+            tracing::info!("Cancelling elicitation request from '{}'.", provider);
             return Ok(McpElicitationResponse {
                 action: ElicitationAction::Cancel,
                 content: None,
@@ -72,7 +71,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         }
 
         if trimmed.is_empty() {
-            println!("Declining elicitation request from '{}'.", provider);
+            tracing::info!("Declining elicitation request from '{}'.", provider);
             return Ok(McpElicitationResponse {
                 action: ElicitationAction::Decline,
                 content: None,
@@ -82,7 +81,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         let content: Value =
             serde_json::from_str(trimmed).context("Elicitation response must be valid JSON")?;
 
-        println!("Submitting elicitation response to '{}'.", provider);
+        tracing::info!("Submitting elicitation response to '{}'.", provider);
 
         Ok(McpElicitationResponse {
             action: ElicitationAction::Accept,

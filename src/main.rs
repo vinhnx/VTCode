@@ -35,22 +35,27 @@ async fn main() -> std::process::ExitCode {
 
 async fn run() -> Result<()> {
     // Suppress macOS malloc warnings that appear as stderr output
+    // IMPORTANT: Remove the variables rather than setting to "0"
+    // Setting to "0" triggers macOS to output "can't turn off malloc stack logging"
+    // which corrupts the TUI display
     #[cfg(target_os = "macos")]
     {
-        // Set environment variables to explicitly disable malloc debugging
+        // Remove malloc debugging environment variables to prevent system warnings
         // This is safe to do at startup as we're not in a multi-threaded context yet
         unsafe {
-            std::env::set_var("MallocStackLogging", "0");
-            std::env::set_var("MallocStackLoggingDirectory", "");
-            std::env::set_var("MallocScribble", "0");
-            std::env::set_var("MallocGuardEdges", "0");
-            std::env::set_var("MallocCheckHeapStart", "0");
-            std::env::set_var("MallocCheckHeapEach", "0");
-            std::env::set_var("MallocCheckHeapAbort", "0");
-            std::env::set_var("MallocCheckHeapSleep", "0");
-            std::env::set_var("MallocErrorAbort", "0");
-            std::env::set_var("MallocCorruptionAbort", "0");
-            std::env::set_var("MallocStackLoggingNoCompact", "0");
+            std::env::remove_var("MallocStackLogging");
+            std::env::remove_var("MallocStackLoggingDirectory");
+            std::env::remove_var("MallocScribble");
+            std::env::remove_var("MallocGuardEdges");
+            std::env::remove_var("MallocCheckHeapStart");
+            std::env::remove_var("MallocCheckHeapEach");
+            std::env::remove_var("MallocCheckHeapAbort");
+            std::env::remove_var("MallocCheckHeapSleep");
+            std::env::remove_var("MallocErrorAbort");
+            std::env::remove_var("MallocCorruptionAbort");
+            std::env::remove_var("MallocStackLoggingNoCompact");
+            std::env::remove_var("MallocDoNotProtectSentinel");
+            std::env::remove_var("MallocQuiet");
         }
     }
 

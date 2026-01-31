@@ -268,7 +268,7 @@ Shortcuts:
             use vtcode_core::exec::skill_manager::SkillManager;
             let skill_manager = SkillManager::new(&workspace);
             if let Err(e) = skill_manager.generate_index().await {
-                eprintln!("Warning: Failed to regenerate skills index: {}", e);
+                tracing::warn!("Failed to regenerate skills index: {}", e);
             }
 
             let discovery_result = loader.discover_all_skills().await?;
@@ -310,7 +310,7 @@ Shortcuts:
             use vtcode_core::exec::skill_manager::SkillManager;
             let skill_manager = SkillManager::new(&workspace);
             if let Err(e) = skill_manager.generate_index().await {
-                eprintln!("Warning: Failed to regenerate skills index: {}", e);
+                tracing::warn!("Failed to regenerate skills index: {}", e);
             }
 
             match loader.get_skill(&name).await {
@@ -344,7 +344,7 @@ Shortcuts:
             use vtcode_core::exec::skill_manager::SkillManager;
             let skill_manager = SkillManager::new(&workspace);
             if let Err(e) = skill_manager.generate_index().await {
-                eprintln!("Warning: Failed to regenerate skills index: {}", e);
+                tracing::warn!("Failed to regenerate skills index: {}", e);
             }
 
             match loader.get_skill(&name).await {

@@ -449,8 +449,8 @@ pub(crate) async fn initialize_session(
         tool_registry.apply_commands_config(&cfg.commands);
         tool_registry.apply_timeout_policy(&cfg.timeouts);
         if let Err(err) = tool_registry.apply_config_policies(&cfg.tools).await {
-            eprintln!(
-                "Warning: Failed to apply tool policies from config: {}",
+            tracing::warn!(
+                "Failed to apply tool policies from config: {}",
                 err
             );
         }
@@ -1240,12 +1240,12 @@ pub(crate) fn spawn_signal_handler(
                             || error_msg.contains("Broken pipe")
                             || error_msg.contains("write EPIPE")
                         {
-                            eprintln!(
-                                "Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}",
+                            tracing::debug!(
+                                "MCP client shutdown encountered pipe errors during interrupt (normal): {}",
                                 e
                             );
                         } else {
-                            eprintln!("Warning: Failed to shutdown MCP client on interrupt: {}", e);
+                            tracing::warn!("Failed to shutdown MCP client on interrupt: {}", e);
                         }
                     }
 
