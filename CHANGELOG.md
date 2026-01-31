@@ -2,6 +2,37 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.0 - 2026-01-31
+
+* Fix permission (e2511d7e)
+* docs: update AGENTS.md for improved clarity and formatting (775a0db7)
+* refactor: update logging in TUI code to use tracing instead of println and eprintln (3393f2e0)
+* refactor: replace eprintln with tracing for improved logging consistency (1d8f11d2)
+* refactor: replace println with tracing for improved logging consistency (4ad8b586)
+* fix: replace println with tracing debug for git repository check (c6c11053)
+* feat: add skip_model_validation option to AnthropicConfig and update validation logic (f19fdb56)
+* Refactor code for improved readability and consistency across multiple files (fec995fc)
+* fix: preserve tool_exists when MCP tool check returns false (999f4a85)
+* refactor: update tool execution methods and enhance context handling (e592f983)
+* Refactor session loop and tool outcomes; remove unused code and improve context handling (016ef738)
+* refactor: unify direct tool execution and expand interaction loop context with new tool-related services. (d7953097)
+* refactor: refine `ToolOutcomeContext` lifetimes to improve mutable borrowing patterns and simplify context access. (a81254ef)
+* refactor: adjust tool outcome context passing and borrowing in turn processing. (a197876a)
+* refactor: centralize tool outcome handling parameters into a new `ToolOutcomeContext` struct. (73856006)
+* Refactor tool call handling by centralizing execution, permission, and safety validation logic into dedicated outcome handlers and removing the execution module. (cfb8e1d7)
+* refactor: extract metric recording and remove auto-exit plan mode logic from tool execution result handling. (5e83a3a2)
+* Refactor tool outcome handling in the agent runloop by introducing tool-specific retry limits, centralizing repetition tracking, and enhancing context conversion. (ce765244)
+* Refactor tool outcome handling by consolidating success, failure, and timeout handlers, and updating tool repetition tracking to only count successful calls. (33a9b664)
+* fix: enable `unified_file` tool in the sandbox and refactor diff preview styling to use a color palette. (15715b9e)
+* feat: prevent duplicate LLM reasoning output and prioritize visible alias targets for hidden tools during lookup. (c434de61)
+* feat: Implement dotfile protection with audit, backup, and guardian modules, and enhance tool registry alias resolution to prioritize LLM-visible tools. (62689a2c)
+* feat: Implement session loading and mode switching, refreshing available commands on mode change and using constants for mode IDs. (9004549c)
+* feat: Add `switch_mode` tool and update `agent-client-protocol` dependency to 0.9.3, adapting API usage. (1bdf7a7f)
+* feat: Introduce a standard Agent Client Protocol adapter and generalize ACP implementation details and tooling. (121184b5)
+* fix: refine markdown styling logic for strong, heading, and inline code elements, and enhance theme-based accent application (04278e00)
+* fix: update default theme, enable todo planning, refine tool output and display settings, and adjust tool policies for streamlined configuration (3308c57e)
+* Update commit (db294299)
+
 ## v0.73.6 - 2026-01-30
 
 * fix: update default theme, enable todo planning, refine tool output and display settings, and adjust tool policies for streamlined configuration (dcc7043e)
