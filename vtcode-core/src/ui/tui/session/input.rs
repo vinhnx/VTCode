@@ -423,7 +423,10 @@ impl Session {
     }
 
     fn cursor_should_be_visible(&self) -> bool {
-        self.cursor_visible && self.input_enabled && !self.is_running_activity()
+        self.cursor_visible
+            && self.input_enabled
+            && !self.is_running_activity()
+            && !self.has_status_spinner()
     }
 
     fn secure_prompt_active(&self) -> bool {
