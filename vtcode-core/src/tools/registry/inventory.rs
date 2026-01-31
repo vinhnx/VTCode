@@ -199,22 +199,54 @@ impl ToolInventory {
 
     pub fn registration_for(&self, name: &str) -> Option<ToolRegistration> {
         // Check if name exists directly or resolve via case-insensitive alias
+        // IMPORTANT: Prefer alias resolution over direct registration when the direct
+        // registration is not LLM-visible. This allows LLMs to call internal tool names
+        // (like "read_file") and have them routed to their visible parent (like "unified_file").
         let name_lower = name.to_ascii_lowercase();
 
         let resolved_name = {
             let tools = self.tools.read().unwrap();
             let aliases = self.aliases.read().unwrap();
 
-            if tools.contains_key(name) {
-                name.to_owned()
-            } else if let Some(aliased) = aliases.get(&name_lower) {
-                // Track alias usage metrics
+            // First check if there's an alias mapping for this name
+            // This takes priority when the direct tool is not LLM-visible
+            let alias_target = aliases.get(&name_lower).cloned();
+
+            if let Some(entry) = tools.get(name) {
+                // Direct tool exists - check if it's LLM-visible
+                if entry.registration.expose_in_llm() {
+                    // LLM-visible tool: use direct registration
+                    name.to_owned()
+                } else if let Some(ref aliased) = alias_target {
+                    // Not LLM-visible but has an alias: prefer the alias target
+                    // This routes "read_file" → "unified_file" when called by LLM
+                    let mut metrics = self.alias_metrics.lock().unwrap();
+                    if let Some((canonical, count)) = metrics.usage.get_mut(&name_lower) {
+                        *count += 1;
+                        let count_val = *count;
+                        let canonical_val = canonical.clone();
+                        drop(metrics);
+                        info!(
+                            alias = %name,
+                            canonical = %canonical_val,
+                            count = count_val,
+                            "Internal tool routed via alias to LLM-visible parent"
+                        );
+                    }
+                    aliased.clone()
+                } else {
+                    // Not LLM-visible and no alias: use direct registration
+                    // (for internal tool-to-tool calls)
+                    name.to_owned()
+                }
+            } else if let Some(aliased) = alias_target {
+                // No direct registration but alias exists
                 let mut metrics = self.alias_metrics.lock().unwrap();
                 if let Some((canonical, count)) = metrics.usage.get_mut(&name_lower) {
                     *count += 1;
                     let count_val = *count;
                     let canonical_val = canonical.clone();
-                    drop(metrics); // Drop lock before logging
+                    drop(metrics);
                     info!(
                         alias = %name,
                         canonical = %canonical_val,
@@ -222,7 +254,7 @@ impl ToolInventory {
                         "Tool alias resolved and usage tracked"
                     );
                 }
-                aliased.clone()
+                aliased
             } else {
                 return None;
             }
@@ -349,5 +381,184 @@ impl ToolInventory {
                 new_len
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::types::CapabilityLevel;
+    use crate::tools::registry::registration::ToolRegistration;
+    use serde_json::Value;
+    use std::path::PathBuf;
+
+    fn make_test_inventory() -> ToolInventory {
+        ToolInventory::new(PathBuf::from("/tmp/vtcode-test"))
+    }
+
+    fn make_visible_registration(name: &'static str) -> ToolRegistration {
+        ToolRegistration::new(name, CapabilityLevel::Basic, false, |_, _| {
+            Box::pin(async { Ok(Value::Null) })
+        })
+    }
+
+    fn make_hidden_registration(name: &'static str) -> ToolRegistration {
+        ToolRegistration::new(name, CapabilityLevel::Basic, false, |_, _| {
+            Box::pin(async { Ok(Value::Null) })
+        })
+        .with_llm_visibility(false)
+    }
+
+    #[test]
+    fn test_alias_preferred_over_hidden_direct_tool() {
+        let inventory = make_test_inventory();
+
+        // Register a visible "parent" tool with an alias
+        let parent = make_visible_registration("unified_file").with_aliases(["read_file"]);
+        inventory.register_tool(parent).unwrap();
+
+        // Register a hidden "internal" tool with the same name as the alias
+        let internal = make_hidden_registration("read_file");
+        inventory.register_tool(internal).unwrap();
+
+        // When we look up "read_file", it should resolve to "unified_file"
+        // because the direct "read_file" registration is not LLM-visible
+        let registration = inventory.registration_for("read_file").unwrap();
+        assert_eq!(
+            registration.name(),
+            "unified_file",
+            "Hidden tool should be routed through its visible alias parent"
+        );
+    }
+
+    #[test]
+    fn test_visible_direct_tool_takes_precedence() {
+        let inventory = make_test_inventory();
+
+        // Register a visible "parent" tool with an alias
+        let parent = make_visible_registration("unified_file").with_aliases(["read_file"]);
+        inventory.register_tool(parent).unwrap();
+
+        // Register a VISIBLE tool with the same name as the alias
+        let visible_direct = make_visible_registration("read_file");
+        inventory.register_tool(visible_direct).unwrap();
+
+        // When we look up "read_file", it should resolve to "read_file"
+        // because the direct registration is LLM-visible
+        let registration = inventory.registration_for("read_file").unwrap();
+        assert_eq!(
+            registration.name(),
+            "read_file",
+            "Visible direct tool should take precedence"
+        );
+    }
+
+    #[test]
+    fn test_hidden_tool_without_alias_still_works() {
+        let inventory = make_test_inventory();
+
+        // Register only a hidden tool with no alias
+        let internal = make_hidden_registration("internal_only");
+        inventory.register_tool(internal).unwrap();
+
+        // Should still find the tool for internal tool-to-tool calls
+        let registration = inventory.registration_for("internal_only").unwrap();
+        assert_eq!(
+            registration.name(),
+            "internal_only",
+            "Hidden tool without alias should still be accessible"
+        );
+    }
+
+    #[test]
+    fn test_alias_metrics_tracked_for_hidden_tool_routing() {
+        let inventory = make_test_inventory();
+
+        // Register a visible tool with an alias
+        let parent = make_visible_registration("unified_file").with_aliases(["read_file"]);
+        inventory.register_tool(parent).unwrap();
+
+        // Register a hidden internal tool
+        let internal = make_hidden_registration("read_file");
+        inventory.register_tool(internal).unwrap();
+
+        // Get initial state - registration adds the entry with count 0
+        let initial_metrics = inventory.alias_metrics();
+        let initial_entry = initial_metrics.usage.get("read_file");
+        assert!(
+            initial_entry.is_some(),
+            "Alias entry should be created during registration"
+        );
+        let initial_count = initial_entry.unwrap().1;
+
+        // Look up via the hidden tool name twice
+        inventory.registration_for("read_file");
+        inventory.registration_for("read_file");
+
+        // Verify metrics were incremented
+        let metrics = inventory.alias_metrics();
+        let usage_entry = metrics.usage.get("read_file");
+        assert!(usage_entry.is_some(), "Alias usage should still be tracked");
+        let (canonical, count) = usage_entry.unwrap();
+        assert_eq!(canonical, "unified_file");
+        assert_eq!(
+            *count,
+            initial_count + 2,
+            "Usage count should have increased by 2"
+        );
+    }
+
+    #[test]
+    fn test_case_insensitive_alias_lookup() {
+        let inventory = make_test_inventory();
+
+        let tool = make_visible_registration("unified_file").with_aliases(["Read_File"]);
+        inventory.register_tool(tool).unwrap();
+
+        // Should resolve regardless of case
+        assert!(inventory.registration_for("read_file").is_some());
+        assert!(inventory.registration_for("READ_FILE").is_some());
+        assert!(inventory.registration_for("Read_File").is_some());
+    }
+
+    #[test]
+    fn test_duplicate_tool_registration_fails() {
+        let inventory = make_test_inventory();
+
+        let tool1 = make_visible_registration("my_tool");
+        let tool2 = make_visible_registration("my_tool");
+
+        inventory.register_tool(tool1).unwrap();
+        let result = inventory.register_tool(tool2);
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("already registered"));
+    }
+
+    #[test]
+    fn test_alias_conflict_with_existing_tool_fails() {
+        let inventory = make_test_inventory();
+
+        // Register a tool first
+        let tool1 = make_visible_registration("existing_tool");
+        inventory.register_tool(tool1).unwrap();
+
+        // Try to register a new tool with an alias matching the existing tool name
+        let tool2 = make_visible_registration("new_tool").with_aliases(["existing_tool"]);
+        let result = inventory.register_tool(tool2);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("conflicts"));
+    }
+
+    #[test]
+    fn test_nonexistent_tool_returns_none() {
+        let inventory = make_test_inventory();
+
+        assert!(inventory.registration_for("nonexistent").is_none());
+        assert!(!inventory.has_tool("nonexistent"));
     }
 }
