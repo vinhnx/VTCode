@@ -32,13 +32,3 @@ pub(crate) fn resolve_max_tool_retries(
 }
 
 --
-
-fix debug logs causing tui broken in the bottom view
-
-
-
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Build something (@files, #prompts, /commands or Shift+Tab to switch to modes)
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-⠋ Executing run_pty_cmd... (Press Ctrl+C to cancel)vtcode(86761) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.m2.1:cloud | (low)
-Ghostty main*
