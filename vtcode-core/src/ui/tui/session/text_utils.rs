@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::mem;
 
 use line_clipping::cohen_sutherland::clip_line;
@@ -6,7 +7,7 @@ use ratatui::prelude::*;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use std::borrow::Cow;
+use crate::config::constants::ansi;
 
 /// Strips ANSI escape codes from text to ensure plain text output
 pub fn strip_ansi_codes(text: &str) -> Cow<'_, str> {
@@ -36,7 +37,7 @@ pub fn strip_ansi_codes(text: &str) -> Cow<'_, str> {
                         } else if ('@'..='~').contains(&next_ch) {
                             // This is the final command character, stop here
                             break;
-                        } else if param_length > 20 {
+                        } else if param_length > ansi::ANSI_MAX_CSI_PARAM_LENGTH {
                             // prevent infinite loops
                             break;
                         } else {
@@ -49,6 +50,8 @@ pub fn strip_ansi_codes(text: &str) -> Cow<'_, str> {
                     // OSC (Operating System Command): ESC]...ST (where ST is \x1b\\ or BEL)
                     chars.next(); // consume the ']'
                     // Skip until we find the string terminator
+                    // Guard against malformed OSC sequences (defensive limit)
+                    let mut osc_length = 0usize;
                     loop {
                         match chars.peek() {
                             Some(&'\x07') => {
@@ -67,17 +70,22 @@ pub fn strip_ansi_codes(text: &str) -> Cow<'_, str> {
                                 } else {
                                     // This is just part of the OSC data, continue
                                     chars.next();
-                                    continue;
+                                    osc_length += 1;
                                 }
                             }
                             Some(_) => {
                                 // Continue consuming characters in the sequence
                                 chars.next();
+                                osc_length += 1;
                             }
                             None => {
                                 // End of string
                                 break;
                             }
+                        }
+                        // Prevent infinite loops on malformed input
+                        if osc_length > ansi::ANSI_MAX_ESCAPE_SEQ_LENGTH {
+                            break;
                         }
                     }
                 }

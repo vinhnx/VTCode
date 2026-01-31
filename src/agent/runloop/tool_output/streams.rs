@@ -564,13 +564,19 @@ pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
                 }
                 Some(']') | Some('P') | Some('^') | Some('_') | Some('X') => {
                     // OSC/DCS/PM/APC/SOS: ESC X ... ST (where ST = ESC \ or BEL)
+                    // Guard against malformed sequences (defensive limit)
                     chars.next();
+                    let mut seq_length = 0usize;
                     while let Some(next) = chars.next() {
                         if next == '\x07' {
                             break;
                         }
                         if next == '\x1b' && matches!(chars.peek(), Some('\\')) {
                             chars.next();
+                            break;
+                        }
+                        seq_length += 1;
+                        if seq_length > vtcode_config::constants::ansi::ANSI_MAX_ESCAPE_SEQ_LENGTH {
                             break;
                         }
                     }

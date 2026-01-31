@@ -75,15 +75,20 @@ impl<'a> Widget for TranscriptWidget<'a> {
             return;
         }
 
-        apply_transcript_rows(self.session, inner.height);
+        // Clamp effective dimensions to prevent pathological CPU usage with huge terminals
+        // See: https://github.com/anthropics/claude-code/issues/21567
+        let effective_height = inner.height.min(ui::TUI_MAX_VIEWPORT_HEIGHT);
+        let effective_width = inner.width.min(ui::TUI_MAX_VIEWPORT_WIDTH);
 
-        let content_width = inner.width;
+        apply_transcript_rows(self.session, effective_height);
+
+        let content_width = effective_width;
         if content_width == 0 {
             return;
         }
         apply_transcript_width(self.session, content_width);
 
-        let viewport_rows = inner.height as usize;
+        let viewport_rows = effective_height as usize;
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
         let total_rows = self.session.total_transcript_rows(content_width) + effective_padding;

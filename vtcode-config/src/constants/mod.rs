@@ -1,3 +1,5 @@
+/// ANSI escape sequence parsing constants
+pub mod ansi;
 /// Application metadata constants shared across crates
 pub mod app;
 /// Bash tool security validation constants
