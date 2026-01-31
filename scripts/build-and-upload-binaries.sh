@@ -258,57 +258,87 @@ build_binaries() {
 }
 
 # Function to build binaries for current platform only (for local sanity check)
+# On macOS, this builds both x86_64 and aarch64 architectures for Homebrew compatibility
 build_binaries_local() {
     local version=$1
     local dist_dir="dist"
 
-    print_info "Building binaries for current platform only (sanity check) for version $version..."
+    print_info "Building binaries for local platform(s) for version $version..."
 
     if [ "$DRY_RUN" = false ]; then
         rm -rf "$dist_dir"
         mkdir -p "$dist_dir"
     fi
 
-    # Determine current platform and build for it only
-    local current_target=""
+    # On macOS, build both architectures for Homebrew formula updates
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        if [[ $(uname -m) == "arm64" ]]; then
-            current_target="aarch64-apple-darwin"
-        else
-            current_target="x86_64-apple-darwin"
+        print_info "Building both macOS architectures (x86_64 and aarch64)..."
+        
+        # Build x86_64
+        print_info "Building x86_64-apple-darwin..."
+        build_with_tool "x86_64-apple-darwin" || print_warning "x86_64 build failed"
+        
+        # Build aarch64
+        print_info "Building aarch64-apple-darwin..."
+        build_with_tool "aarch64-apple-darwin" || print_warning "aarch64 build failed"
+        
+        if [ "$DRY_RUN" = true ]; then
+            print_success "Dry run: Local macOS build process simulation complete"
+            return 0
         fi
+        
+        # Package both architectures
+        print_info "Packaging macOS binaries..."
+        
+        # Package x86_64
+        if [ -f "target/x86_64-apple-darwin/release/vtcode" ]; then
+            cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
+            (cd "$dist_dir" && tar -czf "vtcode-v$version-x86_64-apple-darwin.tar.gz" vtcode && rm vtcode)
+            print_success "x86_64 binary packaged"
+        else
+            print_warning "x86_64 binary not found"
+        fi
+        
+        # Package aarch64
+        if [ -f "target/aarch64-apple-darwin/release/vtcode" ]; then
+            cp "target/aarch64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
+            (cd "$dist_dir" && tar -czf "vtcode-v$version-aarch64-apple-darwin.tar.gz" vtcode && rm vtcode)
+            print_success "aarch64 binary packaged"
+        else
+            print_warning "aarch64 binary not found"
+        fi
+        
+        # Create universal binary if both architectures are available
+        if [ -f "target/x86_64-apple-darwin/release/vtcode" ] && [ -f "target/aarch64-apple-darwin/release/vtcode" ]; then
+            print_info "Creating macOS Universal Binary..."
+            lipo -create \
+                "target/x86_64-apple-darwin/release/vtcode" \
+                "target/aarch64-apple-darwin/release/vtcode" \
+                -output "$dist_dir/vtcode-universal"
+            (cd "$dist_dir" && tar -czf "vtcode-v$version-universal-apple-darwin.tar.gz" vtcode-universal && rm vtcode-universal)
+            print_success "Universal binary created"
+        fi
+        
+        print_success "Local macOS build completed (x86_64 + aarch64)"
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        current_target="x86_64-unknown-linux-gnu"
+        # Linux: build only current platform
+        print_info "Building x86_64-unknown-linux-gnu..."
+        build_with_tool "x86_64-unknown-linux-gnu"
+        
+        if [ "$DRY_RUN" = true ]; then
+            print_success "Dry run: Local Linux build process simulation complete"
+            return 0
+        fi
+        
+        # Package Linux binary
+        print_info "Packaging Linux binary..."
+        cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/vtcode"
+        (cd "$dist_dir" && tar -czf "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" vtcode && rm vtcode)
+        print_success "Local Linux build completed"
     else
         print_error "Unsupported platform: $OSTYPE"
         exit 1
     fi
-
-    print_info "Building for current platform: $current_target"
-    build_with_tool "$current_target"
-
-    if [ "$DRY_RUN" = true ]; then
-        print_success "Dry run: Local build process simulation complete"
-        return 0
-    fi
-
-    # Packaging for current platform only
-    print_info "Packaging current platform binary..."
-
-    # Copy and package the current platform binary
-    cp "target/$current_target/release/vtcode" "$dist_dir/vtcode"
-    local platform_suffix=""
-    if [[ "$current_target" == "aarch64-apple-darwin" ]]; then
-        platform_suffix="aarch64-apple-darwin"
-    elif [[ "$current_target" == "x86_64-apple-darwin" ]]; then
-        platform_suffix="x86_64-apple-darwin"
-    elif [[ "$current_target" == "x86_64-unknown-linux-gnu" ]]; then
-        platform_suffix="x86_64-unknown-linux-gnu"
-    fi
-
-    (cd "$dist_dir" && tar -czf "vtcode-v$version-$platform_suffix.tar.gz" vtcode && rm vtcode)
-
-    print_success "Local binary build and packaging completed for $platform_suffix"
 }
 
 # Function to calculate SHA256 checksums

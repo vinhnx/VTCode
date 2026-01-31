@@ -279,9 +279,9 @@ main() {
         print_warning "Releasing version: $next_version"
     fi
 
-    # 1. Local Build Sanity Check (only for current platform to avoid cross-compilation issues)
+    # 1. Local Build (both macOS architectures for Homebrew, or current platform on Linux)
     if [[ "$skip_binaries" == 'false' ]]; then
-        print_info "Step 1: Local binary build sanity check (current platform only)..."
+        print_info "Step 1: Local binary build (macOS: both architectures, Linux: current platform)..."
         local build_args=(-v "$next_version" --only-build-local)
         if [[ "$dry_run" == 'true' ]]; then
             build_args+=(--dry-run)
