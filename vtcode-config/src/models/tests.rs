@@ -544,6 +544,7 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaQwen3Next80bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaMistralLarge3675bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaKimiK2ThinkingCloud));
+    assert!(ollama_models.contains(&ModelId::OllamaKimiK25Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGlm46Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaGemini3ProPreviewLatestCloud));
@@ -553,7 +554,7 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM21Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaNemotron3Nano30bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGlm47Cloud));
-    assert_eq!(ollama_models.len(), 17); // 17 Ollama models
+    assert_eq!(ollama_models.len(), 18); // 18 Ollama models
 
     let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
     assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));
