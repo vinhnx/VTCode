@@ -49,7 +49,7 @@ impl VTCodeGitignore {
                 }
                 Err(e) => {
                     // Log warning but don't fail - just treat as no patterns
-                    eprintln!("Warning: Failed to load .vtcodegitignore: {}", e);
+                    tracing::warn!("Failed to load .vtcodegitignore: {}", e);
                 }
             }
         }

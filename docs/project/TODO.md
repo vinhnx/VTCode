@@ -2,7 +2,7 @@ extract vtcode-\* module as separate crates like tui-shimmer.
 
 --
 
-improve and defer stop loading state for status bar until task all done, not just after first response from LLM.
+improve and defer stop loading state for status bar until task all done, not just after first response from LLM for better UX.
 
 --
 

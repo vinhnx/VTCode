@@ -17,11 +17,11 @@ pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String 
 
 pub(crate) fn resolve_max_tool_retries(
     _tool_name: &str,
-    _vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
+    vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
 ) -> usize {
-    // TODO: Re-implement per-tool retry configuration once config structure is verified.
-    // Currently AgentConfig does not expose a 'tools' map.
-    3
+    vt_cfg
+        .map(|cfg| cfg.agent.harness.max_tool_retries as usize)
+        .unwrap_or(vtcode_config::constants::defaults::DEFAULT_MAX_TOOL_RETRIES as usize)
 }
 
 /// Updates the tool repetition tracker based on the execution outcome.
