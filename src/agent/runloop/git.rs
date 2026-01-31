@@ -88,6 +88,13 @@ pub(crate) async fn confirm_changes_with_git_diff(
 
         let diff = String::from_utf8_lossy(&output.stdout);
         if !diff.is_empty() {
+            // In TUI mode, skip interactive confirmation to avoid corrupting display
+            // The TUI has its own confirmation mechanisms
+            if std::env::var("VTCODE_TUI_MODE").is_ok() {
+                tracing::debug!("Git diff for {}: {} bytes", file, diff.len());
+                continue;
+            }
+
             println!("Changes to {}:\n{}", file, diff);
             print!("Apply these changes? (y/n): ");
             io::stdout().flush()?;

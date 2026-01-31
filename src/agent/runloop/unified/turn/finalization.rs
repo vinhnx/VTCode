@@ -89,8 +89,8 @@ pub(super) async fn finalize_session(
 
     for linked in linked_directories {
         if let Err(err) = remove_directory_symlink(&linked.link_path).await {
-            eprintln!(
-                "Warning: failed to remove linked directory {}: {}",
+            tracing::warn!(
+                "Failed to remove linked directory {}: {}",
                 linked.link_path.display(),
                 err
             );
@@ -119,12 +119,12 @@ pub(super) async fn finalize_session(
             || error_msg.contains("Broken pipe")
             || error_msg.contains("write EPIPE")
         {
-            eprintln!(
-                "Info: MCP client shutdown encountered pipe errors (normal): {}",
+            tracing::debug!(
+                "MCP client shutdown encountered pipe errors (normal): {}",
                 e
             );
         } else {
-            eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
+            tracing::warn!("Failed to shutdown MCP client cleanly: {}", e);
         }
     }
 

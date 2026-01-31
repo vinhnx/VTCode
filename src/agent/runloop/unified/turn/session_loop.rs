@@ -630,7 +630,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 vt_cfg = config_watcher.load_config();
                 // Optimization: Update idle config when config changes
                 idle_config = extract_idle_config(vt_cfg.as_ref());
-                println!("Configuration reloaded due to file changes");
+                tracing::debug!("Configuration reloaded due to file changes");
             }
 
             resume_state = None;
@@ -646,7 +646,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             vt_cfg = config_watcher.load_config();
             // Optimization: Update idle config when config changes
             idle_config = extract_idle_config(vt_cfg.as_ref());
-            println!("Configuration reloaded during idle period");
+            tracing::debug!("Configuration reloaded during idle period");
         }
 
         // Idle detection and back-off mechanism (optimized: use pre-computed config)

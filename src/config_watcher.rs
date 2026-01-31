@@ -52,7 +52,7 @@ impl ConfigWatcher {
 
                         // Check if the event is relevant to our config files
                         if is_relevant_config_event(&event, &workspace_path) {
-                            println!("Config file changed: {:?}", event);
+                            tracing::debug!("Config file changed: {:?}", event);
                         }
                     }
                 }
@@ -95,7 +95,7 @@ impl ConfigWatcher {
         if self.should_reload().await
             && let Err(err) = self.load_config().await
         {
-            eprintln!("Failed to reload config: {}", err);
+            tracing::warn!("Failed to reload config: {}", err);
         }
 
         self.current_config.lock().await.clone()
