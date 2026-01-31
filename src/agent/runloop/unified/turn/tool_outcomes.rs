@@ -8,8 +8,8 @@
 mod apply;
 mod dispatch;
 mod execution_result;
-mod handlers;
-mod helpers;
+pub(crate) mod handlers;
+pub(crate) mod helpers;
 mod messages;
 
 pub(crate) use apply::apply_turn_outcome;

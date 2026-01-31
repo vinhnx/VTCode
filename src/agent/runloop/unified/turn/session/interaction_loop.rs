@@ -45,6 +45,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub async_mcp_manager: &'a Option<Arc<AsyncMcpManager>>,
     pub tool_registry: &'a mut vtcode_core::tools::registry::ToolRegistry,
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
+    pub cached_tools: &'a Option<Arc<Vec<uni::ToolDefinition>>>,
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub decision_ledger:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
@@ -64,6 +65,23 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub default_placeholder: &'a mut Option<String>,
     pub follow_up_placeholder: &'a mut Option<String>,
     pub checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
+    pub tool_result_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>,
+    pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    pub harness_emitter:
+        Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
+    pub safety_validator: &'a Arc<
+        tokio::sync::RwLock<
+            crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator,
+        >,
+    >,
+    pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
+    pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
+    pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
+    pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
+    pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
+    pub error_recovery:
+        &'a Arc<std::sync::RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+    pub last_forced_redraw: &'a mut std::time::Instant,
 }
 
 pub(crate) struct InteractionState<'a> {
@@ -374,13 +392,8 @@ pub(crate) async fn run_interaction_loop(
         // Check for direct tool execution (bash / run)
         {
             let mut direct_tool_ctx = tool_dispatch::DirectToolContext {
-                renderer: ctx.renderer,
-                conversation_history: ctx.conversation_history,
-                handle: ctx.handle,
+                interaction_ctx: ctx,
                 input_status_state: state.input_status_state,
-                tool_registry: ctx.tool_registry,
-                vt_cfg: ctx.vt_cfg,
-                follow_up_placeholder: ctx.follow_up_placeholder,
             };
 
             if let Some(outcome) =

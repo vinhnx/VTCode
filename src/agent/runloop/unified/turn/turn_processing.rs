@@ -508,14 +508,13 @@ pub(crate) fn process_llm_response(
 
     // Build result
     if !tool_calls.is_empty() {
-        let assistant_text = if interpreted_textual_call {
-            String::new()
-        } else {
-            final_text.clone().unwrap_or_default()
-        };
         return Ok(TurnProcessingResult::ToolCalls {
             tool_calls,
-            assistant_text,
+            assistant_text: if interpreted_textual_call {
+                String::new()
+            } else {
+                final_text.clone().unwrap_or_default()
+            },
             reasoning: response.reasoning.clone(),
         });
     }
