@@ -177,7 +177,9 @@ impl OllamaClient {
         model: &str,
         reporter: &mut dyn OllamaPullProgressReporter,
     ) -> io::Result<()> {
-        reporter.on_event(&OllamaPullEvent::Status(format!("Pulling model {model}...")))?;
+        reporter.on_event(&OllamaPullEvent::Status(format!(
+            "Pulling model {model}..."
+        )))?;
         let mut stream = self.pull_model_stream(model).await?;
 
         while let Some(event) = stream.next().await {

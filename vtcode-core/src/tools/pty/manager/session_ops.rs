@@ -7,7 +7,6 @@ use anyhow::{Context, Result, anyhow};
 use portable_pty::PtySize;
 use std::io::Write;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use tracing::warn;
 
 impl PtyManager {
@@ -250,27 +249,9 @@ impl PtyManager {
             }
         }
 
-        // 2. Terminate child process
-        {
-            let mut child = handle.child.lock();
-            if child
-                .try_wait()
-                .context("failed to poll PTY session status")?
-                .is_none()
-            {
-                let kill_started = Instant::now();
-                child.kill().context("failed to terminate PTY session")?;
-                let _ = child.wait();
-                let elapsed = kill_started.elapsed();
-                if elapsed > Duration::from_secs(2) {
-                    warn!(
-                        session = %session_id,
-                        elapsed_ms = %elapsed.as_millis(),
-                        "PTY session termination exceeded budget"
-                    );
-                }
-            }
-        }
+        // 2. Terminate child process using graceful termination
+        // This uses SIGTERM first, then SIGKILL after a grace period
+        handle.graceful_terminate();
 
         // 3. Join reader thread
         {

@@ -5,12 +5,18 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use portable_pty::{Child, MasterPty};
-use tracing::warn;
+use tracing::{debug, warn};
 use vt100::Parser;
 
 use crate::tools::types::VTCodePtySession;
 
 use super::scrollback::PtyScrollback;
+
+/// Grace period to wait after SIGTERM before sending SIGKILL (ms)
+const GRACEFUL_SHUTDOWN_TIMEOUT_MS: u64 = 500;
+
+/// Maximum time to wait for reader thread to finish (ms)
+const READER_THREAD_TIMEOUT_MS: u64 = 5000;
 
 pub(super) struct CommandEchoState {
     command_bytes: Vec<u8>,
@@ -152,12 +158,94 @@ fn parse_ansi_sequence(text: &str) -> Option<usize> {
 pub(super) struct PtySessionHandle {
     pub(super) master: Mutex<Box<dyn MasterPty + Send>>,
     pub(super) child: Mutex<Box<dyn Child + Send>>,
+    pub(super) child_pid: Option<u32>,
     pub(super) writer: Mutex<Option<Box<dyn Write + Send>>>,
     pub(super) terminal: Arc<Mutex<Parser>>,
     pub(super) scrollback: Arc<Mutex<PtyScrollback>>,
     pub(super) reader_thread: Mutex<Option<JoinHandle<()>>>,
     pub(super) metadata: VTCodePtySession,
     pub(super) last_input: Mutex<Option<CommandEchoState>>,
+}
+
+impl PtySessionHandle {
+    /// Gracefully terminate the child process.
+    ///
+    /// This method attempts a graceful shutdown by:
+    /// 1. Sending SIGTERM (via process group kill on Unix)
+    /// 2. Waiting for a short grace period
+    /// 3. Sending SIGKILL if the process hasn't exited
+    ///
+    /// This ensures that child processes have a chance to clean up
+    /// before being forcibly terminated.
+    #[cfg(unix)]
+    pub(super) fn graceful_terminate(&self) {
+        use vtcode_bash_runner::{
+            GracefulTerminationResult, KillSignal, graceful_kill_process_group,
+        };
+
+        let mut child = self.child.lock();
+
+        // Check if already exited
+        if let Ok(Some(_)) = child.try_wait() {
+            return;
+        }
+
+        // Use unified graceful termination helper
+        if let Some(pid) = self.child_pid {
+            let result = graceful_kill_process_group(
+                pid,
+                KillSignal::Term,
+                Duration::from_millis(GRACEFUL_SHUTDOWN_TIMEOUT_MS),
+            );
+
+            match result {
+                GracefulTerminationResult::GracefulExit => {
+                    debug!(pid = pid, "Process group exited gracefully");
+                }
+                GracefulTerminationResult::ForcefulKill => {
+                    debug!(pid = pid, "Process group required SIGKILL");
+                }
+                GracefulTerminationResult::AlreadyExited => {
+                    debug!(pid = pid, "Process group was already exited");
+                }
+                GracefulTerminationResult::Error => {
+                    warn!(pid = pid, "Failed to terminate process group");
+                }
+            }
+        }
+
+        // Fallback: use portable-pty's kill for any remaining cleanup
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    /// Gracefully terminate on non-Unix (just kill directly)
+    #[cfg(not(unix))]
+    pub(super) fn graceful_terminate(&self) {
+        use vtcode_bash_runner::{GracefulTerminationResult, graceful_kill_process_group_default};
+
+        let mut child = self.child.lock();
+
+        // Check if already exited
+        if let Ok(Some(_)) = child.try_wait() {
+            return;
+        }
+
+        // Try graceful termination via process group
+        if let Some(pid) = self.child_pid {
+            let result = graceful_kill_process_group_default(pid);
+            match result {
+                GracefulTerminationResult::Error => {
+                    // Fallback to portable-pty's kill
+                    let _ = child.kill();
+                }
+                _ => {}
+            }
+        } else {
+            let _ = child.kill();
+        }
+        let _ = child.wait();
+    }
 }
 
 impl Drop for PtySessionHandle {
@@ -174,11 +262,39 @@ impl Drop for PtySessionHandle {
             }
         }
 
-        // Kill child if still running
+        // Kill child process and its process group using graceful termination
+        // This uses SIGTERM first, then SIGKILL after a grace period
+        #[cfg(unix)]
         {
+            use vtcode_bash_runner::{
+                KillSignal, graceful_kill_process_group,
+            };
+
             let mut child = self.child.lock();
             if let Ok(None) = child.try_wait() {
-                // Child still running, terminate it
+                // Use unified graceful termination helper
+                if let Some(pid) = self.child_pid {
+                    let _ = graceful_kill_process_group(
+                        pid,
+                        KillSignal::Term,
+                        Duration::from_millis(GRACEFUL_SHUTDOWN_TIMEOUT_MS),
+                    );
+                }
+
+                // Fallback: use portable-pty's kill for any remaining cleanup
+                let _ = child.kill();
+            }
+        }
+
+        #[cfg(not(unix))]
+        {
+            use vtcode_bash_runner::graceful_kill_process_group_default;
+
+            let mut child = self.child.lock();
+            if let Ok(None) = child.try_wait() {
+                if let Some(pid) = self.child_pid {
+                    let _ = graceful_kill_process_group_default(pid);
+                }
                 let _ = child.kill();
             }
         }
@@ -189,14 +305,14 @@ impl Drop for PtySessionHandle {
             if let Some(reader_thread) = thread_guard.take() {
                 // Use timeout to prevent infinite hang in Drop
                 let join_result = std::thread::spawn(move || {
-                    // Give reader thread up to 5 seconds to finish
                     let start = std::time::Instant::now();
+                    let timeout = Duration::from_millis(READER_THREAD_TIMEOUT_MS);
                     loop {
                         if reader_thread.is_finished() {
                             let _ = reader_thread.join();
                             break;
                         }
-                        if start.elapsed() > Duration::from_secs(5) {
+                        if start.elapsed() > timeout {
                             warn!("PTY reader thread did not finish within timeout");
                             break;
                         }

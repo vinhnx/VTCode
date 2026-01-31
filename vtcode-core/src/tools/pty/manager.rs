@@ -543,6 +543,10 @@ if output.len() > max_tokens * 4 {
         let child = pair.slave.spawn_command(builder).with_context(|| {
             format!("failed to spawn PTY session command '{}'", display_program)
         })?;
+
+        // Capture the child process ID for process group management
+        let child_pid = child.process_id();
+
         drop(pair.slave);
 
         let master = pair.master;
@@ -656,6 +660,7 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
         entry.insert(Arc::new(PtySessionHandle {
             master: Mutex::new(master),
             child: Mutex::new(child),
+            child_pid,
             writer: Mutex::new(Some(writer)),
             terminal: parser,
             scrollback,

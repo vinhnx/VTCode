@@ -196,30 +196,53 @@ pub fn filter_sensitive_env(env: &HashMap<String, String>) -> HashMap<String, St
 ///
 /// "Ensures sandboxed children die if the main process gets killed -
 /// you don't want orphaned processes running around."
+///
+/// Uses SIGTERM for graceful shutdown. Includes parent PID check to avoid
+/// race condition where parent exits between fork and exec.
 #[cfg(target_os = "linux")]
 pub fn setup_parent_death_signal() -> std::io::Result<()> {
+    setup_parent_death_signal_with_check(unsafe { libc::getppid() })
+}
+
+/// Set up parent death signal with explicit parent PID check.
+///
+/// This variant should be used in pre_exec hooks where the parent PID
+/// is captured before spawn to avoid race conditions.
+#[cfg(target_os = "linux")]
+pub fn setup_parent_death_signal_with_check(
+    expected_parent_pid: libc::pid_t,
+) -> std::io::Result<()> {
     use std::io::{Error, ErrorKind};
 
-    const PR_SET_PDEATHSIG: libc::c_int = 1;
-    const SIGKILL: libc::c_int = 9;
-
-    let result = unsafe { libc::prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0) };
+    // Use SIGTERM for graceful shutdown (allows cleanup handlers to run)
+    let result = unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) };
 
     if result == -1 {
-        Err(Error::new(
+        return Err(Error::new(
             ErrorKind::Other,
             format!(
                 "prctl(PR_SET_PDEATHSIG) failed: {}",
                 std::io::Error::last_os_error()
             ),
-        ))
-    } else {
-        Ok(())
+        ));
     }
+
+    // Re-check parent PID to catch race condition where parent exited between
+    // fork and this prctl call. If parent changed, self-terminate immediately.
+    if unsafe { libc::getppid() } != expected_parent_pid {
+        unsafe { libc::raise(libc::SIGTERM) };
+    }
+
+    Ok(())
 }
 
 #[cfg(not(target_os = "linux"))]
 pub fn setup_parent_death_signal() -> std::io::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn setup_parent_death_signal_with_check(_expected_parent_pid: i32) -> std::io::Result<()> {
     Ok(())
 }
 

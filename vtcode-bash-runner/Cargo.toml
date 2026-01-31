@@ -25,16 +25,35 @@ lru = "0.12"
 parking_lot = "0.12"
 path-clean = "1.0"
 shell-escape = "0.1"
-tokio = { version = "1.0", features = ["sync", "macros", "rt", "io-util"] }
+tokio = { version = "1.0", features = [
+    "sync",
+    "macros",
+    "rt",
+    "io-util",
+    "process",
+    "time",
+    "rt-multi-thread",
+] }
 vtcode-commons = { path = "../vtcode-commons", version = "0.74.2" }
 serde = { version = "1.0", features = ["derive"], optional = true }
 vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.74.2", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "processthreadsapi",
+    "winnt",
+    "handleapi",
+] }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 assert_fs = "1.1"
+tokio-test = "0.4"
 
 [[example]]
 name = "dry_run"
