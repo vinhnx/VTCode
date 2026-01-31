@@ -157,49 +157,24 @@ pub(crate) async fn handle_tool_calls(
                 for (call_id, name, args, status, start_time) in results {
                     let outcome = ToolPipelineOutcome::from_status(status);
 
-                    let signature_key = signature_key_for(&name, &args);
-                    let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
-                    *current_count += 1;
+                    // Only count SUCCESSFUL tool calls for turn balancer repetition tracking.
+                    // Failed, timed out, or cancelled tool calls should NOT trigger the turn balancer.
+                    if matches!(
+                        &outcome.status,
+                        crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success { .. }
+                    ) {
+                        let signature_key = signature_key_for(&name, &args);
+                        let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
+                        *current_count += 1;
+                    }
 
                     handle_tool_execution_result(
-                        &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
-                            renderer: ctx.renderer,
-                            handle: ctx.handle,
-                            session: ctx.session,
-                            session_stats: ctx.session_stats,
-                            auto_exit_plan_mode_attempted: ctx.auto_exit_plan_mode_attempted,
-                            mcp_panel_state: ctx.mcp_panel_state,
-                            tool_result_cache: ctx.tool_result_cache,
-                            approval_recorder: ctx.approval_recorder,
-                            decision_ledger: ctx.decision_ledger,
-                            tool_registry: ctx.tool_registry,
-                            tools: ctx.tools,
-                            cached_tools: ctx.cached_tools,
-                            ctrl_c_state: ctx.ctrl_c_state,
-                            ctrl_c_notify: ctx.ctrl_c_notify,
-                            context_manager: ctx.context_manager,
-                            last_forced_redraw: ctx.last_forced_redraw,
-                            input_status_state: ctx.input_status_state,
-                            lifecycle_hooks: ctx.lifecycle_hooks,
-                            default_placeholder: ctx.default_placeholder,
-                            tool_permission_cache: ctx.tool_permission_cache,
-                            safety_validator: ctx.safety_validator,
-                            circuit_breaker: ctx.circuit_breaker,
-                            tool_health_tracker: ctx.tool_health_tracker,
-                            rate_limiter: ctx.rate_limiter,
-                            telemetry: ctx.telemetry,
-                            autonomous_executor: ctx.autonomous_executor,
-                            error_recovery: ctx.error_recovery,
-                            harness_state: ctx.harness_state,
-                            harness_emitter: ctx.harness_emitter,
-                        },
+                        ctx,
                         call_id,
                         &name,
                         &args,
                         &outcome,
-                        ctx.working_history,
                         turn_modified_files,
-                        ctx.vt_cfg,
                         traj,
                         start_time,
                     )

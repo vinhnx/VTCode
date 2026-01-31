@@ -15,7 +15,9 @@ use crate::agent::runloop::unified::turn::context::{
 use crate::agent::runloop::unified::turn::guards::handle_turn_balancer;
 
 use super::execution_result::handle_tool_execution_result;
-use super::helpers::{push_assistant_message, push_tool_response, resolve_max_tool_retries};
+use super::helpers::{
+    push_assistant_message, push_tool_response, reasoning_duplicates_content, resolve_max_tool_retries,
+};
 
 pub(crate) fn handle_assistant_response(
     ctx: &mut TurnProcessingContext<'_>,
@@ -23,12 +25,6 @@ pub(crate) fn handle_assistant_response(
     reasoning: Option<String>,
     response_streamed: bool,
 ) -> Result<()> {
-    fn reasoning_duplicates_content(cleaned_reasoning: &str, content: &str) -> bool {
-        let cleaned_content = vtcode_core::llm::providers::clean_reasoning_text(content);
-        !cleaned_reasoning.is_empty()
-            && !cleaned_content.is_empty()
-            && cleaned_reasoning == cleaned_content
-    }
 
     if !response_streamed {
         if !assistant_text.trim().is_empty() {
@@ -37,13 +33,13 @@ pub(crate) fn handle_assistant_response(
         if let Some(reasoning_text) = reasoning.as_ref()
             && !reasoning_text.trim().is_empty()
         {
-            let cleaned_reasoning =
-                vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
             let duplicates_content = !assistant_text.trim().is_empty()
-                && reasoning_duplicates_content(&cleaned_reasoning, &assistant_text);
-            if !cleaned_reasoning.trim().is_empty() && !duplicates_content {
+                && reasoning_duplicates_content(reasoning_text, &assistant_text);
+            if !reasoning_text.trim().is_empty() && !duplicates_content {
+                let cleaned_for_display =
+                    vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
                 ctx.renderer
-                    .line(MessageStyle::Reasoning, &cleaned_reasoning)?;
+                    .line(MessageStyle::Reasoning, &cleaned_for_display)?;
             }
         }
     }
@@ -51,11 +47,7 @@ pub(crate) fn handle_assistant_response(
     if !assistant_text.trim().is_empty() {
         let msg = uni::Message::assistant(assistant_text.clone());
         let msg_with_reasoning = if let Some(reasoning_text) = reasoning {
-            let cleaned_reasoning =
-                vtcode_core::llm::providers::clean_reasoning_text(&reasoning_text);
-            let duplicates_content =
-                reasoning_duplicates_content(&cleaned_reasoning, &assistant_text);
-            if duplicates_content {
+            if reasoning_duplicates_content(&reasoning_text, &assistant_text) {
                 msg
             } else {
                 msg.with_reasoning(Some(reasoning_text))
@@ -91,13 +83,6 @@ pub(crate) struct HandleTextResponseParams<'a> {
 pub(crate) async fn handle_text_response(
     params: HandleTextResponseParams<'_>,
 ) -> Result<TurnHandlerOutcome> {
-    fn reasoning_duplicates_content(cleaned_reasoning: &str, content: &str) -> bool {
-        let cleaned_content = vtcode_core::llm::providers::clean_reasoning_text(content);
-        !cleaned_reasoning.is_empty()
-            && !cleaned_content.is_empty()
-            && cleaned_reasoning == cleaned_content
-    }
-
     if !params.response_streamed {
         if !params.text.trim().is_empty() {
             params
@@ -108,15 +93,15 @@ pub(crate) async fn handle_text_response(
         if let Some(reasoning_text) = params.reasoning.as_ref()
             && !reasoning_text.trim().is_empty()
         {
-            let cleaned_reasoning =
-                vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
             let duplicates_content = !params.text.trim().is_empty()
-                && reasoning_duplicates_content(&cleaned_reasoning, &params.text);
-            if !cleaned_reasoning.trim().is_empty() && !duplicates_content {
+                && reasoning_duplicates_content(reasoning_text, &params.text);
+            if !reasoning_text.trim().is_empty() && !duplicates_content {
+                let cleaned_for_display =
+                    vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
                 params
                     .ctx
                     .renderer
-                    .line(MessageStyle::Reasoning, &cleaned_reasoning)?;
+                    .line(MessageStyle::Reasoning, &cleaned_for_display)?;
             }
         }
     }
@@ -226,44 +211,12 @@ pub(crate) async fn handle_text_response(
                 let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);
 
                 handle_tool_execution_result(
-                    &mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
-                        renderer: params.ctx.renderer,
-                        handle: params.ctx.handle,
-                        session: params.ctx.session,
-                        session_stats: params.ctx.session_stats,
-                        auto_exit_plan_mode_attempted: params.ctx.auto_exit_plan_mode_attempted,
-                        mcp_panel_state: params.ctx.mcp_panel_state,
-                        tool_result_cache: params.ctx.tool_result_cache,
-                        approval_recorder: params.ctx.approval_recorder,
-                        decision_ledger: params.ctx.decision_ledger,
-                        tool_registry: params.ctx.tool_registry,
-                        tools: params.ctx.tools,
-                        cached_tools: params.ctx.cached_tools,
-                        ctrl_c_state: params.ctx.ctrl_c_state,
-                        ctrl_c_notify: params.ctx.ctrl_c_notify,
-                        context_manager: params.ctx.context_manager,
-                        last_forced_redraw: params.ctx.last_forced_redraw,
-                        input_status_state: params.ctx.input_status_state,
-                        lifecycle_hooks: params.ctx.lifecycle_hooks,
-                        default_placeholder: params.ctx.default_placeholder,
-                        tool_permission_cache: params.ctx.tool_permission_cache,
-                        safety_validator: params.ctx.safety_validator,
-                        circuit_breaker: params.ctx.circuit_breaker,
-                        tool_health_tracker: params.ctx.tool_health_tracker,
-                        rate_limiter: params.ctx.rate_limiter,
-                        telemetry: params.ctx.telemetry,
-                        autonomous_executor: params.ctx.autonomous_executor,
-                        error_recovery: params.ctx.error_recovery,
-                        harness_state: params.ctx.harness_state,
-                        harness_emitter: params.ctx.harness_emitter,
-                    },
+                    params.ctx,
                     tool_call.id.clone(),
                     call_tool_name,
                     &call_args_val,
                     &pipeline_outcome,
-                    params.ctx.working_history,
                     params.turn_modified_files,
-                    params.ctx.vt_cfg,
                     params.traj,
                     tool_execution_start,
                 )
@@ -317,10 +270,7 @@ pub(crate) async fn handle_text_response(
     } else {
         let msg = uni::Message::assistant(params.text.clone());
         let msg_with_reasoning = if let Some(reasoning_text) = params.reasoning {
-            let cleaned_reasoning =
-                vtcode_core::llm::providers::clean_reasoning_text(&reasoning_text);
-            let duplicates_content = reasoning_duplicates_content(&cleaned_reasoning, &params.text);
-            if duplicates_content {
+            if reasoning_duplicates_content(&reasoning_text, &params.text) {
                 msg
             } else {
                 msg.with_reasoning(Some(reasoning_text))

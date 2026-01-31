@@ -151,4 +151,43 @@ impl<'a> TurnProcessingContext<'a> {
             harness_emitter: ctx.harness_emitter,
         }
     }
+
+    /// Creates a TurnLoopContext from this TurnProcessingContext.
+    /// This is used when calling handle_tool_execution_result which requires TurnLoopContext.
+    pub fn as_turn_loop_context(
+        &mut self,
+    ) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {
+        crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            session: self.session,
+            session_stats: self.session_stats,
+            auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
+            mcp_panel_state: self.mcp_panel_state,
+            tool_result_cache: self.tool_result_cache,
+            approval_recorder: self.approval_recorder,
+            decision_ledger: self.decision_ledger,
+            tool_registry: self.tool_registry,
+            tools: self.tools,
+            cached_tools: self.cached_tools,
+            ctrl_c_state: self.ctrl_c_state,
+            ctrl_c_notify: self.ctrl_c_notify,
+            context_manager: self.context_manager,
+            last_forced_redraw: self.last_forced_redraw,
+            input_status_state: self.input_status_state,
+            lifecycle_hooks: self.lifecycle_hooks,
+            default_placeholder: self.default_placeholder,
+            tool_permission_cache: self.tool_permission_cache,
+            safety_validator: self.safety_validator,
+            circuit_breaker: self.circuit_breaker,
+            tool_health_tracker: self.tool_health_tracker,
+            rate_limiter: self.rate_limiter,
+            telemetry: self.telemetry,
+            autonomous_executor: self.autonomous_executor,
+            error_recovery: self.error_recovery,
+            harness_state: self.harness_state,
+            harness_emitter: self.harness_emitter,
+        }
+    }
 }
+
