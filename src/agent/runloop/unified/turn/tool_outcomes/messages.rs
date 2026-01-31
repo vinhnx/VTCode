@@ -80,8 +80,8 @@ pub(crate) struct HandleTextResponseParams<'a> {
     pub tool_repeat_limit: usize,
 }
 
-pub(crate) async fn handle_text_response(
-    params: HandleTextResponseParams<'_>,
+pub(crate) async fn handle_text_response<'a>(
+    params: HandleTextResponseParams<'a>,
 ) -> Result<TurnHandlerOutcome> {
     if !params.response_streamed {
         if !params.text.trim().is_empty() {
@@ -151,7 +151,6 @@ pub(crate) async fn handle_text_response(
                         &serde_json::json!({"error": format!("Safety validation failed: {}", err)}),
                     )
                     .unwrap_or_else(|_| "{}".to_string()),
-                    call_tool_name,
                 );
                 return Ok(handle_turn_balancer(
                     params.ctx,
@@ -204,7 +203,7 @@ pub(crate) async fn handle_text_response(
                     params.ctx.ctrl_c_state,
                     params.ctx.ctrl_c_notify,
                     None,
-                    resolve_max_tool_retries(params.ctx.vt_cfg),
+                    resolve_max_tool_retries(call_tool_name, params.ctx.vt_cfg),
                 )
                 .await;
 
@@ -237,7 +236,6 @@ pub(crate) async fn handle_text_response(
                     params.ctx.working_history,
                     tool_call.id.clone(),
                     serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
-                    call_tool_name,
                 );
             }
             Ok(ToolPermissionFlow::Exit) => {
@@ -255,7 +253,6 @@ pub(crate) async fn handle_text_response(
                     params.ctx.working_history,
                     tool_call.id.clone(),
                     err_json.to_string(),
-                    call_tool_name,
                 );
             }
         }

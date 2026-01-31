@@ -18,14 +18,14 @@ use super::helpers::push_tool_response;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn handle_tool_execution_result(
-    ctx: &mut TurnProcessingContext<'_>,
+pub(crate) async fn handle_tool_execution_result<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
     pipeline_outcome: &ToolPipelineOutcome,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &vtcode_core::core::trajectory::TrajectoryLogger,
+    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     tool_start_time: std::time::Instant,
 ) -> Result<()> {
     match &pipeline_outcome.status {
@@ -48,7 +48,7 @@ pub(crate) async fn handle_tool_execution_result(
                 serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
             };
 
-            push_tool_response(ctx.working_history, tool_call_id, content_for_model, tool_name);
+            push_tool_response(ctx.working_history, tool_call_id, content_for_model);
 
             let vt_cfg = ctx.vt_cfg;
             let (_any_write, mod_files, last_stdout) = handle_pipeline_output_from_turn_ctx(
@@ -123,7 +123,6 @@ pub(crate) async fn handle_tool_execution_result(
                 ctx.working_history,
                 tool_call_id,
                 error_content.to_string(),
-                tool_name,
             );
 
             if is_plan_mode_denial && ctx.session_stats.is_plan_mode() {
@@ -152,23 +151,24 @@ pub(crate) async fn handle_tool_execution_result(
                 );
 
                 let exit_start = std::time::Instant::now();
+                let mut run_loop_ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+                    renderer: ctx.renderer,
+                    handle: ctx.handle,
+                    tool_registry: ctx.tool_registry,
+                    tools: ctx.tools,
+                    tool_result_cache: ctx.tool_result_cache,
+                    tool_permission_cache: ctx.tool_permission_cache,
+                    decision_ledger: ctx.decision_ledger,
+                    session_stats: ctx.session_stats,
+                    mcp_panel_state: ctx.mcp_panel_state,
+                    approval_recorder: ctx.approval_recorder,
+                    session: ctx.session,
+                    traj,
+                    harness_state: ctx.harness_state,
+                    harness_emitter: ctx.harness_emitter,
+                };
                 let exit_outcome = run_tool_call(
-                    &mut crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-                        renderer: ctx.renderer,
-                        handle: ctx.handle,
-                        tool_registry: ctx.tool_registry,
-                        tools: ctx.tools,
-                        tool_result_cache: ctx.tool_result_cache,
-                        tool_permission_cache: ctx.tool_permission_cache,
-                        decision_ledger: ctx.decision_ledger,
-                        session_stats: ctx.session_stats,
-                        mcp_panel_state: ctx.mcp_panel_state,
-                        approval_recorder: ctx.approval_recorder,
-                        session: ctx.session,
-                        traj,
-                        harness_state: ctx.harness_state,
-                        harness_emitter: ctx.harness_emitter,
-                    },
+                    &mut run_loop_ctx,
                     &exit_call,
                     ctx.ctrl_c_state,
                     ctx.ctrl_c_notify,
@@ -201,7 +201,6 @@ pub(crate) async fn handle_tool_execution_result(
                                 ctx.working_history,
                                 exit_call_id.clone(),
                                 content_for_model,
-                                tool_names::EXIT_PLAN_MODE,
                             );
 
                             let vt_cfg = ctx.vt_cfg;
@@ -244,7 +243,6 @@ pub(crate) async fn handle_tool_execution_result(
                                 ctx.working_history,
                                 exit_call_id.clone(),
                                 error_content.to_string(),
-                                tool_names::EXIT_PLAN_MODE,
                             );
                         }
                         ToolExecutionStatus::Timeout { error } => {
@@ -271,7 +269,6 @@ pub(crate) async fn handle_tool_execution_result(
                                 ctx.working_history,
                                 exit_call_id.clone(),
                                 error_content.to_string(),
-                                tool_names::EXIT_PLAN_MODE,
                             );
                         }
                         ToolExecutionStatus::Cancelled | ToolExecutionStatus::Progress(_) => {}
@@ -294,7 +291,6 @@ pub(crate) async fn handle_tool_execution_result(
                 ctx.working_history,
                 tool_call_id,
                 error_content.to_string(),
-                tool_name,
             );
         }
         ToolExecutionStatus::Cancelled => {
@@ -306,7 +302,6 @@ pub(crate) async fn handle_tool_execution_result(
                 ctx.working_history,
                 tool_call_id,
                 error_content.to_string(),
-                tool_name,
             );
         }
         ToolExecutionStatus::Progress(_) => {}

@@ -189,5 +189,29 @@ impl<'a> TurnProcessingContext<'a> {
             harness_emitter: self.harness_emitter,
         }
     }
+
+    /// Creates a RunLoopContext from this TurnProcessingContext.
+    /// Used for actions that require the full RunLoopContext (e.g. running internal tools).
+    pub fn as_run_loop_context(
+        &mut self,
+        traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    ) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
+        crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            tool_registry: self.tool_registry,
+            tools: self.tools,
+            tool_result_cache: self.tool_result_cache,
+            tool_permission_cache: self.tool_permission_cache,
+            decision_ledger: self.decision_ledger,
+            session_stats: self.session_stats,
+            mcp_panel_state: self.mcp_panel_state,
+            approval_recorder: self.approval_recorder,
+            session: self.session,
+            traj,
+            harness_state: self.harness_state,
+            harness_emitter: self.harness_emitter,
+        }
+    }
 }
 

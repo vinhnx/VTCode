@@ -18,14 +18,14 @@ use crate::agent::runloop::unified::turn::context::{
 };
 
 use super::super::execution_result::handle_tool_execution_result;
-use super::super::helpers::{push_tool_response, resolve_max_tool_retries, signature_key_for};
+use super::super::helpers::{push_tool_response, resolve_max_tool_retries, update_repetition_tracker};
 
-pub(crate) async fn handle_tool_call(
-    ctx: &mut TurnProcessingContext<'_>,
+pub(crate) async fn handle_tool_call<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
     tool_call: &uni::ToolCall,
     repeated_tool_attempts: &mut std::collections::HashMap<String, usize>,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &vtcode_core::core::trajectory::TrajectoryLogger,
+    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
 ) -> Result<Option<TurnHandlerOutcome>> {
     let function = tool_call
         .function
@@ -50,7 +50,6 @@ pub(crate) async fn handle_tool_call(
             ctx.working_history,
             tool_call.id.clone(),
             serde_json::json!({"error": error_msg}).to_string(),
-            tool_name,
         );
         return Ok(None);
     }
@@ -92,7 +91,6 @@ pub(crate) async fn handle_tool_call(
                 ctx.working_history,
                 tool_call.id.clone(),
                 serde_json::json!({"error": error_msg}).to_string(),
-                tool_name,
             );
             return Ok(None);
         } else {
@@ -135,7 +133,6 @@ pub(crate) async fn handle_tool_call(
                             tool_call.id.clone(),
                             serde_json::json!({"error": "Session tool limit reached and not increased by user"})
                                 .to_string(),
-                            tool_name,
                         );
                         return Ok(None);
                     }
@@ -151,7 +148,6 @@ pub(crate) async fn handle_tool_call(
                     tool_call.id.clone(),
                     serde_json::json!({"error": format!("Safety validation failed: {}", err)})
                         .to_string(),
-                    tool_name,
                 );
                 return Ok(None);
             }
@@ -191,7 +187,6 @@ pub(crate) async fn handle_tool_call(
         Ok(ToolPermissionFlow::Approved) => {
             // NOTE: We track repetition AFTER execution to only count successful tool calls.
             // This prevents the turn balancer from triggering on repeated failed/blocked calls.
-            let signature_key = signature_key_for(tool_name, &args_val);
 
             // Show pre-execution indicator for file modification operations
             if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(
@@ -271,7 +266,7 @@ pub(crate) async fn handle_tool_call(
                 }));
 
             let tool_execution_start = std::time::Instant::now();
-            let max_tool_retries = resolve_max_tool_retries(ctx.vt_cfg);
+            let max_tool_retries = resolve_max_tool_retries(tool_name, ctx.vt_cfg);
             let tool_result = execute_tool_with_timeout_ref(
                 ctx.tool_registry,
                 tool_name,
@@ -288,14 +283,12 @@ pub(crate) async fn handle_tool_call(
             let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);
 
             // Only count SUCCESSFUL tool calls for turn balancer repetition tracking.
-            // Failed, timed out, or cancelled tool calls should NOT trigger the turn balancer.
-            if matches!(
-                &pipeline_outcome.status,
-                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success { .. }
-            ) {
-                let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
-                *current_count += 1;
-            }
+            update_repetition_tracker(
+                repeated_tool_attempts,
+                &pipeline_outcome,
+                tool_name,
+                &args_val,
+            );
 
             handle_tool_execution_result(
                 ctx,
@@ -321,7 +314,6 @@ pub(crate) async fn handle_tool_call(
                 ctx.working_history,
                 tool_call.id.clone(),
                 serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
-                tool_name,
             );
         }
         Ok(ToolPermissionFlow::Exit) => {
@@ -338,7 +330,6 @@ pub(crate) async fn handle_tool_call(
                 ctx.working_history,
                 tool_call.id.clone(),
                 err_json.to_string(),
-                tool_name,
             );
         }
     }
