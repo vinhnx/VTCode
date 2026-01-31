@@ -24,8 +24,8 @@
 //! or syntax highlighting defaults exposed by the loader.
 
 pub mod acp;
-pub mod auth;
 pub mod api_keys;
+pub mod auth;
 pub mod constants;
 pub mod context;
 pub mod core;
@@ -103,7 +103,6 @@ pub use types::{
 
 // Re-export auth module types
 pub use auth::{
-    OpenRouterOAuthConfig, OpenRouterToken, generate_pkce_challenge, get_auth_url,
-    load_oauth_token, save_oauth_token, clear_oauth_token, AuthStatus, get_auth_status,
-    PkceChallenge,
+    AuthStatus, OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge, clear_oauth_token,
+    generate_pkce_challenge, get_auth_status, get_auth_url, load_oauth_token, save_oauth_token,
 };

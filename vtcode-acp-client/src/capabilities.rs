@@ -342,7 +342,7 @@ pub struct AuthRequirements {
 }
 
 /// Supported authentication methods
-/// 
+///
 /// Follows ACP authentication specification:
 /// https://agentclientprotocol.com/protocol/auth
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -359,7 +359,7 @@ pub enum AuthMethod {
         #[serde(skip_serializing_if = "Option::is_none")]
         description: Option<String>,
     },
-    
+
     /// Environment variable-based authentication
     /// User provides a key/credential that client passes as environment variable
     #[serde(rename = "env_var")]
@@ -377,7 +377,7 @@ pub enum AuthMethod {
         #[serde(skip_serializing_if = "Option::is_none")]
         link: Option<String>,
     },
-    
+
     /// Terminal/TUI-based interactive authentication
     /// Client launches interactive terminal for user to login
     #[serde(rename = "terminal")]
@@ -396,19 +396,19 @@ pub enum AuthMethod {
         #[serde(default, skip_serializing_if = "HashMap::is_empty")]
         env: HashMap<String, String>,
     },
-    
+
     /// Legacy: API key authentication (deprecated, use EnvVar instead)
     #[serde(rename = "api_key")]
     ApiKey,
-    
+
     /// Legacy: OAuth 2.0 (use Terminal for interactive flows)
     #[serde(rename = "oauth2")]
     OAuth2,
-    
+
     /// Legacy: Bearer token authentication
     #[serde(rename = "bearer")]
     Bearer,
-    
+
     /// Custom authentication (agent-specific)
     #[serde(rename = "custom")]
     Custom(String),
@@ -549,7 +549,7 @@ mod tests {
     fn test_auth_method_terminal() {
         let mut env = HashMap::new();
         env.insert("VAR1".to_string(), "value1".to_string());
-        
+
         let method = AuthMethod::Terminal {
             id: "terminal_login".to_string(),
             name: "Terminal Login".to_string(),
@@ -572,12 +572,14 @@ mod tests {
             var_name: "TEST_VAR".to_string(),
             link: None,
         };
-        
+
         let json = serde_json::to_value(&method).unwrap();
         let deserialized: AuthMethod = serde_json::from_value(json).unwrap();
-        
+
         match deserialized {
-            AuthMethod::EnvVar { id, name, var_name, .. } => {
+            AuthMethod::EnvVar {
+                id, name, var_name, ..
+            } => {
                 assert_eq!(id, "test_id");
                 assert_eq!(name, "Test");
                 assert_eq!(var_name, "TEST_VAR");

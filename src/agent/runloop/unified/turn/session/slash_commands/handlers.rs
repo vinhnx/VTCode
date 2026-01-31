@@ -1491,11 +1491,10 @@ pub async fn handle_oauth_login(
     // Generate auth URL
     let auth_url = vtcode_config::auth::get_auth_url(&pkce, callback_port);
 
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "Opening browser for authentication...",
-    )?;
-    ctx.renderer.line(MessageStyle::Output, &format!("URL: {}", auth_url))?;
+    ctx.renderer
+        .line(MessageStyle::Info, "Opening browser for authentication...")?;
+    ctx.renderer
+        .line(MessageStyle::Output, &format!("URL: {}", auth_url))?;
 
     // Try to open browser
     if let Err(err) = webbrowser::open(&auth_url) {
@@ -1526,7 +1525,9 @@ pub async fn handle_oauth_login(
     {
         use vtcode_core::auth::OAuthResult;
 
-        match vtcode_core::auth::run_oauth_callback_server(pkce, callback_port, Some(timeout_secs)).await {
+        match vtcode_core::auth::run_oauth_callback_server(pkce, callback_port, Some(timeout_secs))
+            .await
+        {
             Ok(OAuthResult::Success(api_key)) => {
                 ctx.renderer.line(
                     MessageStyle::Info,
@@ -1538,26 +1539,23 @@ pub async fn handle_oauth_login(
                 )?;
                 ctx.renderer.line(
                     MessageStyle::Output,
-                    &format!("Key preview: {}...", &api_key[..std::cmp::min(8, api_key.len())]),
+                    &format!(
+                        "Key preview: {}...",
+                        &api_key[..std::cmp::min(8, api_key.len())]
+                    ),
                 )?;
             }
             Ok(OAuthResult::Cancelled) => {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "OAuth flow was cancelled by user.",
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Info, "OAuth flow was cancelled by user.")?;
             }
             Ok(OAuthResult::Error(err)) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("OAuth flow failed: {}", err),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Error, &format!("OAuth flow failed: {}", err))?;
             }
             Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("OAuth server error: {}", err),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Error, &format!("OAuth server error: {}", err))?;
             }
         }
     }
@@ -1615,7 +1613,8 @@ pub async fn handle_show_auth_status(
     ctx: SlashCommandContext<'_>,
     provider: Option<String>,
 ) -> Result<SlashCommandControl> {
-    ctx.renderer.line(MessageStyle::Info, "Authentication Status")?;
+    ctx.renderer
+        .line(MessageStyle::Info, "Authentication Status")?;
     ctx.renderer.line(MessageStyle::Output, "")?;
 
     // Show OpenRouter status
@@ -1630,10 +1629,8 @@ pub async fn handle_show_auth_status(
                     ctx.renderer
                         .line(MessageStyle::Info, "OpenRouter: ✓ Authenticated (OAuth)")?;
                     if let Some(l) = label {
-                        ctx.renderer.line(
-                            MessageStyle::Output,
-                            &format!("  Label: {}", l),
-                        )?;
+                        ctx.renderer
+                            .line(MessageStyle::Output, &format!("  Label: {}", l))?;
                     }
                     let age_str = if age_seconds < 60 {
                         format!("{}s ago", age_seconds)
@@ -1658,17 +1655,17 @@ pub async fn handle_show_auth_status(
                         } else {
                             format!("{}d", expires / 86400)
                         };
-                        ctx.renderer.line(
-                            MessageStyle::Output,
-                            &format!("  Expires in: {}", exp_str),
-                        )?;
+                        ctx.renderer
+                            .line(MessageStyle::Output, &format!("  Expires in: {}", exp_str))?;
                     }
                 }
                 vtcode_config::auth::AuthStatus::NotAuthenticated => {
                     // Check if using API key instead
                     if std::env::var("OPENROUTER_API_KEY").is_ok() {
-                        ctx.renderer
-                            .line(MessageStyle::Info, "OpenRouter: Using API key from environment")?;
+                        ctx.renderer.line(
+                            MessageStyle::Info,
+                            "OpenRouter: Using API key from environment",
+                        )?;
                     } else {
                         ctx.renderer
                             .line(MessageStyle::Info, "OpenRouter: Not authenticated")?;

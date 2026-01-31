@@ -12,7 +12,7 @@ use vtcode_acp_client::AuthMethod;
 pub struct AuthHandler {
     /// Environment variables to set for the agent process
     pub env_vars: HashMap<String, String>,
-    
+
     /// Arguments to pass to the agent process
     pub args: Vec<String>,
 }
@@ -29,16 +29,16 @@ impl AuthHandler {
                 })
             }
 
-            AuthMethod::EnvVar {
-                var_name,
-                ..
-            } => {
+            AuthMethod::EnvVar { var_name, .. } => {
                 // For env var auth, the client is responsible for setting the variable
                 // We just validate the variable name here
                 if var_name.is_empty() {
                     anyhow::bail!("Environment variable name cannot be empty");
                 }
-                if !var_name.chars().all(|c: char| c.is_alphanumeric() || c == '_') {
+                if !var_name
+                    .chars()
+                    .all(|c: char| c.is_alphanumeric() || c == '_')
+                {
                     anyhow::bail!(
                         "Invalid environment variable name: '{}'. Must contain only alphanumeric characters and underscores.",
                         var_name
@@ -60,33 +60,25 @@ impl AuthHandler {
             }
 
             // Legacy methods
-            AuthMethod::ApiKey => {
-                Ok(Self {
-                    env_vars: HashMap::new(),
-                    args: Vec::new(),
-                })
-            }
+            AuthMethod::ApiKey => Ok(Self {
+                env_vars: HashMap::new(),
+                args: Vec::new(),
+            }),
 
-            AuthMethod::OAuth2 => {
-                Ok(Self {
-                    env_vars: HashMap::new(),
-                    args: Vec::new(),
-                })
-            }
+            AuthMethod::OAuth2 => Ok(Self {
+                env_vars: HashMap::new(),
+                args: Vec::new(),
+            }),
 
-            AuthMethod::Bearer => {
-                Ok(Self {
-                    env_vars: HashMap::new(),
-                    args: Vec::new(),
-                })
-            }
+            AuthMethod::Bearer => Ok(Self {
+                env_vars: HashMap::new(),
+                args: Vec::new(),
+            }),
 
-            AuthMethod::Custom(_) => {
-                Ok(Self {
-                    env_vars: HashMap::new(),
-                    args: Vec::new(),
-                })
-            }
+            AuthMethod::Custom(_) => Ok(Self {
+                env_vars: HashMap::new(),
+                args: Vec::new(),
+            }),
         }
     }
 
@@ -191,9 +183,7 @@ mod tests {
             name: "Agent".to_string(),
             description: None,
         };
-        let handler = AuthHandler::new(&method)
-            .unwrap()
-            .with_arg("--flag");
+        let handler = AuthHandler::new(&method).unwrap().with_arg("--flag");
         assert_eq!(handler.args.len(), 1);
         assert_eq!(handler.args[0], "--flag");
     }

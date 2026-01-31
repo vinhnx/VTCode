@@ -894,7 +894,10 @@ pub async fn handle_slash_command(
                 renderer.line(MessageStyle::Info, "OAuth Authentication")?;
                 renderer.line(MessageStyle::Output, "")?;
                 renderer.line(MessageStyle::Output, "Available providers:")?;
-                renderer.line(MessageStyle::Output, "  openrouter  - OpenRouter API (OAuth PKCE)")?;
+                renderer.line(
+                    MessageStyle::Output,
+                    "  openrouter  - OpenRouter API (OAuth PKCE)",
+                )?;
                 renderer.line(MessageStyle::Output, "")?;
                 renderer.line(MessageStyle::Info, "Usage: /login <provider>")?;
                 renderer.line(MessageStyle::Output, "  Example: /login openrouter")?;
@@ -923,7 +926,10 @@ pub async fn handle_slash_command(
                 renderer.line(MessageStyle::Output, "Usage: /logout <provider>")?;
                 renderer.line(MessageStyle::Output, "  Example: /logout openrouter")?;
                 renderer.line(MessageStyle::Output, "")?;
-                renderer.line(MessageStyle::Info, "Use /auth to check current authentication status.")?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Use /auth to check current authentication status.",
+                )?;
                 return Ok(SlashCommandOutcome::Handled);
             }
             if provider != "openrouter" {

@@ -152,12 +152,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 .input_manager
                 .history()
                 .iter()
-                .map(|entry| {
-                    (
-                        entry.content().to_string(),
-                        entry.attachment_elements(),
-                    )
-                })
+                .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
                 .collect();
             session.history_picker_state.update_search(&history);
             session.mark_dirty();
@@ -172,12 +167,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             .input_manager
             .history()
             .iter()
-            .map(|entry| {
-                (
-                    entry.content().to_string(),
-                    entry.attachment_elements(),
-                )
-            })
+            .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
             .collect();
         let handled = crate::ui::tui::session::history_picker::handle_history_picker_key(
             &key,

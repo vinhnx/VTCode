@@ -15,7 +15,7 @@
 //! portable across the same user's sessions on the same machine.
 
 use anyhow::{Context, Result, anyhow};
-use ring::aead::{self, Aad, LessSafeKey, Nonce, UnboundKey, NONCE_LEN};
+use ring::aead::{self, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -139,7 +139,10 @@ pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> R
         .context("Failed to send token exchange request")?;
 
     let status = response.status();
-    let body = response.text().await.context("Failed to read response body")?;
+    let body = response
+        .text()
+        .await
+        .context("Failed to read response body")?;
 
     if !status.is_success() {
         // Parse error response for better messages
@@ -213,12 +216,10 @@ fn derive_encryption_key() -> Result<LessSafeKey> {
 
     // Hash to get 32-byte key
     let hash = digest(&SHA256, &key_material);
-    let key_bytes: &[u8; 32] = hash.as_ref()[..32]
-        .try_into()
-        .context("Hash too short")?;
+    let key_bytes: &[u8; 32] = hash.as_ref()[..32].try_into().context("Hash too short")?;
 
-    let unbound_key =
-        UnboundKey::new(&aead::AES_256_GCM, key_bytes).map_err(|_| anyhow!("Invalid key length"))?;
+    let unbound_key = UnboundKey::new(&aead::AES_256_GCM, key_bytes)
+        .map_err(|_| anyhow!("Invalid key length"))?;
 
     Ok(LessSafeKey::new(unbound_key))
 }
@@ -277,7 +278,9 @@ fn decrypt_token(encrypted: &EncryptedToken) -> Result<OpenRouterToken> {
     let nonce = Nonce::assume_unique_for_key(nonce_bytes);
     let plaintext = key
         .open_in_place(nonce, Aad::empty(), &mut ciphertext)
-        .map_err(|_| anyhow!("Decryption failed - token may be corrupted or from different machine"))?;
+        .map_err(|_| {
+            anyhow!("Decryption failed - token may be corrupted or from different machine")
+        })?;
 
     serde_json::from_slice(plaintext).context("Failed to deserialize token")
 }
@@ -286,7 +289,8 @@ fn decrypt_token(encrypted: &EncryptedToken) -> Result<OpenRouterToken> {
 pub fn save_oauth_token(token: &OpenRouterToken) -> Result<()> {
     let path = get_token_path()?;
     let encrypted = encrypt_token(token)?;
-    let json = serde_json::to_string_pretty(&encrypted).context("Failed to serialize encrypted token")?;
+    let json =
+        serde_json::to_string_pretty(&encrypted).context("Failed to serialize encrypted token")?;
 
     fs::write(&path, json).context("Failed to write token file")?;
 
@@ -399,7 +403,10 @@ impl AuthStatus {
                 let expiry_str = expires_in
                     .map(|e| format!(", expires in {}", humanize_duration(e)))
                     .unwrap_or_default();
-                format!("Authenticated{}, obtained {}{}", label_str, age_str, expiry_str)
+                format!(
+                    "Authenticated{}, obtained {}{}",
+                    label_str, age_str, expiry_str
+                )
             }
             AuthStatus::NotAuthenticated => "Not authenticated".to_string(),
         }

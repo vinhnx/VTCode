@@ -255,18 +255,14 @@ impl JsonRpcError {
     }
 
     /// Create an authentication required error with list of available methods
-    /// 
+    ///
     /// Per ACP spec, includes authMethods in error data to help clients
     /// present appropriate UI for authentication options.
     pub fn auth_required(auth_methods: Vec<super::AuthMethod>) -> Self {
         let data = serde_json::json!({
             "authMethods": auth_methods,
         });
-        Self::with_data(
-            error_codes::AUTH_REQUIRED,
-            "Authentication required",
-            data,
-        )
+        Self::with_data(error_codes::AUTH_REQUIRED, "Authentication required", data)
     }
 
     /// Create a permission denied error
@@ -374,7 +370,7 @@ mod tests {
         ];
 
         let error = JsonRpcError::auth_required(auth_methods);
-        
+
         assert_eq!(error.code, error_codes::AUTH_REQUIRED);
         assert_eq!(error.message, "Authentication required");
         assert!(error.data.is_some());
@@ -388,15 +384,13 @@ mod tests {
     fn test_auth_required_error_serialization() {
         use super::super::AuthMethod;
 
-        let auth_methods = vec![
-            AuthMethod::EnvVar {
-                id: "test".to_string(),
-                name: "Test".to_string(),
-                description: None,
-                var_name: "TEST_VAR".to_string(),
-                link: Some("https://example.com".to_string()),
-            },
-        ];
+        let auth_methods = vec![AuthMethod::EnvVar {
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            description: None,
+            var_name: "TEST_VAR".to_string(),
+            link: Some("https://example.com".to_string()),
+        }];
 
         let error = JsonRpcError::auth_required(auth_methods);
         let json = serde_json::to_value(&error).unwrap();

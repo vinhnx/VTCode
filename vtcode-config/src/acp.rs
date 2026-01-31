@@ -274,6 +274,9 @@ auth_url = "https://platform.openai.com/api-keys"
         let auth: AcpAuthConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(auth.default_method, "env_var");
         assert_eq!(auth.env_var_name, Some("OPENAI_API_KEY".to_string()));
-        assert_eq!(auth.auth_url, Some("https://platform.openai.com/api-keys".to_string()));
+        assert_eq!(
+            auth.auth_url,
+            Some("https://platform.openai.com/api-keys".to_string())
+        );
     }
 }
