@@ -9,6 +9,8 @@ use vtcode_exec_events::trace::{TraceRecord, AGENT_TRACE_VERSION};
 pub const TRACES_DIR: &str = "traces";
 
 /// Trace storage for reading and writing Agent Trace records.
+///
+/// Provides both sync and async APIs for flexibility.
 #[derive(Debug, Clone)]
 pub struct TraceStore {
     /// Base directory for trace storage (usually `.vtcode/traces/`).
@@ -162,6 +164,69 @@ impl TraceStore {
             format!("{}.json", trace.id)
         }
     }
+
+    // ========================================================================
+    // Async API
+    // ========================================================================
+
+    /// Ensure the trace storage directory exists (async).
+    pub async fn ensure_dir_async(&self) -> Result<()> {
+        if !self.base_dir.exists() {
+            tokio::fs::create_dir_all(&self.base_dir)
+                .await
+                .with_context(|| format!("Failed to create trace directory: {:?}", self.base_dir))?;
+        }
+        Ok(())
+    }
+
+    /// Write a trace record to storage (async).
+    pub async fn write_trace_async(&self, trace: &TraceRecord) -> Result<PathBuf> {
+        self.ensure_dir_async().await?;
+
+        let filename = self.trace_filename(trace);
+        let path = self.base_dir.join(&filename);
+
+        let json = serde_json::to_string_pretty(trace)
+            .with_context(|| "Failed to serialize trace record")?;
+
+        tokio::fs::write(&path, json)
+            .await
+            .with_context(|| format!("Failed to write trace to {:?}", path))?;
+
+        Ok(path)
+    }
+
+    /// Read a trace record from a specific path (async).
+    pub async fn read_trace_from_path_async(&self, path: &Path) -> Result<TraceRecord> {
+        let content = tokio::fs::read_to_string(path)
+            .await
+            .with_context(|| format!("Failed to read trace: {:?}", path))?;
+
+        let trace: TraceRecord = serde_json::from_str(&content)
+            .with_context(|| format!("Failed to parse trace: {:?}", path))?;
+
+        Ok(trace)
+    }
+
+    /// Read a trace by git revision (async).
+    pub async fn read_by_revision_async(&self, revision: &str) -> Result<Option<TraceRecord>> {
+        let short_rev = &revision[..revision.len().min(12)];
+        let filename = format!("{}.json", short_rev);
+        let path = self.base_dir.join(&filename);
+
+        if tokio::fs::try_exists(&path).await.unwrap_or(false) {
+            Ok(Some(self.read_trace_from_path_async(&path).await?))
+        } else {
+            // Try full revision
+            let filename = format!("{}.json", revision);
+            let path = self.base_dir.join(&filename);
+            if tokio::fs::try_exists(&path).await.unwrap_or(false) {
+                Ok(Some(self.read_trace_from_path_async(&path).await?))
+            } else {
+                Ok(None)
+            }
+        }
+    }
 }
 
 /// Index file for quick lookup of traces by file path.
@@ -308,5 +373,28 @@ mod tests {
         let traces = index.get_traces_for_file("src/main.rs");
         assert!(traces.is_some());
         assert_eq!(traces.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_trace_store_async() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let store = TraceStore::new(temp_dir.path().join("traces"));
+
+        let trace = create_test_trace();
+        let path = store.write_trace_async(&trace).await?;
+
+        assert!(path.exists());
+
+        let loaded = store.read_trace_from_path_async(&path).await?;
+        assert_eq!(loaded.id, trace.id);
+        assert_eq!(loaded.files.len(), 1);
+
+        // Test read by revision async
+        let loaded_by_rev = store
+            .read_by_revision_async("abc123def456789012345678901234567890abcd")
+            .await?;
+        assert!(loaded_by_rev.is_some());
+
+        Ok(())
     }
 }
