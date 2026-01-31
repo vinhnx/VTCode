@@ -465,6 +465,11 @@ pub async fn run_turn_loop(
         // Clone validation cache arc to avoid borrow conflict
         let validation_cache = ctx.session_stats.validation_cache.clone();
 
+        // Capture input status state for potential restoration after LLM response
+        // (needed because turn_processing_ctx will mutably borrow input_status_state)
+        let restore_status_left = ctx.input_status_state.left.clone();
+        let restore_status_right = ctx.input_status_state.right.clone();
+
         // Prepare turn processing context
         let mut turn_processing_ctx = TurnProcessingContext {
             renderer: ctx.renderer,
@@ -548,7 +553,16 @@ pub async fn run_turn_loop(
             Some(&validation_cache),
         )?;
 
-        if matches!(processing_result, TurnProcessingResult::ToolCalls { .. }) {
+        // Restore input status if there are no tool calls (turn is completing)
+        // This handles the case where defer_restore was set but no tool spinners will take over
+        let has_tool_calls = matches!(processing_result, TurnProcessingResult::ToolCalls { .. });
+        if !has_tool_calls {
+            // Restore the input status bar to its original state
+            ctx.handle
+                .set_input_status(restore_status_left.clone(), restore_status_right.clone());
+        }
+
+        if has_tool_calls {
             turn_processing_ctx
                 .harness_state
                 .set_phase(TurnPhase::ExecutingTools);

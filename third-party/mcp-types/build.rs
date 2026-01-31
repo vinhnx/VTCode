@@ -4,6 +4,8 @@ use typify::{TypeSpace, TypeSpaceSettings};
 
 fn main() {
     // Suppress macOS malloc warnings in build output
+    // IMPORTANT: Only remove vars, never set them to "0" as that triggers
+    // "can't turn off malloc stack logging" warnings from xcrun
     #[cfg(target_os = "macos")]
     {
         // Unset all malloc-related environment variables that might cause warnings
@@ -19,10 +21,6 @@ fn main() {
         std::env::remove_var("MallocCorruptionAbort");
         std::env::remove_var("MallocHelpOptions");
         std::env::remove_var("MallocStackLoggingNoCompact");
-
-        // Set environment to explicitly disable malloc debugging
-        std::env::set_var("MallocStackLogging", "0");
-        std::env::set_var("MallocStackLoggingDirectory", "");
     }
 
     println!("cargo:rerun-if-env-changed=MCP_TYPES_FORCE_REGEN");
