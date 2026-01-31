@@ -117,9 +117,10 @@ pub use sandboxing::{
 // Tool Orchestrator (Codex-compatible)
 pub use tool_orchestrator::ToolOrchestrator;
 
-// Turn Diff Tracker
+// Turn Diff Tracker with Agent Trace support
 pub use turn_diff_tracker::{
-    FileChange as DiffFileChange, SharedTurnDiffTracker, TurnDiffTracker, new_shared_tracker,
+    ChangeAttribution, FileChange, FileChangeKind, SharedTurnDiffTracker, TurnDiffTracker,
+    new_shared_tracker,
 };
 
 // Router
@@ -139,10 +140,13 @@ pub use plan_mode::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
 
 // Core tool handler types
 pub use tool_handler::{
-    AdditionalProperties, ApprovalPolicy, ConfiguredToolSpec, ContentItem, DiffTracker, FileChange,
+    AdditionalProperties, ApprovalPolicy, ConfiguredToolSpec, ContentItem, DiffTracker,
     FreeformTool, FreeformToolFormat, JsonSchema, McpToolResult, PatchApplyBeginEvent,
     PatchApplyEndEvent, ResponsesApiTool, SandboxPermissions, SharedDiffTracker,
     ShellEnvironmentPolicy, ShellToolCallParams, ToolCallError, ToolEvent, ToolEventBegin,
     ToolEventFailure, ToolEventSuccess, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
     ToolPayload, ToolSession, ToolSpec, TurnContext,
 };
+
+// Legacy FileChange re-export for backward compatibility
+pub use tool_handler::FileChange as LegacyFileChange;
