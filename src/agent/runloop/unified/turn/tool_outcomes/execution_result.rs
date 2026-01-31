@@ -14,8 +14,26 @@ use crate::agent::runloop::unified::turn::turn_helpers::display_status;
 
 use super::helpers::{check_is_argument_error, push_tool_response, serialize_output};
 
-#[allow(clippy::too_many_arguments)]
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
+
+fn record_tool_execution(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_name: &str,
+    start_time: std::time::Instant,
+    success: bool,
+    is_argument_error: bool,
+) {
+    let duration = start_time.elapsed();
+    if success {
+        ctx.circuit_breaker.record_success_for_tool(tool_name);
+    } else {
+        ctx.circuit_breaker
+            .record_failure_for_tool(tool_name, is_argument_error);
+    }
+    ctx.tool_health_tracker
+        .record_execution(tool_name, success, duration);
+    ctx.telemetry.record_tool_usage(tool_name, success);
+}
 
 /// Main handler for tool execution results.
 ///
@@ -28,119 +46,110 @@ use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 /// - Dispatching MCP events
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_tool_execution_result<'a>(
-    ctx: &mut TurnProcessingContext<'a>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
     pipeline_outcome: &ToolPipelineOutcome,
-    turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     tool_start_time: std::time::Instant,
 ) -> Result<()> {
-    // Dispatch to specific handlers based on status
+    // 1. Record metrics and outcome
+    let is_success = matches!(pipeline_outcome.status, ToolExecutionStatus::Success { .. });
+    let is_argument_error = if let ToolExecutionStatus::Failure { error } = &pipeline_outcome.status {
+        check_is_argument_error(&error.to_string())
+    } else {
+        false
+    };
+    
+    self::record_tool_execution(
+        t_ctx.ctx,
+        tool_name,
+        tool_start_time,
+        is_success,
+        is_argument_error,
+    );
+
     match &pipeline_outcome.status {
         ToolExecutionStatus::Success { output, .. } => {
             handle_success(
-                ctx,
+                t_ctx,
                 tool_call_id,
                 tool_name,
                 args_val,
                 pipeline_outcome,
                 output,
-                turn_modified_files,
-                traj,
-                tool_start_time,
             )
             .await?;
         }
         ToolExecutionStatus::Failure { error } => {
             handle_failure(
-                ctx,
+                t_ctx,
                 tool_call_id,
                 tool_name,
                 error,
-                turn_modified_files,
-                traj,
                 tool_start_time,
             )
             .await?;
         }
         ToolExecutionStatus::Timeout { error } => {
-            handle_timeout(ctx, tool_call_id, tool_name, error, tool_start_time).await?;
+            handle_timeout(t_ctx, tool_call_id, tool_name, error).await?;
         }
         ToolExecutionStatus::Cancelled => {
-            handle_cancelled(ctx, tool_call_id, tool_name).await?;
+            handle_cancelled(t_ctx, tool_call_id, tool_name).await?;
         }
         ToolExecutionStatus::Progress(_) => {}
     }
 
     // 2. Record MCP specific events
     if tool_name.starts_with("mcp_") {
-        record_mcp_tool_event(ctx, tool_name, &pipeline_outcome.status);
+        record_mcp_tool_event(t_ctx, tool_name, &pipeline_outcome.status);
     }
 
     Ok(())
 }
 
 async fn handle_success<'a>(
-    ctx: &mut TurnProcessingContext<'a>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
     pipeline_outcome: &ToolPipelineOutcome,
     output: &serde_json::Value,
-    turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
-    tool_start_time: std::time::Instant,
 ) -> Result<()> {
-    record_tool_success(ctx, tool_name, tool_start_time);
-
     let content_for_model = serialize_output(output);
-    push_tool_response(ctx.working_history, tool_call_id, content_for_model);
+    push_tool_response(t_ctx.ctx.working_history, tool_call_id, content_for_model);
 
     // Handle UI output and file modifications
-    let vt_cfg = ctx.vt_cfg;
+    let vt_cfg = t_ctx.ctx.vt_cfg;
     let (_any_write, mod_files, _last_stdout) = handle_pipeline_output_from_turn_ctx(
-        &mut ctx.as_turn_loop_context(),
+        &mut t_ctx.ctx.as_turn_loop_context(),
         tool_name,
         args_val,
         pipeline_outcome,
         vt_cfg,
-        traj,
+        t_ctx.traj,
     )
     .await?;
 
     for f in mod_files {
-        turn_modified_files.insert(f);
+        t_ctx.turn_modified_files.insert(f);
     }
 
     // Run post-tool hooks
-    run_post_tool_hooks(ctx, tool_name, args_val, output).await?;
+    run_post_tool_hooks(t_ctx.ctx, tool_name, args_val, output).await?;
 
     Ok(())
 }
 
 async fn handle_failure<'a>(
-    ctx: &mut TurnProcessingContext<'a>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
     tool_call_id: String,
     tool_name: &str,
     error: &anyhow::Error,
-    turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     tool_start_time: std::time::Instant,
 ) -> Result<()> {
     let error_str = error.to_string();
     let is_plan_mode_denial = error_str.contains("tool denied by plan mode");
-
-    if !is_plan_mode_denial {
-        let is_argument_error = check_is_argument_error(&error_str);
-        record_tool_failure(ctx, tool_name, tool_start_time, is_argument_error);
-    } else {
-        tracing::debug!(
-            tool = %tool_name,
-            "Plan mode denial - not recording as circuit breaker failure"
-        );
-    }
 
     let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
     tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
@@ -148,34 +157,31 @@ async fn handle_failure<'a>(
     // Push error to history
     let error_content = serde_json::json!({"error": error_msg});
     push_tool_response(
-        ctx.working_history,
+        t_ctx.ctx.working_history,
         tool_call_id,
         error_content.to_string(),
     );
 
     // Handle auto-exit from Plan Mode if applicable
-    if is_plan_mode_denial && ctx.session_stats.is_plan_mode() {
-        handle_plan_mode_auto_exit(ctx, turn_modified_files, traj, tool_start_time).await?;
+    if is_plan_mode_denial && t_ctx.ctx.session_stats.is_plan_mode() {
+        handle_plan_mode_auto_exit(t_ctx, tool_start_time).await?;
     }
 
     Ok(())
 }
 
-async fn handle_timeout<'a>(
-    ctx: &mut TurnProcessingContext<'a>,
+async fn handle_timeout(
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'_>,
     tool_call_id: String,
     tool_name: &str,
     error: &vtcode_core::tools::registry::ToolExecutionError,
-    tool_start_time: std::time::Instant,
 ) -> Result<()> {
-    record_tool_failure(ctx, tool_name, tool_start_time, false);
-
     let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
     tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
 
     let error_content = serde_json::json!({"error": error_msg});
     push_tool_response(
-        ctx.working_history,
+        t_ctx.ctx.working_history,
         tool_call_id,
         error_content.to_string(),
     );
@@ -183,17 +189,17 @@ async fn handle_timeout<'a>(
     Ok(())
 }
 
-async fn handle_cancelled<'a>(
-    ctx: &mut TurnProcessingContext<'a>,
+async fn handle_cancelled(
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'_>,
     tool_call_id: String,
     tool_name: &str,
 ) -> Result<()> {
     let error_msg = format!("Tool '{}' execution cancelled", tool_name);
-    ctx.renderer.line(MessageStyle::Info, &error_msg)?;
+    t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
     let error_content = serde_json::json!({"error": error_msg});
     push_tool_response(
-        ctx.working_history,
+        t_ctx.ctx.working_history,
         tool_call_id,
         error_content.to_string(),
     );
@@ -234,175 +240,47 @@ async fn run_post_tool_hooks<'a>(
     Ok(())
 }
 
-// --- Helpers ---
-
-fn record_tool_success(
-    ctx: &mut TurnProcessingContext<'_>,
-    tool_name: &str,
-    start_time: std::time::Instant,
-) {
-    let duration = start_time.elapsed();
-    ctx.circuit_breaker.record_success_for_tool(tool_name);
-    ctx.tool_health_tracker
-        .record_execution(tool_name, true, duration);
-    ctx.telemetry.record_tool_usage(tool_name, true);
-}
-
-fn record_tool_failure(
-    ctx: &mut TurnProcessingContext<'_>,
-    tool_name: &str,
-    start_time: std::time::Instant,
-    is_argument_error: bool,
-) {
-    let duration = start_time.elapsed();
-    ctx.circuit_breaker
-        .record_failure_for_tool(tool_name, is_argument_error);
-    ctx.tool_health_tracker
-        .record_execution(tool_name, false, duration);
-    ctx.telemetry.record_tool_usage(tool_name, false);
-}
 
 
 
 async fn handle_plan_mode_auto_exit<'a>(
-    ctx: &mut TurnProcessingContext<'a>,
-    turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
     trigger_start_time: std::time::Instant,
 ) -> Result<()> {
-    if *ctx.auto_exit_plan_mode_attempted {
+    if *t_ctx.ctx.auto_exit_plan_mode_attempted {
         display_status(
-            ctx.renderer,
+            t_ctx.ctx.renderer,
             "Plan Mode still active. Call `exit_plan_mode` to review the plan or refine the plan before retrying.",
         )?;
         return Ok(());
     }
-    *ctx.auto_exit_plan_mode_attempted = true;
+    *t_ctx.ctx.auto_exit_plan_mode_attempted = true;
 
     let exit_args = serde_json::json!({
         "reason": "auto_trigger_on_plan_denial"
     });
-    let exit_args_json = serde_json::to_string(&exit_args).unwrap_or_else(|_| "{}".to_string());
     
     // Generate a unique ID for the injected call
     let exit_call_id = format!(
         "call_auto_exit_plan_mode_{}",
         trigger_start_time.elapsed().as_millis()
     );
-    let exit_call = uni::ToolCall::function(
-        exit_call_id.clone(),
-        tool_names::EXIT_PLAN_MODE.to_string(),
-        exit_args_json.clone(),
-    );
 
-    let exit_start = std::time::Instant::now();
-    
-    // Construct temporary run loop context for the recursive call
-    let mut run_loop_ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: ctx.renderer,
-        handle: ctx.handle,
-        tool_registry: ctx.tool_registry,
-        tools: ctx.tools,
-        tool_result_cache: ctx.tool_result_cache,
-        tool_permission_cache: ctx.tool_permission_cache,
-        decision_ledger: ctx.decision_ledger,
-        session_stats: ctx.session_stats,
-        mcp_panel_state: ctx.mcp_panel_state,
-        approval_recorder: ctx.approval_recorder,
-        session: ctx.session,
-        traj,
-        harness_state: ctx.harness_state,
-        harness_emitter: ctx.harness_emitter,
-    };
-
-    let exit_outcome = run_tool_call(
-        &mut run_loop_ctx,
-        &exit_call,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        ctx.default_placeholder.clone(),
-        ctx.lifecycle_hooks,
-        true,
-        ctx.vt_cfg,
-        0,
+    // HP-6: Use the unified execute_and_handle_tool_call so that recording and side-effects happen correctly
+    super::handlers::execute_and_handle_tool_call(
+        t_ctx,
+        exit_call_id,
+        tool_names::EXIT_PLAN_MODE,
+        exit_args,
+        None,
     )
-    .await;
-
-    // Handle the outcome of the exit call
-    if let Ok(exit_pipeline_outcome) = exit_outcome {
-        match &exit_pipeline_outcome.status {
-            ToolExecutionStatus::Success { output, .. } => {
-                record_tool_success(ctx, tool_names::EXIT_PLAN_MODE, exit_start);
-
-                let content_for_model = serialize_output(output);
-                push_tool_response(
-                    ctx.working_history,
-                    exit_call_id,
-                    content_for_model,
-                );
-
-                let vt_cfg = ctx.vt_cfg;
-                let (_any_write, mod_files, _last_stdout) = handle_pipeline_output_from_turn_ctx(
-                    &mut ctx.as_turn_loop_context(),
-                    tool_names::EXIT_PLAN_MODE,
-                    &exit_args,
-                    &exit_pipeline_outcome,
-                    vt_cfg,
-                    traj,
-                )
-                .await?;
-                for f in mod_files {
-                    turn_modified_files.insert(f);
-                }
-            }
-            ToolExecutionStatus::Failure { error } => {
-                record_tool_failure(ctx, tool_names::EXIT_PLAN_MODE, exit_start, false);
-
-                let err_msg = format!(
-                    "Tool '{}' execution failed: {}",
-                    tool_names::EXIT_PLAN_MODE,
-                    error
-                );
-                tracing::debug!(
-                    tool = tool_names::EXIT_PLAN_MODE,
-                    error = %error,
-                    "exit_plan_mode failed"
-                );
-                let error_content = serde_json::json!({"error": err_msg});
-                push_tool_response(
-                    ctx.working_history,
-                    exit_call_id,
-                    error_content.to_string(),
-                );
-            }
-            ToolExecutionStatus::Timeout { error } => {
-                record_tool_failure(ctx, tool_names::EXIT_PLAN_MODE, exit_start, false);
-                let err_msg = format!(
-                    "Tool '{}' timed out: {}",
-                    tool_names::EXIT_PLAN_MODE,
-                    error.message
-                );
-                tracing::debug!(
-                    tool = tool_names::EXIT_PLAN_MODE,
-                    error = %error.message,
-                    "exit_plan_mode timed out"
-                );
-                let error_content = serde_json::json!({"error": err_msg});
-                push_tool_response(
-                    ctx.working_history,
-                    exit_call_id,
-                    error_content.to_string(),
-                );
-            }
-            ToolExecutionStatus::Cancelled | ToolExecutionStatus::Progress(_) => {}
-        }
-    }
+    .await?;
     
     Ok(())
 }
 
 fn record_mcp_tool_event(
-    ctx: &mut TurnProcessingContext<'_>,
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'_>,
     tool_name: &str,
     status: &ToolExecutionStatus,
 ) {
@@ -446,5 +324,5 @@ fn record_mcp_tool_event(
         ToolExecutionStatus::Progress(_) => {}
     }
 
-    ctx.mcp_panel_state.add_event(mcp_event);
+    t_ctx.ctx.mcp_panel_state.add_event(mcp_event);
 }

@@ -7,3 +7,16 @@ improve and defer stop loading state for status bar until task all done, not jus
 --
 
 Review the overall tool-outcomes module and its recent changes with meticulous attention to architectural integrity, identifying opportunities to improve stability, resilience, and reliability of the execution harness while eliminating redundancy and enforcing DRY principles throughout the implementation.
+
+--
+
+@tool_dispatch.rs
+
+ @call.rs 
+ 
+ @turn/
+ 
+ @unified/ 
+ 
+ 
+ @runloop 

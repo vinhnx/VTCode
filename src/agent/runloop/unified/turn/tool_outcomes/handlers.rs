@@ -21,6 +21,25 @@ use crate::agent::runloop::unified::turn::context::{
 
 use super::execution_result::handle_tool_execution_result;
 use super::helpers::{push_tool_response, resolve_max_tool_retries, update_repetition_tracker};
+use crate::agent::runloop::unified::tool_routing::ToolPermissionFlow;
+
+/// Result of a tool call validation phase.
+pub(crate) enum ValidationResult {
+    /// Proceed with execution
+    Proceed,
+    /// Tool was blocked or handled internally (e.g. error pushed to history), skip execution but continue turn
+    Blocked,
+    /// Stop turn/loop with a specific outcome (e.g. Exit or Cancel)
+    Outcome(TurnHandlerOutcome),
+}
+
+/// Consolidated state for tool outcomes to reduce signature bloat and ensure DRY across handlers.
+pub struct ToolOutcomeContext<'a> {
+    pub ctx: &'a mut TurnProcessingContext<'a>,
+    pub repeated_tool_attempts: &'a mut std::collections::HashMap<String, usize>,
+    pub turn_modified_files: &'a mut std::collections::BTreeSet<std::path::PathBuf>,
+    pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+}
 
 /// Unified handler for a single tool call (whether native or textual).
 ///
@@ -34,43 +53,27 @@ use super::helpers::{push_tool_response, resolve_max_tool_retries, update_repeti
 /// 7. Result Handling (recording metrics, history, UI output)
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_single_tool_call<'a>(
-    ctx: &mut TurnProcessingContext<'a>,
+    t_ctx: &'a mut ToolOutcomeContext<'a>,
     tool_call_id: String,
-    tool_name: &str,
+    tool_name: &'a str,
     args_val: serde_json::Value,
-    repeated_tool_attempts: &mut std::collections::HashMap<String, usize>,
-    turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
 ) -> Result<Option<TurnHandlerOutcome>> {
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
-    ctx.harness_state.set_phase(TurnPhase::ExecutingTools);
+    t_ctx.ctx.harness_state.set_phase(TurnPhase::ExecutingTools);
 
     // 1. Validate (Circuit Breaker, Rate Limit, Loop Detection, Safety, Permission)
-    match validate_tool_call(ctx, &tool_call_id, tool_name, &args_val).await? {
-        Some(permission_outcome) => return Ok(Some(permission_outcome)),
-        None => {} // Tool was blocked/handled internally (e.g. pushed error to history)
-    }
-
-    // 2. Check if we should skip execution because validation pushed an error or handled it
-    // Implementation note: validate_tool_call might have pushed a response and returned None
-    // if it found a reason to skip but not break the turn.
-    if let Some(last_msg) = ctx.working_history.last() {
-        if last_msg.role == uni::MessageRole::Tool
-            && last_msg.tool_call_id.as_ref() == Some(&tool_call_id)
-        {
-            return Ok(None);
-        }
+    match validate_tool_call(t_ctx.ctx, &tool_call_id, tool_name, &args_val).await? {
+        ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
+        ValidationResult::Blocked => return Ok(None),
+        ValidationResult::Proceed => {}
     }
 
     // 3. Execute and Handle Result
     execute_and_handle_tool_call(
-        ctx,
+        t_ctx,
         tool_call_id,
         tool_name,
         args_val,
-        repeated_tool_attempts,
-        turn_modified_files,
-        traj,
         None,
     )
     .await?;
@@ -86,7 +89,7 @@ pub(crate) async fn validate_tool_call<'a>(
     tool_call_id: &str,
     tool_name: &str,
     args_val: &serde_json::Value,
-) -> Result<Option<TurnHandlerOutcome>> {
+) -> Result<ValidationResult> {
     // Phase 4 Check: Per-tool Circuit Breaker
     if !ctx.circuit_breaker.allow_request_for_tool(tool_name) {
         let error_msg = format!(
@@ -99,7 +102,7 @@ pub(crate) async fn validate_tool_call<'a>(
             tool_call_id.to_string(),
             serde_json::json!({"error": error_msg}).to_string(),
         );
-        return Ok(None);
+        return Ok(ValidationResult::Blocked);
     }
 
     // Phase 4 Check: Adaptive Rate Limiter
@@ -136,7 +139,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 tool_call_id.to_string(),
                 serde_json::json!({"error": error_msg}).to_string(),
             );
-            return Ok(None);
+            return Ok(ValidationResult::Blocked);
         } else {
             tracing::warn!(tool = %tool_name, warning = %warning, "Loop detector warning");
         }
@@ -173,7 +176,7 @@ pub(crate) async fn validate_tool_call<'a>(
                             serde_json::json!({"error": "Session tool limit reached and not increased by user"})
                                 .to_string(),
                         );
-                        return Ok(None);
+                        return Ok(ValidationResult::Blocked);
                     }
                 }
             }
@@ -188,7 +191,7 @@ pub(crate) async fn validate_tool_call<'a>(
                     serde_json::json!({"error": format!("Safety validation failed: {}", err)})
                         .to_string(),
                 );
-                return Ok(None);
+                return Ok(ValidationResult::Blocked);
             }
         }
     }
@@ -223,7 +226,7 @@ pub(crate) async fn validate_tool_call<'a>(
     )
     .await
     {
-        Ok(ToolPermissionFlow::Approved) => Ok(None),
+        Ok(ToolPermissionFlow::Approved) => Ok(ValidationResult::Proceed),
         Ok(ToolPermissionFlow::Denied) => {
             let denial = ToolExecutionError::new(
                 tool_name.to_string(),
@@ -237,12 +240,14 @@ pub(crate) async fn validate_tool_call<'a>(
                 tool_call_id.to_string(),
                 serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
             );
-            Ok(None)
+            Ok(ValidationResult::Blocked)
         }
-        Ok(ToolPermissionFlow::Exit) => Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit))),
-        Ok(ToolPermissionFlow::Interrupted) => {
-            Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)))
-        }
+        Ok(ToolPermissionFlow::Exit) => Ok(ValidationResult::Outcome(
+            TurnHandlerOutcome::Break(TurnLoopResult::Exit),
+        )),
+        Ok(ToolPermissionFlow::Interrupted) => Ok(ValidationResult::Outcome(
+            TurnHandlerOutcome::Break(TurnLoopResult::Cancelled),
+        )),
         Err(err) => {
             let err_json = serde_json::json!({
                 "error": format!("Failed to evaluate policy for tool '{}': {}", tool_name, err)
@@ -252,19 +257,137 @@ pub(crate) async fn validate_tool_call<'a>(
                 tool_call_id.to_string(),
                 err_json.to_string(),
             );
-            Ok(None)
+            Ok(ValidationResult::Blocked)
         }
     }
 }
 
-pub(crate) async fn execute_and_handle_tool_call<'a>(
-    ctx: &mut TurnProcessingContext<'a>,
+/// Executes a batch of tool calls correctly handling validation and parallel execution.
+pub(crate) async fn handle_tool_call_batch<'a>(
+    t_ctx: &mut ToolOutcomeContext<'a>,
+    tool_calls: &[&'a uni::ToolCall],
+) -> Result<Option<TurnHandlerOutcome>> {
+    use crate::agent::runloop::unified::run_loop_context::TurnPhase;
+    t_ctx.ctx.harness_state.set_phase(TurnPhase::ExecutingTools);
+
+    let mut validated_calls = Vec::new();
+
+    // 1. Validate all calls sequentially (safety first)
+    for tool_call in tool_calls {
+        let func = match tool_call.function.as_ref() {
+            Some(f) => f,
+            None => continue, // Skip non-function calls
+        };
+        let tool_name = func.name.as_str();
+        let args_val: serde_json::Value =
+            serde_json::from_str(&func.arguments).unwrap_or(serde_json::json!({}));
+
+        match validate_tool_call(t_ctx.ctx, &tool_call.id, tool_name, &args_val).await? {
+            ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
+            ValidationResult::Blocked => continue,
+            ValidationResult::Proceed => {
+                validated_calls.push((tool_call, tool_name.to_string(), args_val));
+            }
+        }
+    }
+
+    if validated_calls.is_empty() {
+        return Ok(None);
+    }
+
+    // 2. Parallel Execution
+    let progress_reporter = ProgressReporter::new();
+    let _spinner = crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::with_progress(
+        t_ctx.ctx.handle,
+        t_ctx.ctx.input_status_state.left.clone(),
+        t_ctx.ctx.input_status_state.right.clone(),
+        format!("Executing {} tools...", validated_calls.len()),
+        Some(&progress_reporter),
+    );
+
+    let registry = t_ctx.ctx.tool_registry.clone();
+    let ctrl_c_state = std::sync::Arc::clone(t_ctx.ctx.ctrl_c_state);
+    let ctrl_c_notify = std::sync::Arc::clone(t_ctx.ctx.ctrl_c_notify);
+    let vt_cfg = t_ctx.ctx.vt_cfg;
+
+    let mut execution_futures = Vec::new();
+    for (tool_call, tool_name, args_val) in &validated_calls {
+        let registry = registry.clone();
+        let ctrl_c_state = std::sync::Arc::clone(&ctrl_c_state);
+        let ctrl_c_notify = std::sync::Arc::clone(&ctrl_c_notify);
+        let reporter = progress_reporter.clone();
+        let name = tool_name.clone();
+        let args = args_val.clone();
+        let call_id = tool_call.id.clone();
+        
+        let fut = async move {
+            let start_time = std::time::Instant::now();
+            let max_retries = resolve_max_tool_retries(&name, vt_cfg);
+            let status = crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout_ref(
+                &registry,
+                &name,
+                &args,
+                &ctrl_c_state,
+                &ctrl_c_notify,
+                Some(&reporter),
+                max_retries,
+            ).await;
+            (call_id, name, args, status, start_time)
+        };
+        execution_futures.push(fut);
+    }
+
+    let results = futures::future::join_all(execution_futures).await;
+
+    // 3. Sequential Result Handling
+    for (call_id, name, args, status, start_time) in results {
+        let outcome = crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(status);
+        
+        // Track repetition
+        update_repetition_tracker(t_ctx.repeated_tool_attempts, &outcome, &name, &args);
+
+        // Handle result
+        crate::agent::runloop::unified::turn::tool_outcomes::execution_result::handle_tool_execution_result(
+            t_ctx,
+            call_id,
+            &name,
+            &args,
+            &outcome,
+            start_time,
+        ).await?;
+    }
+
+    Ok(None)
+}
+
+pub(crate) fn execute_and_handle_tool_call<'a>(
+    t_ctx: &'a mut ToolOutcomeContext<'a>,
+    tool_call_id: String,
+    tool_name: &'a str,
+    args_val: serde_json::Value,
+    batch_progress_reporter: Option<&'a ProgressReporter>,
+) -> futures::future::BoxFuture<'a, Result<()>> {
+    let tool_call_id = tool_call_id;
+    let tool_name_owned = tool_name.to_string();
+    let args_val = args_val;
+    let batch_progress_reporter = batch_progress_reporter;
+
+    Box::pin(async move {
+        execute_and_handle_tool_call_inner(
+            t_ctx,
+            tool_call_id,
+            &tool_name_owned,
+            args_val,
+            batch_progress_reporter,
+        ).await
+    })
+}
+
+async fn execute_and_handle_tool_call_inner(
+    t_ctx: &mut ToolOutcomeContext<'_>,
     tool_call_id: String,
     tool_name: &str,
     args_val: serde_json::Value,
-    repeated_tool_attempts: &mut std::collections::HashMap<String, usize>,
-    turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     batch_progress_reporter: Option<&ProgressReporter>,
 ) -> Result<()> {
     // Show pre-execution indicator for file modification operations
@@ -272,7 +395,7 @@ pub(crate) async fn execute_and_handle_tool_call<'a>(
         tool_name, &args_val,
     ) {
         crate::agent::runloop::unified::tool_summary::render_file_operation_indicator(
-            ctx.renderer,
+            t_ctx.ctx.renderer,
             tool_name,
             &args_val,
         )?;
@@ -295,7 +418,7 @@ pub(crate) async fn execute_and_handle_tool_call<'a>(
 
     // Check cache
     if let Some(ref key) = cache_key {
-        let mut tool_cache = ctx.tool_result_cache.write().await;
+        let mut tool_cache = t_ctx.ctx.tool_result_cache.write().await;
         if let Some(cached_output) = tool_cache.get(key) {
             #[cfg(debug_assertions)]
             tracing::debug!("Cache hit for tool: {}", tool_name);
@@ -314,13 +437,11 @@ pub(crate) async fn execute_and_handle_tool_call<'a>(
             );
 
             handle_tool_execution_result(
-                ctx,
+                t_ctx,
                 tool_call_id,
                 tool_name,
                 &args_val,
                 &outcome,
-                turn_modified_files,
-                traj,
                 std::time::Instant::now(),
             )
             .await?;
@@ -337,9 +458,9 @@ pub(crate) async fn execute_and_handle_tool_call<'a>(
 
     let _spinner = if batch_progress_reporter.is_none() {
         Some(crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::with_progress(
-            ctx.handle,
-            ctx.input_status_state.left.clone(),
-            ctx.input_status_state.right.clone(),
+            t_ctx.ctx.handle,
+            t_ctx.ctx.input_status_state.left.clone(),
+            t_ctx.ctx.input_status_state.right.clone(),
             format!("Executing {}...", tool_name),
             Some(&progress_reporter),
         ))
@@ -348,12 +469,12 @@ pub(crate) async fn execute_and_handle_tool_call<'a>(
     };
 
     let progress_reporter_clone = progress_reporter.clone();
-    let handle_clone = ctx.handle.clone();
+    let handle_clone = t_ctx.ctx.handle.clone();
     let is_pty_command = tool_name == vtcode_core::config::constants::tools::RUN_PTY_CMD
         || tool_name == vtcode_core::config::constants::tools::UNIFIED_EXEC
         || tool_name == vtcode_core::config::constants::tools::SEND_PTY_INPUT;
 
-    ctx.tool_registry
+    t_ctx.ctx.tool_registry
         .set_progress_callback(Arc::new(move |name, output| {
             let reporter = progress_reporter_clone.clone();
             let output_owned = output.to_string();
@@ -399,45 +520,43 @@ pub(crate) async fn execute_and_handle_tool_call<'a>(
         }));
 
     let tool_execution_start = std::time::Instant::now();
-    let max_tool_retries = resolve_max_tool_retries(tool_name, ctx.vt_cfg);
+    let max_tool_retries = resolve_max_tool_retries(tool_name, t_ctx.ctx.vt_cfg);
     let tool_result = execute_tool_with_timeout_ref(
-        ctx.tool_registry,
+        t_ctx.ctx.tool_registry,
         tool_name,
         &args_val,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
+        t_ctx.ctx.ctrl_c_state,
+        t_ctx.ctx.ctrl_c_notify,
         Some(&progress_reporter),
         max_tool_retries,
     )
     .await;
 
-    ctx.tool_registry.clear_progress_callback();
+    t_ctx.ctx.tool_registry.clear_progress_callback();
 
     let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);
 
     if let Some(ref key) = cache_key {
         if let crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success { ref output, .. } = pipeline_outcome.status {
              let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
-             let mut cache = ctx.tool_result_cache.write().await;
+             let mut cache = t_ctx.ctx.tool_result_cache.write().await;
              cache.insert_arc(key.clone(), Arc::new(output_json));
         }
     }
 
     update_repetition_tracker(
-        repeated_tool_attempts,
+        t_ctx.repeated_tool_attempts,
         &pipeline_outcome,
         tool_name,
         &args_val,
     );
 
     handle_tool_execution_result(
-        ctx,
+        t_ctx,
         tool_call_id,
         tool_name,
         &args_val,
         &pipeline_outcome,
-        turn_modified_files,
-        traj,
         tool_execution_start,
     )
     .await?;

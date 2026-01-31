@@ -9,11 +9,8 @@ use crate::agent::runloop::unified::turn::context::{
 use super::super::handlers::handle_single_tool_call;
 
 pub(crate) async fn handle_tool_call<'a>(
-    ctx: &mut TurnProcessingContext<'a>,
-    tool_call: &uni::ToolCall,
-    repeated_tool_attempts: &mut std::collections::HashMap<String, usize>,
-    turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    t_ctx: &mut super::super::handlers::ToolOutcomeContext<'a>,
+    tool_call: &'a uni::ToolCall,
 ) -> Result<Option<TurnHandlerOutcome>> {
     let function = tool_call
         .function
@@ -25,12 +22,9 @@ pub(crate) async fn handle_tool_call<'a>(
         .unwrap_or_else(|_| serde_json::json!({}));
 
     handle_single_tool_call(
-        ctx,
+        t_ctx,
         tool_call.id.clone(),
         tool_name,
         args_val,
-        repeated_tool_attempts,
-        turn_modified_files,
-        traj,
     ).await
 }

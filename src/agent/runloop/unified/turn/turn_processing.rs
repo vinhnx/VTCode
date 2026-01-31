@@ -12,7 +12,7 @@ use crate::agent::runloop::unified::turn::context::{
 use crate::agent::runloop::unified::turn::guards::{
     handle_turn_balancer, validate_tool_args_security,
 };
-use crate::agent::runloop::unified::turn::tool_outcomes::HandleTextResponseParams;
+use crate::agent::runloop::unified::turn::tool_outcomes::{HandleTextResponseParams, ToolOutcomeContext};
 use crate::agent::runloop::unified::ui_interaction::stream_and_render_response;
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
@@ -359,13 +359,17 @@ pub(crate) async fn handle_turn_processing_result(
                 params.response_streamed,
             )?;
 
+            let mut t_ctx = ToolOutcomeContext {
+                ctx: params.ctx,
+                repeated_tool_attempts: params.repeated_tool_attempts,
+                turn_modified_files: params.turn_modified_files,
+                traj: params.traj,
+            };
+
             if let Some(outcome) =
                 crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls(
-                    params.ctx,
+                    &mut t_ctx,
                     &tool_calls,
-                    params.repeated_tool_attempts,
-                    params.turn_modified_files,
-                    params.traj,
                 )
                 .await?
             {
@@ -374,16 +378,20 @@ pub(crate) async fn handle_turn_processing_result(
             // Fall through to balancer
         }
         TurnProcessingResult::TextResponse { text, reasoning } => {
+            let mut t_ctx = ToolOutcomeContext {
+                ctx: params.ctx,
+                repeated_tool_attempts: params.repeated_tool_attempts,
+                turn_modified_files: params.turn_modified_files,
+                traj: params.traj,
+            };
+
             return crate::agent::runloop::unified::turn::tool_outcomes::handle_text_response(
                 HandleTextResponseParams {
-                    ctx: params.ctx,
+                    t_ctx: &mut t_ctx,
                     text,
                     reasoning,
                     response_streamed: params.response_streamed,
                     step_count: params.step_count,
-                    repeated_tool_attempts: params.repeated_tool_attempts,
-                    turn_modified_files: params.turn_modified_files,
-                    traj: params.traj,
                     session_end_reason: params.session_end_reason,
                     max_tool_loops: params.max_tool_loops,
                     tool_repeat_limit: params.tool_repeat_limit,
