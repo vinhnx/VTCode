@@ -10,7 +10,55 @@ use crate::config::constants::{defaults, ui};
 /// Identifier for the default theme.
 pub const DEFAULT_THEME_ID: &str = defaults::DEFAULT_THEME;
 
-const MIN_CONTRAST: f64 = ui::THEME_MIN_CONTRAST_RATIO;
+/// Default minimum contrast ratio (WCAG AA standard)
+const DEFAULT_MIN_CONTRAST: f64 = ui::THEME_MIN_CONTRAST_RATIO;
+
+/// Runtime configuration for color accessibility settings.
+/// These can be updated from vtcode.toml [ui] section.
+static COLOR_CONFIG: Lazy<RwLock<ColorAccessibilityConfig>> =
+    Lazy::new(|| RwLock::new(ColorAccessibilityConfig::default()));
+
+/// Color accessibility configuration loaded from vtcode.toml
+#[derive(Clone, Debug)]
+pub struct ColorAccessibilityConfig {
+    /// Minimum contrast ratio for text (WCAG standard)
+    pub minimum_contrast: f64,
+    /// Whether to treat bold as bright (legacy terminal compat)
+    pub bold_is_bright: bool,
+    /// Whether to restrict to safe ANSI colors only
+    pub safe_colors_only: bool,
+}
+
+impl Default for ColorAccessibilityConfig {
+    fn default() -> Self {
+        Self {
+            minimum_contrast: DEFAULT_MIN_CONTRAST,
+            bold_is_bright: false,
+            safe_colors_only: false,
+        }
+    }
+}
+
+/// Update the global color accessibility configuration.
+/// Call this after loading vtcode.toml to apply user preferences.
+pub fn set_color_accessibility_config(config: ColorAccessibilityConfig) {
+    *COLOR_CONFIG.write() = config;
+}
+
+/// Get the current minimum contrast ratio setting.
+pub fn get_minimum_contrast() -> f64 {
+    COLOR_CONFIG.read().minimum_contrast
+}
+
+/// Check if bold-is-bright compatibility mode is enabled.
+pub fn is_bold_bright_mode() -> bool {
+    COLOR_CONFIG.read().bold_is_bright
+}
+
+/// Check if safe colors only mode is enabled.
+pub fn is_safe_colors_only() -> bool {
+    COLOR_CONFIG.read().safe_colors_only
+}
 
 /// Palette describing UI colors for the terminal experience.
 #[derive(Clone, Debug)]
@@ -24,15 +72,25 @@ pub struct ThemePalette {
 }
 
 impl ThemePalette {
+    /// Create a style with foreground color, respecting bold_is_bright setting.
+    /// When bold_is_bright is enabled and bold is requested, we skip bold
+    /// to prevent unintended bright color mapping in legacy terminals.
     fn style_from(color: RgbColor, bold: bool) -> Style {
         let mut style = Style::new().fg_color(Some(Color::Rgb(color)));
-        if bold {
+        // Only apply bold if not in bold_is_bright compatibility mode
+        if bold && !is_bold_bright_mode() {
             style = style.bold();
         }
         style
     }
 
     fn build_styles(&self) -> ThemeStyles {
+        self.build_styles_with_contrast(get_minimum_contrast())
+    }
+
+    /// Build styles with a specific minimum contrast ratio.
+    /// This allows runtime configuration of contrast requirements.
+    fn build_styles_with_contrast(&self, min_contrast: f64) -> ThemeStyles {
         let primary = self.primary_accent;
         let background = self.background;
         let secondary = self.secondary_accent;
@@ -46,7 +104,7 @@ impl ThemePalette {
         let text_color = ensure_contrast(
             self.foreground,
             background,
-            MIN_CONTRAST,
+            min_contrast,
             &[
                 lighten(self.foreground, ui::THEME_FOREGROUND_LIGHTEN_RATIO),
                 lighten(secondary, ui::THEME_SECONDARY_LIGHTEN_RATIO),
@@ -56,7 +114,7 @@ impl ThemePalette {
         let info_color = ensure_contrast(
             secondary,
             background,
-            MIN_CONTRAST,
+            min_contrast,
             &[
                 lighten(secondary, ui::THEME_SECONDARY_LIGHTEN_RATIO),
                 text_color,
@@ -68,7 +126,7 @@ impl ThemePalette {
         let tool_color = ensure_contrast(
             light_tool_color,
             background,
-            MIN_CONTRAST,
+            min_contrast,
             &[
                 lighten(light_tool_color, ui::THEME_TOOL_BODY_LIGHTEN_RATIO),
                 info_color,
@@ -79,7 +137,7 @@ impl ThemePalette {
         let tool_body_color = ensure_contrast(
             tool_body_candidate,
             background,
-            MIN_CONTRAST,
+            min_contrast,
             &[
                 lighten(light_tool_color, ui::THEME_TOOL_BODY_LIGHTEN_RATIO),
                 text_color,
@@ -91,7 +149,7 @@ impl ThemePalette {
         let response_color = ensure_contrast(
             text_color,
             background,
-            MIN_CONTRAST,
+            min_contrast,
             &[
                 lighten(text_color, ui::THEME_RESPONSE_COLOR_LIGHTEN_RATIO),
                 fallback_light,
@@ -101,7 +159,7 @@ impl ThemePalette {
         let reasoning_color = ensure_contrast(
             lighten(text_color, 0.25), // Lighter for placeholder-like appearance
             background,
-            MIN_CONTRAST,
+            min_contrast,
             &[lighten(text_color, 0.15), text_color, fallback_light],
         );
         // Reasoning style: Dimmed and italic for placeholder-like thinking output
@@ -111,7 +169,7 @@ impl ThemePalette {
         let user_color = ensure_contrast(
             lighten(secondary, ui::THEME_USER_COLOR_LIGHTEN_RATIO),
             background,
-            MIN_CONTRAST,
+            min_contrast,
             &[
                 lighten(secondary, ui::THEME_SECONDARY_USER_COLOR_LIGHTEN_RATIO),
                 info_color,
@@ -121,7 +179,7 @@ impl ThemePalette {
         let alert_color = ensure_contrast(
             self.alert,
             background,
-            MIN_CONTRAST,
+            min_contrast,
             &[
                 lighten(self.alert, ui::THEME_LUMINANCE_LIGHTEN_RATIO),
                 fallback_light,
@@ -145,7 +203,7 @@ impl ThemePalette {
                 ensure_contrast(
                     lighten(primary, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
                     background,
-                    MIN_CONTRAST,
+                    min_contrast,
                     &[
                         lighten(primary, ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO),
                         info_color,
@@ -158,7 +216,7 @@ impl ThemePalette {
                 ensure_contrast(
                     lighten(self.logo_accent, ui::THEME_SECONDARY_LIGHTEN_RATIO),
                     background,
-                    MIN_CONTRAST,
+                    min_contrast,
                     &[
                         lighten(self.logo_accent, ui::THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO),
                         info_color,
@@ -449,11 +507,12 @@ pub fn banner_color() -> RgbColor {
     let background = guard.palette.background;
     drop(guard);
 
+    let min_contrast = get_minimum_contrast();
     let candidate = lighten(accent, ui::THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO);
     ensure_contrast(
         candidate,
         background,
-        MIN_CONTRAST,
+        min_contrast,
         &[
             lighten(accent, ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO),
             lighten(
@@ -580,4 +639,106 @@ pub fn ensure_theme(theme_id: &str) -> Result<&'static str> {
         .get(theme_id)
         .map(|definition| definition.label)
         .context("Theme not found")
+}
+
+/// Rebuild the active theme's styles with current accessibility settings.
+/// Call this after updating color accessibility configuration.
+pub fn rebuild_active_styles() {
+    let mut guard = ACTIVE.write();
+    guard.styles = guard.palette.build_styles();
+}
+
+/// Theme validation result
+#[derive(Debug, Clone)]
+pub struct ThemeValidationResult {
+    /// Whether the theme passed validation
+    pub is_valid: bool,
+    /// List of warnings (non-fatal issues)
+    pub warnings: Vec<String>,
+    /// List of errors (fatal issues)
+    pub errors: Vec<String>,
+}
+
+/// Validate a theme's color contrast ratios.
+/// Returns warnings for colors that don't meet WCAG AA standards.
+pub fn validate_theme_contrast(theme_id: &str) -> ThemeValidationResult {
+    let mut result = ThemeValidationResult {
+        is_valid: true,
+        warnings: Vec::new(),
+        errors: Vec::new(),
+    };
+
+    let theme = match REGISTRY.get(theme_id) {
+        Some(t) => t,
+        None => {
+            result.is_valid = false;
+            result.errors.push(format!("Unknown theme: {}", theme_id));
+            return result;
+        }
+    };
+
+    let palette = &theme.palette;
+    let bg = palette.background;
+    let min_contrast = get_minimum_contrast();
+
+    // Check main text colors
+    let checks = [
+        ("foreground", palette.foreground),
+        ("primary_accent", palette.primary_accent),
+        ("secondary_accent", palette.secondary_accent),
+        ("alert", palette.alert),
+        ("logo_accent", palette.logo_accent),
+    ];
+
+    for (name, color) in checks {
+        let ratio = contrast_ratio(color, bg);
+        if ratio < min_contrast {
+            result.warnings.push(format!(
+                "{} ({:02X}{:02X}{:02X}) has contrast ratio {:.2} < {:.1} against background",
+                name, color.0, color.1, color.2, ratio, min_contrast
+            ));
+        }
+    }
+
+    result
+}
+
+/// Check if a theme is suitable for the detected terminal color scheme.
+/// Returns true if the theme matches (light theme for light terminal, dark for dark).
+pub fn theme_matches_terminal_scheme(theme_id: &str) -> bool {
+    use crate::utils::ansi_capabilities::detect_color_scheme;
+    use crate::utils::ansi_capabilities::ColorScheme;
+
+    let scheme = detect_color_scheme();
+    let theme_is_light = is_light_theme(theme_id);
+
+    match scheme {
+        ColorScheme::Light => theme_is_light,
+        ColorScheme::Dark | ColorScheme::Unknown => !theme_is_light,
+    }
+}
+
+/// Determine if a theme is a light theme based on its background luminance.
+pub fn is_light_theme(theme_id: &str) -> bool {
+    REGISTRY
+        .get(theme_id)
+        .map(|theme| {
+            let bg = theme.palette.background;
+            let luminance = relative_luminance(bg);
+            // If background luminance > 0.5, it's a light theme
+            luminance > 0.5
+        })
+        .unwrap_or(false)
+}
+
+/// Get a suggested theme based on terminal color scheme detection.
+/// Returns a light or dark theme depending on detected terminal background.
+pub fn suggest_theme_for_terminal() -> &'static str {
+    use crate::utils::ansi_capabilities::detect_color_scheme;
+    use crate::utils::ansi_capabilities::ColorScheme;
+
+    match detect_color_scheme() {
+        ColorScheme::Light => "vitesse-light",
+        ColorScheme::Dark | ColorScheme::Unknown => DEFAULT_THEME_ID,
+    }
 }

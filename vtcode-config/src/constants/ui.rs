@@ -178,3 +178,61 @@ pub const THEME_RED_LUMINANCE_COEFFICIENT: f64 = 0.2126;
 pub const THEME_GREEN_LUMINANCE_COEFFICIENT: f64 = 0.7152;
 pub const THEME_BLUE_LUMINANCE_COEFFICIENT: f64 = 0.0722;
 pub const THEME_LUMINANCE_LIGHTEN_RATIO: f64 = 0.2;
+
+// === Safe ANSI Color Palette ===
+// Based on terminal color portability research: https://blog.xoria.org/terminal-colors/
+// These 11 colors are safe across Basic (light/dark), Tango, and Solarized themes.
+// Colors NOT in this list have visibility issues in common terminal configurations.
+
+/// WCAG AA standard minimum contrast ratio (4.5:1)
+pub const WCAG_AA_CONTRAST_RATIO: f64 = 4.5;
+
+/// WCAG AAA standard minimum contrast ratio (7.0:1)
+pub const WCAG_AAA_CONTRAST_RATIO: f64 = 7.0;
+
+/// Large text minimum contrast ratio (3.0:1)
+pub const WCAG_LARGE_TEXT_CONTRAST_RATIO: f64 = 3.0;
+
+// Safe ANSI color indices (standard 0-15 palette)
+// These colors are portable across common terminal themes.
+
+/// Safe regular colors (ANSI 0-7 subset that works everywhere)
+/// Note: black (0) and white (7) are excluded due to theme conflicts
+pub const SAFE_ANSI_RED: u8 = 1;
+pub const SAFE_ANSI_GREEN: u8 = 2;
+pub const SAFE_ANSI_YELLOW: u8 = 3;
+pub const SAFE_ANSI_BLUE: u8 = 4;
+pub const SAFE_ANSI_MAGENTA: u8 = 5;
+pub const SAFE_ANSI_CYAN: u8 = 6;
+
+/// Safe bright colors (ANSI 8-15 subset that works everywhere)
+/// Note: brblack (8) is invisible in Solarized Dark
+/// Note: bryellow (11), brblue (12), brwhite (15) have visibility issues
+pub const SAFE_ANSI_BRIGHT_RED: u8 = 9;
+pub const SAFE_ANSI_BRIGHT_GREEN: u8 = 10;
+pub const SAFE_ANSI_BRIGHT_MAGENTA: u8 = 13;
+pub const SAFE_ANSI_BRIGHT_CYAN: u8 = 14;
+
+/// All safe ANSI color indices as an array
+/// These 10 colors are safe to use across all common terminal themes
+pub const SAFE_ANSI_COLORS: [u8; 10] = [
+    SAFE_ANSI_RED,
+    SAFE_ANSI_GREEN,
+    SAFE_ANSI_YELLOW,
+    SAFE_ANSI_BLUE,
+    SAFE_ANSI_MAGENTA,
+    SAFE_ANSI_CYAN,
+    SAFE_ANSI_BRIGHT_RED,
+    SAFE_ANSI_BRIGHT_GREEN,
+    SAFE_ANSI_BRIGHT_MAGENTA,
+    SAFE_ANSI_BRIGHT_CYAN,
+];
+
+/// Problematic ANSI colors to avoid when safe_colors_only is enabled
+/// - 0 (black): Low contrast on dark backgrounds
+/// - 7 (white): Low contrast on light backgrounds
+/// - 8 (brblack): Invisible in Solarized Dark (hijacked for base03)
+/// - 11 (bryellow): Low contrast on light backgrounds
+/// - 12 (brblue): Low contrast in Basic Dark
+/// - 15 (brwhite): Low contrast on light backgrounds
+pub const PROBLEMATIC_ANSI_COLORS: [u8; 6] = [0, 7, 8, 11, 12, 15];

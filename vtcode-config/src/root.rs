@@ -96,6 +96,69 @@ pub struct UiConfig {
     /// Add spacing between message blocks
     #[serde(default = "default_message_block_spacing")]
     pub message_block_spacing: bool,
+
+    // === Color Accessibility Configuration ===
+    // Based on NO_COLOR standard, Ghostty minimum-contrast, and terminal color portability research
+    // See: https://no-color.org/, https://ghostty.org/docs/config/reference#minimum-contrast
+
+    /// Minimum contrast ratio for text against background (WCAG 2.1 standard)
+    /// - 4.5: WCAG AA (default, suitable for most users)
+    /// - 7.0: WCAG AAA (enhanced, for low-vision users)
+    /// - 3.0: Large text minimum
+    /// - 1.0: Disable contrast enforcement
+    #[serde(default = "default_minimum_contrast")]
+    pub minimum_contrast: f64,
+
+    /// Compatibility mode for legacy terminals that map bold to bright colors.
+    /// When enabled, avoids using bold styling on text that would become bright colors,
+    /// preventing visibility issues in terminals with "bold is bright" behavior.
+    #[serde(default = "default_bold_is_bright")]
+    pub bold_is_bright: bool,
+
+    /// Restrict color palette to the 11 "safe" ANSI colors portable across common themes.
+    /// Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan
+    /// Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes),
+    /// white/brwhite (light themes), brblue (Basic Dark).
+    /// See: https://blog.xoria.org/terminal-colors/
+    #[serde(default = "default_safe_colors_only")]
+    pub safe_colors_only: bool,
+
+    /// Color scheme mode for automatic light/dark theme switching.
+    /// - "auto": Detect from terminal (via OSC 11 or COLORFGBG env var)
+    /// - "light": Force light mode theme selection
+    /// - "dark": Force dark mode theme selection
+    #[serde(default = "default_color_scheme_mode")]
+    pub color_scheme_mode: ColorSchemeMode,
+}
+
+/// Color scheme mode for theme selection
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ColorSchemeMode {
+    /// Detect from terminal environment (OSC 11 query or COLORFGBG)
+    #[default]
+    Auto,
+    /// Force light color scheme
+    Light,
+    /// Force dark color scheme
+    Dark,
+}
+
+fn default_minimum_contrast() -> f64 {
+    crate::constants::ui::THEME_MIN_CONTRAST_RATIO
+}
+
+fn default_bold_is_bright() -> bool {
+    false
+}
+
+fn default_safe_colors_only() -> bool {
+    false
+}
+
+fn default_color_scheme_mode() -> ColorSchemeMode {
+    ColorSchemeMode::Auto
 }
 
 fn default_show_sidebar() -> bool {
@@ -128,6 +191,11 @@ impl Default for UiConfig {
             show_sidebar: default_show_sidebar(),
             dim_completed_todos: default_dim_completed_todos(),
             message_block_spacing: default_message_block_spacing(),
+            // Color accessibility defaults
+            minimum_contrast: default_minimum_contrast(),
+            bold_is_bright: default_bold_is_bright(),
+            safe_colors_only: default_safe_colors_only(),
+            color_scheme_mode: default_color_scheme_mode(),
         }
     }
 }

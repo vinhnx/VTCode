@@ -766,6 +766,35 @@ reasoning_display_mode = "toggle"
 # Default visibility for reasoning when display mode is "toggle"
 reasoning_visible_default = false
 
+# === Color Accessibility Configuration ===
+# Based on NO_COLOR standard (https://no-color.org/), Ghostty minimum-contrast feature,
+# and terminal color portability research (https://blog.xoria.org/terminal-colors/)
+
+# Minimum contrast ratio for text against background (WCAG 2.1)
+# - 4.5: WCAG AA standard (default) - suitable for most users
+# - 7.0: WCAG AAA enhanced - recommended for low-vision users
+# - 3.0: Large text minimum
+# - 1.0: Disable contrast enforcement
+minimum_contrast = 4.5
+
+# Enable legacy terminal compatibility mode where bold text maps to bright colors.
+# When true, avoids bold styling on text to prevent unintended bright color mapping
+# in terminals that treat "bold" as "use bright color variant".
+bold_is_bright = false
+
+# Restrict output to the 11 "safe" ANSI colors that are portable across common themes.
+# Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan
+# Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes),
+# white/brwhite (light themes), brblue (Basic Dark).
+# Enable this if you use multiple terminal themes or share dotfiles across systems.
+safe_colors_only = false
+
+# Color scheme mode for automatic light/dark theme switching.
+# - "auto": Detect from terminal (via COLORFGBG env var or terminal query)
+# - "light": Force light mode theme selection
+# - "dark": Force dark mode theme selection
+color_scheme_mode = "auto"
+
 
 # Status line configuration
 [ui.status_line]
