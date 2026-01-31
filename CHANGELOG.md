@@ -2,6 +2,19 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.1 - 2026-01-31
+
+* refactor: update terminal theme to ciapre-dark (157b61cd)
+* refactor: improve formatting of model pull commands in Ollama provider documentation (252114fc)
+* refactor: add Kimi K2.5 and GLM 4.7 models to Ollama provider documentation and tests (84b6c722)
+* refactor: add Kimi K2.5 model support and update related configurations (6e83202d)
+* refactor: improve table formatting in color guidelines documentation (d33b7afa)
+* refactor: implement color accessibility features and update configuration options (6422c103)
+* refactor: enhance cursor visibility logic by adding status spinner check (910506f9)
+* refactor: update malloc warning suppression in debug script (839dbd68)
+* refactor: improve malloc warning suppression and enhance spinner behavior in UI interactions (241c53fe)
+* refactor: enhance local build process for macOS and Linux in release scripts (98cb01fb)
+
 ## v0.74.0 - 2026-01-31
 
 * Fix permission (e2511d7e)
