@@ -311,7 +311,10 @@ impl<'a> SessionWidget<'a> {
 
         let hint = if self.session.thinking_spinner.is_active {
             footer_hints::PROCESSING
-        } else if self.session.file_palette_active || self.session.prompt_palette_active {
+        } else if self.session.file_palette_active
+            || self.session.prompt_palette_active
+            || self.session.history_picker_state.active
+        {
             footer_hints::MODAL
         } else if self.session.input_manager.content().is_empty() {
             footer_hints::IDLE
@@ -352,6 +355,16 @@ impl<'a> SessionWidget<'a> {
             && let Some(palette) = self.session.prompt_palette.as_ref()
         {
             PromptPaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
+        }
+
+        // Render history picker using builder pattern
+        if self.session.history_picker_state.active {
+            super::HistoryPickerWidget::new(
+                self.session,
+                &self.session.history_picker_state,
+                viewport,
+            )
+            .render(buf);
         }
     }
 }
