@@ -491,7 +491,8 @@ impl ToolRegistry {
                         .await;
                 }
                 Ok(false) => {
-                    tool_exists = false;
+                    // Don't modify tool_exists here - keep the result from standard tool check.
+                    // Setting tool_exists = false would incorrectly override a valid standard tool.
                 }
                 Err(err) => {
                     warn!("Error checking MCP tool '{}': {}", resolved_mcp_name, err);
