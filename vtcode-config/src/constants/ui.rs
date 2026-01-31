@@ -143,6 +143,14 @@ pub const TUI_SHIMMER_FRAME_INTERVAL_MS: u64 = 50;
 /// Shimmer sweep duration in milliseconds
 pub const TUI_SHIMMER_SWEEP_DURATION_MS: u64 = 2000;
 
+// Viewport size limits to prevent pathological CPU usage with huge terminals
+// (e.g., 2000+ columns causes 100% CPU without these guards)
+// See: https://github.com/anthropics/claude-code/issues/21567
+/// Maximum effective viewport width (columns) for rendering
+pub const TUI_MAX_VIEWPORT_WIDTH: u16 = 500;
+/// Maximum effective viewport height (rows) for rendering
+pub const TUI_MAX_VIEWPORT_HEIGHT: u16 = 200;
+
 // Theme and color constants
 pub const THEME_MIN_CONTRAST_RATIO: f64 = 4.5;
 pub const THEME_FOREGROUND_LIGHTEN_RATIO: f64 = 0.25;
