@@ -11,10 +11,7 @@ use ratatui::{
 
 use crate::config::constants::ui;
 use crate::ui::tui::session::{
-    Session,
-    history_picker::HistoryPickerState,
-    modal::compute_modal_area,
-    terminal_capabilities,
+    Session, history_picker::HistoryPickerState, modal::compute_modal_area, terminal_capabilities,
 };
 use crate::ui::tui::style::{measure_text_width, ratatui_color_from_ansi};
 
@@ -33,11 +30,7 @@ pub struct HistoryPickerWidget<'a> {
 
 impl<'a> HistoryPickerWidget<'a> {
     /// Create a new HistoryPickerWidget
-    pub fn new(
-        session: &'a Session,
-        picker: &'a HistoryPickerState,
-        viewport: Rect,
-    ) -> Self {
+    pub fn new(session: &'a Session, picker: &'a HistoryPickerState, viewport: Rect) -> Self {
         Self {
             session,
             picker,
@@ -108,7 +101,10 @@ impl<'a> HistoryPickerWidget<'a> {
         };
         let hint_line = Line::from(Span::styled(
             HISTORY_PICKER_HINT,
-            self.session.styles.default_style().add_modifier(Modifier::DIM),
+            self.session
+                .styles
+                .default_style()
+                .add_modifier(Modifier::DIM),
         ));
         Paragraph::new(hint_line).render(hint_area, buf);
         y_offset += 1;
@@ -130,7 +126,10 @@ impl<'a> HistoryPickerWidget<'a> {
             };
             let empty_line = Line::from(Span::styled(
                 empty_msg,
-                self.session.styles.default_style().add_modifier(Modifier::DIM | Modifier::ITALIC),
+                self.session
+                    .styles
+                    .default_style()
+                    .add_modifier(Modifier::DIM | Modifier::ITALIC),
             ));
             Paragraph::new(empty_line).render(list_area, buf);
         } else {
@@ -142,7 +141,8 @@ impl<'a> HistoryPickerWidget<'a> {
                     let is_selected = self.picker.list_state.selected() == Some(idx);
 
                     // Truncate long entries
-                    let content: String = m.content.chars().take(inner.width as usize - 4).collect();
+                    let content: String =
+                        m.content.chars().take(inner.width as usize - 4).collect();
                     let display = if m.content.len() > inner.width as usize - 4 {
                         format!("{}…", content)
                     } else {
@@ -172,8 +172,6 @@ impl<'a> HistoryPickerWidget<'a> {
             Widget::render(list, list_area, buf);
         }
     }
-
-
 
     /// Get the highlight style for selected items
     fn highlight_style(&self) -> Style {

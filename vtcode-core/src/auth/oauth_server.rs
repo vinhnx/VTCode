@@ -292,7 +292,8 @@ fn success_html() -> String {
 
 /// Generate error HTML page.
 fn error_html(error: &str) -> String {
-    format!(r##"<!DOCTYPE html>
+    format!(
+        r##"<!DOCTYPE html>
 <html>
 <head>
     <title>VT Code - Authentication Failed</title>
@@ -381,7 +382,9 @@ fn error_html(error: &str) -> String {
         <div class="error">{}</div>
     </div>
 </body>
-</html>"##, error)
+</html>"##,
+        error
+    )
 }
 
 /// Generate cancelled HTML page.
