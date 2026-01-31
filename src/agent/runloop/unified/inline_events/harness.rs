@@ -11,6 +11,8 @@ use vtcode_core::exec::events::{
     ThreadEvent, ThreadItem, ThreadItemDetails, TurnCompletedEvent, TurnFailedEvent,
     TurnStartedEvent, Usage, VersionedThreadEvent,
 };
+#[cfg(test)]
+use vtcode_core::exec::events::ThreadStartedEvent;
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
 
 use crate::agent::runloop::unified::run_loop_context::TurnRunId;
