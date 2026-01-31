@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod automation;
 pub mod commands;
+pub mod dotfile_protection;
 pub mod model;
 pub mod permissions;
 pub mod plugins;
@@ -31,6 +32,7 @@ pub use sandbox::{
     NetworkAllowlistEntryConfig, NetworkConfig, ResourceLimitsConfig, ResourceLimitsPreset,
     SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
 };
+pub use dotfile_protection::DotfileProtectionConfig;
 pub use security::SecurityConfig;
 pub use skills::{PromptFormat, SkillsConfig, SkillsRenderMode};
 pub use tools::{ToolPolicy, ToolsConfig, WebFetchConfig};

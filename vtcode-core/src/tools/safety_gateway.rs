@@ -18,12 +18,16 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::config::CommandsConfig;
+use crate::dotfile_protection::{
+    get_global_guardian, AccessContext, AccessType, DotfileGuardian, ProtectionDecision,
+};
 use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::invocation::ToolInvocationId;
 use crate::tools::registry::{
     RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
 use crate::tools::unified_executor::ToolExecutionContext;
+use vtcode_config::core::DotfileProtectionConfig;
 
 /// Safety decision for a tool invocation
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,6 +85,8 @@ pub enum SafetyError {
     PlanModeViolation(String),
     #[error("Command policy denied: {0}")]
     CommandPolicyDenied(String),
+    #[error("Dotfile protection violation: {0}")]
+    DotfileProtectionViolation(String),
 }
 
 /// Configuration for the safety gateway
@@ -139,7 +145,8 @@ struct RateLimiterState {
 /// Unified Safety Gateway
 ///
 /// Consolidates rate limiting, destructive tool detection, command policy
-/// enforcement, and plan mode restrictions into a single safety decision point.
+/// enforcement, plan mode restrictions, and dotfile protection into a single
+/// safety decision point.
 pub struct SafetyGateway {
     /// Configuration
     config: SafetyGatewayConfig,
@@ -153,6 +160,8 @@ pub struct SafetyGateway {
     rate_state: Arc<Mutex<RateLimiterState>>,
     /// Preapproved tools for this session
     preapproved: Arc<Mutex<HashSet<String>>>,
+    /// Dotfile guardian for protected file access
+    dotfile_guardian: Option<Arc<DotfileGuardian>>,
 }
 
 impl SafetyGateway {
@@ -189,7 +198,24 @@ impl SafetyGateway {
             command_policy: None,
             rate_state: Arc::new(Mutex::new(RateLimiterState::default())),
             preapproved: Arc::new(Mutex::new(HashSet::new())),
+            dotfile_guardian: None,
         }
+    }
+
+    /// Set the dotfile guardian for protected file access
+    pub fn with_dotfile_guardian(mut self, guardian: Arc<DotfileGuardian>) -> Self {
+        self.dotfile_guardian = Some(guardian);
+        self
+    }
+
+    /// Create and set a dotfile guardian from configuration
+    pub async fn with_dotfile_protection(
+        mut self,
+        config: DotfileProtectionConfig,
+    ) -> anyhow::Result<Self> {
+        let guardian = DotfileGuardian::new(config).await?;
+        self.dotfile_guardian = Some(Arc::new(guardian));
+        Ok(self)
     }
 
     /// Set the command policy evaluator for shell command checks
@@ -297,7 +323,20 @@ impl SafetyGateway {
             return SafetyDecision::Deny(err.to_string());
         }
 
-        // 2. Check plan mode restrictions
+        // 2. Check dotfile protection for file operations
+        if let Some(decision) = self
+            .check_dotfile_protection(tool_name, args, &ctx.session_id)
+            .await
+        {
+            tracing::info!(
+                invocation_id = %inv_id,
+                tool = %tool_name,
+                "SafetyGateway: dotfile protection triggered"
+            );
+            return decision;
+        }
+
+        // 3. Check plan mode restrictions
         if self.config.plan_mode_active && self.is_mutating(tool_name) {
             let reason = format!(
                 "Tool '{}' is blocked in plan mode (read-only). Switch to edit mode to execute.",
@@ -311,7 +350,7 @@ impl SafetyGateway {
             return SafetyDecision::Deny(reason);
         }
 
-        // 3. Check command policy for shell commands
+        // 4. Check command policy for shell commands
         if let Some(ref policy) = self.command_policy
             && (tool_name == "shell" || tool_name == "run_pty_cmd")
             && let Some(command) = args.get("command").and_then(|v| v.as_str())
@@ -326,7 +365,7 @@ impl SafetyGateway {
             return SafetyDecision::Deny(reason);
         }
 
-        // 4. Check if preapproved
+        // 5. Check if preapproved
         if self.is_preapproved(tool_name).await {
             tracing::debug!(
                 invocation_id = %inv_id,
@@ -336,7 +375,7 @@ impl SafetyGateway {
             return SafetyDecision::Allow;
         }
 
-        // 5. Check trust level bypass
+        // 6. Check trust level bypass
         if ctx.trust_level.can_bypass_approval() {
             tracing::debug!(
                 invocation_id = %inv_id,
@@ -347,7 +386,7 @@ impl SafetyGateway {
             return SafetyDecision::Allow;
         }
 
-        // 6. Calculate risk and determine if approval is needed
+        // 7. Calculate risk and determine if approval is needed
         let risk_ctx = self.build_risk_context(tool_name, args);
         let risk_level = ToolRiskScorer::calculate_risk(&risk_ctx);
 
@@ -362,7 +401,7 @@ impl SafetyGateway {
             return SafetyDecision::NeedsApproval(justification);
         }
 
-        // 7. Check if destructive and requires confirmation
+        // 8. Check if destructive and requires confirmation
         if self.is_destructive(tool_name) {
             let justification = format!(
                 "Tool '{}' is destructive and may modify files or execute commands.",
@@ -439,6 +478,146 @@ impl SafetyGateway {
         Ok(())
     }
 
+    /// Check dotfile protection for file operations.
+    /// Returns Some(SafetyDecision) if dotfile protection applies, None otherwise.
+    async fn check_dotfile_protection(
+        &self,
+        tool_name: &str,
+        args: &Value,
+        session_id: &str,
+    ) -> Option<SafetyDecision> {
+        // Use local guardian if set, otherwise try global guardian
+        let guardian = match self.dotfile_guardian.as_ref() {
+            Some(g) => g.clone(),
+            None => get_global_guardian()?,
+        };
+
+        // Only check file-modifying operations (both unified and legacy tool names)
+        if !matches!(
+            tool_name,
+            "write_file"
+                | "edit_file"
+                | "create_file"
+                | "delete_file"
+                | "apply_patch"
+                | "unified_file"
+                | "search_replace"
+        ) {
+            return None;
+        }
+
+        // For unified_file, only check write/edit/delete actions
+        if tool_name == "unified_file" {
+            let action = args.get("action").and_then(|v| v.as_str()).unwrap_or("");
+            if !matches!(action, "write" | "edit" | "delete" | "append") {
+                return None;
+            }
+        }
+
+        // Extract file path from arguments
+        let path_str = args.get("path").and_then(|v| v.as_str())?;
+        let path = std::path::Path::new(path_str);
+
+        // Check if this is a protected dotfile
+        if !guardian.is_protected(path) {
+            return None;
+        }
+
+        // Determine access type
+        let access_type = match tool_name {
+            "write_file" | "create_file" => AccessType::Write,
+            "edit_file" | "apply_patch" => AccessType::Modify,
+            "delete_file" => AccessType::Delete,
+            _ => AccessType::Modify,
+        };
+
+        // Build proposed changes description
+        let proposed_changes = if let Some(content) = args.get("content").and_then(|v| v.as_str()) {
+            let preview_len = content.len().min(500);
+            format!(
+                "Content ({} bytes):\n{}{}",
+                content.len(),
+                &content[..preview_len],
+                if content.len() > preview_len { "..." } else { "" }
+            )
+        } else if let Some(old_str) = args.get("old_str").and_then(|v| v.as_str()) {
+            let new_str = args.get("new_str").and_then(|v| v.as_str()).unwrap_or("");
+            format!("Replace:\n  '{}'\nWith:\n  '{}'", old_str, new_str)
+        } else {
+            "No details provided".to_string()
+        };
+
+        // Create access context
+        let context = AccessContext::new(path, access_type, tool_name, session_id)
+            .with_proposed_changes(&proposed_changes);
+
+        // Request access from the guardian
+        match guardian.request_access(&context).await {
+            Ok(ProtectionDecision::Allowed) => None,
+            Ok(ProtectionDecision::RequiresConfirmation(req)) => {
+                Some(SafetyDecision::NeedsApproval(format!(
+                    "DOTFILE PROTECTION\n\n\
+                    File: {}\n\
+                    Operation: {}\n\
+                    Reason: {}\n\n\
+                    Proposed changes:\n{}\n\n\
+                    {}",
+                    req.file_path,
+                    req.access_type,
+                    req.protection_reason,
+                    req.proposed_changes,
+                    req.warning
+                )))
+            }
+            Ok(ProtectionDecision::RequiresSecondaryAuth(req)) => {
+                Some(SafetyDecision::NeedsApproval(format!(
+                    "DOTFILE SECONDARY AUTHENTICATION REQUIRED\n\n\
+                    File: {} (whitelisted)\n\
+                    Operation: {}\n\
+                    Reason: {}\n\n\
+                    This file is on the whitelist but requires secondary authentication.\n\n\
+                    Proposed changes:\n{}\n\n\
+                    {}",
+                    req.file_path,
+                    req.access_type,
+                    req.protection_reason,
+                    req.proposed_changes,
+                    req.warning
+                )))
+            }
+            Ok(ProtectionDecision::Blocked(violation)) => {
+                Some(SafetyDecision::Deny(format!(
+                    "DOTFILE MODIFICATION BLOCKED\n\n\
+                    File: {}\n\
+                    Reason: {}\n\n\
+                    Suggestion: {}",
+                    violation.file_path, violation.reason, violation.suggestion
+                )))
+            }
+            Ok(ProtectionDecision::Denied(violation)) => {
+                Some(SafetyDecision::Deny(format!(
+                    "DOTFILE ACCESS DENIED\n\n\
+                    File: {}\n\
+                    Reason: {}\n\n\
+                    Suggestion: {}",
+                    violation.file_path, violation.reason, violation.suggestion
+                )))
+            }
+            Err(e) => {
+                tracing::error!("Dotfile protection check failed: {}", e);
+                Some(SafetyDecision::Deny(format!(
+                    "Dotfile protection check failed: {}",
+                    e
+                )))
+            }
+        }
+    }
+
+    /// Get the dotfile guardian (if configured)
+    pub fn dotfile_guardian(&self) -> Option<&Arc<DotfileGuardian>> {
+        self.dotfile_guardian.as_ref()
+    }
+
     /// Build risk context from tool name and arguments
     fn build_risk_context(&self, tool_name: &str, args: &Value) -> ToolRiskContext {
         let source = if tool_name.starts_with("mcp_") {
@@ -486,7 +665,7 @@ impl SafetyGateway {
         parts.push(format!("Risk level: {}", risk_level));
 
         if self.is_destructive(tool_name) {
-            parts.push("⚠️ This tool may modify or delete files.".to_string());
+            parts.push("This tool may modify or delete files.".to_string());
         }
 
         if let Some(command) = args.get("command").and_then(|v| v.as_str()) {
