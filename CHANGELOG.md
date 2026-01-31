@@ -4,6 +4,19 @@ All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
 ## v0.74.2 - 2026-01-31
 
+* feat: add ACP authentication methods and configuration support (e51a5658)
+* docs: update changelog for v0.74.2 [skip ci] (6d29ab5b)
+* refactor: add dead code allowance for search_position and start_search method (39dc545b)
+* Implement OpenRouter OAuth PKCE authentication flow and related utilities (c338e631)
+* feat: add ANSI escape sequence parsing constants and improve handling in text utilities (d5641f54)
+* refactor: remove unused Wrap widget import from history picker (67d5cc2c)
+* feat: implement history picker for fuzzy command search (Ctrl+R) (e529e7a0)
+* refactor: reorder use statements for clarity in theme module (63495bea)
+* Update README.md to fix badge links (7b44cfa4)
+* chore: update homebrew formula to v0.74.1 (73b0bf06)
+
+## v0.74.2 - 2026-01-31
+
 * refactor: add dead code allowance for search_position and start_search method (39dc545b)
 * Implement OpenRouter OAuth PKCE authentication flow and related utilities (c338e631)
 * feat: add ANSI escape sequence parsing constants and improve handling in text utilities (d5641f54)
