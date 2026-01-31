@@ -49,10 +49,10 @@ pub mod messages;
 
 // V2 exports (recommended)
 pub use capabilities::{
-    AgentCapabilities, AgentFeatures, AgentInfo as AgentInfoV2, AuthCredentials,
-    AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo, FilesystemCapabilities,
-    InitializeParams, InitializeResult, PROTOCOL_VERSION, SUPPORTED_VERSIONS, TerminalCapabilities,
-    ToolCapability, UiCapabilities,
+    AgentCapabilities, AgentFeatures, AgentInfo as AgentInfoV2, AuthCredentials, AuthMethod,
+    AuthRequirements, AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo,
+    FilesystemCapabilities, InitializeParams, InitializeResult, PROTOCOL_VERSION,
+    SUPPORTED_VERSIONS, TerminalCapabilities, ToolCapability, UiCapabilities,
 };
 pub use client_v2::{AcpClientV2, AcpClientV2Builder};
 pub use jsonrpc::{JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse};

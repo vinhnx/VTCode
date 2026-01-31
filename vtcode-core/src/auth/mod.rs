@@ -1,13 +1,19 @@
 //! Authentication module for VT Code.
 //!
-//! This module provides OAuth flows and authentication management
-//! for LLM providers that support OAuth-based authentication.
+//! This module provides:
+//! - OAuth flows for OpenRouter and other providers
+//! - ACP authentication method handling
+//! - Authentication configuration management
+
+pub mod auth_handler;
 
 #[cfg(feature = "a2a-server")]
 pub mod oauth_server;
 
 #[cfg(feature = "a2a-server")]
 pub use oauth_server::{OAuthResult, run_oauth_callback_server};
+
+pub use auth_handler::AuthHandler;
 
 // Re-export config auth types for convenience
 pub use vtcode_config::auth::{
