@@ -11,7 +11,7 @@ FILE_PATH=$(echo "$INPUT_JSON" | jq -r '.tool_input.file_path // empty' 2>/dev/n
 # Check if the modified file is in a location that should trigger tests
 if [[ "$FILE_PATH" =~ src/.*\.(rs|js|ts|py|go)$ ]]; then
   echo "File change detected in source directory: $FILE_PATH"
-  
+
   # Check if there's a test script in the project
   if [[ -f "test.sh" ]]; then
     echo "Running project tests..."
