@@ -100,7 +100,6 @@ pub struct UiConfig {
     // === Color Accessibility Configuration ===
     // Based on NO_COLOR standard, Ghostty minimum-contrast, and terminal color portability research
     // See: https://no-color.org/, https://ghostty.org/docs/config/reference#minimum-contrast
-
     /// Minimum contrast ratio for text against background (WCAG 2.1 standard)
     /// - 4.5: WCAG AA (default, suitable for most users)
     /// - 7.0: WCAG AAA (enhanced, for low-vision users)
