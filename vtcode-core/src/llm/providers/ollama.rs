@@ -78,7 +78,9 @@ fn wire_api_for_version(version: &Version) -> OllamaWireApi {
 /// should keep the configured default in that case.
 ///
 /// Adapted from OpenAI Codex's codex-ollama/src/lib.rs
-pub async fn detect_wire_api(base_url: Option<String>) -> std::io::Result<Option<WireApiDetection>> {
+pub async fn detect_wire_api(
+    base_url: Option<String>,
+) -> std::io::Result<Option<WireApiDetection>> {
     let resolved_base_url = override_base_url(
         urls::OLLAMA_API_BASE,
         base_url,
@@ -1205,7 +1207,10 @@ mod tests {
 
     #[test]
     fn test_wire_api_for_version_before_cutoff_is_chat() {
-        assert_eq!(wire_api_for_version(&Version::new(0, 13, 3)), OllamaWireApi::Chat);
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 13, 3)),
+            OllamaWireApi::Chat
+        );
     }
 
     #[test]
