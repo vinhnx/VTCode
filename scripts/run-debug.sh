@@ -5,11 +5,13 @@
 
 set -e
 
-# Suppress macOS malloc warnings
-export MallocStackLogging=0
-export MALLOCSTACKTOOLSDIR=""
-export MallocErrorAbort=0
-export MallocNanoZone=0
+# Suppress macOS malloc warnings by REMOVING the env vars (not setting to 0)
+# Setting to 0 triggers "can't turn off malloc stack logging" warnings
+unset MallocStackLogging
+unset MallocStackLoggingDirectory
+unset MALLOCSTACKTOOLSDIR
+unset MallocErrorAbort
+unset MallocNanoZone
 
 echo "VTCODE - Debug Mode (Fast Build)"
 echo "=================================="
