@@ -336,6 +336,27 @@ let config = Config::load("vtcode.toml")?;
 -   `README.md` is the only exception (stays in root)
 -   Use `docs/models.json` for latest LLM model metadata
 
+**TUI Logging (Critical)**:
+
+-   **NEVER use `println!` or `eprintln!` in TUI-active code paths**
+-   The TUI uses `CrosstermBackend` on stderr—direct prints corrupt the display
+-   Use `tracing::debug!`, `tracing::info!`, `tracing::warn!`, or `tracing::error!` instead
+-   Logs go to `/tmp/vtcode-debug.log` when TUI is active
+-   Acceptable exceptions:
+    -   Pre-TUI startup errors in `main.rs` (before TUI initializes)
+    -   `vtcode-process-hardening` (runs before main, can't use tracing)
+    -   CLI-only commands in `src/cli/` (run without TUI)
+
+```rust
+// ❌ NEVER in TUI code
+eprintln!("Warning: something went wrong");
+println!("Debug: value = {}", x);
+
+// ✅ ALWAYS use tracing
+tracing::warn!("Something went wrong");
+tracing::debug!("value = {}", x);
+```
+
 ## Testing Infrastructure
 
 ### Test Organization

@@ -525,13 +525,13 @@ impl ToolPolicyManager {
         let backup_path = config_path.with_extension("json.bak");
 
         if let Err(err) = tokio::fs::rename(config_path, &backup_path).await {
-            eprintln!(
-                "Warning: Unable to back up invalid tool policy config ({}). {}",
+            tracing::warn!(
+                "Unable to back up invalid tool policy config ({}). {}",
                 config_path.display(),
                 err
             );
         } else {
-            eprintln!(
+            tracing::info!(
                 "Backed up invalid tool policy config to {}",
                 backup_path.display()
             );
