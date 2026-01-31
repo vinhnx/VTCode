@@ -359,6 +359,7 @@ impl ModelId {
             | ModelId::OpenRouterDeepSeekChatV31
             | ModelId::OpenRouterDeepSeekR1
             | ModelId::OpenRouterOpenAIGptOss120b
+            | ModelId::OpenRouterOpenAIGptOss120bFree
             | ModelId::OpenRouterOpenAIGptOss20b
             | ModelId::OpenRouterOpenAIGpt5
             | ModelId::OpenRouterOpenAIGpt5Codex

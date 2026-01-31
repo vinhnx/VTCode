@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod auth;
 pub mod automation;
 pub mod commands;
 pub mod dotfile_protection;
@@ -15,6 +16,7 @@ pub mod tools;
 pub use agent::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, OpenResponsesConfig,
 };
+pub use auth::{AuthConfig, OpenRouterAuthConfig};
 pub use automation::{AutomationConfig, FullAutoConfig};
 pub use commands::CommandsConfig;
 pub use dotfile_protection::DotfileProtectionConfig;

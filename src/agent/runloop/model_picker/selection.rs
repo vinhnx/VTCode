@@ -31,6 +31,8 @@ pub(super) enum ReasoningChoice {
 pub(super) enum ExistingKey {
     Environment,
     WorkspaceDotenv(String),
+    /// OAuth token from encrypted storage (for OpenRouter)
+    OAuthToken,
 }
 
 #[derive(Clone)]
@@ -212,6 +214,14 @@ pub(super) fn provider_requires_api_key(provider: Provider, model_id: &str, env_
     }
     if provider == Provider::LmStudio {
         return false;
+    }
+
+    // For OpenRouter, check OAuth token first
+    if provider == Provider::OpenRouter {
+        if let Ok(Some(_token)) = vtcode_config::auth::load_oauth_token() {
+            // OAuth token is available, no need for manual API key entry
+            return false;
+        }
     }
 
     match std::env::var(env_key) {

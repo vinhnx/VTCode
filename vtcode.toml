@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "openrouter"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENROUTER_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "minimax-m2.1:cloud"
+default_model = "openai/gpt-oss-120b:free"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -161,6 +161,12 @@ include_reasoning = true
 mode = "Auto"
 refresh_interval_ms = 1000
 command_timeout_ms = 200
+
+[auth.openrouter]
+use_oauth = false
+callback_port = 8484
+auto_refresh = true
+flow_timeout_secs = 300
 #mode = "Command"
 #command = "./.vtcode/statusline/statusline.sh"
 #refresh_interval_ms = 1000

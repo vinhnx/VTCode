@@ -148,6 +148,19 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "terminal-setup",
             description: "Configure terminal for VT Code (multiline, copy/paste, shell, themes)",
         },
+        // OAuth authentication
+        SlashCommandInfo {
+            name: "login",
+            description: "Authenticate with OpenRouter via OAuth (usage: /login openrouter)",
+        },
+        SlashCommandInfo {
+            name: "logout",
+            description: "Clear OAuth authentication (usage: /logout openrouter)",
+        },
+        SlashCommandInfo {
+            name: "auth",
+            description: "Show authentication status for providers (usage: /auth [provider])",
+        },
     ]
 });
 

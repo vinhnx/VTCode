@@ -2298,6 +2298,37 @@
           "doc_comment": "OpenAI gpt-oss-120b - Open-weight 120B reasoning model via OpenRouter"
         }
       },
+      "openai/gpt-oss-120b:free": {
+        "id": "openai/gpt-oss-120b:free",
+        "name": "OpenAI: gpt-oss-120b (free)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
+        "max_output_tokens": 131072,
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "vtcode": {
+          "variant": "OpenRouterOpenAIGptOss120bFree",
+          "constant": "OPENAI_GPT_OSS_120B_FREE",
+          "vendor": "openai",
+          "display": "OpenAI gpt-oss-120b (free)",
+          "description": "Open-weight 120B reasoning model - free tier via OpenRouter",
+          "efficient": true,
+          "top_tier": false,
+          "generation": "OSS-120B",
+          "doc_comment": "OpenAI gpt-oss-120b:free - Open-weight 120B reasoning model free tier via OpenRouter"
+        }
+      },
       "openai/gpt-oss-20b": {
         "id": "openai/gpt-oss-20b",
         "name": "OpenAI: gpt-oss-20b",
