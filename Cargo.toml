@@ -181,20 +181,24 @@ anthropic-api = ["vtcode-core/anthropic-api", "dep:axum"]
 a2a-server = ["vtcode-core/a2a-server"]   # Enable OAuth callback server for provider authentication
 
 [profile.dev]
-debug = 0             # No debug info = faster linking
-lto = false           # Disable LTO for fast dev builds
-incremental = true    # Enable incremental compilation
-opt-level = 0         # No optimization = fastest compile
+debug = 0
+lto = false
+incremental = true
+opt-level = 0
 
-# Fast test profile
 [profile.test]
 inherits = "dev"
 
-# Optimize proc-macros for faster builds
+# Optimize build dependencies for faster proc-macro execution
 [profile.dev.build-override]
 opt-level = 3
+codegen-units = 16
 
-# Use this profile when you need optimization: cargo build --profile dev-optimized
+# Optimize dependencies slightly (they're cached anyway)
+[profile.dev.package."*"]
+opt-level = 1
+debug = false
+
 [profile.dev-optimized]
 inherits = "dev"
 lto = "thin"
