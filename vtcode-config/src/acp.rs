@@ -108,6 +108,10 @@ pub struct AgentClientProtocolZedConfig {
     /// Desired workspace trust level when running under ACP
     #[serde(default = "default_zed_workspace_trust_mode")]
     pub workspace_trust: AgentClientProtocolZedWorkspaceTrustMode,
+
+    /// Authentication method configuration for ACP
+    #[serde(default)]
+    pub auth: AcpAuthConfig,
 }
 
 impl Default for AgentClientProtocolZedConfig {
@@ -117,6 +121,7 @@ impl Default for AgentClientProtocolZedConfig {
             transport: default_transport(),
             tools: AgentClientProtocolZedToolsConfig::default(),
             workspace_trust: default_zed_workspace_trust_mode(),
+            auth: AcpAuthConfig::default(),
         }
     }
 }
@@ -193,6 +198,39 @@ impl std::fmt::Display for WorkspaceTrustLevel {
     }
 }
 
+/// ACP authentication configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AcpAuthConfig {
+    /// Default authentication method for ACP agents
+    /// Options: "agent" (default - agent handles auth), "env_var", "terminal"
+    #[serde(default = "default_auth_method")]
+    pub default_method: String,
+
+    /// Environment variable name for auth (used when default_method is "env_var")
+    /// Examples: "OPENAI_API_KEY", "ANTHROPIC_API_KEY"
+    #[serde(default)]
+    pub env_var_name: Option<String>,
+
+    /// URL where users can get their API key (optional, for UI display)
+    #[serde(default)]
+    pub auth_url: Option<String>,
+}
+
+fn default_auth_method() -> String {
+    "agent".to_string()
+}
+
+impl Default for AcpAuthConfig {
+    fn default() -> Self {
+        Self {
+            default_method: default_auth_method(),
+            env_var_name: None,
+            auth_url: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,5 +248,32 @@ mod tests {
             cfg.zed.workspace_trust,
             AgentClientProtocolZedWorkspaceTrustMode::FullAuto
         ));
+    }
+
+    #[test]
+    fn test_acp_auth_config_defaults() {
+        let auth = AcpAuthConfig::default();
+        assert_eq!(auth.default_method, "agent");
+        assert!(auth.env_var_name.is_none());
+        assert!(auth.auth_url.is_none());
+    }
+
+    #[test]
+    fn test_acp_auth_config_in_zed_config() {
+        let cfg = AgentClientProtocolZedConfig::default();
+        assert_eq!(cfg.auth.default_method, "agent");
+    }
+
+    #[test]
+    fn test_acp_auth_config_deserialization() {
+        let toml_str = r#"
+default_method = "env_var"
+env_var_name = "OPENAI_API_KEY"
+auth_url = "https://platform.openai.com/api-keys"
+"#;
+        let auth: AcpAuthConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(auth.default_method, "env_var");
+        assert_eq!(auth.env_var_name, Some("OPENAI_API_KEY".to_string()));
+        assert_eq!(auth.auth_url, Some("https://platform.openai.com/api-keys".to_string()));
     }
 }

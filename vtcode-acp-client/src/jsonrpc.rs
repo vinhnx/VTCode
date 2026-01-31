@@ -253,6 +253,47 @@ impl JsonRpcError {
     pub fn internal_error(details: impl Into<String>) -> Self {
         Self::new(error_codes::INTERNAL_ERROR, details)
     }
+
+    /// Create an authentication required error with list of available methods
+    /// 
+    /// Per ACP spec, includes authMethods in error data to help clients
+    /// present appropriate UI for authentication options.
+    pub fn auth_required(auth_methods: Vec<super::AuthMethod>) -> Self {
+        let data = serde_json::json!({
+            "authMethods": auth_methods,
+        });
+        Self::with_data(
+            error_codes::AUTH_REQUIRED,
+            "Authentication required",
+            data,
+        )
+    }
+
+    /// Create a permission denied error
+    pub fn permission_denied(details: impl Into<String>) -> Self {
+        Self::new(error_codes::PERMISSION_DENIED, details)
+    }
+
+    /// Create a session not found error
+    pub fn session_not_found(session_id: impl Into<String>) -> Self {
+        Self::new(
+            error_codes::SESSION_NOT_FOUND,
+            format!("Session not found: {}", session_id.into()),
+        )
+    }
+
+    /// Create a rate limited error
+    pub fn rate_limited(details: impl Into<String>) -> Self {
+        Self::new(error_codes::RATE_LIMITED, details)
+    }
+
+    /// Create a resource not found error
+    pub fn resource_not_found(resource: impl Into<String>) -> Self {
+        Self::new(
+            error_codes::RESOURCE_NOT_FOUND,
+            format!("Resource not found: {}", resource.into()),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -311,5 +352,75 @@ mod tests {
 
         assert_eq!(format!("{}", string_id), "abc");
         assert_eq!(format!("{}", number_id), "123");
+    }
+
+    #[test]
+    fn test_auth_required_error() {
+        use super::super::AuthMethod;
+
+        let auth_methods = vec![
+            AuthMethod::Agent {
+                id: "agent_auth".to_string(),
+                name: "Agent Auth".to_string(),
+                description: None,
+            },
+            AuthMethod::EnvVar {
+                id: "openai_key".to_string(),
+                name: "OpenAI Key".to_string(),
+                description: None,
+                var_name: "OPENAI_API_KEY".to_string(),
+                link: None,
+            },
+        ];
+
+        let error = JsonRpcError::auth_required(auth_methods);
+        
+        assert_eq!(error.code, error_codes::AUTH_REQUIRED);
+        assert_eq!(error.message, "Authentication required");
+        assert!(error.data.is_some());
+
+        let data = error.data.unwrap();
+        assert!(data["authMethods"].is_array());
+        assert_eq!(data["authMethods"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_auth_required_error_serialization() {
+        use super::super::AuthMethod;
+
+        let auth_methods = vec![
+            AuthMethod::EnvVar {
+                id: "test".to_string(),
+                name: "Test".to_string(),
+                description: None,
+                var_name: "TEST_VAR".to_string(),
+                link: Some("https://example.com".to_string()),
+            },
+        ];
+
+        let error = JsonRpcError::auth_required(auth_methods);
+        let json = serde_json::to_value(&error).unwrap();
+
+        assert_eq!(json["code"], -32001);
+        assert_eq!(json["message"], "Authentication required");
+        assert_eq!(json["data"]["authMethods"][0]["type"], "env_var");
+        assert_eq!(json["data"]["authMethods"][0]["id"], "test");
+    }
+
+    #[test]
+    fn test_acp_error_helpers() {
+        let err_perm = JsonRpcError::permission_denied("Not allowed");
+        assert_eq!(err_perm.code, error_codes::PERMISSION_DENIED);
+
+        let err_session = JsonRpcError::session_not_found("sess-123");
+        assert_eq!(err_session.code, error_codes::SESSION_NOT_FOUND);
+        assert!(err_session.message.contains("sess-123"));
+
+        let err_rate = JsonRpcError::rate_limited("Too many requests");
+        assert_eq!(err_rate.code, error_codes::RATE_LIMITED);
+
+        let err_resource = JsonRpcError::resource_not_found("file.txt");
+        assert_eq!(err_resource.code, error_codes::RESOURCE_NOT_FOUND);
+        assert!(err_resource.message.contains("file.txt"));
     }
 }

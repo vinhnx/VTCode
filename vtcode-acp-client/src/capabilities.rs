@@ -342,16 +342,75 @@ pub struct AuthRequirements {
 }
 
 /// Supported authentication methods
+/// 
+/// Follows ACP authentication specification:
+/// https://agentclientprotocol.com/protocol/auth
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum AuthMethod {
-    /// API key authentication
+    /// Agent handles authentication itself (default/backward-compatible)
+    #[serde(rename = "agent")]
+    Agent {
+        /// Unique identifier for this auth method
+        id: String,
+        /// Human-readable name
+        name: String,
+        /// Description of the auth method
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+    },
+    
+    /// Environment variable-based authentication
+    /// User provides a key/credential that client passes as environment variable
+    #[serde(rename = "env_var")]
+    EnvVar {
+        /// Unique identifier for this auth method
+        id: String,
+        /// Human-readable name
+        name: String,
+        /// Description of the auth method
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        /// Environment variable name to set
+        var_name: String,
+        /// Optional link to page where user can get their key
+        #[serde(skip_serializing_if = "Option::is_none")]
+        link: Option<String>,
+    },
+    
+    /// Terminal/TUI-based interactive authentication
+    /// Client launches interactive terminal for user to login
+    #[serde(rename = "terminal")]
+    Terminal {
+        /// Unique identifier for this auth method
+        id: String,
+        /// Human-readable name
+        name: String,
+        /// Description of the auth method
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        /// Additional arguments to pass to agent command
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        args: Vec<String>,
+        /// Additional environment variables to set
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        env: HashMap<String, String>,
+    },
+    
+    /// Legacy: API key authentication (deprecated, use EnvVar instead)
+    #[serde(rename = "api_key")]
     ApiKey,
-    /// OAuth 2.0
+    
+    /// Legacy: OAuth 2.0 (use Terminal for interactive flows)
+    #[serde(rename = "oauth2")]
     OAuth2,
-    /// Bearer token
+    
+    /// Legacy: Bearer token authentication
+    #[serde(rename = "bearer")]
     Bearer,
-    /// Custom authentication
+    
+    /// Custom authentication (agent-specific)
+    #[serde(rename = "custom")]
     Custom(String),
 }
 
@@ -454,5 +513,92 @@ mod tests {
         let json = serde_json::to_value(&creds).unwrap();
         assert_eq!(json["type"], "api_key");
         assert_eq!(json["key"], "sk-test123");
+    }
+
+    #[test]
+    fn test_auth_method_agent() {
+        let method = AuthMethod::Agent {
+            id: "agent_auth".to_string(),
+            name: "Agent Authentication".to_string(),
+            description: Some("Let agent handle authentication".to_string()),
+        };
+        let json = serde_json::to_value(&method).unwrap();
+        assert_eq!(json["type"], "agent");
+        assert_eq!(json["id"], "agent_auth");
+        assert_eq!(json["name"], "Agent Authentication");
+    }
+
+    #[test]
+    fn test_auth_method_env_var() {
+        let method = AuthMethod::EnvVar {
+            id: "openai_key".to_string(),
+            name: "OpenAI API Key".to_string(),
+            description: Some("Provide your OpenAI API key".to_string()),
+            var_name: "OPENAI_API_KEY".to_string(),
+            link: Some("https://platform.openai.com/api-keys".to_string()),
+        };
+        let json = serde_json::to_value(&method).unwrap();
+        assert_eq!(json["type"], "env_var");
+        assert_eq!(json["id"], "openai_key");
+        assert_eq!(json["name"], "OpenAI API Key");
+        assert_eq!(json["var_name"], "OPENAI_API_KEY");
+        assert_eq!(json["link"], "https://platform.openai.com/api-keys");
+    }
+
+    #[test]
+    fn test_auth_method_terminal() {
+        let mut env = HashMap::new();
+        env.insert("VAR1".to_string(), "value1".to_string());
+        
+        let method = AuthMethod::Terminal {
+            id: "terminal_login".to_string(),
+            name: "Terminal Login".to_string(),
+            description: Some("Login via interactive terminal".to_string()),
+            args: vec!["--login".to_string(), "--interactive".to_string()],
+            env,
+        };
+        let json = serde_json::to_value(&method).unwrap();
+        assert_eq!(json["type"], "terminal");
+        assert_eq!(json["args"][0], "--login");
+        assert_eq!(json["env"]["VAR1"], "value1");
+    }
+
+    #[test]
+    fn test_auth_method_serialization_roundtrip() {
+        let method = AuthMethod::EnvVar {
+            id: "test_id".to_string(),
+            name: "Test".to_string(),
+            description: None,
+            var_name: "TEST_VAR".to_string(),
+            link: None,
+        };
+        
+        let json = serde_json::to_value(&method).unwrap();
+        let deserialized: AuthMethod = serde_json::from_value(json).unwrap();
+        
+        match deserialized {
+            AuthMethod::EnvVar { id, name, var_name, .. } => {
+                assert_eq!(id, "test_id");
+                assert_eq!(name, "Test");
+                assert_eq!(var_name, "TEST_VAR");
+            }
+            _ => panic!("Unexpected auth method variant"),
+        }
+    }
+
+    #[test]
+    fn test_legacy_auth_methods() {
+        // Ensure backward compatibility
+        let json = serde_json::json!({"type": "api_key"});
+        let method: AuthMethod = serde_json::from_value(json).unwrap();
+        matches!(method, AuthMethod::ApiKey);
+
+        let json = serde_json::json!({"type": "oauth2"});
+        let method: AuthMethod = serde_json::from_value(json).unwrap();
+        matches!(method, AuthMethod::OAuth2);
+
+        let json = serde_json::json!({"type": "bearer"});
+        let method: AuthMethod = serde_json::from_value(json).unwrap();
+        matches!(method, AuthMethod::Bearer);
     }
 }

@@ -6447,6 +6447,7 @@ dependencies = [
  "url",
  "uuid",
  "vt100",
+ "vtcode-acp-client",
  "vtcode-bash-runner",
  "vtcode-commons",
  "vtcode-config",

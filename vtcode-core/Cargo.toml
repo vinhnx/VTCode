@@ -133,6 +133,7 @@ vtcode-config = { path = "../vtcode-config", version = "0.74.1" }
 vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.74.1" }
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.74.1" }
 vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.74.1" }
+vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.74.1" }
 
 # Schema generation
 schemars = { workspace = true, optional = true }
