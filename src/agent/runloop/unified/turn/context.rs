@@ -17,6 +17,7 @@ pub enum TurnLoopResult {
     Completed,
     Aborted,
     Cancelled,
+    Exit,
     Blocked { reason: Option<String> },
 }
 

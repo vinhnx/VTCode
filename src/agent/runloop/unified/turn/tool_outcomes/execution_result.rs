@@ -12,7 +12,7 @@ use crate::agent::runloop::unified::tool_pipeline::{
 };
 use crate::agent::runloop::unified::turn::turn_helpers::display_status;
 
-use super::helpers::push_tool_response;
+use super::helpers::{check_is_argument_error, push_tool_response, serialize_output};
 
 #[allow(clippy::too_many_arguments)]
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
@@ -37,109 +37,39 @@ pub(crate) async fn handle_tool_execution_result<'a>(
     traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     tool_start_time: std::time::Instant,
 ) -> Result<()> {
-    // 1. Record metrics and handle outcome specific logic
+    // Dispatch to specific handlers based on status
     match &pipeline_outcome.status {
         ToolExecutionStatus::Success { output, .. } => {
-            record_tool_success(ctx, tool_name, tool_start_time);
-
-            let content_for_model = serialize_output(output);
-            push_tool_response(ctx.working_history, tool_call_id, content_for_model);
-
-            // Handle UI output and file modifications
-            let vt_cfg = ctx.vt_cfg;
-            let (_any_write, mod_files, _last_stdout) = handle_pipeline_output_from_turn_ctx(
-                &mut ctx.as_turn_loop_context(),
+            handle_success(
+                ctx,
+                tool_call_id,
                 tool_name,
                 args_val,
                 pipeline_outcome,
-                vt_cfg,
+                output,
+                turn_modified_files,
                 traj,
+                tool_start_time,
             )
             .await?;
-
-            for f in mod_files {
-                turn_modified_files.insert(f);
-            }
-
-            // Run post-tool hooks
-            if let Some(hooks) = ctx.lifecycle_hooks {
-                match hooks
-                    .run_post_tool_use(tool_name, Some(args_val), output)
-                    .await
-                {
-                    Ok(outcome) => {
-                        crate::agent::runloop::unified::turn::utils::render_hook_messages(
-                            ctx.renderer,
-                            &outcome.messages,
-                        )?;
-                        for context in outcome.additional_context {
-                            if !context.trim().is_empty() {
-                                ctx.working_history.push(uni::Message::system(context));
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        ctx.renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to run post-tool hooks: {}", err),
-                        )?;
-                    }
-                }
-            }
         }
         ToolExecutionStatus::Failure { error } => {
-            let error_str = error.to_string();
-            let is_plan_mode_denial = error_str.contains("tool denied by plan mode");
-
-            if !is_plan_mode_denial {
-                let is_argument_error = check_is_argument_error(&error_str);
-                record_tool_failure(ctx, tool_name, tool_start_time, is_argument_error);
-            } else {
-                tracing::debug!(
-                    tool = %tool_name,
-                    "Plan mode denial - not recording as circuit breaker failure"
-                );
-            }
-
-            let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
-            tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
-
-            // Push error to history
-            let error_content = serde_json::json!({"error": error_msg});
-            push_tool_response(
-                ctx.working_history,
+            handle_failure(
+                ctx,
                 tool_call_id,
-                error_content.to_string(),
-            );
-
-            // Handle auto-exit from Plan Mode if applicable
-            if is_plan_mode_denial && ctx.session_stats.is_plan_mode() {
-                handle_plan_mode_auto_exit(ctx, turn_modified_files, traj, tool_start_time).await?;
-            }
+                tool_name,
+                error,
+                turn_modified_files,
+                traj,
+                tool_start_time,
+            )
+            .await?;
         }
         ToolExecutionStatus::Timeout { error } => {
-            record_tool_failure(ctx, tool_name, tool_start_time, false);
-
-            let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
-            tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
-
-            let error_content = serde_json::json!({"error": error_msg});
-            push_tool_response(
-                ctx.working_history,
-                tool_call_id,
-                error_content.to_string(),
-            );
+            handle_timeout(ctx, tool_call_id, tool_name, error, tool_start_time).await?;
         }
         ToolExecutionStatus::Cancelled => {
-            let error_msg = format!("Tool '{}' execution cancelled", tool_name);
-            ctx.renderer.line(MessageStyle::Info, &error_msg)?;
-
-            let error_content = serde_json::json!({"error": error_msg});
-            push_tool_response(
-                ctx.working_history,
-                tool_call_id,
-                error_content.to_string(),
-            );
+            handle_cancelled(ctx, tool_call_id, tool_name).await?;
         }
         ToolExecutionStatus::Progress(_) => {}
     }
@@ -149,6 +79,158 @@ pub(crate) async fn handle_tool_execution_result<'a>(
         record_mcp_tool_event(ctx, tool_name, &pipeline_outcome.status);
     }
 
+    Ok(())
+}
+
+async fn handle_success<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
+    tool_call_id: String,
+    tool_name: &str,
+    args_val: &serde_json::Value,
+    pipeline_outcome: &ToolPipelineOutcome,
+    output: &serde_json::Value,
+    turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
+    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    tool_start_time: std::time::Instant,
+) -> Result<()> {
+    record_tool_success(ctx, tool_name, tool_start_time);
+
+    let content_for_model = serialize_output(output);
+    push_tool_response(ctx.working_history, tool_call_id, content_for_model);
+
+    // Handle UI output and file modifications
+    let vt_cfg = ctx.vt_cfg;
+    let (_any_write, mod_files, _last_stdout) = handle_pipeline_output_from_turn_ctx(
+        &mut ctx.as_turn_loop_context(),
+        tool_name,
+        args_val,
+        pipeline_outcome,
+        vt_cfg,
+        traj,
+    )
+    .await?;
+
+    for f in mod_files {
+        turn_modified_files.insert(f);
+    }
+
+    // Run post-tool hooks
+    run_post_tool_hooks(ctx, tool_name, args_val, output).await?;
+
+    Ok(())
+}
+
+async fn handle_failure<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
+    tool_call_id: String,
+    tool_name: &str,
+    error: &anyhow::Error,
+    turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
+    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    tool_start_time: std::time::Instant,
+) -> Result<()> {
+    let error_str = error.to_string();
+    let is_plan_mode_denial = error_str.contains("tool denied by plan mode");
+
+    if !is_plan_mode_denial {
+        let is_argument_error = check_is_argument_error(&error_str);
+        record_tool_failure(ctx, tool_name, tool_start_time, is_argument_error);
+    } else {
+        tracing::debug!(
+            tool = %tool_name,
+            "Plan mode denial - not recording as circuit breaker failure"
+        );
+    }
+
+    let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
+    tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
+
+    // Push error to history
+    let error_content = serde_json::json!({"error": error_msg});
+    push_tool_response(
+        ctx.working_history,
+        tool_call_id,
+        error_content.to_string(),
+    );
+
+    // Handle auto-exit from Plan Mode if applicable
+    if is_plan_mode_denial && ctx.session_stats.is_plan_mode() {
+        handle_plan_mode_auto_exit(ctx, turn_modified_files, traj, tool_start_time).await?;
+    }
+
+    Ok(())
+}
+
+async fn handle_timeout<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
+    tool_call_id: String,
+    tool_name: &str,
+    error: &vtcode_core::tools::registry::ToolExecutionError,
+    tool_start_time: std::time::Instant,
+) -> Result<()> {
+    record_tool_failure(ctx, tool_name, tool_start_time, false);
+
+    let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
+    tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
+
+    let error_content = serde_json::json!({"error": error_msg});
+    push_tool_response(
+        ctx.working_history,
+        tool_call_id,
+        error_content.to_string(),
+    );
+    
+    Ok(())
+}
+
+async fn handle_cancelled<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
+    tool_call_id: String,
+    tool_name: &str,
+) -> Result<()> {
+    let error_msg = format!("Tool '{}' execution cancelled", tool_name);
+    ctx.renderer.line(MessageStyle::Info, &error_msg)?;
+
+    let error_content = serde_json::json!({"error": error_msg});
+    push_tool_response(
+        ctx.working_history,
+        tool_call_id,
+        error_content.to_string(),
+    );
+    
+    Ok(())
+}
+
+async fn run_post_tool_hooks<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
+    tool_name: &str,
+    args_val: &serde_json::Value,
+    output: &serde_json::Value,
+) -> Result<()> {
+    if let Some(hooks) = ctx.lifecycle_hooks {
+        match hooks
+            .run_post_tool_use(tool_name, Some(args_val), output)
+            .await
+        {
+            Ok(outcome) => {
+                crate::agent::runloop::unified::turn::utils::render_hook_messages(
+                    ctx.renderer,
+                    &outcome.messages,
+                )?;
+                for context in outcome.additional_context {
+                    if !context.trim().is_empty() {
+                        ctx.working_history.push(uni::Message::system(context));
+                    }
+                }
+            }
+            Err(err) => {
+                ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to run post-tool hooks: {}", err),
+                )?;
+            }
+        }
+    }
     Ok(())
 }
 
@@ -180,21 +262,7 @@ fn record_tool_failure(
     ctx.telemetry.record_tool_usage(tool_name, false);
 }
 
-fn check_is_argument_error(error_str: &str) -> bool {
-    error_str.contains("Missing required")
-        || error_str.contains("Invalid arguments")
-        || error_str.contains("required path parameter")
-        || error_str.contains("expected ")
-        || error_str.contains("Expected:")
-}
 
-fn serialize_output(output: &serde_json::Value) -> String {
-    if let Some(s) = output.as_str() {
-        s.to_string()
-    } else {
-        serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
-    }
-}
 
 async fn handle_plan_mode_auto_exit<'a>(
     ctx: &mut TurnProcessingContext<'a>,
