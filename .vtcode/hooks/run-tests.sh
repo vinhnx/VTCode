@@ -17,9 +17,13 @@ if [[ "$FILE_PATH" =~ src/.*\.(rs|js|ts|py|go)$ ]]; then
     echo "Running project tests..."
     ./test.sh
   elif [[ -f "Cargo.toml" ]] && [[ "$FILE_PATH" =~ \.rs$ ]]; then
-    # Rust project
+    # Rust project - prefer nextest for faster execution
     echo "Running Rust tests..."
-    cargo test --quiet
+    if command -v cargo-nextest &> /dev/null; then
+      cargo nextest run --profile quick
+    else
+      cargo test --quiet
+    fi
   elif [[ -f "package.json" ]] && [[ "$FILE_PATH" =~ \.(js|ts)$ ]]; then
     # Node.js project
     echo "Running Node.js tests..."

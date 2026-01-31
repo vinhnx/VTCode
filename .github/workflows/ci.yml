@@ -169,7 +169,7 @@ jobs:
       - run: cargo check --locked
 
   test:
-    name: "Cargo test"
+    name: "Cargo nextest"
     runs-on: "ubuntu-latest"
     timeout-minutes: 20
     steps:
@@ -182,8 +182,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       - name: Run tests
-        run: cargo test --locked
+        run: cargo nextest run --locked --profile ci
 
   # clippy:
   #   name: "Cargo clippy"
