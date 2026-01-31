@@ -130,7 +130,7 @@ impl UnicodeValidationContext {
         // For now, just log the completion
         // In a full implementation, this would update global statistics
         if !self.errors.is_empty() {
-            eprintln!(
+            tracing::warn!(
                 "Unicode validation completed with {} errors",
                 self.errors.len()
             );

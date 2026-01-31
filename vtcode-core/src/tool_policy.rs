@@ -485,8 +485,8 @@ impl ToolPolicyManager {
                     Ok(config)
                 }
                 Err(parse_err) => {
-                    eprintln!(
-                        "Warning: Invalid tool policy config at {} ({}). Resetting to defaults.",
+                    tracing::warn!(
+                        "Invalid tool policy config at {} ({}). Resetting to defaults.",
                         config_path.display(),
                         parse_err
                     );

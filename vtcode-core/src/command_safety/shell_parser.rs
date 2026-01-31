@@ -47,7 +47,7 @@ pub fn parse_shell_commands(script: &str) -> std::result::Result<Vec<Vec<String>
         Ok(commands) if !commands.is_empty() => return Ok(commands),
         Ok(_) => {} // Empty result, fall through to basic parsing
         Err(e) => {
-            eprintln!(
+            tracing::debug!(
                 "Tree-sitter bash parsing failed: {}, falling back to basic tokenization",
                 e
             );
