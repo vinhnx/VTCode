@@ -85,6 +85,8 @@ dirs = "6.0"
 serde_yaml = "0.9"
 # Zip support for skill packaging
 zip = { version = "7.0", default-features = false, features = ["deflate"] }
+# Semantic versioning for Ollama version detection (Codex pattern)
+semver = { workspace = true }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 # ANSI styling
