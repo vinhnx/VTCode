@@ -5,72 +5,18 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use vtcode_exec_events::trace::{
     Contributor, RelatedResource, TraceConversation, TraceFile, TraceMetadata, TraceRange,
-    TraceRecord, TraceRecordBuilder, VtCodeMetadata, compute_content_hash,
-    normalize_model_id,
+    TraceRecord, TraceRecordBuilder, VtCodeMetadata, compute_content_hash, normalize_model_id,
 };
 
-/// Context for generating traces from file changes.
-#[derive(Debug, Clone)]
-pub struct TraceGeneratorContext {
-    /// Git revision (commit SHA).
-    pub revision: Option<String>,
-    /// Session ID for conversation URL.
-    pub session_id: Option<String>,
-    /// Model ID.
-    pub model_id: String,
-    /// Provider name.
-    pub provider: String,
-    /// Turn number.
-    pub turn_number: Option<u32>,
-    /// Workspace path for resolving relative paths.
-    pub workspace_path: PathBuf,
-}
-
-impl TraceGeneratorContext {
-    /// Create a new generator context.
-    pub fn new(
-        model_id: impl Into<String>,
-        provider: impl Into<String>,
-        workspace_path: impl Into<PathBuf>,
-    ) -> Self {
-        Self {
-            revision: None,
-            session_id: None,
-            model_id: model_id.into(),
-            provider: provider.into(),
-            turn_number: None,
-            workspace_path: workspace_path.into(),
-        }
-    }
-
-    /// Set the git revision.
-    pub fn with_revision(mut self, revision: impl Into<String>) -> Self {
-        self.revision = Some(revision.into());
-        self
-    }
-
-    /// Set the session ID.
-    pub fn with_session_id(mut self, session_id: impl Into<String>) -> Self {
-        self.session_id = Some(session_id.into());
-        self
-    }
-
-    /// Set the turn number.
-    pub fn with_turn_number(mut self, turn: u32) -> Self {
-        self.turn_number = Some(turn);
-        self
-    }
-}
+// Re-export TraceContext for convenience
+pub use vtcode_exec_events::trace::TraceContext;
 
 /// Generate Agent Trace records from tracked file changes.
 pub struct TraceGenerator;
 
 impl TraceGenerator {
     /// Generate a trace record from a TurnDiffTracker.
-    pub fn from_diff_tracker(
-        tracker: &TurnDiffTracker,
-        ctx: &TraceGeneratorContext,
-    ) -> Option<TraceRecord> {
+    pub fn from_diff_tracker(tracker: &TurnDiffTracker, ctx: &TraceContext) -> Option<TraceRecord> {
         if !tracker.has_changes() {
             return None;
         }
@@ -82,9 +28,15 @@ impl TraceGenerator {
             builder = builder.git_revision(revision);
         }
 
+        // Get workspace path or use current directory
+        let workspace_path = ctx
+            .workspace_path
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("."));
+
         // Generate files with attributed ranges
         for (path, change) in tracker.changes() {
-            if let Some(trace_file) = Self::file_change_to_trace_file(path, change, ctx) {
+            if let Some(trace_file) = Self::file_change_to_trace_file(path, change, ctx, &workspace_path) {
                 builder = builder.file(trace_file);
             }
         }
@@ -95,7 +47,7 @@ impl TraceGenerator {
             vtcode: Some(VtCodeMetadata {
                 session_id: ctx.session_id.clone(),
                 turn_number: ctx.turn_number,
-                workspace_path: Some(ctx.workspace_path.display().to_string()),
+                workspace_path: ctx.workspace_path.as_ref().map(|p| p.display().to_string()),
                 provider: Some(ctx.provider.clone()),
             }),
             ..Default::default()
@@ -115,7 +67,7 @@ impl TraceGenerator {
     /// Generate a trace record from raw file changes.
     pub fn from_changes(
         changes: &HashMap<PathBuf, FileChange>,
-        ctx: &TraceGeneratorContext,
+        ctx: &TraceContext,
     ) -> Option<TraceRecord> {
         if changes.is_empty() {
             return None;
@@ -127,8 +79,13 @@ impl TraceGenerator {
             builder = builder.git_revision(revision);
         }
 
+        let workspace_path = ctx
+            .workspace_path
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("."));
+
         for (path, change) in changes {
-            if let Some(trace_file) = Self::file_change_to_trace_file(path, change, ctx) {
+            if let Some(trace_file) = Self::file_change_to_trace_file(path, change, ctx, &workspace_path) {
                 builder = builder.file(trace_file);
             }
         }
@@ -138,7 +95,7 @@ impl TraceGenerator {
             vtcode: Some(VtCodeMetadata {
                 session_id: ctx.session_id.clone(),
                 turn_number: ctx.turn_number,
-                workspace_path: Some(ctx.workspace_path.display().to_string()),
+                workspace_path: ctx.workspace_path.as_ref().map(|p| p.display().to_string()),
                 provider: Some(ctx.provider.clone()),
             }),
             ..Default::default()
@@ -157,11 +114,12 @@ impl TraceGenerator {
     fn file_change_to_trace_file(
         path: &Path,
         change: &FileChange,
-        ctx: &TraceGeneratorContext,
+        ctx: &TraceContext,
+        workspace_path: &Path,
     ) -> Option<TraceFile> {
         // Get relative path from workspace
         let relative_path = path
-            .strip_prefix(&ctx.workspace_path)
+            .strip_prefix(workspace_path)
             .unwrap_or(path)
             .to_string_lossy()
             .to_string();
@@ -232,7 +190,7 @@ impl TraceGenerator {
             // Use file:// URL for local session files
             let session_url = format!(
                 "file://{}/sessions/{}.json",
-                ctx.workspace_path.join(".vtcode").display(),
+                workspace_path.join(".vtcode").display(),
                 session_id
             );
             conversation.url = Some(session_url.clone());
@@ -284,7 +242,8 @@ mod tests {
         tracker.on_patch_begin(changes);
         tracker.on_patch_end(true);
 
-        let ctx = TraceGeneratorContext::new("claude-opus-4", "anthropic", "/workspace")
+        let ctx = TraceContext::new("claude-opus-4", "anthropic")
+            .with_workspace_path("/workspace")
             .with_session_id("session-123")
             .with_turn_number(1);
 
@@ -300,7 +259,8 @@ mod tests {
 
     #[test]
     fn test_trace_with_git_revision() {
-        let ctx = TraceGeneratorContext::new("gpt-4o", "openai", "/workspace")
+        let ctx = TraceContext::new("gpt-4o", "openai")
+            .with_workspace_path("/workspace")
             .with_revision("abc123def456789012345678901234567890abcd");
 
         let mut changes = HashMap::new();
@@ -319,7 +279,7 @@ mod tests {
 
     #[test]
     fn test_trace_empty_changes() {
-        let ctx = TraceGeneratorContext::new("model", "provider", "/workspace");
+        let ctx = TraceContext::new("model", "provider").with_workspace_path("/workspace");
         let changes = HashMap::new();
 
         let trace = TraceGenerator::from_changes(&changes, &ctx);
@@ -328,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_trace_delete_not_included() {
-        let ctx = TraceGeneratorContext::new("model", "provider", "/workspace");
+        let ctx = TraceContext::new("model", "provider").with_workspace_path("/workspace");
 
         let mut changes = HashMap::new();
         changes.insert(PathBuf::from("/workspace/deleted.rs"), FileChange::delete("old content"));

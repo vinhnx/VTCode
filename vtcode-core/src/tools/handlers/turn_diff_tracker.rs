@@ -9,10 +9,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 /// Attribution information for a file change (Agent Trace compatible).
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ChangeAttribution {
     /// Model ID in provider/model format (e.g., "anthropic/claude-opus-4").
     pub model_id: Option<String>,
@@ -74,18 +76,22 @@ impl ChangeAttribution {
 }
 
 /// File change types (from Codex protocol)
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileChange {
     /// The type of change.
+    #[serde(flatten)]
     pub kind: FileChangeKind,
     /// Attribution information (Agent Trace).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub attribution: Option<ChangeAttribution>,
     /// Line range affected (1-indexed, for Agent Trace).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub line_range: Option<(u32, u32)>,
 }
 
 /// Kind of file change.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum FileChangeKind {
     /// New file added
     Add { content: String },
@@ -211,6 +217,65 @@ impl FileChange {
     /// Compute line count for the new content.
     pub fn new_line_count(&self) -> usize {
         self.new_content().map(|c| c.lines().count()).unwrap_or(0)
+    }
+
+    /// Convert from legacy FileChange enum (from tool_handler.rs).
+    ///
+    /// This provides backward compatibility with the older FileChange format.
+    pub fn from_legacy(
+        legacy: &super::tool_handler::FileChange,
+        attribution: Option<ChangeAttribution>,
+    ) -> Self {
+        let kind = match legacy {
+            super::tool_handler::FileChange::Add { content } => FileChangeKind::Add {
+                content: content.clone(),
+            },
+            super::tool_handler::FileChange::Delete => FileChangeKind::Delete {
+                original_content: String::new(), // Legacy doesn't preserve content
+            },
+            super::tool_handler::FileChange::Update {
+                old_content,
+                new_content,
+            } => FileChangeKind::Update {
+                old_content: old_content.clone(),
+                new_content: new_content.clone(),
+            },
+            super::tool_handler::FileChange::Rename { new_path, content } => FileChangeKind::Rename {
+                new_path: new_path.clone(),
+                old_content: None,
+                new_content: content.clone(),
+            },
+        };
+        Self {
+            kind,
+            attribution,
+            line_range: None,
+        }
+    }
+
+    /// Convert to legacy FileChange enum (for backward compatibility).
+    pub fn to_legacy(&self) -> super::tool_handler::FileChange {
+        match &self.kind {
+            FileChangeKind::Add { content } => super::tool_handler::FileChange::Add {
+                content: content.clone(),
+            },
+            FileChangeKind::Delete { .. } => super::tool_handler::FileChange::Delete,
+            FileChangeKind::Update {
+                old_content,
+                new_content,
+            } => super::tool_handler::FileChange::Update {
+                old_content: old_content.clone(),
+                new_content: new_content.clone(),
+            },
+            FileChangeKind::Rename {
+                new_path,
+                new_content,
+                ..
+            } => super::tool_handler::FileChange::Rename {
+                new_path: new_path.clone(),
+                content: new_content.clone(),
+            },
+        }
     }
 }
 
@@ -666,5 +731,39 @@ mod tests {
             let t = tracker.read().await;
             assert!(t.has_changes());
         }
+    }
+
+    #[test]
+    fn test_file_change_serialization() {
+        let change = FileChange::add("fn main() {}")
+            .with_attribution(ChangeAttribution::ai("claude-opus-4", "anthropic"))
+            .with_line_range(1, 5);
+
+        let json = serde_json::to_string_pretty(&change).unwrap();
+        assert!(json.contains("\"type\": \"add\""));
+        assert!(json.contains("\"content\": \"fn main() {}\""));
+        assert!(json.contains("\"contributor_type\": \"ai\""));
+        assert!(json.contains("\"model_id\": \"claude-opus-4\""));
+
+        // Roundtrip
+        let restored: FileChange = serde_json::from_str(&json).unwrap();
+        assert!(restored.is_add());
+        assert_eq!(restored.new_content(), Some("fn main() {}"));
+        assert!(restored.attribution.is_some());
+    }
+
+    #[test]
+    fn test_change_attribution_serialization() {
+        let attr = ChangeAttribution::ai("gpt-4o", "openai")
+            .with_session("session-abc", 3);
+
+        let json = serde_json::to_string(&attr).unwrap();
+        let restored: ChangeAttribution = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(restored.model_id, Some("gpt-4o".to_string()));
+        assert_eq!(restored.provider, Some("openai".to_string()));
+        assert_eq!(restored.session_id, Some("session-abc".to_string()));
+        assert_eq!(restored.turn_number, Some(3));
+        assert_eq!(restored.contributor_type, "ai");
     }
 }
