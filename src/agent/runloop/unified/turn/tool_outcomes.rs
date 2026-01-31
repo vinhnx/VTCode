@@ -17,6 +17,7 @@ pub(crate) use dispatch::handle_tool_calls;
 pub(crate) use messages::{
     HandleTextResponseParams, handle_assistant_response, handle_text_response,
 };
+pub(crate) use handlers::ToolOutcomeContext;
 
 #[allow(dead_code)]
 pub enum PrepareToolCallResult {
