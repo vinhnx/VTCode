@@ -13,7 +13,9 @@ use crate::agent::runloop::unified::turn::guards::{
     handle_turn_balancer, validate_tool_args_security,
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::ToolOutcomeContext;
-use crate::agent::runloop::unified::ui_interaction::stream_and_render_response;
+use crate::agent::runloop::unified::ui_interaction::{
+    StreamSpinnerOptions, stream_and_render_response_with_options,
+};
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
@@ -155,6 +157,11 @@ pub(crate) async fn execute_llm_request(
             ctx.input_status_state.right.clone(),
             spinner_msg,
         );
+        // If tools are available, set defer_restore so status bar isn't restored immediately.
+        // The turn loop will restore it after processing the response if there are no tool calls.
+        if has_tools {
+            _spinner.set_defer_restore(true);
+        }
         task::yield_now().await;
 
         #[cfg(debug_assertions)]
@@ -174,13 +181,18 @@ pub(crate) async fn execute_llm_request(
         }
 
         let step_result = if use_streaming {
-            let stream_result = stream_and_render_response(
+            // Defer spinner finish if tools are available - keeps loading indicator active
+            let spinner_options = StreamSpinnerOptions {
+                defer_finish: has_tools,
+            };
+            let stream_result = stream_and_render_response_with_options(
                 provider_client,
                 request.clone(),
                 &_spinner,
                 ctx.renderer,
                 ctx.ctrl_c_state,
                 ctx.ctrl_c_notify,
+                spinner_options,
             )
             .await;
 

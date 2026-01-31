@@ -175,6 +175,8 @@ pub(crate) struct PlaceholderSpinner {
     task: task::JoinHandle<()>,
     progress_state: Option<Arc<ProgressState>>,
     message_sender: Option<mpsc::UnboundedSender<String>>,
+    /// When true, don't restore UI status on finish - allows subsequent operations to take over
+    defer_restore: Arc<AtomicBool>,
 }
 
 impl PlaceholderSpinner {
@@ -273,6 +275,7 @@ impl PlaceholderSpinner {
             task,
             progress_state: progress_reporter.map(|r| r.get_state().clone()),
             message_sender: Some(message_sender_clone),
+            defer_restore: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -287,6 +290,13 @@ impl PlaceholderSpinner {
         // For backward compatibility, we don't expose message_sender for the old API
         spinner.message_sender = None;
         spinner
+    }
+
+    /// Set defer_restore flag - when true, don't restore UI status on finish
+    /// This allows subsequent operations (like tool execution) to maintain
+    /// their own loading indicators without flicker.
+    pub(crate) fn set_defer_restore(&self, defer: bool) {
+        self.defer_restore.store(defer, Ordering::SeqCst);
     }
 
     /// Get the progress state if available
@@ -304,13 +314,22 @@ impl PlaceholderSpinner {
     }
 
     pub(crate) fn finish(&self) {
+        self.finish_with_restore(!self.defer_restore.load(Ordering::SeqCst));
+    }
+
+    /// Finish the spinner with explicit control over whether to restore UI status.
+    /// When `restore` is false, the status bar will keep its current state,
+    /// allowing subsequent operations to seamlessly continue the loading indicator.
+    pub(crate) fn finish_with_restore(&self, restore: bool) {
         if self.active.swap(false, Ordering::SeqCst) {
             // Abort the spinner task first to prevent it from updating the input status
             // after we restore it (race condition fix)
             self.task.abort();
-            // Restore the UI state
-            self.handle
-                .set_input_status(self.restore_left.clone(), self.restore_right.clone());
+            // Only restore the UI state if requested
+            if restore {
+                self.handle
+                    .set_input_status(self.restore_left.clone(), self.restore_right.clone());
+            }
             // Note: We don't change input enabled/visible state since we didn't disable it in the first place
         }
     }
@@ -482,6 +501,18 @@ impl StreamingReasoningState {
     }
 }
 
+/// Options for controlling spinner behavior during response streaming
+#[derive(Default, Clone, Copy)]
+pub(crate) struct StreamSpinnerOptions {
+    /// If true, defer stopping the spinner until the caller explicitly finishes it.
+    /// This is useful when the task continues after streaming (e.g., tool execution).
+    /// Default is false for backward compatibility.
+    pub defer_finish: bool,
+}
+
+/// Stream and render response with default options.
+/// For more control over spinner behavior, use `stream_and_render_response_with_options`.
+#[allow(dead_code)]
 pub(crate) async fn stream_and_render_response(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
@@ -489,6 +520,30 @@ pub(crate) async fn stream_and_render_response(
     renderer: &mut AnsiRenderer,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
+) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
+    stream_and_render_response_with_options(
+        provider,
+        request,
+        spinner,
+        renderer,
+        ctrl_c_state,
+        ctrl_c_notify,
+        StreamSpinnerOptions::default(),
+    )
+    .await
+}
+
+/// Stream and render response with configurable spinner options.
+/// When `options.defer_finish` is true, the spinner will not be stopped during streaming,
+/// allowing the caller to keep the loading indicator active for subsequent operations.
+pub(crate) async fn stream_and_render_response_with_options(
+    provider: &dyn uni::LLMProvider,
+    request: uni::LLMRequest,
+    spinner: &PlaceholderSpinner,
+    renderer: &mut AnsiRenderer,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    options: StreamSpinnerOptions,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let provider_name = provider.name();
 
@@ -528,8 +583,11 @@ pub(crate) async fn stream_and_render_response(
     let mut aggregated = String::new();
     let mut spinner_active = true;
     let mut rendered_line_count = 0usize;
-    let finish_spinner = |active: &mut bool| {
-        if *active {
+    // Finish spinner helper - respects defer_finish option
+    let finish_spinner = |active: &mut bool, force: bool| {
+        // If defer_finish is enabled and not forcing, just mark as inactive for tracking
+        // but don't actually stop the spinner - caller will handle it
+        if *active && (force || !options.defer_finish) {
             spinner.finish();
             *active = false;
         }
@@ -550,7 +608,7 @@ pub(crate) async fn stream_and_render_response(
 
     loop {
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
-            finish_spinner(&mut spinner_active);
+            finish_spinner(&mut spinner_active, true); // Force finish on cancellation
             reasoning_state
                 .handle_stream_failure(renderer)
                 .map_err(|err| map_render_error(provider_name, err))?;
@@ -564,7 +622,7 @@ pub(crate) async fn stream_and_render_response(
             biased;
 
             _ = ctrl_c_notify.notified() => {
-                finish_spinner(&mut spinner_active);
+                finish_spinner(&mut spinner_active, true); // Force finish on cancellation
                 reasoning_state
                     .handle_stream_failure(renderer)
                     .map_err(|err| map_render_error(provider_name, err))?;
@@ -599,7 +657,9 @@ pub(crate) async fn stream_and_render_response(
                         .update_message(format!("Receiving response... ({} tokens)", token_count));
                     last_progress_update = std::time::Instant::now();
                 }
-                finish_spinner(&mut spinner_active);
+                // Don't finish spinner during streaming if defer_finish is enabled
+                // This keeps the loading indicator active for better UX during tool execution
+                finish_spinner(&mut spinner_active, false);
                 if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
                     pending_content.push_str(&delta);
                     let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
@@ -674,7 +734,8 @@ pub(crate) async fn stream_and_render_response(
                     ));
                     last_progress_update = std::time::Instant::now();
                 }
-                finish_spinner(&mut spinner_active);
+                // Don't finish spinner during reasoning if defer_finish is enabled
+                finish_spinner(&mut spinner_active, false);
                 reasoning_accumulated.push_str(&delta);
                 let rendered = reasoning_state
                     .handle_delta(renderer, &delta)
@@ -688,7 +749,7 @@ pub(crate) async fn stream_and_render_response(
                 final_response = Some(*response);
             }
             Err(err) => {
-                finish_spinner(&mut spinner_active);
+                finish_spinner(&mut spinner_active, true); // Force finish on error
                 reasoning_state
                     .handle_stream_failure(renderer)
                     .map_err(|render_err| map_render_error(provider_name, render_err))?;
@@ -697,7 +758,8 @@ pub(crate) async fn stream_and_render_response(
         }
     }
 
-    finish_spinner(&mut spinner_active);
+    // Stream completed successfully - finish spinner unless deferred
+    finish_spinner(&mut spinner_active, false);
 
     let response = match final_response {
         Some(response) => response,

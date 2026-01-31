@@ -449,10 +449,7 @@ pub(crate) async fn initialize_session(
         tool_registry.apply_commands_config(&cfg.commands);
         tool_registry.apply_timeout_policy(&cfg.timeouts);
         if let Err(err) = tool_registry.apply_config_policies(&cfg.tools).await {
-            tracing::warn!(
-                "Failed to apply tool policies from config: {}",
-                err
-            );
+            tracing::warn!("Failed to apply tool policies from config: {}", err);
         }
 
         // Add MCP client to tool registry if available from async manager
