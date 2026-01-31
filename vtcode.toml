@@ -245,6 +245,7 @@ execute_code = "allow"
 write_file = "allow"
 apply_patch = "allow"
 agent_info = "allow"
+unified_file = "allow"
 
 [sandbox]
 enabled = true
