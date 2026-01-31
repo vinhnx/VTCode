@@ -268,7 +268,10 @@ async fn handle_plan_mode_auto_exit<'a>(
 
     // HP-6: Use the unified execute_and_handle_tool_call so that recording and side-effects happen correctly
     super::handlers::execute_and_handle_tool_call(
-        t_ctx,
+        t_ctx.ctx,
+        t_ctx.repeated_tool_attempts,
+        t_ctx.turn_modified_files,
+        t_ctx.traj,
         exit_call_id,
         tool_names::EXIT_PLAN_MODE,
         exit_args,
