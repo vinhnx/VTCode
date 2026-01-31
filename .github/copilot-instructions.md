@@ -5,11 +5,19 @@
 ## Build & Test Commands
 
 ```bash
+# Preferred (faster with cargo-nextest)
+cargo nextest run           # Run all tests (3-5x faster)
+cargo nextest run -p vtcode-core  # Single package
+cargo t                     # Alias for nextest run
+cargo tq                    # Quick profile (no retries)
+
+# Standard cargo commands
 cargo check                 # Fast compile check
-cargo test                  # Run tests
-cargo test --package vtcode-core  # Single package
 cargo clippy                # Lint (strict Clippy rules)
 cargo fmt                   # Format code
+
+# Fallback (if nextest unavailable)
+cargo ts                    # Alias for standard cargo test
 ```
 
 ## Architecture & Key Modules
@@ -161,7 +169,8 @@ Self-Diagnostic and Error Recovery:
 
 **Command Execution Strategy**:
 - Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
-- One-off commands → shell tool (e.g., `git diff`, `git status`, `git log`, `cargo build`, `cargo test`, `cargo fmt`, etc.)
+- One-off commands → shell tool (e.g., `git diff`, `git status`, `git log`, `cargo build`, `cargo nextest run`, `cargo fmt`, etc.)
+- **PREFER**: `cargo nextest run` over `cargo test` (3-5x faster)
 - AVOID: raw grep/find bash (use Grep instead); do NOT use bash for searching files—use dedicated tools
 
 # Code Execution Patterns
