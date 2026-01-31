@@ -24,12 +24,12 @@ vtcode --no-color
 
 Inspired by [Ghostty's minimum-contrast feature](https://ghostty.org/docs/config/reference#minimum-contrast), VT Code enforces WCAG contrast ratios:
 
-| Level | Ratio | Use Case |
-|-------|-------|----------|
-| WCAG AA | 4.5:1 | Default, suitable for most users |
-| WCAG AAA | 7.0:1 | Enhanced, recommended for low-vision users |
-| Large Text | 3.0:1 | Minimum for 18pt+ or 14pt bold text |
-| Disabled | 1.0:1 | No contrast enforcement |
+| Level      | Ratio | Use Case                                   |
+| ---------- | ----- | ------------------------------------------ |
+| WCAG AA    | 4.5:1 | Default, suitable for most users           |
+| WCAG AAA   | 7.0:1 | Enhanced, recommended for low-vision users |
+| Large Text | 3.0:1 | Minimum for 18pt+ or 14pt bold text        |
+| Disabled   | 1.0:1 | No contrast enforcement                    |
 
 Configure in `vtcode.toml`:
 
@@ -45,25 +45,25 @@ Based on [terminal color portability research](https://blog.xoria.org/terminal-c
 
 #### Safe Colors (Portable)
 
-| Regular | Bright |
-|---------|--------|
-| red (1) | brred (9) |
-| green (2) | brgreen (10) |
-| yellow (3) | — |
-| blue (4) | — |
+| Regular     | Bright         |
+| ----------- | -------------- |
+| red (1)     | brred (9)      |
+| green (2)   | brgreen (10)   |
+| yellow (3)  | —              |
+| blue (4)    | —              |
 | magenta (5) | brmagenta (13) |
-| cyan (6) | brcyan (14) |
+| cyan (6)    | brcyan (14)    |
 
 #### Problematic Colors (Avoid)
 
-| Color | Issue |
-|-------|-------|
-| black (0) | Low contrast on dark backgrounds |
-| white (7) | Low contrast on light backgrounds |
-| brblack (8) | **Invisible** in Solarized Dark (hijacked for base03) |
-| bryellow (11) | Low contrast on light backgrounds |
-| brblue (12) | Low contrast in Basic Dark |
-| brwhite (15) | Low contrast on light backgrounds |
+| Color         | Issue                                                 |
+| ------------- | ----------------------------------------------------- |
+| black (0)     | Low contrast on dark backgrounds                      |
+| white (7)     | Low contrast on light backgrounds                     |
+| brblack (8)   | **Invisible** in Solarized Dark (hijacked for base03) |
+| bryellow (11) | Low contrast on light backgrounds                     |
+| brblue (12)   | Low contrast in Basic Dark                            |
+| brwhite (15)  | Low contrast on light backgrounds                     |
 
 Enable safe-only mode in `vtcode.toml`:
 
@@ -130,19 +130,19 @@ bold_is_bright = true
 
 VT Code includes light and dark themes:
 
-| Theme | Mode | Description |
-|-------|------|-------------|
-| ciapre-dark | Dark | Default warm amber theme |
-| ciapre-blue | Dark | Blue variant of Ciapre |
-| vitesse-black | Dark | Pure black background |
-| vitesse-dark | Dark | Dark gray background |
-| vitesse-dark-soft | Dark | Softer dark background |
-| vitesse-light | Light | White background |
-| vitesse-light-soft | Light | Cream background |
-| catppuccin-latte | Light | Pastel light theme |
-| catppuccin-frappe | Dark | Muted dark theme |
-| catppuccin-macchiato | Dark | Rich dark theme |
-| catppuccin-mocha | Dark | Deep dark theme |
+| Theme                | Mode  | Description              |
+| -------------------- | ----- | ------------------------ |
+| ciapre-dark          | Dark  | Default warm amber theme |
+| ciapre-blue          | Dark  | Blue variant of Ciapre   |
+| vitesse-black        | Dark  | Pure black background    |
+| vitesse-dark         | Dark  | Dark gray background     |
+| vitesse-dark-soft    | Dark  | Softer dark background   |
+| vitesse-light        | Light | White background         |
+| vitesse-light-soft   | Light | Cream background         |
+| catppuccin-latte     | Light | Pastel light theme       |
+| catppuccin-frappe    | Dark  | Muted dark theme         |
+| catppuccin-macchiato | Dark  | Rich dark theme          |
+| catppuccin-mocha     | Dark  | Deep dark theme          |
 
 ## Theme Validation
 
