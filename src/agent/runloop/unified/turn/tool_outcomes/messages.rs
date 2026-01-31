@@ -9,7 +9,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
-use crate::agent::runloop::unified::turn::guards::handle_turn_balancer;
+// use crate::agent::runloop::unified::turn::guards::handle_turn_balancer;
 
 use super::helpers::{
     push_assistant_message, reasoning_duplicates_content,
@@ -96,76 +96,20 @@ pub(crate) async fn handle_text_response<'a>(
         }
     }
 
-    if let Some((tool_name, args)) =
-        crate::agent::runloop::text_tools::detect_textual_tool_call(&params.text)
-    {
-        let args_json = serde_json::json!(&args);
-        let tool_call_str = format!("call_textual_{}", params.ctx.working_history.len());
-
-        let call_tool_name = tool_name;
-        let call_args_val = args_json;
-
-        use crate::agent::runloop::unified::tool_summary::{
-            describe_tool_action, humanize_tool_name,
-        };
-        let (headline, _) = describe_tool_action(&call_tool_name, &call_args_val);
-        let notice = if headline.is_empty() {
-            format!("Detected {} request", humanize_tool_name(&call_tool_name))
-        } else {
-            format!("Detected {headline}")
-        };
-        params.ctx.renderer.line(MessageStyle::Info, &notice)?;
-
-        use super::handlers::{handle_single_tool_call, ToolOutcomeContext};
-        let tool_name_owned = call_tool_name.to_string();
-        
-        // Wrap for the unified handler
-        let outcome_result = {
-            let mut t_ctx = ToolOutcomeContext {
-                ctx: &mut *params.ctx,
-                repeated_tool_attempts: &mut *params.repeated_tool_attempts,
-                turn_modified_files: &mut *params.turn_modified_files,
-                traj: params.traj,
-            };
-
-            handle_single_tool_call(
-                &mut t_ctx,
-                tool_call_str,
-                &tool_name_owned,
-                call_args_val,
-            )
-            .await?
-        };
-
-        if let Some(outcome) = outcome_result {
-            return Ok(outcome);
-        }
-
-        Ok(handle_turn_balancer(
-            params.ctx,
-            params.step_count,
-            params.repeated_tool_attempts,
-            params.max_tool_loops,
-            params.tool_repeat_limit,
-        )
-        .await)
-    }
- else {
-        let msg = uni::Message::assistant(params.text.clone());
-        let msg_with_reasoning = if let Some(reasoning_text) = params.reasoning {
-            if reasoning_duplicates_content(&reasoning_text, &params.text) {
-                msg
-            } else {
-                msg.with_reasoning(Some(reasoning_text))
-            }
-        } else {
+    let msg = uni::Message::assistant(params.text.clone());
+    let msg_with_reasoning = if let Some(reasoning_text) = params.reasoning {
+        if reasoning_duplicates_content(&reasoning_text, &params.text) {
             msg
-        };
-
-        if !params.text.is_empty() || msg_with_reasoning.reasoning.is_some() {
-            push_assistant_message(params.ctx.working_history, msg_with_reasoning);
+        } else {
+            msg.with_reasoning(Some(reasoning_text))
         }
+    } else {
+        msg
+    };
 
-        Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
+    if !params.text.is_empty() || msg_with_reasoning.reasoning.is_some() {
+        push_assistant_message(params.ctx.working_history, msg_with_reasoning);
     }
+
+    Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
 }

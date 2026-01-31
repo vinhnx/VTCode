@@ -272,6 +272,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 async_mcp_manager: &async_mcp_manager,
                 tool_registry: &mut tool_registry,
                 tools: &tools,
+                cached_tools: &cached_tools,
                 conversation_history: &mut conversation_history,
                 decision_ledger: &decision_ledger,
                 context_manager: &mut context_manager,
@@ -288,6 +289,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                 default_placeholder: &mut default_placeholder,
                 follow_up_placeholder: &mut follow_up_placeholder,
                 checkpoint_manager: checkpoint_manager.as_ref(),
+                tool_result_cache: &tool_result_cache,
+                traj: &traj,
+                harness_emitter: harness_emitter.as_ref(),
+                safety_validator: &safety_validator,
+                circuit_breaker: &circuit_breaker,
+                tool_health_tracker: &tool_health_tracker,
+                rate_limiter: &rate_limiter,
+                telemetry: &telemetry,
+                autonomous_executor: &autonomous_executor,
+                error_recovery: &session_state.error_recovery,
+                last_forced_redraw: &mut last_forced_redraw,
             };
 
             // Phase 3 Optimization: Session Memory Bounds
