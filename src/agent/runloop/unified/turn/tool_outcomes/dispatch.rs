@@ -15,17 +15,17 @@ use crate::agent::runloop::unified::tool_pipeline::{
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingContext};
 
 use super::execution_result::handle_tool_execution_result;
-use super::helpers::{resolve_max_tool_retries, signature_key_for};
+use super::helpers::{resolve_max_tool_retries, update_repetition_tracker};
 use call::handle_tool_call;
 
 mod call;
 
-pub(crate) async fn handle_tool_calls(
-    ctx: &mut TurnProcessingContext<'_>,
+pub(crate) async fn handle_tool_calls<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
     tool_calls: &[uni::ToolCall],
     repeated_tool_attempts: &mut std::collections::HashMap<String, usize>,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &vtcode_core::core::trajectory::TrajectoryLogger,
+    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
 ) -> Result<Option<TurnHandlerOutcome>> {
     if tool_calls.is_empty() {
         return Ok(None);
@@ -124,7 +124,6 @@ pub(crate) async fn handle_tool_calls(
                 let ctrl_c_state = Arc::clone(ctx.ctrl_c_state);
                 let ctrl_c_notify = Arc::clone(ctx.ctrl_c_notify);
 
-                let max_tool_retries = resolve_max_tool_retries(ctx.vt_cfg);
                 let futures: Vec<_> = execution_items
                     .iter()
                     .map(|(call_id, name, args)| {
@@ -134,9 +133,11 @@ pub(crate) async fn handle_tool_calls(
                         let name = name.clone();
                         let args = args.clone();
                         let reporter = progress_reporter.clone();
+                        let vt_cfg = ctx.vt_cfg;
 
                         async move {
                             let start_time = std::time::Instant::now();
+                            let max_tool_retries = resolve_max_tool_retries(&name, vt_cfg);
                             let result = execute_tool_with_timeout_ref(
                                 &registry,
                                 &name,
@@ -158,15 +159,7 @@ pub(crate) async fn handle_tool_calls(
                     let outcome = ToolPipelineOutcome::from_status(status);
 
                     // Only count SUCCESSFUL tool calls for turn balancer repetition tracking.
-                    // Failed, timed out, or cancelled tool calls should NOT trigger the turn balancer.
-                    if matches!(
-                        &outcome.status,
-                        crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success { .. }
-                    ) {
-                        let signature_key = signature_key_for(&name, &args);
-                        let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
-                        *current_count += 1;
-                    }
+                    update_repetition_tracker(repeated_tool_attempts, &outcome, &name, &args);
 
                     handle_tool_execution_result(
                         ctx,

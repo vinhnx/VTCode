@@ -6,7 +6,4 @@ improve and defer stop loading state for status bar until task all done, not jus
 
 --
 
-review overall tool-outcomes module  and changes again carefully, can you do better?  
-tool_outcomes
- 
-aim for stable, resilent and reliable harness
+Review the overall tool-outcomes module and its recent changes with meticulous attention to architectural integrity, identifying opportunities to improve stability, resilience, and reliability of the execution harness while eliminating redundancy and enforcing DRY principles throughout the implementation.
