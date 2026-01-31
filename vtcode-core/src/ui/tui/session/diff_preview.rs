@@ -13,19 +13,19 @@ use ratatui::{
 use crate::ui::markdown::highlight_line_for_diff;
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{DiffPreviewState, TrustMode};
+use crate::utils::diff_styles::DiffColorPalette;
 use crate::utils::diff::{DiffLineKind, DiffOptions, compute_diff};
 
-const BG_ADDITION: Color = Color::Rgb(0x1a, 0x2e, 0x1a);
-const BG_DELETION: Color = Color::Rgb(0x2e, 0x1a, 0x1a);
-const FG_ADDITION: Color = Color::Rgb(0x76, 0x93, 0x63);
-const FG_DELETION: Color = Color::Rgb(0x9d, 0x4a, 0x4a);
-const FG_LINE_NUM: Color = Color::Rgb(0x4a, 0x4a, 0x4a);
-const FG_HEADER: Color = Color::Rgb(0x88, 0x88, 0x88);
+fn ratatui_rgb(rgb: anstyle::RgbColor) -> Color {
+    Color::Rgb(rgb.0, rgb.1, rgb.2)
+}
 
 pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect) {
     let Some(preview) = session.diff_preview.as_ref() else {
         return;
     };
+
+    let palette = DiffColorPalette::default();
 
     let chunks = Layout::vertical([
         Constraint::Length(2),
@@ -34,15 +34,23 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     ])
     .split(area);
 
-    render_file_header(frame, chunks[0], preview);
-    render_diff_content(frame, chunks[1], preview);
+    render_file_header(frame, chunks[0], preview, &palette);
+    render_diff_content(frame, chunks[1], preview, &palette);
     render_controls(frame, chunks[2], preview);
 }
 
-fn render_file_header(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewState) {
+fn render_file_header(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    preview: &DiffPreviewState,
+    palette: &DiffColorPalette,
+) {
     let header = Line::from(vec![
-        Span::styled("← Edit ", Style::default().fg(FG_HEADER)),
-        Span::styled(&preview.file_path, Style::default().fg(FG_HEADER)),
+        Span::styled("← Edit ", Style::default().fg(ratatui_rgb(palette.header_fg))),
+        Span::styled(
+            &preview.file_path,
+            Style::default().fg(ratatui_rgb(palette.header_fg)),
+        ),
     ]);
     frame.render_widget(Paragraph::new(header), area);
 }
@@ -135,7 +143,12 @@ fn highlight_line_with_bg(
     }
 }
 
-fn render_diff_content(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewState) {
+fn render_diff_content(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    preview: &DiffPreviewState,
+    palette: &DiffColorPalette,
+) {
     let language = detect_language(&preview.file_path);
     let diff_bundle = compute_diff(
         &preview.before,
@@ -177,10 +190,19 @@ fn render_diff_content(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewS
             let line_num_str = format!("{:>4} ", line_num);
             let text = diff_line.text.trim_end_matches('\n');
 
+            let fg_line_num = Color::Rgb(0x4a, 0x4a, 0x4a);
             let (prefix, fg, bg) = match diff_line.kind {
-                DiffLineKind::Context => (" ", FG_LINE_NUM, None),
-                DiffLineKind::Addition => ("+", FG_ADDITION, Some(BG_ADDITION)),
-                DiffLineKind::Deletion => ("-", FG_DELETION, Some(BG_DELETION)),
+                DiffLineKind::Context => (" ", fg_line_num, None),
+                DiffLineKind::Addition => (
+                    "+",
+                    ratatui_rgb(palette.added_fg),
+                    Some(ratatui_rgb(palette.added_bg)),
+                ),
+                DiffLineKind::Deletion => (
+                    "-",
+                    ratatui_rgb(palette.removed_fg),
+                    Some(ratatui_rgb(palette.removed_bg)),
+                ),
             };
 
             let mut spans = vec![

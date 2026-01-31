@@ -76,7 +76,7 @@
     "move_file": "prompt",
     "search": "prompt",
     "send_pty_input": "prompt",
-    "unified_file": "prompt",
+    "unified_file": "allow",
     "unified_search": "prompt",
     "ask_user_question": "allow",
     "enter_plan": "prompt",
@@ -88,7 +88,8 @@
     "plan_mode": "prompt",
     "start_implementation": "prompt",
     "start_planning": "prompt",
-    "request_user_input": "allow"
+    "request_user_input": "allow",
+    "list_skills": "allow"
   },
   "constraints": {},
   "mcp": {
