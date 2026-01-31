@@ -38,7 +38,6 @@ pub struct ToolOutcomeContext<'a, 'b> {
     pub ctx: &'b mut TurnProcessingContext<'a>,
     pub repeated_tool_attempts: &'b mut std::collections::HashMap<String, usize>,
     pub turn_modified_files: &'b mut std::collections::BTreeSet<std::path::PathBuf>,
-    pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
 }
 
 /// Unified handler for a single tool call (whether native or textual).
@@ -73,7 +72,6 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
         t_ctx.ctx,
         t_ctx.repeated_tool_attempts,
         t_ctx.turn_modified_files,
-        t_ctx.traj,
         tool_call_id,
         tool_name,
         args_val,
@@ -367,23 +365,18 @@ pub(crate) fn execute_and_handle_tool_call<'a, 'b>(
     ctx: &'b mut TurnProcessingContext<'a>,
     repeated_tool_attempts: &'b mut std::collections::HashMap<String, usize>,
     turn_modified_files: &'b mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     tool_call_id: String,
     tool_name: &str,
     args_val: serde_json::Value,
     batch_progress_reporter: Option<&'b ProgressReporter>,
 ) -> futures::future::BoxFuture<'b, Result<()>> {
-    let tool_call_id = tool_call_id;
     let tool_name_owned = tool_name.to_string();
-    let args_val = args_val;
-    let batch_progress_reporter = batch_progress_reporter;
 
     Box::pin(async move {
         execute_and_handle_tool_call_inner(
             ctx,
             repeated_tool_attempts,
             turn_modified_files,
-            traj,
             tool_call_id,
             &tool_name_owned,
             args_val,
@@ -396,7 +389,6 @@ async fn execute_and_handle_tool_call_inner<'a>(
     ctx: &mut TurnProcessingContext<'a>,
     repeated_tool_attempts: &mut std::collections::HashMap<String, usize>,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     tool_call_id: String,
     tool_name: &str,
     args_val: serde_json::Value,
@@ -452,7 +444,6 @@ async fn execute_and_handle_tool_call_inner<'a>(
                 ctx: &mut *ctx,
                 repeated_tool_attempts: &mut *repeated_tool_attempts,
                 turn_modified_files: &mut *turn_modified_files,
-                traj,
             };
 
             handle_tool_execution_result(
@@ -525,14 +516,12 @@ async fn execute_and_handle_tool_call_inner<'a>(
                             reporter.set_message(trimmed.to_string()).await;
                         }
                     }
-                } else {
-                    if let Some(last_line) = output_owned.lines().last() {
-                        let clean_line =
-                            vtcode_core::utils::ansi_parser::strip_ansi(last_line);
-                        let trimmed = clean_line.trim();
-                        if !trimmed.is_empty() {
-                            reporter.set_message(trimmed.to_string()).await;
-                        }
+                } else if let Some(last_line) = output_owned.lines().last() {
+                    let clean_line =
+                        vtcode_core::utils::ansi_parser::strip_ansi(last_line);
+                    let trimmed = clean_line.trim();
+                    if !trimmed.is_empty() {
+                        reporter.set_message(trimmed.to_string()).await;
                     }
                 }
             });
@@ -555,12 +544,11 @@ async fn execute_and_handle_tool_call_inner<'a>(
 
     let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);
 
-    if let Some(ref key) = cache_key {
-        if let crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success { ref output, .. } = pipeline_outcome.status {
+    if let Some(ref key) = cache_key
+        && let crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success { ref output, .. } = pipeline_outcome.status {
              let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
              let mut cache: tokio::sync::RwLockWriteGuard<'_, vtcode_core::tools::ToolResultCache> = ctx.tool_result_cache.write().await;
              cache.insert_arc(key.clone(), Arc::new(output_json));
-        }
     }
 
     update_repetition_tracker(
@@ -574,7 +562,6 @@ async fn execute_and_handle_tool_call_inner<'a>(
         ctx,
         repeated_tool_attempts,
         turn_modified_files,
-        traj,
     };
 
     handle_tool_execution_result(

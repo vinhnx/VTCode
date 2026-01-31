@@ -948,7 +948,7 @@ async fn run_single_tool_attempt(
                         progress_reporter
                             .set_message(format!("{} completed", name))
                             .await;
-                        process_tool_output(output)
+                        process_llm_tool_output(output)
                     }
                     Ok(Err(error)) => {
                         progress_reporter
@@ -1026,7 +1026,7 @@ fn status_label(status: &ToolExecutionStatus) -> &'static str {
 }
 
 /// Process the output from a tool execution and convert it to a ToolExecutionStatus
-fn process_tool_output(output: Value) -> ToolExecutionStatus {
+pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
     // Check for loop detection first - this is a critical signal to stop retrying
     if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool())
         && loop_detected

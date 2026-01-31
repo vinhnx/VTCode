@@ -28,6 +28,7 @@ async fn run_pty_command_captures_output() -> Result<()> {
             pixel_height: 0,
         },
         max_tokens: None,
+        output_callback: None,
     };
 
     let result = manager.run_command(request).await?;

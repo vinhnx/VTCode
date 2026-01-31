@@ -10,7 +10,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -200,28 +199,8 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
     args_val: &serde_json::Value,
     outcome: &ToolPipelineOutcome,
     vt_config: Option<&VTCodeConfig>,
-    traj: &TrajectoryLogger,
 ) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
-    // Build a RunLoopContext on top of the TurnLoopContext so we can reuse the generic handler
-    use crate::agent::runloop::unified::run_loop_context::RunLoopContext as GenericRunLoopContext;
-
-    let mut run_ctx = GenericRunLoopContext {
-        renderer: ctx.renderer,
-        handle: ctx.handle,
-        tool_registry: ctx.tool_registry,
-        tools: ctx.tools,
-        tool_result_cache: ctx.tool_result_cache,
-        tool_permission_cache: ctx.tool_permission_cache,
-        decision_ledger: ctx.decision_ledger,
-        session_stats: ctx.session_stats,
-        mcp_panel_state: ctx.mcp_panel_state,
-        approval_recorder: ctx.approval_recorder,
-        session: ctx.session,
-        traj,
-        harness_state: ctx.harness_state,
-        harness_emitter: ctx.harness_emitter,
-    };
-
+    let mut run_ctx = ctx.as_run_loop_context();
     handle_pipeline_output(&mut run_ctx, name, args_val, outcome, vt_config).await
 }
 

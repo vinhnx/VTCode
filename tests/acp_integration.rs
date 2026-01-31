@@ -59,38 +59,29 @@ impl acp::Client for FakeClient {
             .push(args.clone());
 
         match &self.outcome {
-            FakeOutcome::Allow => Ok(acp::RequestPermissionResponse {
-                outcome: acp::RequestPermissionOutcome::Selected {
-                    option_id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_ALLOW_OPTION_ID)),
-                },
-                meta: None,
-            }),
-            FakeOutcome::AllowAlways => Ok(acp::RequestPermissionResponse {
-                outcome: acp::RequestPermissionOutcome::Selected {
-                    option_id: acp::PermissionOptionId(Arc::from(
-                        TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID,
-                    )),
-                },
-                meta: None,
-            }),
-            FakeOutcome::Deny => Ok(acp::RequestPermissionResponse {
-                outcome: acp::RequestPermissionOutcome::Selected {
-                    option_id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_DENY_OPTION_ID)),
-                },
-                meta: None,
-            }),
-            FakeOutcome::DenyAlways => Ok(acp::RequestPermissionResponse {
-                outcome: acp::RequestPermissionOutcome::Selected {
-                    option_id: acp::PermissionOptionId(Arc::from(
-                        TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID,
-                    )),
-                },
-                meta: None,
-            }),
-            FakeOutcome::Cancel => Ok(acp::RequestPermissionResponse {
-                outcome: acp::RequestPermissionOutcome::Cancelled,
-                meta: None,
-            }),
+            FakeOutcome::Allow => Ok(acp::RequestPermissionResponse::new(
+                acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
+                    acp::PermissionOptionId::new(Arc::from(TOOL_PERMISSION_ALLOW_OPTION_ID)),
+                )),
+            )),
+            FakeOutcome::AllowAlways => Ok(acp::RequestPermissionResponse::new(
+                acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
+                    acp::PermissionOptionId::new(Arc::from(TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID)),
+                )),
+            )),
+            FakeOutcome::Deny => Ok(acp::RequestPermissionResponse::new(
+                acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
+                    acp::PermissionOptionId::new(Arc::from(TOOL_PERMISSION_DENY_OPTION_ID)),
+                )),
+            )),
+            FakeOutcome::DenyAlways => Ok(acp::RequestPermissionResponse::new(
+                acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
+                    acp::PermissionOptionId::new(Arc::from(TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID)),
+                )),
+            )),
+            FakeOutcome::Cancel => Ok(acp::RequestPermissionResponse::new(
+                acp::RequestPermissionOutcome::Cancelled,
+            )),
             FakeOutcome::Error(error) => Err(error.clone()),
         }
     }
@@ -176,6 +167,7 @@ impl ToolRegistryProvider for FakeRegistry {
         match descriptor {
             ToolDescriptor::Acp(SupportedTool::ReadFile) => self.render_read_file(args),
             ToolDescriptor::Acp(SupportedTool::ListFiles) => self.render_list_files(args),
+            ToolDescriptor::Acp(SupportedTool::SwitchMode) => "Switch mode".to_string(),
             ToolDescriptor::Local => "Local tool".to_string(),
         }
     }
@@ -227,7 +219,7 @@ async fn permission_allow_flow_returns_none() {
     let option_ids: Vec<_> = request
         .options
         .iter()
-        .map(|option| option.id.0.as_ref().to_string())
+        .map(|option| option.option_id.0.as_ref().to_string())
         .collect();
     assert!(option_ids.contains(&TOOL_PERMISSION_ALLOW_OPTION_ID.to_string()));
     assert!(option_ids.contains(&TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID.to_string()));
@@ -317,7 +309,7 @@ async fn permission_allow_always_flow_returns_none() {
     let option_ids: Vec<_> = request
         .options
         .iter()
-        .map(|option| option.id.0.as_ref().to_string())
+        .map(|option| option.option_id.0.as_ref().to_string())
         .collect();
     assert!(option_ids.contains(&TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID.to_string()));
 }

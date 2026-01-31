@@ -12,11 +12,10 @@ use crate::agent::runloop::unified::turn::context::{
 use crate::agent::runloop::unified::turn::guards::{
     handle_turn_balancer, validate_tool_args_security,
 };
-use crate::agent::runloop::unified::turn::tool_outcomes::{HandleTextResponseParams, ToolOutcomeContext};
+use crate::agent::runloop::unified::turn::tool_outcomes::ToolOutcomeContext;
 use crate::agent::runloop::unified::ui_interaction::stream_and_render_response;
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
-use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::prompts::sort_tool_definitions;
 
@@ -334,7 +333,6 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub step_count: usize,
     pub repeated_tool_attempts: &'a mut HashMap<String, usize>,
     pub turn_modified_files: &'a mut BTreeSet<PathBuf>,
-    pub traj: &'a TrajectoryLogger,
     pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
     /// Pre-computed max tool loops limit for efficiency
     pub max_tool_loops: usize,
@@ -352,8 +350,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             assistant_text,
             reasoning,
         } => {
-            crate::agent::runloop::unified::turn::tool_outcomes::handle_assistant_response(
-                &mut *params.ctx,
+            params.ctx.handle_assistant_response(
                 assistant_text,
                 reasoning,
                 params.response_streamed,
@@ -364,7 +361,6 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     ctx: &mut *params.ctx,
                     repeated_tool_attempts: &mut *params.repeated_tool_attempts,
                     turn_modified_files: &mut *params.turn_modified_files,
-                    traj: params.traj,
                 };
 
                 crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls(
@@ -389,32 +385,22 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             .await);
         }
         TurnProcessingResult::TextResponse { text, reasoning } => {
-            return crate::agent::runloop::unified::turn::tool_outcomes::handle_text_response(
-                HandleTextResponseParams {
-                    ctx: &mut *params.ctx,
-                    repeated_tool_attempts: &mut *params.repeated_tool_attempts,
-                    turn_modified_files: &mut *params.turn_modified_files,
-                    traj: params.traj,
-                    text: text.clone(),
-                    reasoning: reasoning.clone(),
-                    response_streamed: params.response_streamed,
-                    step_count: params.step_count,
-                    session_end_reason: &mut *params.session_end_reason,
-                    max_tool_loops: params.max_tool_loops,
-                    tool_repeat_limit: params.tool_repeat_limit,
-                },
+            params.ctx.handle_text_response(
+                text.clone(),
+                reasoning.clone(),
+                params.response_streamed,
             )
-            .await;
+            .await
         }
         TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
-            return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed));
+            Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
         }
         TurnProcessingResult::Cancelled => {
             *params.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
-            return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled));
+            Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled))
         }
         TurnProcessingResult::Aborted => {
-            return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Aborted));
+            Ok(TurnHandlerOutcome::Break(TurnLoopResult::Aborted))
         }
     }
 }

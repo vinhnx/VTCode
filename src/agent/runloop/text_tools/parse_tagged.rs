@@ -16,15 +16,25 @@ pub(super) fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     const ARG_VALUE_CLOSE: &str = "</arg_value>";
 
     let start = text.find(TOOL_TAG)?;
-    let mut rest = &text[start + TOOL_TAG.len()..];
-    let (name, after_name) = read_tag_text(rest);
+    let rest_initial = &text[start + TOOL_TAG.len()..];
+
+    // Find the end of the tool name. It ends at:
+    // 1. The first '<' (start of next tag)
+    // 2. The first '{' (start of JSON arguments)
+    // 3. The first whitespace (separator for key=value arguments)
+    // 4. The end of the string
+    let name_end = rest_initial
+        .find(|c: char| c == '<' || c == '{' || c.is_whitespace())
+        .unwrap_or(rest_initial.len());
+
+    let name = rest_initial[..name_end].trim().to_string();
     if name.is_empty() {
         return None;
     }
 
+    let mut rest = &rest_initial[name_end..];
     let mut object = Map::new();
     let mut indexed_values: BTreeMap<String, BTreeMap<usize, Value>> = BTreeMap::new();
-    rest = after_name;
 
     // First, try standard <arg_key>/<arg_value> parsing
     let mut found_arg_tags = false;
@@ -66,6 +76,7 @@ pub(super) fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     // If no arg tags found, try fallback parsing for malformed output
     // e.g., <tool_call>list_files<tool_call>{"path": "/tmp"} or <tool_call>read_file path="/tmp"
     if !found_arg_tags && object.is_empty() {
+        let after_name = &rest_initial[name_end..];
         // Determine the content boundary (next <tool_call>, </tool_call>, or end)
         let content_end = after_name
             .find(TOOL_TAG)

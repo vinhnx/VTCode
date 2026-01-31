@@ -94,6 +94,8 @@ pub(crate) struct TurnProcessingContext<'a> {
         >,
     >,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
+    pub config: &'a mut vtcode_core::config::types::AgentConfig,
+    pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     pub full_auto: bool,
     // Phase 4 Integration
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
@@ -109,50 +111,6 @@ pub(crate) struct TurnProcessingContext<'a> {
 }
 
 impl<'a> TurnProcessingContext<'a> {
-    pub fn new(
-        ctx: &'a mut crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_>,
-        working_history: &'a mut Vec<uni::Message>,
-        provider_client: &'a mut Box<dyn uni::LLMProvider>,
-        vt_cfg: Option<&'a VTCodeConfig>,
-        full_auto: bool,
-    ) -> Self {
-        Self {
-            renderer: ctx.renderer,
-            handle: ctx.handle,
-            session_stats: ctx.session_stats,
-            auto_exit_plan_mode_attempted: ctx.auto_exit_plan_mode_attempted,
-            mcp_panel_state: ctx.mcp_panel_state,
-            tool_result_cache: ctx.tool_result_cache,
-            approval_recorder: ctx.approval_recorder,
-            decision_ledger: ctx.decision_ledger,
-            working_history,
-            tool_registry: ctx.tool_registry,
-            tools: ctx.tools,
-            cached_tools: ctx.cached_tools,
-            ctrl_c_state: ctx.ctrl_c_state,
-            ctrl_c_notify: ctx.ctrl_c_notify,
-            vt_cfg,
-            context_manager: ctx.context_manager,
-            last_forced_redraw: ctx.last_forced_redraw,
-            input_status_state: ctx.input_status_state,
-            session: ctx.session,
-            lifecycle_hooks: ctx.lifecycle_hooks,
-            default_placeholder: ctx.default_placeholder,
-            tool_permission_cache: ctx.tool_permission_cache,
-            safety_validator: ctx.safety_validator,
-            provider_client,
-            full_auto,
-            circuit_breaker: ctx.circuit_breaker,
-            tool_health_tracker: ctx.tool_health_tracker,
-            rate_limiter: ctx.rate_limiter,
-            telemetry: ctx.telemetry,
-            autonomous_executor: ctx.autonomous_executor,
-            error_recovery: ctx.error_recovery,
-            harness_state: ctx.harness_state,
-            harness_emitter: ctx.harness_emitter,
-        }
-    }
-
     /// Creates a TurnLoopContext from this TurnProcessingContext.
     /// This is used when calling handle_tool_execution_result which requires TurnLoopContext.
     pub fn as_turn_loop_context(
@@ -188,31 +146,87 @@ impl<'a> TurnProcessingContext<'a> {
             error_recovery: self.error_recovery,
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,
+            config: self.config,
+            vt_cfg: self.vt_cfg,
+            provider_client: self.provider_client,
+            traj: self.traj,
+            full_auto: self.full_auto,
         }
     }
 
-    /// Creates a RunLoopContext from this TurnProcessingContext.
-    /// Used for actions that require the full RunLoopContext (e.g. running internal tools).
-    pub fn as_run_loop_context(
+    pub fn handle_assistant_response(
         &mut self,
-        traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
-    ) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
-        crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-            renderer: self.renderer,
-            handle: self.handle,
-            tool_registry: self.tool_registry,
-            tools: self.tools,
-            tool_result_cache: self.tool_result_cache,
-            tool_permission_cache: self.tool_permission_cache,
-            decision_ledger: self.decision_ledger,
-            session_stats: self.session_stats,
-            mcp_panel_state: self.mcp_panel_state,
-            approval_recorder: self.approval_recorder,
-            session: self.session,
-            traj,
-            harness_state: self.harness_state,
-            harness_emitter: self.harness_emitter,
+        text: String,
+        reasoning: Option<String>,
+        response_streamed: bool,
+    ) -> anyhow::Result<()> {
+        if !response_streamed {
+            use vtcode_core::utils::ansi::MessageStyle;
+            if !text.trim().is_empty() {
+                self.renderer.line(MessageStyle::Response, &text)?;
+            }
+            if let Some(reasoning_text) = reasoning.as_ref()
+                && !reasoning_text.trim().is_empty()
+            {
+                let duplicates_content = !text.trim().is_empty()
+                    && reasoning_duplicates_content(reasoning_text, &text);
+                if !reasoning_text.trim().is_empty() && !duplicates_content {
+                    let cleaned_for_display =
+                        vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
+                    self.renderer
+                        .line(MessageStyle::Reasoning, &cleaned_for_display)?;
+                }
+            }
         }
+
+        let msg = uni::Message::assistant(text.clone());
+        let msg_with_reasoning = if let Some(reasoning_text) = reasoning {
+            if reasoning_duplicates_content(&reasoning_text, &text) {
+                msg
+            } else {
+                msg.with_reasoning(Some(reasoning_text))
+            }
+        } else {
+            msg
+        };
+
+        if !text.is_empty() || msg_with_reasoning.reasoning.is_some() {
+            push_assistant_message(self.working_history, msg_with_reasoning);
+        }
+
+        Ok(())
+    }
+
+    pub async fn handle_text_response(
+        &mut self,
+        text: String,
+        reasoning: Option<String>,
+        response_streamed: bool,
+    ) -> anyhow::Result<TurnHandlerOutcome> {
+        self.handle_assistant_response(text, reasoning, response_streamed)?;
+        Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
     }
 }
+
+fn reasoning_duplicates_content(reasoning: &str, content: &str) -> bool {
+    let r = reasoning.trim();
+    let c = content.trim();
+    if r.is_empty() || c.is_empty() {
+        return false;
+    }
+    r == c || r.contains(c) || c.contains(r)
+}
+
+fn push_assistant_message(history: &mut Vec<uni::Message>, msg: uni::Message) {
+    if let Some(last) = history.last_mut()
+        && last.role == uni::MessageRole::Assistant
+        && last.tool_calls.is_none()
+    {
+        last.content = msg.content;
+        last.reasoning = msg.reasoning;
+    } else {
+        history.push(msg);
+    }
+}
+
 

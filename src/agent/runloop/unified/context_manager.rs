@@ -329,15 +329,19 @@ mod tests {
 
     #[test]
     fn test_pre_request_check_limits() {
+        use vtcode_config::core::AgentConfig;
         let manager = ContextManager::new(
             "sys".into(),
             (),
             Arc::new(RwLock::new(HashMap::new())),
-            None,
+            Some(AgentConfig {
+                max_conversation_turns: 50,
+                ..Default::default()
+            }),
         );
 
         let mut history = Vec::new();
-        for _ in 0..60 {
+        for _ in 0..40 {
             history.push(uni::Message::user("test".to_string()));
         }
 

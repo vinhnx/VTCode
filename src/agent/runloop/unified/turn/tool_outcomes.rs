@@ -10,13 +10,9 @@ mod dispatch;
 mod execution_result;
 pub(crate) mod handlers;
 pub(crate) mod helpers;
-mod messages;
 
 pub(crate) use apply::apply_turn_outcome;
 pub(crate) use dispatch::handle_tool_calls;
-pub(crate) use messages::{
-    HandleTextResponseParams, handle_assistant_response, handle_text_response,
-};
 pub(crate) use handlers::ToolOutcomeContext;
 
 #[allow(dead_code)]

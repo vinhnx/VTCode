@@ -463,7 +463,7 @@ mod tests {
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
 
-        assert_eq!(bootstrap.header_highlights.len(), 3);
+        assert_eq!(bootstrap.header_highlights.len(), 4);
 
         let slash_commands = &bootstrap.header_highlights[0];
         assert!(slash_commands.title.is_empty());
@@ -548,7 +548,8 @@ mod tests {
         let vt_cfg = VTCodeConfig::default();
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
 
-        assert_eq!(bootstrap.header_highlights.len(), 1);
+        // Should have slash commands + terminal info
+        assert_eq!(bootstrap.header_highlights.len(), 2);
         let slash_commands = &bootstrap.header_highlights[0];
         assert!(slash_commands.title.is_empty());
         assert!(

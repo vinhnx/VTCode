@@ -5,7 +5,7 @@ use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
+    TurnHandlerOutcome, TurnLoopResult,
 };
 use crate::agent::runloop::unified::turn::session::interaction_loop::{
     InteractionLoopContext, InteractionOutcome,
@@ -48,47 +48,19 @@ pub(crate) async fn handle_direct_tool_execution(
     let mut harness_state = HarnessTurnState::new(
         TurnRunId(SessionId::new().0),
         TurnId(SessionId::new().0),
-        100, // max tool calls
-        300, // max duration
-        3,   // max retries
+        ctx.interaction_ctx.harness_config.max_tool_calls_per_turn,
+        ctx.interaction_ctx.harness_config.max_tool_wall_clock_secs,
+        ctx.interaction_ctx.harness_config.max_tool_retries,
     );
 
+    let mut auto_exit_plan_mode_attempted = false;
+
     // Construct TurnProcessingContext to leverage unified execution handlers
-    let mut tp_ctx = TurnProcessingContext {
-        renderer: ctx.interaction_ctx.renderer,
-        handle: ctx.interaction_ctx.handle,
-        session_stats: ctx.interaction_ctx.session_stats,
-        auto_exit_plan_mode_attempted: &mut false,
-        mcp_panel_state: ctx.interaction_ctx.mcp_panel_state,
-        tool_result_cache: ctx.interaction_ctx.tool_result_cache,
-        approval_recorder: ctx.interaction_ctx.approval_recorder,
-        decision_ledger: ctx.interaction_ctx.decision_ledger,
-        working_history: ctx.interaction_ctx.conversation_history,
-        tool_registry: ctx.interaction_ctx.tool_registry,
-        tools: ctx.interaction_ctx.tools,
-        cached_tools: ctx.interaction_ctx.cached_tools,
-        ctrl_c_state: ctx.interaction_ctx.ctrl_c_state,
-        ctrl_c_notify: ctx.interaction_ctx.ctrl_c_notify,
-        vt_cfg: ctx.interaction_ctx.vt_cfg.as_ref(),
-        context_manager: ctx.interaction_ctx.context_manager,
-        last_forced_redraw: ctx.interaction_ctx.last_forced_redraw,
-        input_status_state: ctx.input_status_state,
-        session: ctx.interaction_ctx.session,
-        lifecycle_hooks: ctx.interaction_ctx.lifecycle_hooks,
-        default_placeholder: ctx.interaction_ctx.default_placeholder,
-        tool_permission_cache: ctx.interaction_ctx.tool_permission_cache,
-        safety_validator: ctx.interaction_ctx.safety_validator,
-        provider_client: ctx.interaction_ctx.provider_client,
-        full_auto: ctx.interaction_ctx.full_auto,
-        circuit_breaker: ctx.interaction_ctx.circuit_breaker,
-        tool_health_tracker: ctx.interaction_ctx.tool_health_tracker,
-        rate_limiter: ctx.interaction_ctx.rate_limiter,
-        telemetry: ctx.interaction_ctx.telemetry,
-        autonomous_executor: ctx.interaction_ctx.autonomous_executor,
-        error_recovery: ctx.interaction_ctx.error_recovery,
-        harness_state: &mut harness_state,
-        harness_emitter: ctx.interaction_ctx.harness_emitter,
-    };
+    let mut tp_ctx = ctx.interaction_ctx.as_turn_processing_context(
+        &mut harness_state,
+        &mut auto_exit_plan_mode_attempted,
+        ctx.input_status_state,
+    );
 
     let mut repeated_tool_attempts = HashMap::new();
     let mut turn_modified_files = BTreeSet::new();
@@ -97,7 +69,6 @@ pub(crate) async fn handle_direct_tool_execution(
         ctx: &mut tp_ctx,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
-        traj: ctx.interaction_ctx.traj,
     };
 
     // 1. Display user message and push to history
