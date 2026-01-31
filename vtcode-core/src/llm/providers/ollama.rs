@@ -830,6 +830,13 @@ impl LLMProvider for OllamaProvider {
 
                     if let Some(message) = parsed.message {
                         // 1. Explicit thinking field from Ollama
+                        // Track if we got reasoning from the thinking field to avoid duplicates
+                        let has_explicit_thinking = message
+                            .thinking
+                            .as_ref()
+                            .map(|v| !v.is_empty())
+                            .unwrap_or(false);
+
                         if let Some(thinking) = message
                             .thinking
                             .and_then(|value| (!value.is_empty()).then_some(value))
@@ -839,6 +846,7 @@ impl LLMProvider for OllamaProvider {
                         }
 
                         // 2. Content field - may contain embedded tags handled by sanitizer
+                        // If we got explicit thinking, skip reasoning from sanitizer to avoid duplicates
                         if let Some(content) = message
                             .content
                             .and_then(|value| (!value.is_empty()).then_some(value))
@@ -847,13 +855,19 @@ impl LLMProvider for OllamaProvider {
                                 match &event {
                                     LLMStreamEvent::Token { delta } => {
                                         accumulated.push_str(delta);
+                                        yield LLMStreamEvent::Token { delta: delta.clone() };
                                     }
                                     LLMStreamEvent::Reasoning { delta } => {
-                                        reasoning_buffer.push_str(delta);
+                                        // Skip duplicate reasoning if we already got it from thinking field
+                                        if !has_explicit_thinking {
+                                            reasoning_buffer.push_str(delta);
+                                            yield LLMStreamEvent::Reasoning { delta: delta.clone() };
+                                        }
                                     }
-                                    _ => {}
+                                    _ => {
+                                        yield event;
+                                    }
                                 }
-                                yield event;
                             }
                         }
 
