@@ -706,8 +706,8 @@ pub fn validate_theme_contrast(theme_id: &str) -> ThemeValidationResult {
 /// Check if a theme is suitable for the detected terminal color scheme.
 /// Returns true if the theme matches (light theme for light terminal, dark for dark).
 pub fn theme_matches_terminal_scheme(theme_id: &str) -> bool {
-    use crate::utils::ansi_capabilities::detect_color_scheme;
     use crate::utils::ansi_capabilities::ColorScheme;
+    use crate::utils::ansi_capabilities::detect_color_scheme;
 
     let scheme = detect_color_scheme();
     let theme_is_light = is_light_theme(theme_id);
@@ -734,8 +734,8 @@ pub fn is_light_theme(theme_id: &str) -> bool {
 /// Get a suggested theme based on terminal color scheme detection.
 /// Returns a light or dark theme depending on detected terminal background.
 pub fn suggest_theme_for_terminal() -> &'static str {
-    use crate::utils::ansi_capabilities::detect_color_scheme;
     use crate::utils::ansi_capabilities::ColorScheme;
+    use crate::utils::ansi_capabilities::detect_color_scheme;
 
     match detect_color_scheme() {
         ColorScheme::Light => "vitesse-light",
