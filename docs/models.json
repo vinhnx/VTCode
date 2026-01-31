@@ -3813,6 +3813,22 @@
         },
         "context": 131072
       },
+      "kimi-k2.5:cloud": {
+        "id": "kimi-k2.5:cloud",
+        "name": "Kimi K2.5 (cloud)",
+        "description": "MoonshotAI Kimi K2.5 versatile multimodal model via Ollama Cloud with reasoning support",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
       "qwen3-coder:480b-cloud": {
         "id": "qwen3-coder:480b-cloud",
         "name": "Qwen3 Coder 480B (cloud)",

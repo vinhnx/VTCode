@@ -64,6 +64,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
             ModelId::OllamaMistralLarge3675bCloud => "Mistral Large 3 675B (cloud)",
             ModelId::OllamaKimiK2ThinkingCloud => "Kimi K2 Thinking (cloud)",
+            ModelId::OllamaKimiK25Cloud => "Kimi K2.5 (cloud)",
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGlm46Cloud => "GLM-4.6 (cloud)",
             ModelId::OllamaGemini3ProPreviewLatestCloud => "Gemini 3 Pro Preview (cloud)",

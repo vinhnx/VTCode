@@ -57,6 +57,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud,
             ModelId::OllamaMistralLarge3675bCloud,
             ModelId::OllamaKimiK2ThinkingCloud,
+            ModelId::OllamaKimiK25Cloud,
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm46Cloud,
             ModelId::OllamaGlm47Cloud,

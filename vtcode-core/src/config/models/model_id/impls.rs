@@ -87,6 +87,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud => models::ollama::QWEN3_NEXT_80B_CLOUD,
             ModelId::OllamaMistralLarge3675bCloud => models::ollama::MISTRAL_LARGE_3_675B_CLOUD,
             ModelId::OllamaKimiK2ThinkingCloud => models::ollama::KIMI_K2_THINKING_CLOUD,
+            ModelId::OllamaKimiK25Cloud => models::ollama::KIMI_K2_5_CLOUD,
 
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
@@ -246,6 +247,7 @@ impl ModelId {
             | ModelId::OllamaQwen3Next80bCloud
             | ModelId::OllamaMistralLarge3675bCloud
             | ModelId::OllamaKimiK2ThinkingCloud
+            | ModelId::OllamaKimiK25Cloud
             | ModelId::OllamaQwen3Coder480bCloud
             | ModelId::OllamaGlm46Cloud
             | ModelId::OllamaGlm47Cloud

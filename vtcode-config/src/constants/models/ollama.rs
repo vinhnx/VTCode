@@ -11,6 +11,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MISTRAL_LARGE_3_675B_CLOUD,
     KIMI_K2_THINKING_CLOUD,
     KIMI_K2_1T_CLOUD,
+    KIMI_K2_5_CLOUD,
     QWEN3_CODER_480B_CLOUD,
     GLM_46_CLOUD,
     GLM_47_CLOUD,
@@ -33,6 +34,7 @@ pub const REASONING_MODELS: &[&str] = &[
     MISTRAL_LARGE_3_675B_CLOUD,
     KIMI_K2_THINKING_CLOUD,
     KIMI_K2_1T_CLOUD,
+    KIMI_K2_5_CLOUD,
     QWEN3_CODER_480B_CLOUD,
     GLM_46_CLOUD,
     GLM_47_CLOUD,
@@ -65,6 +67,7 @@ pub const QWEN3_NEXT_80B_CLOUD: &str = "qwen3-next:80b-cloud";
 pub const MISTRAL_LARGE_3_675B_CLOUD: &str = "mistral-large-3:675b-cloud";
 pub const KIMI_K2_THINKING_CLOUD: &str = "kimi-k2-thinking:cloud";
 pub const KIMI_K2_1T_CLOUD: &str = "kimi-k2:1t-cloud";
+pub const KIMI_K2_5_CLOUD: &str = "kimi-k2.5:cloud";
 pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
 pub const GLM_46_CLOUD: &str = "glm-4.6:cloud";
 pub const GLM_47_CLOUD: &str = "glm-4.7:cloud";
