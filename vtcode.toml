@@ -246,6 +246,7 @@ write_file = "allow"
 apply_patch = "allow"
 agent_info = "allow"
 unified_file = "allow"
+unified_exec = "allow"
 
 [sandbox]
 enabled = true

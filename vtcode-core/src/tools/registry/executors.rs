@@ -55,11 +55,11 @@ impl ToolRegistry {
             .with_context(|| format!("Invalid action: {}", action_str))?;
 
         match action {
-            UnifiedExecAction::Run => self.execute_tool_ref("run_pty_cmd", &args).await,
-            UnifiedExecAction::Write => self.execute_tool_ref("send_pty_input", &args).await,
-            UnifiedExecAction::Poll => self.execute_tool_ref("read_pty_session", &args).await,
-            UnifiedExecAction::List => self.execute_tool_ref("list_pty_sessions", &args).await,
-            UnifiedExecAction::Close => self.execute_tool_ref("close_pty_session", &args).await,
+            UnifiedExecAction::Run => self.execute_run_pty_cmd(args).await,
+            UnifiedExecAction::Write => self.execute_send_pty_input(args).await,
+            UnifiedExecAction::Poll => self.execute_read_pty_session(args).await,
+            UnifiedExecAction::List => self.execute_list_pty_sessions().await,
+            UnifiedExecAction::Close => self.execute_close_pty_session(args).await,
             UnifiedExecAction::Code => self.execute_code(args).await,
         }
     }
@@ -87,9 +87,15 @@ impl ToolRegistry {
             .with_context(|| format!("Invalid action: {}", action_str))?;
 
         match action {
-            UnifiedFileAction::Read => self.execute_tool_ref("read_file", &args).await,
-            UnifiedFileAction::Write => self.execute_tool_ref("write_file", &args).await,
-            UnifiedFileAction::Edit => self.execute_tool_ref("edit_file", &args).await,
+            UnifiedFileAction::Read => {
+                let tool = self.inventory.file_ops_tool().clone();
+                tool.read_file(args).await
+            }
+            UnifiedFileAction::Write => {
+                let tool = self.inventory.file_ops_tool().clone();
+                tool.write_file(args).await
+            }
+            UnifiedFileAction::Edit => self.edit_file(args).await,
             UnifiedFileAction::Patch => self.execute_apply_patch(args).await,
             UnifiedFileAction::Delete => {
                 let tool = self.inventory.file_ops_tool().clone();
@@ -151,14 +157,21 @@ impl ToolRegistry {
         }
 
         match action {
-            UnifiedSearchAction::Grep => self.execute_tool_ref("grep_file", &args).await,
-            UnifiedSearchAction::List => self.execute_tool_ref("list_files", &args).await,
-            UnifiedSearchAction::Intelligence => {
-                self.execute_tool_ref("code_intelligence", &args).await
+            UnifiedSearchAction::Grep => {
+                let manager = self.inventory.grep_file_manager();
+                manager
+                    .perform_search(serde_json::from_value(args)?)
+                    .await
+                    .map(|r| json!(r))
             }
-            UnifiedSearchAction::Tools => self.execute_tool_ref("search_tools", &args).await,
-            UnifiedSearchAction::Errors => self.execute_tool_ref("get_errors", &args).await,
-            UnifiedSearchAction::Agent => self.execute_tool_ref("agent_info", &args).await,
+            UnifiedSearchAction::List => {
+                let tool = self.inventory.file_ops_tool().clone();
+                tool.execute(args).await
+            }
+            UnifiedSearchAction::Intelligence => self.execute_code_intelligence(args).await,
+            UnifiedSearchAction::Tools => self.execute_search_tools(args).await,
+            UnifiedSearchAction::Errors => self.execute_get_errors(args).await,
+            UnifiedSearchAction::Agent => self.execute_agent_info().await,
             UnifiedSearchAction::Web => self.execute_web_fetch(args).await,
             UnifiedSearchAction::Skill => self.execute_skill(args).await,
         }

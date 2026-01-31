@@ -110,6 +110,7 @@ impl ToolInventory {
 
     pub fn register_tool(&self, registration: ToolRegistration) -> anyhow::Result<()> {
         let name = registration.name().to_owned();
+        let name_lower = name.to_ascii_lowercase();
         let aliases = registration.metadata().aliases().to_vec();
 
         {
@@ -118,7 +119,8 @@ impl ToolInventory {
 
             // Validate aliases don't conflict with existing tool names BEFORE registration
             for alias in &aliases {
-                if tools.contains_key(alias) {
+                let alias_lower = alias.to_ascii_lowercase();
+                if tools.contains_key(&alias_lower) {
                     return Err(anyhow::anyhow!(
                         "Cannot register alias '{}' for tool '{}': alias conflicts with existing tool name",
                         alias,
@@ -126,10 +128,9 @@ impl ToolInventory {
                     ));
                 }
                 // Also check if it conflicts with an existing alias
-                let alias_lower = alias.to_ascii_lowercase();
                 if let Some(existing_target) = aliases_map.get(&alias_lower) {
                     // Only warn if the alias is being registered for a DIFFERENT tool
-                    if existing_target != &name {
+                    if existing_target != &name_lower {
                         return Err(anyhow::anyhow!(
                             "Cannot register alias '{}' for tool '{}': alias already exists for tool '{}'",
                             alias,
@@ -147,7 +148,7 @@ impl ToolInventory {
         {
             let mut tools = self.tools.write().unwrap();
             use std::collections::hash_map::Entry;
-            match tools.entry(name.clone()) {
+            match tools.entry(name_lower.clone()) {
                 Entry::Occupied(_) => {
                     return Err(anyhow::anyhow!("Tool '{}' is already registered", name));
                 }
@@ -159,20 +160,20 @@ impl ToolInventory {
                     }));
                     // HP-7: Maintain sorted invariant - insert at correct position
                     let mut sorted = self.sorted_names.write().unwrap();
-                    let pos = sorted.binary_search(&name).unwrap_or_else(|e| e);
-                    sorted.insert(pos, name.clone());
+                    let pos = sorted.binary_search(&name_lower).unwrap_or_else(|e| e);
+                    sorted.insert(pos, name_lower.clone());
                 }
             }
         }
 
         // Add to frequently used set if it's a common tool
-        if self.is_common_tool(&name) {
-            self.frequently_used.write().unwrap().insert(name.clone());
+        if self.is_common_tool(&name_lower) {
+            self.frequently_used.write().unwrap().insert(name_lower.clone());
         }
 
         // Register case-insensitive aliases and track metrics
         if !aliases.is_empty() {
-            self.register_aliases(&name, &aliases);
+            self.register_aliases(&name_lower, &aliases);
         }
 
         // Clean up old cache entries if needed
@@ -182,12 +183,12 @@ impl ToolInventory {
     }
 
     /// Register case-insensitive aliases for a tool and track metrics
-    fn register_aliases(&self, tool_name: &str, aliases: &[String]) {
+    fn register_aliases(&self, canonical_name_lower: &str, aliases: &[String]) {
         let mut aliases_map = self.aliases.write().unwrap();
         let mut metrics = self.alias_metrics.lock().unwrap();
         for alias in aliases {
             let alias_lower = alias.to_ascii_lowercase();
-            let target = tool_name.to_owned();
+            let target = canonical_name_lower.to_owned();
 
             // Store lowercase -> canonical mapping
             aliases_map.insert(alias_lower.clone(), target.clone());
@@ -212,11 +213,11 @@ impl ToolInventory {
             // This takes priority when the direct tool is not LLM-visible
             let alias_target = aliases.get(&name_lower).cloned();
 
-            if let Some(entry) = tools.get(name) {
+            if let Some(entry) = tools.get(&name_lower) {
                 // Direct tool exists - check if it's LLM-visible
                 if entry.registration.expose_in_llm() {
                     // LLM-visible tool: use direct registration
-                    name.to_owned()
+                    name_lower.clone()
                 } else if let Some(ref aliased) = alias_target {
                     // Not LLM-visible but has an alias: prefer the alias target
                     // This routes "read_file" → "unified_file" when called by LLM
@@ -237,7 +238,7 @@ impl ToolInventory {
                 } else {
                     // Not LLM-visible and no alias: use direct registration
                     // (for internal tool-to-tool calls)
-                    name.to_owned()
+                    name_lower.clone()
                 }
             } else if let Some(aliased) = alias_target {
                 // No direct registration but alias exists
@@ -271,7 +272,7 @@ impl ToolInventory {
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             // Track frequently used for aliased tools
-            if resolved_name != name {
+            if resolved_name != name_lower {
                 self.frequently_used.write().unwrap().insert(resolved_name);
             }
             return Some(entry.registration.clone());
@@ -285,8 +286,9 @@ impl ToolInventory {
         let name_lower = name.to_ascii_lowercase();
         let tools = self.tools.read().unwrap();
         let aliases = self.aliases.read().unwrap();
-        let resolved_name = if tools.contains_key(name) {
-            name
+        
+        let resolved_name = if tools.contains_key(&name_lower) {
+            &name_lower
         } else if let Some(aliased) = aliases.get(&name_lower) {
             aliased
         } else {
@@ -300,7 +302,7 @@ impl ToolInventory {
 
     pub fn has_tool(&self, name: &str) -> bool {
         let name_lower = name.to_ascii_lowercase();
-        self.tools.read().unwrap().contains_key(name)
+        self.tools.read().unwrap().contains_key(&name_lower)
             || self.aliases.read().unwrap().contains_key(&name_lower)
     }
 
