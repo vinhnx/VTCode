@@ -67,3 +67,18 @@ pub(crate) fn update_repetition_tracker(
         *current_count += 1;
     }
 }
+pub(crate) fn serialize_output(output: &serde_json::Value) -> String {
+    if let Some(s) = output.as_str() {
+        s.to_string()
+    } else {
+        serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
+pub(crate) fn check_is_argument_error(error_str: &str) -> bool {
+    error_str.contains("Missing required")
+        || error_str.contains("Invalid arguments")
+        || error_str.contains("required path parameter")
+        || error_str.contains("expected ")
+        || error_str.contains("Expected:")
+}

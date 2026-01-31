@@ -2,21 +2,17 @@
 
 use anyhow::Result;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
+
 use vtcode_core::utils::ansi::MessageStyle;
 
-use crate::agent::runloop::unified::tool_pipeline::{
-    ToolPipelineOutcome, execute_tool_with_timeout_ref,
-};
-use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
+
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
 use crate::agent::runloop::unified::turn::guards::handle_turn_balancer;
 
-use super::execution_result::handle_tool_execution_result;
 use super::helpers::{
-    push_assistant_message, push_tool_response, reasoning_duplicates_content, resolve_max_tool_retries,
+    push_assistant_message, reasoning_duplicates_content,
 };
 
 pub(crate) fn handle_assistant_response(
@@ -111,151 +107,36 @@ pub(crate) async fn handle_text_response<'a>(
     {
         let args_json = serde_json::json!(&args);
         let tool_call_str = format!("call_textual_{}", params.ctx.working_history.len());
-        let tool_call = uni::ToolCall::function(
-            tool_call_str,
-            tool_name.clone(),
-            serde_json::to_string(&args_json).unwrap_or_else(|_| "{}".to_string()),
-        );
 
-        let function = tool_call
-            .function
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Tool call has no function definition"))?;
-        let call_tool_name = &function.name;
-        let call_args_val = tool_call
-            .parsed_arguments()
-            .unwrap_or_else(|_| serde_json::json!({}));
+        let call_tool_name = tool_name;
+        let call_args_val = args_json;
 
         use crate::agent::runloop::unified::tool_summary::{
             describe_tool_action, humanize_tool_name,
         };
-        let (headline, _) = describe_tool_action(call_tool_name, &call_args_val);
+        let (headline, _) = describe_tool_action(&call_tool_name, &call_args_val);
         let notice = if headline.is_empty() {
-            format!("Detected {} request", humanize_tool_name(call_tool_name))
+            format!("Detected {} request", humanize_tool_name(&call_tool_name))
         } else {
             format!("Detected {headline}")
         };
         params.ctx.renderer.line(MessageStyle::Info, &notice)?;
 
-        {
-            let mut validator = params.ctx.safety_validator.write().await;
-            if let Err(err) = validator.validate_call(call_tool_name) {
-                params.ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Safety validation failed: {}", err),
-                )?;
-                push_tool_response(
-                    params.ctx.working_history,
-                    tool_call.id.clone(),
-                    serde_json::to_string(
-                        &serde_json::json!({"error": format!("Safety validation failed: {}", err)}),
-                    )
-                    .unwrap_or_else(|_| "{}".to_string()),
-                );
-                return Ok(handle_turn_balancer(
-                    params.ctx,
-                    params.step_count,
-                    params.repeated_tool_attempts,
-                    params.max_tool_loops,
-                    params.tool_repeat_limit,
-                )
-                .await);
-            }
-        }
-
-        match ensure_tool_permission(
-            crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
-                tool_registry: params.ctx.tool_registry,
-                renderer: params.ctx.renderer,
-                handle: params.ctx.handle,
-                session: params.ctx.session,
-                default_placeholder: params.ctx.default_placeholder.clone(),
-                ctrl_c_state: params.ctx.ctrl_c_state,
-                ctrl_c_notify: params.ctx.ctrl_c_notify,
-                hooks: params.ctx.lifecycle_hooks,
-                justification: None,
-                approval_recorder: Some(params.ctx.approval_recorder.as_ref()),
-                decision_ledger: Some(params.ctx.decision_ledger),
-                tool_permission_cache: Some(params.ctx.tool_permission_cache),
-                hitl_notification_bell: params
-                    .ctx
-                    .vt_cfg
-                    .map(|cfg| cfg.security.hitl_notification_bell)
-                    .unwrap_or(true),
-                autonomous_mode: params.ctx.session_stats.is_autonomous_mode(),
-                human_in_the_loop: params
-                    .ctx
-                    .vt_cfg
-                    .map(|cfg| cfg.security.human_in_the_loop)
-                    .unwrap_or(true),
-            },
-            call_tool_name,
-            Some(&call_args_val),
+        use super::handlers::handle_single_tool_call;
+        if let Some(outcome) = handle_single_tool_call(
+            params.ctx,
+            tool_call_str,
+            &call_tool_name,
+            call_args_val,
+            params.repeated_tool_attempts,
+            params.turn_modified_files,
+            params.traj,
         )
-        .await
+        .await?
         {
-            Ok(ToolPermissionFlow::Approved) => {
-                let tool_execution_start = std::time::Instant::now();
-                let tool_result = execute_tool_with_timeout_ref(
-                    params.ctx.tool_registry,
-                    call_tool_name,
-                    &call_args_val,
-                    params.ctx.ctrl_c_state,
-                    params.ctx.ctrl_c_notify,
-                    None,
-                    resolve_max_tool_retries(call_tool_name, params.ctx.vt_cfg),
-                )
-                .await;
-
-                let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);
-
-                handle_tool_execution_result(
-                    params.ctx,
-                    tool_call.id.clone(),
-                    call_tool_name,
-                    &call_args_val,
-                    &pipeline_outcome,
-                    params.turn_modified_files,
-                    params.traj,
-                    tool_execution_start,
-                )
-                .await?;
-            }
-            Ok(ToolPermissionFlow::Denied) => {
-                let denial = ToolExecutionError::new(
-                    call_tool_name.clone(),
-                    ToolErrorType::PolicyViolation,
-                    format!(
-                        "Detected tool '{}' execution denied by policy",
-                        call_tool_name
-                    ),
-                )
-                .to_json_value();
-
-                push_tool_response(
-                    params.ctx.working_history,
-                    tool_call.id.clone(),
-                    serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
-                );
-            }
-            Ok(ToolPermissionFlow::Exit) => {
-                *params.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Exit;
-                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled));
-            }
-            Ok(ToolPermissionFlow::Interrupted) => {
-                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled));
-            }
-            Err(err) => {
-                let err_json = serde_json::json!({
-                    "error": format!("Failed to evaluate policy for detected tool '{}': {}", call_tool_name, err)
-                });
-                push_tool_response(
-                    params.ctx.working_history,
-                    tool_call.id.clone(),
-                    err_json.to_string(),
-                );
-            }
+            return Ok(outcome);
         }
+
         Ok(handle_turn_balancer(
             params.ctx,
             params.step_count,

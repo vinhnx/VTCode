@@ -7,7 +7,6 @@
 
 mod apply;
 mod dispatch;
-mod execution;
 mod execution_result;
 mod handlers;
 mod helpers;

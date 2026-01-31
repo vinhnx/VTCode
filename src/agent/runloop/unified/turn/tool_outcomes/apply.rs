@@ -26,6 +26,10 @@ pub async fn apply_turn_outcome(
             *ctx.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
             Ok(())
         }
+        TurnLoopResult::Exit => {
+            *ctx.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Exit;
+            Ok(())
+        }
         TurnLoopResult::Aborted => {
             if let Some(last) = ctx.conversation_history.last() {
                 match last.role {

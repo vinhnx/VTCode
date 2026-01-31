@@ -5,7 +5,6 @@ use futures::future::join_all;
 use std::sync::Arc;
 
 use vtcode_core::llm::provider as uni;
-use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::parallel_executor::ParallelExecutionPlanner;
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
@@ -14,8 +13,10 @@ use crate::agent::runloop::unified::tool_pipeline::{
 };
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingContext};
 
+use super::handlers::validate_tool_call;
+use super::helpers::resolve_max_tool_retries;
 use super::execution_result::handle_tool_execution_result;
-use super::helpers::{resolve_max_tool_retries, update_repetition_tracker};
+use super::helpers::update_repetition_tracker;
 use call::handle_tool_call;
 
 mod call;
@@ -51,60 +52,40 @@ pub(crate) async fn handle_tool_calls<'a>(
                     group_tool_calls.push(tc);
                 }
             }
-
-            // Check if all tools in group are safe and approved
-            let mut can_run_parallel = true;
-            let mut execution_items = Vec::with_capacity(group_tool_calls.len());
+            // 1. Validate EACH tool call in the group (sequential phase)
+            let mut validated_items = Vec::with_capacity(group_tool_calls.len());
+            let mut all_validated = true;
 
             for tc in &group_tool_calls {
                 let func = match tc.function.as_ref() {
                     Some(f) => f,
                     None => {
-                        can_run_parallel = false;
+                        all_validated = false;
                         break;
                     }
                 };
                 let tool_name = &func.name;
-                let args_val = tc
-                    .parsed_arguments()
-                    .unwrap_or_else(|_| serde_json::json!({}));
+                let args_val = tc.parsed_arguments().unwrap_or_else(|_| serde_json::json!({}));
 
-                // Quick safety check
-                {
-                    let mut validator = ctx.safety_validator.write().await;
-                    if validator.validate_call(tool_name).is_err() {
-                        can_run_parallel = false;
-                        break;
+                match validate_tool_call(ctx, &tc.id, tool_name, &args_val).await? {
+                    Some(outcome) => return Ok(Some(outcome)),
+                    None => {
+                        // Check if it was blocked (response pushed to history)
+                        if let Some(last_msg) = ctx.working_history.last() {
+                            if last_msg.role == uni::MessageRole::Tool
+                                && last_msg.tool_call_id.as_ref() == Some(&tc.id)
+                            {
+                                all_validated = false;
+                                break;
+                            }
+                        }
                     }
                 }
-
-                let is_allowed = matches!(
-                    ctx.tool_registry.get_tool_policy(tool_name).await,
-                    ToolPolicy::Allow
-                );
-
-                if !is_allowed {
-                    can_run_parallel = false;
-                    break;
-                }
-
-                execution_items.push((tc.id.clone(), tool_name.clone(), args_val));
+                validated_items.push((tc.id.clone(), tool_name.clone(), args_val));
             }
 
-            if can_run_parallel && !execution_items.is_empty() {
-                for (_, name, args) in &execution_items {
-                    if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(
-                        name, args,
-                    ) {
-                        crate::agent::runloop::unified::tool_summary::render_file_operation_indicator(
-                            ctx.renderer,
-                            name,
-                            args,
-                        )?;
-                    }
-                }
-
-                let tool_names: Vec<_> = execution_items
+            if all_validated && !validated_items.is_empty() {
+                let tool_names: Vec<_> = validated_items
                     .iter()
                     .map(|(_, name, _)| name.as_str())
                     .collect();
@@ -124,7 +105,7 @@ pub(crate) async fn handle_tool_calls<'a>(
                 let ctrl_c_state = Arc::clone(ctx.ctrl_c_state);
                 let ctrl_c_notify = Arc::clone(ctx.ctrl_c_notify);
 
-                let futures: Vec<_> = execution_items
+                let futures: Vec<_> = validated_items
                     .iter()
                     .map(|(call_id, name, args)| {
                         let registry = registry.clone();
@@ -158,10 +139,15 @@ pub(crate) async fn handle_tool_calls<'a>(
                 for (call_id, name, args, status, start_time) in results {
                     let outcome = ToolPipelineOutcome::from_status(status);
 
-                    // Only count SUCCESSFUL tool calls for turn balancer repetition tracking.
-                    update_repetition_tracker(repeated_tool_attempts, &outcome, &name, &args);
+                    // Track repetition (Success only)
+                    super::helpers::update_repetition_tracker(
+                        repeated_tool_attempts,
+                        &outcome,
+                        &name,
+                        &args,
+                    );
 
-                    handle_tool_execution_result(
+                    super::execution_result::handle_tool_execution_result(
                         ctx,
                         call_id,
                         &name,
@@ -186,12 +172,13 @@ pub(crate) async fn handle_tool_calls<'a>(
             }
         } else {
             let call_id = &group.tool_calls[0].2;
-            if let Some(tc) = tool_calls.iter().find(|tc| &tc.id == call_id)
-                && let Some(outcome) =
+            if let Some(tc) = tool_calls.iter().find(|tc| &tc.id == call_id) {
+                if let Some(outcome) =
                     handle_tool_call(ctx, tc, repeated_tool_attempts, turn_modified_files, traj)
                         .await?
-            {
-                return Ok(Some(outcome));
+                {
+                    return Ok(Some(outcome));
+                }
             }
         }
     }

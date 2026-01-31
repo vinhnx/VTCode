@@ -458,6 +458,7 @@ pub async fn run_turn_loop(
             TurnLoopResult::Completed => Some(turn_completed_event()),
             TurnLoopResult::Aborted => Some(turn_failed_event("turn aborted")),
             TurnLoopResult::Cancelled => Some(turn_failed_event("turn cancelled")),
+            TurnLoopResult::Exit => Some(turn_failed_event("turn exit")),
             TurnLoopResult::Blocked { .. } => Some(turn_failed_event("turn blocked")),
         };
         if let Some(event) = event {
