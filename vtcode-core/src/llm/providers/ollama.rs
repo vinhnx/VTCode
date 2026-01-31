@@ -29,11 +29,122 @@ pub use pull::{
 };
 pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 
+use semver::Version;
+
 use super::common::{
     convert_usage_to_llm_types, override_base_url, parse_client_prompt_common, resolve_model,
 };
 use super::error_handling::{format_network_error, format_parse_error};
 use super::tag_sanitizer::TagStreamSanitizer;
+
+// ============================================================================
+// Wire API Detection (adapted from OpenAI Codex's codex-ollama/src/lib.rs)
+// ============================================================================
+
+/// Wire protocol that the Ollama server supports.
+/// Based on OpenAI Codex's WireApi enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OllamaWireApi {
+    /// The Responses API (OpenAI-compatible at `/v1/responses`).
+    Responses,
+    /// Regular Chat Completions compatible with `/v1/chat/completions`.
+    Chat,
+}
+
+/// Result of detecting which wire API the Ollama server supports.
+pub struct WireApiDetection {
+    pub wire_api: OllamaWireApi,
+    pub version: Option<Version>,
+}
+
+/// Minimum Ollama version that supports the Responses API.
+/// Ollama versions >= 0.13.4 support the Responses API.
+fn min_responses_version() -> Version {
+    Version::new(0, 13, 4)
+}
+
+/// Determine which wire API to use based on the Ollama server version.
+fn wire_api_for_version(version: &Version) -> OllamaWireApi {
+    // Version 0.0.0 is used for development builds, which typically support latest features
+    if *version == Version::new(0, 0, 0) || *version >= min_responses_version() {
+        OllamaWireApi::Responses
+    } else {
+        OllamaWireApi::Chat
+    }
+}
+
+/// Detect which wire API the running Ollama server supports based on its version.
+/// Returns `Ok(None)` when the version endpoint is missing or unparsable; callers
+/// should keep the configured default in that case.
+///
+/// Adapted from OpenAI Codex's codex-ollama/src/lib.rs
+pub async fn detect_wire_api(base_url: Option<String>) -> std::io::Result<Option<WireApiDetection>> {
+    let resolved_base_url = override_base_url(
+        urls::OLLAMA_API_BASE,
+        base_url,
+        Some(env_vars::OLLAMA_BASE_URL),
+    );
+
+    let client = match OllamaClient::try_from_base_url(&resolved_base_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::debug!("Failed to connect to Ollama server for version detection: {e}");
+            return Ok(None);
+        }
+    };
+
+    let Some(version) = client.fetch_version().await? else {
+        return Ok(None);
+    };
+
+    let wire_api = wire_api_for_version(&version);
+
+    Ok(Some(WireApiDetection {
+        wire_api,
+        version: Some(version),
+    }))
+}
+
+/// Prepare the local OSS environment when using Ollama.
+///
+/// - Ensures a local Ollama server is reachable.
+/// - Checks if the model exists locally and pulls it if missing.
+///
+/// Adapted from OpenAI Codex's codex-ollama/src/lib.rs
+pub async fn ensure_oss_ready(
+    model: Option<&str>,
+    base_url: Option<String>,
+) -> std::io::Result<()> {
+    let target_model = model.unwrap_or(models::ollama::DEFAULT_MODEL);
+
+    let resolved_base_url = override_base_url(
+        urls::OLLAMA_API_BASE,
+        base_url,
+        Some(env_vars::OLLAMA_BASE_URL),
+    );
+
+    // Verify local Ollama is reachable
+    let ollama_client = OllamaClient::try_from_base_url(&resolved_base_url).await?;
+
+    // If the model is not present locally, pull it
+    match ollama_client.fetch_models().await {
+        Ok(existing_models) => {
+            if !existing_models.iter().any(|m| m == target_model) {
+                tracing::info!("Model '{target_model}' not found locally, pulling...");
+                let mut reporter = CliPullProgressReporter::new();
+                ollama_client
+                    .pull_with_reporter(target_model, &mut reporter)
+                    .await?;
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to list Ollama models: {e}");
+            // Continue anyway; model might exist but listing failed
+        }
+    }
+
+    Ok(())
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 struct OllamaTagsResponse {
@@ -1080,5 +1191,41 @@ mod tests {
         let payload = provider.build_payload(&request, false).unwrap();
         assert_eq!(payload.format, Some(json!("json")));
         assert!(!payload.stream);
+    }
+
+    // Wire API detection tests (adapted from OpenAI Codex)
+
+    #[test]
+    fn test_wire_api_for_version_dev_zero_keeps_responses() {
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 0, 0)),
+            OllamaWireApi::Responses
+        );
+    }
+
+    #[test]
+    fn test_wire_api_for_version_before_cutoff_is_chat() {
+        assert_eq!(wire_api_for_version(&Version::new(0, 13, 3)), OllamaWireApi::Chat);
+    }
+
+    #[test]
+    fn test_wire_api_for_version_at_or_after_cutoff_is_responses() {
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 13, 4)),
+            OllamaWireApi::Responses
+        );
+        assert_eq!(
+            wire_api_for_version(&Version::new(0, 14, 0)),
+            OllamaWireApi::Responses
+        );
+        assert_eq!(
+            wire_api_for_version(&Version::new(1, 0, 0)),
+            OllamaWireApi::Responses
+        );
+    }
+
+    #[test]
+    fn test_min_responses_version() {
+        assert_eq!(min_responses_version(), Version::new(0, 13, 4));
     }
 }

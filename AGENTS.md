@@ -15,19 +15,19 @@ When writing complex features or significant refactors, use an ExecPlan (as desc
 ```bash
 # Preferred development workflow
 cargo check                          # Fast compile check
-cargo test                           # Run tests
-cargo test --package vtcode-core    # Test specific package
+cargo nextest                       # Run tests
+cargo nextest --package vtcode-core    # Test specific package
 cargo clippy                         # Lint with strict rules
 cargo fmt                           # Format code
 
 # Additional commands
-cargo test -- --nocapture           # Tests with output
+cargo nextest -- --nocapture           # Tests with output
 cargo bench                          # Run performance benchmarks
 cargo build                          # Build the project
 cargo run -- ask "Hello world"      # Run VT Code CLI
 
 # Run a single test
-cargo test test_name -- --nocapture
+cargo nextest test_name -- --nocapture
 
 # Aliases & Quick Commands
 cargo t                              # Run tests (alias)
@@ -70,13 +70,13 @@ See: `docs/HOMEBREW_RELEASE_GUIDE.md` for troubleshooting.
 
 These shortcuts match intuitive agent expectations:
 
-- `cargo t` → `cargo test`
+- `cargo t` → `cargo nextest`
 - `cargo c` → `cargo check`
 - `cargo r` → `cargo run`
 - When running a specific test, agents intuitively try:
-    - `cargo test function_name` ✓ (this works)
-    - `cargo test --lib` ✓ (unit tests only)
-    - `cargo test --integration` ✓ (integration tests only)
+    - `cargo nextest function_name` ✓ (this works)
+    - `cargo nextest --lib` ✓ (unit tests only)
+    - `cargo nextest --integration` ✓ (integration tests only)
 
 ## Workspace Structure
 
@@ -371,17 +371,17 @@ tracing::debug!("value = {}", x);
 
 ```bash
 # All tests
-cargo test
+cargo nextest
 
 # Integration tests
-cargo test --test integration_tests
+cargo nextest --test integration_tests
 
 # Benchmarks
 cargo bench
 cargo bench -- search_benchmark
 
 # With output
-cargo test -- --nocapture
+cargo nextest -- --nocapture
 ```
 
 ## Agent UX & Desire Paths
@@ -396,7 +396,7 @@ When agents guess wrong about commands, flags, or workflows, we treat that as a 
 
 **Cargo alias expectations**:
 
-- Agents try `cargo t` expecting `cargo test` → ✓ Paved with cargo aliases
+- Agents try `cargo t` expecting `cargo nextest` → ✓ Paved with cargo aliases
 - Agents try `cargo c` expecting `cargo check` → ✓ Paved with cargo aliases
 - Agents try `cargo r` expecting `cargo run` → ✓ Paved with cargo aliases
 
@@ -432,7 +432,7 @@ If you (agent or human) notice a repeated "wrong" guess that makes intuitive sen
 
 ### Autonomy & Verification
 
-- **Verification Autonomy**: The agent MUST run verification commands (`cargo check`, `cargo test`, etc.) itself using `run_pty_cmd` after making changes. Do NOT ask the user to run these commands.
+- **Verification Autonomy**: The agent MUST run verification commands (`cargo check`, `cargo nextest`, etc.) itself using `run_pty_cmd` after making changes. Do NOT ask the user to run these commands.
 - **Planning**: Use `update_plan` for any task requiring 4+ steps to maintain state and provide visibility to the user.
 
 ### Memory & Performance
@@ -461,7 +461,7 @@ If you (agent or human) notice a repeated "wrong" guess that makes intuitive sen
 
 ```bash
 # Run all quality checks
-cargo clippy && cargo fmt --check && cargo check && cargo test
+cargo clippy && cargo fmt --check && cargo check && cargo nextest
 ```
 
 ### Adding New Features
