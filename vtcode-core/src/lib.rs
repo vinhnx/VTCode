@@ -169,6 +169,7 @@ pub mod telemetry;
 pub mod terminal_setup;
 pub mod tool_policy;
 pub mod tools;
+pub mod trace; // Agent Trace specification for AI code attribution
 pub mod types;
 pub mod ui;
 pub mod utils;

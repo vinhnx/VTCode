@@ -2,6 +2,8 @@
 //!
 //! Aggregates file diffs across multiple apply_patch tool calls within a turn.
 //! This provides a unified view of all changes made during a conversation turn.
+//!
+//! Supports Agent Trace attribution tracking for AI-generated code.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -9,9 +11,82 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
+/// Attribution information for a file change (Agent Trace compatible).
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct ChangeAttribution {
+    /// Model ID in provider/model format (e.g., "anthropic/claude-opus-4").
+    pub model_id: Option<String>,
+    /// Provider name (e.g., "anthropic", "openai").
+    pub provider: Option<String>,
+    /// Session ID linking to the conversation.
+    pub session_id: Option<String>,
+    /// Turn number within the session.
+    pub turn_number: Option<u32>,
+    /// Contributor type: "ai", "human", "mixed", "unknown".
+    pub contributor_type: String,
+}
+
+impl ChangeAttribution {
+    /// Create AI attribution with model info.
+    pub fn ai(model_id: impl Into<String>, provider: impl Into<String>) -> Self {
+        Self {
+            model_id: Some(model_id.into()),
+            provider: Some(provider.into()),
+            session_id: None,
+            turn_number: None,
+            contributor_type: "ai".to_string(),
+        }
+    }
+
+    /// Create human attribution.
+    pub fn human() -> Self {
+        Self {
+            contributor_type: "human".to_string(),
+            ..Default::default()
+        }
+    }
+
+    /// Create unknown attribution.
+    pub fn unknown() -> Self {
+        Self {
+            contributor_type: "unknown".to_string(),
+            ..Default::default()
+        }
+    }
+
+    /// Add session context.
+    pub fn with_session(mut self, session_id: impl Into<String>, turn: u32) -> Self {
+        self.session_id = Some(session_id.into());
+        self.turn_number = Some(turn);
+        self
+    }
+
+    /// Get normalized model ID in provider/model format.
+    pub fn normalized_model_id(&self) -> Option<String> {
+        match (&self.model_id, &self.provider) {
+            (Some(model), Some(provider)) if !model.contains('/') => {
+                Some(format!("{}/{}", provider, model))
+            }
+            (Some(model), _) => Some(model.clone()),
+            _ => None,
+        }
+    }
+}
+
 /// File change types (from Codex protocol)
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FileChange {
+pub struct FileChange {
+    /// The type of change.
+    pub kind: FileChangeKind,
+    /// Attribution information (Agent Trace).
+    pub attribution: Option<ChangeAttribution>,
+    /// Line range affected (1-indexed, for Agent Trace).
+    pub line_range: Option<(u32, u32)>,
+}
+
+/// Kind of file change.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FileChangeKind {
     /// New file added
     Add { content: String },
     /// File deleted
@@ -30,24 +105,112 @@ pub enum FileChange {
 }
 
 impl FileChange {
+    /// Create a new Add change.
+    pub fn add(content: impl Into<String>) -> Self {
+        Self {
+            kind: FileChangeKind::Add {
+                content: content.into(),
+            },
+            attribution: None,
+            line_range: None,
+        }
+    }
+
+    /// Create a new Delete change.
+    pub fn delete(original_content: impl Into<String>) -> Self {
+        Self {
+            kind: FileChangeKind::Delete {
+                original_content: original_content.into(),
+            },
+            attribution: None,
+            line_range: None,
+        }
+    }
+
+    /// Create a new Update change.
+    pub fn update(old_content: impl Into<String>, new_content: impl Into<String>) -> Self {
+        Self {
+            kind: FileChangeKind::Update {
+                old_content: old_content.into(),
+                new_content: new_content.into(),
+            },
+            attribution: None,
+            line_range: None,
+        }
+    }
+
+    /// Create a new Rename change.
+    pub fn rename(
+        new_path: PathBuf,
+        old_content: Option<String>,
+        new_content: Option<String>,
+    ) -> Self {
+        Self {
+            kind: FileChangeKind::Rename {
+                new_path,
+                old_content,
+                new_content,
+            },
+            attribution: None,
+            line_range: None,
+        }
+    }
+
+    /// Add attribution to the change.
+    pub fn with_attribution(mut self, attribution: ChangeAttribution) -> Self {
+        self.attribution = Some(attribution);
+        self
+    }
+
+    /// Add line range to the change.
+    pub fn with_line_range(mut self, start: u32, end: u32) -> Self {
+        self.line_range = Some((start, end));
+        self
+    }
+
     /// Get the new content if any
     pub fn new_content(&self) -> Option<&str> {
-        match self {
-            FileChange::Add { content } => Some(content),
-            FileChange::Update { new_content, .. } => Some(new_content),
-            FileChange::Rename { new_content, .. } => new_content.as_deref(),
-            FileChange::Delete { .. } => None,
+        match &self.kind {
+            FileChangeKind::Add { content } => Some(content),
+            FileChangeKind::Update { new_content, .. } => Some(new_content),
+            FileChangeKind::Rename { new_content, .. } => new_content.as_deref(),
+            FileChangeKind::Delete { .. } => None,
         }
     }
 
     /// Get the old content if any
     pub fn old_content(&self) -> Option<&str> {
-        match self {
-            FileChange::Delete { original_content } => Some(original_content),
-            FileChange::Update { old_content, .. } => Some(old_content),
-            FileChange::Rename { old_content, .. } => old_content.as_deref(),
-            FileChange::Add { .. } => None,
+        match &self.kind {
+            FileChangeKind::Delete { original_content } => Some(original_content),
+            FileChangeKind::Update { old_content, .. } => Some(old_content),
+            FileChangeKind::Rename { old_content, .. } => old_content.as_deref(),
+            FileChangeKind::Add { .. } => None,
         }
+    }
+
+    /// Check if this is an add operation.
+    pub fn is_add(&self) -> bool {
+        matches!(self.kind, FileChangeKind::Add { .. })
+    }
+
+    /// Check if this is a delete operation.
+    pub fn is_delete(&self) -> bool {
+        matches!(self.kind, FileChangeKind::Delete { .. })
+    }
+
+    /// Check if this is an update operation.
+    pub fn is_update(&self) -> bool {
+        matches!(self.kind, FileChangeKind::Update { .. })
+    }
+
+    /// Check if this is a rename operation.
+    pub fn is_rename(&self) -> bool {
+        matches!(self.kind, FileChangeKind::Rename { .. })
+    }
+
+    /// Compute line count for the new content.
+    pub fn new_line_count(&self) -> usize {
+        self.new_content().map(|c| c.lines().count()).unwrap_or(0)
     }
 }
 
@@ -56,6 +219,8 @@ impl FileChange {
 pub struct TurnDiffTracker {
     changes: HashMap<PathBuf, FileChange>,
     pending_changes: Option<HashMap<PathBuf, FileChange>>,
+    /// Current attribution context for new changes.
+    current_attribution: Option<ChangeAttribution>,
 }
 
 impl TurnDiffTracker {
@@ -63,11 +228,36 @@ impl TurnDiffTracker {
         Self::default()
     }
 
+    /// Set the current attribution context for subsequent changes.
+    pub fn set_attribution(&mut self, attribution: ChangeAttribution) {
+        self.current_attribution = Some(attribution);
+    }
+
+    /// Clear the current attribution context.
+    pub fn clear_attribution(&mut self) {
+        self.current_attribution = None;
+    }
+
+    /// Get the current attribution context.
+    pub fn current_attribution(&self) -> Option<&ChangeAttribution> {
+        self.current_attribution.as_ref()
+    }
+
     /// Called when a patch application begins (from Codex)
     ///
     /// Stores the pending changes until the patch is confirmed
     pub fn on_patch_begin(&mut self, changes: HashMap<PathBuf, FileChange>) {
-        self.pending_changes = Some(changes);
+        // Apply current attribution to all changes
+        let changes_with_attribution: HashMap<PathBuf, FileChange> = changes
+            .into_iter()
+            .map(|(path, mut change)| {
+                if change.attribution.is_none() {
+                    change.attribution = self.current_attribution.clone();
+                }
+                (path, change)
+            })
+            .collect();
+        self.pending_changes = Some(changes_with_attribution);
     }
 
     /// Called when a patch application ends (from Codex)
@@ -88,40 +278,57 @@ impl TurnDiffTracker {
     /// Merge a change into the tracker, combining with existing changes
     fn merge_change(&mut self, path: PathBuf, change: FileChange) {
         if let Some(existing) = self.changes.get(&path) {
-            // Merge the changes
-            let merged = match (existing, &change) {
+            // Merge the changes, preserving the latest attribution
+            let merged = match (&existing.kind, &change.kind) {
                 // Add then Update = Add with new content
-                (FileChange::Add { .. }, FileChange::Update { new_content, .. }) => {
-                    FileChange::Add {
-                        content: new_content.clone(),
+                (FileChangeKind::Add { .. }, FileChangeKind::Update { new_content, .. }) => {
+                    FileChange {
+                        kind: FileChangeKind::Add {
+                            content: new_content.clone(),
+                        },
+                        attribution: change.attribution.clone().or(existing.attribution.clone()),
+                        line_range: change.line_range,
                     }
                 }
                 // Add then Delete = No change (remove from tracker)
-                (FileChange::Add { .. }, FileChange::Delete { .. }) => {
+                (FileChangeKind::Add { .. }, FileChangeKind::Delete { .. }) => {
                     self.changes.remove(&path);
                     return;
                 }
                 // Update then Update = Update with combined old/new
                 (
-                    FileChange::Update { old_content, .. },
-                    FileChange::Update { new_content, .. },
-                ) => FileChange::Update {
-                    old_content: old_content.clone(),
-                    new_content: new_content.clone(),
+                    FileChangeKind::Update { old_content, .. },
+                    FileChangeKind::Update { new_content, .. },
+                ) => FileChange {
+                    kind: FileChangeKind::Update {
+                        old_content: old_content.clone(),
+                        new_content: new_content.clone(),
+                    },
+                    attribution: change.attribution.clone().or(existing.attribution.clone()),
+                    line_range: change.line_range,
                 },
                 // Update then Delete = Delete with original old content
-                (FileChange::Update { old_content, .. }, FileChange::Delete { .. }) => {
-                    FileChange::Delete {
-                        original_content: old_content.clone(),
+                (FileChangeKind::Update { old_content, .. }, FileChangeKind::Delete { .. }) => {
+                    FileChange {
+                        kind: FileChangeKind::Delete {
+                            original_content: old_content.clone(),
+                        },
+                        attribution: change.attribution.clone().or(existing.attribution.clone()),
+                        line_range: None,
                     }
                 }
                 // Delete then Add = Update
-                (FileChange::Delete { original_content }, FileChange::Add { content }) => {
-                    FileChange::Update {
+                (
+                    FileChangeKind::Delete { original_content },
+                    FileChangeKind::Add { content },
+                ) => FileChange {
+                    kind: FileChangeKind::Update {
                         old_content: original_content.clone(),
                         new_content: content.clone(),
-                    }
-                }
+                    },
+                    attribution: change.attribution.clone().or(existing.attribution.clone()),
+                    line_range: change.line_range,
+                },
                 // Default: use the new change
                 _ => change,
             };
@@ -152,23 +359,23 @@ impl TurnDiffTracker {
 
         for (path, change) in &self.changes {
             let path_str = path.display();
-            match change {
-                FileChange::Add { content } => {
+            match &change.kind {
+                FileChangeKind::Add { content } => {
                     diff.push_str(&format!("--- /dev/null\n+++ b/{}\n", path_str));
                     diff.push_str(&format_addition_diff(content));
                 }
-                FileChange::Delete { original_content } => {
+                FileChangeKind::Delete { original_content } => {
                     diff.push_str(&format!("--- a/{}\n+++ /dev/null\n", path_str));
                     diff.push_str(&format_deletion_diff(original_content));
                 }
-                FileChange::Update {
+                FileChangeKind::Update {
                     old_content,
                     new_content,
                 } => {
                     diff.push_str(&format!("--- a/{}\n+++ b/{}\n", path_str, path_str));
                     diff.push_str(&compute_unified_diff(old_content, new_content));
                 }
-                FileChange::Rename {
+                FileChangeKind::Rename {
                     new_path,
                     old_content,
                     new_content,
@@ -279,12 +486,7 @@ mod tests {
         let mut tracker = TurnDiffTracker::new();
 
         let mut changes = HashMap::new();
-        changes.insert(
-            PathBuf::from("test.txt"),
-            FileChange::Add {
-                content: "hello".to_string(),
-            },
-        );
+        changes.insert(PathBuf::from("test.txt"), FileChange::add("hello"));
 
         tracker.on_patch_begin(changes);
         assert!(tracker.pending_changes().is_some());
@@ -300,12 +502,7 @@ mod tests {
         let mut tracker = TurnDiffTracker::new();
 
         let mut changes = HashMap::new();
-        changes.insert(
-            PathBuf::from("test.txt"),
-            FileChange::Add {
-                content: "hello".to_string(),
-            },
-        );
+        changes.insert(PathBuf::from("test.txt"), FileChange::add("hello"));
 
         tracker.on_patch_begin(changes);
         tracker.on_patch_end(false);
@@ -320,12 +517,7 @@ mod tests {
 
         // First patch: Add file
         let mut changes1 = HashMap::new();
-        changes1.insert(
-            PathBuf::from("test.txt"),
-            FileChange::Add {
-                content: "hello".to_string(),
-            },
-        );
+        changes1.insert(PathBuf::from("test.txt"), FileChange::add("hello"));
         tracker.on_patch_begin(changes1);
         tracker.on_patch_end(true);
 
@@ -333,20 +525,15 @@ mod tests {
         let mut changes2 = HashMap::new();
         changes2.insert(
             PathBuf::from("test.txt"),
-            FileChange::Update {
-                old_content: "hello".to_string(),
-                new_content: "world".to_string(),
-            },
+            FileChange::update("hello", "world"),
         );
         tracker.on_patch_begin(changes2);
         tracker.on_patch_end(true);
 
         // Result should be Add with new content
         let change = tracker.changes().get(&PathBuf::from("test.txt")).unwrap();
-        match change {
-            FileChange::Add { content } => assert_eq!(content, "world"),
-            _ => panic!("Expected Add"),
-        }
+        assert!(change.is_add());
+        assert_eq!(change.new_content(), Some("world"));
     }
 
     #[test]
@@ -355,23 +542,13 @@ mod tests {
 
         // First patch: Add file
         let mut changes1 = HashMap::new();
-        changes1.insert(
-            PathBuf::from("test.txt"),
-            FileChange::Add {
-                content: "hello".to_string(),
-            },
-        );
+        changes1.insert(PathBuf::from("test.txt"), FileChange::add("hello"));
         tracker.on_patch_begin(changes1);
         tracker.on_patch_end(true);
 
         // Second patch: Delete file
         let mut changes2 = HashMap::new();
-        changes2.insert(
-            PathBuf::from("test.txt"),
-            FileChange::Delete {
-                original_content: "hello".to_string(),
-            },
-        );
+        changes2.insert(PathBuf::from("test.txt"), FileChange::delete("hello"));
         tracker.on_patch_begin(changes2);
         tracker.on_patch_end(true);
 
@@ -384,12 +561,7 @@ mod tests {
         let mut tracker = TurnDiffTracker::new();
 
         let mut changes = HashMap::new();
-        changes.insert(
-            PathBuf::from("new.txt"),
-            FileChange::Add {
-                content: "line1\nline2".to_string(),
-            },
-        );
+        changes.insert(PathBuf::from("new.txt"), FileChange::add("line1\nline2"));
         tracker.on_patch_begin(changes);
         tracker.on_patch_end(true);
 
@@ -398,6 +570,23 @@ mod tests {
         assert!(diff.contains("+++ b/new.txt"));
         assert!(diff.contains("+line1"));
         assert!(diff.contains("+line2"));
+    }
+
+    #[test]
+    fn test_attribution_propagation() {
+        let mut tracker = TurnDiffTracker::new();
+        tracker.set_attribution(ChangeAttribution::ai("claude-opus-4", "anthropic"));
+
+        let mut changes = HashMap::new();
+        changes.insert(PathBuf::from("test.txt"), FileChange::add("hello"));
+        tracker.on_patch_begin(changes);
+        tracker.on_patch_end(true);
+
+        let change = tracker.changes().get(&PathBuf::from("test.txt")).unwrap();
+        assert!(change.attribution.is_some());
+        let attr = change.attribution.as_ref().unwrap();
+        assert_eq!(attr.contributor_type, "ai");
+        assert_eq!(attr.model_id, Some("claude-opus-4".to_string()));
     }
 
     #[test]
@@ -430,24 +619,35 @@ mod tests {
 
     #[test]
     fn test_file_change_accessors() {
-        let add = FileChange::Add {
-            content: "hello".to_string(),
-        };
+        let add = FileChange::add("hello");
         assert_eq!(add.new_content(), Some("hello"));
         assert_eq!(add.old_content(), None);
+        assert!(add.is_add());
 
-        let delete = FileChange::Delete {
-            original_content: "goodbye".to_string(),
-        };
+        let delete = FileChange::delete("goodbye");
         assert_eq!(delete.new_content(), None);
         assert_eq!(delete.old_content(), Some("goodbye"));
+        assert!(delete.is_delete());
 
-        let update = FileChange::Update {
-            old_content: "old".to_string(),
-            new_content: "new".to_string(),
-        };
+        let update = FileChange::update("old", "new");
         assert_eq!(update.new_content(), Some("new"));
         assert_eq!(update.old_content(), Some("old"));
+        assert!(update.is_update());
+    }
+
+    #[test]
+    fn test_normalized_model_id() {
+        let attr = ChangeAttribution::ai("claude-opus-4", "anthropic");
+        assert_eq!(
+            attr.normalized_model_id(),
+            Some("anthropic/claude-opus-4".to_string())
+        );
+
+        let attr2 = ChangeAttribution::ai("anthropic/claude-opus-4", "anthropic");
+        assert_eq!(
+            attr2.normalized_model_id(),
+            Some("anthropic/claude-opus-4".to_string())
+        );
     }
 
     #[tokio::test]
@@ -457,12 +657,7 @@ mod tests {
         {
             let mut t = tracker.write().await;
             let mut changes = HashMap::new();
-            changes.insert(
-                PathBuf::from("test.txt"),
-                FileChange::Add {
-                    content: "hello".to_string(),
-                },
-            );
+            changes.insert(PathBuf::from("test.txt"), FileChange::add("hello"));
             t.on_patch_begin(changes);
             t.on_patch_end(true);
         }

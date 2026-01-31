@@ -5,9 +5,16 @@
 //! automation runtime. Downstream applications can deserialize these
 //! structures to drive dashboards, logging, or auditing pipelines without
 //! depending on the full `vtcode-core` crate.
+//!
+//! # Agent Trace Support
+//!
+//! This crate implements the [Agent Trace](https://agent-trace.dev/) specification
+//! for tracking AI-generated code attribution. See the [`trace`] module for details.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
 pub const EVENT_SCHEMA_VERSION: &str = "0.1.0";
