@@ -801,8 +801,12 @@ pub(crate) async fn stream_and_render_response(
                         renderer
                             .stream_markdown_response(content, prev_count)
                             .map_err(|err| map_render_error(provider_name, err))?;
-                        emitted_tokens = true;
+                    } else {
+                        renderer
+                            .line(MessageStyle::Response, content)
+                            .map_err(|err| map_render_error(provider_name, err))?;
                     }
+                    emitted_tokens = true;
                     aggregated = content.to_string();
                 }
             }
@@ -810,6 +814,7 @@ pub(crate) async fn stream_and_render_response(
     }
 
     // Finalize reasoning display (only if we haven't already in the content block above)
+    let rendered_reasoning_before = reasoning_state.rendered_reasoning();
     if response.content.is_none() || aggregated.trim().is_empty() {
         let suppress_reasoning = response
             .reasoning
@@ -832,7 +837,7 @@ pub(crate) async fn stream_and_render_response(
     if !emitted_tokens
         && aggregated.trim().is_empty()
         && response.content.is_none()
-        && !reasoning_state.rendered_reasoning()
+        && !rendered_reasoning_before
         && let Some(reasoning) = response.reasoning.as_deref()
     {
         let reasoning_trimmed = clean_reasoning_text(reasoning.trim());
@@ -897,7 +902,7 @@ mod tests {
         async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
             let response = self.generate(request).await?;
             Ok(Box::pin(stream::once(async {
-                Ok(uni::LLMStreamEvent::Completed { response })
+                Ok(uni::LLMStreamEvent::Completed { response: Box::new(response) })
             })))
         }
 

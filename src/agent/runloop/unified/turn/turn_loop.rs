@@ -93,6 +93,32 @@ pub struct TurnLoopContext<'a> {
         &'a Arc<StdRwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     pub harness_state: &'a mut HarnessTurnState,
     pub harness_emitter: Option<&'a HarnessEventEmitter>,
+    pub config: &'a mut AgentConfig,
+    pub vt_cfg: Option<&'a VTCodeConfig>,
+    pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
+    pub traj: &'a TrajectoryLogger,
+    pub full_auto: bool,
+}
+
+impl<'a> TurnLoopContext<'a> {
+    pub fn as_run_loop_context(&mut self) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
+        crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            tool_registry: self.tool_registry,
+            tools: self.tools,
+            tool_result_cache: self.tool_result_cache,
+            tool_permission_cache: self.tool_permission_cache,
+            decision_ledger: self.decision_ledger,
+            session_stats: self.session_stats,
+            mcp_panel_state: self.mcp_panel_state,
+            approval_recorder: self.approval_recorder,
+            session: self.session,
+            traj: self.traj,
+            harness_state: self.harness_state,
+            harness_emitter: self.harness_emitter,
+        }
+    }
 }
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
@@ -101,13 +127,7 @@ pub struct TurnLoopContext<'a> {
 pub async fn run_turn_loop(
     _input: &str,
     mut working_history: Vec<uni::Message>,
-    mut ctx: TurnLoopContext<'_>,
-    config: &AgentConfig,
-    vt_cfg: Option<&VTCodeConfig>,
-    provider_client: &mut Box<dyn uni::LLMProvider>,
-    traj: &TrajectoryLogger,
-    _skip_confirmations: bool,
-    full_auto: bool,
+    ctx: TurnLoopContext<'_>,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
     use crate::agent::runloop::unified::context_manager::PreRequestAction;
@@ -135,7 +155,7 @@ pub async fn run_turn_loop(
     // Do NOT add it again here, as it will cause duplicate messages in the conversation
 
     // Process up to max_tool_loops iterations to handle tool calls
-    let max_tool_loops = vt_cfg
+    let max_tool_loops = ctx.vt_cfg
         .map(|cfg| cfg.tools.max_tool_loops)
         .filter(|&value| value > 0)
         .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS);
@@ -147,7 +167,7 @@ pub async fn run_turn_loop(
 
     // Reset safety validator for a new turn
     {
-        let max_session_turns = vt_cfg
+        let max_session_turns = ctx.vt_cfg
             .map(|c| c.agent.max_conversation_turns)
             .unwrap_or(150);
         let mut validator = ctx.safety_validator.write().await;
@@ -156,7 +176,7 @@ pub async fn run_turn_loop(
     }
 
     // Optimization: Pre-compute tool repeat limit once
-    let tool_repeat_limit = vt_cfg
+    let tool_repeat_limit = ctx.vt_cfg
         .map(|cfg| cfg.tools.max_repeated_tool_calls)
         .filter(|&value| value > 0)
         .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
@@ -166,7 +186,7 @@ pub async fn run_turn_loop(
         ctx.telemetry.record_turn();
 
         // Check session boundaries
-        let context_window_size = provider_client.effective_context_size(&config.model);
+        let context_window_size = ctx.provider_client.effective_context_size(&ctx.config.model);
         match ctx
             .context_manager
             .pre_request_check(&working_history, context_window_size)
@@ -198,8 +218,8 @@ pub async fn run_turn_loop(
                     .context_manager
                     .compact_history_if_needed(
                         &working_history,
-                        provider_client.as_ref(),
-                        &config.model,
+                        ctx.provider_client.as_ref(),
+                        &ctx.config.model,
                     )
                     .await?;
                 working_history = compacted;
@@ -265,7 +285,7 @@ pub async fn run_turn_loop(
                     mcp_panel_state: ctx.mcp_panel_state,
                     approval_recorder: ctx.approval_recorder,
                     session: ctx.session,
-                    traj,
+                    traj: ctx.traj,
                     harness_state: ctx.harness_state,
                     harness_emitter: ctx.harness_emitter,
                 };
@@ -288,7 +308,7 @@ pub async fn run_turn_loop(
                     ctx.default_placeholder.clone(),
                     ctx.lifecycle_hooks,
                     true,
-                    vt_cfg,
+                    ctx.vt_cfg,
                     step_count,
                 )
                 .await;
@@ -362,13 +382,43 @@ pub async fn run_turn_loop(
         let validation_cache = ctx.session_stats.validation_cache.clone();
 
         // Prepare turn processing context
-        let mut turn_processing_ctx = TurnProcessingContext::new(
-            &mut ctx,
-            &mut working_history,
-            provider_client,
-            vt_cfg,
-            full_auto,
-        );
+        let mut turn_processing_ctx = TurnProcessingContext {
+            renderer: ctx.renderer,
+            handle: ctx.handle,
+            session_stats: ctx.session_stats,
+            auto_exit_plan_mode_attempted: ctx.auto_exit_plan_mode_attempted,
+            mcp_panel_state: ctx.mcp_panel_state,
+            tool_result_cache: ctx.tool_result_cache,
+            approval_recorder: ctx.approval_recorder,
+            decision_ledger: ctx.decision_ledger,
+            working_history: &mut working_history,
+            tool_registry: ctx.tool_registry,
+            tools: ctx.tools,
+            cached_tools: ctx.cached_tools,
+            ctrl_c_state: ctx.ctrl_c_state,
+            ctrl_c_notify: ctx.ctrl_c_notify,
+            vt_cfg: ctx.vt_cfg,
+            context_manager: ctx.context_manager,
+            last_forced_redraw: ctx.last_forced_redraw,
+            input_status_state: ctx.input_status_state,
+            session: ctx.session,
+            lifecycle_hooks: ctx.lifecycle_hooks,
+            default_placeholder: ctx.default_placeholder,
+            tool_permission_cache: ctx.tool_permission_cache,
+            safety_validator: ctx.safety_validator,
+            provider_client: ctx.provider_client,
+            config: ctx.config,
+            traj: ctx.traj,
+            full_auto: ctx.full_auto,
+            circuit_breaker: ctx.circuit_breaker,
+            tool_health_tracker: ctx.tool_health_tracker,
+            rate_limiter: ctx.rate_limiter,
+            telemetry: ctx.telemetry,
+            autonomous_executor: ctx.autonomous_executor,
+            error_recovery: ctx.error_recovery,
+            harness_state: ctx.harness_state,
+            harness_emitter: ctx.harness_emitter,
+        };
 
         // === PROACTIVE GUARDS (HP-2: Pre-request checks) ===
         // === PROACTIVE GUARDS (HP-2: Pre-request checks) ===
@@ -378,10 +428,11 @@ pub async fn run_turn_loop(
         turn_processing_ctx
             .harness_state
             .set_phase(TurnPhase::Requesting);
+        let active_model = turn_processing_ctx.config.model.clone();
         let (response, response_streamed) = match execute_llm_request(
             &mut turn_processing_ctx,
             step_count,
-            &config.model,
+            &active_model,
             None, // max_tokens_opt
             None, // parallel_cfg_opt
         )
@@ -431,7 +482,6 @@ pub async fn run_turn_loop(
             step_count,
             repeated_tool_attempts: &mut repeated_tool_attempts,
             turn_modified_files: &mut turn_modified_files,
-            traj,
             session_end_reason,
             max_tool_loops,
             tool_repeat_limit,

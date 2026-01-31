@@ -86,7 +86,7 @@ const SELF_REVIEW_MIN_LENGTH: usize = 240;
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
     _vt_cfg: Option<VTCodeConfig>,
-    skip_confirmations: bool,
+    _skip_confirmations: bool,
     full_auto: bool,
     plan_mode: bool,
     resume: Option<ResumeSession>,
@@ -259,83 +259,85 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut last_mcp_refresh = std::time::Instant::now();
 
         loop {
-            let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
-                renderer: &mut renderer,
-                session: &mut session,
-                handle: &handle,
-                ctrl_c_state: &ctrl_c_state,
-                ctrl_c_notify: &ctrl_c_notify,
-                config: &mut config,
-                vt_cfg: &mut vt_cfg,
-                provider_client: &mut provider_client,
-                session_bootstrap: &session_bootstrap,
-                async_mcp_manager: &async_mcp_manager,
-                tool_registry: &mut tool_registry,
-                tools: &tools,
-                cached_tools: &cached_tools,
-                conversation_history: &mut conversation_history,
-                decision_ledger: &decision_ledger,
-                context_manager: &mut context_manager,
-                session_stats: &mut session_stats,
-                mcp_panel_state: &mut mcp_panel_state,
-                linked_directories: &mut linked_directories,
-                lifecycle_hooks: lifecycle_hooks.as_ref(),
-                full_auto,
-                approval_recorder: &approval_recorder,
-                tool_permission_cache: &tool_permission_cache,
-                loaded_skills: &loaded_skills,
-                custom_prompts: &custom_prompts,
-                custom_slash_commands: &custom_slash_commands,
-                default_placeholder: &mut default_placeholder,
-                follow_up_placeholder: &mut follow_up_placeholder,
-                checkpoint_manager: checkpoint_manager.as_ref(),
-                tool_result_cache: &tool_result_cache,
-                traj: &traj,
-                harness_emitter: harness_emitter.as_ref(),
-                safety_validator: &safety_validator,
-                circuit_breaker: &circuit_breaker,
-                tool_health_tracker: &tool_health_tracker,
-                rate_limiter: &rate_limiter,
-                telemetry: &telemetry,
-                autonomous_executor: &autonomous_executor,
-                error_recovery: &session_state.error_recovery,
-                last_forced_redraw: &mut last_forced_redraw,
-            };
-
-            // Phase 3 Optimization: Session Memory Bounds
-            // Check if we've exceeded the maximum allowed turns/messages
-            // We approximate turns as history/2 for safety
-            if interaction_ctx.conversation_history.len()
-                > interaction_ctx.config.max_conversation_turns * 2
-            {
-                // Double check specific turn count if we had it, but history length is the main memory driver
-                interaction_ctx.renderer.line(
-                    vtcode_core::utils::ansi::MessageStyle::Warning,
-                    &format!(
-                        "Session reached maximum conversation limit ({} turns). Ending session to prevent performance degradation.",
-                        interaction_ctx.config.max_conversation_turns
-                    )
-                )?;
-                session_end_reason = SessionEndReason::Exit;
-                break;
-            }
-
-            let mut interaction_state =
-                crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
-                    input_status_state: &mut input_status_state,
-                    queued_inputs: &mut queued_inputs,
-                    model_picker_state: &mut model_picker_state,
-                    palette_state: &mut palette_state,
-                    last_known_mcp_tools: &mut last_known_mcp_tools,
-                    mcp_catalog_initialized: &mut mcp_catalog_initialized,
-                    last_mcp_refresh: &mut last_mcp_refresh,
-                    ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
+            let interaction_outcome = {
+                let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
+                    renderer: &mut renderer,
+                    session: &mut session,
+                    handle: &handle,
+                    ctrl_c_state: &ctrl_c_state,
+                    ctrl_c_notify: &ctrl_c_notify,
+                    config: &mut config,
+                    vt_cfg: &mut vt_cfg,
+                    provider_client: &mut provider_client,
+                    session_bootstrap: &session_bootstrap,
+                    async_mcp_manager: &async_mcp_manager,
+                    tool_registry: &mut tool_registry,
+                    tools: &tools,
+                    cached_tools: &cached_tools,
+                    conversation_history: &mut conversation_history,
+                    decision_ledger: &decision_ledger,
+                    context_manager: &mut context_manager,
+                    session_stats: &mut session_stats,
+                    mcp_panel_state: &mut mcp_panel_state,
+                    linked_directories: &mut linked_directories,
+                    lifecycle_hooks: lifecycle_hooks.as_ref(),
+                    full_auto,
+                    approval_recorder: &approval_recorder,
+                    tool_permission_cache: &tool_permission_cache,
+                    loaded_skills: &loaded_skills,
+                    custom_prompts: &custom_prompts,
+                    custom_slash_commands: &custom_slash_commands,
+                    default_placeholder: &mut default_placeholder,
+                    follow_up_placeholder: &mut follow_up_placeholder,
+                    checkpoint_manager: checkpoint_manager.as_ref(),
+                    tool_result_cache: &tool_result_cache,
+                    traj: &traj,
+                    harness_emitter: harness_emitter.as_ref(),
+                    safety_validator: &safety_validator,
+                    circuit_breaker: &circuit_breaker,
+                    tool_health_tracker: &tool_health_tracker,
+                    rate_limiter: &rate_limiter,
+                    telemetry: &telemetry,
+                    autonomous_executor: &autonomous_executor,
+                    error_recovery: &session_state.error_recovery,
+                    last_forced_redraw: &mut last_forced_redraw,
+                    harness_config: harness_config.clone(),
                 };
 
-            let interaction_outcome = crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(
-                &mut interaction_ctx,
-                &mut interaction_state,
-            ).await?;
+                // Phase 3 Optimization: Session Memory Bounds
+                // Check if we've exceeded the maximum allowed turns/messages
+                // We approximate turns as history/2 for safety
+                if interaction_ctx.conversation_history.len()
+                    > interaction_ctx.config.max_conversation_turns * 2
+                {
+                    // Double check specific turn count if we had it, but history length is the main memory driver
+                    interaction_ctx.renderer.line(
+                        vtcode_core::utils::ansi::MessageStyle::Warning,
+                        &format!(
+                            "Session reached maximum conversation limit ({} turns). Ending session to prevent performance degradation.",
+                            interaction_ctx.config.max_conversation_turns
+                        )
+                    )?;
+                    return Ok(()); // Or break?
+                }
+
+                let mut interaction_state =
+                    crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
+                        input_status_state: &mut input_status_state,
+                        queued_inputs: &mut queued_inputs,
+                        model_picker_state: &mut model_picker_state,
+                        palette_state: &mut palette_state,
+                        last_known_mcp_tools: &mut last_known_mcp_tools,
+                        mcp_catalog_initialized: &mut mcp_catalog_initialized,
+                        last_mcp_refresh: &mut last_mcp_refresh,
+                        ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
+                    };
+
+                crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(
+                    &mut interaction_ctx,
+                    &mut interaction_state,
+                ).await?
+            };
 
             use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
 
@@ -370,6 +372,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                     continue;
                 }
             };
+            // ... (rest of loop)
+
             // Removed: Tool response pruning
             // Removed: Context window enforcement to respect token limits
 
@@ -450,6 +454,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                     error_recovery: &session_state.error_recovery,
                     harness_state: &mut harness_state,
                     harness_emitter: harness_emitter.as_ref(),
+                    config: &mut config,
+                    vt_cfg: vt_cfg.as_ref(),
+                    provider_client: &mut provider_client,
+                    traj: &traj,
+                    full_auto,
                 };
 
                 let result = timeout(
@@ -458,12 +467,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &input,
                         working_history.clone(),
                         turn_loop_ctx,
-                        &config,
-                        vt_cfg.as_ref(),
-                        &mut provider_client,
-                        &traj,
-                        skip_confirmations,
-                        full_auto,
                         &mut session_end_reason,
                     ),
                 )

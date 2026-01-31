@@ -82,6 +82,54 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub error_recovery:
         &'a Arc<std::sync::RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     pub last_forced_redraw: &'a mut std::time::Instant,
+    pub harness_config: vtcode_config::core::agent::AgentHarnessConfig,
+}
+
+impl<'a> InteractionLoopContext<'a> {
+    pub fn as_turn_processing_context<'b>(
+        &'b mut self,
+        harness_state: &'b mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
+        auto_exit_plan_mode_attempted: &'b mut bool,
+        input_status_state: &'b mut crate::agent::runloop::unified::status_line::InputStatusState,
+    ) -> crate::agent::runloop::unified::turn::context::TurnProcessingContext<'b> {
+        crate::agent::runloop::unified::turn::context::TurnProcessingContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            session_stats: self.session_stats,
+            auto_exit_plan_mode_attempted,
+            mcp_panel_state: self.mcp_panel_state,
+            tool_result_cache: self.tool_result_cache,
+            approval_recorder: self.approval_recorder,
+            decision_ledger: self.decision_ledger,
+            working_history: self.conversation_history,
+            tool_registry: self.tool_registry,
+            tools: self.tools,
+            cached_tools: self.cached_tools,
+            ctrl_c_state: self.ctrl_c_state,
+            ctrl_c_notify: self.ctrl_c_notify,
+            vt_cfg: self.vt_cfg.as_ref(),
+            context_manager: self.context_manager,
+            last_forced_redraw: self.last_forced_redraw,
+            input_status_state,
+            session: self.session,
+            lifecycle_hooks: self.lifecycle_hooks,
+            default_placeholder: self.default_placeholder,
+            tool_permission_cache: self.tool_permission_cache,
+            safety_validator: self.safety_validator,
+            provider_client: self.provider_client,
+            config: self.config,
+            traj: self.traj,
+            full_auto: self.full_auto,
+            circuit_breaker: self.circuit_breaker,
+            tool_health_tracker: self.tool_health_tracker,
+            rate_limiter: self.rate_limiter,
+            telemetry: self.telemetry,
+            autonomous_executor: self.autonomous_executor,
+            error_recovery: self.error_recovery,
+            harness_state,
+            harness_emitter: self.harness_emitter,
+        }
+    }
 }
 
 pub(crate) struct InteractionState<'a> {

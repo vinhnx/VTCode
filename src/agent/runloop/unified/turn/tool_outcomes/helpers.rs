@@ -2,13 +2,6 @@ use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPip
 use std::collections::HashMap;
 use vtcode_core::llm::provider as uni;
 
-pub(crate) fn limit_conversation_history(history: &mut Vec<uni::Message>, limit: usize) {
-    if history.len() > limit {
-        let remove_count = history.len() - limit;
-        history.drain(0..remove_count);
-    }
-}
-
 pub(crate) fn push_tool_response(
     history: &mut Vec<uni::Message>,
     tool_call_id: String,
@@ -18,13 +11,6 @@ pub(crate) fn push_tool_response(
         tool_call_id,
         content,
     ));
-}
-
-pub(crate) fn push_assistant_message(
-    history: &mut Vec<uni::Message>,
-    message: uni::Message,
-) {
-    history.push(message);
 }
 
 pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String {
@@ -39,13 +25,6 @@ pub(crate) fn resolve_max_tool_retries(
     // TODO: Re-implement per-tool retry configuration once config structure is verified.
     // Currently AgentConfig does not expose a 'tools' map.
     3
-}
-
-pub(crate) fn reasoning_duplicates_content(cleaned_reasoning: &str, content: &str) -> bool {
-    let cleaned_content = vtcode_core::llm::providers::clean_reasoning_text(content);
-    !cleaned_reasoning.is_empty()
-        && !cleaned_content.is_empty()
-        && cleaned_reasoning == cleaned_content
 }
 
 /// Updates the tool repetition tracker based on the execution outcome.

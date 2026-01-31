@@ -8,8 +8,8 @@ use chrono::Utc;
 use vtcode_config::OpenResponsesConfig;
 use vtcode_core::exec::events::{
     CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent, ItemStartedEvent,
-    ThreadEvent, ThreadItem, ThreadItemDetails, TurnCompletedEvent, TurnFailedEvent,
-    TurnStartedEvent, Usage, VersionedThreadEvent,
+    ThreadEvent, ThreadItem, ThreadItemDetails, TurnCompletedEvent,
+    TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent,
 };
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
 
@@ -107,8 +107,8 @@ impl HarnessEventEmitter {
         }
 
         // Also emit to Open Responses format if enabled
-        if let Ok(mut guard) = self.open_responses.lock() {
-            if let Some(ref mut state) = *guard {
+        if let Ok(mut guard) = self.open_responses.lock()
+            && let Some(ref mut state) = *guard {
                 state.integration.process_event(&event);
 
                 // Write any emitted Open Responses events
@@ -127,7 +127,6 @@ impl HarnessEventEmitter {
                         let _ = writer.flush();
                     }
                 }
-            }
         }
 
         Ok(())
@@ -135,14 +134,13 @@ impl HarnessEventEmitter {
 
     /// Finishes the Open Responses session and writes the terminal marker.
     pub fn finish_open_responses(&self) {
-        if let Ok(mut guard) = self.open_responses.lock() {
-            if let Some(ref mut state) = *guard {
+        if let Ok(mut guard) = self.open_responses.lock()
+            && let Some(ref mut state) = *guard {
                 let _ = state.integration.finish_response();
                 if let Some(ref mut writer) = state.writer {
                     let _ = writeln!(writer, "data: [DONE]");
                     let _ = writer.flush();
                 }
-            }
         }
     }
 
