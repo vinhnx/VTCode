@@ -8,6 +8,7 @@ use super::input_manager::InputManager;
 pub struct ReverseSearchState {
     pub active: bool,
     pub search_term: String,
+    #[allow(dead_code)]
     pub search_position: usize, // Position in history where search started
     pub original_content: String, // Content before search started
     pub original_cursor: usize, // Cursor position before search started
@@ -36,6 +37,7 @@ impl ReverseSearchState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn start_search(&mut self, input_manager: &InputManager, history: &[String]) {
         self.active = true;
         self.search_term = String::new();
