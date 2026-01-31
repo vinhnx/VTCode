@@ -151,6 +151,10 @@ impl Session {
             reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState::new(
             ),
 
+            // --- History Picker (Ctrl+R fuzzy search) ---
+            history_picker_state: crate::ui::tui::session::history_picker::HistoryPickerState::new(
+            ),
+
             // --- PTY Session Management ---
             active_pty_sessions: None,
 

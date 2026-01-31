@@ -142,20 +142,69 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return Some(event);
     }
 
-    // Handle reverse search (Ctrl+R)
+    // Handle history picker (Ctrl+R) - Visual fuzzy search for command history
     if has_control && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) {
-        if !session.reverse_search_state.active {
-            // Start reverse search
-            session.reverse_search_state.start_search(
-                &session.input_manager,
-                &session.input_manager.history_texts(),
-            );
+        if !session.history_picker_state.active {
+            // Open the history picker
+            session.history_picker_state.open(&session.input_manager);
+            // Get history with attachments for fuzzy search
+            let history: Vec<(String, Vec<crate::llm::provider::ContentPart>)> = session
+                .input_manager
+                .history()
+                .iter()
+                .map(|entry| {
+                    (
+                        entry.content().to_string(),
+                        entry.attachment_elements(),
+                    )
+                })
+                .collect();
+            session.history_picker_state.update_search(&history);
             session.mark_dirty();
             return None;
         }
     }
 
-    // Handle reverse search if active
+    // Handle history picker if active
+    if session.history_picker_state.active {
+        // Get history with attachments for search updates
+        let history: Vec<(String, Vec<crate::llm::provider::ContentPart>)> = session
+            .input_manager
+            .history()
+            .iter()
+            .map(|entry| {
+                (
+                    entry.content().to_string(),
+                    entry.attachment_elements(),
+                )
+            })
+            .collect();
+        let handled = crate::ui::tui::session::history_picker::handle_history_picker_key(
+            &key,
+            &mut session.history_picker_state,
+            &mut session.input_manager,
+            &history,
+        );
+        if handled {
+            session.mark_dirty();
+            return None;
+        }
+    }
+
+    // Legacy reverse search handling (kept for backward compatibility)
+    // Handle reverse search (Ctrl+R) - disabled in favor of history picker
+    // if has_control && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) {
+    //     if !session.reverse_search_state.active {
+    //         session.reverse_search_state.start_search(
+    //             &session.input_manager,
+    //             &session.input_manager.history_texts(),
+    //         );
+    //         session.mark_dirty();
+    //         return None;
+    //     }
+    // }
+
+    // Handle reverse search if active (legacy)
     if session.reverse_search_state.active {
         // Get history first to avoid borrow conflicts
         let history = session.input_manager.history_texts();

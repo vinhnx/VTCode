@@ -64,6 +64,7 @@ mod editing;
 pub mod config;
 mod diff_preview;
 mod events;
+pub mod history_picker;
 mod message_renderer;
 mod messages;
 mod palette;
@@ -79,6 +80,7 @@ mod trust;
 
 use self::config_palette::ConfigPalette;
 use self::file_palette::FilePalette;
+use self::history_picker::HistoryPickerState;
 use self::input_manager::InputManager;
 use self::message::{MessageLabels, MessageLine};
 use self::modal::{ModalState, WizardModalState};
@@ -187,6 +189,9 @@ pub struct Session {
 
     // --- Reverse Search ---
     pub(crate) reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState,
+
+    // --- History Picker (Ctrl+R fuzzy search) ---
+    pub(crate) history_picker_state: HistoryPickerState,
 
     // --- PTY Session Management ---
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,

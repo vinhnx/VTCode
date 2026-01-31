@@ -23,6 +23,7 @@
 /// - Titles are shown in Standard/Wide modes only
 pub mod footer;
 pub mod header;
+pub mod history_picker;
 pub mod input;
 pub mod layout_mode;
 pub mod modal;
@@ -35,6 +36,7 @@ pub mod transcript;
 
 pub use footer::{FooterWidget, hints as footer_hints};
 pub use header::HeaderWidget;
+pub use history_picker::HistoryPickerWidget;
 pub use input::InputWidget;
 pub use layout_mode::LayoutMode;
 pub use modal::{ModalType, ModalWidget};
