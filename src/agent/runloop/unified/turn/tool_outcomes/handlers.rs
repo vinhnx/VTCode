@@ -34,10 +34,10 @@ pub(crate) enum ValidationResult {
 }
 
 /// Consolidated state for tool outcomes to reduce signature bloat and ensure DRY across handlers.
-pub struct ToolOutcomeContext<'a> {
-    pub ctx: &'a mut TurnProcessingContext<'a>,
-    pub repeated_tool_attempts: &'a mut std::collections::HashMap<String, usize>,
-    pub turn_modified_files: &'a mut std::collections::BTreeSet<std::path::PathBuf>,
+pub struct ToolOutcomeContext<'a, 'b> {
+    pub ctx: &'b mut TurnProcessingContext<'a>,
+    pub repeated_tool_attempts: &'b mut std::collections::HashMap<String, usize>,
+    pub turn_modified_files: &'b mut std::collections::BTreeSet<std::path::PathBuf>,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
 }
 
@@ -52,10 +52,10 @@ pub struct ToolOutcomeContext<'a> {
 /// 6. Execution (with progress spinners and PTY streaming)
 /// 7. Result Handling (recording metrics, history, UI output)
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn handle_single_tool_call<'a>(
-    t_ctx: &mut ToolOutcomeContext<'a>,
+pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
+    t_ctx: &mut ToolOutcomeContext<'a, 'b>,
     tool_call_id: String,
-    tool_name: &str,
+    tool_name: &'tool str,
     args_val: serde_json::Value,
 ) -> Result<Option<TurnHandlerOutcome>> {
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
@@ -265,9 +265,8 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 }
 
-/// Executes a batch of tool calls correctly handling validation and parallel execution.
-pub(crate) async fn handle_tool_call_batch<'a>(
-    t_ctx: &mut ToolOutcomeContext<'a>,
+pub(crate) async fn handle_tool_call_batch<'a, 'b>(
+    t_ctx: &mut ToolOutcomeContext<'a, 'b>,
     tool_calls: &[&uni::ToolCall],
 ) -> Result<Option<TurnHandlerOutcome>> {
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
@@ -364,16 +363,16 @@ pub(crate) async fn handle_tool_call_batch<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn execute_and_handle_tool_call<'a>(
-    ctx: &'a mut TurnProcessingContext<'a>,
-    repeated_tool_attempts: &'a mut std::collections::HashMap<String, usize>,
-    turn_modified_files: &'a mut std::collections::BTreeSet<std::path::PathBuf>,
+pub(crate) fn execute_and_handle_tool_call<'a, 'b>(
+    ctx: &'b mut TurnProcessingContext<'a>,
+    repeated_tool_attempts: &'b mut std::collections::HashMap<String, usize>,
+    turn_modified_files: &'b mut std::collections::BTreeSet<std::path::PathBuf>,
     traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     tool_call_id: String,
-    tool_name: &'a str,
+    tool_name: &str,
     args_val: serde_json::Value,
-    batch_progress_reporter: Option<&'a ProgressReporter>,
-) -> futures::future::BoxFuture<'a, Result<()>> {
+    batch_progress_reporter: Option<&'b ProgressReporter>,
+) -> futures::future::BoxFuture<'b, Result<()>> {
     let tool_call_id = tool_call_id;
     let tool_name_owned = tool_name.to_string();
     let args_val = args_val;
@@ -397,7 +396,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
     ctx: &mut TurnProcessingContext<'a>,
     repeated_tool_attempts: &mut std::collections::HashMap<String, usize>,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
-    traj: &vtcode_core::core::trajectory::TrajectoryLogger,
+    traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
     tool_call_id: String,
     tool_name: &str,
     args_val: serde_json::Value,
@@ -408,7 +407,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
         tool_name, &args_val,
     ) {
         crate::agent::runloop::unified::tool_summary::render_file_operation_indicator(
-            t_ctx.ctx.renderer,
+            ctx.renderer,
             tool_name,
             &args_val,
         )?;
@@ -431,8 +430,8 @@ async fn execute_and_handle_tool_call_inner<'a>(
 
     // Check cache
     if let Some(ref key) = cache_key {
-        let mut tool_cache: tokio::sync::RwLockWriteGuard<'_, crate::agent::runloop::tool_cache::ToolResultCache> = t_ctx.ctx.tool_result_cache.write().await;
-        if let Some(cached_output) = tool_cache.get::<serde_json::Value>(key) {
+        let mut tool_cache_guard = ctx.tool_result_cache.write().await;
+        if let Some(cached_output) = tool_cache_guard.get(key) {
             #[cfg(debug_assertions)]
             tracing::debug!("Cache hit for tool: {}", tool_name);
 
@@ -449,8 +448,15 @@ async fn execute_and_handle_tool_call_inner<'a>(
                 }
             );
 
+            let mut t_ctx_local = ToolOutcomeContext {
+                ctx: &mut *ctx,
+                repeated_tool_attempts: &mut *repeated_tool_attempts,
+                turn_modified_files: &mut *turn_modified_files,
+                traj,
+            };
+
             handle_tool_execution_result(
-                t_ctx,
+                &mut t_ctx_local,
                 tool_call_id,
                 tool_name,
                 &args_val,
@@ -471,9 +477,9 @@ async fn execute_and_handle_tool_call_inner<'a>(
 
     let _spinner = if batch_progress_reporter.is_none() {
         Some(crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::with_progress(
-            t_ctx.ctx.handle,
-            t_ctx.ctx.input_status_state.left.clone(),
-            t_ctx.ctx.input_status_state.right.clone(),
+            ctx.handle,
+            ctx.input_status_state.left.clone(),
+            ctx.input_status_state.right.clone(),
             format!("Executing {}...", tool_name),
             Some(&progress_reporter),
         ))
@@ -482,13 +488,13 @@ async fn execute_and_handle_tool_call_inner<'a>(
     };
 
     let progress_reporter_clone = progress_reporter.clone();
-    let handle_clone = t_ctx.ctx.handle.clone();
+    let handle_clone = ctx.handle.clone();
     let is_pty_command = tool_name == vtcode_core::config::constants::tools::RUN_PTY_CMD
         || tool_name == vtcode_core::config::constants::tools::UNIFIED_EXEC
         || tool_name == vtcode_core::config::constants::tools::SEND_PTY_INPUT;
 
-    t_ctx.ctx.tool_registry
-        .set_progress_callback(Arc::new(move |name: String, _output: serde_json::Value| {
+    ctx.tool_registry
+        .set_progress_callback(Arc::new(move |name: &str, output: &str| {
             let reporter = progress_reporter_clone.clone();
             let output_owned = output.to_string();
             let handle = handle_clone.clone();
@@ -532,40 +538,47 @@ async fn execute_and_handle_tool_call_inner<'a>(
             });
         }));
 
-    let tool_execution_start = std::time::Instant::now();
-    let max_tool_retries = resolve_max_tool_retries(tool_name, t_ctx.ctx.vt_cfg);
+     let tool_execution_start = std::time::Instant::now();
+    let max_tool_retries = resolve_max_tool_retries(tool_name, ctx.vt_cfg);
     let tool_result = execute_tool_with_timeout_ref(
-        t_ctx.ctx.tool_registry,
+        ctx.tool_registry,
         tool_name,
         &args_val,
-        t_ctx.ctx.ctrl_c_state,
-        t_ctx.ctx.ctrl_c_notify,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
         Some(&progress_reporter),
         max_tool_retries,
     )
     .await;
 
-    t_ctx.ctx.tool_registry.clear_progress_callback();
+    ctx.tool_registry.clear_progress_callback();
 
     let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);
 
     if let Some(ref key) = cache_key {
         if let crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success { ref output, .. } = pipeline_outcome.status {
              let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
-             let mut cache: tokio::sync::RwLockWriteGuard<'_, crate::agent::runloop::tool_cache::ToolResultCache> = t_ctx.ctx.tool_result_cache.write().await;
+             let mut cache: tokio::sync::RwLockWriteGuard<'_, vtcode_core::tools::ToolResultCache> = ctx.tool_result_cache.write().await;
              cache.insert_arc(key.clone(), Arc::new(output_json));
         }
     }
 
     update_repetition_tracker(
-        t_ctx.repeated_tool_attempts,
+        repeated_tool_attempts,
         &pipeline_outcome,
         tool_name,
         &args_val,
     );
 
+    let mut t_ctx = ToolOutcomeContext {
+        ctx,
+        repeated_tool_attempts,
+        turn_modified_files,
+        traj,
+    };
+
     handle_tool_execution_result(
-        t_ctx,
+        &mut t_ctx,
         tool_call_id,
         tool_name,
         &args_val,

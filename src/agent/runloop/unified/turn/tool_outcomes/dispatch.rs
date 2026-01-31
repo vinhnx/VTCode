@@ -2,13 +2,13 @@ use anyhow::Result;
 use std::sync::Arc;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::parallel_executor::ParallelExecutionPlanner;
-use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingContext};
+use crate::agent::runloop::unified::turn::context::TurnHandlerOutcome;
 use call::handle_tool_call;
 
 mod call;
 
-pub(crate) async fn handle_tool_calls<'a>(
-    t_ctx: &mut super::handlers::ToolOutcomeContext<'a>,
+pub(crate) async fn handle_tool_calls<'a, 'b>(
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a, 'b>,
     tool_calls: &[uni::ToolCall],
 ) -> Result<Option<TurnHandlerOutcome>> {
     if tool_calls.is_empty() {
@@ -27,10 +27,7 @@ pub(crate) async fn handle_tool_calls<'a>(
     let groups = planner.plan(&planner_calls);
 
     for group in groups {
-        let is_parallel = group.len() > 1 && {
-            let inner_ctx = &*t_ctx.ctx;
-            inner_ctx.full_auto
-        };
+        let is_parallel = group.len() > 1 && t_ctx.ctx.full_auto;
         if is_parallel {
             // HP-5: Implement true parallel execution for non-conflicting groups in full-auto mode
             let mut group_tool_calls = Vec::with_capacity(group.len());
