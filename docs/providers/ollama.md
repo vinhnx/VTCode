@@ -13,18 +13,19 @@ Ollama can serve models locally on your machine or proxy larger releases through
 1. **Install Ollama**: Download from [ollama.com](https://ollama.com/download) and follow platform-specific instructions
 2. **Start Ollama server**: Run `ollama serve` in a terminal
 3. **Pull a model**: Choose and download a model to use:
-   ```bash
-   # Popular coding models
-   ollama pull llama3:8b
-   ollama pull codellama:7b
-   ollama pull mistral:7b
-   ollama pull qwen3:1.7b
-   ollama pull deepseek-coder:6.7b
-   ollama pull phind-coder:34b
-   
-   # List available local models
-   ollama list
-   ```
+
+    ```bash
+    # Popular coding models
+    ollama pull llama3:8b
+    ollama pull codellama:7b
+    ollama pull mistral:7b
+    ollama pull qwen3:1.7b
+    ollama pull deepseek-coder:6.7b
+    ollama pull phind-coder:34b
+
+    # List available local models
+    ollama list
+    ```
 
 ## Configuration
 
