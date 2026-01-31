@@ -32,4 +32,4 @@ remove and cleanup old models from vtcode
 
 --
 
-find a way to speedup test
+
