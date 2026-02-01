@@ -8,6 +8,7 @@ use tracing::warn;
 use vtcode_core::utils::dot_config::{
     WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager, load_user_config,
 };
+use vtcode_core::utils::path::canonicalize_workspace;
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
 const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
@@ -43,7 +44,7 @@ pub async fn ensure_workspace_trust(
     workspace: &Path,
     full_auto_requested: bool,
 ) -> Result<WorkspaceTrustGateResult> {
-    let workspace_key = canonicalize_workspace(workspace)?;
+    let workspace_key = canonicalize_workspace(workspace).to_string_lossy().into_owned();
     let config = load_user_config()
         .await
         .context("Failed to load user configuration for trust check")?;
@@ -166,7 +167,7 @@ fn read_user_selection() -> Result<TrustSelection> {
 
 #[allow(dead_code)]
 pub async fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
-    let workspace_key = canonicalize_workspace(workspace)?;
+    let workspace_key = canonicalize_workspace(workspace).to_string_lossy().into_owned();
     let config = load_user_config()
         .await
         .context("Failed to load user configuration for trust lookup")?;
@@ -182,7 +183,7 @@ pub async fn ensure_workspace_trust_level_silent(
     workspace: &Path,
     desired_level: WorkspaceTrustLevel,
 ) -> Result<WorkspaceTrustSyncOutcome> {
-    let workspace_key = canonicalize_workspace(workspace)?;
+    let workspace_key = canonicalize_workspace(workspace).to_string_lossy().into_owned();
     let config = load_user_config()
         .await
         .context("Failed to load user configuration for trust sync")?;
@@ -232,20 +233,6 @@ async fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel)
         })
         .await
         .context("Failed to persist workspace trust decision")
-}
-
-fn canonicalize_workspace(workspace: &Path) -> Result<String> {
-    match workspace.canonicalize() {
-        Ok(canonical) => Ok(canonical.to_string_lossy().into_owned()),
-        Err(error) => {
-            warn!(
-                workspace = %workspace.display(),
-                error = ?error,
-                "Failed to canonicalize workspace path; using provided path as workspace key"
-            );
-            Ok(workspace.to_string_lossy().into_owned())
-        }
-    }
 }
 
 enum PromptTone {

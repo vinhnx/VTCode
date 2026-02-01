@@ -639,12 +639,7 @@ fn should_skip_dir(path: &Path, config: &SimpleIndexerConfig) -> bool {
 
 #[inline]
 fn calculate_hash(content: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = DefaultHasher::new();
-    content.hash(&mut hasher);
-    format!("{:x}", hasher.finish())
+    vtcode_commons::utils::calculate_sha256(content.as_bytes())
 }
 
 #[cfg(test)]

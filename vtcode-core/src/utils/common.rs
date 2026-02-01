@@ -5,24 +5,14 @@
 
 use crate::utils::colors::style;
 use anyhow::Result;
-use regex::Regex;
 use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
 
-/// Get current Unix timestamp in seconds
-///
-/// Returns the number of seconds since the Unix epoch (1970-01-01 00:00:00 UTC).
-/// This is commonly used for timestamping events, cache entries, and logging.
-#[inline]
-pub fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("System time is before Unix epoch")
-        .as_secs()
-}
+pub use vtcode_commons::utils::{
+    current_timestamp, extract_readme_excerpt, extract_toml_str, safe_replace_text,
+};
 
 /// Render PTY output in a terminal-like interface
 pub fn render_pty_output_fn(output: &str, title: &str, command: Option<&str>) -> Result<()> {
@@ -151,51 +141,6 @@ pub async fn build_project_overview(root: &Path) -> Option<ProjectOverview> {
     Some(overview)
 }
 
-/// Extract a string value from a simple TOML key assignment within \[package]
-pub fn extract_toml_str(content: &str, key: &str) -> Option<String> {
-    // Only consider the [package] section to avoid matching other tables
-    let pkg_section = if let Some(start) = content.find("[package]") {
-        let rest = &content[start + "[package]".len()..];
-        // Stop at next section header or end
-        if let Some(_next) = rest.find('\n') {
-            &content[start..]
-        } else {
-            &content[start..]
-        }
-    } else {
-        content
-    };
-
-    // Example target: name = "vtcode"
-    let pattern = format!(r#"(?m)^\s*{}\s*=\s*"([^"]+)"\s*$"#, regex::escape(key));
-    let re = Regex::new(&pattern).ok()?;
-    re.captures(pkg_section)
-        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_owned()))
-}
-
-/// Get the first meaningful section of the README/markdown as an excerpt
-pub fn extract_readme_excerpt(md: &str, max_len: usize) -> String {
-    // Take from start until we pass the first major sections or hit max_len
-    let mut excerpt = String::new();
-    for line in md.lines() {
-        // Stop if we reach a deep section far into the doc
-        if excerpt.len() > max_len {
-            break;
-        }
-        excerpt.push_str(line);
-        excerpt.push('\n');
-        // Prefer stopping after an initial overview section
-        if line.trim().starts_with("## ") && excerpt.len() > (max_len / 2) {
-            break;
-        }
-    }
-    if excerpt.len() > max_len {
-        excerpt.truncate(max_len);
-        excerpt.push_str("...\n");
-    }
-    excerpt
-}
-
 /// Summarize workspace languages
 pub fn summarize_workspace_languages(root: &std::path::Path) -> Option<String> {
     use indexmap::IndexMap;
@@ -231,21 +176,4 @@ pub fn summarize_workspace_languages(root: &std::path::Path) -> Option<String> {
         parts.sort();
         Some(parts.join(", "))
     }
-}
-
-/// Safe text replacement with validation
-pub fn safe_replace_text(
-    content: &str,
-    old_str: &str,
-    new_str: &str,
-) -> Result<String, anyhow::Error> {
-    if old_str.is_empty() {
-        return Err(anyhow::anyhow!("old_string cannot be empty"));
-    }
-
-    if !content.contains(old_str) {
-        return Err(anyhow::anyhow!("Text '{}' not found in file", old_str));
-    }
-
-    Ok(content.replace(old_str, new_str))
 }

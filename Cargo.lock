@@ -6370,8 +6370,20 @@ dependencies = [
 name = "vtcode-commons"
 version = "0.74.7"
 dependencies = [
+ "anstyle",
  "anyhow",
+ "base64",
+ "futures",
+ "glob",
+ "once_cell",
  "rand",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -6561,6 +6573,7 @@ dependencies = [
  "regex",
  "serde",
  "tempfile",
+ "vtcode-commons",
 ]
 
 [[package]]
