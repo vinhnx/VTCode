@@ -148,7 +148,7 @@ for operation in &operations {
 
 ## Code Intelligence Tool
 
-The `code_intelligence` tool exposes tree-sitter code navigation features to the LLM agent, providing LSP-like capabilities without requiring external language servers.
+The `code_intelligence` tool exposes tree-sitter code navigation features to the LLM agent, providing code navigation capabilities using tree-sitter parsing.
 
 ### Available Operations
 
@@ -413,7 +413,6 @@ RUST_LOG=tree_sitter=debug cargo run -- analyze --depth deep
 ### Planned Features
 
 - **Incremental parsing** for real-time analysis
-- **Language server protocol** integration
 - **Research-preview refactoring** with AI assistance
 - **Code generation** from analysis results
 - **Cross-language analysis** for polyglot projects

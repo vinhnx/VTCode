@@ -13,7 +13,7 @@ The agent should primarily use these 3 unified tools, which handle multiple acti
 - **Primary Actions**:
   - `action='grep'` - Regex/literal search in files
   - `action='list'` - List files and directories
-  - `action='intelligence'` - LSP-based code navigation (goto_definition, find_references, hover)
+  - `action='intelligence'` - Tree-sitter code navigation (goto_definition, find_references, hover)
   - `action='tools'` - Discover available tools
   - `action='errors'` - Get session errors
   - `action='agent'` - Agent diagnostics

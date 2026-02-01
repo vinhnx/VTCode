@@ -191,7 +191,7 @@ Understanding these patterns requires reading multiple files across the codebase
 ### Code Intelligence Tool
 
 - **Location**: `vtcode-core/src/tools/code_intelligence.rs`
-- **Purpose**: LSP-like code navigation using tree-sitter
+- **Purpose**: Code navigation using tree-sitter
 - **Operations**:
     - `goto_definition`: Find where a symbol is defined
     - `find_references`: Find all references to a symbol

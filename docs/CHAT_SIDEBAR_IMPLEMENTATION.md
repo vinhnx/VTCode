@@ -341,7 +341,6 @@ interface VtcodeResponse {
 ### Long Term
 
 -   [ ] VS Code Chat API integration
--   [ ] Language server protocol support
 -   [ ] Real-time collaboration
 -   [ ] Cloud sync capabilities
 -   [ ] Mobile companion app

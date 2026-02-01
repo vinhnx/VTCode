@@ -268,7 +268,7 @@ If you deploy VT Code as a plugin, sub-agents improve integration:
 
 1. **VSCode Extension** (`.vscode-extension/`): Can request specific sub-agents
 2. **Zed Extension** (`.zed-extension/`): Uses ACP protocol for agent delegation
-3. **Language Server** Effects: LSP-like code intelligence calls sub-agents
+3. **Code Intelligence**: Tree-sitter navigation calls sub-agents for analysis
 
 Update your extension integrations to explicitly invoke sub-agents:
 

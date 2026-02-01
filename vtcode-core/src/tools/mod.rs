@@ -148,7 +148,6 @@ pub mod grep_cache;
 pub mod grep_file;
 pub mod handlers;
 pub mod invocation;
-pub mod lsp;
 pub mod mcp;
 pub mod names;
 pub mod path_env;
@@ -229,7 +228,7 @@ pub use grep_file::GrepSearchManager;
 pub use invocation::{
     InvocationBuilder, ToolInvocation as UnifiedToolInvocation, ToolInvocationId,
 };
-pub use lsp::LspTool;
+
 pub use optimized_registry::{OptimizedToolRegistry, ToolMetadata as OptimizedToolMetadata};
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};

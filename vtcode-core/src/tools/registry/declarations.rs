@@ -406,7 +406,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "action": {
                         "type": "string",
                         "enum": ["grep", "list", "intelligence", "tools", "errors", "agent", "web", "skill"],
-                        "description": "Action to perform. 'grep' (regex search), 'list' (file listing), 'intelligence' (LSP navigation), 'tools' (find tools), 'errors' (session errors), 'agent' (status), 'web' (fetch URL), 'skill' (load skill)."
+                        "description": "Action to perform. 'grep' (regex search), 'list' (file listing), 'intelligence' (code navigation), 'tools' (find tools), 'errors' (session errors), 'agent' (status), 'web' (fetch URL), 'skill' (load skill)."
                     },
                     "pattern": {"type": "string", "description": "Regex or literal pattern for 'grep' or 'errors' search."},
                     "path": {"type": "string", "description": "Directory or file path to search in.", "default": "."},

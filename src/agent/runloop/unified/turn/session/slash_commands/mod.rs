@@ -30,7 +30,7 @@ use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason};
 
 pub mod handlers;
-pub mod lsp;
+
 
 pub enum SlashCommandControl {
     Continue,
@@ -110,7 +110,7 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ClearConversation => handlers::handle_clear_conversation(ctx).await,
         SlashCommandOutcome::ShowStatus => handlers::handle_show_status(ctx).await,
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
-        SlashCommandOutcome::ManageLsp { action } => lsp::handle_manage_lsp(ctx, action).await,
+
         SlashCommandOutcome::RunDoctor => handlers::handle_run_doctor(ctx).await,
         SlashCommandOutcome::StartTerminalSetup => handlers::handle_start_terminal_setup(ctx).await,
         SlashCommandOutcome::ManageWorkspaceDirectories { command } => {
