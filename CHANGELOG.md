@@ -2,6 +2,11 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.5 - 2026-02-01
+
+* Update CI (c9cf0a74)
+* chore: update homebrew formula to v0.74.4 (1dbb0e27)
+
 ## v0.74.4 - 2026-02-01
 
 * Fix: Skip hanging GitHub CLI refresh in build script (c77bb4aa)
