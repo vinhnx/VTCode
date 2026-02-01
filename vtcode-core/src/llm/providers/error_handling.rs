@@ -69,7 +69,7 @@ pub async fn handle_openai_http_error(
 
 /// Parse Anthropic error response to extract friendly message
 /// Returns Cow to avoid allocation when returning error_text directly
-fn _parse_anthropic_error_message(error_text: &str) -> Cow<'_, str> {
+fn parse_anthropic_error_message(error_text: &str) -> Cow<'_, str> {
     if let Ok(error_json) = serde_json::from_str::<Value>(error_text) {
         if let Some(message) = error_json
             .get("error")

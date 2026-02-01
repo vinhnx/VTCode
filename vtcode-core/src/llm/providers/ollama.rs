@@ -33,7 +33,7 @@ pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 use semver::Version;
 
 use super::common::{
-    convert_usage_to_llm_types, override_base_url, parse_client_prompt_common, resolve_model,
+    override_base_url, parse_client_prompt_common, resolve_model,
 };
 use super::error_handling::{format_network_error, format_parse_error};
 

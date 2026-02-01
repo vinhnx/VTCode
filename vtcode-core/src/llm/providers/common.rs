@@ -572,7 +572,7 @@ where
         let reasoning_details = message
             .get("reasoning_details")
             .and_then(|rd| rd.as_str())
-            .map(|s| vec![serde_json::json!(s)]);
+            .map(|s| vec![s.to_string()]);
 
         (reasoning, reasoning_details)
     };

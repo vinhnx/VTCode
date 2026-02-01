@@ -167,7 +167,7 @@ pub fn parse_responses_payload(
     let reasoning_details = if reasoning_items.is_empty() {
         None
     } else {
-        Some(reasoning_items)
+        Some(reasoning_items.into_iter().map(|v| v.to_string()).collect())
     };
 
     let finish_reason = if !tool_calls_vec.is_empty() {

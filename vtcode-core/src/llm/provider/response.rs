@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
-pub use vtcode_commons::llm::{FinishReason, LLMError, LLMErrorMetadata, LLMResponse, Usage};
-use super::ToolCall;
+pub use vtcode_commons::llm::{FinishReason, LLMError, LLMResponse, Usage};
+
 
 #[derive(Debug, Clone)]
 pub enum LLMStreamEvent {

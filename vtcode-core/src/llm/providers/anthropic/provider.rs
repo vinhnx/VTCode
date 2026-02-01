@@ -286,8 +286,8 @@ impl AnthropicProvider {
         request_builder::convert_to_anthropic_format(request, &self.request_builder_context())
     }
 
-    fn parse_anthropic_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
-        response_parser::parse_response(response_json)
+    fn parse_anthropic_response(&self, response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
+        response_parser::parse_response(response_json, model)
     }
 }
 
@@ -451,7 +451,7 @@ impl LLMClient for AnthropicProvider {
         let response = LLMProvider::generate(self, request).await?;
 
         Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or_default(),
+            content: Some(response.content.unwrap_or_default()),
             model: request_model,
             usage: response
                 .usage
@@ -460,6 +460,9 @@ impl LLMClient for AnthropicProvider {
             reasoning_details: response.reasoning_details,
             request_id: response.request_id,
             organization_id: response.organization_id,
+            finish_reason: response.finish_reason,
+            tool_calls: response.tool_calls,
+            tool_references: response.tool_references,
         })
     }
 

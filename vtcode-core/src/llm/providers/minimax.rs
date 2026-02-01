@@ -7,14 +7,13 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    Message, Usage,
 };
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client as HttpClient;
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use super::common::{override_base_url, resolve_model};
 use super::error_handling::{format_network_error, format_parse_error};
@@ -246,6 +245,25 @@ impl LLMProvider for MinimaxProvider {
         };
 
         Ok(Box::pin(stream))
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec![
+            "abab6.5s-chat".to_string(),
+            "abab6.5-chat".to_string(),
+            "abab5.5s-chat".to_string(),
+            "abab5.5-chat".to_string(),
+        ]
+    }
+
+    fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
+        if request.messages.is_empty() {
+            return Err(LLMError::InvalidRequest {
+                message: "Messages cannot be empty".to_string(),
+                metadata: None,
+            });
+        }
+        Ok(())
     }
 }
 

@@ -106,7 +106,7 @@ impl LLMClient for OpenAIProvider {
         let response = provider::LLMProvider::generate(self, request).await?;
 
         Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or_default(),
+            content: Some(response.content.unwrap_or_default()),
             model: request_model,
             usage: response
                 .usage
@@ -115,6 +115,9 @@ impl LLMClient for OpenAIProvider {
             reasoning_details: response.reasoning_details,
             request_id: response.request_id,
             organization_id: response.organization_id,
+            finish_reason: response.finish_reason,
+            tool_calls: response.tool_calls,
+            tool_references: response.tool_references,
         })
     }
 
