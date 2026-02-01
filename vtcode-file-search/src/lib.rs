@@ -34,7 +34,6 @@ use serde::Serialize;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::num::NonZero;
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -71,24 +70,7 @@ pub struct FileSearchConfig {
     pub respect_gitignore: bool,
 }
 
-/// Extract the filename from a path, with fallback to the full path.
-///
-/// # Examples
-///
-/// ```
-/// use vtcode_file_search::file_name_from_path;
-///
-/// assert_eq!(file_name_from_path("src/main.rs"), "main.rs");
-/// assert_eq!(file_name_from_path("Cargo.toml"), "Cargo.toml");
-/// assert_eq!(file_name_from_path("/absolute/path/file.txt"), "file.txt");
-/// ```
-pub fn file_name_from_path(path: &str) -> String {
-    Path::new(path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| path.to_string())
-}
+pub use vtcode_commons::paths::file_name_from_path;
 
 /// Best matches list per worker thread (lock-free collection).
 ///

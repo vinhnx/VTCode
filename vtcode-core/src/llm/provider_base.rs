@@ -114,11 +114,13 @@ pub trait OpenAICompatibleProvider: Send + Sync {
     fn parse_openai_response(
         &self,
         response: Value,
+        model: String,
         include_cache: bool,
     ) -> Result<crate::llm::provider::LLMResponse> {
         crate::llm::utils::parse_response_openai_format(
             response,
             self.provider_name(),
+            model,
             include_cache,
             None,
         )

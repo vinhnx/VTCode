@@ -528,10 +528,10 @@ impl SubagentRunner {
         debug!(
             "Subagent completed: {} output tokens, {} chars response",
             tokens.output_tokens,
-            response.content.len()
+            response.content_text().len()
         );
 
-        Ok((response.content, 1, tokens))
+        Ok((response.content_string(), 1, tokens))
     }
 }
 

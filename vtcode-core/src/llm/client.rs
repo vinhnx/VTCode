@@ -50,24 +50,7 @@ impl LLMClient for ProviderClientAdapter {
             model: self.model_id.clone(),
             ..Default::default()
         };
-        let provider_response = self.provider.generate(request).await?;
-        // Convert provider::LLMResponse to types::LLMResponse
-        Ok(LLMResponse {
-            content: provider_response.content.unwrap_or_default(),
-            model: self.model_id.clone(),
-            usage: provider_response.usage.map(|u| super::types::Usage {
-                prompt_tokens: u.prompt_tokens as usize,
-                completion_tokens: u.completion_tokens as usize,
-                total_tokens: u.total_tokens as usize,
-                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
-                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
-                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
-            }),
-            reasoning: provider_response.reasoning,
-            reasoning_details: provider_response.reasoning_details,
-            request_id: provider_response.request_id,
-            organization_id: provider_response.organization_id,
-        })
+        Ok(self.provider.generate(request).await?)
     }
 
     fn backend_kind(&self) -> BackendKind {

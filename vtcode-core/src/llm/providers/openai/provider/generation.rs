@@ -25,6 +25,7 @@ impl OpenAIProvider {
         if request.model.trim().is_empty() {
             request.model = self.model.to_string();
         }
+        let model = request.model.clone();
 
         if !self.supports_parallel_tool_config(&request.model) {
             request.parallel_tool_config = None;
@@ -135,7 +136,7 @@ impl OpenAIProvider {
                                         }
                                     })?;
                                 let response =
-                                    self.parse_openai_responses_response(openai_response)?;
+                                    self.parse_openai_responses_response(openai_response, model.clone())?;
                                 return Ok(response);
                             }
                         }
@@ -170,7 +171,7 @@ impl OpenAIProvider {
                     }
                 })?;
 
-                let response = self.parse_openai_responses_response(openai_response)?;
+                let response = self.parse_openai_responses_response(openai_response, model.clone())?;
                 #[cfg(debug_assertions)]
                 {
                     let content_len = response.content.as_ref().map_or(0, |c| c.len());
@@ -204,6 +205,7 @@ impl OpenAIProvider {
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         #[cfg(debug_assertions)]
         let request_timer = Instant::now();
+        let model = request.model.clone();
         let openai_request = self.convert_to_openai_format(request)?;
         let url = format!("{}/chat/completions", self.base_url);
 
@@ -250,7 +252,7 @@ impl OpenAIProvider {
             }
         })?;
 
-        let response = self.parse_openai_response(openai_response)?;
+        let response = self.parse_openai_response(openai_response, model.clone())?;
         #[cfg(debug_assertions)]
         {
             let content_len = response.content.as_ref().map_or(0, |c| c.len());

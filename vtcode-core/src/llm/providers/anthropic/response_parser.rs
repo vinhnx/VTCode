@@ -1,5 +1,5 @@
 //! Response parsing for Anthropic Claude API
-//!
+//! 
 //! Converts Anthropic API JSON responses into internal LLMResponse format,
 //! handling:
 //! - Text content extraction
@@ -13,7 +13,7 @@ use crate::llm::provider::{FinishReason, LLMError, LLMResponse, ToolCall, Usage}
 use crate::llm::providers::extract_reasoning_trace;
 use serde_json::{Value, json};
 
-pub fn parse_response(response_json: Value) -> Result<LLMResponse, LLMError> {
+pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
     let content = response_json
         .get("content")
         .and_then(|c| c.as_array())
@@ -65,31 +65,27 @@ pub fn parse_response(response_json: Value) -> Result<LLMResponse, LLMError> {
                 if name == "structured_output" {
                     let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
                     let output_text =
-                        serde_json::to_string(&input).unwrap_or_else(|_| "{}".to_string());
+                        serde_json::to_string(&input).unwrap_or_else(|_| "{{}}".to_string());
                     text_parts.push(output_text);
                 } else {
                     let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
                     let arguments =
-                        serde_json::to_string(&input).unwrap_or_else(|_| "{}".to_string());
+                        serde_json::to_string(&input).unwrap_or_else(|_| "{{}}".to_string());
                     if !id.is_empty() && !name.is_empty() {
                         tool_calls.push(ToolCall::function(id, name, arguments));
                     }
                 }
             }
-            Some("server_tool_use") => {}
+            Some("server_tool_use") => {} // No-op
             Some("tool_search_tool_result") => {
                 if let Some(content_block) = block.get("content") {
-                    if content_block.get("type").and_then(|t| t.as_str())
-                        == Some("tool_search_tool_search_result")
-                    {
+                    if content_block.get("type").and_then(|t| t.as_str()) == Some("tool_search_tool_search_result") {
                         if let Some(refs) = content_block
                             .get("tool_references")
-                            .and_then(|r| r.as_array())
-                        {
+                            .and_then(|r| r.as_array()) {
                             for tool_ref in refs {
                                 if let Some(tool_name) =
-                                    tool_ref.get("tool_name").and_then(|n| n.as_str())
-                                {
+                                    tool_ref.get("tool_name").and_then(|n| n.as_str()) {
                                     tool_references.push(tool_name.to_string());
                                 }
                             }
@@ -97,7 +93,7 @@ pub fn parse_response(response_json: Value) -> Result<LLMResponse, LLMError> {
                     }
                 }
             }
-            _ => {}
+            _ => {} // Ignore unknown block types
         }
     }
 
@@ -134,6 +130,7 @@ pub fn parse_response(response_json: Value) -> Result<LLMResponse, LLMError> {
         } else {
             Some(tool_calls)
         },
+        model,
         usage,
         finish_reason,
         reasoning,

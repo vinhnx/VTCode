@@ -8,6 +8,7 @@ use serde_json::Value;
 
 pub(crate) fn parse_chat_response(
     response_json: Value,
+    model: String,
     include_cached_prompt_tokens: bool,
 ) -> Result<provider::LLMResponse, provider::LLMError> {
     let choices = response_json
@@ -97,6 +98,7 @@ pub(crate) fn parse_chat_response(
     Ok(provider::LLMResponse {
         content,
         tool_calls,
+        model,
         usage: response_json.get("usage").map(|usage_value| {
             let cached_prompt_tokens = if include_cached_prompt_tokens {
                 usage_value

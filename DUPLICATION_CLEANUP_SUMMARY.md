@@ -57,6 +57,13 @@ This document summarizes the refactoring performed to eliminate duplicated and r
 - **Trait-based Shell Runner**: Refactored `ShellRunner` to support pluggable execution strategies (`System`, `DryRun`).
 - **Standardized Shell Handler**: Refactored `ShellHandler` to use the unified `ShellRunner` and `ToolResponseBuilder`.
 
+### Phase 7: Shared Foundation & LLM Unification
+- **Expanded `vtcode-commons`**: Migrated nearly 2,000 lines of generic utilities (Async, ANSI, Path security, File filtering, Image processing, Hashing) from `vtcode-core` to `vtcode-commons`.
+- **Unified LLM Streaming**: Introduced `StreamAggregator` to centralize the complex state management of streaming tokens, reasoning blocks, and tool calls.
+- **Provider Refactoring**: Standardized `OpenAI`, `Anthropic`, `Gemini`, `DeepSeek`, `Ollama`, `HuggingFace`, `ZAI`, `XAI`, and `OpenRouter` streaming implementations using the new shared aggregator pattern.
+- **Security Hardening**: Centralized path security checks (`is_safe_relative_path`) and standardized hashing (`sha256`) across the entire workspace.
+- **Regex Unification**: Centralized `@` pattern parsing for file and image inclusion using a shared, lazy-compiled regex engine.
+
 ## Impact Summary
 
 ### Code Reduction

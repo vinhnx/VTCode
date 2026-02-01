@@ -22,6 +22,7 @@ impl OpenAIProvider {
         if request.model.trim().is_empty() {
             request.model = self.model.to_string();
         }
+        let model = request.model.clone();
 
         if !self.supports_parallel_tool_config(&request.model) {
             request.parallel_tool_config = None;
@@ -158,6 +159,7 @@ impl OpenAIProvider {
 
         Ok(stream_decoder::create_responses_stream(
             response,
+            model,
             include_metrics,
             debug_model,
             request_timer,
@@ -174,6 +176,7 @@ impl OpenAIProvider {
             model = %request.model,
             "Using standard Chat Completions for streaming"
         );
+        let model = request.model.clone();
         let mut openai_request = self.convert_to_openai_format(request)?;
         openai_request["stream"] = Value::Bool(true);
         // Request usage stats in the stream (compatible with newer OpenAI models)
@@ -216,6 +219,6 @@ impl OpenAIProvider {
             });
         }
 
-        Ok(stream_decoder::create_chat_stream(response))
+        Ok(stream_decoder::create_chat_stream(response, model))
     }
 }

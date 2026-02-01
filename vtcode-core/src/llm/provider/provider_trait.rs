@@ -1,6 +1,7 @@
 use async_stream::try_stream;
 use async_trait::async_trait;
 
+pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 use super::{LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
 
 /// Universal LLM provider trait
@@ -74,107 +75,4 @@ pub trait LLMProvider: Send + Sync {
     /// Validate request for this provider
     #[allow(clippy::result_large_err)]
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError>;
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LLMErrorMetadata {
-    pub provider: &'static str,
-    pub status: Option<u16>,
-    pub code: Option<String>,
-    pub request_id: Option<String>,
-    pub organization_id: Option<String>,
-    pub retry_after: Option<String>,
-    pub message: Option<String>,
-}
-
-impl LLMErrorMetadata {
-    pub fn new(
-        provider: &'static str,
-        status: Option<u16>,
-        code: Option<String>,
-        request_id: Option<String>,
-        organization_id: Option<String>,
-        retry_after: Option<String>,
-        message: Option<String>,
-    ) -> Box<Self> {
-        Box::new(Self {
-            provider,
-            status,
-            code,
-            request_id,
-            organization_id,
-            retry_after,
-            message,
-        })
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[allow(clippy::result_large_err)]
-pub enum LLMError {
-    #[error("Authentication failed: {message}")]
-    Authentication {
-        message: String,
-        metadata: Option<Box<LLMErrorMetadata>>,
-    },
-    #[error("Rate limit exceeded")]
-    RateLimit {
-        metadata: Option<Box<LLMErrorMetadata>>,
-    },
-    #[error("Invalid request: {message}")]
-    InvalidRequest {
-        message: String,
-        metadata: Option<Box<LLMErrorMetadata>>,
-    },
-    #[error("Network error: {message}")]
-    Network {
-        message: String,
-        metadata: Option<Box<LLMErrorMetadata>>,
-    },
-    #[error("Provider error: {message}")]
-    Provider {
-        message: String,
-        metadata: Option<Box<LLMErrorMetadata>>,
-    },
-}
-
-impl From<LLMError> for crate::llm::types::LLMError {
-    fn from(err: LLMError) -> crate::llm::types::LLMError {
-        let convert = |meta: Option<Box<LLMErrorMetadata>>| {
-            meta.map(|m| crate::llm::types::LLMErrorMetadata {
-                provider: Some(m.provider.to_string()),
-                status: m.status,
-                code: m.code,
-                request_id: m.request_id,
-                organization_id: m.organization_id,
-                retry_after: m.retry_after,
-                message: m.message,
-            })
-        };
-        match err {
-            LLMError::Authentication { message, metadata } => {
-                crate::llm::types::LLMError::ApiError {
-                    message,
-                    metadata: convert(metadata),
-                }
-            }
-            LLMError::RateLimit { metadata } => crate::llm::types::LLMError::RateLimit {
-                metadata: convert(metadata),
-            },
-            LLMError::InvalidRequest { message, metadata } => {
-                crate::llm::types::LLMError::InvalidRequest {
-                    message,
-                    metadata: convert(metadata),
-                }
-            }
-            LLMError::Network { message, metadata } => crate::llm::types::LLMError::NetworkError {
-                message,
-                metadata: convert(metadata),
-            },
-            LLMError::Provider { message, metadata } => crate::llm::types::LLMError::ApiError {
-                message,
-                metadata: convert(metadata),
-            },
-        }
-    }
 }

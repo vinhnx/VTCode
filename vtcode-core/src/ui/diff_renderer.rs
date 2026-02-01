@@ -427,7 +427,7 @@ impl DiffRenderer {
     }
 
     pub fn generate_diff(&self, old_content: &str, new_content: &str, file_path: &str) -> FileDiff {
-        let bundle = crate::utils::diff::compute_diff(
+        let bundle = crate::utils::diff::compute_diff_with_theme(
             old_content,
             new_content,
             crate::utils::diff::DiffOptions {

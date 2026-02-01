@@ -84,6 +84,15 @@ pub fn is_safe_relative_path(path: &str) -> bool {
     true
 }
 
+/// Extract the filename from a path, with fallback to the full path.
+pub fn file_name_from_path(path: &str) -> String {
+    Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| path.to_string())
+}
+
 /// Provides the root directories an application uses to store data.
 pub trait WorkspacePaths: Send + Sync {
     /// Absolute path to the application's workspace root.

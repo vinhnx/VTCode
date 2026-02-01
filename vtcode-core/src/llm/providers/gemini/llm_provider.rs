@@ -11,41 +11,31 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
-        // Gemini 2.5 models support thinking/reasoning capability
-        // Reference: https://ai.google.dev/gemini-api/docs/models
         models::google::REASONING_MODELS.contains(&model)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
-        // All Gemini 3 and Gemini 2.5 models support configurable thinking_level
-        // Reference: https://ai.google.dev/gemini-api/docs/gemini-3
-        // Gemini 3 Pro/Flash: supports thinking_level (low, high)
-        // Gemini 3 Flash: additionally supports minimal, medium
-        // Gemini 2.5: supports thinking_level for reasoning models
         models::google::REASONING_MODELS.contains(&model)
     }
 
     fn supports_context_caching(&self, model: &str) -> bool {
-        // Context caching supported on all Gemini 3 and most Gemini 2.5 models
-        // Requires minimum 2048 cached tokens
-        // Reference: https://ai.google.dev/gemini-api/docs/caching
         models::google::CACHING_MODELS.contains(&model)
     }
 
     fn effective_context_size(&self, model: &str) -> usize {
-        // Gemini 3 and Gemini 2.5 models have 1M input context window
         if model.contains("2.5")
             || model.contains("3")
             || model.contains("2.0")
             || model.contains("1.5-pro")
         {
-            2_097_152 // 2M tokens for Gemini 1.5 Pro, 2.x and 3.x models
+            2_097_152
         } else {
-            1_048_576 // 1M tokens for other current models
+            1_048_576
         }
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let model = request.model.clone();
         let gemini_request = self.convert_to_gemini_request(&request)?;
 
         let url = format!("{}/models/{}:generateContent", self.base_url, request.model);
@@ -70,10 +60,11 @@ impl LLMProvider for GeminiProvider {
             .await
             .map_err(|e| format_parse_error("Gemini", &e))?;
 
-        Self::convert_from_gemini_response(gemini_response)
+        Self::convert_from_gemini_response(gemini_response, model)
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
+        let model = request.model.clone();
         let gemini_request = self.convert_to_gemini_request(&request)?;
 
         let url = format!(
@@ -101,12 +92,12 @@ impl LLMProvider for GeminiProvider {
 
         let streaming_timeout = self.timeouts.streaming_ceiling_seconds;
 
+        let model_clone = model.clone();
         tokio::spawn(async move {
             let config = StreamingConfig::with_total_timeout(streaming_timeout);
             let mut processor = StreamingProcessor::with_config(config);
             let event_sender = completion_sender.clone();
-            let mut aggregated_text = String::new();
-            let mut _reasoning_buffer = crate::llm::providers::ReasoningBuffer::default();
+            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
 
             #[allow(clippy::collapsible_if)]
             let mut on_chunk = |chunk: &str| -> Result<(), StreamingError> {
@@ -114,37 +105,18 @@ impl LLMProvider for GeminiProvider {
                     return Ok(());
                 }
 
-                if let Some(delta) = Self::apply_stream_delta(&mut aggregated_text, chunk) {
+                if let Some(delta) = Self::apply_stream_delta(&mut aggregator.content, chunk) {
                     if delta.is_empty() {
                         return Ok(());
                     }
 
-                    // Split any reasoning content from the delta
-                    let (reasoning_segments, cleaned_delta) =
-                        crate::llm::providers::split_reasoning_from_text(&delta);
-
-                    // Send any extracted reasoning content
-                    for segment in reasoning_segments {
-                        if !segment.is_empty() {
-                            event_sender
-                                .send(Ok(LLMStreamEvent::Reasoning { delta: segment }))
-                                .map_err(|_| StreamingError::StreamingError {
-                                    message: "Streaming consumer dropped".to_string(),
-                                    partial_content: Some(chunk.to_string()),
-                                })?;
-                        }
-                    }
-
-                    // Send the cleaned content if any remains
-                    if let Some(cleaned) = cleaned_delta {
-                        if !cleaned.is_empty() {
-                            event_sender
-                                .send(Ok(LLMStreamEvent::Token { delta: cleaned }))
-                                .map_err(|_| StreamingError::StreamingError {
-                                    message: "Streaming consumer dropped".to_string(),
-                                    partial_content: Some(chunk.to_string()),
-                                })?;
-                        }
+                    for event in aggregator.sanitizer.process_chunk(&delta) {
+                        event_sender.send(Ok(event)).map_err(|_| {
+                            StreamingError::StreamingError {
+                                message: "Streaming consumer dropped".to_string(),
+                                partial_content: Some(chunk.to_string()),
+                            }
+                        })?;
                     }
                 }
                 Ok(())
@@ -154,13 +126,13 @@ impl LLMProvider for GeminiProvider {
             match result {
                 Ok(mut streaming_response) => {
                     if streaming_response.candidates.is_empty()
-                        && !aggregated_text.trim().is_empty()
+                        && !aggregator.content.trim().is_empty()
                     {
                         streaming_response.candidates.push(StreamingCandidate {
                             content: Content {
                                 role: "model".to_string(),
                                 parts: vec![Part::Text {
-                                    text: aggregated_text.clone(),
+                                    text: aggregator.content.clone(),
                                     thought_signature: None,
                                 }],
                             },
@@ -169,8 +141,16 @@ impl LLMProvider for GeminiProvider {
                         });
                     }
 
-                    match Self::convert_from_streaming_response(streaming_response) {
-                        Ok(final_response) => {
+                    match Self::convert_from_streaming_response(streaming_response, model_clone) {
+                        Ok(mut final_response) => {
+                            let aggregator_response = aggregator.finalize();
+                            if final_response.reasoning.is_none() {
+                                final_response.reasoning = aggregator_response.reasoning;
+                            }
+                            if final_response.content.is_none() {
+                                final_response.content = aggregator_response.content;
+                            }
+
                             let _ = completion_sender.send(Ok(LLMStreamEvent::Completed {
                                 response: Box::new(final_response),
                             }));
@@ -202,7 +182,6 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        // Order: stable models first, then preview/experimental
         models::google::SUPPORTED_MODELS
             .iter()
             .map(|s| s.to_string())
@@ -224,13 +203,12 @@ impl LLMProvider for GeminiProvider {
             });
         }
 
-        // Validate token limits based on model capabilities
         if let Some(max_tokens) = request.max_tokens {
             let model = request.model.as_str();
             let max_output_tokens = if model.contains("2.5") || model.contains("3") {
-                65536 // Gemini 2.5 and 3 models support 65K output tokens
+                65536
             } else {
-                8192 // Conservative default
+                8192
             };
 
             if max_tokens > max_output_tokens {

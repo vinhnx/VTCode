@@ -6371,17 +6371,21 @@ name = "vtcode-commons"
 version = "0.74.7"
 dependencies = [
  "anstyle",
+ "anstyle-crossterm 4.0.2",
+ "anstyle-query",
  "anyhow",
  "base64",
  "futures",
  "glob",
  "once_cell",
  "rand",
+ "ratatui 0.30.0",
  "regex",
  "reqwest",
  "serde",
  "serde_json",
  "sha2",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
@@ -6547,6 +6551,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "uuid",
+ "vtcode-commons",
 ]
 
 [[package]]
@@ -6562,6 +6567,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "vtcode-commons",
 ]
 
 [[package]]

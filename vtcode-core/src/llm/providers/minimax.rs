@@ -1,51 +1,38 @@
-#![allow(clippy::collapsible_if, clippy::result_large_err)]
+#![allow(clippy::result_large_err)]
 
-use super::AnthropicProvider;
 use crate::config::TimeoutsConfig;
-use crate::config::constants::models;
+use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
+use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    ToolCall, ToolDefinition,
+    Message, Usage,
 };
+use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
-use once_cell::sync::Lazy;
-use regex::Regex;
+use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
-use std::collections::HashMap;
 
-const TOOL_CALL_BLOCK_PATTERN: &str = r"(?s)<minimax:tool_call>(.*?)</minimax:tool_call>";
-const INVOKE_BLOCK_PATTERN: &str = r#"(?s)<invoke\s+name=("[^"]*"|'[^']*'|[^\s>]+)>(.*?)</invoke>"#;
-const PARAMETER_BLOCK_PATTERN: &str =
-    r#"(?s)<parameter\s+name=("[^"]*"|'[^']*'|[^\s>]+)>(.*?)</parameter>"#;
+use super::common::{override_base_url, resolve_model};
+use super::error_handling::{format_network_error, format_parse_error};
 
 pub struct MinimaxProvider {
-    inner: AnthropicProvider,
+    http_client: HttpClient,
+    base_url: String,
+    model: String,
+    api_key: String,
 }
 
 impl MinimaxProvider {
-    pub fn from_config(
-        api_key: Option<String>,
-        model: Option<String>,
-        base_url: Option<String>,
-        prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
-        anthropic: Option<AnthropicConfig>,
-    ) -> Self {
-        let effective_model = model.unwrap_or_else(|| models::minimax::MINIMAX_M2_1.to_string());
+    pub fn new(api_key: String) -> Self {
+        Self::with_model(api_key, models::minimax::DEFAULT_MODEL.to_string())
+    }
 
-        let inner = AnthropicProvider::from_config(
-            api_key,
-            Some(effective_model),
-            base_url,
-            prompt_cache,
-            timeouts,
-            anthropic,
-        );
-        Self { inner }
+    pub fn with_model(api_key: String, model: String) -> Self {
+        Self::with_model_internal(model, None, api_key)
     }
 
     pub fn new_with_client(
@@ -53,11 +40,68 @@ impl MinimaxProvider {
         model: String,
         http_client: reqwest::Client,
         base_url: String,
-        timeouts: TimeoutsConfig,
+        _timeouts: TimeoutsConfig,
     ) -> Self {
-        let inner =
-            AnthropicProvider::new_with_client(api_key, model, http_client, base_url, timeouts);
-        Self { inner }
+        Self {
+            http_client,
+            base_url,
+            model,
+            api_key,
+        }
+    }
+
+    pub fn from_config(
+        api_key: Option<String>,
+        model: Option<String>,
+        base_url: Option<String>,
+        _prompt_cache: Option<PromptCachingConfig>,
+        _timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
+    ) -> Self {
+        let api_key_value = api_key.unwrap_or_default();
+        let resolved_model = resolve_model(model, models::minimax::DEFAULT_MODEL);
+        Self::with_model_internal(resolved_model, base_url, api_key_value)
+    }
+
+    fn with_model_internal(model: String, base_url: Option<String>, api_key: String) -> Self {
+        Self {
+            http_client: HttpClient::new(),
+            base_url: override_base_url(
+                urls::MINIMAX_API_BASE,
+                base_url,
+                Some(env_vars::MINIMAX_BASE_URL),
+            ),
+            model,
+            api_key,
+        }
+    }
+
+    fn chat_url(&self) -> String {
+        format!("{}/chat/completions", self.base_url.trim_end_matches('/'))
+    }
+
+    fn build_payload(&self, request: &LLMRequest, stream: bool) -> Result<Value, LLMError> {
+        let mut messages = Vec::new();
+
+        if let Some(system) = &request.system_prompt {
+            messages.push(serde_json::json!({
+                "role": "system",
+                "content": system
+            }));
+        }
+
+        for message in &request.messages {
+            messages.push(serde_json::json!({
+                "role": message.role.as_generic_str(),
+                "content": message.content.as_text()
+            }));
+        }
+
+        Ok(serde_json::json!({
+            "model": request.model,
+            "messages": messages,
+            "stream": stream
+        }))
     }
 }
 
@@ -67,358 +111,63 @@ impl LLMProvider for MinimaxProvider {
         "minimax"
     }
 
-    fn supports_streaming(&self) -> bool {
-        self.inner.supports_streaming()
-    }
+    async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        if request.model.is_empty() {
+            request.model = self.model.clone();
+        }
+        let model = request.model.clone();
+        let payload = self.build_payload(&request, false)?;
+        let url = self.chat_url();
 
-    fn supports_reasoning(&self, model: &str) -> bool {
-        self.inner.supports_reasoning(model)
-    }
+        let response = self
+            .http_client
+            .post(url)
+            .bearer_auth(&self.api_key)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format_network_error("MiniMax", &e))?;
 
-    fn supports_reasoning_effort(&self, model: &str) -> bool {
-        self.inner.supports_reasoning_effort(model)
-    }
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            let formatted_error =
+                error_display::format_llm_error("MiniMax", &format!("HTTP {}: {}", status, body));
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
 
-    fn supports_tools(&self, model: &str) -> bool {
-        self.inner.supports_tools(model)
-    }
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| format_parse_error("MiniMax", &e))?;
 
-    fn supports_parallel_tool_config(&self, model: &str) -> bool {
-        self.inner.supports_parallel_tool_config(model)
-    }
-
-    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let tools = request.tools.clone();
-        let response = self.inner.generate(request).await?;
-        Ok(post_process_response(response, tools.as_deref()))
-    }
-
-    async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
-        let tool_defs = request.tools.clone();
-        let mut inner_stream = self.inner.stream(request).await?;
-
-        let stream = try_stream! {
-            while let Some(event) = inner_stream.next().await {
-                let event = event?;
-                match event {
-                    LLMStreamEvent::Completed { response } => {
-                        let processed = post_process_response(
-                            *response,
-                            tool_defs.as_deref(),
-                        );
-                        yield LLMStreamEvent::Completed { response: Box::new(processed) };
-                    }
-                    other => {
-                        yield other;
-                    }
+        let choice = json
+            .get("choices")
+            .and_then(|c| c.as_array())
+            .and_then(|c| c.first())
+            .ok_or_else(|| {
+                LLMError::Provider {
+                    message: "Invalid response from MiniMax: missing choices".to_string(),
+                    metadata: None,
                 }
+            })?;
+
+        let message = choice.get("message").ok_or_else(|| {
+            LLMError::Provider {
+                message: "Invalid response from MiniMax: missing message".to_string(),
+                metadata: None,
             }
-        };
+        })?;
 
-        Ok(Box::pin(stream))
-    }
+        let content = message.get("content").and_then(|c| c.as_str()).map(|s| s.to_string());
 
-    fn supported_models(&self) -> Vec<String> {
-        models::minimax::SUPPORTED_MODELS
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
-    }
-
-    fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        self.inner.validate_request(request)
-    }
-}
-
-#[async_trait]
-impl LLMClient for MinimaxProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<crate::llm::types::LLMResponse, LLMError> {
-        let request = super::common::make_default_request(prompt, &self.inner.model_id());
-        let request_model = request.model.clone();
-        let response = LLMProvider::generate(self, request).await?;
-
-        Ok(crate::llm::types::LLMResponse {
-            content: response.content.unwrap_or_default(),
-            model: request_model,
-            usage: response
-                .usage
-                .map(super::common::convert_usage_to_llm_types),
-            reasoning: response.reasoning,
-            reasoning_details: response.reasoning_details,
-            request_id: response.request_id,
-            organization_id: response.organization_id,
-        })
-    }
-
-    fn backend_kind(&self) -> crate::llm::types::BackendKind {
-        crate::llm::types::BackendKind::Minimax
-    }
-
-    fn model_id(&self) -> &str {
-        self.inner.model_id()
-    }
-}
-
-fn post_process_response(
-    mut response: LLMResponse,
-    tools: Option<&[ToolDefinition]>,
-) -> LLMResponse {
-    if response
-        .tool_calls
-        .as_ref()
-        .is_some_and(|calls| !calls.is_empty())
-    {
-        return response;
-    }
-
-    if let Some(content) = &response.content {
-        let (tool_calls, cleaned_content) = parse_minimax_tool_calls(content, tools);
-
-        if !tool_calls.is_empty() {
-            response.tool_calls = Some(tool_calls);
-
-            let trimmed = cleaned_content.trim();
-            response.content = if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            };
-
-            if !matches!(response.finish_reason, FinishReason::ToolCalls) {
-                response.finish_reason = FinishReason::ToolCalls;
-            }
-        }
-    }
-
-    response
-}
-
-// Compile patterns once for reuse to avoid repeated allocations
-static TOOL_CALL_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(TOOL_CALL_BLOCK_PATTERN).unwrap());
-static INVOKE_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(INVOKE_BLOCK_PATTERN).unwrap());
-static PARAMETER_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(PARAMETER_BLOCK_PATTERN).unwrap());
-
-fn parse_minimax_tool_calls(
-    text: &str,
-    tools: Option<&[ToolDefinition]>,
-) -> (Vec<ToolCall>, String) {
-    // Use precompiled static regexes
-    let tool_call_regex = &*TOOL_CALL_BLOCK_RE;
-    let invoke_regex = &*INVOKE_BLOCK_RE;
-    let parameter_regex = &*PARAMETER_BLOCK_RE;
-
-    let mut tool_calls = Vec::new();
-    let mut call_index = 1u32;
-
-    let param_types = build_parameter_type_map(tools);
-
-    for block_capture in tool_call_regex.captures_iter(text) {
-        if let Some(block_inner) = block_capture.get(1) {
-            for invoke_capture in invoke_regex.captures_iter(block_inner.as_str()) {
-                let function_name_raw = invoke_capture.get(1).map(|m| m.as_str()).unwrap_or("");
-                let function_name = extract_name(function_name_raw);
-                let body = invoke_capture.get(2).map(|m| m.as_str()).unwrap_or("");
-
-                if function_name.is_empty() {
-                    continue;
-                }
-
-                let param_config = param_types.get(&function_name);
-                let mut arguments_map = Map::new();
-
-                for parameter_capture in parameter_regex.captures_iter(body) {
-                    let param_name_raw = parameter_capture.get(1).map(|m| m.as_str()).unwrap_or("");
-                    let param_name = extract_name(param_name_raw);
-                    if param_name.is_empty() {
-                        continue;
-                    }
-
-                    let raw_value = parameter_capture.get(2).map(|m| m.as_str()).unwrap_or("");
-                    let cleaned_value = raw_value.trim_matches('\n').trim();
-
-                    let param_type = param_config
-                        .and_then(|cfg| cfg.get(&param_name))
-                        .map(|s| s.as_str())
-                        .unwrap_or("string");
-
-                    let converted = convert_param_value(cleaned_value, param_type);
-                    arguments_map.insert(param_name, converted);
-                }
-
-                let arguments_json = Value::Object(arguments_map);
-                if let Ok(serialized) = serde_json::to_string(&arguments_json) {
-                    let tool_call = ToolCall::function(
-                        format!("call_{}", call_index),
-                        function_name,
-                        serialized,
-                    );
-                    tool_calls.push(tool_call);
-                    call_index += 1;
-                }
-            }
-        }
-    }
-
-    let cleaned = tool_call_regex.replace_all(text, "").to_string();
-    (tool_calls, cleaned)
-}
-
-fn build_parameter_type_map(
-    tools: Option<&[ToolDefinition]>,
-) -> HashMap<String, HashMap<String, String>> {
-    let mut map = HashMap::new();
-
-    if let Some(defs) = tools {
-        for tool in defs {
-            let Some(func) = tool.function.as_ref() else {
-                continue;
-            };
-            let mut param_map = HashMap::new();
-            if let Some(properties) = func
-                .parameters
-                .get("properties")
-                .and_then(|props| props.as_object())
-            {
-                for (name, schema) in properties {
-                    if let Some(param_type) = schema.get("type") {
-                        if let Some(type_str) = param_type.as_str() {
-                            param_map.insert(name.clone(), type_str.to_string());
-                            continue;
-                        }
-
-                        if let Some(array) = param_type.as_array()
-                            && let Some(first) = array.iter().find_map(|value| value.as_str())
-                        {
-                            param_map.insert(name.clone(), first.to_string());
-                            continue;
-                        }
-                    }
-
-                    param_map.insert(name.clone(), "string".to_string());
-                }
-            }
-
-            map.insert(func.name.clone(), param_map);
-        }
-    }
-
-    map
-}
-
-fn extract_name(raw: &str) -> String {
-    let trimmed = raw.trim();
-    let is_wrapped = (trimmed.starts_with('\"') && trimmed.ends_with('\"'))
-        || (trimmed.starts_with('\'') && trimmed.ends_with('\''));
-    if is_wrapped && trimmed.len() >= 2 {
-        trimmed[1..trimmed.len() - 1].to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn convert_param_value(value: &str, param_type: &str) -> Value {
-    if value.eq_ignore_ascii_case("null") {
-        return Value::Null;
-    }
-
-    match param_type.to_ascii_lowercase().as_str() {
-        "string" | "str" | "text" => Value::String(value.to_string()),
-        "integer" | "int" => value
-            .parse::<i64>()
-            .map(Value::from)
-            .unwrap_or_else(|_| Value::String(value.to_string())),
-        "number" | "float" => value
-            .parse::<f64>()
-            .ok()
-            .and_then(serde_json::Number::from_f64)
-            .map(Value::Number)
-            .unwrap_or_else(|| Value::String(value.to_string())),
-        "boolean" | "bool" => {
-            Value::Bool(matches!(value.to_ascii_lowercase().as_str(), "true" | "1"))
-        }
-        "object" | "array" => {
-            serde_json::from_str(value).unwrap_or_else(|_| Value::String(value.to_string()))
-        }
-        _ => serde_json::from_str(value).unwrap_or_else(|_| Value::String(value.to_string())),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    fn sample_tool_definition() -> ToolDefinition {
-        ToolDefinition::function(
-            "search_web".to_string(),
-            "Search function.".to_string(),
-            json!({
-                "type": "object",
-                "properties": {
-                    "query_list": {
-                        "type": "array",
-                        "items": { "type": "string" }
-                    },
-                    "query_tag": {
-                        "type": "array",
-                        "items": { "type": "string" }
-                    },
-                    "radius": { "type": "number" },
-                    "verbose": { "type": "boolean" }
-                }
-            }),
-        )
-    }
-
-    #[test]
-    fn parses_minimax_tool_calls_and_arguments() {
-        let text = r#"Assistant thinking...
-<minimax:tool_call>
-<invoke name="search_web">
-<parameter name="query_list">["rust", "news"]</parameter>
-<parameter name='query_tag'>["technology"]</parameter>
-<parameter name="radius">12.5</parameter>
-<parameter name="verbose">true</parameter>
-</invoke>
-</minimax:tool_call>
-Continuing response."#;
-
-        let (tool_calls, cleaned) =
-            parse_minimax_tool_calls(text, Some(&[sample_tool_definition()]));
-
-        assert_eq!(tool_calls.len(), 1);
-        let call = &tool_calls[0];
-        let func = call
-            .function
-            .as_ref()
-            .expect("function call should be present");
-        assert_eq!(func.name, "search_web");
-
-        let parsed_args: Value = serde_json::from_str(&func.arguments).unwrap();
-        assert_eq!(parsed_args["query_list"], json!(["rust", "news"]));
-        assert_eq!(parsed_args["query_tag"], json!(["technology"]));
-        assert_eq!(parsed_args["radius"], json!(12.5));
-        assert_eq!(parsed_args["verbose"], json!(true));
-
-        assert!(!cleaned.contains("<minimax:tool_call>"));
-        assert!(cleaned.contains("Assistant thinking"));
-        assert!(cleaned.contains("Continuing response."));
-    }
-
-    #[test]
-    fn post_processing_infers_tool_calls() {
-        let text = r#"Some text before
-<minimax:tool_call>
-<invoke name="search_web">
-<parameter name="query_list">["minimax"]</parameter>
-<parameter name="query_tag">["ai"]</parameter>
-</invoke>
-</minimax:tool_call>
-"#;
-
-        let response = LLMResponse {
-            content: Some(text.to_string()),
+        Ok(LLMResponse {
+            content,
             tool_calls: None,
+            model,
             usage: None,
             finish_reason: FinishReason::Stop,
             reasoning: None,
@@ -426,32 +175,96 @@ Continuing response."#;
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
-        };
-
-        let processed = post_process_response(response, Some(&[sample_tool_definition()]));
-
-        let tool_calls = processed.tool_calls.expect("expected tool calls");
-        assert_eq!(tool_calls.len(), 1);
-        let func = tool_calls[0]
-            .function
-            .as_ref()
-            .expect("function call should be present");
-        assert_eq!(func.name, "search_web");
-        assert!(matches!(processed.finish_reason, FinishReason::ToolCalls));
-        assert!(
-            processed
-                .content
-                .unwrap_or_default()
-                .contains("Some text before")
-        );
+        })
     }
 
-    #[test]
-    fn parse_handles_missing_blocks() {
-        let text = "No tool calls here.";
-        let (tool_calls, cleaned) =
-            parse_minimax_tool_calls(text, Some(&[sample_tool_definition()]));
-        assert!(tool_calls.is_empty());
-        assert_eq!(cleaned, text);
+    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+        if request.model.is_empty() {
+            request.model = self.model.clone();
+        }
+        let model = request.model.clone();
+        let payload = self.build_payload(&request, true)?;
+        let url = self.chat_url();
+
+        let response = self
+            .http_client
+            .post(url)
+            .bearer_auth(&self.api_key)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format_network_error("MiniMax", &e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            let formatted_error =
+                error_display::format_llm_error("MiniMax", &format!("HTTP {}: {}", status, body));
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
+
+        let stream = try_stream! {
+            let mut body_stream = response.bytes_stream();
+            let mut buffer = String::new();
+            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model);
+
+            while let Some(chunk_result) = body_stream.next().await {
+                let chunk = chunk_result.map_err(|e| format_network_error("MiniMax", &e))?;
+                buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+                while let Some((split_idx, delimiter_len)) = crate::llm::providers::shared::find_sse_boundary(&buffer) {
+                    let event = buffer[..split_idx].to_string();
+                    buffer.drain(..split_idx + delimiter_len);
+
+                    if let Some(data_payload) = crate::llm::providers::shared::extract_data_payload(&event) {
+                        let trimmed = data_payload.trim();
+                        if trimmed.is_empty() || trimmed == "[DONE]" {
+                            continue;
+                        }
+
+                        if let Ok(payload) = serde_json::from_str::<Value>(trimmed) {
+                            if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
+                                if let Some(choice) = choices.first() {
+                                    if let Some(delta) = choice.get("delta") {
+                                        if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
+                                            for ev in aggregator.handle_content(content) {
+                                                yield ev;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            yield LLMStreamEvent::Completed { response: Box::new(aggregator.finalize()) };
+        };
+
+        Ok(Box::pin(stream))
+    }
+}
+
+#[async_trait]
+impl LLMClient for MinimaxProvider {
+    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+        let request = LLMRequest {
+            messages: vec![crate::llm::provider::Message::user(prompt.to_string())],
+            model: self.model.clone(),
+            ..Default::default()
+        };
+        Ok(LLMProvider::generate(self, request).await?)
+    }
+
+    fn backend_kind(&self) -> llm_types::BackendKind {
+        llm_types::BackendKind::Minimax
+    }
+
+    fn model_id(&self) -> &str {
+        &self.model
     }
 }

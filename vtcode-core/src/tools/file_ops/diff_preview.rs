@@ -1,7 +1,7 @@
 //! Diff preview utilities for file operations.
 
 use crate::config::constants::diff;
-use crate::utils::diff::{DiffOptions, compute_diff};
+use crate::utils::diff::{DiffOptions, compute_diff_with_theme};
 use serde_json::{Value, json};
 use std::time::Instant;
 
@@ -51,7 +51,7 @@ pub fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Valu
     let old_label = format!("a/{path}");
     let new_label = format!("b/{path}");
 
-    let diff_bundle = compute_diff(
+    let diff_bundle = compute_diff_with_theme(
         previous,
         after,
         DiffOptions {

@@ -109,6 +109,7 @@ pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCal
 
 /// Helper to aggregate streaming events and produce a final LLMResponse.
 pub struct StreamAggregator {
+    pub model: String,
     pub content: String,
     pub reasoning: String,
     pub reasoning_buffer: ReasoningBuffer,
@@ -118,15 +119,10 @@ pub struct StreamAggregator {
     pub sanitizer: TagStreamSanitizer,
 }
 
-impl Default for StreamAggregator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl StreamAggregator {
-    pub fn new() -> Self {
+    pub fn new(model: String) -> Self {
         Self {
+            model,
             content: String::new(),
             reasoning: String::new(),
             reasoning_buffer: ReasoningBuffer::default(),
@@ -189,6 +185,7 @@ impl StreamAggregator {
                 Some(self.content)
             },
             tool_calls: finalize_tool_calls(self.tool_builders),
+            model: self.model,
             usage: self.usage,
             finish_reason: self.finish_reason,
             reasoning: if self.reasoning.is_empty() {
@@ -210,6 +207,7 @@ impl StreamAggregator {
 pub async fn process_openai_stream<S, E, F>(
     mut byte_stream: S,
     provider_name: &'static str,
+    model: String,
     mut on_chunk: F,
 ) -> Result<LLMResponse, LLMError>
 where
@@ -257,6 +255,7 @@ where
     let mut final_response = LLMResponse {
         content: None,
         tool_calls: None,
+        model,
         usage: None,
         finish_reason: crate::llm::provider::FinishReason::Stop,
         reasoning: None,

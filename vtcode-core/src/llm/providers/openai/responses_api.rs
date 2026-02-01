@@ -1,31 +1,11 @@
-//! OpenAI Responses API payload construction and parsing.
-//!
-//! This module handles the Responses API format used by GPT-5 and Codex models.
-//!
-//! ## Codex-Specific Considerations (from Cursor harness learnings)
-//!
-//! Codex models are especially dependent on reasoning trace continuity. When reasoning
-//! traces are dropped, performance degrades by ~30% (vs ~3% for standard GPT-5). This
-//! module ensures reasoning items are always preserved and forwarded correctly via:
-//!
-//! 1. **Parsing**: `reasoning_items` are extracted from response output and stored in
-//!    `reasoning_details` field of `LLMResponse`
-//! 2. **Re-injection**: When building payloads, `reasoning_details` from previous
-//!    assistant messages are injected back into the input sequence
-//! 3. **Validation**: The build functions ensure reasoning traces flow through correctly
-
-use std::collections::HashSet;
-
 use serde_json::{Value, json};
-
+use std::collections::HashSet;
+use crate::llm::provider::{LLMResponse, LLMError, FinishReason, Usage, ToolCall, MessageRole, LLMRequest};
 use crate::llm::error_display;
-use crate::llm::provider::{self, FinishReason, LLMError, LLMResponse, ToolCall, Usage};
+use crate::llm::providers::openai::types::OpenAIResponsesPayload;
 use crate::prompts::system::default_system_prompt;
 
-use super::types::OpenAIResponsesPayload;
-
-/// Parse a tool call from a Responses API item.
-pub fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
+fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
     let call_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
     let function_obj = item.get("function").and_then(|v| v.as_object());
     let name = function_obj.and_then(|f| f.get("name").and_then(|n| n.as_str()))?;
@@ -46,9 +26,9 @@ pub fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
     ))
 }
 
-/// Parse a complete Responses API response payload into an LLMResponse.
 pub fn parse_responses_payload(
     response_json: Value,
+    model: String,
     include_cached_prompt_metrics: bool,
 ) -> Result<LLMResponse, LLMError> {
     let output = response_json
@@ -86,8 +66,7 @@ pub fn parse_responses_payload(
 
         match item_type {
             "message" => {
-                if let Some(content_array) = item.get("content").and_then(|value| value.as_array())
-                {
+                if let Some(content_array) = item.get("content").and_then(|value| value.as_array()) {
                     for entry in content_array {
                         let entry_type = entry
                             .get("type")
@@ -242,6 +221,7 @@ pub fn parse_responses_payload(
     Ok(LLMResponse {
         content,
         tool_calls,
+        model,
         usage,
         finish_reason,
         reasoning,
@@ -254,7 +234,7 @@ pub fn parse_responses_payload(
 
 /// Build a standard (non-Codex) Responses API payload.
 pub fn build_standard_responses_payload(
-    request: &provider::LLMRequest,
+    request: &LLMRequest,
 ) -> Result<OpenAIResponsesPayload, LLMError> {
     let mut input = Vec::new();
     let mut active_tool_call_ids: HashSet<String> = HashSet::new();
@@ -269,14 +249,14 @@ pub fn build_standard_responses_payload(
 
     for msg in &request.messages {
         match msg.role {
-            provider::MessageRole::System => {
+            MessageRole::System => {
                 let content_text = msg.content.as_text();
                 let trimmed = content_text.trim();
                 if !trimmed.is_empty() {
                     instructions_segments.push(trimmed.to_string());
                 }
             }
-            provider::MessageRole::User => {
+            MessageRole::User => {
                 input.push(json!({
                     "role": "user",
                     "content": [{
@@ -285,7 +265,7 @@ pub fn build_standard_responses_payload(
                     }]
                 }));
             }
-            provider::MessageRole::Assistant => {
+            MessageRole::Assistant => {
                 // Inject any persisted reasoning items from previous turns
                 if let Some(reasoning_details) = &msg.reasoning_details {
                     for item in reasoning_details {
@@ -324,7 +304,7 @@ pub fn build_standard_responses_payload(
                     }));
                 }
             }
-            provider::MessageRole::Tool => {
+            MessageRole::Tool => {
                 let tool_call_id = msg.tool_call_id.as_ref().ok_or_else(|| {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",
@@ -384,7 +364,7 @@ pub fn build_standard_responses_payload(
 
 /// Build a Codex-specific Responses API payload with specialized instructions.
 pub fn build_codex_responses_payload(
-    request: &provider::LLMRequest,
+    request: &LLMRequest,
 ) -> Result<OpenAIResponsesPayload, LLMError> {
     let mut additional_guidance = Vec::new();
 
@@ -400,14 +380,14 @@ pub fn build_codex_responses_payload(
 
     for msg in &request.messages {
         match msg.role {
-            provider::MessageRole::System => {
+            MessageRole::System => {
                 let content_text = msg.content.as_text();
                 let trimmed = content_text.trim();
                 if !trimmed.is_empty() {
                     additional_guidance.push(trimmed.to_owned());
                 }
             }
-            provider::MessageRole::User => {
+            MessageRole::User => {
                 input.push(json!({
                     "role": "user",
                     "content": [{
@@ -416,7 +396,7 @@ pub fn build_codex_responses_payload(
                     }]
                 }));
             }
-            provider::MessageRole::Assistant => {
+            MessageRole::Assistant => {
                 // CRITICAL for Codex: Inject any persisted reasoning items from previous turns
                 // Codex models experience ~30% performance degradation when reasoning traces
                 // are dropped (vs ~3% for standard GPT-5). Always preserve reasoning continuity.
@@ -457,7 +437,7 @@ pub fn build_codex_responses_payload(
                     }));
                 }
             }
-            provider::MessageRole::Tool => {
+            MessageRole::Tool => {
                 let tool_call_id = msg.tool_call_id.clone().ok_or_else(|| {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",

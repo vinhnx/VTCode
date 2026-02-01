@@ -1,7 +1,7 @@
 [package]
 name = "vtcode-commons"
 version = "0.74.7"
-edition = "2021"
+edition = "2024"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Shared traits for paths, telemetry, and error reporting reused across VT Code component extractions"
 license = "MIT"
@@ -29,9 +29,13 @@ serde_json = { workspace = true }
 tokio = { version = "1.48", features = ["fs", "io-util"] }
 tracing = "0.1"
 anstyle = "1.0"
+anstyle-query = "1.0"
+anstyle-crossterm = "4.0"
 futures = "0.3"
 base64 = { workspace = true }
 glob = "0.3"
 once_cell = "1.19"
 sha2 = "0.10"
+thiserror = { workspace = true }
 regex = { workspace = true }
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
