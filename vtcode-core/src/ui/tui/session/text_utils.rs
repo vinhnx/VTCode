@@ -7,122 +7,14 @@ use ratatui::prelude::*;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::config::constants::ansi;
+use crate::utils::ansi_parser::strip_ansi;
 
 /// Strips ANSI escape codes from text to ensure plain text output
 pub fn strip_ansi_codes(text: &str) -> Cow<'_, str> {
     if !text.contains('\x1b') {
         return Cow::Borrowed(text);
     }
-
-    // Comprehensive ANSI code stripping by looking for various escape sequences
-    let mut result = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch == '\x1b' {
-            // Found escape character, check what follows
-            match chars.peek() {
-                Some('[') => {
-                    // CSI (Control Sequence Introducer): ESC[...m
-                    chars.next(); // consume the '['
-                    // Skip the parameters and final character
-                    let mut param_length = 0;
-                    while let Some(&next_ch) = chars.peek() {
-                        chars.next(); // consume the character
-                        param_length += 1;
-                        if next_ch.is_ascii_digit() || next_ch == ';' || next_ch == ':' {
-                            // These are parameter characters, continue
-                            continue;
-                        } else if ('@'..='~').contains(&next_ch) {
-                            // This is the final command character, stop here
-                            break;
-                        } else if param_length > ansi::ANSI_MAX_CSI_PARAM_LENGTH {
-                            // prevent infinite loops
-                            break;
-                        } else {
-                            // Some other character, continue
-                            continue;
-                        }
-                    }
-                }
-                Some(']') => {
-                    // OSC (Operating System Command): ESC]...ST (where ST is \x1b\\ or BEL)
-                    chars.next(); // consume the ']'
-                    // Skip until we find the string terminator
-                    // Guard against malformed OSC sequences (defensive limit)
-                    let mut osc_length = 0usize;
-                    loop {
-                        match chars.peek() {
-                            Some(&'\x07') => {
-                                // BEL character (0x07) terminates the sequence
-                                chars.next(); // consume the BEL
-                                break;
-                            }
-                            Some(&'\x1b') => {
-                                // Check if next char after ESC is backslash to form ST
-                                let mut peekable_copy = chars.clone();
-                                peekable_copy.next(); // consume the second ESC
-                                if peekable_copy.peek() == Some(&'\\') {
-                                    chars.next(); // consume the second ESC
-                                    chars.next(); // consume the '\\'
-                                    break; // ESC\\ terminates the sequence
-                                } else {
-                                    // This is just part of the OSC data, continue
-                                    chars.next();
-                                    osc_length += 1;
-                                }
-                            }
-                            Some(_) => {
-                                // Continue consuming characters in the sequence
-                                chars.next();
-                                osc_length += 1;
-                            }
-                            None => {
-                                // End of string
-                                break;
-                            }
-                        }
-                        // Prevent infinite loops on malformed input
-                        if osc_length > ansi::ANSI_MAX_ESCAPE_SEQ_LENGTH {
-                            break;
-                        }
-                    }
-                }
-                Some('(') | Some(')') | Some('*') | Some('+') | Some('-') | Some('.') => {
-                    // G0, G1, G2, G3 character set selection: ESC(...)
-                    chars.next(); // consume the special character
-                    // consume one more parameter character if available
-                    if chars.peek().is_some() {
-                        chars.next();
-                    }
-                }
-                Some(_) => {
-                    // Other ESC sequences with specific characters
-                    let next_ch = chars.peek().unwrap();
-                    match next_ch {
-                        '7' | '8' | '=' | '>' | 'D' | 'E' | 'H' | 'M' | 'O' | 'P' | 'V' | 'W'
-                        | 'X' | 'Z' | '[' | '\\' | ']' | '^' | '_' => {
-                            // These are single-character ESC sequences, consume the character
-                            chars.next();
-                        }
-                        _ => {
-                            // Not a known ESC sequence, treat as regular character
-                            result.push(ch);
-                        }
-                    }
-                }
-                None => {
-                    // End of string, just add the escape character
-                    result.push(ch);
-                }
-            }
-        } else {
-            result.push(ch);
-        }
-    }
-
-    Cow::Owned(result)
+    Cow::Owned(strip_ansi(text))
 }
 
 /// Simplify tool call display text for better human readability

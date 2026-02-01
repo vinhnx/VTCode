@@ -291,6 +291,14 @@ pub struct DiffBundle {
     pub is_empty: bool,
 }
 
+/// Format a unified diff without ANSI color codes.
+pub fn format_unified_diff(old: &str, new: &str, options: DiffOptions<'_>) -> String {
+    let mut options = options;
+    options.missing_newline_hint = false;
+    let bundle = compute_diff(old, new, options);
+    crate::utils::ansi_parser::strip_ansi(&bundle.formatted)
+}
+
 /// A diff hunk with metadata for old/new ranges.
 #[derive(Debug, Clone, Serialize)]
 pub struct DiffHunk {
