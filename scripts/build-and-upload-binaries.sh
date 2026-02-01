@@ -70,16 +70,8 @@ check_dependencies() {
         fi
     fi
 
-    # Check for required 'workflow' scope and refresh if needed
-    if ! gh auth status --show-token 2>&1 | grep -q "workflow"; then
-        print_info "Refreshing GitHub CLI scopes to include 'workflow'..."
-        if gh auth refresh -h github.com -s workflow 2>/dev/null; then
-            print_success "GitHub CLI scopes refreshed"
-        else
-            print_warning "Could not refresh GitHub CLI scopes. Some release operations may fail."
-            print_info "To manually refresh, run: gh auth refresh -h github.com -s workflow"
-        fi
-    fi
+    # Skip the refresh step that causes hangs, assuming user has proper scopes
+    print_warning "Skipping GitHub CLI scopes refresh (may need manual refresh if issues occur)"
 
     print_success "All required tools are available"
 }
