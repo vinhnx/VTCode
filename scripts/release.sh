@@ -43,6 +43,65 @@ print_distribution() {
     printf '%b\n' "${PURPLE}DISTRIBUTION:${NC} $1"
 }
 
+# Get GitHub username from commit author email
+get_github_username() {
+    local email=$1
+    # Common email-to-username mappings
+    case "$email" in
+        vinhnguyen*) echo "vinhnx" ;;
+        noreply@vtcode.com) echo "vtcode-release-bot" ;;
+        *)
+            # Extract username from email (before @)
+            local username="${email%%@*}"
+            echo "$username"
+            ;;
+    esac
+}
+
+# Add @username tags to changelog entries
+add_username_tags() {
+    local changelog=$1
+    local commits_range=$2
+    
+    # Create a mapping of commit hashes to usernames
+    local -A author_map
+    while IFS= read -r line; do
+        local hash author_email
+        hash=$(echo "$line" | cut -d'|' -f1)
+        author_email=$(echo "$line" | cut -d'|' -f2)
+        local username=$(get_github_username "$author_email")
+        author_map["$hash"]="$username"
+    done < <(git log "$commits_range" --no-merges --pretty=format:"%h|%ae")
+    
+    # Process changelog and add @username tags
+    local result=""
+    while IFS= read -r entry; do
+        # Extract commit hash from entry (e.g., "[<samp>(f533a)</samp>]")
+        if [[ $entry =~ \[.*\(([a-f0-9]+)\) ]]; then
+            local short_hash="${BASH_REMATCH[1]}"
+            # Find full hash from short hash
+            local full_hash=""
+            for hash in "${!author_map[@]}"; do
+                if [[ $hash == ${short_hash}* ]]; then
+                    full_hash="$hash"
+                    break
+                fi
+            done
+            
+            if [[ -n "$full_hash" && -n "${author_map[$full_hash]}" ]]; then
+                local username="${author_map[$full_hash]}"
+                # Add @username before the closing bracket if not already present
+                if [[ $entry != *"@$username"* ]]; then
+                    entry=$(echo "$entry" | sed "s/by \*\*\([^*]*\)\*\*/by [@\2](&) **\1**/")
+                fi
+            fi
+        fi
+        result+="$entry"$'\n'
+    done <<< "$changelog"
+    
+    echo "${result%$'\n'}"
+}
+
 show_usage() {
     cat <<'USAGE'
 Usage: ./scripts/release.sh [version|level] [options]
@@ -94,19 +153,43 @@ update_changelog_from_commits() {
             full_output=$(npx changelogithub --dry 2>/dev/null || echo "")
         fi
 
-        # Extract content between separators (14 dashes)
-        changelog_content=$(echo "$full_output" | sed -n '/^--------------$/,/^--------------$/p' | sed '1d;$d')
+        # Strip ANSI color codes from output
+        full_output=$(echo "$full_output" | sed 's/\x1b\[[0-9;]*m//g')
 
-        # Replace ...HEAD with ...v$version in the comparison link
-        changelog_content=$(echo "$changelog_content" | sed "s/\.\.\.HEAD/...v$version/g")
+        # Extract changelog content between separators
+        # Format: version line, then content, then "Dry run. Release skipped."
+        # We want lines between first and second separator
+        local first_sep_line
+        first_sep_line=$(echo "$full_output" | grep -n '^--------------$' | head -1 | cut -d: -f1)
+        local second_sep_line
+        second_sep_line=$(echo "$full_output" | grep -n '^--------------$' | head -2 | tail -1 | cut -d: -f1)
+        
+        if [[ -n "$first_sep_line" && -n "$second_sep_line" ]]; then
+            # Extract lines between separators (exclusive)
+            changelog_content=$(echo "$full_output" | sed -n "$((first_sep_line + 1)),$((second_sep_line - 1))p")
+            # Remove the version/tag line if present (e.g., "v0.74.6 -> v0.74.7 (4 commits)")
+            changelog_content=$(echo "$changelog_content" | sed '/^v[0-9]\+\.[0-9]\+\.[0-9]\+.*$/d')
+            # Replace ...HEAD with ...v$version in the comparison link
+            changelog_content=$(echo "$changelog_content" | sed "s/\.\.\.HEAD/...v$version/g")
+        else
+            print_warning "Could not find separators in changelogithub output"
+            changelog_content=""
+        fi
 
         # If extraction failed or empty, fallback to simple log
         if [[ -z "$(echo "$changelog_content" | tr -d '[:space:]')" ]]; then
+            print_warning "changelogithub extraction failed, using git log fallback"
             changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"* %s (%h)")
         fi
     else
         # Fallback if npx is missing
+        print_warning "changelogithub not found, using git log fallback"
         changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"* %s (%h)")
+    fi
+
+    # Add @username tags to changelog entries
+    if [[ -n "$commits_range" && "$commits_range" != "HEAD" ]]; then
+        changelog_content=$(add_username_tags "$changelog_content" "$commits_range")
     fi
 
     # Save to global variable for release notes use (GitHub Release body)
