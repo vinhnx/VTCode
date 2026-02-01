@@ -1,6 +1,8 @@
 use crate::llm::provider::{Message, MessageContent, MessageRole};
 use crate::utils::dot_config::DotManager;
-use crate::utils::error_messages::*;
+use crate::utils::file_utils::{
+    ensure_dir_exists, read_json_file, read_json_file_sync, write_json_file_sync,
+};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -340,14 +342,7 @@ impl SessionArchive {
     }
 
     fn write_snapshot(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
-        let payload = serde_json::to_string_pretty(&snapshot).context(ERR_SERIALIZE_STATE)?;
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("{}: {}", ERR_CREATE_SESSION_DIR, parent.display()))?;
-        }
-        fs::write(&self.path, payload)
-            .with_context(|| format!("{}: {}", ERR_WRITE_SESSION, self.path.display()))?;
-
+        write_json_file_sync(&self.path, &snapshot)?;
         Ok(self.path.clone())
     }
     /// Update loaded skills in the archive metadata
@@ -442,13 +437,10 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
         for path in batch {
             let path = path.clone();
             let task = tokio::task::spawn(async move {
-                match tokio::fs::read_to_string(&path).await {
-                    Ok(data) => match serde_json::from_str::<SessionSnapshot>(&data) {
-                        Ok(snapshot) => Some(SessionListing { path, snapshot }),
-                        Err(_) => None, // Invalid JSON, skip
-                    },
-                    Err(_) => None, // Failed to read, skip
-                }
+                read_json_file::<SessionSnapshot>(&path)
+                    .await
+                    .ok()
+                    .map(|snapshot| SessionListing { path, snapshot })
             });
             tasks.push(task);
         }
@@ -504,10 +496,7 @@ pub async fn find_session_by_identifier(identifier: &str) -> Result<Option<Sessi
             continue;
         }
 
-        let data = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read session file: {}", path.display()))?;
-        let snapshot: SessionSnapshot = serde_json::from_str(&data)
-            .with_context(|| format!("failed to parse session archive: {}", path.display()))?;
+        let snapshot: SessionSnapshot = read_json_file_sync(&path)?;
         return Ok(Some(SessionListing { path, snapshot }));
     }
 
@@ -576,9 +565,7 @@ pub async fn search_sessions(
 async fn resolve_sessions_dir() -> Result<PathBuf> {
     if let Some(custom) = env::var_os(SESSION_DIR_ENV) {
         let path = PathBuf::from(custom);
-        tokio::fs::create_dir_all(&path)
-            .await
-            .with_context(|| format!("failed to create custom session dir: {}", path.display()))?;
+        ensure_dir_exists(&path).await?;
         return Ok(path);
     }
 
@@ -588,9 +575,7 @@ async fn resolve_sessions_dir() -> Result<PathBuf> {
         .await
         .context("failed to initialize VT Code dot directory structure")?;
     let dir = manager.sessions_dir();
-    tokio::fs::create_dir_all(&dir)
-        .await
-        .with_context(|| format!("failed to create session directory: {}", dir.display()))?;
+    ensure_dir_exists(&dir).await?;
     Ok(dir)
 }
 

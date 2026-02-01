@@ -16,15 +16,12 @@ use crate::llm::providers::common::{
 use crate::llm::providers::error_handling::{
     format_network_error, format_parse_error, handle_openai_http_error,
 };
-use crate::llm::providers::shared::{
-    NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls, update_tool_calls,
-};
+use crate::llm::providers::shared::{ToolCallBuilder, finalize_tool_calls, update_tool_calls};
 use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
-use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{Map, Value};
 
@@ -267,11 +264,12 @@ impl LLMProvider for MoonshotProvider {
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, "MOONSHOT_API_KEY").await?;
 
-        let mut bytes_stream = response.bytes_stream();
-        let mut buffer = String::new();
-        let telemetry = NoopStreamTelemetry;
+        let bytes_stream = response.bytes_stream();
+        let (event_tx, event_rx) =
+            tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+        let tx = event_tx.clone();
 
-        let stream = try_stream! {
+        tokio::spawn(async move {
             let mut aggregated_content = String::new();
             let mut aggregated_reasoning = String::new();
             let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
@@ -279,90 +277,93 @@ impl LLMProvider for MoonshotProvider {
             let mut finish_reason = FinishReason::Stop;
             let mut sanitizer = TagStreamSanitizer::new();
 
-            while let Some(chunk_result) = bytes_stream.next().await {
-                let chunk_bytes = chunk_result.map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
-                let chunk_str = String::from_utf8_lossy(&chunk_bytes);
-                buffer.push_str(&chunk_str);
+            let result = crate::llm::providers::shared::process_openai_stream(
+                bytes_stream,
+                PROVIDER_NAME,
+                |value| {
+                    if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
+                        && let Some(choice) = choices.first()
+                    {
+                        if let Some(delta) = choice.get("delta") {
+                            if let Some(reasoning) =
+                                delta.get("reasoning_content").and_then(|r| r.as_str())
+                            {
+                                aggregated_reasoning.push_str(reasoning);
+                                let _ = tx.send(Ok(LLMStreamEvent::Reasoning {
+                                    delta: reasoning.to_string(),
+                                }));
+                            }
 
-                while let Some((boundary_idx, boundary_len)) = crate::llm::providers::shared::find_sse_boundary(&buffer) {
-                    let event = buffer[..boundary_idx].to_string();
-                    buffer.drain(..boundary_idx + boundary_len);
-
-                    if let Some(data) = crate::llm::providers::shared::extract_data_payload(&event) {
-                        if data == "[DONE]" {
-                            break;
-                        }
-
-                        for line in data.lines() {
-                            if let Ok(value) = serde_json::from_str::<Value>(line) {
-                                if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
-                                    && let Some(choice) = choices.first()
-                                {
-                                    if let Some(delta) = choice.get("delta") {
-                                        // Moonshot Kimi models often put reasoning in a "reasoning_content" field
-                                        // similar to DeepSeek or ZAI.
-                                        if let Some(reasoning) = delta.get("reasoning_content").and_then(|r| r.as_str()) {
-                                            aggregated_reasoning.push_str(reasoning);
-                                            telemetry.on_reasoning_delta(reasoning);
-                                            yield LLMStreamEvent::Reasoning { delta: reasoning.to_string() };
-                                        }
-
-                                        if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
-                                            aggregated_content.push_str(content);
-                                            telemetry.on_content_delta(content);
-
-                                            for event in sanitizer.process_chunk(content) {
-                                                match &event {
-                                                    LLMStreamEvent::Token { delta } => {
-                                                        yield LLMStreamEvent::Token { delta: delta.clone() };
-                                                    }
-                                                    LLMStreamEvent::Reasoning { delta } => {
-                                                        yield LLMStreamEvent::Reasoning { delta: delta.clone() };
-                                                    }
-                                                    _ => {}
-                                                }
-                                            }
-                                        }
-
-                                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
-                                            update_tool_calls(&mut tool_call_builders, tool_calls);
-                                            telemetry.on_tool_call_delta();
-                                        }
-                                    }
-
-                                    if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
-                                        finish_reason = map_finish_reason_common(reason);
-                                    }
-                                }
-
-                                if let Some(_usage_value) = value.get("usage") {
-                                    usage = Some(crate::llm::providers::common::parse_usage_openai_format(&value, true).unwrap_or_default());
+                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                aggregated_content.push_str(content);
+                                for event in sanitizer.process_chunk(content) {
+                                    let _ = tx.send(Ok(event));
                                 }
                             }
+
+                            if let Some(tool_calls) =
+                                delta.get("tool_calls").and_then(|tc| tc.as_array())
+                            {
+                                update_tool_calls(&mut tool_call_builders, tool_calls);
+                            }
+                        }
+
+                        if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
+                            finish_reason = map_finish_reason_common(reason);
                         }
                     }
+
+                    if let Some(_usage_value) = value.get("usage") {
+                        usage = Some(
+                            crate::llm::providers::common::parse_usage_openai_format(&value, true)
+                                .unwrap_or_default(),
+                        );
+                    }
+                    Ok(())
+                },
+            )
+            .await;
+
+            for event in sanitizer.finalize() {
+                let _ = tx.send(Ok(event));
+            }
+
+            match result {
+                Ok(_) => {
+                    let tool_calls = finalize_tool_calls(tool_call_builders);
+                    let _ = tx.send(Ok(LLMStreamEvent::Completed {
+                        response: Box::new(LLMResponse {
+                            content: if aggregated_content.is_empty() {
+                                None
+                            } else {
+                                Some(aggregated_content)
+                            },
+                            tool_calls,
+                            usage,
+                            finish_reason,
+                            reasoning: if aggregated_reasoning.is_empty() {
+                                None
+                            } else {
+                                Some(aggregated_reasoning)
+                            },
+                            reasoning_details: None,
+                            tool_references: Vec::new(),
+                            request_id: None,
+                            organization_id: None,
+                        }),
+                    }));
+                }
+                Err(err) => {
+                    let _ = tx.send(Err(err));
                 }
             }
+        });
 
-            // Finalize sanitizer and yield leftover events
-            for event in sanitizer.finalize() {
-                yield event;
+        let stream = try_stream! {
+            let mut receiver = event_rx;
+            while let Some(event) = receiver.recv().await {
+                yield event?;
             }
-
-            let tool_calls = finalize_tool_calls(tool_call_builders);
-            yield LLMStreamEvent::Completed {
-                response: Box::new(LLMResponse {
-                    content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
-                    tool_calls,
-                    usage,
-                    finish_reason,
-                    reasoning: if aggregated_reasoning.is_empty() { None } else { Some(aggregated_reasoning) },
-                    reasoning_details: None,
-                    tool_references: Vec::new(),
-                    request_id: None,
-                    organization_id: None,
-                })
-            };
         };
 
         Ok(Box::pin(stream))

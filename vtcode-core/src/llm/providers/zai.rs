@@ -6,27 +6,24 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display::format_llm_error;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
-    LLMStreamEvent, MessageRole, ToolChoice, Usage,
+    LLMStreamEvent, MessageRole, Usage,
 };
-use crate::llm::providers::shared::{
-    NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls,
-};
+use crate::llm::providers::shared::{NoopStreamTelemetry, ToolCallBuilder, finalize_tool_calls};
 use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
-use futures::StreamExt;
 use reqwest::header::RETRY_AFTER;
 use reqwest::{Client as HttpClient, StatusCode};
 use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::mpsc;
 // No tracing imports needed here currently, or just tracing::debug if needed
 // use tracing::error;
 
 use super::common::{
-    convert_usage_to_llm_types, map_finish_reason_common, override_base_url,
-    parse_chat_request_openai_format_with_extractor, parse_client_prompt_common, resolve_model,
+    convert_usage_to_llm_types, map_finish_reason_common, override_base_url, resolve_model,
     serialize_tools_openai_format, validate_request_common,
 };
 use super::error_handling::{format_network_error, format_parse_error};
@@ -113,31 +110,6 @@ impl ZAIProvider {
             prompt_cache,
             timeouts.unwrap_or_default(),
         )
-    }
-
-    fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {
-        parse_client_prompt_common(prompt, &self.model, |value| self.parse_chat_request(value))
-    }
-
-    fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
-        let mut request =
-            parse_chat_request_openai_format_with_extractor(value, &self.model, |c| match c {
-                Value::String(text) => text.to_string(),
-                other => other.to_string(),
-            })?;
-
-        // ZAI supports tool_choice parsing
-        request.tool_choice = value.get("tool_choice").and_then(|choice| match choice {
-            Value::String(s) => match s.as_str() {
-                "auto" => Some(ToolChoice::auto()),
-                "none" => Some(ToolChoice::none()),
-                "any" | "required" => Some(ToolChoice::any()),
-                _ => None,
-            },
-            _ => None,
-        });
-
-        Some(request)
     }
 
     fn convert_to_zai_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
@@ -687,124 +659,116 @@ impl LLMProvider for ZAIProvider {
             });
         }
 
-        let mut bytes_stream = response.bytes_stream();
-        let mut buffer = String::new();
-        let telemetry = NoopStreamTelemetry;
+        let bytes_stream = response.bytes_stream();
+        let (event_tx, event_rx) = mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+        let tx = event_tx.clone();
 
-        let stream = try_stream! {
+        tokio::spawn(async move {
             let mut aggregated_content = String::new();
             let mut aggregated_reasoning = String::new();
             let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
-            let mut usage = None;
-            let mut finish_reason = FinishReason::Stop;
             let mut sanitizer = TagStreamSanitizer::new();
+            let mut final_usage = None;
+            let mut final_finish_reason = FinishReason::Stop;
 
-            while let Some(chunk_result) = bytes_stream.next().await {
-                let chunk_bytes = chunk_result.map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
-                let chunk_str = String::from_utf8_lossy(&chunk_bytes);
-                buffer.push_str(&chunk_str);
-
-                while let Some((boundary_idx, boundary_len)) = crate::llm::providers::shared::find_sse_boundary(&buffer) {
-                    let event = buffer[..boundary_idx].to_string();
-                    buffer.drain(..boundary_idx + boundary_len);
-
-                    if let Some(data) = crate::llm::providers::shared::extract_data_payload(&event) {
-                        if data == "[DONE]" {
-                            break;
+            let result = crate::llm::providers::shared::process_openai_stream(bytes_stream, PROVIDER_NAME, |value| {
+                if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
+                    && let Some(choice) = choices.first()
+                {
+                    if let Some(delta) = choice.get("delta") {
+                        // Handle content
+                        if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                            aggregated_content.push_str(content);
+                            for event in sanitizer.process_chunk(content) {
+                                let _ = tx.send(Ok(event));
+                            }
                         }
 
-                        for line in data.lines() {
-                            if let Ok(value) = serde_json::from_str::<Value>(line) {
-                                if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
-                                    && let Some(choice) = choices.first()
-                                {
-                                    if let Some(delta) = choice.get("delta") {
-                                        // Handle content
-                                        if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
-                                            aggregated_content.push_str(content);
-                                            telemetry.on_content_delta(content);
+                        // Handle ZAI reasoning_content
+                        if let Some(reasoning) = delta.get("reasoning_content") {
+                            let reasoning_text = match reasoning {
+                                Value::String(s) => s.to_string(),
+                                Value::Array(parts) => parts.iter().filter_map(|p| p.as_str()).collect::<String>(),
+                                _ => String::new(),
+                            };
+                            if !reasoning_text.is_empty() {
+                                aggregated_reasoning.push_str(&reasoning_text);
+                                let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta: reasoning_text }));
+                            }
+                        }
 
-                                            for event in sanitizer.process_chunk(content) {
-                                                match &event {
-                                                    LLMStreamEvent::Token { delta } => {
-                                                        yield LLMStreamEvent::Token { delta: delta.clone() };
-                                                    }
-                                                    LLMStreamEvent::Reasoning { delta } => {
-                                                        yield LLMStreamEvent::Reasoning { delta: delta.clone() };
-                                                    }
-                                                    _ => {}
-                                                }
-                                            }
-                                        }
-
-                                        // Handle ZAI reasoning_content
-                                        if let Some(reasoning) = delta.get("reasoning_content") {
-                                            let reasoning_text = match reasoning {
-                                                Value::String(s) => s.to_string(),
-                                                Value::Array(parts) => parts.iter().filter_map(|p| p.as_str()).collect::<String>(),
-                                                _ => String::new(),
-                                            };
-                                            if !reasoning_text.is_empty() {
-                                                aggregated_reasoning.push_str(&reasoning_text);
-                                                telemetry.on_reasoning_delta(&reasoning_text);
-                                                yield LLMStreamEvent::Reasoning { delta: reasoning_text };
-                                            }
-                                        }
-
-                                        // Handle tool calls
-                                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
-                                            for tool_call in tool_calls {
-                                                if let Some(tc_obj) = tool_call.as_object() {
-                                                    crate::llm::providers::shared::apply_tool_call_delta_from_content(
-                                                        &mut tool_call_builders,
-                                                        tc_obj,
-                                                        &telemetry,
-                                                    );
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
-                                        finish_reason = map_finish_reason_common(reason);
-                                    }
-                                }
-
-                                if let Some(usage_value) = value.get("usage") {
-                                    usage = Some(Usage {
-                                        prompt_tokens: usage_value.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                                        completion_tokens: usage_value.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                                        total_tokens: usage_value.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                                        cached_prompt_tokens: usage_value.get("prompt_tokens_details").and_then(|d| d.get("cached_tokens")).and_then(|v| v.as_u64()).map(|v| v as u32),
-                                        cache_creation_tokens: None,
-                                        cache_read_tokens: None,
-                                    });
+                        // Handle tool calls
+                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
+                            for tool_call in tool_calls {
+                                if let Some(tc_obj) = tool_call.as_object() {
+                                    crate::llm::providers::shared::apply_tool_call_delta_from_content(
+                                        &mut tool_call_builders,
+                                        tc_obj,
+                                        &NoopStreamTelemetry,
+                                    );
                                 }
                             }
                         }
                     }
+
+                    if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
+                        final_finish_reason = map_finish_reason_common(reason);
+                    }
+                }
+
+                if let Some(usage_value) = value.get("usage") {
+                    final_usage = Some(Usage {
+                        prompt_tokens: usage_value.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                        completion_tokens: usage_value.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                        total_tokens: usage_value.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                        cached_prompt_tokens: usage_value.get("prompt_tokens_details").and_then(|d| d.get("cached_tokens")).and_then(|v| v.as_u64()).map(|v| v as u32),
+                        cache_creation_tokens: None,
+                        cache_read_tokens: None,
+                    });
+                }
+                Ok(())
+            }).await;
+
+            for event in sanitizer.finalize() {
+                let _ = tx.send(Ok(event));
+            }
+
+            match result {
+                Ok(_) => {
+                    let tool_calls = finalize_tool_calls(tool_call_builders);
+                    let _ = tx.send(Ok(LLMStreamEvent::Completed {
+                        response: Box::new(LLMResponse {
+                            content: if aggregated_content.is_empty() {
+                                None
+                            } else {
+                                Some(aggregated_content)
+                            },
+                            tool_calls,
+                            usage: final_usage,
+                            finish_reason: final_finish_reason,
+                            reasoning: if aggregated_reasoning.is_empty() {
+                                None
+                            } else {
+                                Some(aggregated_reasoning)
+                            },
+                            reasoning_details: None,
+                            tool_references: Vec::new(),
+                            request_id: None,
+                            organization_id: None,
+                        }),
+                    }));
+                }
+                Err(err) => {
+                    let _ = tx.send(Err(err));
                 }
             }
+        });
 
-            // Finalize sanitizer and yield leftover events
-            for event in sanitizer.finalize() {
-                yield event;
+        let stream = try_stream! {
+            let mut receiver = event_rx;
+            while let Some(event) = receiver.recv().await {
+                yield event?;
             }
-
-            let tool_calls = finalize_tool_calls(tool_call_builders);
-            yield LLMStreamEvent::Completed {
-                response: Box::new(LLMResponse {
-                    content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
-                    tool_calls,
-                    usage,
-                    finish_reason,
-                    reasoning: if aggregated_reasoning.is_empty() { None } else { Some(aggregated_reasoning) },
-                    reasoning_details: None,
-                    tool_references: Vec::new(),
-                    request_id: None,
-                    organization_id: None,
-                })
-            };
         };
 
         Ok(Box::pin(stream))
@@ -827,7 +791,7 @@ impl LLMProvider for ZAIProvider {
 #[async_trait]
 impl LLMClient for ZAIProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
-        let request = self.parse_client_prompt(prompt);
+        let request = super::common::make_default_request(prompt, &self.model);
         let request_model = request.model.clone();
         let response = LLMProvider::generate(self, request).await?;
 

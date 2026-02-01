@@ -2,7 +2,7 @@
 
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::traits::{CacheableTool, FileTool, ModeTool, Tool};
-use crate::tools::types::ListInput;
+use crate::tools::types::{ListInput, PathArgs};
 use crate::utils::path::canonicalize_workspace;
 use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};
@@ -82,9 +82,15 @@ mod tests {
 #[async_trait]
 impl Tool for FileOpsTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let mut input: ListInput = serde_json::from_value(args).context(
+        let mut input: ListInput = serde_json::from_value(args.clone()).context(
             "Error: Invalid 'list_files' arguments. Expected JSON object with: path (required, string). Optional: mode (string), max_items (number), page (number), per_page (number), include_hidden (bool), response_format (string). Example: {\"path\": \"src\", \"page\": 1, \"per_page\": 50, \"response_format\": \"concise\"}",
         )?;
+
+        // Standard path extraction from args (handles aliases)
+        let path_args: PathArgs = serde_json::from_value(args).unwrap_or(PathArgs {
+            path: input.path.clone(),
+        });
+        input.path = path_args.path;
 
         // Normalize path: strip /workspace prefix if present (common LLM pattern)
         if input.path.starts_with("/workspace/") {

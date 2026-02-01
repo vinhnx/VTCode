@@ -1,6 +1,7 @@
 use super::FileOpsTool;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
+use crate::tools::builder::ToolResponseBuilder;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use tracing::{info, warn};
@@ -110,41 +111,9 @@ impl FileOpsTool {
         let has_more = end < capped_total;
         let has_overflow = all_items.len() > input.max_items;
 
-        // Log paging operation details
-        info!(
-            path = %input.path,
-            total_items = all_items.len(),
-            capped_total = capped_total,
-            page = page,
-            per_page = per_page,
-            start_index = start,
-            end_index = end,
-            has_more = has_more,
-            "Executing paginated file listing"
-        );
-
-        // Validate paging parameters
-        if page > 1 && start >= capped_total {
-            warn!(
-                path = %input.path,
-                page = page,
-                per_page = per_page,
-                total_items = capped_total,
-                "Requested page exceeds available data"
-            );
-        }
-
         let mut page_items = if start < end {
             all_items[start..end].to_vec()
         } else {
-            warn!(
-                path = %input.path,
-                page = page,
-                per_page = per_page,
-                start_index = start,
-                end_index = end,
-                "Empty page result - no items in requested range"
-            );
             vec![]
         };
 
@@ -248,21 +217,25 @@ impl FileOpsTool {
             None
         };
 
-        let mut out = json!({
-            "success": true,
-            "items": page_items,
-            "count": page_items.len(),
-            "total": capped_total,
-            "page": page,
-            "per_page": per_page,
-            "has_more": has_more,
-            "mode": "list",
-            "response_format": if concise { "concise" } else { "detailed" }
-        });
+        let mut builder = ToolResponseBuilder::new("list_files")
+            .success()
+            .field("items", json!(page_items))
+            .field("count", json!(page_items.len()))
+            .field("total", json!(capped_total))
+            .field("page", json!(page))
+            .field("per_page", json!(per_page))
+            .field("has_more", json!(has_more))
+            .field("mode", json!("list"))
+            .field(
+                "response_format",
+                json!(if concise { "concise" } else { "detailed" }),
+            );
 
         if let Some(msg) = guidance {
-            out["message"] = json!(msg);
+            builder = builder.message(msg);
         }
+
+        let out = builder.build_json();
 
         // Cache the result for directories (TTL is 5 minutes in FILE_CACHE)
         if base.is_dir() {

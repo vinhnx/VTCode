@@ -1,5 +1,5 @@
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, ToolCall};
+use crate::llm::provider::{LLMError, LLMResponse, ToolCall};
 use crate::llm::providers::{ReasoningBuffer, split_reasoning_from_text};
 use serde_json::{Map, Value};
 
@@ -98,6 +98,78 @@ pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCal
         .collect();
 
     if calls.is_empty() { None } else { Some(calls) }
+}
+
+/// Common helper for processing OpenAI-compatible SSE streams.
+///
+/// This simplifies stream implementations across providers like DeepSeek, ZAI, Moonshot, etc.
+pub async fn process_openai_stream<S, E, F>(
+    mut byte_stream: S,
+    provider_name: &'static str,
+    mut on_chunk: F,
+) -> Result<LLMResponse, LLMError>
+where
+    S: futures::Stream<Item = Result<bytes::Bytes, E>> + Unpin,
+    E: std::fmt::Display,
+    F: FnMut(Value) -> Result<(), LLMError>,
+{
+    use crate::llm::providers::error_handling::format_network_error;
+    use futures::StreamExt;
+
+    let mut buffer = String::new();
+    let mut last_response_value = None;
+
+    while let Some(chunk_result) = byte_stream.next().await {
+        let chunk_bytes =
+            chunk_result.map_err(|e| format_network_error(provider_name, &e.to_string()))?;
+        let chunk_str = String::from_utf8_lossy(&chunk_bytes);
+        buffer.push_str(&chunk_str);
+
+        while let Some((boundary_idx, boundary_len)) = find_sse_boundary(&buffer) {
+            let event = buffer[..boundary_idx].to_string();
+            buffer.drain(..boundary_idx + boundary_len);
+
+            if let Some(data) = extract_data_payload(&event) {
+                if data == "[DONE]" {
+                    break;
+                }
+
+                for line in data.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+
+                    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                        on_chunk(value.clone())?;
+                        last_response_value = Some(value);
+                    }
+                }
+            }
+        }
+    }
+
+    // Attempt to extract final response metadata (usage, etc) from last chunk if not already done
+    let mut final_response = LLMResponse {
+        content: None,
+        tool_calls: None,
+        usage: None,
+        finish_reason: crate::llm::provider::FinishReason::Stop,
+        reasoning: None,
+        reasoning_details: None,
+        tool_references: Vec::new(),
+        request_id: None,
+        organization_id: None,
+    };
+
+    if let Some(value) = last_response_value {
+        if value.get("usage").is_some() {
+            final_response.usage =
+                crate::llm::providers::common::parse_usage_openai_format(&value, true);
+        }
+    }
+
+    Ok(final_response)
 }
 
 pub fn parse_openai_tool_calls(calls: &[Value]) -> Vec<ToolCall> {

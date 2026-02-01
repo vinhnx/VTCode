@@ -5,15 +5,17 @@ use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, Message as ProviderMessage,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
+use crate::llm::providers::TagStreamSanitizer;
 use crate::llm::providers::openai::responses_api::{
     build_standard_responses_payload, parse_responses_payload,
 };
 use crate::llm::types as llm_types;
+use async_stream::try_stream;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -299,6 +301,140 @@ impl LLMProvider for XAIProvider {
         parse_responses_payload(xai_response, include_metrics)
     }
 
+    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+        if request.model.trim().is_empty() {
+            request.model = self.model.to_string();
+        }
+
+        request.stream = true;
+        let responses_payload = build_standard_responses_payload(&request)?;
+
+        let mut xai_request = json!({
+            "model": request.model,
+            "input": responses_payload.input,
+            "stream": true,
+            "output_types": ["message", "tool_call"],
+        });
+
+        if let Some(instructions) = responses_payload.instructions {
+            if !instructions.trim().is_empty() {
+                xai_request["instructions"] = json!(instructions);
+            }
+        }
+
+        // Add tools if present
+        if let Some(tools) = &request.tools {
+            if !tools.is_empty() {
+                if let Some(serialized) = super::common::serialize_tools_openai_format(tools) {
+                    xai_request["tools"] = Value::Array(serialized);
+                    if let Some(tool_choice) = &request.tool_choice {
+                        xai_request["tool_choice"] = tool_choice.to_provider_format("xai");
+                    }
+                }
+            }
+        }
+
+        let url = format!("{}/responses", self.base_url);
+
+        let response = self
+            .authorize(self.http_client.post(&url))
+            .header("Content-Type", "application/json")
+            .json(&xai_request)
+            .send()
+            .await
+            .map_err(|e| {
+                let formatted =
+                    error_display::format_llm_error("xAI", &format!("Network error: {}", e));
+                LLMError::Network {
+                    message: formatted,
+                    metadata: None,
+                }
+            })?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            let formatted =
+                error_display::format_llm_error("xAI", &format!("HTTP {}: {}", status, error_text));
+            return Err(LLMError::Provider {
+                message: formatted,
+                metadata: None,
+            });
+        }
+
+        let bytes_stream = response.bytes_stream();
+        let (event_tx, event_rx) =
+            tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+        let tx = event_tx.clone();
+
+        tokio::spawn(async move {
+            let mut aggregated_content = String::new();
+            let aggregated_reasoning = String::new();
+            let mut tool_call_builders = Vec::new();
+            let mut sanitizer = TagStreamSanitizer::new();
+            let mut usage = None;
+            let final_finish_reason = FinishReason::Stop;
+
+            let result = crate::llm::providers::shared::process_openai_stream(bytes_stream, "xAI", |value| {
+                // xAI Responses API streaming format parsing
+                if let Some(delta) = value.get("delta") {
+                    if let Some(content) = delta.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_str()) {
+                        aggregated_content.push_str(content);
+                        for event in sanitizer.process_chunk(content) {
+                            let _ = tx.send(Ok(event));
+                        }
+                    }
+
+                    if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
+                        for tool_call in tool_calls {
+                            if let Some(tc_obj) = tool_call.as_object() {
+                                crate::llm::providers::shared::apply_tool_call_delta_from_content(
+                                    &mut tool_call_builders,
+                                    tc_obj,
+                                    &crate::llm::providers::shared::NoopStreamTelemetry,
+                                );
+                            }
+                        }
+                    }
+                }
+
+                if value.get("usage").is_some() {
+                    usage = super::common::parse_usage_openai_format(&value, true);
+                }
+                Ok(())
+            }).await;
+
+            for event in sanitizer.finalize() {
+                let _ = tx.send(Ok(event));
+            }
+
+            match result {
+                Ok(_) => {
+                    yield_completed(
+                        &tx,
+                        aggregated_content,
+                        tool_call_builders,
+                        usage,
+                        final_finish_reason,
+                        aggregated_reasoning,
+                    );
+                }
+                Err(err) => {
+                    let _ = tx.send(Err(err));
+                }
+            }
+        });
+
+        let stream = try_stream! {
+            let mut receiver = event_rx;
+            while let Some(event) = receiver.recv().await {
+                yield event?;
+            }
+        };
+
+        Ok(Box::pin(stream))
+    }
+
     fn supported_models(&self) -> Vec<String> {
         models::xai::SUPPORTED_MODELS
             .iter()
@@ -307,52 +443,51 @@ impl LLMProvider for XAIProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        if request.messages.is_empty() {
-            let formatted = error_display::format_llm_error("xAI", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest {
-                message: formatted,
-                metadata: None,
-            });
-        }
+        let supported_models = models::xai::SUPPORTED_MODELS
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
 
-        if !request.model.trim().is_empty()
-            && !models::xai::SUPPORTED_MODELS
-                .iter()
-                .any(|m| *m == request.model)
-        {
-            let formatted = error_display::format_llm_error(
-                "xAI",
-                &format!("Unsupported model: {}", request.model),
-            );
-            return Err(LLMError::InvalidRequest {
-                message: formatted,
-                metadata: None,
-            });
-        }
-
-        for message in &request.messages {
-            if let Err(err) = message.validate_for_provider("openai") {
-                let formatted = error_display::format_llm_error("xAI", &err);
-                return Err(LLMError::InvalidRequest {
-                    message: formatted,
-                    metadata: None,
-                });
-            }
-        }
-
-        Ok(())
+        super::common::validate_request_common(request, "xAI", "openai", Some(&supported_models))
     }
+}
+
+fn yield_completed(
+    tx: &tokio::sync::mpsc::UnboundedSender<Result<LLMStreamEvent, LLMError>>,
+    content: String,
+    tool_call_builders: Vec<crate::llm::providers::shared::ToolCallBuilder>,
+    usage: Option<crate::llm::provider::Usage>,
+    finish_reason: FinishReason,
+    reasoning: String,
+) {
+    let _ = tx.send(Ok(LLMStreamEvent::Completed {
+        response: Box::new(LLMResponse {
+            content: if content.is_empty() {
+                None
+            } else {
+                Some(content)
+            },
+            tool_calls: crate::llm::providers::shared::finalize_tool_calls(tool_call_builders),
+            usage,
+            finish_reason,
+            reasoning: if reasoning.is_empty() {
+                None
+            } else {
+                Some(reasoning)
+            },
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        }),
+    }));
 }
 
 #[async_trait]
 impl LLMClient for XAIProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
         // Parse the prompt into an LLMRequest
-        let request = LLMRequest {
-            messages: vec![ProviderMessage::user(prompt.to_string())],
-            model: self.model.to_string(),
-            ..Default::default()
-        };
+        let request = super::common::make_default_request(prompt, &self.model);
 
         let response = LLMProvider::generate(self, request).await?;
 
@@ -361,7 +496,7 @@ impl LLMClient for XAIProvider {
             model: self.model.to_string(),
             usage: response
                 .usage
-                .map(|usage| crate::llm::providers::common::convert_usage_to_llm_types(usage)),
+                .map(super::common::convert_usage_to_llm_types),
             reasoning: response.reasoning,
             reasoning_details: response.reasoning_details,
             request_id: response.request_id,

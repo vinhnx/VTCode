@@ -22,6 +22,7 @@ use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 use crate::llm::providers::common::override_base_url;
 use crate::llm::types as llm_types;
+use crate::utils::http_client;
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -72,10 +73,7 @@ pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<Strin
     };
 
     // Create HTTP client with connection timeout
-    let client = reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+    let client = http_client::create_client_with_timeout(std::time::Duration::from_secs(5));
 
     // Make GET request to fetch models
     let response = client

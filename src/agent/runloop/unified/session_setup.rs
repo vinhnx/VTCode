@@ -51,23 +51,9 @@ use vtcode_core::ui::tui::{
 };
 use vtcode_core::ui::user_confirmation::TaskComplexity;
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::formatting::indent_block;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
-
-fn indent_block(text: &str, indent: &str) -> String {
-    if indent.is_empty() || text.is_empty() {
-        return text.to_string();
-    }
-    let mut indented = String::with_capacity(text.len() + indent.len());
-    for (idx, line) in text.split('\n').enumerate() {
-        if idx > 0 {
-            indented.push('\n');
-        }
-        indented.push_str(indent);
-        indented.push_str(line);
-    }
-    indented
-}
 
 /// Convert agent.circuit_breaker config to core CircuitBreakerConfig
 /// Maps user-facing settings to the actual circuit breaker parameters

@@ -586,7 +586,7 @@ mod slice {
             }
 
             let formatted = format_line(&buffer);
-            collected.push(format!("{seen}: {formatted}"));
+            collected.push(formatted);
         }
 
         if seen < offset {

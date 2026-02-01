@@ -5,17 +5,22 @@ use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, DeepSeekPromptCacheSettings, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse};
+use crate::llm::provider::{
+    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+};
+use crate::llm::providers::TagStreamSanitizer;
+use crate::llm::providers::shared::{ToolCallBuilder, finalize_tool_calls, update_tool_calls};
 use crate::llm::types as llm_types;
+use async_stream::try_stream;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
 use super::{
     common::{
-        convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url,
-        parse_chat_request_openai_format, parse_client_prompt_common, parse_response_openai_format,
-        resolve_model, serialize_messages_openai_format, serialize_tools_openai_format,
+        convert_usage_to_llm_types, extract_prompt_cache_settings, map_finish_reason_common,
+        override_base_url, parse_response_openai_format, resolve_model,
+        serialize_messages_openai_format, serialize_tools_openai_format, validate_request_common,
     },
     error_handling::handle_openai_http_error,
     extract_reasoning_trace,
@@ -112,14 +117,6 @@ impl DeepSeekProvider {
             prompt_cache_enabled,
             prompt_cache_settings,
         }
-    }
-
-    fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {
-        parse_client_prompt_common(prompt, &self.model, |value| self.parse_chat_request(value))
-    }
-
-    fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
-        parse_chat_request_openai_format(value, &self.model)
     }
 
     fn convert_to_deepseek_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
@@ -276,6 +273,143 @@ impl LLMProvider for DeepSeekProvider {
         self.parse_response(response_json)
     }
 
+    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+        if request.model.trim().is_empty() {
+            request.model = self.model.clone();
+        }
+
+        self.validate_request(&request)?;
+        request.stream = true;
+
+        let payload = self.convert_to_deepseek_format(&request)?;
+        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+
+        let response = self
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| {
+                let formatted_error = error_display::format_llm_error(
+                    PROVIDER_NAME,
+                    &format!("Network error: {}", e),
+                );
+                LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
+            })?;
+
+        let response =
+            handle_openai_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
+
+        let bytes_stream = response.bytes_stream();
+        let (event_tx, event_rx) =
+            tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+        let tx = event_tx.clone();
+
+        tokio::spawn(async move {
+            let mut aggregated_content = String::new();
+            let mut aggregated_reasoning = String::new();
+            let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
+            let mut usage = None;
+            let mut finish_reason = crate::llm::provider::FinishReason::Stop;
+            let mut sanitizer = TagStreamSanitizer::new();
+
+            let result = crate::llm::providers::shared::process_openai_stream(
+                bytes_stream,
+                PROVIDER_NAME,
+                |value| {
+                    if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
+                        && let Some(choice) = choices.first()
+                    {
+                        if let Some(delta) = choice.get("delta") {
+                            if let Some(reasoning) =
+                                delta.get("reasoning_content").and_then(|r| r.as_str())
+                            {
+                                aggregated_reasoning.push_str(reasoning);
+                                let _ = tx.send(Ok(LLMStreamEvent::Reasoning {
+                                    delta: reasoning.to_string(),
+                                }));
+                            }
+
+                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                aggregated_content.push_str(content);
+                                for event in sanitizer.process_chunk(content) {
+                                    let _ = tx.send(Ok(event));
+                                }
+                            }
+
+                            if let Some(tool_calls) =
+                                delta.get("tool_calls").and_then(|tc| tc.as_array())
+                            {
+                                update_tool_calls(&mut tool_call_builders, tool_calls);
+                            }
+                        }
+
+                        if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
+                            finish_reason = map_finish_reason_common(reason);
+                        }
+                    }
+
+                    if let Some(_usage_value) = value.get("usage") {
+                        usage = Some(
+                            crate::llm::providers::common::parse_usage_openai_format(&value, true)
+                                .unwrap_or_default(),
+                        );
+                    }
+                    Ok(())
+                },
+            )
+            .await;
+
+            for event in sanitizer.finalize() {
+                let _ = tx.send(Ok(event));
+            }
+
+            match result {
+                Ok(_) => {
+                    let tool_calls = finalize_tool_calls(tool_call_builders);
+                    let _ = tx.send(Ok(LLMStreamEvent::Completed {
+                        response: Box::new(LLMResponse {
+                            content: if aggregated_content.is_empty() {
+                                None
+                            } else {
+                                Some(aggregated_content)
+                            },
+                            tool_calls,
+                            usage,
+                            finish_reason,
+                            reasoning: if aggregated_reasoning.is_empty() {
+                                None
+                            } else {
+                                Some(aggregated_reasoning)
+                            },
+                            reasoning_details: None,
+                            tool_references: Vec::new(),
+                            request_id: None,
+                            organization_id: None,
+                        }),
+                    }));
+                }
+                Err(err) => {
+                    let _ = tx.send(Err(err));
+                }
+            }
+        });
+
+        let stream = try_stream! {
+            let mut receiver = event_rx;
+            while let Some(event) = receiver.recv().await {
+                yield event?;
+            }
+        };
+
+        Ok(Box::pin(stream))
+    }
+
     fn supported_models(&self) -> Vec<String> {
         models::deepseek::SUPPORTED_MODELS
             .iter()
@@ -284,22 +418,24 @@ impl LLMProvider for DeepSeekProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        for message in &request.messages {
-            message
-                .validate_for_provider(PROVIDER_KEY)
-                .map_err(|e| LLMError::InvalidRequest {
-                    message: e,
-                    metadata: None,
-                })?;
-        }
-        Ok(())
+        let supported_models = models::deepseek::SUPPORTED_MODELS
+            .iter()
+            .map(|model| model.to_string())
+            .collect::<Vec<_>>();
+
+        validate_request_common(
+            request,
+            PROVIDER_NAME,
+            PROVIDER_KEY,
+            Some(&supported_models),
+        )
     }
 }
 
 #[async_trait]
 impl LLMClient for DeepSeekProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
-        let request = self.parse_client_prompt(prompt);
+        let request = super::common::make_default_request(prompt, &self.model);
         let model = request.model.clone();
         let response = LLMProvider::generate(self, request).await?;
 

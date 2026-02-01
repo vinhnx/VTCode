@@ -824,13 +824,13 @@ async fn run_single_tool_attempt(
         .await;
     progress_reporter.set_progress(5).await;
 
-    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+    if let Err(e) = ctrl_c_state.check_cancellation() {
         progress_reporter
             .set_message(format!("{} cancelled", name))
             .await;
         progress_reporter.set_progress(100).await;
         warning_guard.cancel().await;
-        return ToolExecutionStatus::Cancelled;
+        return ToolExecutionStatus::Failure { error: e };
     }
 
     progress_reporter
@@ -839,13 +839,13 @@ async fn run_single_tool_attempt(
     progress_reporter.set_progress(20).await;
 
     let status = loop {
-        if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+        if let Err(e) = ctrl_c_state.check_cancellation() {
             progress_reporter
                 .set_message(format!("{} cancelled", name))
                 .await;
             progress_reporter.set_progress(100).await;
             warning_guard.cancel().await;
-            return ToolExecutionStatus::Cancelled;
+            break ToolExecutionStatus::Failure { error: e };
         }
 
         // Spawn a background task to update progress periodically with elapsed time
@@ -883,15 +883,15 @@ async fn run_single_tool_attempt(
 
         enum ExecutionControl {
             Continue,
-            Cancelled,
             Completed(Result<Result<Value, Error>, time::error::Elapsed>),
+            Cancelled,
         }
 
         let control = tokio::select! {
             biased;
 
             _ = ctrl_c_notify.notified() => {
-                if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+                if let Err(_e) = ctrl_c_state.check_cancellation() {
                     token.cancel();
                     ExecutionControl::Cancelled
                 } else {
@@ -900,7 +900,22 @@ async fn run_single_tool_attempt(
                 }
             }
 
-            result = time::timeout(tool_timeout, exec_future) => ExecutionControl::Completed(result),
+            result = vtcode_core::utils::async_utils::with_timeout(exec_future, tool_timeout, "tool execution") => {
+                match result {
+                    Ok(val) => ExecutionControl::Completed(Ok(val)),
+                    Err(e) => {
+                        // Check if it's a timeout or other error
+                        if e.to_string().contains("timed out") {
+                            // We can't easily construct tokio::time::error::Elapsed,
+                            // but we can return it via a timeout call that always fails
+                            let elapsed = time::timeout(Duration::from_nanos(0), async {}).await.unwrap_err();
+                            ExecutionControl::Completed(Err(elapsed))
+                        } else {
+                            ExecutionControl::Completed(Ok(Err(e)))
+                        }
+                    }
+                }
+            },
         };
 
         // Stop the background update task (handled by guard drop)
@@ -918,14 +933,9 @@ async fn run_single_tool_attempt(
                 break match result {
                     Ok(Ok(output)) => {
                         progress_reporter
-                            .set_message(format!("Finalizing {}...", name))
-                            .await;
-                        progress_reporter.set_progress(95).await;
-
-                        progress_reporter.set_progress(100).await;
-                        progress_reporter
                             .set_message(format!("{} completed", name))
                             .await;
+                        progress_reporter.set_progress(100).await;
                         process_llm_tool_output(output)
                     }
                     Ok(Err(error)) => {

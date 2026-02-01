@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use crate::ui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle};
-use crate::utils::ansi::MessageStyle;
+pub use crate::utils::message_style::MessageStyle;
 
 const MAX_LINES: usize = 4000;
 const MAX_QUEUE_SIZE: usize = 100;
@@ -137,21 +137,9 @@ pub fn clear_inline_handle() {
     *INLINE_HANDLE.write() = None;
 }
 
-/// Map MessageStyle to InlineMessageKind (mirrors logic from ansi.rs)
+/// Map MessageStyle to InlineMessageKind
 fn message_kind(style: MessageStyle) -> InlineMessageKind {
-    match style {
-        MessageStyle::Info => InlineMessageKind::Info,
-        MessageStyle::Error => InlineMessageKind::Error,
-        MessageStyle::Output | MessageStyle::ToolOutput => InlineMessageKind::Pty,
-        MessageStyle::Response => InlineMessageKind::Agent,
-        MessageStyle::Tool | MessageStyle::ToolDetail | MessageStyle::ToolError => {
-            InlineMessageKind::Tool
-        }
-        MessageStyle::Status | MessageStyle::McpStatus => InlineMessageKind::Info,
-        MessageStyle::User => InlineMessageKind::User,
-        MessageStyle::Reasoning => InlineMessageKind::Policy,
-        MessageStyle::Warning => InlineMessageKind::Error,
-    }
+    style.message_kind()
 }
 
 /// Enqueue a message with a specific style and display it immediately

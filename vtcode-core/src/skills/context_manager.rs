@@ -8,6 +8,7 @@
 //! - Skill state persistence
 
 use crate::skills::types::{Skill, SkillManifest};
+use crate::utils::file_utils::{read_json_file_sync, write_json_file_sync};
 use anyhow::{Result, anyhow};
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
@@ -492,8 +493,7 @@ impl PersistentContextManager {
             return Ok(());
         }
 
-        let content = std::fs::read_to_string(&self.cache_path)?;
-        let cache: ContextCache = serde_json::from_str(&content)?;
+        let cache: ContextCache = read_json_file_sync(&self.cache_path)?;
 
         // Restore active skills
         let skill_count = cache.active_skills.len();
@@ -520,8 +520,7 @@ impl PersistentContextManager {
                 .collect(),
         };
 
-        let content = serde_json::to_string_pretty(&cache)?;
-        std::fs::write(&self.cache_path, content)?;
+        write_json_file_sync(&self.cache_path, &cache)?;
 
         info!("Saved {} skills to cache", cache.active_skills.len());
         Ok(())

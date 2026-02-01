@@ -130,7 +130,7 @@ pub use router::{
 };
 
 // Shell handler
-pub use shell_handler::{ShellHandler, ShellOutput, create_shell_tool};
+pub use shell_handler::{ShellHandler, create_shell_tool};
 
 // Spawn subagent
 pub use spawn_subagent::SpawnSubagentTool;

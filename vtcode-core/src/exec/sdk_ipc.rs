@@ -44,6 +44,9 @@
 //! 3. De-tokenizes responses before returning to code
 //! 4. Maintains token mapping for the session
 
+use crate::utils::file_utils::{
+    parse_json_with_context, read_file_with_context, write_file_with_context,
+};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -97,12 +100,8 @@ impl ToolIpcHandler {
             return Ok(None);
         }
 
-        let content = fs::read_to_string(&request_file)
-            .await
-            .context("failed to read request file")?;
-
-        let request: ToolRequest =
-            serde_json::from_str(&content).context("failed to parse request JSON")?;
+        let content = read_file_with_context(&request_file, "request file").await?;
+        let request: ToolRequest = parse_json_with_context(&content, "request JSON")?;
 
         // Clean up request file
         let _ = fs::remove_file(&request_file).await;
@@ -118,8 +117,7 @@ impl ToolIpcHandler {
             let (tokenized, _) = tokenizer
                 .tokenize_string(&args_str)
                 .context("PII tokenization failed")?;
-            request.args =
-                serde_json::from_str(&tokenized).context("failed to parse tokenized args")?;
+            request.args = parse_json_with_context(&tokenized, "tokenized args")?;
         }
         Ok(())
     }
@@ -134,10 +132,10 @@ impl ToolIpcHandler {
             let detokenized = tokenizer
                 .detokenize_string(&result_str)
                 .context("PII de-tokenization failed")?;
-            response.result = Some(
-                serde_json::from_str(&detokenized)
-                    .context("failed to parse de-tokenized result")?,
-            );
+            response.result = Some(parse_json_with_context(
+                &detokenized,
+                "de-tokenized result",
+            )?);
         }
         Ok(())
     }
@@ -151,9 +149,7 @@ impl ToolIpcHandler {
 
         let json = serde_json::to_string(&response).context("failed to serialize response")?;
 
-        fs::write(&response_file, json)
-            .await
-            .context("failed to write response file")?;
+        write_file_with_context(&response_file, &json, "response file").await?;
 
         Ok(())
     }

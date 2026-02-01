@@ -7,6 +7,7 @@ use super::{
     approval::{AskForApproval, ExecApprovalRequirement, ExecPolicyAmendment},
     policy::{Decision, Policy, PolicyEvaluation, RuleMatch},
 };
+use crate::command_safety::command_might_be_dangerous;
 use crate::sandboxing::SandboxPolicy;
 use anyhow::{Context, Result};
 use std::{
@@ -210,6 +211,8 @@ impl ExecPolicyManager {
     }
 
     /// Apply heuristics to determine decision for unknown commands.
+    ///
+    /// Uses the centralized `command_safety` module for dangerous command detection.
     fn heuristics_decision(&self, command: &[String]) -> Decision {
         if !self.config.use_heuristics {
             return Decision::Prompt;
@@ -221,7 +224,7 @@ impl ExecPolicyManager {
 
         let cmd = &command[0];
 
-        // Known safe read-only commands
+        // Known safe read-only commands that can proceed without approval
         let safe_commands = [
             "ls", "cat", "head", "tail", "grep", "find", "echo", "pwd", "which", "type", "less",
             "more", "wc", "sort", "uniq", "diff", "env", "printenv", "hostname", "uname", "date",
@@ -232,27 +235,16 @@ impl ExecPolicyManager {
             return Decision::Allow;
         }
 
-        // Known dangerous commands
-        let dangerous_commands = [
-            "rm", "rmdir", "dd", "mkfs", "fdisk", "shutdown", "reboot", "halt", "poweroff", "init",
-            "kill", "killall", "pkill", "chmod", "chown", "chgrp", "sudo", "su",
-        ];
-
-        if dangerous_commands.contains(&cmd.as_str()) {
-            // Check for --dry-run flag
+        // Check dangerous commands using centralized logic
+        if command_might_be_dangerous(command) {
+            // Check for --dry-run flag to allow prompting instead of forbidding
             if command.iter().any(|arg| arg == "--dry-run" || arg == "-n") {
                 return Decision::Prompt;
             }
             return Decision::Forbidden;
         }
 
-        // Commands with potentially dangerous flags
-        if command.iter().any(|arg| {
-            arg == "--force" || arg == "-f" || arg == "--hard" || arg == "-rf" || arg == "-fr"
-        }) {
-            return Decision::Prompt;
-        }
-
+        // For all other commands, default to prompting for approval
         Decision::Prompt
     }
 

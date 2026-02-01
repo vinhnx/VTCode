@@ -546,58 +546,7 @@ pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
     if !input.contains('\x1b') {
         return Cow::Borrowed(input);
     }
-
-    let mut output = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\x1b' {
-            match chars.peek() {
-                Some('[') => {
-                    // CSI: ESC [ ... letter
-                    chars.next();
-                    for next in chars.by_ref() {
-                        let codepoint = next as u32;
-                        if (0x40..=0x7e).contains(&codepoint) {
-                            break;
-                        }
-                    }
-                }
-                Some(']') | Some('P') | Some('^') | Some('_') | Some('X') => {
-                    // OSC/DCS/PM/APC/SOS: ESC X ... ST (where ST = ESC \ or BEL)
-                    // Guard against malformed sequences (defensive limit)
-                    chars.next();
-                    let mut seq_length = 0usize;
-                    while let Some(next) = chars.next() {
-                        if next == '\x07' {
-                            break;
-                        }
-                        if next == '\x1b' && matches!(chars.peek(), Some('\\')) {
-                            chars.next();
-                            break;
-                        }
-                        seq_length += 1;
-                        if seq_length > vtcode_config::constants::ansi::ANSI_MAX_ESCAPE_SEQ_LENGTH {
-                            break;
-                        }
-                    }
-                }
-                Some('(') | Some(')') | Some('*') | Some('+') => {
-                    // Character set: ESC ( X, ESC ) X, etc.
-                    chars.next();
-                    chars.next();
-                }
-                Some('7') | Some('8') | Some('=') | Some('>') | Some('c') | Some('D')
-                | Some('E') | Some('H') | Some('M') | Some('Z') => {
-                    // Single char sequences: save/restore cursor, reset, etc.
-                    chars.next();
-                }
-                _ => {}
-            }
-            continue;
-        }
-        output.push(ch);
-    }
-    Cow::Owned(output)
+    Cow::Owned(vtcode_core::utils::ansi_parser::strip_ansi(input))
 }
 
 #[cfg(test)]

@@ -31,6 +31,8 @@
 use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
 use crate::exec::sdk_ipc::{ToolIpcHandler, ToolResponse};
 use crate::mcp::McpToolExecutor;
+use crate::utils::async_utils;
+use crate::utils::file_utils::{ensure_dir_exists, write_file_with_context};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -189,9 +191,7 @@ impl CodeExecutor {
 
         // Set up IPC directory for tool invocation
         let ipc_dir = self.workspace_root.join(".vtcode").join("ipc");
-        tokio::fs::create_dir_all(&ipc_dir)
-            .await
-            .context("failed to create IPC directory")?;
+        ensure_dir_exists(&ipc_dir).await?;
 
         // Generate the SDK wrapper
         let sdk = self
@@ -208,9 +208,7 @@ impl CodeExecutor {
         // Write code to temporary file in workspace
         // Use code_temp as a directory, not a file
         let code_temp_dir = self.workspace_root.join(".vtcode").join("code_temp");
-        tokio::fs::create_dir_all(&code_temp_dir)
-            .await
-            .context("failed to create .vtcode/code_temp directory")?;
+        ensure_dir_exists(&code_temp_dir).await?;
 
         // Use a unique temp file name based on timestamp
         let timestamp = std::time::SystemTime::now()
@@ -223,9 +221,7 @@ impl CodeExecutor {
         };
         let code_file = code_temp_dir.join(format!("exec_{}.{}", timestamp, ext));
 
-        tokio::fs::write(&code_file, &complete_code)
-            .await
-            .context("failed to write code file")?;
+        write_file_with_context(&code_file, &complete_code, "temporary code file").await?;
 
         debug!(
             language = self.language.as_str(),
@@ -386,7 +382,8 @@ impl CodeExecutor {
         let _ = tokio::fs::remove_dir_all(&ipc_dir).await;
 
         // Wait for IPC task to complete (with timeout)
-        let ipc_result = tokio::time::timeout(Duration::from_secs(1), ipc_task).await;
+        let ipc_result =
+            async_utils::with_timeout(ipc_task, Duration::from_secs(1), "IPC handler task").await;
 
         if let Err(e) = ipc_result {
             debug!(error = %e, "IPC handler did not complete in time");

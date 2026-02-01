@@ -4,6 +4,7 @@
 //! Each line specifies a command prefix and a decision.
 
 use super::policy::{Decision, Policy, PrefixRule};
+use crate::utils::file_utils::{parse_json_with_context, read_file_with_context};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -54,7 +55,7 @@ impl PolicyParser {
 
     /// Parse a JSON policy file.
     pub fn parse_json(&self, content: &str) -> Result<PolicyFile> {
-        serde_json::from_str(content).context("Failed to parse policy JSON")
+        parse_json_with_context(content, "policy JSON")
     }
 
     /// Parse a simple line-based format.
@@ -116,9 +117,7 @@ impl PolicyParser {
 
     /// Load a policy from a file.
     pub async fn load_file(&self, path: &Path) -> Result<Policy> {
-        let content = tokio::fs::read_to_string(path)
-            .await
-            .with_context(|| format!("Failed to read policy file: {}", path.display()))?;
+        let content = read_file_with_context(path, "policy file").await?;
 
         self.load_from_content(&content, path)
     }
