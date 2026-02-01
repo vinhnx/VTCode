@@ -22,8 +22,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
         })?;
 
     if choices.is_empty() {
-        let formatted =
-            error_display::format_llm_error("OpenRouter", "No choices in response");
+        let formatted = error_display::format_llm_error("OpenRouter", "No choices in response");
         return Err(LLMError::Provider {
             message: formatted,
             metadata: None,
@@ -32,15 +31,20 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
 
     let choice = &choices[0];
     let message = choice.get("message").ok_or_else(|| {
-        let formatted =
-            error_display::format_llm_error("OpenRouter", "Invalid response format: missing message");
+        let formatted = error_display::format_llm_error(
+            "OpenRouter",
+            "Invalid response format: missing message",
+        );
         LLMError::Provider {
             message: formatted,
             metadata: None,
         }
     })?;
 
-    let content = message.get("content").and_then(|c| c.as_str()).map(|s| s.to_string());
+    let content = message
+        .get("content")
+        .and_then(|c| c.as_str())
+        .map(|s| s.to_string());
 
     let tool_calls = message
         .get("tool_calls")

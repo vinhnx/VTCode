@@ -32,9 +32,7 @@ pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 
 use semver::Version;
 
-use super::common::{
-    override_base_url, parse_client_prompt_common, resolve_model,
-};
+use super::common::{override_base_url, parse_client_prompt_common, resolve_model};
 use super::error_handling::{format_network_error, format_parse_error};
 
 // ============================================================================
@@ -1021,7 +1019,8 @@ impl LLMProvider for OllamaProvider {
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         if let Some(tool_choice) = &request.tool_choice {
             match tool_choice {
-                ToolChoice::Auto | ToolChoice::None => {}_ => {
+                ToolChoice::Auto | ToolChoice::None => {}
+                _ => {
                     return Err(LLMError::InvalidRequest {
                         message: "Ollama does not support explicit tool_choice overrides"
                             .to_string(),

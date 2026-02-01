@@ -97,7 +97,8 @@ impl LLMProvider for GeminiProvider {
             let config = StreamingConfig::with_total_timeout(streaming_timeout);
             let mut processor = StreamingProcessor::with_config(config);
             let event_sender = completion_sender.clone();
-            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
+            let mut aggregator =
+                crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
 
             #[allow(clippy::collapsible_if)]
             let mut on_chunk = |chunk: &str| -> Result<(), StreamingError> {

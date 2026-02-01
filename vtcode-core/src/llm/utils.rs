@@ -294,7 +294,9 @@ fn join_deprecated_section(lines: &[String]) -> Option<String> {
     }
 }
 
-pub use vtcode_commons::tokens::{estimate_tokens as estimate_token_count, truncate_to_tokens as truncate_to_token_limit};
+pub use vtcode_commons::tokens::{
+    estimate_tokens as estimate_token_count, truncate_to_tokens as truncate_to_token_limit,
+};
 
 /// Create a consistent error message for LLM errors
 pub fn format_llm_error(provider_name: &str, error_message: &str) -> String {
@@ -363,7 +365,9 @@ mod tests {
             "model": "gpt-4"
         });
 
-        let result = parse_response_openai_format(response, "test", "gpt-4".to_string(), false, None).unwrap();
+        let result =
+            parse_response_openai_format(response, "test", "gpt-4".to_string(), false, None)
+                .unwrap();
         assert_eq!(result.content_text(), "Hello world");
         let usage = result.usage.expect("usage should be present");
         assert_eq!(usage.prompt_tokens, 10);

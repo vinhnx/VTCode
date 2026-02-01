@@ -710,7 +710,8 @@ impl LLMProvider for HuggingFaceProvider {
             .await
             .map_err(|err| format_network_error(PROVIDER_NAME, &err))?;
 
-        self.parse_response(response, model, use_responses_api).await
+        self.parse_response(response, model, use_responses_api)
+            .await
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {

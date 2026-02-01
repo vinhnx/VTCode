@@ -135,8 +135,10 @@ impl OpenAIProvider {
                                             metadata: None,
                                         }
                                     })?;
-                                let response =
-                                    self.parse_openai_responses_response(openai_response, model.clone())?;
+                                let response = self.parse_openai_responses_response(
+                                    openai_response,
+                                    model.clone(),
+                                )?;
                                 return Ok(response);
                             }
                         }
@@ -171,7 +173,8 @@ impl OpenAIProvider {
                     }
                 })?;
 
-                let response = self.parse_openai_responses_response(openai_response, model.clone())?;
+                let response =
+                    self.parse_openai_responses_response(openai_response, model.clone())?;
                 #[cfg(debug_assertions)]
                 {
                     let content_len = response.content.as_ref().map_or(0, |c| c.len());

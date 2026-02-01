@@ -1,9 +1,9 @@
 use std::fs;
 use std::num::NonZero;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tempfile::TempDir;
-use vtcode_file_search::{run, FileSearchConfig};
+use vtcode_file_search::{FileSearchConfig, run};
 
 #[test]
 fn test_multiple_matches() -> anyhow::Result<()> {

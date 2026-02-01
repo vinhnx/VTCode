@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::path::{Component, Path, PathBuf};
 use tracing::warn;
 
@@ -47,13 +47,12 @@ pub fn secure_path(workspace_root: &Path, user_path: &Path) -> Result<PathBuf> {
         .with_context(|| format!("Failed to canonicalize path {}", joined.display()))?;
 
     // Ensure the canonical path is within the workspace.
-    let workspace_canonical = std::fs::canonicalize(workspace_root)
-        .with_context(|| {
-            format!(
-                "Failed to canonicalize workspace root {}",
-                workspace_root.display()
-            )
-        })?;
+    let workspace_canonical = std::fs::canonicalize(workspace_root).with_context(|| {
+        format!(
+            "Failed to canonicalize workspace root {}",
+            workspace_root.display()
+        )
+    })?;
     if !canonical.starts_with(&workspace_canonical) {
         return Err(anyhow!(
             "Path {} escapes workspace root {}",

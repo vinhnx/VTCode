@@ -6,8 +6,7 @@ use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
-    LLMStreamEvent,
+    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
@@ -83,11 +82,7 @@ impl ZAIProvider {
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::ZAI_API_BASE,
-                base_url,
-                Some(env_vars::ZAI_BASE_URL),
-            ),
+            base_url: override_base_url(urls::ZAI_API_BASE, base_url, Some(env_vars::ZAI_BASE_URL)),
             model,
         }
     }
@@ -279,7 +274,8 @@ impl LLMProvider for ZAIProvider {
 
         let model_clone = model.clone();
         tokio::spawn(async move {
-            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
+            let mut aggregator =
+                crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
 
             let result = crate::llm::providers::shared::process_openai_stream(
                 bytes_stream,

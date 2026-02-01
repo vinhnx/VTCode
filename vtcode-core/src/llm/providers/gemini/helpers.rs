@@ -1,9 +1,9 @@
 use super::*;
-use crate::prompts::system::default_system_prompt;
+use crate::config::constants::models;
+use crate::gemini::streaming::StreamingError;
 use crate::llm::error_display;
 use crate::llm::provider::LLMError;
-use crate::gemini::streaming::StreamingError;
-use crate::config::constants::models;
+use crate::prompts::system::default_system_prompt;
 
 impl GeminiProvider {
     /// Check if model supports context caching
@@ -385,8 +385,7 @@ impl GeminiProvider {
                         thought_signature: None,
                     });
                 }
-                Part::FunctionResponse { .. } => {
-                }
+                Part::FunctionResponse { .. } => {}
             }
         }
 
@@ -400,7 +399,7 @@ impl GeminiProvider {
         };
 
         let (cleaned_content, extracted_reasoning) = if !text_content.is_empty() {
-            let (reasoning_segments, cleaned) = 
+            let (reasoning_segments, cleaned) =
                 crate::llm::providers::split_reasoning_from_text(&text_content);
             let final_reasoning = if reasoning_segments.is_empty() {
                 None
@@ -480,7 +479,7 @@ impl GeminiProvider {
             StreamingError::ApiError {
                 status_code,
                 message,
-                .. 
+                ..
             } => {
                 if status_code == 401 || status_code == 403 {
                     let formatted = error_display::format_llm_error(
@@ -505,7 +504,7 @@ impl GeminiProvider {
                 }
             }
             StreamingError::ParseError { message, .. } => {
-                let formatted = 
+                let formatted =
                     error_display::format_llm_error("Gemini", &format!("Parse error: {}", message));
                 LLMError::Provider {
                     message: formatted,

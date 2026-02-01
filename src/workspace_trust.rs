@@ -43,7 +43,9 @@ pub async fn ensure_workspace_trust(
     workspace: &Path,
     full_auto_requested: bool,
 ) -> Result<WorkspaceTrustGateResult> {
-    let workspace_key = canonicalize_workspace(workspace).to_string_lossy().into_owned();
+    let workspace_key = canonicalize_workspace(workspace)
+        .to_string_lossy()
+        .into_owned();
     let config = load_user_config()
         .await
         .context("Failed to load user configuration for trust check")?;
@@ -166,7 +168,9 @@ fn read_user_selection() -> Result<TrustSelection> {
 
 #[allow(dead_code)]
 pub async fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
-    let workspace_key = canonicalize_workspace(workspace).to_string_lossy().into_owned();
+    let workspace_key = canonicalize_workspace(workspace)
+        .to_string_lossy()
+        .into_owned();
     let config = load_user_config()
         .await
         .context("Failed to load user configuration for trust lookup")?;
@@ -182,7 +186,9 @@ pub async fn ensure_workspace_trust_level_silent(
     workspace: &Path,
     desired_level: WorkspaceTrustLevel,
 ) -> Result<WorkspaceTrustSyncOutcome> {
-    let workspace_key = canonicalize_workspace(workspace).to_string_lossy().into_owned();
+    let workspace_key = canonicalize_workspace(workspace)
+        .to_string_lossy()
+        .into_owned();
     let config = load_user_config()
         .await
         .context("Failed to load user configuration for trust sync")?;

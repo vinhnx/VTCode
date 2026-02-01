@@ -219,8 +219,10 @@ impl LLMProvider for OpenResponsesProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            let formatted_error =
-                error_display::format_llm_error("OpenResponses", &format!("HTTP {}: {}", status, body));
+            let formatted_error = error_display::format_llm_error(
+                "OpenResponses",
+                &format!("HTTP {}: {}", status, body),
+            );
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
@@ -236,21 +238,20 @@ impl LLMProvider for OpenResponsesProvider {
             .get("choices")
             .and_then(|c| c.as_array())
             .and_then(|c| c.first())
-            .ok_or_else(|| {
-                LLMError::Provider {
-                    message: "Invalid response from OpenResponses: missing choices".to_string(),
-                    metadata: None,
-                }
+            .ok_or_else(|| LLMError::Provider {
+                message: "Invalid response from OpenResponses: missing choices".to_string(),
+                metadata: None,
             })?;
 
-        let message = choice.get("message").ok_or_else(|| {
-            LLMError::Provider {
-                message: "Invalid response from OpenResponses: missing message".to_string(),
-                metadata: None,
-            }
+        let message = choice.get("message").ok_or_else(|| LLMError::Provider {
+            message: "Invalid response from OpenResponses: missing message".to_string(),
+            metadata: None,
         })?;
 
-        let content = message.get("content").and_then(|c| c.as_str()).map(|s| s.to_string());
+        let content = message
+            .get("content")
+            .and_then(|c| c.as_str())
+            .map(|s| s.to_string());
 
         let tool_calls = message
             .get("tool_calls")
@@ -318,8 +319,10 @@ impl LLMProvider for OpenResponsesProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            let formatted_error =
-                error_display::format_llm_error("OpenResponses", &format!("HTTP {}: {}", status, body));
+            let formatted_error = error_display::format_llm_error(
+                "OpenResponses",
+                &format!("HTTP {}: {}", status, body),
+            );
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
@@ -354,7 +357,7 @@ impl LLMProvider for OpenResponsesProvider {
                                                 yield ev;
                                             }
                                         }
-                                        
+
                                         if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
                                             aggregator.handle_tool_calls(tool_calls);
                                         }

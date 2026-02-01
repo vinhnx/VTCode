@@ -1,6 +1,8 @@
 use super::*;
 use crate::config::constants::models;
-use crate::llm::provider::{MessageContent, MessageRole, SpecificFunctionChoice, SpecificToolChoice, ToolDefinition};
+use crate::llm::provider::{
+    MessageContent, MessageRole, SpecificFunctionChoice, SpecificToolChoice, ToolDefinition,
+};
 use serde_json::json;
 
 #[test]
@@ -111,7 +113,8 @@ fn convert_from_gemini_response_extracts_tool_calls() {
     };
 
     let llm_response =
-        GeminiProvider::convert_from_gemini_response(response, "gemini-2.5-flash".to_string()).expect("conversion should succeed");
+        GeminiProvider::convert_from_gemini_response(response, "gemini-2.5-flash".to_string())
+            .expect("conversion should succeed");
 
     assert_eq!(llm_response.content.as_deref(), Some("Here you go"));
     let calls = llm_response
@@ -356,7 +359,8 @@ fn thought_signature_preserved_in_function_call_response() {
     };
 
     let llm_response =
-        GeminiProvider::convert_from_gemini_response(response, "gemini-3-pro-preview".to_string()).expect("conversion should succeed");
+        GeminiProvider::convert_from_gemini_response(response, "gemini-3-pro-preview".to_string())
+            .expect("conversion should succeed");
 
     let tool_calls = llm_response.tool_calls.expect("should have tool calls");
     assert_eq!(tool_calls.len(), 1);
@@ -454,7 +458,8 @@ fn parallel_function_calls_single_signature() {
     };
 
     let llm_response =
-        GeminiProvider::convert_from_gemini_response(response, "gemini-3-pro-preview".to_string()).expect("conversion should succeed");
+        GeminiProvider::convert_from_gemini_response(response, "gemini-3-pro-preview".to_string())
+            .expect("conversion should succeed");
 
     let tool_calls = llm_response.tool_calls.expect("should have tool calls");
     assert_eq!(tool_calls.len(), 2);

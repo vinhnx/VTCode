@@ -1,7 +1,7 @@
 //! ANSI escape sequence constants and utilities
 
-use std::io::{IsTerminal, Write};
 use once_cell::sync::Lazy;
+use std::io::{IsTerminal, Write};
 
 /// Escape character (ESC = 0x1B = 27)
 pub const ESC: &str = "\x1b";

@@ -4,11 +4,13 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnthropicConfig {
-    /// Skip model name validation against the hardcoded allowlist.
-    /// Enable this when using third-party aggregators or proxies (e.g., OpenRouter,
-    /// LiteLLM) that provide Anthropic-compatible APIs but use different model names.
-    /// When true, any model string is accepted without validation.
-    /// Default: false (validation enabled)
+    /// DEPRECATED: Model name validation has been removed. The Anthropic API validates
+    /// model names directly, avoiding maintenance burden and allowing flexibility.
+    /// This field is kept for backward compatibility but has no effect.
+    #[deprecated(
+        since = "0.75.0",
+        note = "Model validation removed. API validates model names directly."
+    )]
     #[serde(default)]
     pub skip_model_validation: bool,
 

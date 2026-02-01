@@ -281,9 +281,9 @@ pub struct DiffLine {
 }
 
 /// Compute a structured diff bundle.
-pub fn compute_diff<F>(old: &str, new: &str, options: DiffOptions<'_>, formatter: F) -> DiffBundle 
-where 
-    F: FnOnce(&[DiffHunk], &DiffOptions<'_>) -> String
+pub fn compute_diff<F>(old: &str, new: &str, options: DiffOptions<'_>, formatter: F) -> DiffBundle
+where
+    F: FnOnce(&[DiffHunk], &DiffOptions<'_>) -> String,
 {
     let old_lines_owned = split_lines_with_terminator(old);
     let new_lines_owned = split_lines_with_terminator(new);

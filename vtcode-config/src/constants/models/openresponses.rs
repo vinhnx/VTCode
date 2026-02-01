@@ -11,44 +11,35 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     "gpt-5.1-codex",
     "gpt-5.1-codex-max",
     "gpt-5.2-codex",
-    
     // OpenAI o-series (Reasoning models)
     "o3",
     "o4-mini",
-    
     // Legacy GPT-4 series (still supported)
     "gpt-4o",
     "gpt-4o-mini",
-    
     // Anthropic Claude 4.5 series
     "claude-sonnet-4-5",
     "claude-haiku-4-5",
     "claude-opus-4-5",
-    
     // Legacy Claude 3.5 series
     "claude-3-5-sonnet",
     "claude-3-5-haiku",
-    
     // Google Gemini 2.5/3 series
     "gemini-2.5-flash",
     "gemini-2.5-pro",
     "gemini-3-flash-preview",
-    
     // DeepSeek models
     "deepseek-chat",
     "deepseek-reasoner",
     "deepseek-r1",
-    
     // xAI Grok models
     "grok-4",
     "grok-4-mini",
     "grok-4-code",
-    
     // Z.AI GLM models
     "glm-4.7",
     "glm-4.7-flash",
     "glm-4-plus",
-    
     // MiniMax models
     "MiniMax-M2.1",
     "MiniMax-M2.1-lightning",

@@ -1,9 +1,11 @@
-use serde_json::{Value, json};
-use std::collections::HashSet;
-use crate::llm::provider::{LLMResponse, LLMError, FinishReason, Usage, ToolCall, MessageRole, LLMRequest};
 use crate::llm::error_display;
+use crate::llm::provider::{
+    FinishReason, LLMError, LLMRequest, LLMResponse, MessageRole, ToolCall, Usage,
+};
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
 use crate::prompts::system::default_system_prompt;
+use serde_json::{Value, json};
+use std::collections::HashSet;
 
 fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
     let call_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -66,7 +68,8 @@ pub fn parse_responses_payload(
 
         match item_type {
             "message" => {
-                if let Some(content_array) = item.get("content").and_then(|value| value.as_array()) {
+                if let Some(content_array) = item.get("content").and_then(|value| value.as_array())
+                {
                     for entry in content_array {
                         let entry_type = entry
                             .get("type")

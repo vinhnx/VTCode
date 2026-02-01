@@ -1,10 +1,10 @@
 //! Unicode monitoring and validation utilities
 
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
-use once_cell::sync::Lazy;
 
 /// Global unicode monitoring statistics
 #[derive(Debug, Default)]
