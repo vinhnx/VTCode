@@ -59,16 +59,26 @@ check_dependencies() {
         exit 1
     fi
 
-    # Verify GitHub CLI authentication and scopes
+    # Verify GitHub CLI authentication and attempt to switch to vinhnx account
     if ! gh auth status >/dev/null 2>&1; then
-        print_error "GitHub CLI is not authenticated. Please run: gh auth login"
-        exit 1
+        print_info "Attempting to authenticate with GitHub CLI (vinhnx account)..."
+        if gh auth switch -u vinhnx 2>/dev/null; then
+            print_success "Switched to GitHub account vinhnx"
+        else
+            print_error "GitHub CLI is not authenticated. Please run: gh auth login"
+            exit 1
+        fi
     fi
 
-    # Check for required 'workflow' scope which is often needed for release actions
+    # Check for required 'workflow' scope and refresh if needed
     if ! gh auth status --show-token 2>&1 | grep -q "workflow"; then
-        print_warning "GitHub CLI may lack 'workflow' scope required for some release operations."
-        print_info "If release creation fails, run: gh auth refresh -s workflow"
+        print_info "Refreshing GitHub CLI scopes to include 'workflow'..."
+        if gh auth refresh -h github.com -s workflow 2>/dev/null; then
+            print_success "GitHub CLI scopes refreshed"
+        else
+            print_warning "Could not refresh GitHub CLI scopes. Some release operations may fail."
+            print_info "To manually refresh, run: gh auth refresh -h github.com -s workflow"
+        fi
     fi
 
     print_success "All required tools are available"
