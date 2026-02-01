@@ -2,7 +2,6 @@ use std::pin::Pin;
 
 pub use vtcode_commons::llm::{FinishReason, LLMError, LLMResponse, Usage};
 
-
 #[derive(Debug, Clone)]
 pub enum LLMStreamEvent {
     Token { delta: String },

@@ -2,8 +2,8 @@
 //!
 //! Re-exports from vtcode-commons for backward compatibility.
 
-pub use vtcode_commons::colors::*;
 use anstyle::{Color, Effects, Style as AnsiStyle};
+pub use vtcode_commons::colors::*;
 
 /// Create a style with enhanced effects
 pub fn enhanced_style(fg: Option<Color>, bg: Option<Color>, effects: Effects) -> AnsiStyle {

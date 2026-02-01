@@ -115,8 +115,6 @@ pub struct HoverContents {
     pub scope: Option<String>,
 }
 
-
-
 /// Code Intelligence Tool
 #[derive(Clone)]
 pub struct CodeIntelligenceTool {
@@ -126,9 +124,7 @@ pub struct CodeIntelligenceTool {
 impl CodeIntelligenceTool {
     /// Create a new code intelligence tool
     pub fn new(workspace_root: PathBuf) -> Self {
-        Self {
-            workspace_root,
-        }
+        Self { workspace_root }
     }
 
     /// Execute a code intelligence operation

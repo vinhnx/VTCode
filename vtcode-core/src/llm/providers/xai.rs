@@ -82,11 +82,7 @@ impl XAIProvider {
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::XAI_API_BASE,
-                base_url,
-                Some(env_vars::XAI_BASE_URL),
-            ),
+            base_url: override_base_url(urls::XAI_API_BASE, base_url, Some(env_vars::XAI_BASE_URL)),
             model,
         }
     }
@@ -234,7 +230,8 @@ impl LLMProvider for XAIProvider {
 
         let model_clone = model.clone();
         tokio::spawn(async move {
-            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
+            let mut aggregator =
+                crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
 
             let result = crate::llm::providers::shared::process_openai_stream(
                 bytes_stream,

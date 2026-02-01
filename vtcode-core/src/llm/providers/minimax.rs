@@ -147,21 +147,20 @@ impl LLMProvider for MinimaxProvider {
             .get("choices")
             .and_then(|c| c.as_array())
             .and_then(|c| c.first())
-            .ok_or_else(|| {
-                LLMError::Provider {
-                    message: "Invalid response from MiniMax: missing choices".to_string(),
-                    metadata: None,
-                }
+            .ok_or_else(|| LLMError::Provider {
+                message: "Invalid response from MiniMax: missing choices".to_string(),
+                metadata: None,
             })?;
 
-        let message = choice.get("message").ok_or_else(|| {
-            LLMError::Provider {
-                message: "Invalid response from MiniMax: missing message".to_string(),
-                metadata: None,
-            }
+        let message = choice.get("message").ok_or_else(|| LLMError::Provider {
+            message: "Invalid response from MiniMax: missing message".to_string(),
+            metadata: None,
         })?;
 
-        let content = message.get("content").and_then(|c| c.as_str()).map(|s| s.to_string());
+        let content = message
+            .get("content")
+            .and_then(|c| c.as_str())
+            .map(|s| s.to_string());
 
         Ok(LLMResponse {
             content,

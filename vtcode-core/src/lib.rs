@@ -175,8 +175,8 @@ pub mod ui;
 pub mod utils;
 
 // Re-export common error macros and constants
-pub use vtcode_commons::{ctx_err, file_err};
 pub use vtcode_commons::errors::*;
+pub use vtcode_commons::{ctx_err, file_err};
 
 // New MCP enhancement modules
 // Re-exports for convenience

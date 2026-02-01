@@ -100,8 +100,6 @@ pub enum SlashCommandOutcome {
     },
 }
 
-
-
 #[derive(Clone, Debug)]
 pub enum AgentCommandAction {
     List,

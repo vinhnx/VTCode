@@ -1,9 +1,9 @@
 //! Generic utility functions
 
+use anyhow::Result;
 use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
-use anyhow::Result;
 
 /// Get current Unix timestamp in seconds
 #[inline]
@@ -67,11 +67,7 @@ pub fn extract_readme_excerpt(md: &str, max_len: usize) -> String {
 }
 
 /// Safe text replacement with validation
-pub fn safe_replace_text(
-    content: &str,
-    old_str: &str,
-    new_str: &str,
-) -> Result<String> {
+pub fn safe_replace_text(content: &str, old_str: &str, new_str: &str) -> Result<String> {
     if old_str.is_empty() {
         return Err(anyhow::anyhow!("old_string cannot be empty"));
     }

@@ -1,9 +1,9 @@
 //! Project-related utilities and structures
 
-use std::path::{Path, PathBuf};
-use std::fmt::Write as _;
-use tokio::fs;
 use crate::utils::{extract_readme_excerpt, extract_toml_str};
+use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
+use tokio::fs;
 
 /// Lightweight project overview extracted from workspace files
 pub struct ProjectOverview {

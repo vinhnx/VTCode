@@ -1,8 +1,8 @@
 //! Diff utilities for generating structured and formatted diffs.
 
 use anstyle::Reset;
-pub use vtcode_commons::diff::*;
 use std::fmt::Write;
+pub use vtcode_commons::diff::*;
 
 use crate::ui::theme;
 

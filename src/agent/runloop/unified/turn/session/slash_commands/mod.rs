@@ -31,7 +31,6 @@ use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason};
 
 pub mod handlers;
 
-
 pub enum SlashCommandControl {
     Continue,
     SubmitPrompt(String),

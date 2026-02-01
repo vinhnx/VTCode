@@ -1,8 +1,8 @@
 use async_stream::try_stream;
 use async_trait::async_trait;
 
-pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 use super::{LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
+pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 
 /// Universal LLM provider trait
 #[async_trait]

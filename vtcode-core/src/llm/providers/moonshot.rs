@@ -227,7 +227,8 @@ impl LLMProvider for MoonshotProvider {
 
         let model_clone = model.clone();
         tokio::spawn(async move {
-            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
+            let mut aggregator =
+                crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
 
             let result = crate::llm::providers::shared::process_openai_stream(
                 bytes_stream,

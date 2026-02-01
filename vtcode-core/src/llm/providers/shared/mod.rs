@@ -2,9 +2,9 @@ use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMResponse, ToolCall};
 pub use crate::llm::providers::ReasoningBuffer;
 mod tag_sanitizer;
-pub use tag_sanitizer::TagStreamSanitizer;
 use crate::llm::providers::split_reasoning_from_text;
 use serde_json::{Map, Value};
+pub use tag_sanitizer::TagStreamSanitizer;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StreamAssemblyError {
@@ -100,11 +100,7 @@ pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCal
         .filter_map(|(index, builder)| builder.finalize(index))
         .collect();
 
-    if calls.is_empty() {
-        None
-    } else {
-        Some(calls)
-    }
+    if calls.is_empty() { None } else { Some(calls) }
 }
 
 /// Helper to aggregate streaming events and produce a final LLMResponse.

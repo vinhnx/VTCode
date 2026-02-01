@@ -286,7 +286,11 @@ impl AnthropicProvider {
         request_builder::convert_to_anthropic_format(request, &self.request_builder_context())
     }
 
-    fn parse_anthropic_response(&self, response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
+    fn parse_anthropic_response(
+        &self,
+        response_json: Value,
+        model: String,
+    ) -> Result<LLMResponse, LLMError> {
         response_parser::parse_response(response_json, model)
     }
 }
@@ -370,7 +374,8 @@ impl LLMProvider for AnthropicProvider {
             .await
             .map_err(|e| format_parse_error("Anthropic", &e))?;
 
-        let mut llm_response = response_parser::parse_response(anthropic_response, self.model.clone())?;
+        let mut llm_response =
+            response_parser::parse_response(anthropic_response, self.model.clone())?;
         llm_response.request_id = request_id;
         llm_response.organization_id = organization_id;
         Ok(llm_response)

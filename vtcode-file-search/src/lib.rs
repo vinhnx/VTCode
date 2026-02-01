@@ -34,8 +34,8 @@ use serde::Serialize;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::num::NonZero;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// A single file match result.
 ///
@@ -108,7 +108,7 @@ impl BestMatchesList {
             self.matches.push(Reverse((score, path.to_string())));
             Some(score)
         } else {
-            let min_score = self.matches.peek().unwrap().0 .0;
+            let min_score = self.matches.peek().unwrap().0.0;
             if score > min_score {
                 self.matches.pop();
                 self.matches.push(Reverse((score, path.to_string())));

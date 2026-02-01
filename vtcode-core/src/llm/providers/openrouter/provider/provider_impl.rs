@@ -1,6 +1,8 @@
 use super::super::OpenRouterProvider;
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
+use crate::llm::provider::{
+    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+};
 use crate::llm::providers::error_handling::{format_network_error, format_parse_error};
 
 use async_stream::try_stream;
@@ -39,8 +41,10 @@ impl LLMProvider for OpenRouterProvider {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            let formatted_error =
-                error_display::format_llm_error("OpenRouter", &format!("HTTP {}: {}", status, error_text));
+            let formatted_error = error_display::format_llm_error(
+                "OpenRouter",
+                &format!("HTTP {}: {}", status, error_text),
+            );
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
@@ -76,8 +80,10 @@ impl LLMProvider for OpenRouterProvider {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            let formatted_error =
-                error_display::format_llm_error("OpenRouter", &format!("HTTP {}: {}", status, error_text));
+            let formatted_error = error_display::format_llm_error(
+                "OpenRouter",
+                &format!("HTTP {}: {}", status, error_text),
+            );
             return Err(LLMError::Provider {
                 message: formatted_error,
                 metadata: None,

@@ -3,9 +3,7 @@
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::providers::shared::StreamTelemetry;
-use crate::llm::providers::shared::{
-    StreamAssemblyError, extract_data_payload, find_sse_boundary,
-};
+use crate::llm::providers::shared::{StreamAssemblyError, extract_data_payload, find_sse_boundary};
 use async_stream::try_stream;
 use futures::StreamExt;
 use serde_json::Value;
@@ -16,7 +14,10 @@ use tracing::debug;
 use super::responses_api::parse_responses_payload;
 use super::streaming::OpenAIStreamTelemetry;
 
-pub(crate) fn create_chat_stream(response: reqwest::Response, model: String) -> provider::LLMStream {
+pub(crate) fn create_chat_stream(
+    response: reqwest::Response,
+    model: String,
+) -> provider::LLMStream {
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
@@ -244,7 +245,7 @@ pub(crate) fn create_responses_stream(
         let mut response = parse_responses_payload(response_value, model, include_metrics)?;
 
         let final_aggregator_response = aggregator.finalize();
-        
+
         if response.content.is_none() {
             response.content = final_aggregator_response.content;
         } else if let (Some(c), Some(agg_c)) = (&mut response.content, final_aggregator_response.content) {

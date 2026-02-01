@@ -16,9 +16,9 @@ use serde_json::{Map, Value};
 
 use super::{
     common::{
-        extract_prompt_cache_settings, map_finish_reason_common,
-        override_base_url, parse_response_openai_format, resolve_model,
-        serialize_messages_openai_format, serialize_tools_openai_format, validate_request_common,
+        extract_prompt_cache_settings, map_finish_reason_common, override_base_url,
+        parse_response_openai_format, resolve_model, serialize_messages_openai_format,
+        serialize_tools_openai_format, validate_request_common,
     },
     error_handling::handle_openai_http_error,
     extract_reasoning_trace,
@@ -313,7 +313,8 @@ impl LLMProvider for DeepSeekProvider {
 
         let model_clone = model.clone();
         tokio::spawn(async move {
-            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
+            let mut aggregator =
+                crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
 
             let result = crate::llm::providers::shared::process_openai_stream(
                 bytes_stream,
