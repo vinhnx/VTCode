@@ -184,8 +184,11 @@ a2a-server = ["vtcode-core/a2a-server"]   # Enable OAuth callback server for pro
 [profile.dev]
 debug = 0
 lto = false
-incremental = true
+# incremental = false required for sccache; set CARGO_INCREMENTAL=1 to override for rapid iteration
+incremental = false
 opt-level = 0
+# Split debuginfo for faster incremental builds (when CARGO_INCREMENTAL=1)
+split-debuginfo = "unpacked"
 
 [profile.test]
 inherits = "dev"
@@ -205,6 +208,12 @@ inherits = "dev"
 lto = "thin"
 codegen-units = 1
 opt-level = 2
+
+# Fast release profile - thin LTO for ~50% faster builds than full LTO
+[profile.release-fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 4
 
 [profile.release]
 codegen-units = 1 # Allows compiler to perform better optimization.
