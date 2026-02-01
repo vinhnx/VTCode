@@ -318,46 +318,76 @@ main() {
         print_warning "Released version $released_version differs from expected $next_version"
     fi
 
-    # 3.5 GitHub Release Creation via changelogithub
-    # This matches the workflow used in GitHub Actions and ensures consistent formatting
-    print_info "Step 3.5: Creating GitHub Release via npx changelogithub..."
+    # 3.5 GitHub Release Creation and Binary Upload via gh
+     print_info "Step 3.5: Creating GitHub Release with binaries..."
+    
+     # Ensure GITHUB_TOKEN is available
+     if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+         export GITHUB_TOKEN=$(gh auth token)
+     fi
+    
+     # Check if release already exists
+     if gh release view "v$released_version" &>/dev/null; then
+         print_warning "Release v$released_version already exists"
+     else
+         # Read release notes from file
+         local release_body=""
+         if [[ -f "$RELEASE_NOTES_FILE" ]]; then
+             release_body=$(cat "$RELEASE_NOTES_FILE")
+         fi
+    
+         # Create GitHub release with release notes
+         if gh release create "v$released_version" \
+             --title "VT Code v$released_version" \
+             --notes "$release_body" \
+             --draft=false \
+             --prerelease=false; then
+             print_success "GitHub Release v$released_version created successfully"
+         else
+             print_error "Failed to create GitHub Release"
+             exit 1
+         fi
+     fi
 
-    # Switch to the correct GitHub account before creating the release
-    if command -v gh >/dev/null 2>&1; then
-        print_info "Switching to GitHub account vinhnx..."
-        if ! gh auth switch -u vinhnx; then
-            print_warning "Could not switch to GitHub account vinhnx, continuing with current account..."
-        fi
-    else
-        print_warning "GitHub CLI not found, skipping account switch..."
-    fi
-
-    if command -v npx >/dev/null 2>&1; then
-        # Ensure GITHUB_TOKEN is available for changelogithub
-        if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
-            export GITHUB_TOKEN=$(gh auth token)
-        fi
-
-        # Run changelogithub to create the release on GitHub
-        if npx changelogithub; then
-            print_success "GitHub Release v$released_version created successfully"
-        else
-            print_warning "changelogithub failed, falling back to manual release creation in Step 4"
-        fi
-    else
-        print_warning "npx not found, skipping changelogithub step"
-    fi
-
-    # 4. Upload Binaries to GitHub with the captured Release Notes
+    # 4. Upload Binaries to GitHub Release
     if [[ "$skip_binaries" == 'false' ]]; then
-        print_info "Step 4: Uploading binaries to GitHub Release v$released_version..."
-        if ! ./scripts/build-and-upload-binaries.sh -v "$released_version" --only-upload --notes-file "$RELEASE_NOTES_FILE"; then
-            print_error "Step 4 failed locally."
-            print_info "You can trigger the release via GitHub Actions instead:"
-            print_info "gh workflow run release.yml -f tag=v$released_version"
-            print_info "Alternatively, refresh your token: gh auth refresh -h github.com -s workflow"
+        print_info "Step 4: Packaging and uploading binaries to GitHub Release v$released_version..."
+        
+        local binaries_dir="/tmp/vtcode-release-$released_version"
+        mkdir -p "$binaries_dir"
+        
+        # Build and package binaries
+        print_info "Building binaries for macOS architectures..."
+        
+        # x86_64-apple-darwin
+        if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
+            tar -C target/x86_64-apple-darwin/release -czf "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.tar.gz" vtcode
+            shasum -a 256 "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.sha256"
+            print_success "Built x86_64-apple-darwin"
+        else
+            print_warning "Failed to build x86_64-apple-darwin"
+        fi
+        
+        # aarch64-apple-darwin
+        if cargo build --release --target aarch64-apple-darwin &>/dev/null; then
+            tar -C target/aarch64-apple-darwin/release -czf "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.tar.gz" vtcode
+            shasum -a 256 "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.sha256"
+            print_success "Built aarch64-apple-darwin"
+        else
+            print_warning "Failed to build aarch64-apple-darwin"
+        fi
+        
+        # Upload binaries to GitHub Release
+        print_info "Uploading binaries to GitHub Release..."
+        if gh release upload "v$released_version" "$binaries_dir"/*.tar.gz "$binaries_dir"/*.sha256 --clobber; then
+            print_success "Binaries uploaded successfully"
+        else
+            print_error "Failed to upload binaries to GitHub Release"
             exit 1
         fi
+        
+        # Cleanup
+        rm -rf "$binaries_dir"
     fi
 
     # 5. Update Homebrew
