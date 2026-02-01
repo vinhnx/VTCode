@@ -2,6 +2,28 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.3 - 2026-02-01
+
+* fix: skip gh auth checks in dry-run mode (8f4f8dae)
+* automation: enhance release.sh with direct GitHub binary upload via gh CLI (9168134d)
+* chore: add Windows cross-platform builds to release workflow (d497cf6d)
+* feat: enhance AGENTS.md with new cargo commands and build performance tips (4df82383)
+* feat: update imports in harness.rs and tests.rs for improved clarity (6e2b9432)
+* chore: remove unnecessary blank line in run-tests.sh (c9422726)
+* feat: update test commands to prefer cargo-nextest for faster execution (db00e155)
+* feat: enhance Turn Diff Tracker with Agent Trace support and backward compatibility (a81074bd)
+* feat: enhance Agent Trace support with async storage and serialization improvements (e777f259)
+* Implement Agent Trace storage and specification for AI code attribution (d6748fc4)
+* refactor: update process group management documentation for clarity (aff7157a)
+* Implement process group management and graceful termination for child processes (d7aac98b)
+* feat: implement wire API detection and version handling for Ollama (0cc27230)
+* refactor: optimize development profile settings in Cargo.toml (cac65958)
+* refactor: optimize development and test profiles in Cargo.toml (7f4cc397)
+* fix: correct file path conversion in log_access method (ec7e3dc4)
+* refactor: improve code formatting and readability across multiple files (d4ba430d)
+* Fix badge links in README.md (e098b997)
+* chore: update homebrew formula to v0.74.2 (744e7902)
+
 ## v0.74.2 - 2026-01-31
 
 * feat: add ACP authentication methods and configuration support (e51a5658)
