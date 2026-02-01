@@ -248,12 +248,10 @@ impl LLMProvider for MinimaxProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        vec![
-            "abab6.5s-chat".to_string(),
-            "abab6.5-chat".to_string(),
-            "abab5.5s-chat".to_string(),
-            "abab5.5-chat".to_string(),
-        ]
+        models::minimax::SUPPORTED_MODELS
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {

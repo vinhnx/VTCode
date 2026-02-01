@@ -127,14 +127,11 @@ impl LLMProvider for OpenRouterProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        vec![
-            "anthropic/claude-3.5-sonnet".to_string(),
-            "anthropic/claude-3-haiku".to_string(),
-            "openai/gpt-4o".to_string(),
-            "openai/gpt-4o-mini".to_string(),
-            "google/gemini-pro".to_string(),
-            "meta-llama/llama-3.1-405b-instruct".to_string(),
-        ]
+        use crate::config::constants::models;
+        models::openrouter::SUPPORTED_MODELS
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
