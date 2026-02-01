@@ -30,12 +30,12 @@ default-run = "vtcode"
 [workspace.dependencies]
 base64 = "0.22.1"
 crossterm = "0.29"
-schemars = "0.8"
-thiserror = "2.0.17"
+schemars = "1.2"
+thiserror = "2.0.18"
 unicode-width = "0.2.0"
 serde_json = "1.0"
 tempfile = "3.24"
-tokio = { version = "1.48", features = ["full"] }
+tokio = { version = "1.49", features = ["full"] }
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 regex = "1.12"
