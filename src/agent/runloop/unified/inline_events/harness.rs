@@ -6,13 +6,13 @@ use std::sync::Mutex;
 
 use chrono::Utc;
 use vtcode_config::OpenResponsesConfig;
+#[cfg(test)]
+use vtcode_core::exec::events::ThreadStartedEvent;
 use vtcode_core::exec::events::{
     CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent, ItemStartedEvent,
     ThreadEvent, ThreadItem, ThreadItemDetails, TurnCompletedEvent, TurnFailedEvent,
     TurnStartedEvent, Usage, VersionedThreadEvent,
 };
-#[cfg(test)]
-use vtcode_core::exec::events::ThreadStartedEvent;
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
 
 use crate::agent::runloop::unified::run_loop_context::TurnRunId;

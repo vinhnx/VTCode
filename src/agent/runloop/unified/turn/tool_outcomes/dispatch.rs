@@ -29,6 +29,20 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
     for group in groups {
         let is_parallel = group.len() > 1 && t_ctx.ctx.full_auto;
         if is_parallel {
+            let all_parallel_safe = group.tool_calls.iter().all(|(name, _, _)| {
+                vtcode_core::tools::parallel_tool_batch::ParallelToolBatch::is_parallel_safe(name)
+            });
+            if !all_parallel_safe {
+                for (_, _, call_id) in &group.tool_calls {
+                    if let Some(tc) = tool_calls.iter().find(|tc| &tc.id == call_id) {
+                        let outcome = handle_tool_call(t_ctx, tc).await?;
+                        if let Some(o) = outcome {
+                            return Ok(Some(o));
+                        }
+                    }
+                }
+                continue;
+            }
             // HP-5: Implement true parallel execution for non-conflicting groups in full-auto mode
             let mut group_tool_calls = Vec::with_capacity(group.len());
             for (_, _, call_id) in &group.tool_calls {

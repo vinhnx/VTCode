@@ -264,7 +264,7 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
     let traj = TrajectoryLogger::new(&test_ctx.workspace);
     let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
-    let mut harness_state = build_harness_state_with(0);
+    let mut harness_state = build_harness_state_with(1);
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
         renderer: &mut test_ctx.renderer,
         handle: &test_ctx.handle,
@@ -306,9 +306,9 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
 
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
-            assert!(error.to_string().contains("Policy violation"));
+            assert!(error.to_string().contains("Tool permission denied"));
         }
-        other => panic!("Expected policy violation, got: {:?}", other),
+        other => panic!("Expected permission denial, got: {:?}", other),
     }
 }
 

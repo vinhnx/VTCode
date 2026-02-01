@@ -266,9 +266,7 @@ impl Drop for PtySessionHandle {
         // This uses SIGTERM first, then SIGKILL after a grace period
         #[cfg(unix)]
         {
-            use vtcode_bash_runner::{
-                KillSignal, graceful_kill_process_group,
-            };
+            use vtcode_bash_runner::{KillSignal, graceful_kill_process_group};
 
             let mut child = self.child.lock();
             if let Ok(None) = child.try_wait() {

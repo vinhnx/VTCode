@@ -36,7 +36,9 @@ impl TraceGenerator {
 
         // Generate files with attributed ranges
         for (path, change) in tracker.changes() {
-            if let Some(trace_file) = Self::file_change_to_trace_file(path, change, ctx, &workspace_path) {
+            if let Some(trace_file) =
+                Self::file_change_to_trace_file(path, change, ctx, &workspace_path)
+            {
                 builder = builder.file(trace_file);
             }
         }
@@ -85,7 +87,9 @@ impl TraceGenerator {
             .unwrap_or_else(|| PathBuf::from("."));
 
         for (path, change) in changes {
-            if let Some(trace_file) = Self::file_change_to_trace_file(path, change, ctx, &workspace_path) {
+            if let Some(trace_file) =
+                Self::file_change_to_trace_file(path, change, ctx, &workspace_path)
+            {
                 builder = builder.file(trace_file);
             }
         }
@@ -291,7 +295,10 @@ mod tests {
         let ctx = TraceContext::new("model", "provider").with_workspace_path("/workspace");
 
         let mut changes = HashMap::new();
-        changes.insert(PathBuf::from("/workspace/deleted.rs"), FileChange::delete("old content"));
+        changes.insert(
+            PathBuf::from("/workspace/deleted.rs"),
+            FileChange::delete("old content"),
+        );
 
         let trace = TraceGenerator::from_changes(&changes, &ctx);
         // Deletions don't create attributions

@@ -74,28 +74,6 @@ pub(crate) async fn run_tool_call(
     };
     let tool_item_id = call.id.clone();
 
-    if ctx.harness_state.tool_budget_exhausted() {
-        return Ok(ToolPipelineOutcome::from_status(
-            ToolExecutionStatus::Failure {
-                error: anyhow!(
-                    "Policy violation: exceeded max tool calls per turn ({})",
-                    ctx.harness_state.max_tool_calls
-                ),
-            },
-        ));
-    }
-    if ctx.harness_state.wall_clock_exhausted() {
-        return Ok(ToolPipelineOutcome::from_status(
-            ToolExecutionStatus::Failure {
-                error: anyhow!(
-                    "Policy violation: exceeded tool wall clock budget ({}s)",
-                    ctx.harness_state.max_tool_wall_clock.as_secs()
-                ),
-            },
-        ));
-    }
-    ctx.harness_state.record_tool_call();
-
     if let Some(validation_failures) = validate_tool_args_security(&name, &args_val, None) {
         return Ok(ToolPipelineOutcome::from_status(
             ToolExecutionStatus::Failure {

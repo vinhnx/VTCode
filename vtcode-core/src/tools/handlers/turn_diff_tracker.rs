@@ -240,11 +240,13 @@ impl FileChange {
                 old_content: old_content.clone(),
                 new_content: new_content.clone(),
             },
-            super::tool_handler::FileChange::Rename { new_path, content } => FileChangeKind::Rename {
-                new_path: new_path.clone(),
-                old_content: None,
-                new_content: content.clone(),
-            },
+            super::tool_handler::FileChange::Rename { new_path, content } => {
+                FileChangeKind::Rename {
+                    new_path: new_path.clone(),
+                    old_content: None,
+                    new_content: content.clone(),
+                }
+            }
         };
         Self {
             kind,
@@ -383,17 +385,16 @@ impl TurnDiffTracker {
                     }
                 }
                 // Delete then Add = Update
-                (
-                    FileChangeKind::Delete { original_content },
-                    FileChangeKind::Add { content },
-                ) => FileChange {
-                    kind: FileChangeKind::Update {
-                        old_content: original_content.clone(),
-                        new_content: content.clone(),
-                    },
-                    attribution: change.attribution.clone().or(existing.attribution.clone()),
-                    line_range: change.line_range,
-                },
+                (FileChangeKind::Delete { original_content }, FileChangeKind::Add { content }) => {
+                    FileChange {
+                        kind: FileChangeKind::Update {
+                            old_content: original_content.clone(),
+                            new_content: content.clone(),
+                        },
+                        attribution: change.attribution.clone().or(existing.attribution.clone()),
+                        line_range: change.line_range,
+                    }
+                }
                 // Default: use the new change
                 _ => change,
             };
@@ -754,8 +755,7 @@ mod tests {
 
     #[test]
     fn test_change_attribution_serialization() {
-        let attr = ChangeAttribution::ai("gpt-4", "openai")
-            .with_session("session-abc", 3);
+        let attr = ChangeAttribution::ai("gpt-4", "openai").with_session("session-abc", 3);
 
         let json = serde_json::to_string(&attr).unwrap();
         let restored: ChangeAttribution = serde_json::from_str(&json).unwrap();

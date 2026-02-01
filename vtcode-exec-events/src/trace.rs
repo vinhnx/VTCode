@@ -801,7 +801,12 @@ mod tests {
         let range_with_hash = range.with_content_hash("hello world");
         assert!(range_with_hash.content_hash.is_some());
         // Default is MurmurHash3 per Agent Trace spec
-        assert!(range_with_hash.content_hash.unwrap().starts_with("murmur3:"));
+        assert!(
+            range_with_hash
+                .content_hash
+                .unwrap()
+                .starts_with("murmur3:")
+        );
     }
 
     #[test]
