@@ -2,6 +2,12 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.6 - 2026-02-01
+
+* Migrate LM Studio 0.4 REST API (4d12e993)
+* Update release (bb930a4e)
+* chore: update homebrew formula to v0.74.5 (dd7bdd0a)
+
 ## v0.74.5 - 2026-02-01
 
 * Update CI (c9cf0a74)
