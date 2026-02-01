@@ -244,11 +244,12 @@ main() {
 
     # GitHub CLI authentication setup
     if command -v gh >/dev/null 2>&1; then
-        print_info "Setting up GitHub CLI authentication..."
-        
+        print_info "Checking GitHub CLI authentication..."
+
         # Check current GitHub user
         current_user=$(gh api user --jq '.login' 2>/dev/null || echo "")
-        
+        print_info "Currently logged in as: $current_user"
+
         if [[ "$current_user" != "vinhnx" ]]; then
             print_info "Switching to GitHub account vinhnx..."
             if gh auth switch -u vinhnx 2>/dev/null; then
@@ -257,16 +258,9 @@ main() {
                 print_warning "Could not switch to GitHub account vinhnx"
             fi
         fi
-        
-        # Check and refresh workflow scope
-        if ! gh auth status --show-token 2>&1 | grep -q "workflow"; then
-            print_info "Refreshing GitHub CLI scopes..."
-            if gh auth refresh -h github.com -s workflow 2>/dev/null; then
-                print_success "GitHub CLI scopes refreshed"
-            else
-                print_warning "Could not refresh GitHub CLI scopes. Run: gh auth refresh -h github.com -s workflow"
-            fi
-        fi
+
+        # Skip the refresh step that causes hangs, assuming user has proper scopes
+        print_warning "Skipping GitHub CLI scopes refresh (may need manual refresh if issues occur)"
     else
         print_warning "GitHub CLI not found. Release will continue but binary uploads may fail."
     fi
