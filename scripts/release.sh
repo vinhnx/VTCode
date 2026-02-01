@@ -281,12 +281,13 @@ main() {
 
     # 1. Local Build (both macOS architectures for Homebrew, or current platform on Linux)
     if [[ "$skip_binaries" == 'false' ]]; then
-        print_info "Step 1: Local binary build (macOS: both architectures, Linux: current platform)..."
-        local build_args=(-v "$next_version" --only-build-local)
         if [[ "$dry_run" == 'true' ]]; then
-            build_args+=(--dry-run)
+            print_info "Step 1 (dry-run): Would build binaries for x86_64-apple-darwin and aarch64-apple-darwin"
+        else
+            print_info "Step 1: Local binary build (macOS: both architectures, Linux: current platform)..."
+            local build_args=(-v "$next_version" --only-build-local)
+            ./scripts/build-and-upload-binaries.sh "${build_args[@]}"
         fi
-        ./scripts/build-and-upload-binaries.sh "${build_args[@]}"
     fi
 
     # 2. Changelog Update & capture for Release Notes
