@@ -18,8 +18,8 @@ fn main() -> anyhow::Result<()> {
         config_dir.join("settings.toml"),
         r#"
             [agent]
-            provider = "openai"
-            default_model = "gpt-5-nano"
+            provider = "anthropic"
+            default_model = "claude-sonnet-4-5"
         "#
         .trim(),
     )?;

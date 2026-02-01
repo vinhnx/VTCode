@@ -25,7 +25,7 @@ python3 evals/eval_engine.py --cases evals/test_cases.json --provider gemini --m
 **Arguments:**
 - `--cases`: Path to the test cases JSON file (default: `evals/test_cases.json`).
 - `--provider`: The LLM provider to evaluate (e.g., `gemini`, `openai`, `anthropic`).
-- `--model`: The specific model ID to evaluate (e.g., `gemini-2.5-flash`, `gpt-4o`).
+- `--model`: The specific model ID to evaluate (e.g., `gemini-2.5-flash`, `gpt-4`).
 
 ## Directory Structure
 

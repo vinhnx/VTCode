@@ -1,7 +1,7 @@
 [agent]
-provider = "openai"
-api_key_env = "OPENAI_API_KEY"
-default_model = "gpt-5"
+provider = "anthropic"
+api_key_env = "ANTHROPIC_API_KEY"
+default_model = "claude-sonnet-4-5"
 theme = "ciapre-dark"
 system_prompt_mode = "default"
 tool_documentation_mode = "full"

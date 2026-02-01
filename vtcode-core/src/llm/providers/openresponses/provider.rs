@@ -27,7 +27,7 @@ const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_OPENRESPONSES_VERSION: &str = "latest";
 
 /// Default model to use if none specified.
-const DEFAULT_MODEL: &str = "gpt-4o";
+const DEFAULT_MODEL: &str = "claude-sonnet-4-5";
 
 /// OpenResponses provider for multi-provider LLM interactions.
 ///

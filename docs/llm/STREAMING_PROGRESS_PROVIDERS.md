@@ -5,7 +5,7 @@
 The `StreamingProgressTracker` in `vtcode-core/src/llm/providers/streaming_progress.rs` provides a unified interface for tracking streaming timeout progress across all LLM providers.
 
 **Supported Providers:**
--   OpenAI (GPT-4, GPT-3.5, o1, o1-mini)
+-   OpenAI (GPT-4, o1, o1-mini)
 -   Anthropic (Claude)
 -   Google Gemini
 -   Ollama

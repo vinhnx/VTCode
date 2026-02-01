@@ -270,12 +270,7 @@ pub enum ModelId {
     OpenRouterOpenAIGpt5Codex,
     /// OpenAI GPT-5 Chat - Chat optimised GPT-5 endpoint without tool use
     OpenRouterOpenAIGpt5Chat,
-    /// OpenAI GPT-4o Search Preview - GPT-4o search preview endpoint via OpenRouter
-    OpenRouterOpenAIGpt4oSearchPreview,
-    /// OpenAI GPT-4o Mini Search Preview - GPT-4o mini search preview endpoint
-    OpenRouterOpenAIGpt4oMiniSearchPreview,
-    /// OpenAI ChatGPT-4o Latest - ChatGPT 4o latest listing via OpenRouter
-    OpenRouterOpenAIChatgpt4oLatest,
+
     /// Claude Sonnet 4.5 - Anthropic Claude Sonnet 4.5 listing
     OpenRouterAnthropicClaudeSonnet45,
     /// Claude Haiku 4.5 - Anthropic Claude Haiku 4.5 listing

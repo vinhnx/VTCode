@@ -11,6 +11,7 @@ The Anthropic API compatibility server allows existing applications that expect 
 - Multi-provider LLM support through VT Code's unified interface
 
 ## Quick Links
+
 - [Reducing Latency with Claude](./anthropic-latency.md)
 - [Anthropic API Documentation](https://docs.anthropic.com/en/api/messages)
 
@@ -71,6 +72,7 @@ curl -X POST http://localhost:11434/v1/messages \
 ## Supported Features
 
 ### Messages
+
 - Text content blocks
 - Image content blocks (base64 encoded)
 - Tool use blocks
@@ -78,22 +80,26 @@ curl -X POST http://localhost:11434/v1/messages \
 - Thinking blocks
 
 ### Streaming
+
 - Full Server-Sent Events (SSE) support
 - Streaming events: `message_start`, `content_block_start`, `content_block_delta`, `message_delta`, `message_stop`
 - Real-time response streaming
 
 ### Tool Calling
+
 - Tool definition and registration
 - Parallel tool execution
 - Tool result handling
 - Complex tool chains
 
 ### Vision
+
 - Image content support
 - Base64-encoded image processing
 - Multimodal inputs
 
 ### Other Features
+
 - System prompts
 - Multi-turn conversations
 - Temperature and sampling controls
@@ -125,7 +131,6 @@ Then run Claude Code with any model supported by VT Code:
 ```bash
 # Local models
 claude --model claude-3-5-sonnet
-claude --model gpt-4o
 
 # Cloud models
 claude --model glm-4-air
@@ -160,11 +165,13 @@ curl http://localhost:11434/v1/messages \
 ## Differences from Anthropic API
 
 ### Behavior Differences
+
 - API key is accepted but not validated
 - `anthropic-version` header is accepted but not used
 - Token counts are approximations based on the underlying model's tokenizer
 
 ### Not Supported
+
 - `/v1/messages/count_tokens` endpoint
 - `tool_choice` parameter (forcing specific tool use or disabling tools)
 - `metadata` parameter (request metadata like user_id)
@@ -175,6 +182,7 @@ curl http://localhost:11434/v1/messages \
 - Server-sent errors during streaming (errors return HTTP status instead)
 
 ### Partial Support
+
 - Image content: Base64 images supported; URL images not supported
 - Extended thinking: Basic support; `budget_tokens` accepted but not enforced
 
@@ -209,6 +217,7 @@ curl -X POST http://localhost:11434/v1/messages \
 ## Security
 
 The Anthropic API compatibility server inherits VT Code's security model:
+
 - All operations are confined to the workspace boundaries
 - Tool policies and execution controls apply
 - Human-in-the-loop approvals can be configured

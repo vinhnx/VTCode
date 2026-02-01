@@ -364,9 +364,6 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt5
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
-            | ModelId::OpenRouterOpenAIGpt4oSearchPreview
-            | ModelId::OpenRouterOpenAIGpt4oMiniSearchPreview
-            | ModelId::OpenRouterOpenAIChatgpt4oLatest
             | ModelId::OpenRouterAnthropicClaudeSonnet45
             | ModelId::OpenRouterAnthropicClaudeHaiku45
             | ModelId::OpenRouterAnthropicClaudeOpus41
