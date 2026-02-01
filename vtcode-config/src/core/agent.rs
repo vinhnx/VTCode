@@ -837,7 +837,7 @@ pub struct AgentSmallModelConfig {
     #[serde(default = "default_small_model_enabled")]
     pub enabled: bool,
 
-    /// Small model to use (e.g., "claude-3-5-haiku", "gpt-4o-mini", "gemini-2.0-flash")
+    /// Small model to use (e.g., "claude-3-5-haiku", "gpt-4-mini", "gemini-2.0-flash")
     /// Leave empty to auto-select a lightweight sibling of the main model
     #[serde(default)]
     pub model: String,

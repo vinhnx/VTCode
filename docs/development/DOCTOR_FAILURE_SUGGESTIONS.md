@@ -102,7 +102,7 @@ VT Code Doctor v0.52.10
 [Configuration]
   ✓ Config File: Loaded from /path/to/vtcode.toml
   ✓ Theme: ciapre-dark
-  ✓ Model: gpt-4 (+ small model: gpt-4o-mini)
+  ✓ Model: gpt-4 (+ small model: gpt-4-mini)
   ✓ Max Turns: 50
   ...
 

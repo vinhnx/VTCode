@@ -43,8 +43,8 @@
 //!
 //! ```toml
 //! [agent]
-//! provider = "openai"
-//! default_model = "gpt-5-codex"
+//! provider = "anthropic"
+//! default_model = "claude-sonnet-4-5"
 //! ```
 //!
 //! The configuration loader resolves aliases through

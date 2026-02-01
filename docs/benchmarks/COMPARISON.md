@@ -22,7 +22,7 @@ See [GPT5_NANO_VS_GEMINI.md](GPT5_NANO_VS_GEMINI.md) for detailed comparison.
 -   gpt-5-nano (94.5%, ~$0.10-0.30/1M)
 -   gemini-2.5-flash-lite (61.6%, free)
 -   ⏳ gemini-2.5-flash
--   ⏳ gpt-4o-mini
+-   ⏳ gpt-4-mini
 -   ⏳ claude-3-haiku
 
 **Premium Tier:**

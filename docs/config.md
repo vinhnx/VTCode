@@ -53,8 +53,8 @@ The AI provider that VT Code should use.
 
 ```toml
 [agent]
-provider = "openai"  # available: openai, anthropic, google, together, fireworks, ollama
-default_model = "gpt-4o"  # overrides the default model for the selected provider
+provider = "anthropic"  # available: openai, anthropic, google, together, fireworks, ollama
+default_model = "claude-sonnet-4-5"  # overrides the default model for the selected provider
 ```
 
 ### agent.provider_settings
@@ -331,7 +331,7 @@ Here is an example of a `vtcode.toml` that defines multiple profiles:
 # Default settings
 [agent]
 provider = "openai"
-default_model = "gpt-4o"
+default_model = "gpt-4"
 
 [security]
 human_in_the_loop = true
@@ -341,7 +341,7 @@ default_tool_policy = "ask"
 [profiles.development]
 [profiles.development.agent]
 provider = "openai"
-default_model = "gpt-4o"
+default_model = "gpt-4"
 
 [profiles.development.security]
 human_in_the_loop = true
@@ -389,7 +389,7 @@ You can also define settings that only apply to specific workspace types:
 # Settings for any workspace containing a package.json
 [workspace.nodejs]
 [workspace.nodejs.agent]
-default_model = "gpt-4-turbo"
+default_model = "gpt-4"
 
 [workspace.nodejs.participants]
 default_participants = ["@workspace", "@code", "@terminal"]
@@ -542,7 +542,7 @@ If VT Code is not behaving as expected with your configuration:
     # Make sure all tables close properly
     [agent]
     provider = "openai"
-    default_model = "gpt-4o"
+    default_model = "gpt-4"
     # No missing closing brackets
     ```
 

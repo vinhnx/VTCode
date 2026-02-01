@@ -180,7 +180,7 @@ Here's a complete example configuration in `vtcode.toml` with optimization featu
 ```toml
 [agent]
 provider = "openai"
-default_model = "gpt-4o"
+default_model = "gpt-4"
 theme = "vitesse-dark"
 
 [security]

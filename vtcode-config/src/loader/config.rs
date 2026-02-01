@@ -251,13 +251,13 @@ impl VTCodeConfig {
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "openai"
+provider = "anthropic"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OPENAI_API_KEY"
+api_key_env = "ANTHROPIC_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-5-nano"
+default_model = "claude-sonnet-4-5"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"

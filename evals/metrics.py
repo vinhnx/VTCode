@@ -16,7 +16,7 @@ class ContainsMatch(Metric):
         return target.lower() in output.lower()
 
 class LLMGrader(Metric):
-    def __init__(self, provider="openai", model="gpt-4o"):
+    def __init__(self, provider="openai", model="gpt-4"):
         self.provider = provider
         self.model = model
 

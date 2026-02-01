@@ -125,7 +125,7 @@ export OPENAI_API_KEY="your-api-key"
 ```toml
 [ai]
 provider = "openai"
-model = "gpt-4o"
+model = "gpt-4"
 ```
 
 ### Full-Featured Setup

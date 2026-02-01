@@ -18,18 +18,5 @@ module and its recent changes with meticulous attention to architectural integri
 
 --
 
-/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/pi-answer.png
 
-pi-mino plan/answer mode
-
---
-
-remove gpt-4o model
-
---
-
-remove and cleanup old models from vtcode
-
---
-
-
+change default provider config to anthropic and claude-sonnet-4 in code codebase for consistency

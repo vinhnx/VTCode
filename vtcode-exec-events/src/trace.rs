@@ -846,7 +846,7 @@ mod tests {
             .git_revision("abc123def456")
             .file(TraceFile::with_ai_ranges(
                 "src/lib.rs",
-                "openai/gpt-4o",
+                "openai/gpt-4",
                 vec![TraceRange::new(10, 20)],
             ))
             .build();
