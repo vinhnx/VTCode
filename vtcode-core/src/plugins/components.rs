@@ -6,7 +6,6 @@
 //! - Skills (model-invoked capabilities)
 //! - Hooks (event handlers)
 //! - MCP servers (Model Context Protocol)
-//! - LSP servers (Language Server Protocol)
 
 use std::path::{Path, PathBuf};
 

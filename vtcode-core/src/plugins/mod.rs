@@ -6,7 +6,6 @@
 //! - Skills (model-invoked capabilities)
 //! - Hooks (event handlers)
 //! - MCP servers (Model Context Protocol)
-//! - LSP servers (Language Server Protocol)
 
 pub mod caching;
 pub mod components;

@@ -4,7 +4,7 @@
 
 OpenAI's `codex-file-search` crate implements a **dedicated, reusable file discovery library** that separates concerns between directory traversal and content search. This architecture offers VT Code several strategic advantages:
 
-1. **Modular Design**: Reusable across CLI, TUI, LSP, and IDE integrations
+1. **Modular Design**: Reusable across CLI, TUI, and IDE integrations
 2. **High Performance**: Parallel traversal + fuzzy matching without subprocess overhead
 3. **Composability**: Standalone binary + library usage
 4. **Maintainability**: Centralized file operations (no duplicate logic)

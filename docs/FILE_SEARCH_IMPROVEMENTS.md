@@ -48,7 +48,7 @@ pub async fn run(
 
 **Benefits**:
 - Decouples file discovery from content search
-- Reusable in CLI, TUI, LSP server, and IDE integrations (Zed, VS Code)
+- Reusable in CLI, TUI, and IDE integrations (Zed, VS Code)
 - Testable in isolation
 - Can be exposed as a standalone binary (like Codex does)
 

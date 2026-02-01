@@ -1,6 +1,6 @@
 //! Code Intelligence Tool using Tree-Sitter
 //!
-//! Provides LSP-like code navigation features:
+//! Provides code navigation features:
 //! - Go to definition
 //! - Find references
 //! - Hover information
@@ -115,23 +115,19 @@ pub struct HoverContents {
     pub scope: Option<String>,
 }
 
-use crate::tools::lsp::{LspInput, LspOperation, LspTool};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+
 
 /// Code Intelligence Tool
 #[derive(Clone)]
 pub struct CodeIntelligenceTool {
     workspace_root: PathBuf,
-    lsp_tool: Arc<Mutex<LspTool>>,
 }
 
 impl CodeIntelligenceTool {
     /// Create a new code intelligence tool
     pub fn new(workspace_root: PathBuf) -> Self {
         Self {
-            workspace_root: workspace_root.clone(),
-            lsp_tool: Arc::new(Mutex::new(LspTool::new(workspace_root))),
+            workspace_root,
         }
     }
 
@@ -142,114 +138,17 @@ impl CodeIntelligenceTool {
 
         // Handle status check operation separately
         if input.operation == CodeIntelligenceOperation::StatusCheck {
-            // Check if LSP tool is available and initialized
-            let lsp_available = {
-                let _tool = self.lsp_tool.lock().await;
-                // Try to get LSP status - if it has been initialized, it's available
-                // For now, we'll just check if the tool exists and return basic status
-                true // LSP tool is available if we can access it
-            };
-
-            let status_info = if lsp_available {
-                "LSP tool initialized and available"
-            } else {
-                "LSP tool not available"
-            };
-
             return Ok(json!(CodeIntelligenceOutput {
                 success: true,
                 operation: input.operation.to_string(),
                 result: Some(CodeIntelligenceResult::Custom(json!({
-                    "lsp_available": lsp_available,
-                    "status": status_info
+                    "status": "Tree-sitter based code analysis available"
                 }))),
                 error: None,
             }));
         }
 
-        // Try LSP first for operations that support it (GotoDefinition, FindReferences, Hover)
-        // LSP server detection:
-        //   1. Determine file extension from file_path
-        //   2. Use crate::tools::lsp::manager::detect_server() to find language server
-        //   3. If LSP succeeds with non-empty result, return it
-        //   4. Otherwise fall back to Tree-Sitter analysis as fallback
-
-        let lsp_op = match input.operation {
-            CodeIntelligenceOperation::GotoDefinition => Some(LspOperation::GotoDefinition),
-            CodeIntelligenceOperation::FindReferences => Some(LspOperation::FindReferences),
-            CodeIntelligenceOperation::Hover => Some(LspOperation::Hover),
-            _ => None,
-        };
-
-        if let Some(op) = lsp_op {
-            // We need to determine if we have an active server or can start one.
-            // For now, we attempt it if we can map the request.
-            // But existing LspTool requres 'server_command'.
-            // We'll skip explicit LSP call here unless we want to enforce it,
-            // OR we rely on LspTool's default if set.
-
-            // To properly "hybridize", we should really control the LspTool
-            // or check if it's "ready".
-            // Given the current simplistic LspTool, let's try to delegate
-            // IF we assume an LSP might be available.
-
-            // However, blindly calling it might fail.
-            // Let's implement the fallback pattern: Try LSP -> Error/Empty -> TreeSitter.
-
-            // Construct LspInput
-            // Missing: server_command. We can't know it yet easily without detection.
-            // If we don't pass it, LspTool fails unless default is set.
-
-            // STRATEGY:
-            // 1. Just proceed to TreeSitter for now if no LSP config known?
-            //    No, the user wants integration.
-            //    We'll assume the user might have configured a default via /lsp command (stored in LspTool state).
-            // 2. Try calling LspTool.execute.
-
-            // Determine extension
-            let extension = input
-                .file_path
-                .as_ref()
-                .and_then(|p| std::path::Path::new(p).extension())
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-
-            let detected_cmd =
-                crate::tools::lsp::manager::detect_server(extension).map(|cmd| cmd.to_string());
-
-            let lsp_input = LspInput {
-                operation: op,
-                server_command: detected_cmd, // Use detected if available
-                server_args: None,
-                file_path: input.file_path.clone(),
-                line: input.line.map(|l| l as u32),
-                character: input.character.map(|c| c as u32),
-            };
-
-            if let Ok(json_args) = serde_json::to_value(lsp_input) {
-                let tool = self.lsp_tool.lock().await;
-                use crate::tools::traits::Tool;
-
-                if let Ok(result) = tool.execute(json_args).await {
-                    // Check if result is "useful" (not null/error)
-                    // If success, return it (mapped to CodeIntelligenceOutput)
-                    // Converting LSP output to CodeIntelligenceOutput is tricky because they are different shapes.
-                    // The user wants "Improved precision", implying we should return the LSP result.
-
-                    // For now, let's wrap the LSP result in CodeIntelligenceOutput
-                    if result.get("result").is_some() {
-                        return Ok(json!(CodeIntelligenceOutput {
-                            success: true,
-                            operation: input.operation.to_string(),
-                            result: Some(CodeIntelligenceResult::Custom(result)), // We need to add Custom variant or map it
-                            error: None,
-                        }));
-                    }
-                }
-            }
-        }
-
-        // Fallback to Tree-Sitter for operations that are not status check
+        // Use Tree-Sitter for all code intelligence operations
         let result = match input.operation {
             CodeIntelligenceOperation::GotoDefinition => self.goto_definition(&input).await,
             CodeIntelligenceOperation::FindReferences => self.find_references(&input).await,
