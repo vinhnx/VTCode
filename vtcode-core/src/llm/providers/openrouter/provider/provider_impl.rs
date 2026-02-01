@@ -2,7 +2,7 @@ use super::super::OpenRouterProvider;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
 use crate::llm::providers::error_handling::{format_network_error, format_parse_error};
-use crate::llm::providers::openai::headers;
+
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -22,7 +22,7 @@ impl LLMProvider for OpenRouterProvider {
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let model = request.model.clone();
-        let openai_request = self.convert_to_openai_format(&request)?;
+        let openai_request = self.convert_to_openrouter_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url);
 
         let response = self
@@ -57,7 +57,7 @@ impl LLMProvider for OpenRouterProvider {
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         let model = request.model.clone();
-        let mut openai_request = self.convert_to_openai_format(&request)?;
+        let mut openai_request = self.convert_to_openrouter_format(&request)?;
         openai_request["stream"] = Value::Bool(true);
 
         let url = format!("{}/chat/completions", self.base_url);
@@ -124,5 +124,26 @@ impl LLMProvider for OpenRouterProvider {
         };
 
         Ok(Box::pin(stream))
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec![
+            "anthropic/claude-3.5-sonnet".to_string(),
+            "anthropic/claude-3-haiku".to_string(),
+            "openai/gpt-4o".to_string(),
+            "openai/gpt-4o-mini".to_string(),
+            "google/gemini-pro".to_string(),
+            "meta-llama/llama-3.1-405b-instruct".to_string(),
+        ]
+    }
+
+    fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
+        if request.messages.is_empty() {
+            return Err(LLMError::InvalidRequest {
+                message: "Messages cannot be empty".to_string(),
+                metadata: None,
+            });
+        }
+        Ok(())
     }
 }

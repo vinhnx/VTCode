@@ -950,6 +950,7 @@ mod tests {
         ) -> Result<uni::LLMResponse, uni::LLMError> {
             Ok(uni::LLMResponse {
                 content: self.content.clone(),
+                model: "mock-model".to_string(),
                 tool_calls: None,
                 usage: None,
                 finish_reason: uni::FinishReason::Stop,

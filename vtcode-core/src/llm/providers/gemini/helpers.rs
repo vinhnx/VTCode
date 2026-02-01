@@ -1,7 +1,7 @@
 use super::*;
 use crate::prompts::system::default_system_prompt;
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMErrorMetadata};
+use crate::llm::provider::LLMError;
 use crate::gemini::streaming::StreamingError;
 use crate::config::constants::models;
 
@@ -355,13 +355,13 @@ impl GeminiProvider {
             match part {
                 Part::Text {
                     text,
-                    thought_signature,
+                    thought_signature: _,
                 } => {
                     text_content.push_str(&text);
                 }
                 Part::FunctionCall {
                     function_call,
-                    thought_signature,
+                    thought_signature: _,
                 } => {
                     let call_id = function_call.id.clone().unwrap_or_else(|| {
                         format!(
@@ -382,7 +382,7 @@ impl GeminiProvider {
                                 .unwrap_or_else(|_| "{}".to_string()),
                         }),
                         text: None,
-                        thought_signature,
+                        thought_signature: None,
                     });
                 }
                 Part::FunctionResponse { .. } => {

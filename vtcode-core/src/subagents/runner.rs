@@ -518,6 +518,7 @@ impl SubagentRunner {
         // Extract token usage if available
         let tokens = response
             .usage
+            .as_ref()
             .map(|u| TokenUsage {
                 input_tokens: u.prompt_tokens as u64,
                 output_tokens: u.completion_tokens as u64,

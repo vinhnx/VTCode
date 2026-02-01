@@ -20,7 +20,7 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, FunctionCall, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,
-    LLMStreamEvent, Message, MessageContent, MessageRole, ToolCall, ToolChoice,
+    LLMStreamEvent, Message, MessageRole, ToolCall, ToolChoice,
 };
 use crate::llm::types as llm_types;
 use async_stream::try_stream;

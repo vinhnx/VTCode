@@ -42,13 +42,13 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                 }
             }
             Some("thinking") => {
-                reasoning_details_vec.push(block.clone());
                 if let Some(thinking) = block.get("thinking").and_then(|t| t.as_str()) {
+                    reasoning_details_vec.push(thinking.to_string());
                     reasoning_parts.push(thinking.to_string());
                 }
             }
             Some("redacted_thinking") => {
-                reasoning_details_vec.push(block.clone());
+                reasoning_details_vec.push("[REDACTED THINKING]".to_string());
             }
             Some("tool_use") => {
                 let id = block

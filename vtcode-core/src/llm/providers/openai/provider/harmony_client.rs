@@ -339,6 +339,7 @@ impl OpenAIProvider {
 
         Ok(provider::LLMResponse {
             content,
+            model: request.model.clone(),
             tool_calls,
             usage: Some(crate::llm::provider::Usage {
                 prompt_tokens: prompt_tokens.len().try_into().unwrap_or(u32::MAX),

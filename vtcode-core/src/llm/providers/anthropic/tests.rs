@@ -203,7 +203,7 @@ mod response_parser_tests {
             }
         });
 
-        let response = parse_response(response_json).expect("parse response");
+        let response = parse_response(response_json, "claude-3-5-sonnet".to_string()).expect("parse response");
         assert_eq!(response.content.as_deref(), Some("Hello, world!"));
         assert!(matches!(response.finish_reason, FinishReason::Stop));
     }
@@ -222,7 +222,7 @@ mod response_parser_tests {
             }
         });
 
-        let response = parse_response(response_json).expect("parse response");
+        let response = parse_response(response_json, "claude-3-5-sonnet".to_string()).expect("parse response");
         let reasoning = response
             .reasoning
             .as_deref()
@@ -249,7 +249,7 @@ mod response_parser_tests {
             }
         });
 
-        let response = parse_response(response_json).expect("parse response");
+        let response = parse_response(response_json, "claude-3-5-sonnet".to_string()).expect("parse response");
         let tool_calls = response.tool_calls.as_ref().expect("expected tool calls");
         assert_eq!(tool_calls.len(), 1);
         let function = tool_calls[0]

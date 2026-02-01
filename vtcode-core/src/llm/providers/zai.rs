@@ -6,13 +6,13 @@ use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
-    LLMStreamEvent, Message, Usage,
+    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
+    LLMStreamEvent,
 };
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
-use futures::StreamExt;
+
 use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
