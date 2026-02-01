@@ -8,7 +8,7 @@ use async_trait::async_trait;
 #[async_trait]
 impl LLMClient for OpenRouterProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
-        let request = self.parse_client_prompt(prompt);
+        let request = crate::llm::providers::common::make_default_request(prompt, &self.model);
         let request_model = request.model.clone();
         let response = LLMProvider::generate(self, request).await?;
 

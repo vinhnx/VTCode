@@ -1,9 +1,9 @@
 use anyhow::Result;
 use itertools::Itertools;
-use std::fs;
 use std::path::Path;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::utils::colors::style;
+use vtcode_core::utils::file_utils::{ensure_dir_exists, ensure_dir_exists_sync, write_file_with_context_sync};
 
 /// Handle the create-project command
 pub async fn handle_create_project_command(
@@ -24,7 +24,7 @@ pub async fn handle_create_project_command(
     let project_path = config.workspace.join(name);
 
     // Create project directory
-    fs::create_dir_all(&project_path)?;
+    ensure_dir_exists(&project_path).await?;
     println!("Created project directory: {}", project_path.display());
 
     // Create basic project structure based on features
@@ -42,7 +42,7 @@ pub async fn handle_create_project_command(
 fn create_project_structure(project_path: &Path, features: &[String]) -> Result<()> {
     // Create src directory
     let src_path = project_path.join("src");
-    fs::create_dir_all(&src_path)?;
+    ensure_dir_exists_sync(&src_path)?;
 
     // Create main file (simple template; extend later for feature-specific scaffolds)
     let main_content = r#"fn main() {
@@ -50,7 +50,7 @@ fn create_project_structure(project_path: &Path, features: &[String]) -> Result<
 }
 "#;
 
-    fs::write(src_path.join("main.rs"), main_content)?;
+    write_file_with_context_sync(&src_path.join("main.rs"), main_content, "main.rs")?;
 
     // Create README.md
     let readme_content = format!(
@@ -64,7 +64,7 @@ This is a new project created with VT Code.
         features.iter().map(|f| format!("- {}\n", f)).join("")
     );
 
-    fs::write(project_path.join("README.md"), readme_content)?;
+    write_file_with_context_sync(&project_path.join("README.md"), &readme_content, "README.md")?;
 
     // Create Cargo.toml for Rust projects
     let cargo_content = r#"[package]
@@ -75,7 +75,7 @@ edition = "2021"
 [dependencies]
 "#;
 
-    fs::write(project_path.join("Cargo.toml"), cargo_content)?;
+    write_file_with_context_sync(&project_path.join("Cargo.toml"), cargo_content, "Cargo.toml")?;
 
     Ok(())
 }
@@ -93,6 +93,6 @@ path = "."
 verbose = false
 "#;
 
-    fs::write(project_path.join("vtcode.toml"), config_content)?;
+    write_file_with_context_sync(&project_path.join("vtcode.toml"), config_content, "vtcode.toml")?;
     Ok(())
 }

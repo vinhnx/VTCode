@@ -1,5 +1,6 @@
 use super::FileOpsTool;
 use super::is_image_path;
+use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::types::Input;
 use crate::utils::image_processing::read_image_file;
 use anyhow::{Context, Result, anyhow};
@@ -23,17 +24,24 @@ impl FileOpsTool {
 
         if is_image_path(file_path) {
             let image_data = read_image_file::<&str>(file_path.to_string_lossy().as_ref()).await?;
-            let metadata = json!({
-                "size_bytes": image_data.size,
-                "size_lines": 0,
-                "is_truncated": false,
-                "type": "file",
-                "content_kind": "image",
-                "encoding": "base64",
-                "mime_type": image_data.mime_type,
-            });
+            let builder = ToolResponseBuilder::new("read_file")
+                .success()
+                .message(format!(
+                    "Successfully read image file {}",
+                    self.workspace_relative_display(file_path)
+                ))
+                .content(image_data.base64_data.clone())
+                .data("size_bytes", json!(image_data.size))
+                .data("content_kind", json!("image"))
+                .data("encoding", json!("base64"))
+                .data("mime_type", json!(image_data.mime_type))
+                .field("binary", json!(true));
 
-            return Ok((image_data.base64_data, metadata, false));
+            return Ok((
+                image_data.base64_data,
+                builder.build_json()["metadata"].clone(),
+                false,
+            ));
         }
 
         if let Some(encoding) = input.encoding.as_deref() {

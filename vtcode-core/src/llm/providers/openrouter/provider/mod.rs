@@ -7,7 +7,7 @@ use crate::config::models::ModelId;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole, ToolChoice};
 use crate::llm::providers::common::{
-    extract_prompt_cache_settings, override_base_url, parse_client_prompt_common, resolve_model,
+    extract_prompt_cache_settings, override_base_url, resolve_model,
 };
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::Value;
@@ -110,10 +110,6 @@ impl OpenRouterProvider {
             prompt_cache_enabled,
             prompt_cache_settings,
         }
-    }
-
-    fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {
-        parse_client_prompt_common(prompt, &self.model, |value| self.parse_chat_request(value))
     }
 
     pub(super) fn is_gpt5_codex_model(model: &str) -> bool {

@@ -1,9 +1,9 @@
 use std::env;
 use std::io;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
-use crate::utils::path::canonicalize_workspace;
+use crate::utils::path::{canonicalize_workspace, normalize_path};
 use anyhow::{Context, Result, anyhow};
 
 /// Helper to validate flags in arguments (reduces duplication in 10+ validators)
@@ -1046,22 +1046,6 @@ fn collect_sed_flags(chars: std::str::Chars<'_>, target: &mut String) -> Result<
         }
     }
     Ok(())
-}
-
-fn normalize_path(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::CurDir => {}
-            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
-            Component::RootDir => normalized.push(component.as_os_str()),
-            Component::Normal(part) => normalized.push(part),
-        }
-    }
-    normalized
 }
 
 #[cfg(test)]

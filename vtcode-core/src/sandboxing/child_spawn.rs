@@ -241,11 +241,6 @@ pub fn setup_parent_death_signal() -> std::io::Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_os = "linux"))]
-pub fn setup_parent_death_signal_with_check(_expected_parent_pid: i32) -> std::io::Result<()> {
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,7 +4,7 @@
 //! and environment policy management.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -15,6 +15,7 @@ use super::tool_handler::{
     ShellToolCallParams, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
     ToolPayload,
 };
+use crate::tools::shell::{ShellOutput as CoreShellOutput, ShellRunner};
 
 /// Default timeout for shell commands (30 seconds).
 const DEFAULT_SHELL_TIMEOUT_MS: u64 = 30_000;
@@ -87,59 +88,24 @@ impl ShellHandler {
         &self,
         params: &ShellToolCallParams,
         cwd: &Path,
-        env: Option<HashMap<String, String>>,
-    ) -> Result<ShellOutput, ToolCallError> {
-        // Join command parts or use single command
+        _env: Option<HashMap<String, String>>,
+    ) -> Result<CoreShellOutput, ToolCallError> {
+        let runner = ShellRunner::new(cwd.to_path_buf());
         let command = params.command.join(" ");
-        let workdir = params
-            .workdir
-            .as_ref()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| cwd.to_path_buf());
+
         let timeout_ms = params
             .timeout_ms
             .unwrap_or(DEFAULT_SHELL_TIMEOUT_MS)
             .min(MAX_SHELL_TIMEOUT_MS);
 
-        // Build the command
-        let mut cmd = tokio::process::Command::new(&self.default_shell);
-        cmd.arg("-c")
-            .arg(&command)
-            .current_dir(&workdir)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
-
-        // Apply environment
-        if !self.inherit_env {
-            cmd.env_clear();
-        }
-        if let Some(env_vars) = env {
-            for (key, value) in env_vars {
-                cmd.env(key, value);
-            }
-        }
-
         // Execute with timeout
-        let result = tokio::time::timeout(Duration::from_millis(timeout_ms), cmd.output())
+        let result = tokio::time::timeout(Duration::from_millis(timeout_ms), runner.exec(&command))
             .await
             .map_err(|_| ToolCallError::Timeout(timeout_ms))?
-            .map_err(|e| ToolCallError::Internal(e.into()))?;
+            .map_err(|e| ToolCallError::Internal(e))?;
 
-        Ok(ShellOutput {
-            stdout: String::from_utf8_lossy(&result.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&result.stderr).to_string(),
-            exit_code: result.status.code().unwrap_or(-1),
-        })
+        Ok(result)
     }
-}
-
-/// Output from shell command execution.
-#[derive(Clone, Debug)]
-pub struct ShellOutput {
-    pub stdout: String,
-    pub stderr: String,
-    pub exit_code: i32,
 }
 
 impl Sandboxable for ShellHandler {
@@ -180,9 +146,9 @@ impl ToolHandler for ShellHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
         let params = self.parse_params(&invocation)?;
-        let cwd = invocation.turn.cwd.clone();
-
-        let output = self.execute_command(&params, &cwd, None).await?;
+        let output = self
+            .execute_command(&params, &invocation.turn.cwd, None)
+            .await?;
 
         // Format output
         let mut content_text = String::new();
@@ -197,7 +163,10 @@ impl ToolHandler for ShellHandler {
             content_text.push_str(&output.stderr);
         }
         if output.exit_code != 0 {
-            content_text.push_str(&format!("\n[exit code: {}]", output.exit_code));
+            if !content_text.is_empty() {
+                content_text.push('\n');
+            }
+            content_text.push_str(&format!("[exit code: {}]", output.exit_code));
         }
 
         if content_text.is_empty() {

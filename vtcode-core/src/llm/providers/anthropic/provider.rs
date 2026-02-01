@@ -20,14 +20,13 @@ use crate::llm::types as llm_types;
 
 use super::capabilities;
 use super::headers;
-use super::message_parser;
 use super::request_builder::{self, RequestBuilderContext};
 use super::response_parser;
 use super::stream_decoder;
 use super::validation;
 
 use crate::llm::providers::common::{
-    convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url, resolve_model,
+    extract_prompt_cache_settings, override_base_url, resolve_model,
 };
 use crate::llm::providers::error_handling::{
     format_network_error, format_parse_error, handle_anthropic_http_error,
@@ -446,18 +445,16 @@ impl LLMProvider for AnthropicProvider {
 #[async_trait]
 impl LLMClient for AnthropicProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
-        use crate::llm::providers::common::parse_client_prompt_common;
-
-        let request = parse_client_prompt_common(prompt, &self.model, |value| {
-            self.parse_messages_request(value)
-        });
+        let request = crate::llm::providers::common::make_default_request(prompt, &self.model);
         let request_model = request.model.clone();
         let response = LLMProvider::generate(self, request).await?;
 
         Ok(llm_types::LLMResponse {
             content: response.content.unwrap_or_default(),
             model: request_model,
-            usage: response.usage.map(convert_usage_to_llm_types),
+            usage: response
+                .usage
+                .map(crate::llm::providers::common::convert_usage_to_llm_types),
             reasoning: response.reasoning,
             reasoning_details: response.reasoning_details,
             request_id: response.request_id,
@@ -471,11 +468,5 @@ impl LLMClient for AnthropicProvider {
 
     fn model_id(&self) -> &str {
         &self.model
-    }
-}
-
-impl AnthropicProvider {
-    fn parse_messages_request(&self, value: &Value) -> Option<LLMRequest> {
-        message_parser::parse_messages_request(value, &self.model)
     }
 }

@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::utils::file_utils::{parse_json_with_context, read_json_file};
+use crate::utils::http_client;
 use anyhow::{Context, Result, bail};
 use base64;
 use serde::{Deserialize, Serialize};
@@ -153,7 +155,6 @@ impl MarketplaceRegistry {
         repo: &str,
         refspec: Option<&str>,
     ) -> Result<MarketplaceManifest> {
-        use reqwest;
         use serde_json::Value;
 
         // Determine the refspec (default to 'main' if not specified)
@@ -166,7 +167,7 @@ impl MarketplaceRegistry {
         );
 
         // Create HTTP client with appropriate headers
-        let client = reqwest::Client::new();
+        let client = http_client::create_client_with_user_agent("vtcode");
         let response = client
             .get(&api_url)
             .header("User-Agent", "vtcode")
@@ -226,14 +227,7 @@ impl MarketplaceRegistry {
         })?;
 
         // Parse the manifest from the content
-        let manifest: MarketplaceManifest = serde_json::from_str(&content).with_context(|| {
-            format!(
-                "Failed to parse marketplace manifest from GitHub: {}/{}",
-                owner, repo
-            )
-        })?;
-
-        Ok(manifest)
+        parse_json_with_context(&content, &format!("GitHub: {}/{}", owner, repo))
     }
 
     /// Fetch manifest from Git repository
@@ -243,7 +237,6 @@ impl MarketplaceRegistry {
         refspec: Option<&str>,
     ) -> Result<MarketplaceManifest> {
         use tempfile::TempDir;
-        use tokio::fs;
         use tokio::process::Command;
 
         // Create a temporary directory for the git clone
@@ -277,51 +270,23 @@ impl MarketplaceRegistry {
             bail!("Marketplace manifest not found in repository: {}", url);
         }
 
-        let content = fs::read_to_string(&manifest_path).await.with_context(|| {
-            format!(
-                "Failed to read marketplace manifest from {}",
-                manifest_path.display()
-            )
-        })?;
-
-        let manifest: MarketplaceManifest = serde_json::from_str(&content).with_context(|| {
-            format!(
-                "Failed to parse marketplace manifest from {}",
-                manifest_path.display()
-            )
-        })?;
-
-        Ok(manifest)
+        read_json_file(&manifest_path).await
     }
 
     /// Fetch manifest from local path
     async fn fetch_local_manifest(&self, path: &str) -> Result<MarketplaceManifest> {
         use std::path::Path;
-        use tokio::fs;
 
         let manifest_path = Path::new(path).join(".vtcode-plugin/marketplace.json");
-        let content = fs::read_to_string(&manifest_path).await.with_context(|| {
-            format!(
-                "Failed to read marketplace manifest from {}",
-                manifest_path.display()
-            )
-        })?;
-
-        let manifest: MarketplaceManifest = serde_json::from_str(&content).with_context(|| {
-            format!(
-                "Failed to parse marketplace manifest from {}",
-                manifest_path.display()
-            )
-        })?;
-
-        Ok(manifest)
+        read_json_file(&manifest_path).await
     }
 
     /// Fetch manifest from remote URL
     async fn fetch_remote_manifest(&self, url: &str) -> Result<MarketplaceManifest> {
-        use reqwest;
-
-        let response = reqwest::get(url)
+        let client = http_client::create_default_client();
+        let response = client
+            .get(url)
+            .send()
             .await
             .with_context(|| format!("Failed to fetch remote manifest from {}", url))?;
 
@@ -337,10 +302,7 @@ impl MarketplaceRegistry {
             .await
             .with_context(|| format!("Failed to read response body from {}", url))?;
 
-        let manifest: MarketplaceManifest = serde_json::from_str(&content)
-            .with_context(|| format!("Failed to parse marketplace manifest from {}", url))?;
-
-        Ok(manifest)
+        parse_json_with_context(&content, &format!("remote manifest: {}", url))
     }
 
     /// Get cached manifest for a marketplace

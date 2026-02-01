@@ -8,10 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
 
-/// Simple token estimator: bytes / 4 with minimum of 1
-fn estimate_tokens(text: &str) -> usize {
-    (text.len() / 4).max(1)
-}
+use crate::utils::tokens::estimate_tokens;
 
 /// Cached prompt entry
 #[derive(Debug, Clone, Serialize, Deserialize)]

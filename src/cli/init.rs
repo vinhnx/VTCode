@@ -12,6 +12,7 @@ use vtcode_core::config::types::{
 use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
+use vtcode_core::utils::file_utils::ensure_dir_exists;
 use vtcode_core::ui::theme::DEFAULT_THEME_ID;
 use vtcode_core::utils::colors::style;
 
@@ -24,12 +25,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
 
     super::set_workspace_env(workspace);
 
-    fs::create_dir_all(workspace).with_context(|| {
-        format!(
-            "failed to create workspace directory {}",
-            workspace.display()
-        )
-    })?;
+    ensure_dir_exists(workspace).await?;
 
     // Bootstrap configuration files in the workspace
     VTCodeConfig::bootstrap_project(workspace, force)

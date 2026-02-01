@@ -3,9 +3,10 @@ use super::is_image_path;
 mod legacy;
 mod logging;
 mod segments;
+use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler};
 use crate::tools::traits::FileTool;
-use crate::tools::types::Input;
+use crate::tools::types::{Input, PathArgs};
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 
@@ -55,23 +56,19 @@ fn build_read_handler_args(args: &Value, canonical_path: &std::path::Path) -> Va
 
 impl FileOpsTool {
     pub async fn read_file(&self, args: Value) -> Result<Value> {
-        let path_str = args
-            .get("path")
-            .or_else(|| args.get("file_path"))
-            .or_else(|| args.get("filepath"))
-            .or_else(|| args.get("target_path"))
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                let received = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-                anyhow!(
-                    "Error: Invalid 'read_file' arguments. Missing required path parameter.\n\
-                    Received: {}\n\
-                    Expected: {{\"path\": \"file/path\"}} or {{\"file_path\": \"file/path\"}}\n\
-                    Accepted path parameters: path, file_path, filepath, target_path\n\
-                    Optional params: offset_lines, limit, max_bytes, max_tokens",
-                    received
-                )
-            })?;
+        let path_args: PathArgs = serde_json::from_value(args.clone()).map_err(|_| {
+            let received = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+            anyhow!(
+                "Error: Invalid 'read_file' arguments. Missing required path parameter.\n\
+                Received: {}\n\
+                Expected: {{\"path\": \"file/path\"}} or {{\"file_path\": \"file/path\"}}\n\
+                Accepted path parameters: path, file_path, filepath, target_path\n\
+                Optional params: offset_lines, limit, max_bytes, max_tokens",
+                received
+            )
+        })?;
+
+        let path_str = &path_args.path;
 
         // Try to resolve the file path
         let potential_paths = self.resolve_file_path(path_str)?;
@@ -95,7 +92,6 @@ impl FileOpsTool {
             }
 
             let size_bytes = metadata.len();
-
             let is_image = is_image_path(&canonical);
             let is_legacy_request = is_legacy_read_request(&args, is_image);
             let is_new_request = is_new_read_request(&args);
@@ -106,16 +102,17 @@ impl FileOpsTool {
                     Ok(read_args) => {
                         let handler = ReadFileHandler;
                         let content = handler.handle(read_args).await?;
-                        return Ok(json!({
-                           "success": true,
-                           "status": "success",
-                           "message": format!("Successfully read file {}", self.workspace_relative_display(&canonical)),
-                           "content": content,
-                           "path": self.workspace_relative_display(&canonical),
-                           "metadata": {
-                               "size_bytes": size_bytes,
-                           }
-                        }));
+
+                        return Ok(ToolResponseBuilder::new("read_file")
+                            .success()
+                            .message(format!(
+                                "Successfully read file {}",
+                                self.workspace_relative_display(&canonical)
+                            ))
+                            .content(content)
+                            .field("path", json!(self.workspace_relative_display(&canonical)))
+                            .data("size_bytes", json!(size_bytes))
+                            .build_json());
                     }
                     Err(e) => {
                         if is_new_request {
@@ -130,7 +127,6 @@ impl FileOpsTool {
             }
 
             // Legacy path
-            // We must reconstruct Input from args to use legacy functions
             let input: Input = serde_json::from_value(args.clone())
                 .context("Error: Invalid 'read_file' arguments for legacy handler.")?;
 
@@ -146,77 +142,61 @@ impl FileOpsTool {
                 self.read_file_legacy(&canonical, &input).await?
             };
 
-            let mut result = json!({
-                "success": true,
-                "status": "success",
-                "message": format!("Successfully read {} bytes from {}", size_bytes, self.workspace_relative_display(&canonical)),
-                "content": content,
-                "path": self.workspace_relative_display(&canonical),
-                "metadata": metadata
-            });
+            let mut builder = ToolResponseBuilder::new("read_file")
+                .success()
+                .message(format!(
+                    "Successfully read {} bytes from {}",
+                    size_bytes,
+                    self.workspace_relative_display(&canonical)
+                ))
+                .content(content)
+                .field("path", json!(self.workspace_relative_display(&canonical)));
 
-            // ... (legacy metadata logic) ...
-            if let Some(is_truncated) = result
-                .get("metadata")
-                .and_then(|meta| meta.get("is_truncated"))
-                .and_then(Value::as_bool)
-            {
-                result["is_truncated"] = json!(is_truncated);
-            }
-            if let Some(encoding) = result
-                .get("metadata")
-                .and_then(|meta| meta.get("encoding"))
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-            {
-                result["encoding"] = json!(encoding);
-            }
-            // ... copy remaining legacy logic ...
-            if let Some(content_kind) = result
-                .get("metadata")
-                .and_then(|meta| meta.get("content_kind"))
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-            {
-                result["content_kind"] = json!(content_kind);
-                if matches!(content_kind.as_str(), "binary" | "image") {
-                    result["binary"] = json!(true);
+            // Merge legacy metadata
+            if let Some(obj) = metadata.as_object() {
+                for (k, v) in obj {
+                    builder = builder.data(k, v.clone());
                 }
             }
-            if let Some(mime_type) = result
-                .get("metadata")
-                .and_then(|meta| meta.get("mime_type"))
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-            {
-                result["mime_type"] = json!(mime_type);
+
+            // Special legacy fields at top level
+            if let Some(is_truncated) = metadata.get("is_truncated").and_then(Value::as_bool) {
+                builder = builder.field("is_truncated", json!(is_truncated));
+            }
+            if let Some(encoding) = metadata.get("encoding").and_then(Value::as_str) {
+                builder = builder.field("encoding", json!(encoding));
+            }
+            if let Some(content_kind) = metadata.get("content_kind").and_then(Value::as_str) {
+                builder = builder.field("content_kind", json!(content_kind));
+                if matches!(content_kind, "binary" | "image") {
+                    builder = builder.field("binary", json!(true));
+                }
+            }
+            if let Some(mime_type) = metadata.get("mime_type").and_then(Value::as_str) {
+                builder = builder.field("mime_type", json!(mime_type));
             }
 
             // Add paging information
-            if input.offset_bytes.is_some()
-                || input.page_size_bytes.is_some()
-                || input.offset_lines.is_some()
-                || input.page_size_lines.is_some()
-            {
+            if use_paging {
                 if let Some(offset_bytes) = input.offset_bytes {
-                    result["offset_bytes"] = json!(offset_bytes);
+                    builder = builder.field("offset_bytes", json!(offset_bytes));
                 }
                 if let Some(page_size_bytes) = input.page_size_bytes {
-                    result["page_size_bytes"] = json!(page_size_bytes);
+                    builder = builder.field("page_size_bytes", json!(page_size_bytes));
                 }
                 if let Some(offset_lines) = input.offset_lines {
-                    result["offset_lines"] = json!(offset_lines);
+                    builder = builder.field("offset_lines", json!(offset_lines));
                 }
                 if let Some(page_size_lines) = input.page_size_lines {
-                    result["page_size_lines"] = json!(page_size_lines);
+                    builder = builder.field("page_size_lines", json!(page_size_lines));
                 }
                 if truncated {
-                    result["truncated"] = json!(true);
-                    result["truncation_reason"] = json!("reached_end_of_file");
+                    builder = builder.field("truncated", json!(true));
+                    builder = builder.field("truncation_reason", json!("reached_end_of_file"));
                 }
             }
 
-            return Ok(result);
+            return Ok(builder.build_json());
         }
 
         Err(anyhow!(

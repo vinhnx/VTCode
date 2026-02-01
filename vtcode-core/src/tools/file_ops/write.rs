@@ -3,6 +3,7 @@ use super::diff_preview::{build_diff_preview, diff_preview_error_skip, diff_prev
 mod chunked;
 mod fs_ops;
 use crate::config::constants::diff;
+use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::traits::FileTool;
 use crate::tools::types::WriteInput;
 use anyhow::{Context, Result, anyhow};
@@ -14,8 +15,9 @@ const MAX_WRITE_BYTES: usize = 64_000;
 impl FileOpsTool {
     /// Write file with various modes and chunking support for large content
     pub async fn write_file(&self, args: Value) -> Result<Value> {
-        let input: WriteInput = serde_json::from_value(args)
+        let input: WriteInput = serde_json::from_value(args.clone())
             .context("Error: Invalid 'write_file' arguments. Expected JSON object with: path (required, string), content (required, string). Optional: mode (string, one of: overwrite, append, skip_if_exists). Example: {\"path\": \"README.md\", \"content\": \"Hello\", \"mode\": \"overwrite\"}")?;
+
         let file_path = self.normalize_and_validate_user_path(&input.path).await?;
 
         if self.should_exclude(&file_path).await {
@@ -84,11 +86,12 @@ impl FileOpsTool {
             }
             "skip_if_exists" => {
                 if file_exists {
-                    return Ok(json!({
-                        "success": true,
-                        "skipped": true,
-                        "reason": "File already exists"
-                    }));
+                    return Ok(ToolResponseBuilder::new("write_file")
+                        .success()
+                        .message("File already exists")
+                        .field("skipped", json!(true))
+                        .field("reason", json!("File already exists"))
+                        .build_json());
                 }
                 tokio::fs::write(&file_path, &input.content).await?;
             }
@@ -149,20 +152,21 @@ impl FileOpsTool {
             }
         }
 
-        let mut response = json!({
-            "success": true,
-            "path": self.workspace_relative_display(&file_path),
-            "mode": effective_mode,
-            "bytes_written": input.content.len(),
-            "file_existed": file_exists,
-        });
+        let mut builder = ToolResponseBuilder::new("write_file")
+            .success()
+            .message(format!(
+                "Successfully wrote file {}",
+                self.workspace_relative_display(&file_path)
+            ))
+            .field("path", json!(self.workspace_relative_display(&file_path)))
+            .field("mode", json!(effective_mode))
+            .field("bytes_written", json!(input.content.len()))
+            .field("file_existed", json!(file_exists));
 
-        if let Some(preview) = diff_preview
-            && let Some(object) = response.as_object_mut()
-        {
-            object.insert("diff_preview".to_string(), preview);
+        if let Some(preview) = diff_preview {
+            builder = builder.field("diff_preview", preview);
         }
 
-        Ok(response)
+        Ok(builder.build_json())
     }
 }

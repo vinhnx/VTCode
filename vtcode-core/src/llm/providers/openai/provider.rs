@@ -27,7 +27,6 @@ use tracing::debug;
 
 // Import from extracted modules
 use super::harmony;
-use super::message_parser;
 use super::request_builder;
 use super::response_parser;
 use super::responses_api::parse_responses_payload;
@@ -227,12 +226,6 @@ impl OpenAIProvider {
             }
         };
         modes.insert(model.to_string(), state);
-    }
-
-    fn parse_client_prompt(&self, prompt: &str) -> provider::LLMRequest {
-        parse_client_prompt_common(prompt, &self.model, |value| {
-            message_parser::parse_chat_request(value, &self.model)
-        })
     }
 
     fn convert_to_openai_format(

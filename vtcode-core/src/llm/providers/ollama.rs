@@ -8,6 +8,7 @@ use crate::llm::provider::{
     Message, MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 use crate::llm::types as llm_types;
+use crate::utils::http_client;
 use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -189,10 +190,7 @@ pub async fn fetch_ollama_models(base_url: Option<String>) -> Result<Vec<String>
     let tags_url = format!("{}/api/tags", resolved_base_url);
 
     // Create HTTP client with connection timeout
-    let client = reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+    let client = http_client::create_client_with_timeout(std::time::Duration::from_secs(5));
 
     // Make GET request to fetch models
     let response = client
@@ -331,7 +329,7 @@ impl OllamaProvider {
         };
 
         Self {
-            http_client: HttpClient::new(),
+            http_client: http_client::create_default_client(),
             base_url: resolved_base,
             model,
             api_key: effective_api_key,

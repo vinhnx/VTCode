@@ -81,40 +81,17 @@ impl provider::LLMProvider for OpenAIProvider {
     }
 
     fn validate_request(&self, request: &provider::LLMRequest) -> Result<(), provider::LLMError> {
-        if request.messages.is_empty() {
-            let formatted_error =
-                error_display::format_llm_error("OpenAI", "Messages cannot be empty");
-            return Err(provider::LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
-
-        if !models::openai::SUPPORTED_MODELS
+        let supported_models = models::openai::SUPPORTED_MODELS
             .iter()
-            .any(|m| *m == request.model)
-        {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                &format!("Unsupported model: {}", request.model),
-            );
-            return Err(provider::LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
 
-        for message in &request.messages {
-            if let Err(err) = message.validate_for_provider("openai") {
-                let formatted = error_display::format_llm_error("OpenAI", &err);
-                return Err(provider::LLMError::InvalidRequest {
-                    message: formatted,
-                    metadata: None,
-                });
-            }
-        }
-
-        Ok(())
+        super::super::super::common::validate_request_common(
+            request,
+            "OpenAI",
+            "openai",
+            Some(&supported_models),
+        )
     }
 }
 
@@ -124,7 +101,7 @@ impl LLMClient for OpenAIProvider {
         &mut self,
         prompt: &str,
     ) -> Result<llm_types::LLMResponse, provider::LLMError> {
-        let request = self.parse_client_prompt(prompt);
+        let request = super::super::super::common::make_default_request(prompt, &self.model);
         let request_model = request.model.to_string();
         let response = provider::LLMProvider::generate(self, request).await?;
 
@@ -133,7 +110,7 @@ impl LLMClient for OpenAIProvider {
             model: request_model,
             usage: response
                 .usage
-                .map(crate::llm::providers::common::convert_usage_to_llm_types),
+                .map(super::super::super::common::convert_usage_to_llm_types),
             reasoning: response.reasoning,
             reasoning_details: response.reasoning_details,
             request_id: response.request_id,

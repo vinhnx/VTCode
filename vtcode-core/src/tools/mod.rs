@@ -122,6 +122,7 @@
 
 pub mod apply_patch;
 pub mod ask_user_question;
+pub mod builder;
 pub mod code_intelligence;
 pub mod constants;
 pub mod error_messages;
@@ -162,7 +163,6 @@ pub mod safety_gateway;
 pub mod search_metrics;
 pub mod shell;
 pub mod skills;
-pub mod smart_cache;
 pub mod summarizers;
 pub mod terminal_app;
 pub mod tool_effectiveness;
@@ -248,7 +248,6 @@ pub use safety_gateway::{
     SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
 };
 pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
-pub use smart_cache::{CachedResult as SmartCachedResult, SmartResultCache};
 pub use tool_effectiveness::{
     AdaptiveToolSelector, ToolEffectiveness, ToolEffectivenessTracker, ToolFailureMode,
     ToolSelectionContext, ToolSelector,

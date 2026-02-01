@@ -1,9 +1,9 @@
 //! Init-project command implementation
 
 use anyhow::{Context, Result};
-use std::fs;
 use std::path::Path;
 use vtcode_core::utils::colors::style;
+use vtcode_core::utils::file_utils::ensure_dir_exists;
 use vtcode_core::{ProjectData, SimpleProjectManager};
 use walkdir::WalkDir;
 
@@ -162,17 +162,12 @@ async fn migrate_existing_files(
         };
 
         if let Some(parent) = destination.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!(
-                    "failed to create destination directory {}",
-                    parent.display()
-                )
-            })?;
+            ensure_dir_exists(parent).await?;
         }
 
         if destination.exists() {
             let backup = destination.with_extension("bak");
-            fs::rename(&destination, &backup)
+            std::fs::rename(&destination, &backup)
                 .with_context(|| format!("failed to backup {}", destination.display()))?;
         }
 
@@ -182,16 +177,12 @@ async fn migrate_existing_files(
                 let relative = file_path.strip_prefix(&path).unwrap_or(file_path);
                 let dest_path = destination.join(relative);
                 if entry.file_type().is_dir() {
-                    fs::create_dir_all(&dest_path).with_context(|| {
-                        format!("failed to create directory {}", dest_path.display())
-                    })?;
+                    ensure_dir_exists(&dest_path).await?;
                 } else {
                     if let Some(parent) = dest_path.parent() {
-                        fs::create_dir_all(parent).with_context(|| {
-                            format!("failed to create directory {}", parent.display())
-                        })?;
+                        ensure_dir_exists(parent).await?;
                     }
-                    fs::copy(file_path, &dest_path).with_context(|| {
+                    std::fs::copy(file_path, &dest_path).with_context(|| {
                         format!(
                             "failed to copy {} to {}",
                             file_path.display(),
@@ -201,7 +192,7 @@ async fn migrate_existing_files(
                 }
             }
         } else {
-            fs::copy(&path, &destination).with_context(|| {
+            std::fs::copy(&path, &destination).with_context(|| {
                 format!(
                     "failed to copy {} to {}",
                     path.display(),

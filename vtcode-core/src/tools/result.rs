@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::utils::tokens::estimate_tokens;
+
 /// Result from tool execution with dual-channel output
 ///
 /// Tools return two versions of their output:
@@ -176,14 +178,6 @@ impl ToolResult {
     pub fn has_significant_savings(&self) -> bool {
         self.metadata.token_counts.savings_percent > 50.0
     }
-}
-
-/// Estimate token count from string
-///
-/// Simple estimation: 1 token ≈ 4 characters
-/// This is conservative and works well for English text
-fn estimate_tokens(text: &str) -> usize {
-    (text.len() as f32 / 4.0).ceil() as usize
 }
 
 /// Builder for ToolMetadata

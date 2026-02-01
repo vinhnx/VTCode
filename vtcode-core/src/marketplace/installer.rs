@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::tools::plugins::PluginRuntime;
+use crate::utils::file_utils::{ensure_dir_exists, write_file_with_context, write_json_file};
+use crate::utils::validation::{validate_all_non_empty, validate_non_empty, validate_path_exists};
 use anyhow::{Context, Result, bail};
 use tokio::fs;
 
@@ -28,48 +30,19 @@ impl PluginInstaller {
     /// Install a plugin from its manifest
     pub async fn install_plugin(&self, manifest: &PluginManifest) -> Result<()> {
         // Create plugins directory if it doesn't exist
-        fs::create_dir_all(&self.plugins_dir)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to create plugins directory: {}",
-                    self.plugins_dir.display()
-                )
-            })?;
+        ensure_dir_exists(&self.plugins_dir).await?;
 
         // Create plugin installation directory
         let plugin_dir = self.plugins_dir.join(&manifest.id);
-        fs::create_dir_all(&plugin_dir).await.with_context(|| {
-            format!(
-                "Failed to create plugin directory: {}",
-                plugin_dir.display()
-            )
-        })?;
+        ensure_dir_exists(&plugin_dir).await?;
 
         // Download the plugin from its source
         self.download_plugin(manifest, &plugin_dir).await?;
 
         // Save the manifest to the plugin directory
         let manifest_dir = plugin_dir.join(".vtcode-plugin");
-        fs::create_dir_all(&manifest_dir).await.with_context(|| {
-            format!(
-                "Failed to create manifest directory: {}",
-                manifest_dir.display()
-            )
-        })?;
-
         let manifest_path = manifest_dir.join("plugin.json");
-        let manifest_content = serde_json::to_string_pretty(manifest)
-            .with_context(|| "Failed to serialize plugin manifest")?;
-
-        fs::write(&manifest_path, manifest_content)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to write plugin manifest: {}",
-                    manifest_path.display()
-                )
-            })?;
+        write_json_file(&manifest_path, manifest).await?;
 
         // Integrate with VT Code's existing plugin system
         self.integrate_with_core_plugin_system(&manifest_path)
@@ -128,26 +101,13 @@ impl PluginInstaller {
     async fn download_from_http(&self, manifest: &PluginManifest, plugin_dir: &Path) -> Result<()> {
         // For now, we'll create a placeholder since we don't have the actual HTTP client configured
         let placeholder_path = plugin_dir.join(&manifest.entrypoint);
-        if let Some(parent) = placeholder_path.parent() {
-            fs::create_dir_all(parent).await.with_context(|| {
-                format!(
-                    "Failed to create parent directory for: {}",
-                    placeholder_path.display()
-                )
-            })?;
-        }
 
-        fs::write(
+        write_file_with_context(
             &placeholder_path,
-            format!("# HTTP Downloaded plugin: {}\n", manifest.id),
+            &format!("# HTTP Downloaded plugin: {}\n", manifest.id),
+            "plugin entrypoint",
         )
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to create plugin file: {}",
-                placeholder_path.display()
-            )
-        })?;
+        .await?;
 
         println!("HTTP download completed for plugin: {}", manifest.id);
         Ok(())
@@ -156,22 +116,11 @@ impl PluginInstaller {
     /// Download plugin from local file
     async fn download_from_file(&self, manifest: &PluginManifest, plugin_dir: &Path) -> Result<()> {
         let source_path = PathBuf::from(&manifest.source.replace("file://", ""));
-
-        if !source_path.exists() {
-            bail!(
-                "Local source file does not exist: {}",
-                source_path.display()
-            );
-        }
+        validate_path_exists(&source_path, "Local source file")?;
 
         let dest_path = plugin_dir.join(&manifest.entrypoint);
         if let Some(parent) = dest_path.parent() {
-            fs::create_dir_all(parent).await.with_context(|| {
-                format!(
-                    "Failed to create parent directory for: {}",
-                    dest_path.display()
-                )
-            })?;
+            ensure_dir_exists(parent).await?;
         }
 
         // Copy the file from source to destination
@@ -196,22 +145,11 @@ impl PluginInstaller {
         plugin_dir: &Path,
     ) -> Result<()> {
         let source_path = PathBuf::from(&manifest.source);
-
-        if !source_path.exists() {
-            bail!(
-                "Local source path does not exist: {}",
-                source_path.display()
-            );
-        }
+        validate_path_exists(&source_path, "Local source path")?;
 
         let dest_path = plugin_dir.join(&manifest.entrypoint);
         if let Some(parent) = dest_path.parent() {
-            fs::create_dir_all(parent).await.with_context(|| {
-                format!(
-                    "Failed to create parent directory for: {}",
-                    dest_path.display()
-                )
-            })?;
+            ensure_dir_exists(parent).await?;
         }
 
         // Copy the file from source to destination
@@ -233,26 +171,13 @@ impl PluginInstaller {
     async fn download_from_git(&self, manifest: &PluginManifest, plugin_dir: &Path) -> Result<()> {
         // For now, we'll create a placeholder since we don't have git functionality integrated
         let placeholder_path = plugin_dir.join(&manifest.entrypoint);
-        if let Some(parent) = placeholder_path.parent() {
-            fs::create_dir_all(parent).await.with_context(|| {
-                format!(
-                    "Failed to create parent directory for: {}",
-                    placeholder_path.display()
-                )
-            })?;
-        }
 
-        fs::write(
+        write_file_with_context(
             &placeholder_path,
-            format!("# Git downloaded plugin: {}\n", manifest.id),
+            &format!("# Git downloaded plugin: {}\n", manifest.id),
+            "plugin entrypoint",
         )
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to create plugin file: {}",
-                placeholder_path.display()
-            )
-        })?;
+        .await?;
 
         println!("Git download completed for plugin: {}", manifest.id);
         Ok(())
@@ -261,17 +186,9 @@ impl PluginInstaller {
     /// Validate the plugin manifest before installation
     pub fn validate_manifest(&self, manifest: &PluginManifest) -> Result<()> {
         // Validate required fields
-        if manifest.id.is_empty() {
-            bail!("Plugin manifest must have a non-empty ID");
-        }
-
-        if manifest.name.is_empty() {
-            bail!("Plugin manifest must have a non-empty name");
-        }
-
-        if manifest.source.is_empty() {
-            bail!("Plugin manifest must have a non-empty source URL");
-        }
+        validate_non_empty(&manifest.id, "Plugin ID")?;
+        validate_non_empty(&manifest.name, "Plugin name")?;
+        validate_non_empty(&manifest.source, "Plugin source URL")?;
 
         // Validate entrypoint path
         if manifest.entrypoint.as_os_str().is_empty() {
@@ -290,14 +207,7 @@ impl PluginInstaller {
         }
 
         // Validate dependencies if any
-        for dep in &manifest.dependencies {
-            if dep.is_empty() {
-                bail!(
-                    "Plugin manifest contains empty dependency: {:?}",
-                    manifest.dependencies
-                );
-            }
-        }
+        validate_all_non_empty(&manifest.dependencies, "Plugin dependencies")?;
 
         Ok(())
     }
@@ -305,10 +215,7 @@ impl PluginInstaller {
     /// Uninstall a plugin by ID
     pub async fn uninstall_plugin(&self, plugin_id: &str) -> Result<()> {
         let plugin_dir = self.plugins_dir.join(plugin_id);
-
-        if !plugin_dir.exists() {
-            bail!("Plugin '{}' is not installed", plugin_id);
-        }
+        validate_path_exists(&plugin_dir, "Installed plugin")?;
 
         // Remove from VT Code's plugin system before filesystem removal
         self.remove_from_core_plugin_system(plugin_id).await?;

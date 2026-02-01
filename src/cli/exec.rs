@@ -1,5 +1,4 @@
 use anyhow::{Context, Result, bail};
-use std::fs;
 use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -11,6 +10,8 @@ use vtcode_core::core::agent::runner::{AgentRunner, ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails};
 use vtcode_core::utils::colors::style;
+use vtcode_core::utils::file_utils::write_file_with_context;
+use vtcode_core::utils::validation::validate_non_empty;
 
 use crate::workspace_trust::workspace_trust_level;
 
@@ -44,9 +45,7 @@ fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
             io::stdin()
                 .read_to_string(&mut buffer)
                 .context("Failed to read prompt from stdin")?;
-            if buffer.trim().is_empty() {
-                bail!("No prompt provided via stdin.");
-            }
+            validate_non_empty(&buffer, "Prompt via stdin")?;
             Ok(buffer)
         }
     }
@@ -232,14 +231,12 @@ async fn handle_exec_command_impl(
         if !body.is_empty() {
             body.push('\n');
         }
-        fs::write(path, body)
-            .with_context(|| format!("Failed to write exec events to {}", path.display()))?;
+        write_file_with_context(path, &body, "exec events").await?;
     }
 
     if let Some(path) = &options.last_message_file {
         let message = last_agent_message(&result.thread_events).unwrap_or_default();
-        fs::write(path, message)
-            .with_context(|| format!("Failed to write last message file {}", path.display()))?;
+        write_file_with_context(path, message, "last message file").await?;
         if message.is_empty() {
             eprintln!(
                 "Warning: no last agent message; wrote empty content to {}",

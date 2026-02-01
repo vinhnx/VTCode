@@ -7,6 +7,7 @@ use crate::ui::tui::{
     theme_from_styles,
 };
 use crate::utils::ansi_capabilities::AnsiCapabilities;
+pub use crate::utils::message_style::MessageStyle;
 use crate::utils::transcript;
 use ansi_to_tui::IntoText;
 use anstream::{AutoStream, ColorChoice};
@@ -15,53 +16,6 @@ use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
 use std::sync::Arc;
-
-/// Styles available for rendering messages
-#[derive(Clone, Copy, Debug)]
-pub enum MessageStyle {
-    Info,
-    Error,
-    Output,
-    Response,
-    Tool,
-    ToolDetail,
-    ToolOutput,
-    ToolError,
-    Status,
-    McpStatus,
-    User,
-    Reasoning,
-    Warning,
-}
-
-impl MessageStyle {
-    pub fn style(self) -> Style {
-        let styles = theme::active_styles();
-        match self {
-            Self::Info => styles.info,
-            Self::Error => styles.error,
-            Self::Output => styles.output,
-            Self::Response => styles.response,
-            Self::Tool => styles.tool,
-            Self::ToolDetail => styles.tool_detail,
-            Self::ToolOutput => styles.tool_output,
-            Self::ToolError => styles.error,
-            Self::Status => styles.status,
-            Self::McpStatus => styles.mcp,
-            Self::User => styles.user,
-            Self::Reasoning => styles.reasoning,
-            Self::Warning => styles.error,
-        }
-    }
-
-    pub fn indent(self) -> &'static str {
-        match self {
-            Self::Response | Self::Tool | Self::Reasoning => "  ",
-            Self::ToolDetail | Self::ToolOutput | Self::ToolError => "    ",
-            _ => "",
-        }
-    }
-}
 
 /// Renderer with deferred output buffering
 pub struct AnsiRenderer {
@@ -121,19 +75,7 @@ impl AnsiRenderer {
     }
 
     fn message_kind(style: MessageStyle) -> InlineMessageKind {
-        match style {
-            MessageStyle::Info => InlineMessageKind::Info,
-            MessageStyle::Error => InlineMessageKind::Error,
-            MessageStyle::Output | MessageStyle::ToolOutput => InlineMessageKind::Pty,
-            MessageStyle::Response => InlineMessageKind::Agent,
-            MessageStyle::Tool | MessageStyle::ToolDetail | MessageStyle::ToolError => {
-                InlineMessageKind::Tool
-            }
-            MessageStyle::Status | MessageStyle::McpStatus => InlineMessageKind::Info,
-            MessageStyle::User => InlineMessageKind::User,
-            MessageStyle::Reasoning => InlineMessageKind::Policy,
-            MessageStyle::Warning => InlineMessageKind::Warning,
-        }
+        style.message_kind()
     }
 
     pub fn supports_streaming_markdown(&self) -> bool {

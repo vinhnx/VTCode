@@ -465,10 +465,7 @@ impl TurnDiffTracker {
                         let old_label = path_str.to_string();
                         let new_label = new_path.to_string_lossy();
                         diff.push_str(&compute_unified_diff_with_labels(
-                            old,
-                            new,
-                            &old_label,
-                            &new_label,
+                            old, new, &old_label, &new_label,
                         ));
                     }
                 }
@@ -494,7 +491,6 @@ pub fn new_shared_tracker() -> SharedTurnDiffTracker {
     Arc::new(RwLock::new(TurnDiffTracker::new()))
 }
 
-
 /// Compute unified diff between old and new content
 fn compute_unified_diff_with_labels(
     old: &str,
@@ -514,6 +510,18 @@ fn compute_unified_diff_with_labels(
             missing_newline_hint: false,
         },
     )
+}
+
+/// Format a diff for newly added content (for testing)
+#[cfg(test)]
+fn format_addition_diff(content: &str) -> String {
+    compute_unified_diff_with_labels("", content, "file", "file")
+}
+
+/// Format a diff for deleted content (for testing)
+#[cfg(test)]
+fn format_deletion_diff(content: &str) -> String {
+    compute_unified_diff_with_labels(content, "", "file", "file")
 }
 
 #[cfg(test)]

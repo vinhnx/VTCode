@@ -13,6 +13,8 @@
 
 use anyhow::Result;
 
+use crate::utils::tokens::{estimate_tokens, truncate_to_tokens};
+
 pub mod execution;
 pub mod file_ops;
 pub mod search;
@@ -45,28 +47,6 @@ pub trait Summarizer {
             0.0
         };
         (llm_tokens, ui_tokens, savings_pct)
-    }
-}
-
-/// Estimate token count from string
-///
-/// Simple estimation: 1 token ≈ 4 characters
-/// Conservative and works well for English text
-pub fn estimate_tokens(text: &str) -> usize {
-    (text.len() as f32 / 4.0).ceil() as usize
-}
-
-/// Truncate string to approximate token limit
-///
-/// Useful for ensuring summaries stay within budget
-pub fn truncate_to_tokens(text: &str, max_tokens: usize) -> String {
-    let max_chars = max_tokens * 4;
-    if text.len() <= max_chars {
-        text.to_string()
-    } else {
-        let mut truncated = text[..max_chars].to_string();
-        truncated.push_str("...");
-        truncated
     }
 }
 

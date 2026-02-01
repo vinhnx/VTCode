@@ -61,7 +61,7 @@ impl LLMClient for GeminiProvider {
                             .collect::<Vec<_>>()
                     });
 
-                    let llm_request = LLMRequest {
+                    LLMRequest {
                         messages,
                         system_prompt,
                         tools,
@@ -75,84 +75,16 @@ impl LLMClient for GeminiProvider {
                             .as_ref()
                             .and_then(|config| config.temperature),
                         ..Default::default()
-                    };
-
-                    // Use the standard LLMProvider generate method
-                    let response = LLMProvider::generate(self, llm_request).await?;
-
-                    // If there are tool calls, include them in the response content as JSON
-                    let content = if let Some(tool_calls) = &response.tool_calls {
-                        if !tool_calls.is_empty() {
-                            // Create a JSON structure that the agent can parse
-                            let tool_call_json = json!({
-                                "tool_calls": tool_calls.iter().filter_map(|tc| {
-                                    tc.function.as_ref().map(|func| {
-                                        json!({
-                                            "function": {
-                                                "name": func.name,
-                                                "arguments": func.arguments
-                                            }
-                                        })
-                                    })
-                                }).collect::<Vec<_>>()
-                            });
-                            tool_call_json.to_string()
-                        } else {
-                            response.content.unwrap_or_default()
-                        }
-                    } else {
-                        response.content.unwrap_or_default()
-                    };
-
-                    return Ok(llm_types::LLMResponse {
-                        content,
-                        model: self.model.to_string(),
-                        usage: response.usage.map(|u| llm_types::Usage {
-                            prompt_tokens: u.prompt_tokens as usize,
-                            completion_tokens: u.completion_tokens as usize,
-                            total_tokens: u.total_tokens as usize,
-                            cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
-                            cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
-                            cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
-                        }),
-                        reasoning: response.reasoning,
-                        reasoning_details: response.reasoning_details,
-                        request_id: response.request_id,
-                        organization_id: response.organization_id,
-                    });
+                    }
                 }
                 Err(_) => {
                     // Fallback: treat as regular prompt
-                    LLMRequest {
-                        messages: vec![Message {
-                            role: MessageRole::User,
-                            content: MessageContent::Text(prompt.to_string()),
-                            reasoning: None,
-                            reasoning_details: None,
-                            tool_calls: None,
-                            tool_call_id: None,
-                            origin_tool: None,
-                        }],
-                        model: self.model.to_string(),
-                        ..Default::default()
-                    }
+                    crate::llm::providers::common::make_default_request(prompt, &self.model)
                 }
             }
         } else {
             // Fallback: treat as regular prompt
-            LLMRequest {
-                messages: vec![Message {
-                    role: MessageRole::User,
-                    content: MessageContent::Text(prompt.to_string()),
-                    reasoning: None,
-                    reasoning_details: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                    origin_tool: None,
-                }],
-                model: self.model.to_string(),
-                ..Default::default()
-            }
+            crate::llm::providers::common::make_default_request(prompt, &self.model)
         };
 
         let response = LLMProvider::generate(self, request).await?;
@@ -160,14 +92,9 @@ impl LLMClient for GeminiProvider {
         Ok(llm_types::LLMResponse {
             content: response.content.unwrap_or_default(),
             model: self.model.to_string(),
-            usage: response.usage.map(|u| llm_types::Usage {
-                prompt_tokens: u.prompt_tokens as usize,
-                completion_tokens: u.completion_tokens as usize,
-                total_tokens: u.total_tokens as usize,
-                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
-                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
-                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
-            }),
+            usage: response
+                .usage
+                .map(crate::llm::providers::common::convert_usage_to_llm_types),
             reasoning: response.reasoning,
             reasoning_details: response.reasoning_details,
             request_id: response.request_id,

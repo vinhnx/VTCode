@@ -3,6 +3,9 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow, bail};
 use vtcode_core::dotfile_protection::init_global_guardian;
+use vtcode_core::utils::validation::{
+    validate_is_directory, validate_non_empty, validate_path_exists,
+};
 
 mod first_run;
 
@@ -10,9 +13,7 @@ use crate::tools::RipgrepStatus;
 
 /// Validate custom session ID suffix
 fn validate_session_id_suffix(suffix: &str) -> Result<()> {
-    if suffix.is_empty() {
-        bail!("Custom session ID suffix cannot be empty");
-    }
+    validate_non_empty(suffix, "Custom session ID suffix")?;
     if suffix.len() > 64 {
         bail!("Custom session ID suffix too long (maximum 64 characters)");
     }
@@ -32,12 +33,7 @@ fn validate_additional_directories(dirs: &[PathBuf]) -> Result<Vec<PathBuf>> {
     let mut validated_dirs = Vec::new();
 
     for dir in dirs {
-        if !dir.exists() {
-            bail!("Additional directory '{}' does not exist", dir.display());
-        }
-        if !dir.is_dir() {
-            bail!("Path '{}' is not a directory", dir.display());
-        }
+        validate_is_directory(dir, "Additional directory")?;
 
         // Resolve to absolute path
         let absolute_dir = dir
@@ -170,13 +166,8 @@ impl StartupContext {
         let workspace = resolve_workspace_path(workspace_override)
             .context("Failed to resolve workspace directory")?;
 
-        if let Some(path) = &args.workspace_path
-            && !workspace.exists()
-        {
-            bail!(
-                "Workspace path '{}' does not exist. Initialize it first or provide an existing directory.",
-                path.display()
-            );
+        if args.workspace_path.is_some() {
+            validate_path_exists(&workspace, "Workspace")?;
         }
 
         // Validate and resolve additional directories

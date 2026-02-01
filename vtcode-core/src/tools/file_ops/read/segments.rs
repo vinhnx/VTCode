@@ -1,4 +1,5 @@
 use super::FileOpsTool;
+use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::types::Input;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
@@ -33,17 +34,39 @@ impl FileOpsTool {
                 self.read_file_by_bytes(file_path, input, file_size).await?
             };
 
-        // Create metadata object
-        let metadata = json!({
-            "size_bytes": file_size,
-            "size_lines": final_content.lines().count(),
-            "is_truncated": is_truncated,
-            "type": "file",
-            "content_kind": "text",
-            "encoding": "utf8",
-        });
+        // Create builder and metadata object
+        let mut builder = ToolResponseBuilder::new("read_file")
+            .success()
+            .message(format!(
+                "Successfully read file {} (paged)",
+                self.workspace_relative_display(file_path)
+            ))
+            .content(final_content.clone())
+            .data("size_bytes", json!(file_size))
+            .data("size_lines", json!(final_content.lines().count()))
+            .data("is_truncated", json!(is_truncated))
+            .data("content_kind", json!("text"))
+            .data("encoding", json!("utf8"));
 
-        Ok((final_content, metadata, is_truncated))
+        // Copy paging parameters to metadata
+        if let Some(offset_bytes) = input.offset_bytes {
+            builder = builder.data("offset_bytes", json!(offset_bytes));
+        }
+        if let Some(page_size_bytes) = input.page_size_bytes {
+            builder = builder.data("page_size_bytes", json!(page_size_bytes));
+        }
+        if let Some(offset_lines) = input.offset_lines {
+            builder = builder.data("offset_lines", json!(offset_lines));
+        }
+        if let Some(page_size_lines) = input.page_size_lines {
+            builder = builder.data("page_size_lines", json!(page_size_lines));
+        }
+
+        Ok((
+            final_content,
+            builder.build_json()["metadata"].clone(),
+            is_truncated,
+        ))
     }
 
     /// Read file content by lines with offset and page size

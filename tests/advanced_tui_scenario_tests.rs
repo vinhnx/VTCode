@@ -35,6 +35,7 @@ fn test_tui_with_conversation_history() {
 
 /// Test actual UI state with populated content using the command system
 #[tokio::test]
+#[ignore] // Requires interactive terminal (stdin must be a TTY)
 async fn test_real_ui_scenario_with_commands() {
     // Create a session with initial parameters
     let session = spawn_session(

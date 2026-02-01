@@ -133,15 +133,29 @@ impl LLMProvider for MinimaxProvider {
 #[async_trait]
 impl LLMClient for MinimaxProvider {
     async fn generate(&mut self, prompt: &str) -> Result<crate::llm::types::LLMResponse, LLMError> {
-        LLMClient::generate(&mut self.inner, prompt).await
+        let request = super::common::make_default_request(prompt, &self.inner.model_id());
+        let request_model = request.model.clone();
+        let response = LLMProvider::generate(self, request).await?;
+
+        Ok(crate::llm::types::LLMResponse {
+            content: response.content.unwrap_or_default(),
+            model: request_model,
+            usage: response
+                .usage
+                .map(super::common::convert_usage_to_llm_types),
+            reasoning: response.reasoning,
+            reasoning_details: response.reasoning_details,
+            request_id: response.request_id,
+            organization_id: response.organization_id,
+        })
     }
 
     fn backend_kind(&self) -> crate::llm::types::BackendKind {
-        LLMClient::backend_kind(&self.inner)
+        crate::llm::types::BackendKind::Minimax
     }
 
     fn model_id(&self) -> &str {
-        LLMClient::model_id(&self.inner)
+        self.inner.model_id()
     }
 }
 

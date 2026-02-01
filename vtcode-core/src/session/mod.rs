@@ -1,9 +1,10 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 use crate::llm::provider::Message;
+use crate::utils::file_utils::{read_json_file_sync, write_json_file_sync};
 
 /// Session identifier for conversation persistence.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -50,23 +51,12 @@ impl SessionState {
 
     /// Save session to disk.
     pub fn save(&self, path: &Path) -> Result<()> {
-        let json =
-            serde_json::to_string_pretty(self).context("Failed to serialize session state")?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).with_context(|| {
-                format!("Failed to create session directory {}", parent.display())
-            })?;
-        }
-        std::fs::write(path, json)
-            .with_context(|| format!("Failed to write session state to {}", path.display()))?;
-        Ok(())
+        write_json_file_sync(path, self)
     }
 
     /// Load session from disk.
     pub fn load(path: &Path) -> Result<Self> {
-        let json = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read session state from {}", path.display()))?;
-        serde_json::from_str(&json).context("Failed to deserialize session state")
+        read_json_file_sync(path)
     }
 }
 

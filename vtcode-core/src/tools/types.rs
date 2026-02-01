@@ -151,6 +151,12 @@ pub struct CopyInput {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct PathArgs {
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    pub path: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct EditInput {
     #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
     pub path: String,

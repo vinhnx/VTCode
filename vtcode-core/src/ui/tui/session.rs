@@ -56,7 +56,6 @@ mod text_utils;
 mod transcript;
 
 // New modular components (refactored from main session.rs)
-mod ansi_utils;
 mod command;
 pub mod config_palette;
 mod editing;

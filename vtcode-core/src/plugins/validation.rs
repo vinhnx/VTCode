@@ -7,6 +7,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
+use crate::command_safety::command_might_be_dangerous;
 use crate::plugins::{PluginError, PluginManifest, PluginResult};
 
 /// Plugin validator
@@ -109,11 +110,7 @@ impl PluginValidator {
 
     /// Check if a command is potentially dangerous
     fn is_dangerous_command(command: &str) -> bool {
-        let dangerous_commands = [
-            "rm", "rmdir", "del", "format", "dd", "mkfs", "shutdown", "reboot", "poweroff", "halt",
-        ];
-
-        dangerous_commands.iter().any(|&dc| command.contains(dc))
+        command_might_be_dangerous(&[command.to_string()])
     }
 }
 

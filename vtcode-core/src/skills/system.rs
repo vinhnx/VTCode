@@ -1,3 +1,6 @@
+use crate::utils::file_utils::{
+    ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
+};
 use include_dir::Dir;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
@@ -35,8 +38,8 @@ pub(crate) fn system_cache_root_dir(codex_home: &Path) -> PathBuf {
 /// install is skipped.
 pub(crate) fn install_system_skills(codex_home: &Path) -> Result<(), SystemSkillsError> {
     let skills_root_dir = codex_home.join(SKILLS_DIR_NAME);
-    fs::create_dir_all(&skills_root_dir)
-        .map_err(|source| SystemSkillsError::io("create skills root dir", source))?;
+    ensure_dir_exists_sync(&skills_root_dir)
+        .map_err(|source| SystemSkillsError::io("create skills root dir", anyhow_to_io(source)))?;
 
     let dest_system = system_cache_root_dir(codex_home);
 
@@ -54,14 +57,22 @@ pub(crate) fn install_system_skills(codex_home: &Path) -> Result<(), SystemSkill
     }
 
     write_embedded_dir(&SYSTEM_SKILLS_DIR, &dest_system)?;
-    fs::write(&marker_path, format!("{expected_fingerprint}\n"))
-        .map_err(|source| SystemSkillsError::io("write system skills marker", source))?;
+    write_file_with_context_sync(
+        &marker_path,
+        &format!("{expected_fingerprint}\n"),
+        "system skills marker",
+    )
+    .map_err(|source| SystemSkillsError::io("write system skills marker", anyhow_to_io(source)))?;
     Ok(())
 }
 
+fn anyhow_to_io(err: anyhow::Error) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::Other, err.to_string())
+}
+
 fn read_marker(path: &Path) -> Result<String, SystemSkillsError> {
-    Ok(fs::read_to_string(path)
-        .map_err(|source| SystemSkillsError::io("read system skills marker", source))?
+    Ok(read_file_with_context_sync(path, "system skills marker")
+        .map_err(|source| SystemSkillsError::io("read system skills marker", anyhow_to_io(source)))?
         .trim()
         .to_string())
 }
@@ -97,41 +108,37 @@ fn embedded_system_skills_fingerprint() -> String {
 ///
 /// Preserves the embedded directory structure.
 fn write_embedded_dir(dir: &Dir<'_>, dest: &Path) -> Result<(), SystemSkillsError> {
-    fs::create_dir_all(dest)
-        .map_err(|source| SystemSkillsError::io("create system skills dir", source))?;
+    ensure_dir_exists_sync(dest).map_err(|source| {
+        SystemSkillsError::io("create system skills dir", anyhow_to_io(source))
+    })?;
 
     for entry in dir.entries() {
         match entry {
             include_dir::DirEntry::Dir(subdir) => {
                 let subdir_dest = dest.join(subdir.path());
-                fs::create_dir_all(&subdir_dest).map_err(|source| {
-                    SystemSkillsError::io("create system skills subdir", source)
+                ensure_dir_exists_sync(&subdir_dest).map_err(|source| {
+                    SystemSkillsError::io("create system skills subdir", anyhow_to_io(source))
                 })?;
-                write_embedded_dir(subdir, dest)?; // Note: write_embedded_dir handles relative path inside, but here we recurse?
-                // Wait, include_dir recursion:
-                // include_dir entries paths are relative to the root of the Dir.
-                // But write_embedded_dir assumes `dir` is the root to write to `dest`.
-                // Actually, the recursion logic in reference was:
-                // write_embedded_dir(subdir, dest)?;
-                // But subdir.path() is relative to Parent Dir.
-                // Let's check reference again.
-                // logic: dest.join(subdir.path()) -> this is correct.
-                // But passing `dest` again to recursive call means it will join subdir.path() AGAIN?
-                // `include_dir` paths are relative to the embedded root.
-                // So if root has `foo/bar`, subdir `foo` has path `foo`.
-                // Recursing on `foo`: its entries have path `foo/bar`.
-                // So joining `dest` + `foo/bar` is correct.
-                // So `dest` should stay the same.
+                write_embedded_dir(subdir, dest)?;
             }
             include_dir::DirEntry::File(file) => {
                 let path = dest.join(file.path());
                 if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent).map_err(|source| {
-                        SystemSkillsError::io("create system skills file parent", source)
+                    ensure_dir_exists_sync(parent).map_err(|source| {
+                        SystemSkillsError::io(
+                            "create system skills file parent",
+                            anyhow_to_io(source),
+                        )
                     })?;
                 }
-                fs::write(&path, file.contents())
-                    .map_err(|source| SystemSkillsError::io("write system skill file", source))?;
+                write_file_with_context_sync(
+                    &path,
+                    std::str::from_utf8(file.contents()).unwrap_or_default(),
+                    "system skill file",
+                )
+                .map_err(|source| {
+                    SystemSkillsError::io("write system skill file", anyhow_to_io(source))
+                })?;
             }
         }
     }

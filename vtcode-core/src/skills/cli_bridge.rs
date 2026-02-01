@@ -21,7 +21,9 @@
 use crate::skills::types::{Skill, SkillManifest, SkillResource};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::traits::Tool;
-use anyhow::{Context, Result, anyhow};
+use crate::utils::async_utils;
+use crate::utils::file_utils::{read_file_with_context_sync, read_json_file_sync};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -29,7 +31,6 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Command;
-use tokio::time::timeout;
 use tracing::{debug, info, warn};
 
 /// Configuration for a CLI tool skill
@@ -107,9 +108,7 @@ impl CliToolBridge {
     pub fn from_directory(tool_dir: &Path) -> Result<Self> {
         let config_path = tool_dir.join("tool.json");
         let config: CliToolConfig = if config_path.exists() {
-            let content =
-                std::fs::read_to_string(&config_path).context("Failed to read tool.json")?;
-            serde_json::from_str(&content).context("Failed to parse tool.json")?
+            read_json_file_sync(&config_path)?
         } else {
             // Auto-discover tool configuration
             Self::auto_discover_config(tool_dir)?
@@ -210,7 +209,7 @@ impl CliToolBridge {
     /// Load README/documentation content
     fn load_readme(config: &CliToolConfig) -> Result<String> {
         if let Some(readme_path) = config.readme_path.as_ref().filter(|p| p.exists()) {
-            return std::fs::read_to_string(readme_path).context("Failed to read README file");
+            return read_file_with_context_sync(readme_path, "README file");
         }
 
         // Generate basic instructions if no README
@@ -224,11 +223,7 @@ impl CliToolBridge {
     /// Load JSON schema for validation
     fn load_schema(config: &CliToolConfig) -> Result<Option<Value>> {
         if let Some(schema_path) = config.schema_path.as_ref().filter(|p| p.exists()) {
-            let content =
-                std::fs::read_to_string(schema_path).context("Failed to read schema file")?;
-            let schema: Value =
-                serde_json::from_str(&content).context("Failed to parse schema JSON")?;
-            return Ok(Some(schema));
+            return Ok(Some(read_json_file_sync(schema_path)?));
         }
 
         Ok(None)
@@ -273,35 +268,30 @@ impl CliToolBridge {
 
         // Execute with timeout
         let timeout_duration = Duration::from_secs(self.config.timeout_seconds.unwrap_or(30));
-        let output_result = timeout(timeout_duration, cmd.output())
-            .await
-            .map_err(|_| anyhow!("Tool execution timed out"))?;
+        let output_result =
+            async_utils::with_timeout(cmd.output(), timeout_duration, "CLI tool execution")
+                .await??;
 
         let execution_time_ms = start_time.elapsed().as_millis() as u64;
 
-        match output_result {
-            Ok(output) => {
-                // Parse output
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        // Parse output
+        let stdout = String::from_utf8_lossy(&output_result.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output_result.stderr).to_string();
 
-                // Try to parse JSON output if supported
-                let json_output = if self.config.supports_json {
-                    serde_json::from_str(&stdout).ok()
-                } else {
-                    None
-                };
+        // Try to parse JSON output if supported
+        let json_output = if self.config.supports_json {
+            serde_json::from_str(&stdout).ok()
+        } else {
+            None
+        };
 
-                Ok(CliToolResult {
-                    exit_code: output.status.code().unwrap_or(-1),
-                    stdout,
-                    stderr,
-                    json_output,
-                    execution_time_ms,
-                })
-            }
-            Err(e) => Err(anyhow!("Failed to execute tool: {}", e)),
-        }
+        Ok(CliToolResult {
+            exit_code: output_result.status.code().unwrap_or(-1),
+            stdout,
+            stderr,
+            json_output,
+            execution_time_ms,
+        })
     }
 
     /// Configure command arguments based on input

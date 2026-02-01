@@ -191,6 +191,17 @@ impl CtrlCState {
         self.exit_requested.load(Ordering::Relaxed)
     }
 
+    /// Check if cancellation or exit has been requested and return an error if so
+    pub(crate) fn check_cancellation(&self) -> anyhow::Result<()> {
+        if self.is_exit_requested() {
+            anyhow::bail!("Exit requested");
+        }
+        if self.is_cancel_requested() {
+            anyhow::bail!("Operation cancelled");
+        }
+        Ok(())
+    }
+
     pub(crate) fn disarm_exit(&self) {
         self.exit_armed.store(false, Ordering::SeqCst);
         self.last_signal_time.store(0, Ordering::SeqCst);
