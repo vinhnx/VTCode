@@ -4,15 +4,12 @@
 //! apply_patch invocations, redirecting them to the proper patch application
 //! flow with approval and sandbox handling.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use super::sandboxing::ToolCtx;
 use super::tool_handler::{ToolOutput, ToolSession, TurnContext};
-use super::tool_orchestrator::ToolOrchestrator;
-use super::turn_diff_tracker::{FileChange, SharedTurnDiffTracker};
+use super::turn_diff_tracker::SharedTurnDiffTracker;
 
 /// The argument used to indicate apply_patch mode (from Codex)
 pub const CODEX_APPLY_PATCH_ARG: &str = "--codex-run-as-apply-patch";
@@ -97,11 +94,11 @@ pub async fn intercept_apply_patch(
     command: &[String],
     cwd: &Path,
     timeout_ms: Option<u64>,
-    session: &dyn ToolSession,
-    turn: &TurnContext,
+    _session: &dyn ToolSession,
+    _turn: &TurnContext,
     tracker: Option<&SharedTurnDiffTracker>,
-    call_id: &str,
-    tool_name: &str,
+    _call_id: &str,
+    _tool_name: &str,
 ) -> Result<Option<ToolOutput>, ApplyPatchError> {
     // Check if this is an apply_patch command
     if !is_apply_patch_command(command) {
@@ -115,25 +112,11 @@ pub async fn intercept_apply_patch(
     let req = ApplyPatchRequest::new(patch.clone(), cwd.to_path_buf())
         .with_timeout(timeout_ms.unwrap_or(30000));
 
-    // Parse changes from the patch
-    let changes = parse_patch_changes(&patch)?;
-
     // Emit patch begin event
     if let Some(tracker) = tracker {
         let mut t = tracker.write().await;
-        t.on_patch_begin(changes.clone());
+        t.on_patch_begin(Default::default());
     }
-
-    // Create orchestrator (for future use with ApplyPatchRuntime)
-    let _orchestrator = ToolOrchestrator::new();
-
-    // Build tool context (for future use with ApplyPatchRuntime)
-    let _tool_ctx = ToolCtx {
-        session,
-        turn,
-        call_id: call_id.to_string(),
-        tool_name: tool_name.to_string(),
-    };
 
     // For now, execute patch directly (would use ApplyPatchRuntime in production)
     let result = execute_patch(&req).await;
@@ -213,101 +196,6 @@ fn extract_heredoc_content(input: &str) -> Option<String> {
         }
     }
     None
-}
-
-/// Parse file changes from a unified diff patch
-fn parse_patch_changes(patch: &str) -> Result<HashMap<PathBuf, FileChange>, ApplyPatchError> {
-    let mut changes = HashMap::new();
-    let mut current_file: Option<PathBuf> = None;
-    let mut old_content = String::new();
-    let mut new_content = String::new();
-    let mut is_new_file = false;
-    let mut is_deleted = false;
-
-    for line in patch.lines() {
-        if line.starts_with("--- ") {
-            // Save previous file if any
-            if let Some(path) = current_file.take() {
-                save_file_change(
-                    &mut changes,
-                    path,
-                    is_new_file,
-                    is_deleted,
-                    &old_content,
-                    &new_content,
-                );
-            }
-
-            // Parse old file path
-            let path_part = line.strip_prefix("--- ").unwrap_or("");
-            if path_part == "/dev/null" {
-                is_new_file = true;
-            } else {
-                is_new_file = false;
-                // Strip a/ prefix if present
-                let clean_path = path_part.strip_prefix("a/").unwrap_or(path_part);
-                current_file = Some(PathBuf::from(clean_path));
-            }
-            old_content.clear();
-            new_content.clear();
-            is_deleted = false;
-        } else if line.starts_with("+++ ") {
-            let path_part = line.strip_prefix("+++ ").unwrap_or("");
-            if path_part == "/dev/null" {
-                is_deleted = true;
-            } else {
-                // Strip b/ prefix if present
-                let clean_path = path_part.strip_prefix("b/").unwrap_or(path_part);
-                if current_file.is_none() {
-                    current_file = Some(PathBuf::from(clean_path));
-                }
-            }
-        } else if line.starts_with('-') && !line.starts_with("---") {
-            old_content.push_str(&line[1..]);
-            old_content.push('\n');
-        } else if line.starts_with('+') && !line.starts_with("+++") {
-            new_content.push_str(&line[1..]);
-            new_content.push('\n');
-        } else if line.starts_with(' ') {
-            let content = &line[1..];
-            old_content.push_str(content);
-            old_content.push('\n');
-            new_content.push_str(content);
-            new_content.push('\n');
-        }
-    }
-
-    // Save last file
-    if let Some(path) = current_file {
-        save_file_change(
-            &mut changes,
-            path,
-            is_new_file,
-            is_deleted,
-            &old_content,
-            &new_content,
-        );
-    }
-
-    Ok(changes)
-}
-
-fn save_file_change(
-    changes: &mut HashMap<PathBuf, FileChange>,
-    path: PathBuf,
-    is_new_file: bool,
-    is_deleted: bool,
-    old_content: &str,
-    new_content: &str,
-) {
-    let change = if is_new_file {
-        FileChange::add(new_content)
-    } else if is_deleted {
-        FileChange::delete(old_content)
-    } else {
-        FileChange::update(old_content, new_content)
-    };
-    changes.insert(path, change);
 }
 
 /// Execute the patch (simplified implementation)
@@ -392,59 +280,6 @@ mod tests {
             "echo".to_string(),
             "hello".to_string(),
         ]));
-    }
-
-    #[test]
-    fn test_parse_patch_changes_add() {
-        let patch = r#"--- /dev/null
-+++ b/new_file.txt
-@@ -0,0 +1,2 @@
-+line 1
-+line 2
-"#;
-        let changes = parse_patch_changes(patch).unwrap();
-        assert!(changes.contains_key(&PathBuf::from("new_file.txt")));
-        let change = changes.get(&PathBuf::from("new_file.txt")).unwrap();
-        assert!(change.is_add());
-        let content = change.new_content().unwrap();
-        assert!(content.contains("line 1"));
-        assert!(content.contains("line 2"));
-    }
-
-    #[test]
-    fn test_parse_patch_changes_delete() {
-        let patch = r#"--- a/old_file.txt
-+++ /dev/null
-@@ -1,2 +0,0 @@
--line 1
--line 2
-"#;
-        let changes = parse_patch_changes(patch).unwrap();
-        assert!(changes.contains_key(&PathBuf::from("old_file.txt")));
-        let change = changes.get(&PathBuf::from("old_file.txt")).unwrap();
-        assert!(change.is_delete());
-        let original_content = change.old_content().unwrap();
-        assert!(original_content.contains("line 1"));
-    }
-
-    #[test]
-    fn test_parse_patch_changes_update() {
-        let patch = r#"--- a/file.txt
-+++ b/file.txt
-@@ -1,3 +1,3 @@
- unchanged
--old line
-+new line
- unchanged
-"#;
-        let changes = parse_patch_changes(patch).unwrap();
-        assert!(changes.contains_key(&PathBuf::from("file.txt")));
-        let change = changes.get(&PathBuf::from("file.txt")).unwrap();
-        assert!(change.is_update());
-        let old_content = change.old_content().unwrap();
-        let new_content = change.new_content().unwrap();
-        assert!(old_content.contains("old line"));
-        assert!(new_content.contains("new line"));
     }
 
     #[test]

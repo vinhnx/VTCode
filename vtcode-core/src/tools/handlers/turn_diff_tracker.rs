@@ -427,32 +427,49 @@ impl TurnDiffTracker {
             let path_str = path.display();
             match &change.kind {
                 FileChangeKind::Add { content } => {
-                    diff.push_str(&format!("--- /dev/null\n+++ b/{}\n", path_str));
-                    diff.push_str(&format_addition_diff(content));
+                    let new_label = path_str.to_string();
+                    diff.push_str(&compute_unified_diff_with_labels(
+                        "",
+                        content,
+                        "/dev/null",
+                        &new_label,
+                    ));
                 }
                 FileChangeKind::Delete { original_content } => {
-                    diff.push_str(&format!("--- a/{}\n+++ /dev/null\n", path_str));
-                    diff.push_str(&format_deletion_diff(original_content));
+                    let old_label = path_str.to_string();
+                    diff.push_str(&compute_unified_diff_with_labels(
+                        original_content,
+                        "",
+                        &old_label,
+                        "/dev/null",
+                    ));
                 }
                 FileChangeKind::Update {
                     old_content,
                     new_content,
                 } => {
-                    diff.push_str(&format!("--- a/{}\n+++ b/{}\n", path_str, path_str));
-                    diff.push_str(&compute_unified_diff(old_content, new_content));
+                    let filename = path_str.to_string();
+                    diff.push_str(&compute_unified_diff_with_labels(
+                        old_content,
+                        new_content,
+                        &filename,
+                        &filename,
+                    ));
                 }
                 FileChangeKind::Rename {
                     new_path,
                     old_content,
                     new_content,
                 } => {
-                    diff.push_str(&format!(
-                        "--- a/{}\n+++ b/{}\n",
-                        path_str,
-                        new_path.display()
-                    ));
                     if let (Some(old), Some(new)) = (old_content, new_content) {
-                        diff.push_str(&compute_unified_diff(old, new));
+                        let old_label = path_str.to_string();
+                        let new_label = new_path.to_string_lossy();
+                        diff.push_str(&compute_unified_diff_with_labels(
+                            old,
+                            new,
+                            &old_label,
+                            &new_label,
+                        ));
                     }
                 }
             }
@@ -477,70 +494,26 @@ pub fn new_shared_tracker() -> SharedTurnDiffTracker {
     Arc::new(RwLock::new(TurnDiffTracker::new()))
 }
 
-/// Format an addition as unified diff lines
-fn format_addition_diff(content: &str) -> String {
-    let mut result = String::new();
-    let lines: Vec<&str> = content.lines().collect();
-    let line_count = lines.len();
-
-    result.push_str(&format!("@@ -0,0 +1,{} @@\n", line_count));
-    for line in lines {
-        result.push_str(&format!("+{}\n", line));
-    }
-    result
-}
-
-/// Format a deletion as unified diff lines
-fn format_deletion_diff(content: &str) -> String {
-    let mut result = String::new();
-    let lines: Vec<&str> = content.lines().collect();
-    let line_count = lines.len();
-
-    result.push_str(&format!("@@ -1,{} +0,0 @@\n", line_count));
-    for line in lines {
-        result.push_str(&format!("-{}\n", line));
-    }
-    result
-}
 
 /// Compute unified diff between old and new content
-fn compute_unified_diff(old: &str, new: &str) -> String {
-    let old_lines: Vec<&str> = old.lines().collect();
-    let new_lines: Vec<&str> = new.lines().collect();
-
-    // Simple line-by-line diff (production would use proper diff algorithm)
-    let mut result = String::new();
-    let max_len = old_lines.len().max(new_lines.len());
-
-    result.push_str(&format!(
-        "@@ -1,{} +1,{} @@\n",
-        old_lines.len(),
-        new_lines.len()
-    ));
-
-    for i in 0..max_len {
-        let old_line = old_lines.get(i);
-        let new_line = new_lines.get(i);
-
-        match (old_line, new_line) {
-            (Some(o), Some(n)) if o == n => {
-                result.push_str(&format!(" {}\n", o));
-            }
-            (Some(o), Some(n)) => {
-                result.push_str(&format!("-{}\n", o));
-                result.push_str(&format!("+{}\n", n));
-            }
-            (Some(o), None) => {
-                result.push_str(&format!("-{}\n", o));
-            }
-            (None, Some(n)) => {
-                result.push_str(&format!("+{}\n", n));
-            }
-            (None, None) => {}
-        }
-    }
-
-    result
+fn compute_unified_diff_with_labels(
+    old: &str,
+    new: &str,
+    old_label: &str,
+    new_label: &str,
+) -> String {
+    let old_label = format!("a/{}", old_label);
+    let new_label = format!("b/{}", new_label);
+    crate::utils::diff::format_unified_diff(
+        old,
+        new,
+        crate::utils::diff::DiffOptions {
+            context_lines: 3,
+            old_label: Some(&old_label),
+            new_label: Some(&new_label),
+            missing_newline_hint: false,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -675,12 +648,13 @@ mod tests {
     fn test_compute_unified_diff() {
         let old = "line1\nline2\nline3";
         let new = "line1\nmodified\nline3";
-        let diff = compute_unified_diff(old, new);
+        let diff = compute_unified_diff_with_labels(old, new, "file.txt", "file.txt");
 
         assert!(diff.contains(" line1"));
         assert!(diff.contains("-line2"));
         assert!(diff.contains("+modified"));
         assert!(diff.contains(" line3"));
+        assert!(diff.starts_with("--- a/"));
     }
 
     #[test]

@@ -66,6 +66,11 @@ impl ExecPolicyAmendment {
         let pattern_json = serde_json::to_string(&self.pattern).unwrap_or_default();
         format!("prefix_rule(pattern={}, decision=\"allow\")", pattern_json)
     }
+
+    /// Get the command pattern for Codex compatibility.
+    pub fn command_pattern(&self) -> &[String] {
+        &self.pattern
+    }
 }
 
 /// Requirement for approval before executing a command.
@@ -169,6 +174,11 @@ impl ExecApprovalRequirement {
             } => proposed_execpolicy_amendment.as_ref(),
             Self::Forbidden { .. } => None,
         }
+    }
+
+    /// Get the proposed exec policy amendment if any (Codex-compatible name).
+    pub fn proposed_execpolicy_amendment(&self) -> Option<&ExecPolicyAmendment> {
+        self.get_amendment()
     }
 }
 

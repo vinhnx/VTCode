@@ -113,11 +113,7 @@ fn shell_command_requires_prompt(command: &str) -> bool {
         return false;
     }
 
-    if vtcode_core::command_safety::command_might_be_dangerous(&tokens) {
-        return true;
-    }
-
-    matches!(tokens[0].as_str(), "rm" | "rmdir")
+    vtcode_core::command_safety::command_might_be_dangerous(&tokens)
 }
 
 pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(

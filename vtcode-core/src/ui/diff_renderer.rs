@@ -427,87 +427,41 @@ impl DiffRenderer {
     }
 
     pub fn generate_diff(&self, old_content: &str, new_content: &str, file_path: &str) -> FileDiff {
-        let mut old_lines: Vec<&str> = Vec::new();
-        for l in old_content.lines() {
-            old_lines.push(l);
-        }
-        let mut new_lines: Vec<&str> = Vec::new();
-        for l in new_content.lines() {
-            new_lines.push(l);
-        }
+        let bundle = crate::utils::diff::compute_diff(
+            old_content,
+            new_content,
+            crate::utils::diff::DiffOptions {
+                context_lines: self.context_lines,
+                old_label: None,
+                new_label: None,
+                missing_newline_hint: false,
+            },
+        );
 
-        // Pre-allocate with estimated capacity
-        let estimated_lines = old_lines.len().max(new_lines.len());
-        let mut lines = Vec::with_capacity(estimated_lines);
+        let mut lines = Vec::new();
         let mut additions = 0;
         let mut deletions = 0;
 
-        // Simple diff algorithm - can be enhanced with more sophisticated diffing
-        let mut old_idx = 0;
-        let mut new_idx = 0;
-
-        while old_idx < old_lines.len() || new_idx < new_lines.len() {
-            if old_idx < old_lines.len() && new_idx < new_lines.len() {
-                if old_lines[old_idx] == new_lines[new_idx] {
-                    // Same line - context
-                    lines.push(DiffLine {
-                        line_type: DiffLineType::Context,
-                        content: old_lines[old_idx].to_owned(),
-                        line_number_old: Some(old_idx + 1),
-                        line_number_new: Some(new_idx + 1),
-                    });
-                    old_idx += 1;
-                    new_idx += 1;
-                } else {
-                    // Lines differ - find the difference
-                    let (old_end, new_end) =
-                        self.find_difference(&old_lines, &new_lines, old_idx, new_idx);
-
-                    // Add removed lines
-                    for (i, line) in old_lines.iter().enumerate().take(old_end).skip(old_idx) {
-                        lines.push(DiffLine {
-                            line_type: DiffLineType::Removed,
-                            content: line.to_string(),
-                            line_number_old: Some(i + 1),
-                            line_number_new: None,
-                        });
-                        deletions += 1;
-                    }
-
-                    // Add added lines
-                    for (i, line) in new_lines.iter().enumerate().take(new_end).skip(new_idx) {
-                        lines.push(DiffLine {
-                            line_type: DiffLineType::Added,
-                            content: line.to_string(),
-                            line_number_old: None,
-                            line_number_new: Some(i + 1),
-                        });
+        for hunk in &bundle.hunks {
+            for line in &hunk.lines {
+                let line_type = match line.kind {
+                    crate::utils::diff::DiffLineKind::Addition => {
                         additions += 1;
+                        DiffLineType::Added
                     }
+                    crate::utils::diff::DiffLineKind::Deletion => {
+                        deletions += 1;
+                        DiffLineType::Removed
+                    }
+                    crate::utils::diff::DiffLineKind::Context => DiffLineType::Context,
+                };
 
-                    old_idx = old_end;
-                    new_idx = new_end;
-                }
-            } else if old_idx < old_lines.len() {
-                // Remaining old lines are deletions
                 lines.push(DiffLine {
-                    line_type: DiffLineType::Removed,
-                    content: old_lines[old_idx].to_owned(),
-                    line_number_old: Some(old_idx + 1),
-                    line_number_new: None,
+                    line_type,
+                    content: line.text.trim_end_matches('\n').to_string(),
+                    line_number_old: line.old_line,
+                    line_number_new: line.new_line,
                 });
-                deletions += 1;
-                old_idx += 1;
-            } else if new_idx < new_lines.len() {
-                // Remaining new lines are additions
-                lines.push(DiffLine {
-                    line_type: DiffLineType::Added,
-                    content: new_lines[new_idx].to_owned(),
-                    line_number_old: None,
-                    line_number_new: Some(new_idx + 1),
-                });
-                additions += 1;
-                new_idx += 1;
             }
         }
 
@@ -522,45 +476,6 @@ impl DiffRenderer {
                 changes,
             },
         }
-    }
-
-    fn find_difference(
-        &self,
-        old_lines: &[&str],
-        new_lines: &[&str],
-        start_old: usize,
-        start_new: usize,
-    ) -> (usize, usize) {
-        let mut old_end = start_old;
-        let mut new_end = start_new;
-
-        // Look for the next matching line
-        while old_end < old_lines.len() && new_end < new_lines.len() {
-            if old_lines[old_end] == new_lines[new_end] {
-                return (old_end, new_end);
-            }
-
-            // Check if we can find a match within context window
-            let mut found = false;
-            for i in 1..=self.context_lines {
-                if old_end + i < old_lines.len()
-                    && new_end + i < new_lines.len()
-                    && old_lines[old_end + i] == new_lines[new_end + i]
-                {
-                    old_end += i;
-                    new_end += i;
-                    found = true;
-                    break;
-                }
-            }
-
-            if !found {
-                old_end += 1;
-                new_end += 1;
-            }
-        }
-
-        (old_end, new_end)
     }
 }
 
@@ -890,125 +805,15 @@ impl DiffChatRenderer {
 }
 
 pub fn generate_unified_diff(old_content: &str, new_content: &str, filename: &str) -> String {
-    let mut old_lines: Vec<&str> = Vec::new();
-    for l in old_content.lines() {
-        old_lines.push(l);
-    }
-    let mut new_lines: Vec<&str> = Vec::new();
-    for l in new_content.lines() {
-        new_lines.push(l);
-    }
-
-    // Pre-allocate buffer: header + estimated hunk size
-    let estimated_size = 100 + (old_lines.len() + new_lines.len()) * 40;
-    let mut diff = String::with_capacity(estimated_size);
-
-    diff.push_str("--- a/");
-    diff.push_str(filename);
-    diff.push_str("\n+++ b/");
-    diff.push_str(filename);
-    diff.push('\n');
-
-    let mut old_idx = 0;
-    let mut new_idx = 0;
-
-    while old_idx < old_lines.len() || new_idx < new_lines.len() {
-        // Find the next difference
-        let start_old = old_idx;
-        let start_new = new_idx;
-
-        // Skip matching lines
-        while old_idx < old_lines.len()
-            && new_idx < new_lines.len()
-            && old_lines[old_idx] == new_lines[new_idx]
-        {
-            old_idx += 1;
-            new_idx += 1;
-        }
-
-        if old_idx == old_lines.len() && new_idx == new_lines.len() {
-            break; // No more differences
-        }
-
-        // Find the end of the difference
-        let mut end_old = old_idx;
-        let mut end_new = new_idx;
-
-        // Look for next matching context
-        let mut context_found = false;
-        for i in 0..3 {
-            // Look ahead 3 lines for context
-            if end_old + i < old_lines.len()
-                && end_new + i < new_lines.len()
-                && old_lines[end_old + i] == new_lines[end_new + i]
-            {
-                end_old += i;
-                end_new += i;
-                context_found = true;
-                break;
-            }
-        }
-
-        if !context_found {
-            end_old = old_lines.len();
-            end_new = new_lines.len();
-        }
-
-        // Generate hunk header
-        let old_count = end_old - start_old;
-        let new_count = end_new - start_new;
-
-        use std::fmt::Write;
-        let _ = writeln!(
-            diff,
-            "@@ -{},{} +{},{} @@",
-            start_old + 1,
-            old_count,
-            start_new + 1,
-            new_count
-        );
-
-        // Add context before (avoid format! allocations)
-        for i in (start_old.saturating_sub(3))..start_old {
-            if i < old_lines.len() {
-                diff.push(' ');
-                diff.push_str(old_lines[i]);
-                diff.push('\n');
-            }
-        }
-
-        // Add removed lines
-        for i in start_old..end_old {
-            if i < old_lines.len() {
-                diff.push('-');
-                diff.push_str(old_lines[i]);
-                diff.push('\n');
-            }
-        }
-
-        // Add added lines
-        for i in start_new..end_new {
-            if i < new_lines.len() {
-                diff.push('+');
-                diff.push_str(new_lines[i]);
-                diff.push('\n');
-            }
-        }
-
-        // Add context after
-        for i in end_old..(end_old + 3) {
-            if i < old_lines.len() {
-                diff.push(' ');
-                diff.push_str(old_lines[i]);
-                diff.push('\n');
-            }
-        }
-
-        old_idx = end_old;
-        new_idx = end_new;
-    }
-
-    diff
+    let old_label = format!("a/{}", filename);
+    let new_label = format!("b/{}", filename);
+    let options = crate::utils::diff::DiffOptions {
+        context_lines: 3,
+        old_label: Some(&old_label),
+        new_label: Some(&new_label),
+        missing_newline_hint: false,
+    };
+    crate::utils::diff::format_unified_diff(old_content, new_content, options)
 }
 
 #[cfg(test)]

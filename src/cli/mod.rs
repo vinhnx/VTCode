@@ -24,6 +24,7 @@ pub use vtcode_core::cli::args::AskCommandOptions;
 
 pub use benchmark::BenchmarkCommandOptions;
 pub use exec::ExecCommandOptions;
+mod snapshots;
 
 // Marketplace command handlers - these are the new functions we're adding
 pub async fn handle_marketplace_add(source: String, id: Option<String>) -> Result<()> {
@@ -311,20 +312,16 @@ pub async fn handle_revert_command(
 }
 
 pub async fn handle_snapshots_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
+    core_cfg: vtcode_core::config::types::AgentConfig,
 ) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Snapshots command not implemented in this stub"
-    ))
+    snapshots::handle_snapshots_command(&core_cfg).await
 }
 
 pub async fn handle_cleanup_snapshots_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _max_snapshots: Option<usize>,
+    core_cfg: vtcode_core::config::types::AgentConfig,
+    max_snapshots: Option<usize>,
 ) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Cleanup snapshots command not implemented in this stub"
-    ))
+    snapshots::handle_cleanup_snapshots_command(&core_cfg, max_snapshots).await
 }
 
 pub async fn handle_init_command(_workspace: &PathBuf, _force: bool, _migrate: bool) -> Result<()> {

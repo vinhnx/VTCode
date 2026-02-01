@@ -16,6 +16,8 @@ use async_trait::async_trait;
 use serde::Serialize;
 use tokio::sync::RwLock;
 
+pub use crate::exec_policy::{ExecApprovalRequirement, ExecPolicyAmendment};
+
 use super::tool_handler::{ToolSession, TurnContext};
 
 // ============================================================================
@@ -39,60 +41,9 @@ pub enum ReviewDecision {
     },
 }
 
-/// Exec policy amendment for approved commands (from Codex)
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
-pub struct ExecPolicyAmendment {
-    /// The command pattern to add to exec policy
-    pub command_pattern: Vec<String>,
-}
-
-impl ExecPolicyAmendment {
-    pub fn new(command_pattern: Vec<String>) -> Self {
-        Self { command_pattern }
-    }
-}
-
 // ============================================================================
 // Exec Approval Requirement (from Codex)
 // ============================================================================
-
-/// Specifies what the orchestrator should do with a given tool call (from Codex)
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ExecApprovalRequirement {
-    /// No approval required for this tool call
-    Skip {
-        /// The first attempt should skip sandboxing
-        bypass_sandbox: bool,
-        /// Proposed amendment to skip future approvals
-        proposed_execpolicy_amendment: Option<ExecPolicyAmendment>,
-    },
-    /// Approval required for this tool call
-    NeedsApproval {
-        /// Reason for requiring approval
-        reason: Option<String>,
-        /// Proposed amendment to skip future approvals
-        proposed_execpolicy_amendment: Option<ExecPolicyAmendment>,
-    },
-    /// Execution forbidden for this tool call
-    Forbidden { reason: String },
-}
-
-impl ExecApprovalRequirement {
-    /// Get the proposed exec policy amendment if any
-    pub fn proposed_execpolicy_amendment(&self) -> Option<&ExecPolicyAmendment> {
-        match self {
-            Self::Skip {
-                proposed_execpolicy_amendment: Some(amendment),
-                ..
-            } => Some(amendment),
-            Self::NeedsApproval {
-                proposed_execpolicy_amendment: Some(amendment),
-                ..
-            } => Some(amendment),
-            _ => None,
-        }
-    }
-}
 
 // ============================================================================
 // Approval Store (from Codex)
@@ -649,7 +600,7 @@ mod tests {
     #[test]
     fn test_exec_policy_amendment() {
         let amendment = ExecPolicyAmendment::new(vec!["cargo".to_string(), "build".to_string()]);
-        assert_eq!(amendment.command_pattern, vec!["cargo", "build"]);
+        assert_eq!(amendment.command_pattern(), vec!["cargo", "build"]);
     }
 
     #[test]
