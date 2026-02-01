@@ -514,7 +514,7 @@ pub fn compute_content_hash_with(content: &str, algorithm: HashAlgorithm) -> Str
         HashAlgorithm::MurmurHash3 => {
             // MurmurHash3 x86_32 implementation
             let hash = murmur3_32(content.as_bytes(), 0);
-            format!("murmur3:{:08x}", hash)
+            format!("murmur3:{hash:08x}")
         }
         HashAlgorithm::Fnv1a => {
             const FNV_OFFSET: u64 = 14695981039346656037;
@@ -524,7 +524,7 @@ pub fn compute_content_hash_with(content: &str, algorithm: HashAlgorithm) -> Str
                 hash ^= byte as u64;
                 hash = hash.wrapping_mul(FNV_PRIME);
             }
-            format!("fnv1a:{:016x}", hash)
+            format!("fnv1a:{hash:016x}")
         }
     }
 }
@@ -605,7 +605,7 @@ pub fn normalize_model_id(model: &str, provider: &str) -> String {
     if model.contains('/') {
         model.to_string()
     } else {
-        format!("{}/{}", provider, model)
+        format!("{provider}/{model}")
     }
 }
 

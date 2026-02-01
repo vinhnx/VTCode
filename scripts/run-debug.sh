@@ -61,6 +61,8 @@ echo "  - Type your coding questions and requests"
 echo "  - Press Ctrl+C to exit"
 echo "  - The agent has access to file operations and coding tools"
 echo ""
+echo "Tip: Use 'cargo rrf' for fast optimized runs (release-fast profile)"
+echo ""
 
 # Build optional args from environment
 EXTRA_ARGS=()
