@@ -1,4 +1,17 @@
 #![allow(clippy::result_large_err)]
+//! LM Studio provider implementation
+//!
+//! LM Studio 0.4.0+ provides multiple API surfaces:
+//! - Native v1 REST API at `/api/v1/*` (recommended for new integrations)
+//! - OpenAI-compatible endpoints at `/v1/*` (used by this implementation)
+//! - Anthropic-compatible endpoints at `/v1/*` (added in 0.4.1)
+//!
+//! This implementation currently uses OpenAI-compatible endpoints for maximum
+//! compatibility. Future versions may migrate to the native v1 API for enhanced
+//! features like stateful chats, MCP via API, and model management endpoints.
+//!
+//! See: https://lmstudio.ai/docs/developer/rest
+
 use super::common::resolve_model;
 use super::openai::OpenAIProvider;
 use crate::config::TimeoutsConfig;
@@ -35,6 +48,9 @@ struct LmStudioModel {
 const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
 
 /// Fetches available models from the LM Studio API endpoint
+///
+/// Uses OpenAI-compatible `/v1/models` endpoint by default.
+/// Set `LMSTUDIO_USE_V1_API=true` to use native v1 API at `/api/v1/models`.
 pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
     let resolved_base_url = override_base_url(
         urls::LMSTUDIO_API_BASE,
@@ -42,8 +58,18 @@ pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<Strin
         Some(env_vars::LMSTUDIO_BASE_URL),
     );
 
+    // Check if v1 API should be used
+    let use_v1_api = std::env::var("LMSTUDIO_USE_V1_API")
+        .ok()
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+
     // Construct the models endpoint URL
-    let models_url = format!("{}/models", resolved_base_url);
+    let models_url = if use_v1_api {
+        format!("{}/api/v1/models", resolved_base_url)
+    } else {
+        format!("{}/v1/models", resolved_base_url)
+    };
 
     // Create HTTP client with connection timeout
     let client = reqwest::Client::builder()
