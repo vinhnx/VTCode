@@ -62,13 +62,36 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Check Binary
+        shell: bash
+        run: |
+          echo "Looking for binary in target/${{ matrix.target }}/release/"
+          ls -lah target/${{ matrix.target }}/release/ | grep -E "vtcode|binary" || echo "No binary found"
+          if [ -f "target/${{ matrix.target }}/release/vtcode" ]; then
+            echo "✓ Found Unix binary: vtcode"
+          elif [ -f "target/${{ matrix.target }}/release/vtcode.exe" ]; then
+            echo "✓ Found Windows binary: vtcode.exe"
+          else
+            echo "✗ Binary not found!" && exit 1
+          fi
+
       - name: Package
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          tar -czf ../../../vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz vtcode
+          # Handle both Unix (vtcode) and Windows (vtcode.exe) binaries
+          if [ -f "vtcode.exe" ]; then
+            BINARY="vtcode.exe"
+          else
+            BINARY="vtcode"
+          fi
+          echo "Packaging: $BINARY"
+          tar -czf ../../../vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz "$BINARY"
           cd ../../../
+          echo "Computing SHA256..."
           shasum -a 256 vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.sha256
+          echo "✓ Package complete:"
+          ls -lh vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.*
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -77,6 +100,20 @@ jobs:
           path: |
             vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz
             vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.sha256
+          if-no-files-found: error
+
+  build-summary:
+    name: Build Summary
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check Build Results
+        run: |
+          echo "Build Status: ${{ needs.build.result }}"
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "⚠️  Some builds may have failed. Check the build job logs above."
+          fi
 
   create-release:
     name: Create Release
@@ -93,13 +130,33 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: List Downloaded Artifacts
+        run: |
+          echo "=== Downloaded Artifacts ==="
+          find artifacts -type f | sort
+          echo ""
+          echo "Total files: $(find artifacts -type f | wc -l)"
+
       - name: Generate Changelog
         id: changelog
-        uses: anton-yurchenko/git-release-notes-action@v3.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          from_tag: ${{ github.event.inputs.tag }} # This is a placeholder, usually it auto-detects
-          template: "standard"
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "${{ github.event.inputs.tag }}" | head -n 1)
+          
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(npx changelogithub --dry 2>/dev/null || git log HEAD --no-merges --pretty=format:"* %s")
+          else
+            CHANGELOG=$(npx changelogithub --dry --from "$PREV_TAG" --to HEAD 2>/dev/null || git log "$PREV_TAG"..HEAD --no-merges --pretty=format:"* %s")
+          fi
+          
+          # Extract the changelog content between separators (remove the --- lines)
+          CHANGELOG=$(echo "$CHANGELOG" | sed -n '/^-*$/,/^-*$/p' | sed '1d;$d')
+          
+          # Save to file for use in release
+          echo "$CHANGELOG" > release_notes.md
+          echo "CHANGELOG_CONTENT<<EOF" >> $GITHUB_ENV
+          echo "$CHANGELOG" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -108,8 +165,8 @@ jobs:
           files: |
             artifacts/*.tar.gz
             artifacts/*.sha256
+          body_path: release_notes.md
           draft: false
           prerelease: false
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
