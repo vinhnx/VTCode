@@ -322,13 +322,11 @@ pub use handlers::{
     Approvable,
     // Core handler traits and types
     ApprovalPolicy,
+    // Turn diff tracker with Agent Trace support
+    ChangeAttribution,
     CommandSpec,
     ConfiguredToolSpec,
     ContentItem,
-    // Turn diff tracker with Agent Trace support
-    ChangeAttribution,
-    FileChange,
-    FileChangeKind,
     DiffTracker,
     // Event emission
     ExecCommandInput,
@@ -336,6 +334,8 @@ pub use handlers::{
     ExecEnv,
     ExecExpiration,
     ExecToolCallOutput,
+    FileChange,
+    FileChangeKind,
     FreeformTool,
     FreeformToolFormat,
     JsonSchema as ToolJsonSchema,

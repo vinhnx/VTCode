@@ -379,7 +379,7 @@ pub fn graceful_kill_process_group(
 ) -> GracefulTerminationResult {
     #[cfg(windows)]
     {
-        use winapi::um::wincon::{GenerateConsoleCtrlEvent, CTRL_BREAK_EVENT, CTRL_C_EVENT};
+        use winapi::um::wincon::{CTRL_BREAK_EVENT, CTRL_C_EVENT, GenerateConsoleCtrlEvent};
 
         // Check if process is still running via OpenProcess
         let handle = unsafe {
@@ -562,4 +562,5 @@ mod tests {
     fn test_is_process_running_nonexistent() {
         // A very high PID should not be running
         assert!(!is_process_running(2_000_000_000));
-    }}
+    }
+}

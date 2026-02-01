@@ -91,6 +91,34 @@ pub(crate) async fn validate_tool_call<'a>(
     tool_name: &str,
     args_val: &serde_json::Value,
 ) -> Result<ValidationResult> {
+    if ctx.harness_state.tool_budget_exhausted() {
+        let error_msg = format!(
+            "Policy violation: exceeded max tool calls per turn ({})",
+            ctx.harness_state.max_tool_calls
+        );
+        push_tool_response(
+            ctx.working_history,
+            tool_call_id.to_string(),
+            serde_json::json!({"error": error_msg}).to_string(),
+        );
+        return Ok(ValidationResult::Blocked);
+    }
+
+    if ctx.harness_state.wall_clock_exhausted() {
+        let error_msg = format!(
+            "Policy violation: exceeded tool wall clock budget ({}s)",
+            ctx.harness_state.max_tool_wall_clock.as_secs()
+        );
+        push_tool_response(
+            ctx.working_history,
+            tool_call_id.to_string(),
+            serde_json::json!({"error": error_msg}).to_string(),
+        );
+        return Ok(ValidationResult::Blocked);
+    }
+
+    ctx.harness_state.record_tool_call();
+
     // Phase 4 Check: Per-tool Circuit Breaker
     if !ctx.circuit_breaker.allow_request_for_tool(tool_name) {
         let error_msg = format!(
@@ -111,7 +139,32 @@ pub(crate) async fn validate_tool_call<'a>(
         Ok(_) => {}
         Err(wait_time) => {
             if wait_time.as_secs_f64() > 0.0 {
-                tokio::time::sleep(wait_time).await;
+                if ctx.ctrl_c_state.is_cancel_requested() {
+                    return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                        TurnLoopResult::Cancelled,
+                    )));
+                }
+                if ctx.ctrl_c_state.is_exit_requested() {
+                    return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                        TurnLoopResult::Exit,
+                    )));
+                }
+
+                tokio::select! {
+                    _ = tokio::time::sleep(wait_time) => {},
+                    _ = ctx.ctrl_c_notify.notified() => {
+                        if ctx.ctrl_c_state.is_exit_requested() {
+                            return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                                TurnLoopResult::Exit,
+                            )));
+                        }
+                        if ctx.ctrl_c_state.is_cancel_requested() {
+                            return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                                TurnLoopResult::Cancelled,
+                            )));
+                        }
+                    }
+                }
             }
         }
     }

@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
-use vtcode_exec_events::trace::{TraceRecord, AGENT_TRACE_VERSION};
+use vtcode_exec_events::trace::{AGENT_TRACE_VERSION, TraceRecord};
 
 /// Default directory name for trace storage.
 pub const TRACES_DIR: &str = "traces";
@@ -39,8 +39,9 @@ impl TraceStore {
     /// Ensure the trace storage directory exists.
     pub fn ensure_dir(&self) -> Result<()> {
         if !self.base_dir.exists() {
-            fs::create_dir_all(&self.base_dir)
-                .with_context(|| format!("Failed to create trace directory: {:?}", self.base_dir))?;
+            fs::create_dir_all(&self.base_dir).with_context(|| {
+                format!("Failed to create trace directory: {:?}", self.base_dir)
+            })?;
         }
         Ok(())
     }
@@ -70,8 +71,8 @@ impl TraceStore {
 
     /// Read a trace record from a specific path.
     pub fn read_trace_from_path(&self, path: &Path) -> Result<TraceRecord> {
-        let content =
-            fs::read_to_string(path).with_context(|| format!("Failed to read trace: {:?}", path))?;
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read trace: {:?}", path))?;
 
         let trace: TraceRecord = serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse trace: {:?}", path))?;
@@ -174,7 +175,9 @@ impl TraceStore {
         if !self.base_dir.exists() {
             tokio::fs::create_dir_all(&self.base_dir)
                 .await
-                .with_context(|| format!("Failed to create trace directory: {:?}", self.base_dir))?;
+                .with_context(|| {
+                    format!("Failed to create trace directory: {:?}", self.base_dir)
+                })?;
         }
         Ok(())
     }
