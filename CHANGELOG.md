@@ -2,6 +2,12 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.7 - 2026-02-01
+
+* Update commit (3edfdb95)
+* fix: rename directory with colon to be Windows-compatible (f533addc)
+* chore: update homebrew formula to v0.74.6 (dad20e9c)
+
 ## v0.74.6 - 2026-02-01
 
 * Migrate LM Studio 0.4 REST API (4d12e993)
