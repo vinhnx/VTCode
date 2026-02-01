@@ -9,15 +9,14 @@ use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display::format_llm_error;
-use crate::llm::provider::ToolDefinition;
 use crate::llm::provider::{
     LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    MessageRole,
+    MessageRole, ToolDefinition,
 };
 use crate::llm::providers::shared::{
     NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls, update_tool_calls,
 };
-use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
+use crate::llm::providers::TagStreamSanitizer;
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;

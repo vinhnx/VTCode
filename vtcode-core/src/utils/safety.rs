@@ -24,7 +24,6 @@ impl SafetyValidator {
         let model_id = match requested_model {
             s if s == models::GEMINI_2_5_PRO => Some(ModelId::Gemini25Pro),
             s if s == models::GEMINI_2_5_FLASH_PREVIEW => Some(ModelId::Gemini25FlashPreview),
-            s if s == models::GEMINI_2_5_PRO => Some(ModelId::Gemini25Pro),
             _ => None,
         };
 

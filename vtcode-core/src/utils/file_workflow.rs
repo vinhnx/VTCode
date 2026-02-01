@@ -3,7 +3,7 @@
 //! This module provides utilities for handling large inputs by reading content from files
 //! referenced in user input, supporting the Claude Code pattern of using files for large inputs.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::Path;
 use tokio::fs;
 
@@ -21,51 +21,30 @@ use tokio::fs;
 ///
 /// * `String` - The input with file references replaced by their content
 pub async fn include_file_content(input: &str, base_dir: &Path) -> Result<String> {
-    // Use regex to match @ followed by a potential file path
-    // This pattern handles both quoted paths (with spaces) and unquoted paths
-    let re = regex::Regex::new(r#"@(?:"([^"]+)"|'([^']+)'|([^\s"'\[\](){}<>|\\^`]+))"#)
-        .context("Failed to compile regex")?;
+    let matches = vtcode_commons::at_pattern::find_at_patterns(input);
+    if matches.is_empty() {
+        return Ok(input.to_string());
+    }
 
     let mut result = String::new();
     let mut last_end = 0;
 
-    for cap in re.captures_iter(input) {
-        let full_match = &cap[0];
-
-        // Extract the path from the appropriate capture group (quoted or unquoted)
-        let path_part = if let Some(m) = cap.get(1) {
-            // First group: quoted with double quotes
-            m.as_str()
-        } else if let Some(m) = cap.get(2) {
-            // Second group: quoted with single quotes
-            m.as_str()
-        } else if let Some(m) = cap.get(3) {
-            // Third group: unquoted
-            m.as_str()
-        } else {
-            continue; // Should not happen if regex is correct
-        };
-
-        // Extract the start and end positions to separate text from matches
-        let start = cap.get(0).unwrap().start();
-        let end = cap.get(0).unwrap().end();
-
+    for m in matches {
         // Add the text before this match
-        if start > last_end {
-            result.push_str(&input[last_end..start]);
+        if m.start > last_end {
+            result.push_str(&input[last_end..m.start]);
         }
 
         // Security validation: prevent directory traversal and validate path
-        let normalized_path = normalize_path(path_part);
-        if normalized_path.is_empty() {
+        if !vtcode_commons::paths::is_safe_relative_path(m.path) {
             // Skip invalid paths (likely directory traversal attempts)
-            result.push_str(full_match);
-            last_end = end;
+            result.push_str(m.full_match);
+            last_end = m.end;
             continue;
         }
 
         // Try to read the file as text content
-        let file_path = base_dir.join(&normalized_path);
+        let file_path = base_dir.join(m.path.trim());
 
         match fs::read_to_string(&file_path).await {
             Ok(file_content) => {
@@ -74,11 +53,11 @@ pub async fn include_file_content(input: &str, base_dir: &Path) -> Result<String
             }
             Err(_) => {
                 // If it's not a valid text file, treat as literal @ usage
-                result.push_str(full_match);
+                result.push_str(m.full_match);
             }
         }
 
-        last_end = end;
+        last_end = m.end;
     }
 
     // Add any remaining text after the last match
@@ -87,28 +66,6 @@ pub async fn include_file_content(input: &str, base_dir: &Path) -> Result<String
     }
 
     Ok(result)
-}
-
-/// Normalizes a path string to prevent directory traversal and validate it's safe
-fn normalize_path(path: &str) -> String {
-    // Remove leading/trailing whitespace
-    let path = path.trim();
-
-    // Check for path traversal attempts
-    if path.contains("../")
-        || path.contains("..\\")
-        || path.starts_with("../")
-        || path.starts_with("..\\")
-    {
-        return String::new(); // Indicates invalid path
-    }
-
-    // Block absolute paths for security - all file references must be relative to workspace
-    if path.starts_with('/') || (cfg!(windows) && path.contains(':')) {
-        return String::new(); // Indicates invalid path
-    }
-
-    path.to_string()
 }
 
 #[cfg(test)]
@@ -183,14 +140,12 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_path_security() {
-        assert_eq!(normalize_path("../../etc/passwd"), "");
-        assert_eq!(normalize_path("../file.txt"), "");
-        assert_eq!(normalize_path("file.txt"), "file.txt");
-        assert_eq!(normalize_path("./path/file.txt"), "./path/file.txt");
-        assert_eq!(
-            normalize_path(" path with spaces .txt "),
-            "path with spaces .txt"
-        );
+    fn test_is_safe_relative_path() {
+        use vtcode_commons::paths::is_safe_relative_path;
+        assert!(!is_safe_relative_path("../../etc/passwd"));
+        assert!(!is_safe_relative_path("../file.txt"));
+        assert!(is_safe_relative_path("file.txt"));
+        assert!(is_safe_relative_path("./path/file.txt"));
+        assert!(is_safe_relative_path(" path with spaces .txt "));
     }
 }

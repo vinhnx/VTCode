@@ -5,9 +5,8 @@ use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
-use crate::llm::providers::TagStreamSanitizer;
 use crate::llm::providers::openai::responses_api::{
     build_standard_responses_payload, parse_responses_payload,
 };
@@ -368,56 +367,36 @@ impl LLMProvider for XAIProvider {
         let tx = event_tx.clone();
 
         tokio::spawn(async move {
-            let mut aggregated_content = String::new();
-            let aggregated_reasoning = String::new();
-            let mut tool_call_builders = Vec::new();
-            let mut sanitizer = TagStreamSanitizer::new();
-            let mut usage = None;
-            let final_finish_reason = FinishReason::Stop;
+            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new();
 
             let result = crate::llm::providers::shared::process_openai_stream(bytes_stream, "xAI", |value| {
                 // xAI Responses API streaming format parsing
                 if let Some(delta) = value.get("delta") {
                     if let Some(content) = delta.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_str()) {
-                        aggregated_content.push_str(content);
-                        for event in sanitizer.process_chunk(content) {
+                        for event in aggregator.handle_content(content) {
                             let _ = tx.send(Ok(event));
                         }
                     }
 
                     if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
-                        for tool_call in tool_calls {
-                            if let Some(tc_obj) = tool_call.as_object() {
-                                crate::llm::providers::shared::apply_tool_call_delta_from_content(
-                                    &mut tool_call_builders,
-                                    tc_obj,
-                                    &crate::llm::providers::shared::NoopStreamTelemetry,
-                                );
-                            }
-                        }
+                        aggregator.handle_tool_calls(tool_calls);
                     }
                 }
 
                 if value.get("usage").is_some() {
-                    usage = super::common::parse_usage_openai_format(&value, true);
+                    if let Some(usage) = super::common::parse_usage_openai_format(&value, true) {
+                        aggregator.set_usage(usage);
+                    }
                 }
                 Ok(())
             }).await;
 
-            for event in sanitizer.finalize() {
-                let _ = tx.send(Ok(event));
-            }
-
             match result {
                 Ok(_) => {
-                    yield_completed(
-                        &tx,
-                        aggregated_content,
-                        tool_call_builders,
-                        usage,
-                        final_finish_reason,
-                        aggregated_reasoning,
-                    );
+                    let response = aggregator.finalize();
+                    let _ = tx.send(Ok(LLMStreamEvent::Completed {
+                        response: Box::new(response),
+                    }));
                 }
                 Err(err) => {
                     let _ = tx.send(Err(err));
@@ -450,37 +429,6 @@ impl LLMProvider for XAIProvider {
 
         super::common::validate_request_common(request, "xAI", "openai", Some(&supported_models))
     }
-}
-
-fn yield_completed(
-    tx: &tokio::sync::mpsc::UnboundedSender<Result<LLMStreamEvent, LLMError>>,
-    content: String,
-    tool_call_builders: Vec<crate::llm::providers::shared::ToolCallBuilder>,
-    usage: Option<crate::llm::provider::Usage>,
-    finish_reason: FinishReason,
-    reasoning: String,
-) {
-    let _ = tx.send(Ok(LLMStreamEvent::Completed {
-        response: Box::new(LLMResponse {
-            content: if content.is_empty() {
-                None
-            } else {
-                Some(content)
-            },
-            tool_calls: crate::llm::providers::shared::finalize_tool_calls(tool_call_builders),
-            usage,
-            finish_reason,
-            reasoning: if reasoning.is_empty() {
-                None
-            } else {
-                Some(reasoning)
-            },
-            reasoning_details: None,
-            tool_references: Vec::new(),
-            request_id: None,
-            organization_id: None,
-        }),
-    }));
 }
 
 #[async_trait]

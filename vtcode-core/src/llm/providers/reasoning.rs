@@ -1,13 +1,13 @@
 use serde_json::Value;
 
 #[derive(Default, Clone)]
-pub(crate) struct ReasoningBuffer {
+pub struct ReasoningBuffer {
     text: String,
     last_chunk: Option<String>,
 }
 
 impl ReasoningBuffer {
-    pub(crate) fn push(&mut self, chunk: &str) -> Option<String> {
+    pub fn push(&mut self, chunk: &str) -> Option<String> {
         if chunk.trim().is_empty() {
             return None;
         }
@@ -49,7 +49,7 @@ impl ReasoningBuffer {
         Some(delta)
     }
 
-    pub(crate) fn finalize(self) -> Option<String> {
+    pub fn finalize(self) -> Option<String> {
         let trimmed = self.text.trim();
         if trimmed.is_empty() {
             None
@@ -123,7 +123,7 @@ struct ParsedTag<'a> {
     category: TagCategory,
 }
 
-pub(crate) fn extract_reasoning_trace(value: &Value) -> Option<String> {
+pub fn extract_reasoning_trace(value: &Value) -> Option<String> {
     let mut segments = Vec::new();
     collect_reasoning_segments(value, &mut segments);
     let combined = segments.join("\n");
@@ -271,7 +271,7 @@ fn parse_start_tag<'a>(lower: &'a str, start: usize) -> Option<ParsedTag<'a>> {
     })
 }
 
-pub(crate) fn split_reasoning_from_text(text: &str) -> (Vec<String>, Option<String>) {
+pub fn split_reasoning_from_text(text: &str) -> (Vec<String>, Option<String>) {
     if text.trim().is_empty() {
         return (Vec::new(), None);
     }

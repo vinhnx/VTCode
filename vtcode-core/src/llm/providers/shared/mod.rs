@@ -1,6 +1,9 @@
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMResponse, ToolCall};
-use crate::llm::providers::{ReasoningBuffer, split_reasoning_from_text};
+pub use crate::llm::providers::ReasoningBuffer;
+mod tag_sanitizer;
+pub use tag_sanitizer::TagStreamSanitizer;
+use crate::llm::providers::split_reasoning_from_text;
 use serde_json::{Map, Value};
 
 #[derive(Debug, thiserror::Error)]
@@ -97,7 +100,108 @@ pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCal
         .filter_map(|(index, builder)| builder.finalize(index))
         .collect();
 
-    if calls.is_empty() { None } else { Some(calls) }
+    if calls.is_empty() {
+        None
+    } else {
+        Some(calls)
+    }
+}
+
+/// Helper to aggregate streaming events and produce a final LLMResponse.
+pub struct StreamAggregator {
+    pub content: String,
+    pub reasoning: String,
+    pub reasoning_buffer: ReasoningBuffer,
+    pub tool_builders: Vec<ToolCallBuilder>,
+    pub usage: Option<crate::llm::provider::Usage>,
+    pub finish_reason: crate::llm::provider::FinishReason,
+    pub sanitizer: TagStreamSanitizer,
+}
+
+impl Default for StreamAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StreamAggregator {
+    pub fn new() -> Self {
+        Self {
+            content: String::new(),
+            reasoning: String::new(),
+            reasoning_buffer: ReasoningBuffer::default(),
+            tool_builders: Vec::new(),
+            usage: None,
+            finish_reason: crate::llm::provider::FinishReason::Stop,
+            sanitizer: TagStreamSanitizer::new(),
+        }
+    }
+
+    /// Process a content delta, applying sanitization for reasoning tags.
+    pub fn handle_content(&mut self, delta: &str) -> Vec<crate::llm::provider::LLMStreamEvent> {
+        self.content.push_str(delta);
+        self.sanitizer.process_chunk(delta)
+    }
+
+    /// Process a reasoning delta from a dedicated field.
+    pub fn handle_reasoning(&mut self, delta: &str) -> Option<String> {
+        let result = self.reasoning_buffer.push(delta);
+        if let Some(ref d) = result {
+            self.reasoning.push_str(d);
+        }
+        result
+    }
+
+    /// Process tool call deltas.
+    pub fn handle_tool_calls(&mut self, deltas: &[Value]) {
+        update_tool_calls(&mut self.tool_builders, deltas);
+    }
+
+    /// Set usage metrics.
+    pub fn set_usage(&mut self, usage: crate::llm::provider::Usage) {
+        self.usage = Some(usage);
+    }
+
+    /// Set finish reason.
+    pub fn set_finish_reason(&mut self, reason: crate::llm::provider::FinishReason) {
+        self.finish_reason = reason;
+    }
+
+    /// Finalize and produce the completed LLMResponse.
+    pub fn finalize(mut self) -> LLMResponse {
+        // Collect any leftover bits from sanitizer
+        for event in self.sanitizer.finalize() {
+            match event {
+                crate::llm::provider::LLMStreamEvent::Token { delta } => {
+                    self.content.push_str(&delta);
+                }
+                crate::llm::provider::LLMStreamEvent::Reasoning { delta } => {
+                    self.reasoning.push_str(&delta);
+                }
+                _ => {}
+            }
+        }
+
+        LLMResponse {
+            content: if self.content.is_empty() {
+                None
+            } else {
+                Some(self.content)
+            },
+            tool_calls: finalize_tool_calls(self.tool_builders),
+            usage: self.usage,
+            finish_reason: self.finish_reason,
+            reasoning: if self.reasoning.is_empty() {
+                self.reasoning_buffer.finalize()
+            } else {
+                Some(self.reasoning)
+            },
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        }
+    }
 }
 
 /// Common helper for processing OpenAI-compatible SSE streams.
@@ -282,39 +386,6 @@ pub fn append_text_with_reasoning(
         telemetry.on_content_delta(&cleaned_text);
         deltas.push_content(&cleaned_text);
     }
-}
-
-pub fn append_reasoning_segments(
-    reasoning: &mut ReasoningBuffer,
-    text: &str,
-    telemetry: &impl StreamTelemetry,
-) -> Vec<String> {
-    let mut emitted = Vec::new();
-    let (mut segments, cleaned) = split_reasoning_from_text(text);
-
-    if !segments.is_empty() {
-        for segment in segments.drain(..) {
-            if let Some(delta) = reasoning.push(&segment) {
-                telemetry.on_reasoning_delta(&delta);
-                emitted.push(delta);
-            }
-        }
-
-        if let Some(cleaned_text) = cleaned {
-            let trimmed = cleaned_text.trim();
-            if !trimmed.is_empty()
-                && let Some(delta) = reasoning.push(trimmed)
-            {
-                telemetry.on_reasoning_delta(&delta);
-                emitted.push(delta);
-            }
-        }
-    } else if let Some(delta) = reasoning.push(text) {
-        telemetry.on_reasoning_delta(&delta);
-        emitted.push(delta);
-    }
-
-    emitted
 }
 
 pub fn extract_data_payload(event: &str) -> Option<String> {

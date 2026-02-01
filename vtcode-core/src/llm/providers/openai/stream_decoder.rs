@@ -2,12 +2,10 @@
 
 use crate::llm::error_display;
 use crate::llm::provider;
-use crate::llm::providers::ReasoningBuffer;
 use crate::llm::providers::shared::StreamTelemetry;
 use crate::llm::providers::shared::{
-    StreamAssemblyError, append_reasoning_segments, extract_data_payload, find_sse_boundary,
+    StreamAssemblyError, extract_data_payload, find_sse_boundary,
 };
-use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use async_stream::try_stream;
 use futures::StreamExt;
 use serde_json::Value;
@@ -22,12 +20,7 @@ pub(crate) fn create_chat_stream(response: reqwest::Response) -> provider::LLMSt
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
-        let mut aggregated_content = String::new();
-        let mut reasoning_buffer = ReasoningBuffer::default();
-        let mut sanitizer = TagStreamSanitizer::new();
-        let mut tool_builders = Vec::new();
-        let mut finish_reason = provider::FinishReason::Stop;
-        let mut accumulated_usage = None;
+        let mut aggregator = crate::llm::providers::shared::StreamAggregator::new();
         let telemetry = OpenAIStreamTelemetry;
 
         while let Some(chunk_result) = body_stream.next().await {
@@ -58,7 +51,7 @@ pub(crate) fn create_chat_stream(response: reqwest::Response) -> provider::LLMSt
 
                     if let Some(usage_val) = payload.get("usage") {
                         if let Ok(u) = serde_json::from_value::<provider::Usage>(usage_val.clone()) {
-                            accumulated_usage = Some(u);
+                            aggregator.set_usage(u);
                         }
                     }
 
@@ -66,41 +59,33 @@ pub(crate) fn create_chat_stream(response: reqwest::Response) -> provider::LLMSt
                         if let Some(choice) = choices.first() {
                             if let Some(delta) = choice.get("delta") {
                                 if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
-                                    aggregated_content.push_str(content);
                                     telemetry.on_content_delta(content);
-                                    for event in sanitizer.process_chunk(content) {
-                                        match &event {
-                                            provider::LLMStreamEvent::Token { delta } => {
-                                                yield provider::LLMStreamEvent::Token { delta: delta.clone() };
-                                            }
-                                            provider::LLMStreamEvent::Reasoning { delta } => {
-                                                yield provider::LLMStreamEvent::Reasoning { delta: delta.clone() };
-                                            }
-                                            _ => {}
-                                        }
+                                    for event in aggregator.handle_content(content) {
+                                        yield event;
                                     }
                                 }
 
                                 if let Some(reasoning) = delta.get("reasoning_content").and_then(|v| v.as_str()) {
-                                    for fragment in append_reasoning_segments(&mut reasoning_buffer, reasoning, &telemetry) {
-                                        yield provider::LLMStreamEvent::Reasoning { delta: fragment };
+                                    if let Some(delta) = aggregator.handle_reasoning(reasoning) {
+                                        telemetry.on_reasoning_delta(&delta);
+                                        yield provider::LLMStreamEvent::Reasoning { delta };
                                     }
                                 }
 
                                 if let Some(tool_deltas) = delta.get("tool_calls").and_then(|v| v.as_array()) {
-                                    crate::llm::providers::shared::update_tool_calls(&mut tool_builders, tool_deltas);
+                                    aggregator.handle_tool_calls(tool_deltas);
                                     telemetry.on_tool_call_delta();
                                 }
                             }
 
                             if let Some(reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
-                                finish_reason = match reason {
+                                aggregator.set_finish_reason(match reason {
                                     "stop" => provider::FinishReason::Stop,
                                     "length" => provider::FinishReason::Length,
                                     "tool_calls" => provider::FinishReason::ToolCalls,
                                     "content_filter" => provider::FinishReason::ContentFilter,
                                     _ => provider::FinishReason::Stop,
-                                };
+                                });
                             }
                         }
                     }
@@ -108,22 +93,7 @@ pub(crate) fn create_chat_stream(response: reqwest::Response) -> provider::LLMSt
             }
         }
 
-        for event in sanitizer.finalize() {
-            yield event;
-        }
-
-        let response = provider::LLMResponse {
-            content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
-            tool_calls: crate::llm::providers::shared::finalize_tool_calls(tool_builders),
-            usage: accumulated_usage,
-            finish_reason,
-            reasoning: reasoning_buffer.finalize(),
-            reasoning_details: None,
-            tool_references: Vec::new(),
-            request_id: None,
-            organization_id: None,
-        };
-
+        let response = aggregator.finalize();
         yield provider::LLMStreamEvent::Completed { response: Box::new(response) };
     };
 
@@ -139,11 +109,9 @@ pub(crate) fn create_responses_stream(
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
-        let mut aggregated_content = String::new();
-        let mut reasoning_buffer = ReasoningBuffer::default();
+        let mut aggregator = crate::llm::providers::shared::StreamAggregator::new();
         let mut final_response: Option<Value> = None;
         let mut done = false;
-        let mut sanitizer = TagStreamSanitizer::new();
         #[cfg(debug_assertions)]
         let mut streamed_events_counter: usize = 0;
         let telemetry = OpenAIStreamTelemetry;
@@ -193,19 +161,10 @@ pub(crate) fn create_responses_stream(
                                         StreamAssemblyError::MissingField("delta")
                                             .into_llm_error("OpenAI")
                                     })?;
-                                aggregated_content.push_str(delta);
                                 telemetry.on_content_delta(delta);
 
-                                for event in sanitizer.process_chunk(delta) {
-                                    match &event {
-                                        provider::LLMStreamEvent::Token { delta } => {
-                                            yield provider::LLMStreamEvent::Token { delta: delta.clone() };
-                                        }
-                                        provider::LLMStreamEvent::Reasoning { delta } => {
-                                            yield provider::LLMStreamEvent::Reasoning { delta: delta.clone() };
-                                        }
-                                        _ => {}
-                                    }
+                                for event in aggregator.handle_content(delta) {
+                                    yield event;
                                 }
                             }
                             "response.refusal.delta" => {
@@ -216,10 +175,10 @@ pub(crate) fn create_responses_stream(
                                         StreamAssemblyError::MissingField("delta")
                                             .into_llm_error("OpenAI")
                                     })?;
-                                aggregated_content.push_str(delta);
                                 telemetry.on_content_delta(delta);
+                                aggregator.content.push_str(delta);
                             }
-                            "response.reasoning_text.delta" => {
+                            "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
                                 let delta = payload
                                     .get("delta")
                                     .and_then(|value| value.as_str())
@@ -227,20 +186,9 @@ pub(crate) fn create_responses_stream(
                                         StreamAssemblyError::MissingField("delta")
                                             .into_llm_error("OpenAI")
                                     })?;
-                                for fragment in append_reasoning_segments(&mut reasoning_buffer, delta, &telemetry) {
-                                    yield provider::LLMStreamEvent::Reasoning { delta: fragment };
-                                }
-                            }
-                            "response.reasoning_summary_text.delta" => {
-                                let delta = payload
-                                    .get("delta")
-                                    .and_then(|value| value.as_str())
-                                    .ok_or_else(|| {
-                                        StreamAssemblyError::MissingField("delta")
-                                            .into_llm_error("OpenAI")
-                                    })?;
-                                for fragment in append_reasoning_segments(&mut reasoning_buffer, delta, &telemetry) {
-                                    yield provider::LLMStreamEvent::Reasoning { delta: fragment };
+                                if let Some(delta) = aggregator.handle_reasoning(delta) {
+                                    telemetry.on_reasoning_delta(&delta);
+                                    yield provider::LLMStreamEvent::Reasoning { delta };
                                 }
                             }
                             "response.function_call_arguments.delta" => {}
@@ -281,10 +229,6 @@ pub(crate) fn create_responses_stream(
             }
         }
 
-        for event in sanitizer.finalize() {
-            yield event;
-        }
-
         let response_value = match final_response {
             Some(value) => value,
             None => {
@@ -298,12 +242,19 @@ pub(crate) fn create_responses_stream(
 
         let mut response = parse_responses_payload(response_value, include_metrics)?;
 
-        if response.content.is_none() && !aggregated_content.is_empty() {
-            response.content = Some(aggregated_content.clone());
+        // Merge aggregated content and reasoning into the final response
+        let final_aggregator_response = aggregator.finalize();
+        
+        if response.content.is_none() {
+            response.content = final_aggregator_response.content;
+        } else if let (Some(c), Some(agg_c)) = (&mut response.content, final_aggregator_response.content) {
+            if !c.contains(&agg_c) {
+                c.push_str(&agg_c);
+            }
         }
 
-        if let Some(reasoning_text) = reasoning_buffer.finalize() {
-            response.reasoning = Some(reasoning_text);
+        if response.reasoning.is_none() {
+            response.reasoning = final_aggregator_response.reasoning;
         }
 
         #[cfg(debug_assertions)]
@@ -313,7 +264,7 @@ pub(crate) fn create_responses_stream(
                 model = %debug_model,
                 elapsed_ms = request_timer.elapsed().as_millis(),
                 events = streamed_events_counter,
-                content_len = aggregated_content.len(),
+                content_len = response.content.as_ref().map(|c| c.len()).unwrap_or(0),
                 "Completed streaming response"
             );
         }

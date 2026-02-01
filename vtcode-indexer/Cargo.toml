@@ -22,6 +22,7 @@ anyhow = "1.0"
 regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
 ignore = "0.4"                                     # Respect .gitignore, .ignore, etc.
+vtcode-commons = { path = "../vtcode-commons", version = "0.74.7" }
 
 [dev-dependencies]
 tempfile = "3.24"

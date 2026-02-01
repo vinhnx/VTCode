@@ -7,11 +7,23 @@
 //! demonstrate how downstream consumers can wire these traits into their own
 //! applications or tests.
 
+pub mod ansi;
+pub mod async_utils;
+pub mod at_pattern;
+pub mod colors;
 pub mod errors;
+pub mod formatting;
+pub mod fs;
+pub mod http;
+pub mod image;
 pub mod paths;
 pub mod reference;
+pub mod serde_helpers;
 pub mod slug;
 pub mod telemetry;
+pub mod utils;
+pub mod validation;
+pub mod vtcodegitignore;
 
 pub use errors::{DisplayErrorFormatter, ErrorFormatter, ErrorReporter, NoopErrorReporter};
 pub use paths::{PathResolver, PathScope, WorkspacePaths};

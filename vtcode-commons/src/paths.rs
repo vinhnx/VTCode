@@ -1,4 +1,88 @@
-use std::path::{Path, PathBuf};
+use anyhow::{anyhow, Context, Result};
+use std::path::{Component, Path, PathBuf};
+use tracing::warn;
+
+/// Normalize a path by resolving `.` and `..` components lexically.
+pub fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::CurDir => {}
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::Normal(part) => normalized.push(part),
+        }
+    }
+    normalized
+}
+
+/// Canonicalize a path with fallback to the original path if canonicalization fails.
+pub fn canonicalize_workspace(workspace_root: &Path) -> PathBuf {
+    std::fs::canonicalize(workspace_root).unwrap_or_else(|error| {
+        warn!(
+            path = %workspace_root.display(),
+            %error,
+            "Failed to canonicalize workspace root; falling back to provided path"
+        );
+        workspace_root.to_path_buf()
+    })
+}
+
+/// Return a canonicalised absolute path that is guaranteed to reside inside the
+/// provided `workspace_root`.  If the path is outside the workspace an error is
+/// returned.
+pub fn secure_path(workspace_root: &Path, user_path: &Path) -> Result<PathBuf> {
+    // Resolve relative paths against the workspace root.
+    let joined = if user_path.is_absolute() {
+        user_path.to_path_buf()
+    } else {
+        workspace_root.join(user_path)
+    };
+
+    // Canonicalise to eliminate `..` components and resolve symlinks.
+    let canonical = std::fs::canonicalize(&joined)
+        .with_context(|| format!("Failed to canonicalize path {}", joined.display()))?;
+
+    // Ensure the canonical path is within the workspace.
+    let workspace_canonical = std::fs::canonicalize(workspace_root)
+        .with_context(|| {
+            format!(
+                "Failed to canonicalize workspace root {}",
+                workspace_root.display()
+            )
+        })?;
+    if !canonical.starts_with(&workspace_canonical) {
+        return Err(anyhow!(
+            "Path {} escapes workspace root {}",
+            canonical.display(),
+            workspace_canonical.display()
+        ));
+    }
+    Ok(canonical)
+}
+
+/// Check if a path string is a safe relative path (no traversal, no absolute).
+pub fn is_safe_relative_path(path: &str) -> bool {
+    let path = path.trim();
+    if path.is_empty() {
+        return false;
+    }
+
+    // Check for path traversal attempts
+    if path.contains("..") {
+        return false;
+    }
+
+    // Block absolute paths for security
+    if path.starts_with('/') || path.contains(':') {
+        return false;
+    }
+
+    true
+}
 
 /// Provides the root directories an application uses to store data.
 pub trait WorkspacePaths: Send + Sync {

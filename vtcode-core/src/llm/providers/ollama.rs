@@ -36,7 +36,7 @@ use super::common::{
     convert_usage_to_llm_types, override_base_url, parse_client_prompt_common, resolve_model,
 };
 use super::error_handling::{format_network_error, format_parse_error};
-use super::tag_sanitizer::TagStreamSanitizer;
+use super::TagStreamSanitizer;
 
 // ============================================================================
 // Wire API Detection (adapted from OpenAI Codex's codex-ollama/src/lib.rs)

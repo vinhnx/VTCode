@@ -14,14 +14,13 @@ pub mod openresponses;
 pub mod openrouter;
 pub mod provider_base;
 pub mod streaming_progress;
-pub mod tag_sanitizer;
-pub use tag_sanitizer::TagStreamSanitizer;
 pub mod xai;
 pub mod zai;
 
 pub mod common;
 pub mod reasoning;
 mod shared;
+pub use shared::TagStreamSanitizer;
 
 // Re-export commonly used constants
 pub use crate::tools::constants::{
@@ -29,7 +28,7 @@ pub use crate::tools::constants::{
 };
 
 pub use reasoning::clean_reasoning_text;
-pub(crate) use reasoning::{ReasoningBuffer, extract_reasoning_trace, split_reasoning_from_text};
+pub use reasoning::{ReasoningBuffer, extract_reasoning_trace, split_reasoning_from_text};
 
 pub use anthropic::AnthropicProvider;
 pub use deepseek::DeepSeekProvider;

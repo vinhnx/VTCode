@@ -6,7 +6,7 @@ use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::config::models::Provider as ModelProvider;
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
 use crate::llm::providers::common::{
     convert_usage_to_llm_types, forward_prompt_cache_with_state, make_default_request,
@@ -16,8 +16,6 @@ use crate::llm::providers::common::{
 use crate::llm::providers::error_handling::{
     format_network_error, format_parse_error, handle_openai_http_error,
 };
-use crate::llm::providers::shared::{ToolCallBuilder, finalize_tool_calls, update_tool_calls};
-use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
@@ -270,12 +268,7 @@ impl LLMProvider for MoonshotProvider {
         let tx = event_tx.clone();
 
         tokio::spawn(async move {
-            let mut aggregated_content = String::new();
-            let mut aggregated_reasoning = String::new();
-            let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
-            let mut usage = None;
-            let mut finish_reason = FinishReason::Stop;
-            let mut sanitizer = TagStreamSanitizer::new();
+            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new();
 
             let result = crate::llm::providers::shared::process_openai_stream(
                 bytes_stream,
@@ -288,15 +281,13 @@ impl LLMProvider for MoonshotProvider {
                             if let Some(reasoning) =
                                 delta.get("reasoning_content").and_then(|r| r.as_str())
                             {
-                                aggregated_reasoning.push_str(reasoning);
-                                let _ = tx.send(Ok(LLMStreamEvent::Reasoning {
-                                    delta: reasoning.to_string(),
-                                }));
+                                if let Some(delta) = aggregator.handle_reasoning(reasoning) {
+                                    let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta }));
+                                }
                             }
 
                             if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
-                                aggregated_content.push_str(content);
-                                for event in sanitizer.process_chunk(content) {
+                                for event in aggregator.handle_content(content) {
                                     let _ = tx.send(Ok(event));
                                 }
                             }
@@ -304,53 +295,32 @@ impl LLMProvider for MoonshotProvider {
                             if let Some(tool_calls) =
                                 delta.get("tool_calls").and_then(|tc| tc.as_array())
                             {
-                                update_tool_calls(&mut tool_call_builders, tool_calls);
+                                aggregator.handle_tool_calls(tool_calls);
                             }
                         }
 
                         if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
-                            finish_reason = map_finish_reason_common(reason);
+                            aggregator.set_finish_reason(map_finish_reason_common(reason));
                         }
                     }
 
                     if let Some(_usage_value) = value.get("usage") {
-                        usage = Some(
+                        if let Some(usage) =
                             crate::llm::providers::common::parse_usage_openai_format(&value, true)
-                                .unwrap_or_default(),
-                        );
+                        {
+                            aggregator.set_usage(usage);
+                        }
                     }
                     Ok(())
                 },
             )
             .await;
 
-            for event in sanitizer.finalize() {
-                let _ = tx.send(Ok(event));
-            }
-
             match result {
                 Ok(_) => {
-                    let tool_calls = finalize_tool_calls(tool_call_builders);
+                    let response = aggregator.finalize();
                     let _ = tx.send(Ok(LLMStreamEvent::Completed {
-                        response: Box::new(LLMResponse {
-                            content: if aggregated_content.is_empty() {
-                                None
-                            } else {
-                                Some(aggregated_content)
-                            },
-                            tool_calls,
-                            usage,
-                            finish_reason,
-                            reasoning: if aggregated_reasoning.is_empty() {
-                                None
-                            } else {
-                                Some(aggregated_reasoning)
-                            },
-                            reasoning_details: None,
-                            tool_references: Vec::new(),
-                            request_id: None,
-                            organization_id: None,
-                        }),
+                        response: Box::new(response),
                     }));
                 }
                 Err(err) => {

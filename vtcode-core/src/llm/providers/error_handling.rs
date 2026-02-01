@@ -19,7 +19,15 @@ const RATE_LIMIT_PATTERNS: &[&str] = &[
     "resource_exhausted",
     "quota",
     "rate limit",
+    "rate_limit",
+    "ratelimit",
     "ratelimitexceeded",
+    "concurrency",
+    "frequency",
+    "usage limit",
+    "too many requests",
+    "daily call limit",
+    "package has expired",
 ];
 
 /// Handle HTTP response errors for Gemini provider

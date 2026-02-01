@@ -5,11 +5,9 @@ use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display::format_llm_error;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
+    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
     LLMStreamEvent, MessageRole, Usage,
 };
-use crate::llm::providers::shared::{NoopStreamTelemetry, ToolCallBuilder, finalize_tool_calls};
-use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -664,12 +662,7 @@ impl LLMProvider for ZAIProvider {
         let tx = event_tx.clone();
 
         tokio::spawn(async move {
-            let mut aggregated_content = String::new();
-            let mut aggregated_reasoning = String::new();
-            let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
-            let mut sanitizer = TagStreamSanitizer::new();
-            let mut final_usage = None;
-            let mut final_finish_reason = FinishReason::Stop;
+            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new();
 
             let result = crate::llm::providers::shared::process_openai_stream(bytes_stream, PROVIDER_NAME, |value| {
                 if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
@@ -678,8 +671,7 @@ impl LLMProvider for ZAIProvider {
                     if let Some(delta) = choice.get("delta") {
                         // Handle content
                         if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
-                            aggregated_content.push_str(content);
-                            for event in sanitizer.process_chunk(content) {
+                            for event in aggregator.handle_content(content) {
                                 let _ = tx.send(Ok(event));
                             }
                         }
@@ -692,32 +684,25 @@ impl LLMProvider for ZAIProvider {
                                 _ => String::new(),
                             };
                             if !reasoning_text.is_empty() {
-                                aggregated_reasoning.push_str(&reasoning_text);
-                                let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta: reasoning_text }));
+                                if let Some(delta) = aggregator.handle_reasoning(&reasoning_text) {
+                                    let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta }));
+                                }
                             }
                         }
 
                         // Handle tool calls
                         if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
-                            for tool_call in tool_calls {
-                                if let Some(tc_obj) = tool_call.as_object() {
-                                    crate::llm::providers::shared::apply_tool_call_delta_from_content(
-                                        &mut tool_call_builders,
-                                        tc_obj,
-                                        &NoopStreamTelemetry,
-                                    );
-                                }
-                            }
+                            aggregator.handle_tool_calls(tool_calls);
                         }
                     }
 
                     if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
-                        final_finish_reason = map_finish_reason_common(reason);
+                        aggregator.set_finish_reason(map_finish_reason_common(reason));
                     }
                 }
 
                 if let Some(usage_value) = value.get("usage") {
-                    final_usage = Some(Usage {
+                    aggregator.set_usage(Usage {
                         prompt_tokens: usage_value.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
                         completion_tokens: usage_value.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
                         total_tokens: usage_value.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
@@ -729,33 +714,11 @@ impl LLMProvider for ZAIProvider {
                 Ok(())
             }).await;
 
-            for event in sanitizer.finalize() {
-                let _ = tx.send(Ok(event));
-            }
-
             match result {
                 Ok(_) => {
-                    let tool_calls = finalize_tool_calls(tool_call_builders);
+                    let response = aggregator.finalize();
                     let _ = tx.send(Ok(LLMStreamEvent::Completed {
-                        response: Box::new(LLMResponse {
-                            content: if aggregated_content.is_empty() {
-                                None
-                            } else {
-                                Some(aggregated_content)
-                            },
-                            tool_calls,
-                            usage: final_usage,
-                            finish_reason: final_finish_reason,
-                            reasoning: if aggregated_reasoning.is_empty() {
-                                None
-                            } else {
-                                Some(aggregated_reasoning)
-                            },
-                            reasoning_details: None,
-                            tool_references: Vec::new(),
-                            request_id: None,
-                            organization_id: None,
-                        }),
+                        response: Box::new(response),
                     }));
                 }
                 Err(err) => {
