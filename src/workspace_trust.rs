@@ -4,7 +4,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anstyle::{Ansi256Color, Effects};
 use anyhow::{Context, Result};
-use tracing::warn;
 use vtcode_core::utils::dot_config::{
     WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager, load_user_config,
 };

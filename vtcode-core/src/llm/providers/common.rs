@@ -79,14 +79,7 @@ where
 /// Shared by all LLMClient implementations.
 #[inline]
 pub fn convert_usage_to_llm_types(usage: crate::llm::provider::Usage) -> llm_types::Usage {
-    llm_types::Usage {
-        prompt_tokens: usage.prompt_tokens as usize,
-        completion_tokens: usage.completion_tokens as usize,
-        total_tokens: usage.total_tokens as usize,
-        cached_prompt_tokens: usage.cached_prompt_tokens.map(|v| v as usize),
-        cache_creation_tokens: usage.cache_creation_tokens.map(|v| v as usize),
-        cache_read_tokens: usage.cache_read_tokens.map(|v| v as usize),
-    }
+    usage
 }
 
 pub fn override_base_url(
@@ -495,6 +488,7 @@ pub fn parse_usage_openai_format(
 /// # Arguments
 /// * `response_json` - The JSON response from the API
 /// * `provider_name` - Provider name for error messages
+/// * `model` - Model name to include in the response
 /// * `include_cache_metrics` - Whether to parse cache-related usage metrics
 /// * `extract_reasoning` - Optional function to extract reasoning content from message/choice
 ///
@@ -503,6 +497,7 @@ pub fn parse_usage_openai_format(
 pub fn parse_response_openai_format<F>(
     response_json: Value,
     provider_name: &str,
+    model: String,
     include_cache_metrics: bool,
     extract_reasoning: Option<F>,
 ) -> Result<crate::llm::provider::LLMResponse, LLMError>
@@ -606,6 +601,7 @@ where
     Ok(LLMResponse {
         content,
         tool_calls,
+        model,
         usage,
         finish_reason,
         reasoning,

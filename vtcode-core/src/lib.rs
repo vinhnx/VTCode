@@ -174,6 +174,10 @@ pub mod types;
 pub mod ui;
 pub mod utils;
 
+// Re-export common error macros and constants
+pub use vtcode_commons::{ctx_err, file_err};
+pub use vtcode_commons::errors::*;
+
 // New MCP enhancement modules
 // Re-exports for convenience
 pub use cli::args::{Cli, Commands};

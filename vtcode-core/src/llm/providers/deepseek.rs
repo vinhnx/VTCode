@@ -16,7 +16,7 @@ use serde_json::{Map, Value};
 
 use super::{
     common::{
-        convert_usage_to_llm_types, extract_prompt_cache_settings, map_finish_reason_common,
+        extract_prompt_cache_settings, map_finish_reason_common,
         override_base_url, parse_response_openai_format, resolve_model,
         serialize_messages_openai_format, serialize_tools_openai_format, validate_request_common,
     },
@@ -183,7 +183,7 @@ impl DeepSeekProvider {
         serialize_messages_openai_format(request, PROVIDER_KEY)
     }
 
-    fn parse_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
+    fn parse_response(&self, response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
         let include_cache = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
 
         // Custom reasoning extractor for DeepSeek
@@ -202,6 +202,7 @@ impl DeepSeekProvider {
         parse_response_openai_format(
             response_json,
             PROVIDER_NAME,
+            model,
             include_cache,
             Some(reasoning_extractor),
         )
@@ -232,6 +233,7 @@ impl LLMProvider for DeepSeekProvider {
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
         }
+        let model = request.model.clone();
 
         let payload = self.convert_to_deepseek_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
@@ -268,7 +270,7 @@ impl LLMProvider for DeepSeekProvider {
             }
         })?;
 
-        self.parse_response(response_json)
+        self.parse_response(response_json, model)
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -278,6 +280,7 @@ impl LLMProvider for DeepSeekProvider {
 
         self.validate_request(&request)?;
         request.stream = true;
+        let model = request.model.clone();
 
         let payload = self.convert_to_deepseek_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
@@ -308,12 +311,14 @@ impl LLMProvider for DeepSeekProvider {
             tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
         let tx = event_tx.clone();
 
+        let model_clone = model.clone();
         tokio::spawn(async move {
-            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new();
+            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model_clone.clone());
 
             let result = crate::llm::providers::shared::process_openai_stream(
                 bytes_stream,
                 PROVIDER_NAME,
+                model_clone,
                 |value| {
                     if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
                         && let Some(choice) = choices.first()
@@ -406,18 +411,7 @@ impl LLMProvider for DeepSeekProvider {
 impl LLMClient for DeepSeekProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
         let request = super::common::make_default_request(prompt, &self.model);
-        let model = request.model.clone();
-        let response = LLMProvider::generate(self, request).await?;
-
-        Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or_default(),
-            model,
-            usage: response.usage.map(convert_usage_to_llm_types),
-            reasoning: response.reasoning,
-            reasoning_details: response.reasoning_details,
-            request_id: response.request_id,
-            organization_id: response.organization_id,
-        })
+        Ok(LLMProvider::generate(self, request).await?)
     }
 
     fn backend_kind(&self) -> llm_types::BackendKind {

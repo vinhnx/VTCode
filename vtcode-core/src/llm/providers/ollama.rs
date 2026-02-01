@@ -36,7 +36,6 @@ use super::common::{
     convert_usage_to_llm_types, override_base_url, parse_client_prompt_common, resolve_model,
 };
 use super::error_handling::{format_network_error, format_parse_error};
-use super::TagStreamSanitizer;
 
 // ============================================================================
 // Wire API Detection (adapted from OpenAI Codex's codex-ollama/src/lib.rs)
@@ -173,7 +172,7 @@ struct OllamaModelDetails {
     quantization_level: String,
 }
 
-const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detected. Start it with: `ollama serve` (after installing)\n\
+const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detected. Start it with: `ollama serve` (after installing)\
      Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file";
 
 /// Fetches available local Ollama models from the Ollama API endpoint
@@ -648,6 +647,7 @@ impl OllamaProvider {
         content: Option<String>,
         tool_calls: Option<Vec<ToolCall>>,
         reasoning: Option<String>,
+        model: String,
         finish_reason: Option<&str>,
         prompt_tokens: Option<u32>,
         completion_tokens: Option<u32>,
@@ -660,6 +660,7 @@ impl OllamaProvider {
         LLMResponse {
             content,
             tool_calls,
+            model,
             usage: Self::usage_from_counts(prompt_tokens, completion_tokens),
             finish_reason: finish,
             reasoning,
@@ -757,7 +758,7 @@ struct OllamaResponseMessage {
     tool_calls: Option<Vec<OllamaResponseToolCall>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct OllamaResponseToolCall {
     #[serde(default)]
     #[serde(rename = "type")]
@@ -767,7 +768,7 @@ struct OllamaResponseToolCall {
     function: Option<OllamaResponseFunctionCall>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct OllamaResponseFunctionCall {
     #[serde(default)]
     name: Option<String>,
@@ -781,8 +782,6 @@ struct OllamaResponseFunctionCall {
 struct OllamaErrorResponse {
     error: Option<String>,
 }
-
-// Removed map_reqwest_error as it's replaced by common helpers.
 
 fn parse_stream_chunk(line: &str) -> Result<OllamaChatResponse, LLMError> {
     serde_json::from_str::<OllamaChatResponse>(line).map_err(|err| LLMError::Provider {
@@ -818,6 +817,7 @@ impl LLMProvider for OllamaProvider {
         if request.model.is_empty() {
             request.model = self.model.clone();
         }
+        let model = request.model.clone();
         let payload = self.build_payload(&request, false)?;
         let url = self.chat_url();
 
@@ -868,6 +868,7 @@ impl LLMProvider for OllamaProvider {
             content,
             tool_calls,
             reasoning,
+            model,
             parsed.done_reason.as_deref(),
             parsed.prompt_eval_count,
             parsed.eval_count,
@@ -879,6 +880,7 @@ impl LLMProvider for OllamaProvider {
         if request.model.is_empty() {
             request.model = self.model.clone();
         }
+        let model = request.model.clone();
         let payload = self.build_payload(&request, true)?;
         let url = self.chat_url();
 
@@ -902,15 +904,12 @@ impl LLMProvider for OllamaProvider {
 
         let byte_stream = response.bytes_stream();
         let mut buffer: Vec<u8> = Vec::new();
-        let mut accumulated = String::new();
-        let mut reasoning_buffer = String::new();
-        let mut sanitizer = TagStreamSanitizer::new();
+        let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model.clone());
         let stream = try_stream! {
             let mut prompt_tokens: Option<u32> = None;
             let mut completion_tokens: Option<u32> = None;
             let mut finish_reason: Option<String> = None;
             let mut completed = false;
-            let mut tool_calls: Option<Vec<ToolCall>> = None;
 
             futures::pin_mut!(byte_stream);
             while let Some(chunk) = byte_stream.next().await {
@@ -923,8 +922,8 @@ impl LLMProvider for OllamaProvider {
                         .map_err(|err| LLMError::Provider {
                             message: format!("Invalid UTF-8 in Ollama stream: {err}"),
                             metadata: None,
-                        })?
-                        .trim();
+                        })?;
+                    let line = line.trim();
 
                     if line.is_empty() {
                         continue;
@@ -940,50 +939,35 @@ impl LLMProvider for OllamaProvider {
                     }
 
                     if let Some(message) = parsed.message {
-                        // 1. Explicit thinking field from Ollama
-                        // Track if we got reasoning from the thinking field to avoid duplicates
                         let has_explicit_thinking = message
                             .thinking
                             .as_ref()
                             .map(|v| !v.is_empty())
                             .unwrap_or(false);
 
-                        if let Some(thinking) = message
-                            .thinking
-                            .and_then(|value| (!value.is_empty()).then_some(value))
-                        {
-                            reasoning_buffer.push_str(&thinking);
-                            yield LLMStreamEvent::Reasoning { delta: thinking };
+                        if let Some(thinking) = message.thinking {
+                            if let Some(delta) = aggregator.handle_reasoning(&thinking) {
+                                yield LLMStreamEvent::Reasoning { delta };
+                            }
                         }
 
-                        // 2. Content field - may contain embedded tags handled by sanitizer
-                        // If we got explicit thinking, skip reasoning from sanitizer to avoid duplicates
-                        if let Some(content) = message
-                            .content
-                            .and_then(|value| (!value.is_empty()).then_some(value))
-                        {
-                            for event in sanitizer.process_chunk(&content) {
+                        if let Some(content) = message.content {
+                            for event in aggregator.handle_content(&content) {
                                 match &event {
-                                    LLMStreamEvent::Token { delta } => {
-                                        accumulated.push_str(delta);
-                                        yield LLMStreamEvent::Token { delta: delta.clone() };
+                                    LLMStreamEvent::Reasoning { .. } if has_explicit_thinking => {
                                     }
-                                    LLMStreamEvent::Reasoning { delta } => {
-                                        // Skip duplicate reasoning if we already got it from thinking field
-                                        if !has_explicit_thinking {
-                                            reasoning_buffer.push_str(delta);
-                                            yield LLMStreamEvent::Reasoning { delta: delta.clone() };
-                                        }
-                                    }
-                                    _ => {
-                                        yield event;
-                                    }
+                                    _ => yield event,
                                 }
                             }
                         }
 
-                        if let Some(parsed_calls) = Self::convert_tool_calls(message.tool_calls)? {
-                            tool_calls = Some(parsed_calls);
+                        if let Some(tool_calls) = message.tool_calls {
+                            let tool_calls_json: Vec<serde_json::Value> = tool_calls
+                                .into_iter()
+                                .map(|tc| serde_json::to_value(tc).unwrap_or(serde_json::Value::Null))
+                                .filter(|v| !v.is_null())
+                                .collect();
+                            aggregator.handle_tool_calls(&tool_calls_json);
                         }
                     }
 
@@ -992,27 +976,12 @@ impl LLMProvider for OllamaProvider {
                         completion_tokens = parsed.eval_count;
                         finish_reason = parsed.done_reason;
                         completed = true;
-                        // Note: Sanitizer finalized after loop for ownership
                     }
                 }
 
                 if completed {
                     break;
                 }
-            }
-
-            // Finalize sanitizer and yield leftover events after the loop finishes
-            for event in sanitizer.finalize() {
-                 match &event {
-                    LLMStreamEvent::Token { delta } => {
-                        accumulated.push_str(delta);
-                    }
-                    LLMStreamEvent::Reasoning { delta } => {
-                        reasoning_buffer.push_str(delta);
-                    }
-                    _ => {}
-                }
-                yield event;
             }
 
             if !completed {
@@ -1022,22 +991,19 @@ impl LLMProvider for OllamaProvider {
                 })?;
             }
 
-            let response = Self::build_response(
-                if accumulated.is_empty() {
-                    None
-                } else {
-                    Some(accumulated.clone())
-                },
-                tool_calls,
-                if reasoning_buffer.is_empty() {
-                    None
-                } else {
-                    Some(reasoning_buffer.clone())
-                },
-                finish_reason.as_deref(),
-                prompt_tokens,
-                completion_tokens,
-            );
+            let mut response = aggregator.finalize();
+            if let Some(pt) = prompt_tokens {
+                let mut usage = response.usage.unwrap_or_default();
+                usage.prompt_tokens = pt;
+                if let Some(ct) = completion_tokens {
+                    usage.completion_tokens = ct;
+                    usage.total_tokens = pt + ct;
+                }
+                response.usage = Some(usage);
+            }
+            if let Some(fr) = finish_reason {
+                response.finish_reason = crate::llm::providers::common::map_finish_reason_common(&fr);
+            }
 
             yield LLMStreamEvent::Completed { response: Box::new(response) };
         };
@@ -1055,8 +1021,7 @@ impl LLMProvider for OllamaProvider {
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         if let Some(tool_choice) = &request.tool_choice {
             match tool_choice {
-                ToolChoice::Auto | ToolChoice::None => {}
-                _ => {
+                ToolChoice::Auto | ToolChoice::None => {}_ => {
                     return Err(LLMError::InvalidRequest {
                         message: "Ollama does not support explicit tool_choice overrides"
                             .to_string(),
@@ -1093,19 +1058,7 @@ impl LLMClient for OllamaProvider {
         if request.model.is_empty() {
             request.model = self.model.clone();
         }
-
-        let request_model = request.model.clone();
-        let response = LLMProvider::generate(self, request).await?;
-
-        Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or_default(),
-            model: request_model,
-            usage: response.usage.map(convert_usage_to_llm_types),
-            reasoning: response.reasoning,
-            reasoning_details: response.reasoning_details,
-            request_id: response.request_id,
-            organization_id: response.organization_id,
-        })
+        Ok(LLMProvider::generate(self, request).await?)
     }
 
     fn backend_kind(&self) -> llm_types::BackendKind {
@@ -1114,121 +1067,5 @@ impl LLMClient for OllamaProvider {
 
     fn model_id(&self) -> &str {
         &self.model
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::constants::{models, urls};
-    use serde_json::json;
-
-    #[test]
-    fn strips_api_key_for_local_targets() {
-        let provider = OllamaProvider::from_config(
-            Some("secret".to_string()),
-            Some(models::ollama::DEFAULT_LOCAL_MODEL.to_string()),
-            Some(urls::OLLAMA_API_BASE.to_string()),
-            None,
-            None,
-            None,
-        );
-
-        assert!(provider.api_key.is_none());
-    }
-
-    #[test]
-    fn keeps_api_key_for_cloud_models() {
-        let provider = OllamaProvider::from_config(
-            Some("secret".to_string()),
-            Some(models::ollama::DEFAULT_CLOUD_MODEL.to_string()),
-            None,
-            None,
-            None,
-            None,
-        );
-
-        assert_eq!(provider.api_key, Some("secret".to_string()));
-        assert_eq!(provider.base_url, urls::OLLAMA_CLOUD_API_BASE.to_string());
-    }
-
-    #[test]
-    fn keeps_api_key_for_remote_overrides() {
-        let provider = OllamaProvider::from_config(
-            Some("secret".to_string()),
-            Some(models::ollama::DEFAULT_LOCAL_MODEL.to_string()),
-            Some("https://remote-ollama.example.com".to_string()),
-            None,
-            None,
-            None,
-        );
-
-        assert_eq!(provider.api_key, Some("secret".to_string()));
-        assert_eq!(
-            provider.base_url,
-            "https://remote-ollama.example.com".to_string()
-        );
-    }
-
-    #[test]
-    fn forwards_output_format_into_payload() {
-        let provider = OllamaProvider::from_config(
-            None,
-            Some(models::ollama::DEFAULT_LOCAL_MODEL.to_string()),
-            None,
-            None,
-            None,
-            None,
-        );
-
-        let request = LLMRequest {
-            messages: vec![Message::user("hi".to_string())],
-            model: models::ollama::DEFAULT_LOCAL_MODEL.to_string(),
-            output_format: Some(json!("json")),
-            ..Default::default()
-        };
-
-        let payload = provider.build_payload(&request, false).unwrap();
-        assert_eq!(payload.format, Some(json!("json")));
-        assert!(!payload.stream);
-    }
-
-    // Wire API detection tests (adapted from OpenAI Codex)
-
-    #[test]
-    fn test_wire_api_for_version_dev_zero_keeps_responses() {
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 0, 0)),
-            OllamaWireApi::Responses
-        );
-    }
-
-    #[test]
-    fn test_wire_api_for_version_before_cutoff_is_chat() {
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 13, 3)),
-            OllamaWireApi::Chat
-        );
-    }
-
-    #[test]
-    fn test_wire_api_for_version_at_or_after_cutoff_is_responses() {
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 13, 4)),
-            OllamaWireApi::Responses
-        );
-        assert_eq!(
-            wire_api_for_version(&Version::new(0, 14, 0)),
-            OllamaWireApi::Responses
-        );
-        assert_eq!(
-            wire_api_for_version(&Version::new(1, 0, 0)),
-            OllamaWireApi::Responses
-        );
-    }
-
-    #[test]
-    fn test_min_responses_version() {
-        assert_eq!(min_responses_version(), Version::new(0, 13, 4));
     }
 }

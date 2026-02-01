@@ -59,6 +59,7 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
 pub fn parse_response_openai_format(
     response: Value,
     _provider_name: &str,
+    model: String,
     include_cache: bool,
     reasoning_content: Option<String>,
 ) -> Result<LLMResponse> {
@@ -111,6 +112,7 @@ pub fn parse_response_openai_format(
     let mut llm_response = LLMResponse {
         content: None,
         tool_calls: None,
+        model,
         usage: Some(crate::llm::provider::Usage {
             prompt_tokens: input_tokens as u32,
             completion_tokens: output_tokens as u32,
@@ -292,36 +294,7 @@ fn join_deprecated_section(lines: &[String]) -> Option<String> {
     }
 }
 
-/// Estimate token count for text (rough approximation)
-///
-/// Uses byte length / 4 with minimum of 1 for consistency.
-#[inline]
-pub fn estimate_token_count(text: &str) -> usize {
-    (text.len() / 4).max(1)
-}
-
-/// Truncate text to approximate token limit
-///
-/// Returns a truncated string that fits within the approximate token limit.
-/// Tries to truncate at word boundaries when possible to avoid mid-word cuts.
-#[inline]
-pub fn truncate_to_token_limit(text: &str, max_tokens: usize) -> String {
-    if max_tokens == 0 {
-        return String::new();
-    }
-
-    let max_chars = max_tokens * 4;
-    if text.len() <= max_chars {
-        return text.to_string();
-    }
-
-    // Try to truncate at a word boundary
-    let truncated = &text[..max_chars];
-    match truncated.rfind(' ') {
-        Some(last_space) => truncated[..last_space].to_string(),
-        None => truncated.to_string(),
-    }
-}
+pub use vtcode_commons::tokens::{estimate_tokens as estimate_token_count, truncate_to_tokens as truncate_to_token_limit};
 
 /// Create a consistent error message for LLM errors
 pub fn format_llm_error(provider_name: &str, error_message: &str) -> String {
@@ -390,8 +363,8 @@ mod tests {
             "model": "gpt-4"
         });
 
-        let result = parse_response_openai_format(response, "test", false, None).unwrap();
-        assert_eq!(result.content.as_deref(), Some("Hello world"));
+        let result = parse_response_openai_format(response, "test", "gpt-4".to_string(), false, None).unwrap();
+        assert_eq!(result.content_text(), "Hello world");
         let usage = result.usage.expect("usage should be present");
         assert_eq!(usage.prompt_tokens, 10);
         assert_eq!(usage.completion_tokens, 5);

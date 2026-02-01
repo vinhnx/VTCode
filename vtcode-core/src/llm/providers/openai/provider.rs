@@ -157,7 +157,6 @@ impl OpenAIProvider {
         let is_native_openai = resolved_base_url.contains("api.openai.com");
         let is_xai = resolved_base_url.contains("api.x.ai");
 
-        // Non-native OpenAI providers (like xAI) may not support all OpenAI features
         let initial_state = if is_xai || !is_native_openai {
             ResponsesApiState::Disabled
         } else {
@@ -165,7 +164,6 @@ impl OpenAIProvider {
         };
         responses_api_modes.insert(model.clone(), initial_state);
 
-        // Use centralized HTTP client factory for consistent timeout handling
         use crate::llm::http_client::HttpClientFactory;
         let http_client =
             HttpClientFactory::with_timeouts(Duration::from_secs(120), Duration::from_secs(30));
@@ -190,8 +188,6 @@ impl OpenAIProvider {
     }
 
     fn supports_temperature_parameter(model: &str) -> bool {
-        // GPT-5.0 variants don't support temperature
-        // GPT-5.1 Codex variants also don't support temperature (API confirmed)
         if model == models::openai::GPT_5
             || model == models::openai::GPT_5_CODEX
             || model == models::openai::GPT_5_MINI
@@ -264,19 +260,21 @@ impl OpenAIProvider {
     fn parse_openai_response(
         &self,
         response_json: Value,
+        model: String,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let include_cached_prompt_tokens =
             self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        response_parser::parse_chat_response(response_json, include_cached_prompt_tokens)
+        response_parser::parse_chat_response(response_json, model, include_cached_prompt_tokens)
     }
 
     fn parse_openai_responses_response(
         &self,
         response_json: Value,
+        model: String,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let include_metrics =
             self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        parse_responses_payload(response_json, include_metrics)
+        parse_responses_payload(response_json, model, include_metrics)
     }
 }
 

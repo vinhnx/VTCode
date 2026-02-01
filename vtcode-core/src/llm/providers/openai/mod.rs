@@ -27,7 +27,7 @@
 
 pub mod errors;
 mod harmony;
-mod headers;
+pub mod headers;
 pub mod request_builder;
 pub mod response_parser;
 pub mod responses_api;

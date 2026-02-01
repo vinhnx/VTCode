@@ -92,14 +92,14 @@ pub async fn handle_ask_command(
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         if is_pipe_output() {
-            if let Some(code_only) = extract_code_only(&response.content) {
+            if let Some(code_only) = extract_code_only(response.content_text()) {
                 print!("{code_only}");
             } else {
-                println!("{}", response.content);
+                println!("{}", response.content_text());
             }
         } else {
             // Print the response content directly (default behavior)
-            println!("{}", response.content);
+            println!("{}", response.content_text());
         }
     }
 

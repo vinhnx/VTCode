@@ -19,13 +19,14 @@ use super::response_parser::parse_finish_reason;
 
 pub fn create_stream(
     response: reqwest::Response,
+    model: String,
     request_id: Option<String>,
     organization_id: Option<String>,
 ) -> crate::llm::provider::LLMStream {
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
-        let mut aggregator = shared::StreamAggregator::new();
+        let mut aggregator = shared::StreamAggregator::new(model);
 
         while let Some(chunk_result) = body_stream.next().await {
             let chunk = chunk_result.map_err(|err| {

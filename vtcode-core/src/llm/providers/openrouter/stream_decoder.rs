@@ -1,12 +1,12 @@
 use serde_json::{Map, Value};
 
-use crate::llm::provider::{FinishReason, LLMResponse, Usage};
+use crate::llm::provider::{FinishReason, Usage};
 
 use super::super::{
     ReasoningBuffer, extract_reasoning_trace,
     shared::{
         StreamDelta, StreamTelemetry, ToolCallBuilder, append_text_with_reasoning,
-        apply_tool_call_delta_from_content, finalize_tool_calls, update_tool_calls,
+        apply_tool_call_delta_from_content, update_tool_calls,
     },
 };
 
@@ -422,33 +422,5 @@ pub(crate) fn parse_stream_payload(
         None
     } else {
         Some(emitted_delta)
-    }
-}
-
-pub(super) fn finalize_stream_response(
-    aggregated_content: String,
-    tool_call_builders: Vec<ToolCallBuilder>,
-    usage: Option<Usage>,
-    finish_reason: FinishReason,
-    reasoning: ReasoningBuffer,
-) -> LLMResponse {
-    let content = if aggregated_content.is_empty() {
-        None
-    } else {
-        Some(aggregated_content)
-    };
-
-    let reasoning = reasoning.finalize();
-
-    LLMResponse {
-        content,
-        tool_calls: finalize_tool_calls(tool_call_builders),
-        usage,
-        finish_reason,
-        reasoning,
-        reasoning_details: None,
-        tool_references: Vec::new(),
-        request_id: None,
-        organization_id: None,
     }
 }

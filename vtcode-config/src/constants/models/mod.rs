@@ -7,6 +7,7 @@ pub mod minimax;
 pub mod moonshot;
 pub mod ollama;
 pub mod openai;
+pub mod openresponses;
 pub mod openrouter;
 pub mod xai;
 pub mod zai;

@@ -13,7 +13,7 @@ use ratatui::{
 use crate::ui::markdown::highlight_line_for_diff;
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{DiffPreviewState, TrustMode};
-use crate::utils::diff::{DiffLineKind, DiffOptions, compute_diff};
+use crate::utils::diff::{DiffLineKind, DiffOptions, compute_diff_with_theme};
 use crate::utils::diff_styles::DiffColorPalette;
 
 fn ratatui_rgb(rgb: anstyle::RgbColor) -> Color {
@@ -153,7 +153,7 @@ fn render_diff_content(
     palette: &DiffColorPalette,
 ) {
     let language = detect_language(&preview.file_path);
-    let diff_bundle = compute_diff(
+    let diff_bundle = compute_diff_with_theme(
         &preview.before,
         &preview.after,
         DiffOptions {

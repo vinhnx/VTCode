@@ -16,11 +16,11 @@ use tracing::debug;
 use super::responses_api::parse_responses_payload;
 use super::streaming::OpenAIStreamTelemetry;
 
-pub(crate) fn create_chat_stream(response: reqwest::Response) -> provider::LLMStream {
+pub(crate) fn create_chat_stream(response: reqwest::Response, model: String) -> provider::LLMStream {
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
-        let mut aggregator = crate::llm::providers::shared::StreamAggregator::new();
+        let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model);
         let telemetry = OpenAIStreamTelemetry;
 
         while let Some(chunk_result) = body_stream.next().await {
@@ -102,6 +102,7 @@ pub(crate) fn create_chat_stream(response: reqwest::Response) -> provider::LLMSt
 
 pub(crate) fn create_responses_stream(
     response: reqwest::Response,
+    model: String,
     include_metrics: bool,
     _debug_model: Option<String>,
     _request_timer: Option<Instant>,
@@ -109,7 +110,7 @@ pub(crate) fn create_responses_stream(
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
-        let mut aggregator = crate::llm::providers::shared::StreamAggregator::new();
+        let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model.clone());
         let mut final_response: Option<Value> = None;
         let mut done = false;
         #[cfg(debug_assertions)]
@@ -240,9 +241,8 @@ pub(crate) fn create_responses_stream(
             }
         };
 
-        let mut response = parse_responses_payload(response_value, include_metrics)?;
+        let mut response = parse_responses_payload(response_value, model, include_metrics)?;
 
-        // Merge aggregated content and reasoning into the final response
         let final_aggregator_response = aggregator.finalize();
         
         if response.content.is_none() {

@@ -370,7 +370,7 @@ impl LLMProvider for AnthropicProvider {
             .await
             .map_err(|e| format_parse_error("Anthropic", &e))?;
 
-        let mut llm_response = self.parse_anthropic_response(anthropic_response)?;
+        let mut llm_response = response_parser::parse_response(anthropic_response, self.model.clone())?;
         llm_response.request_id = request_id;
         llm_response.organization_id = organization_id;
         Ok(llm_response)
@@ -428,6 +428,7 @@ impl LLMProvider for AnthropicProvider {
 
         Ok(stream_decoder::create_stream(
             response,
+            self.model.clone(),
             request_id,
             organization_id,
         ))

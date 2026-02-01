@@ -1,26 +1,18 @@
-use super::OpenRouterProvider;
+use super::super::OpenRouterProvider;
 use crate::llm::client::LLMClient;
-use crate::llm::provider::{LLMError, LLMProvider};
-use crate::llm::providers::common::convert_usage_to_llm_types;
+use crate::llm::provider::{LLMError, LLMProvider, LLMRequest};
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 
 #[async_trait]
 impl LLMClient for OpenRouterProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
-        let request = crate::llm::providers::common::make_default_request(prompt, &self.model);
-        let request_model = request.model.clone();
-        let response = LLMProvider::generate(self, request).await?;
-
-        Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or_default(),
-            model: request_model,
-            usage: response.usage.map(convert_usage_to_llm_types),
-            reasoning: response.reasoning,
-            reasoning_details: response.reasoning_details,
-            request_id: response.request_id,
-            organization_id: response.organization_id,
-        })
+        let request = LLMRequest {
+            messages: vec![crate::llm::provider::Message::user(prompt.to_string())],
+            model: self.model.clone(),
+            ..Default::default()
+        };
+        Ok(LLMProvider::generate(self, request).await?)
     }
 
     fn backend_kind(&self) -> llm_types::BackendKind {

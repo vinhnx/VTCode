@@ -1,5 +1,9 @@
 use super::*;
 use crate::prompts::system::default_system_prompt;
+use crate::llm::error_display;
+use crate::llm::provider::{LLMError, LLMErrorMetadata};
+use crate::gemini::streaming::StreamingError;
+use crate::config::constants::models;
 
 impl GeminiProvider {
     /// Check if model supports context caching
@@ -317,6 +321,7 @@ impl GeminiProvider {
 
     pub(super) fn convert_from_gemini_response(
         response: GenerateContentResponse,
+        model: String,
     ) -> Result<LLMResponse, LLMError> {
         let mut candidates = response.candidates.into_iter();
         let candidate = candidates.next().ok_or_else(|| {
@@ -332,6 +337,7 @@ impl GeminiProvider {
             return Ok(LLMResponse {
                 content: Some(String::new()),
                 tool_calls: None,
+                model,
                 usage: None,
                 finish_reason: FinishReason::Stop,
                 reasoning: None,
@@ -352,12 +358,6 @@ impl GeminiProvider {
                     thought_signature,
                 } => {
                     text_content.push_str(&text);
-                    // Store thought signature for non-function-call text responses
-                    // This is used for maintaining context in multi-turn conversations
-                    if thought_signature.is_some() && !text_content.is_empty() {
-                        // Store in last position to be retrieved later if needed
-                        // For text parts, thought signatures are typically in the last part
-                    }
                 }
                 Part::FunctionCall {
                     function_call,
@@ -382,13 +382,10 @@ impl GeminiProvider {
                                 .unwrap_or_else(|_| "{}".to_string()),
                         }),
                         text: None,
-                        // Preserve thought signature from Gemini response
-                        // Critical for Gemini 3 Pro to maintain reasoning context across function calls
                         thought_signature,
                     });
                 }
                 Part::FunctionResponse { .. } => {
-                    // Ignore echoed tool responses to avoid duplicating tool output
                 }
             }
         }
@@ -402,9 +399,8 @@ impl GeminiProvider {
             None => FinishReason::Stop,
         };
 
-        // Extract reasoning content if present in the text based on markup tags
         let (cleaned_content, extracted_reasoning) = if !text_content.is_empty() {
-            let (reasoning_segments, cleaned) =
+            let (reasoning_segments, cleaned) = 
                 crate::llm::providers::split_reasoning_from_text(&text_content);
             let final_reasoning = if reasoning_segments.is_empty() {
                 None
@@ -436,6 +432,7 @@ impl GeminiProvider {
             } else {
                 Some(tool_calls)
             },
+            model,
             usage: None,
             finish_reason,
             reasoning: extracted_reasoning,
@@ -448,6 +445,7 @@ impl GeminiProvider {
 
     pub(super) fn convert_from_streaming_response(
         response: StreamingResponse,
+        model: String,
     ) -> Result<LLMResponse, LLMError> {
         let converted_candidates: Vec<Candidate> = response
             .candidates
@@ -464,7 +462,7 @@ impl GeminiProvider {
             usage_metadata: response.usage_metadata,
         };
 
-        Self::convert_from_gemini_response(converted)
+        Self::convert_from_gemini_response(converted, model)
     }
 
     pub(super) fn map_streaming_error(error: StreamingError) -> LLMError {
@@ -482,7 +480,7 @@ impl GeminiProvider {
             StreamingError::ApiError {
                 status_code,
                 message,
-                ..
+                .. 
             } => {
                 if status_code == 401 || status_code == 403 {
                     let formatted = error_display::format_llm_error(
@@ -507,7 +505,7 @@ impl GeminiProvider {
                 }
             }
             StreamingError::ParseError { message, .. } => {
-                let formatted =
+                let formatted = 
                     error_display::format_llm_error("Gemini", &format!("Parse error: {}", message));
                 LLMError::Provider {
                     message: formatted,
