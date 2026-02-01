@@ -19,7 +19,7 @@ base64 = { workspace = true }
 dirs = "6.0"
 directories = "6.0"
 hostname = "0.4"
-indexmap = { version = "2.12", features = ["serde"] }
+indexmap = { version = "2.13", features = ["serde"] }
 once_cell = "1.19"
 regex = "1.12"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
@@ -28,7 +28,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9"
 sha2 = "0.10"
-toml = "0.9.10"
+toml = "0.9.11"
 toml_edit = "0.24.0"
 tracing = "0.1"
 urlencoding = "2.1"
@@ -38,7 +38,7 @@ schemars = { workspace = true, optional = true, features = ["indexmap2"] }
 
 # Unix-specific dependencies
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.30", features = ["user"] }
+nix = { version = "0.31", features = ["user"] }
 
 
 [features]
@@ -49,11 +49,11 @@ schema = ["dep:schemars"]
 [dev-dependencies]
 tempfile = "3.24"
 assert_fs = "1.1"
-serial_test = "3.1"
+serial_test = "3.3"
 
 [build-dependencies]
 anyhow = "1.0"
-indexmap = { version = "2.12", features = ["serde"] }
+indexmap = { version = "2.13", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { workspace = true }
 
