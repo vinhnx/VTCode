@@ -1,7 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 use anyhow::Result;
-use ratatui::crossterm::terminal::disable_raw_mode;
-use std::io::{self, Write};
+use std::io;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};

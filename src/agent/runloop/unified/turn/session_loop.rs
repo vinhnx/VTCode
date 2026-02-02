@@ -1,5 +1,4 @@
 use anyhow::Result;
-use ratatui::crossterm::terminal::disable_raw_mode;
 use std::collections::VecDeque;
 use std::io::Write;
 
