@@ -4,7 +4,6 @@ use crate::config::models::Provider;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, MessageRole};
 use crate::llm::rig_adapter::reasoning_parameters_for;
-use crate::prompts::system::default_system_prompt;
 
 use super::OpenRouterProvider;
 

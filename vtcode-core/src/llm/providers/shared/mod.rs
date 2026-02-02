@@ -37,17 +37,20 @@ pub struct NoopStreamTelemetry;
 
 impl StreamTelemetry for NoopStreamTelemetry {}
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamFragment {
     Content(String),
     Reasoning(String),
 }
 
+#[allow(dead_code)]
 #[derive(Default, Debug)]
 pub struct StreamDelta {
     fragments: Vec<StreamFragment>,
 }
 
+#[allow(dead_code)]
 impl StreamDelta {
     pub fn push_content(&mut self, text: &str) {
         if text.is_empty() {
@@ -349,6 +352,7 @@ pub fn parse_openai_tool_calls(calls: &[Value]) -> Vec<ToolCall> {
         .collect()
 }
 
+#[allow(dead_code)]
 pub fn append_text_with_reasoning(
     text: &str,
     aggregated_content: &mut String,
@@ -422,6 +426,7 @@ pub fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
     }
 }
 
+#[allow(dead_code)]
 pub fn apply_tool_call_delta_from_content(
     builders: &mut Vec<ToolCallBuilder>,
     container: &Map<String, Value>,
@@ -430,6 +435,7 @@ pub fn apply_tool_call_delta_from_content(
     apply_tool_call_delta_with_index(builders, container, telemetry, None, None);
 }
 
+#[allow(dead_code)]
 fn apply_tool_call_delta_with_index(
     builders: &mut Vec<ToolCallBuilder>,
     container: &Map<String, Value>,

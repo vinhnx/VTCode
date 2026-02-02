@@ -5,7 +5,6 @@ use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMErrorMetadata};
 use reqwest::Response;
 use serde_json::Value;
-use std::borrow::Cow;
 
 /// HTTP status codes for common error types
 pub const STATUS_UNAUTHORIZED: u16 = 401;
