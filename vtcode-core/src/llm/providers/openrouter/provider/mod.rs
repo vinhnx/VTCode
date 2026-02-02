@@ -2,12 +2,12 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, OpenRouterPromptCacheSettings, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::config::models::ModelId;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole, ToolChoice};
 use crate::llm::providers::common::{
-    extract_prompt_cache_settings, override_base_url, resolve_model,
+    override_base_url, resolve_model,
 };
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::Value;
@@ -27,6 +27,7 @@ pub struct OpenRouterProvider {
     model: String,
 }
 
+#[allow(dead_code)]
 impl OpenRouterProvider {
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
@@ -80,7 +81,7 @@ impl OpenRouterProvider {
     fn with_model_internal(
         api_key: String,
         model: String,
-        prompt_cache: Option<PromptCachingConfig>,
+        _prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
         timeouts: TimeoutsConfig,
     ) -> Self {
