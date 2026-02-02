@@ -529,6 +529,11 @@ pub async fn run_turn_loop(
         {
             Ok(val) => val,
             Err(err) => {
+                // Restore input status on request failure to clear loading/shimmer state.
+                ctx.handle
+                    .set_input_status(restore_status_left.clone(), restore_status_right.clone());
+                ctx.input_status_state.left = restore_status_left.clone();
+                ctx.input_status_state.right = restore_status_right.clone();
                 crate::agent::runloop::unified::turn::turn_helpers::display_error(
                     ctx.renderer,
                     "LLM request failed",
