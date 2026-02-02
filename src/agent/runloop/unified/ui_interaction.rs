@@ -552,7 +552,7 @@ pub(crate) async fn stream_and_render_response_with_options(
 
     // Check for cancellation before starting stream
     if ctrl_c_state.is_cancel_requested() {
-        spinner.finish();
+        spinner.finish_with_restore(true);
         return Err(uni::LLMError::Provider {
             message: error_display::format_llm_error(provider_name, "Interrupted by user"),
             metadata: None,
@@ -566,7 +566,7 @@ pub(crate) async fn stream_and_render_response_with_options(
     tokio::pin!(stream_future);
 
     if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
-        spinner.finish();
+        spinner.finish_with_restore(true);
         return Err(uni::LLMError::Provider {
             message: error_display::format_llm_error(provider_name, "Interrupted by user"),
             metadata: None,
@@ -576,7 +576,7 @@ pub(crate) async fn stream_and_render_response_with_options(
     let mut stream = tokio::select! {
         biased;
         _ = ctrl_c_notify.notified() => {
-            spinner.finish();
+            spinner.finish_with_restore(true);
             return Err(uni::LLMError::Provider { message: error_display::format_llm_error(provider_name, "Interrupted by user"), metadata: None });
         }
         result = stream_future => result?,
@@ -590,9 +590,14 @@ pub(crate) async fn stream_and_render_response_with_options(
     let finish_spinner = |active: &mut bool, force: bool| {
         // If defer_finish is enabled and not forcing, just mark as inactive for tracking
         // but don't actually stop the spinner - caller will handle it
-        if *active && (force || !options.defer_finish) {
-            spinner.finish();
-            *active = false;
+        if *active {
+            if force {
+                spinner.finish_with_restore(true);
+                *active = false;
+            } else if !options.defer_finish {
+                spinner.finish();
+                *active = false;
+            }
         }
     };
     let mut emitted_tokens = false;
@@ -727,6 +732,7 @@ pub(crate) async fn stream_and_render_response_with_options(
             reasoning_state
                 .handle_stream_failure(renderer)
                 .map_err(|err| map_render_error(provider_name, err))?;
+            finish_spinner(&mut spinner_active, true);
             let formatted_error = error_display::format_llm_error(
                 provider_name,
                 "Stream ended without a completion event",

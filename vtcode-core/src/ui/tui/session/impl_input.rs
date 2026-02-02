@@ -57,6 +57,9 @@ impl Session {
             InlineCommand::SetInputStatus { left, right } => {
                 self.input_status_left = left;
                 self.input_status_right = right;
+                if self.thinking_spinner.is_active {
+                    self.thinking_spinner.stop();
+                }
                 self.needs_redraw = true;
             }
             InlineCommand::SetTheme { theme } => {
