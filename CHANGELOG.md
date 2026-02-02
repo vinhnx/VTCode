@@ -2,6 +2,12 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.10 - 2026-02-02
+
+- Update commit (cbde5c0b)
+- chore: update homebrew formula to v0.74.9 (6b604f22)
+
+
 ## v0.74.9 - 2026-02-02
 
 
