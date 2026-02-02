@@ -1251,30 +1251,8 @@ pub(crate) fn spawn_signal_handler(
 /// This is called when double Ctrl+C is pressed to ensure the terminal
 /// is left in a clean state even if normal finalization doesn't run.
 fn emergency_terminal_cleanup() {
-    use ratatui::crossterm::{
-        execute,
-        terminal::{LeaveAlternateScreen, disable_raw_mode},
-    };
-    use std::io::{self, Write};
-
-    let mut stderr = io::stderr();
-
-    // Clear current line to remove any echoed ^C characters from rapid Ctrl+C presses
-    // \r returns to start of line, \x1b[K clears to end of line
-    let _ = stderr.write_all(b"\r\x1b[K");
-
-    // Attempt to leave alternate screen - this is the most critical
-    // operation to prevent ANSI escape codes from leaking
-    let _ = execute!(stderr, LeaveAlternateScreen);
-
-    // Disable raw mode
-    let _ = disable_raw_mode();
-
-    // Flush stderr to ensure commands are processed
-    let _ = stderr.flush();
-
-    // Brief delay to allow terminal to process cleanup commands
-    std::thread::sleep(std::time::Duration::from_millis(10));
+    // Use the centralized TUI restoration logic from vtcode-core
+    let _ = vtcode_core::ui::tui::panic_hook::restore_tui();
 }
 
 fn build_single_mcp_tool_definition(tool: &McpToolInfo) -> uni::ToolDefinition {

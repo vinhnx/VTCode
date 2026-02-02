@@ -328,13 +328,15 @@ impl TerminalModeGuard {
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<io::Stderr>>,
     ) -> Result<()> {
-        if self.raw_mode_enabled {
-            disable_raw_mode().with_context(|| {
-                format!("Failed to disable raw mode after {} selector", self.label)
-            })?;
-            self.raw_mode_enabled = false;
+        // Drain any pending crossterm events BEFORE leaving alternate screen and disabling raw mode
+        while let Ok(true) = event::poll(std::time::Duration::from_millis(0)) {
+            let _ = event::read();
         }
 
+        // Clear current line to remove artifacts like ^C from rapid presses
+        let _ = io::stderr().write_all(b"\r\x1b[K");
+
+        // Proper order: Leave alternate screen FIRST, then disable raw mode LAST
         if self.alternate_screen {
             execute!(terminal.backend_mut(), LeaveAlternateScreen).with_context(|| {
                 format!(
@@ -343,6 +345,13 @@ impl TerminalModeGuard {
                 )
             })?;
             self.alternate_screen = false;
+        }
+
+        if self.raw_mode_enabled {
+            disable_raw_mode().with_context(|| {
+                format!("Failed to disable raw mode after {} selector", self.label)
+            })?;
+            self.raw_mode_enabled = false;
         }
 
         if self.cursor_hidden {
@@ -362,15 +371,22 @@ impl TerminalModeGuard {
 
 impl Drop for TerminalModeGuard {
     fn drop(&mut self) {
-        if self.raw_mode_enabled {
-            let _ = disable_raw_mode();
-            self.raw_mode_enabled = false;
+        // Best-effort cleanup in Drop
+        while let Ok(true) = event::poll(std::time::Duration::from_millis(0)) {
+            let _ = event::read();
         }
+
+        let _ = io::stderr().write_all(b"\r\x1b[K");
 
         if self.alternate_screen {
             let mut stderr = io::stderr();
             let _ = execute!(stderr, LeaveAlternateScreen);
             self.alternate_screen = false;
+        }
+
+        if self.raw_mode_enabled {
+            let _ = disable_raw_mode();
+            self.raw_mode_enabled = false;
         }
 
         if self.cursor_hidden {

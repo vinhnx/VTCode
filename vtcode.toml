@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "anthropic"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "ANTHROPIC_API_KEY"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "claude-opus-4-5"
+default_model = "minimax-m2.1:cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -22,7 +22,7 @@ temperature = 0.7
 ui_surface = "auto"
 
 # Maximum number of conversation turns before rotating context (affects memory usage)
-max_conversation_turns = 150
+max_conversation_turns = 193
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 reasoning_effort = "low"
@@ -66,7 +66,7 @@ use_for_git_history = true
 # "allow" - Execute without confirmation
 # "prompt" - Ask for confirmation
 # "deny" - Block the tool
-default_policy = "prompt"
+default_policy = "allow"
 
 # Maximum number of tool loops allowed per turn (prevents infinite loops)
 max_tool_loops = 50
@@ -124,7 +124,7 @@ layout_mode = "auto"
 show_message_dividers = false
 dim_completed_todos = true
 message_block_spacing = false
-display_mode = "full"
+display_mode = "focused"
 show_sidebar = false
 minimum_contrast = 4.5
 bold_is_bright = false
@@ -575,8 +575,8 @@ cpu_limit = ""
 network_mode = "none"
 
 [context]
-max_context_tokens = 128000
-trim_to_percent = 60
+max_context_tokens = 130048
+trim_to_percent = 90
 preserve_recent_turns = 10
 
 [sandbox.external.microvm]
@@ -654,7 +654,7 @@ batch_timeout_ms = 100
 cache_size = 100
 
 [automation.full_auto]
-enabled = false
+enabled = true
 max_turns = 30
 allowed_tools = [
     "read_file",
@@ -796,7 +796,7 @@ enabled = true
 enabled = true
 transport = "stdio"
 # workspace_trust controls ACP trust mode: "tools_policy" (prompts) or "full_auto" (no prompts)
-workspace_trust = "tools_policy"
+workspace_trust = "full_auto"
 
 [acp.zed.tools]
 read_file = true
