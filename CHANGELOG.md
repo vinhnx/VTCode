@@ -5,6 +5,15 @@ All notable changes to vtcode will be documented in this file.
 ## v0.74.9 - 2026-02-02
 
 
+### Documentation
+
+
+
+##### [View changes on GitHub](https://github.com/vinhnx/vtcode/compare/v0.74.8...v0.74.9)
+
+## v0.74.9 - 2026-02-02
+
+
 *No significant changes*
 
 ##### [View changes on GitHub](https://github.com/vinhnx/vtcode/compare/v0.74.8...v0.74.9)
