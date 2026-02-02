@@ -499,10 +499,6 @@ impl StreamingReasoningState {
         self.rendered_any
     }
 
-    fn set_defer_rendering(&mut self, defer: bool) {
-        self.defer_rendering = defer;
-    }
-
     fn is_deferred(&self) -> bool {
         self.defer_rendering
     }
