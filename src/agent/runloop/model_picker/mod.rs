@@ -801,9 +801,10 @@ impl ModelPickerState {
     fn find_existing_api_key(&self, env_key: &str) -> Result<Option<ExistingKey>> {
         // For OpenRouter, check OAuth token first
         if env_key == "OPENROUTER_API_KEY"
-            && let Ok(Some(_token)) = vtcode_config::auth::load_oauth_token() {
-                return Ok(Some(ExistingKey::OAuthToken));
-            }
+            && let Ok(Some(_token)) = vtcode_config::auth::load_oauth_token()
+        {
+            return Ok(Some(ExistingKey::OAuthToken));
+        }
 
         if let Ok(value) = std::env::var(env_key)
             && !value.trim().is_empty()

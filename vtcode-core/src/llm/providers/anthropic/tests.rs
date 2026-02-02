@@ -284,7 +284,12 @@ mod request_builder_tests {
         let blocks = tool_result_blocks("{\"key\": \"value\"}");
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0]["type"], "text");
-        assert!(blocks[0]["text"].as_str().unwrap().contains("\"key\":\"value\""));
+        assert!(
+            blocks[0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("\"key\":\"value\"")
+        );
     }
 }
 

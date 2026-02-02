@@ -74,3 +74,23 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+
+--
+
+fix message text spacing
+
+
+```
+
+
+The user wants me to use Andre j Kar pathy 's skills. This likely refers to a skill set related to Andre j Kar pathy 's teaching and code examples, particularly his
+works like nano GPT, educational content about neural networks, etc. Let me first check what skills are available and if there's an and re j -k ar pathy skill.
+The user wants me to use Andre j Kar pathy 's skills. This likely refers to a skill set related to Andre j Kar pathy 's teaching and code examples, particularly his
+works like nano GPT, educational content about neural networks, etc. Let me first check what skills are available and if there's an and re j -k ar pathy skill.
+List skills .. Query: andrej karpathy
+The user wants to use Andre j Kar pathy 's skills. Let me first list the available skills to see what's available.
+The user wants to use Andre j Kar pathy 's skills. Let me first list the available skills to see what's available.
+List skills .. Query: karpathy
+
+```
