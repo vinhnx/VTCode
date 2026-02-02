@@ -18,6 +18,8 @@ use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
 };
+use signal_hook::consts::signal::{SIGINT, SIGTERM};
+use signal_hook::iterator::Signals;
 use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 use tokio_util::sync::CancellationToken;
@@ -313,6 +315,8 @@ pub async fn run_tui(
     // This ensures the panic hook knows to restore terminal state
     let _panic_guard = crate::ui::tui::panic_hook::TuiPanicGuard::new();
 
+    let _signal_guard = SignalCleanupGuard::new()?;
+
     let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
     let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
     set_log_theme_name(options.log_theme.clone());
@@ -402,6 +406,38 @@ pub async fn run_tui(
     clear_tui_log_sender();
 
     Ok(())
+}
+
+struct SignalCleanupGuard {
+    handle: signal_hook::iterator::Handle,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl SignalCleanupGuard {
+    fn new() -> Result<Self> {
+        let mut signals = Signals::new([SIGINT, SIGTERM]).context("failed to register signal handlers")?;
+        let handle = signals.handle();
+        let thread = std::thread::spawn(move || {
+            for _signal in signals.forever() {
+                let _ = crate::ui::tui::panic_hook::restore_tui();
+                std::process::exit(130);
+            }
+        });
+
+        Ok(Self {
+            handle,
+            thread: Some(thread),
+        })
+    }
+}
+
+impl Drop for SignalCleanupGuard {
+    fn drop(&mut self) {
+        self.handle.close();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
 }
 
 fn enable_terminal_modes(
