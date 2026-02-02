@@ -2,6 +2,23 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.11 - 2026-02-02
+
+- fix: update spinner finish behavior for cancellation handling (36d1f577) (@vinhnx)
+- refactor: remove unused set_defer_rendering method from StreamingReasoningState (756c86ba) (@vinhnx)
+- refactor: remove deprecated model constants and clean up supported models list (621b7373) (@vinhnx)
+- fix: resolve duplicate model entries and correct legacy model references (7928cb44) (@vinhnx)
+- Update model references to "claude-haiku-4-5" across configuration and tests (84a8d4ab) (@vinhnx)
+- feat: add signal handling for graceful termination in TUI (a3ca378b) (@vinhnx)
+- Update model references from gpt-4 to gpt-5 across documentation and codebase (2520e9fa) (@vinhnx)
+- refactor: improve reasoning content comparison and suppress duplication in response rendering (bcce1fb1) (@vinhnx)
+- chore: update default model and workspace trust settings in configuration fix: suppress duplicated content rendering in response handling refactor: clean up spacing logic in reasoning buffer add: implement streaming payload decoding helpers for OpenRouter (049663b0) (@vinhnx)
+- Fix release note (d75a3f0d) (@vinhnx)
+- chore: update changelog header and release script title format (744db41d) (@vinhnx)
+- Add star history section to README (3de92245) (@1097578+vinhnx)
+- chore: update homebrew formula to v0.74.10 (c08a491c)
+
+
 ## v0.74.10 - 2026-02-02
 
 - Update commit (cbde5c0b)
