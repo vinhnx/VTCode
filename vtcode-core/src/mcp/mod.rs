@@ -395,7 +395,7 @@ mod tests {
             protocol_version: mcp_types::LATEST_PROTOCOL_VERSION.to_string(),
         };
 
-        let converted: rmcp::model::InitializeRequestParam =
+        let converted: rmcp::model::InitializeRequestParams =
             convert_to_rmcp(params.clone()).unwrap();
         let round_trip: InitializeRequestParams = convert_to_mcp(converted).unwrap();
         assert_eq!(round_trip.client_info.name, "vtcode");
