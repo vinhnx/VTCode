@@ -1,8 +1,12 @@
 //! Streaming payload decoding helpers for OpenRouter.
 
+#[cfg(test)]
 use crate::llm::provider::{FinishReason, Usage};
+#[cfg(test)]
 use crate::llm::providers::ReasoningBuffer;
+#[cfg(test)]
 use crate::llm::providers::shared::{StreamDelta, StreamTelemetry, ToolCallBuilder};
+#[cfg(test)]
 use serde_json::Value;
 
 #[cfg(test)]

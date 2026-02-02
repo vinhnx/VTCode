@@ -354,8 +354,15 @@ fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError {
 }
 
 fn reasoning_matches_content(reasoning: &str, content: &str) -> bool {
-    let cleaned_reasoning = clean_reasoning_text(reasoning);
-    let cleaned_content = clean_reasoning_text(content);
+    fn normalize_for_compare(text: &str) -> String {
+        clean_reasoning_text(text)
+            .chars()
+            .filter(|ch| !ch.is_whitespace())
+            .collect::<String>()
+    }
+
+    let cleaned_reasoning = normalize_for_compare(reasoning);
+    let cleaned_content = normalize_for_compare(content);
     !cleaned_reasoning.is_empty()
         && !cleaned_content.is_empty()
         && cleaned_reasoning == cleaned_content
@@ -600,6 +607,8 @@ pub(crate) async fn stream_and_render_response_with_options(
     let mut content_suppressed = false;
     const MAX_PENDING_CONTENT_BYTES: usize = 4_096;
 
+    let mut suppress_reasoning_due_to_duplication = false;
+
     // Track streaming progress
     let mut token_count = 0;
     let mut reasoning_token_count = 0;
@@ -662,53 +671,8 @@ pub(crate) async fn stream_and_render_response_with_options(
                 finish_spinner(&mut spinner_active, false);
                 if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
                     pending_content.push_str(&delta);
-                    let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
-                    let reasoning_prefix = !reasoning_accumulated.is_empty()
-                        && prefix_len == reasoning_accumulated.len();
-                    let pending_len = pending_content.len();
-                    let reasoning_len = reasoning_accumulated.len();
-                    if reasoning_state.is_deferred()
-                        && (!reasoning_prefix || pending_len > reasoning_len)
-                    {
-                        reasoning_state.set_defer_rendering(false);
-                        let rendered = reasoning_state
-                            .flush_pending(renderer)
-                            .map_err(|err| map_render_error(provider_name, err))?;
-                        if rendered {
-                            reasoning_emitted = true;
-                        }
-                    }
-                    let should_flush =
-                        !reasoning_prefix || pending_content.len() >= MAX_PENDING_CONTENT_BYTES;
-
-                    if should_flush {
-                        let pending = std::mem::take(&mut pending_content);
-                        let render_text = if reasoning_prefix {
-                            pending.get(prefix_len..).unwrap_or("").to_string()
-                        } else {
-                            pending
-                        };
-
-                        if reasoning_prefix
-                            && render_text.is_empty()
-                            && (reasoning_state.rendered_reasoning() || reasoning_emitted)
-                        {
-                            content_suppressed = true;
-                            continue;
-                        }
-
-                        aggregated.push_str(&render_text);
-                        if supports_streaming_markdown {
-                            rendered_line_count = renderer
-                                .stream_markdown_response(&aggregated, rendered_line_count)
-                                .map_err(|err| map_render_error(provider_name, err))?;
-                            emitted_tokens = true;
-                        }
-                        if reasoning_prefix
-                            && (reasoning_state.rendered_reasoning() || reasoning_emitted)
-                        {
-                            content_suppressed = true;
-                        }
+                    if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
+                        content_suppressed = true;
                     }
                     continue;
                 }
@@ -779,6 +743,18 @@ pub(crate) async fn stream_and_render_response_with_options(
     };
 
     if !pending_content.is_empty() && !content_suppressed {
+        let reasoning_for_compare = response
+            .reasoning
+            .as_deref()
+            .unwrap_or(reasoning_accumulated.as_str());
+        if !reasoning_for_compare.trim().is_empty()
+            && reasoning_matches_content(reasoning_for_compare, &pending_content)
+        {
+            suppress_reasoning_due_to_duplication = true;
+        }
+    }
+
+    if !pending_content.is_empty() && !content_suppressed {
         let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
         let reasoning_prefix =
             !reasoning_accumulated.is_empty() && prefix_len == reasoning_accumulated.len();
@@ -813,8 +789,6 @@ pub(crate) async fn stream_and_render_response_with_options(
         }
     }
 
-    let mut suppress_content_due_to_duplication = false;
-
     // CRITICAL: Ensure content is ALWAYS displayed.
     // If response has content but we didn't stream any tokens, render it now.
     // This handles providers that send content only in the Completed event.
@@ -828,60 +802,55 @@ pub(crate) async fn stream_and_render_response_with_options(
                 .unwrap_or(false);
 
             if reasoning_dupes_content {
-                suppress_content_due_to_duplication = true;
+                suppress_reasoning_due_to_duplication = true;
+            }
+
+            // Check if we already rendered this content via Token events
+            let already_rendered = emitted_tokens
+                && !aggregated.trim().is_empty()
+                && aggregated.trim() == content_trimmed;
+
+            if !already_rendered {
+                // Content wasn't rendered yet - render it now
+                // First, flush any pending reasoning
                 reasoning_state
                     .finalize(
                         renderer,
                         response.reasoning.as_deref(),
                         reasoning_emitted,
-                        false,
+                        suppress_reasoning_due_to_duplication,
                     )
                     .map_err(|err| map_render_error(provider_name, err))?;
-            } else {
-                // Check if we already rendered this content via Token events
-                let already_rendered = emitted_tokens
-                    && !aggregated.trim().is_empty()
-                    && aggregated.trim() == content_trimmed;
 
-                if !already_rendered {
-                    // Content wasn't rendered yet - render it now
-                    // First, flush any pending reasoning
-                    reasoning_state
-                        .finalize(
-                            renderer,
-                            response.reasoning.as_deref(),
-                            reasoning_emitted,
-                            false,
-                        )
-                        .map_err(|err| map_render_error(provider_name, err))?;
-
-                    // Now render the actual content
-                    if supports_streaming_markdown {
-                        // If we had some streamed content, replace it; otherwise add new
-                        let prev_count = if aggregated.trim().is_empty() {
-                            0
-                        } else {
-                            rendered_line_count
-                        };
-                        renderer
-                            .stream_markdown_response(content, prev_count)
-                            .map_err(|err| map_render_error(provider_name, err))?;
+                // Now render the actual content
+                if supports_streaming_markdown {
+                    // If we had some streamed content, replace it; otherwise add new
+                    let prev_count = if aggregated.trim().is_empty() {
+                        0
                     } else {
-                        renderer
-                            .line(MessageStyle::Response, content)
-                            .map_err(|err| map_render_error(provider_name, err))?;
-                    }
-                    emitted_tokens = true;
-                    aggregated = content.to_string();
+                        rendered_line_count
+                    };
+                    renderer
+                        .stream_markdown_response(content, prev_count)
+                        .map_err(|err| map_render_error(provider_name, err))?;
+                } else {
+                    renderer
+                        .line(MessageStyle::Response, content)
+                        .map_err(|err| map_render_error(provider_name, err))?;
                 }
+                emitted_tokens = true;
+                aggregated = content.to_string();
             }
         }
     }
 
     // Finalize reasoning display (only if we haven't already in the content block above)
     let rendered_reasoning_before = reasoning_state.rendered_reasoning();
-    if response.content.is_none() || aggregated.trim().is_empty() || suppress_content_due_to_duplication {
-        let suppress_reasoning = false;
+    if response.content.is_none()
+        || aggregated.trim().is_empty()
+        || suppress_reasoning_due_to_duplication
+    {
+        let suppress_reasoning = suppress_reasoning_due_to_duplication;
         reasoning_state
             .finalize(
                 renderer,
