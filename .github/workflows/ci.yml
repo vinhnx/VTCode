@@ -10,8 +10,6 @@ on:
   push:
     branches:
       - main
-    tags-ignore:
-      - 'v*'  # Ignore all version tags to prevent CI from running on releases
     paths:
       - "**.rs"
       - "**.toml"

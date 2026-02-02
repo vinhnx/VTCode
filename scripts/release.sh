@@ -159,51 +159,13 @@ update_changelog_from_commits() {
     date_str=$(date +%Y-%m-%d)
 
     local changelog_content
-    if command -v npx >/dev/null 2>&1; then
-        print_info "Using npx changelogithub for formatting..."
-        # Capture changelogithub output
-        local full_output
-        if [[ -n "$previous_tag" ]]; then
-            full_output=$(npx changelogithub --dry --from "$previous_tag" --to HEAD 2>/dev/null || echo "")
-        else
-            full_output=$(npx changelogithub --dry 2>/dev/null || echo "")
-        fi
+    # Use git log directly instead of changelogithub to avoid parsing issues
+    print_info "Generating changelog from commits using git log..."
+    changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"- %s (%h)")
 
-        # Strip ANSI color codes from output
-        full_output=$(echo "$full_output" | sed 's/\x1b\[[0-9;]*m//g')
-
-        # Extract changelog content between separators
-        # Format: version line, then content, then "Dry run. Release skipped."
-        # We want lines between first and second separator
-        local first_sep_line
-        first_sep_line=$(echo "$full_output" | grep -n '^--------------$' | head -1 | cut -d: -f1)
-        local second_sep_line
-        second_sep_line=$(echo "$full_output" | grep -n '^--------------$' | head -2 | tail -1 | cut -d: -f1)
-        
-        if [[ -n "$first_sep_line" && -n "$second_sep_line" ]]; then
-            # Ensure variables are treated as integers for arithmetic
-            local start_line=$((first_sep_line + 1))
-            local end_line=$((second_sep_line - 1))
-            # Extract lines between separators (exclusive)
-            changelog_content=$(echo "$full_output" | sed -n "${start_line},${end_line}p")
-            # Remove the version/tag line if present (e.g., "v0.74.6 -> v0.74.7 (4 commits)")
-            changelog_content=$(echo "$changelog_content" | sed '/^v[0-9]\+\.[0-9]\+\.[0-9]\+.*$/d')
-            # Replace ...HEAD with ...v$version in the comparison link
-            changelog_content=$(echo "$changelog_content" | sed "s/\.\.\.HEAD/...v$version/g")
-        else
-            print_warning "Could not find separators in changelogithub output"
-            changelog_content=""
-        fi
-
-        # If extraction failed or empty, fallback to simple log
-        if [[ -z "$(echo "$changelog_content" | tr -d '[:space:]')" ]]; then
-            print_warning "changelogithub extraction failed, using git log fallback"
-            changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"* %s (%h)")
-        fi
-    else
-        # Fallback if npx is missing
-        print_warning "changelogithub not found, using git log fallback"
-        changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"* %s (%h)")
+    # If no commits found, use a default message
+    if [[ -z "$changelog_content" ]]; then
+        changelog_content="- No significant changes"
     fi
 
     # Add @username tags to changelog entries
@@ -221,13 +183,14 @@ update_changelog_from_commits() {
 
     # Format for CHANGELOG.md (with version header)
     local changelog_entry
-    changelog_entry="## v$version - $date_str\n\n$changelog_content\n"
+    changelog_entry="## v$version - $date_str\n\n$changelog_content\n\n"
 
     if [[ -f CHANGELOG.md ]]; then
-        # Check if file has enough lines
-        local line_count
-        line_count=$(wc -l < CHANGELOG.md)
-        if [[ $line_count -gt 4 ]]; then
+        # Check if this version already exists in the changelog
+        if grep -q "^## v$version " CHANGELOG.md; then
+            print_warning "Version v$version already exists in CHANGELOG.md, skipping update"
+        else
+            # Insert new entry after the header
             local header
             header=$(head -n 4 CHANGELOG.md)
             local remainder
@@ -237,8 +200,6 @@ update_changelog_from_commits() {
                 printf '%b\n' "$changelog_entry"
                 printf '%s\n' "$remainder"
             } > CHANGELOG.md
-        else
-            printf '%b\n' "$changelog_entry" >> CHANGELOG.md
         fi
     else
         {
