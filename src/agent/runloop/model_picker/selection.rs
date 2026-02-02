@@ -218,10 +218,11 @@ pub(super) fn provider_requires_api_key(provider: Provider, model_id: &str, env_
 
     // For OpenRouter, check OAuth token first
     if provider == Provider::OpenRouter
-        && let Ok(Some(_token)) = vtcode_config::auth::load_oauth_token() {
-            // OAuth token is available, no need for manual API key entry
-            return false;
-        }
+        && let Ok(Some(_token)) = vtcode_config::auth::load_oauth_token()
+    {
+        // OAuth token is available, no need for manual API key entry
+        return false;
+    }
 
     match std::env::var(env_key) {
         Ok(value) => value.trim().is_empty(),

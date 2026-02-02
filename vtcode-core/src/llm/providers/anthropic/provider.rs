@@ -25,9 +25,7 @@ use super::response_parser;
 use super::stream_decoder;
 use super::validation;
 
-use crate::llm::providers::common::{
-    extract_prompt_cache_settings, resolve_model,
-};
+use crate::llm::providers::common::{extract_prompt_cache_settings, resolve_model};
 use crate::llm::providers::error_handling::{
     format_network_error, format_parse_error, handle_anthropic_http_error,
 };
@@ -149,7 +147,8 @@ impl AnthropicProvider {
             }
         }
 
-        let is_minimax = crate::config::constants::models::minimax::SUPPORTED_MODELS.contains(&model);
+        let is_minimax =
+            crate::config::constants::models::minimax::SUPPORTED_MODELS.contains(&model);
 
         let resolved = base_url
             .and_then(|value| sanitize(&value))

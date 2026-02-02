@@ -257,6 +257,7 @@ apply_patch = "allow"
 agent_info = "allow"
 unified_file = "allow"
 unified_exec = "allow"
+load_skill = "allow"
 
 [sandbox]
 enabled = true
