@@ -692,14 +692,11 @@ impl TerminalCleanupGuard {
 
 impl Drop for TerminalCleanupGuard {
     fn drop(&mut self) {
-        // Minimal terminal cleanup as last resort
+        // Minimal terminal cleanup as last resort using centralized logic
         // The TUI's run_inline_tui should handle full cleanup, this is just a safety net
-        // We deliberately avoid sending escape sequences to prevent conflicts with TUI cleanup
+        let _ = vtcode_core::ui::tui::panic_hook::restore_tui();
 
-        // Attempt to disable raw mode if still enabled
-        let _ = disable_raw_mode();
-
-        // Ensure stdout is flushed
+        // Ensure stdout is also flushed
         let mut stdout = std::io::stdout();
         let _ = stdout.flush();
 

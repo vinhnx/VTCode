@@ -353,7 +353,7 @@ pub async fn run_tui(
 
     // Ensure any capability or resize responses emitted during terminal setup are not treated as
     // the user's first keystrokes.
-    drain_startup_events();
+    drain_terminal_events();
 
     // Spawn the async event loop after the terminal is fully configured so the first keypress is
     // captured immediately (avoids cooked-mode buffering before raw mode is enabled).
@@ -382,6 +382,13 @@ pub async fn run_tui(
     // Gracefully shutdown the event loop
     cancellation_token.cancel();
     let _ = tokio::time::timeout(Duration::from_millis(100), event_loop_handle).await;
+
+    // Drain any pending events before finalizing terminal and disabling modes
+    drain_terminal_events();
+
+    // Clear current line to remove any echoed characters (like ^C)
+    use std::io::Write;
+    let _ = io::stderr().write_all(b"\r\x1b[K");
 
     let finalize_result = finalize_terminal(&mut terminal);
     let leave_alternate_result = if surface.use_alternate() {
@@ -705,9 +712,9 @@ fn finalize_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Result<()> {
     Ok(())
 }
 
-/// Drain any pending crossterm events that may have been emitted during terminal setup (e.g.,
-/// resize or focus responses) so that the first user keystroke is processed immediately.
-fn drain_startup_events() {
+/// Drain any pending crossterm events (e.g., resize, focus responses, or buffered keystrokes)
+/// so they don't leak to the shell or interfere with next startup.
+fn drain_terminal_events() {
     use ratatui::crossterm::event;
 
     while event::poll(Duration::from_millis(0)).unwrap_or(false) {

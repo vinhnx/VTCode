@@ -99,14 +99,24 @@ pub fn mark_tui_deinitialized() {
 ///
 /// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/panic-hooks/
 pub fn restore_tui() -> io::Result<()> {
-    // Attempt to disable raw mode if it was enabled
-    // We ignore errors here since raw mode might not have been enabled
-    let _ = disable_raw_mode();
+    // 1. Drain any pending crossterm events to prevent them from leaking to the shell
+    // This is a best-effort drain with a zero timeout
+    while let Ok(true) = ratatui::crossterm::event::poll(std::time::Duration::from_millis(0)) {
+        let _ = ratatui::crossterm::event::read();
+    }
 
     // Get stderr for executing terminal commands
     let mut stderr = io::stderr();
 
-    // Disable various terminal modes that might have been enabled by the TUI
+    // 2. Clear current line to remove any echoed ^C characters from rapid Ctrl+C presses
+    // \r returns to start of line, \x1b[K clears to end of line
+    let _ = stderr.write_all(b"\r\x1b[K");
+
+    // 3. Leave alternate screen FIRST (if we were in one)
+    // This is the most critical operation for visual restoration
+    let _ = execute!(stderr, LeaveAlternateScreen);
+
+    // 4. Disable various terminal modes that might have been enabled by the TUI
     let _ = execute!(stderr, DisableBracketedPaste);
     let _ = execute!(stderr, DisableFocusChange);
     let _ = execute!(stderr, DisableMouseCapture);
@@ -115,9 +125,8 @@ pub fn restore_tui() -> io::Result<()> {
     // Ensure cursor is visible
     let _ = execute!(stderr, Show);
 
-    // Try to leave alternate screen to return to normal terminal
-    // This might fail if we're not in alternate screen, which is fine
-    let _ = execute!(stderr, LeaveAlternateScreen);
+    // 5. Disable raw mode LAST to ensure all cleanup commands are sent properly
+    let _ = disable_raw_mode();
 
     // Additional flush to ensure all escape sequences are processed
     let _ = stderr.flush();

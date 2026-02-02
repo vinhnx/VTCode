@@ -19,25 +19,9 @@ use super::utils::render_hook_messages;
 /// This ensures that raw mode is disabled and the terminal is left in a usable state
 /// even if the TUI didn't exit cleanly (e.g., due to Ctrl+C)
 fn restore_terminal_on_exit() -> io::Result<()> {
-    // The TUI should have already cleaned up via run_inline_tui, but this is a fallback
-    // We avoid aggressive cleanup here to prevent conflicts with TUI cleanup
-    let mut stdout = io::stdout();
-
-    // Clear current line to remove any echoed ^C characters from rapid Ctrl+C presses
-    // \r returns to start of line, \x1b[K clears to end of line
-    let _ = stdout.write_all(b"\r\x1b[K");
-
-    // Only attempt minimal, safe cleanup
-    // Disable raw mode if still enabled
-    let _ = disable_raw_mode();
-
-    // Ensure stdout is flushed
-    stdout.flush()?;
-
-    // Brief delay to allow any pending terminal operations to complete
-    std::thread::sleep(std::time::Duration::from_millis(50));
-
-    Ok(())
+    // Use the centralized TUI restoration logic from vtcode-core
+    // This handles draining events, clearing the line, and proper restoration order
+    vtcode_core::ui::tui::panic_hook::restore_tui()
 }
 
 pub(super) async fn finalize_session(

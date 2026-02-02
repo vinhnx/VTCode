@@ -151,6 +151,16 @@ impl ModernTui {
         self.stop().await?;
         if terminal::is_raw_mode_enabled().unwrap_or(false) {
             self.terminal.flush().context("failed to flush terminal")?;
+
+            // Drain any pending crossterm events BEFORE leaving alternate screen and disabling raw mode
+            while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                let _ = event::read();
+            }
+
+            // Clear current line to remove artifacts like ^C
+            use std::io::Write;
+            let _ = std::io::stderr().write_all(b"\r\x1b[K");
+
             if !self.keyboard_flags.is_empty() {
                 let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
             }

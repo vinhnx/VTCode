@@ -255,6 +255,16 @@ impl FullTui {
         self.stop()?;
         if terminal::is_raw_mode_enabled()? {
             self.flush()?;
+
+            // Drain any pending crossterm events BEFORE leaving alternate screen and disabling raw mode
+            while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                let _ = event::read();
+            }
+
+            // Clear current line to remove artifacts like ^C
+            use std::io::Write;
+            let _ = std::io::stderr().write_all(b"\r\x1b[K");
+
             if self.paste {
                 execute!(std::io::stderr(), DisableBracketedPaste)?;
             }

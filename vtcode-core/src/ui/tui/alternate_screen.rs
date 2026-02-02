@@ -135,35 +135,45 @@ impl AlternateScreenSession {
             return Ok(());
         }
 
+        // Drain any pending crossterm events BEFORE leaving alternate screen and disabling raw mode
+        // to prevent them from leaking to the shell.
+        while let Ok(true) = ratatui::crossterm::event::poll(std::time::Duration::from_millis(0)) {
+            let _ = ratatui::crossterm::event::read();
+        }
+
         let mut stdout = io::stdout();
+
+        // Clear current line to remove artifacts like ^C from rapid presses
+        let _ = stdout.write_all(b"\r\x1b[K");
+
         let mut errors = Vec::new();
 
-        // Restore in reverse order of setup
+        // Restore in proper order to prevent leakage
 
-        // Disable focus change
+        // 1. Leave alternate screen FIRST
+        if let Err(e) = execute!(stdout, LeaveAlternateScreen) {
+            errors.push(format!("failed to leave alternate screen: {}", e));
+        }
+
+        // 2. Disable focus change
         if self.original_state.focus_change_enabled
             && let Err(e) = execute!(stdout, DisableFocusChange)
         {
             errors.push(format!("failed to disable focus change: {}", e));
         }
 
-        // Disable bracketed paste
+        // 3. Disable bracketed paste
         if self.original_state.bracketed_paste_enabled
             && let Err(e) = execute!(stdout, DisableBracketedPaste)
         {
             errors.push(format!("failed to disable bracketed paste: {}", e));
         }
 
-        // Disable raw mode
+        // 4. Disable raw mode LAST
         if self.original_state.raw_mode_enabled
             && let Err(e) = disable_raw_mode()
         {
             errors.push(format!("failed to disable raw mode: {}", e));
-        }
-
-        // Leave alternate screen
-        if let Err(e) = execute!(stdout, LeaveAlternateScreen) {
-            errors.push(format!("failed to leave alternate screen: {}", e));
         }
 
         // Flush to ensure all changes are applied
