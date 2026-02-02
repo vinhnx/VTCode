@@ -28,7 +28,6 @@ pub struct OpenRouterProvider {
 }
 
 impl OpenRouterProvider {
-
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
             api_key,
@@ -227,7 +226,10 @@ impl OpenRouterProvider {
             return Err(LLMError::RateLimit { metadata: None });
         }
 
-        if request_with_tools && status == StatusCode::NOT_FOUND && error_text.contains("No endpoints found that support tool use") {
+        if request_with_tools
+            && status == StatusCode::NOT_FOUND
+            && error_text.contains("No endpoints found that support tool use")
+        {
             let fallback_request = Self::tool_free_request(request_ref);
             let (mut fallback_payload, fallback_url) =
                 self.build_provider_payload(&fallback_request)?;

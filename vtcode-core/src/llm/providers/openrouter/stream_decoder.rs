@@ -1,7 +1,3 @@
-use serde_json::{Map, Value};
-
-use crate::llm::provider::{FinishReason, Usage};
-
 use super::super::{
     ReasoningBuffer, extract_reasoning_trace,
     shared::{
@@ -12,5 +8,3 @@ use super::super::{
 
 #[cfg(debug_assertions)]
 use tracing::debug;
-
-
