@@ -2,6 +2,22 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v - 2026-02-02
+
+
+### Refactors
+
+
+
+
+- **commons**:
+
+- **llm**:
+
+
+
+##### [View changes on GitHub](https://github.com/vinhnx/vtcode/compare/v0.74.7...v)
+
 ## v0.74.7 - 2026-02-01
 
 * Update commit (3edfdb95)
