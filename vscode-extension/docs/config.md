@@ -8,29 +8,29 @@ VT Code uses a configuration file named `vtcode.toml` that can be placed at the 
 
 To help you get started with VT Code configuration, we provide these example files:
 
--   `vtcode.toml` - A basic configuration file to get you started
--   `vtcode.toml.example` - A comprehensive example with all configuration options and explanations
+- `vtcode.toml` - A basic configuration file to get you started
+- `vtcode.toml.example` - A comprehensive example with all configuration options and explanations
 
 You can copy either of these files to your project root to begin customizing your VT Code experience.
 
 ## Quick navigation
 
--   [Feature flags](#feature-flags)
--   [Model selection](#model-selection)
--   [Execution environment](#execution-environment)
--   [MCP integration](#mcp-integration)
--   [Security and approvals](#security-and-approvals)
--   [Participant system](#participant-system)
--   [Profiles and overrides](#profiles-and-overrides)
--   [VS Code Integration](#vs-code-integration)
--   [Configuration Validation and Troubleshooting](#configuration-validation-and-troubleshooting)
--   [Reference table](#config-reference)
+- [Feature flags](#feature-flags)
+- [Model selection](#model-selection)
+- [Execution environment](#execution-environment)
+- [MCP integration](#mcp-integration)
+- [Security and approvals](#security-and-approvals)
+- [Participant system](#participant-system)
+- [Profiles and overrides](#profiles-and-overrides)
+- [VS Code Integration](#vs-code-integration)
+- [Configuration Validation and Troubleshooting](#configuration-validation-and-troubleshooting)
+- [Reference table](#config-reference)
 
 VT Code supports several mechanisms for setting config values:
 
--   The `$VTCODE_HOME/config.toml` configuration file where the `VTCODE_HOME` environment value defaults to `~/.vtcode`.
--   The workspace-level `vtcode.toml` file that can be placed at the root of your project (similar to `AGENTS.md` in the OpenAI Codex).
--   Environment variables that can override certain configuration options.
+- The `$VTCODE_HOME/config.toml` configuration file where the `VTCODE_HOME` environment value defaults to `~/.vtcode`.
+- The workspace-level `vtcode.toml` file that can be placed at the root of your project (similar to `AGENTS.md` in the OpenAI Codex).
+- Environment variables that can override certain configuration options.
 
 Both the workspace `vtcode.toml` and the main `config.toml` file support the following options:
 
@@ -342,7 +342,7 @@ Here is an example of a `vtcode.toml` that defines multiple profiles:
 # Default settings
 [agent]
 provider = "openai"
-default_model = "gpt-4"
+default_model = "gpt-5"
 
 [security]
 human_in_the_loop = true
@@ -352,7 +352,7 @@ default_tool_policy = "ask"
 [profiles.development]
 [profiles.development.agent]
 provider = "openai"
-default_model = "gpt-4"
+default_model = "gpt-5"
 
 [profiles.development.security]
 human_in_the_loop = true
@@ -400,7 +400,7 @@ You can also define settings that only apply to specific workspace types:
 # Settings for any workspace containing a package.json
 [workspace.nodejs]
 [workspace.nodejs.agent]
-default_model = "gpt-4"
+default_model = "gpt-5"
 
 [workspace.nodejs.participants]
 default_participants = ["@workspace", "@code", "@terminal"]
@@ -420,10 +420,10 @@ default_participants = ["@workspace", "@code", "@terminal", "@git"]
 
 VT Code VS Code extension provides several commands to help manage configuration:
 
--   `VT Code: Open Configuration` - Opens the workspace `vtcode.toml` file if it exists
--   `VT Code: Toggle Human-in-the-Loop` - Quickly toggle the human_in_the_loop setting
--   `VT Code: Configure MCP Providers` - Helper command to manage MCP provider settings
--   `VT Code: Open Tools Policy Configuration` - Opens the tools policy section of the config
+- `VT Code: Open Configuration` - Opens the workspace `vtcode.toml` file if it exists
+- `VT Code: Toggle Human-in-the-Loop` - Quickly toggle the human_in_the_loop setting
+- `VT Code: Configure MCP Providers` - Helper command to manage MCP provider settings
+- `VT Code: Open Tools Policy Configuration` - Opens the tools policy section of the config
 
 ### Command System Integration
 
@@ -498,9 +498,9 @@ VT Code validates the configuration file on load. You can check for configuratio
 
 Common configuration errors include:
 
--   Invalid TOML syntax
--   Missing required API keys for selected providers
--   Invalid provider names
+- Invalid TOML syntax
+- Missing required API keys for selected providers
+- Invalid provider names
 
 ### Troubleshooting
 
@@ -512,7 +512,7 @@ If VT Code is not behaving as expected with your configuration:
     # Make sure all tables close properly
     [agent]
     provider = "openai"
-    default_model = "gpt-4"
+    default_model = "gpt-5"
     # No missing closing brackets
     ```
 

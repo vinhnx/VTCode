@@ -65,22 +65,22 @@ assert!(completed.is_success());
 
 Streaming is modeled as semantic events, not raw text deltas:
 
-| Event Type | Description |
-|------------|-------------|
-| `response.created` | Initial response creation |
-| `response.in_progress` | Response processing started |
-| `response.output_item.added` | New output item added |
-| `response.output_text.delta` | Text content delta |
-| `response.output_text.done` | Text content complete |
-| `response.output_item.done` | Output item complete |
-| `response.completed` | Response finished successfully |
-| `response.failed` | Response failed with error |
+| Event Type                   | Description                    |
+| ---------------------------- | ------------------------------ |
+| `response.created`           | Initial response creation      |
+| `response.in_progress`       | Response processing started    |
+| `response.output_item.added` | New output item added          |
+| `response.output_text.delta` | Text content delta             |
+| `response.output_text.done`  | Text content complete          |
+| `response.output_item.done`  | Output item complete           |
+| `response.completed`         | Response finished successfully |
+| `response.failed`            | Response failed with error     |
 
 ```rust
 use vtcode_core::{ResponseStreamEvent, Response, VecStreamEmitter, StreamEventEmitter};
 
 let mut emitter = VecStreamEmitter::new();
-let response = Response::new("resp_123", "gpt-4");
+let response = Response::new("resp_123", "gpt-5");
 
 emitter.response_created(response.clone());
 emitter.output_text_delta("resp_123", "item_0", 0, 0, "Hello, ");
@@ -94,13 +94,13 @@ assert_eq!(events.len(), 3);
 
 VT Code supports these Open Responses item types:
 
-| Type | Description |
-|------|-------------|
-| `message` | User/assistant/system messages |
-| `reasoning` | Model's internal thought process |
-| `function_call` | Tool/function invocation request |
-| `function_call_output` | Tool execution result |
-| `custom` | VT Code-specific extensions |
+| Type                   | Description                      |
+| ---------------------- | -------------------------------- |
+| `message`              | User/assistant/system messages   |
+| `reasoning`            | Model's internal thought process |
+| `function_call`        | Tool/function invocation request |
+| `function_call_output` | Tool execution result            |
+| `custom`               | VT Code-specific extensions      |
 
 ```rust
 use vtcode_core::{OutputItem, MessageRole, ContentPart, ItemStatus};
@@ -138,6 +138,7 @@ assert!(response.completed_at.is_some());
 ```
 
 Key fields:
+
 - `id`: Unique response identifier
 - `object`: Always `"response"`
 - `created_at`: Unix timestamp (seconds)
@@ -156,7 +157,7 @@ The `ResponseBuilder` bridges VT Code's internal `ThreadEvent` system to Open Re
 use vtcode_core::{ResponseBuilder, VecStreamEmitter, StreamEventEmitter};
 use vtcode_exec_events::{ThreadEvent, ThreadStartedEvent, TurnCompletedEvent, Usage};
 
-let mut builder = ResponseBuilder::new("gpt-4");
+let mut builder = ResponseBuilder::new("gpt-5");
 let mut emitter = VecStreamEmitter::new();
 
 // Process VT Code events
@@ -173,26 +174,26 @@ let response = builder.response();
 
 ### Event Mapping
 
-| VT Code Event | Open Responses Event |
-|---------------|---------------------|
-| `ThreadStarted` | `response.created` + `response.in_progress` |
-| `TurnCompleted` | `response.completed` |
-| `TurnFailed` | `response.failed` |
-| `ItemStarted` | `response.output_item.added` |
-| `ItemUpdated` | `response.output_text.delta` / `response.reasoning.delta` |
-| `ItemCompleted` | `response.output_item.done` |
+| VT Code Event   | Open Responses Event                                      |
+| --------------- | --------------------------------------------------------- |
+| `ThreadStarted` | `response.created` + `response.in_progress`               |
+| `TurnCompleted` | `response.completed`                                      |
+| `TurnFailed`    | `response.failed`                                         |
+| `ItemStarted`   | `response.output_item.added`                              |
+| `ItemUpdated`   | `response.output_text.delta` / `response.reasoning.delta` |
+| `ItemCompleted` | `response.output_item.done`                               |
 
 ### Item Type Mapping
 
-| VT Code Item | Open Responses Type |
-|--------------|---------------------|
-| `AgentMessageItem` | `message` (role: assistant) |
-| `ReasoningItem` | `reasoning` |
+| VT Code Item           | Open Responses Type                          |
+| ---------------------- | -------------------------------------------- |
+| `AgentMessageItem`     | `message` (role: assistant)                  |
+| `ReasoningItem`        | `reasoning`                                  |
 | `CommandExecutionItem` | `function_call` (name: `vtcode.run_command`) |
-| `McpToolCallItem` | `function_call` |
-| `FileChangeItem` | `custom` (type: `vtcode:file_change`) |
-| `WebSearchItem` | `custom` (type: `vtcode:web_search`) |
-| `ErrorItem` | `custom` (type: `vtcode:error`) |
+| `McpToolCallItem`      | `function_call`                              |
+| `FileChangeItem`       | `custom` (type: `vtcode:file_change`)        |
+| `WebSearchItem`        | `custom` (type: `vtcode:web_search`)         |
+| `ErrorItem`            | `custom` (type: `vtcode:error`)              |
 
 ## Error Handling
 
@@ -210,6 +211,7 @@ assert_eq!(error.param, Some("model".to_string()));
 ```
 
 Error types:
+
 - `server_error`: Internal server error
 - `invalid_request`: Invalid request parameters
 - `not_found`: Resource not found
@@ -311,13 +313,13 @@ include_reasoning = true
 
 ### Configuration Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `enabled` | `false` | Enable the Open Responses layer (opt-in) |
-| `emit_events` | `true` | Emit semantic streaming events |
-| `include_extensions` | `true` | Include VT Code-specific extension items |
-| `map_tool_calls` | `true` | Map tool calls to `function_call` items |
-| `include_reasoning` | `true` | Include reasoning/thinking items |
+| Option               | Default | Description                              |
+| -------------------- | ------- | ---------------------------------------- |
+| `enabled`            | `false` | Enable the Open Responses layer (opt-in) |
+| `emit_events`        | `true`  | Emit semantic streaming events           |
+| `include_extensions` | `true`  | Include VT Code-specific extension items |
+| `map_tool_calls`     | `true`  | Map tool calls to `function_call` items  |
+| `include_reasoning`  | `true`  | Include reasoning/thinking items         |
 
 ### Programmatic Integration
 
@@ -340,7 +342,7 @@ let callback: OpenResponsesCallback = Arc::new(Mutex::new(Box::new(|event| {
 integration.set_callback(callback);
 
 // Start a response session
-integration.start_response("gpt-4");
+integration.start_response("gpt-5");
 
 // Process VT Code events (automatically converts to Open Responses)
 // integration.process_event(&thread_event);

@@ -331,7 +331,7 @@ mod tests {
     #[test]
     fn test_parse_chat_request_openai_format() {
         let json = serde_json::json!({
-            "model": "gpt-4",
+            "model": "gpt-5",
             "messages": [
                 {"role": "user", "content": "Hello"},
                 {"role": "assistant", "content": "Hi there"}
@@ -341,7 +341,7 @@ mod tests {
         });
 
         let request = parse_chat_request_openai_format(&json, "default-model").unwrap();
-        assert_eq!(request.model, "gpt-4");
+        assert_eq!(request.model, "gpt-5");
         assert_eq!(request.messages.len(), 2);
         assert_eq!(request.messages[0].role, MessageRole::User);
         assert_eq!(request.messages[0].content.as_text(), "Hello");
@@ -362,11 +362,11 @@ mod tests {
                 "prompt_tokens": 10,
                 "completion_tokens": 5
             },
-            "model": "gpt-4"
+            "model": "gpt-5"
         });
 
         let result =
-            parse_response_openai_format(response, "test", "gpt-4".to_string(), false, None)
+            parse_response_openai_format(response, "test", "gpt-5".to_string(), false, None)
                 .unwrap();
         assert_eq!(result.content_text(), "Hello world");
         let usage = result.usage.expect("usage should be present");
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_validate_model_string() {
-        assert!(validate_model_string("gpt-4").is_ok());
+        assert!(validate_model_string("gpt-5").is_ok());
         assert!(validate_model_string("claude-3-sonnet").is_ok());
         assert!(validate_model_string("").is_err());
         assert!(validate_model_string(&"a".repeat(101)).is_err());

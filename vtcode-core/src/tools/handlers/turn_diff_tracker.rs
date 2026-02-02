@@ -737,12 +737,12 @@ mod tests {
 
     #[test]
     fn test_change_attribution_serialization() {
-        let attr = ChangeAttribution::ai("gpt-4", "openai").with_session("session-abc", 3);
+        let attr = ChangeAttribution::ai("gpt-5", "openai").with_session("session-abc", 3);
 
         let json = serde_json::to_string(&attr).unwrap();
         let restored: ChangeAttribution = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(restored.model_id, Some("gpt-4".to_string()));
+        assert_eq!(restored.model_id, Some("gpt-5".to_string()));
         assert_eq!(restored.provider, Some("openai".to_string()));
         assert_eq!(restored.session_id, Some("session-abc".to_string()));
         assert_eq!(restored.turn_number, Some(3));

@@ -30,13 +30,17 @@ describe("ConversationManager", () => {
             expect(conversation.metadata.title).toBe("New Conversation");
             expect(conversation.metadata.createdAt).toBeDefined();
             expect(conversation.metadata.updatedAt).toBeDefined();
-            expect(conversation.metadata.totalTokens).toEqual({ input: 0, output: 0 });
+            expect(conversation.metadata.totalTokens).toEqual({
+                input: 0,
+                output: 0,
+            });
             expect(conversation.metadata.participants).toEqual([]);
         });
 
         it("should create a new conversation with custom title", () => {
             // Act
-            const conversation = manager.createConversation("Test Conversation");
+            const conversation =
+                manager.createConversation("Test Conversation");
 
             // Assert
             expect(conversation.metadata.title).toBe("Test Conversation");
@@ -61,7 +65,7 @@ describe("ConversationManager", () => {
             const conversation = manager.getCurrentConversation();
             expect(conversation?.messages).toContain(message);
             expect(conversation?.metadata.updatedAt).toBeGreaterThanOrEqual(
-                conversation?.metadata.createdAt || 0
+                conversation?.metadata.createdAt || 0,
             );
         });
 
@@ -129,7 +133,7 @@ describe("ConversationManager", () => {
             // Assert
             const conversation = manager.getCurrentConversation();
             expect(conversation?.metadata.title).toBe(
-                "What is the meaning of life and everything else?"
+                "What is the meaning of life and everything else?",
             );
         });
 
@@ -157,11 +161,29 @@ describe("ConversationManager", () => {
         it("should return recent messages", () => {
             // Arrange
             const messages: ChatMessage[] = [
-                { id: "msg_1", role: "user", content: "Message 1", timestamp: 1, state: "complete" },
-                { id: "msg_2", role: "assistant", content: "Message 2", timestamp: 2, state: "complete" },
-                { id: "msg_3", role: "user", content: "Message 3", timestamp: 3, state: "complete" },
+                {
+                    id: "msg_1",
+                    role: "user",
+                    content: "Message 1",
+                    timestamp: 1,
+                    state: "complete",
+                },
+                {
+                    id: "msg_2",
+                    role: "assistant",
+                    content: "Message 2",
+                    timestamp: 2,
+                    state: "complete",
+                },
+                {
+                    id: "msg_3",
+                    role: "user",
+                    content: "Message 3",
+                    timestamp: 3,
+                    state: "complete",
+                },
             ];
-            messages.forEach(msg => manager.addMessage(msg));
+            messages.forEach((msg) => manager.addMessage(msg));
 
             // Act
             const recent = manager.getRecentMessages(2);
@@ -195,12 +217,36 @@ describe("ConversationManager", () => {
         it("should return messages filtered by role", () => {
             // Arrange
             const messages: ChatMessage[] = [
-                { id: "msg_1", role: "user", content: "User 1", timestamp: 1, state: "complete" },
-                { id: "msg_2", role: "assistant", content: "Assistant 1", timestamp: 2, state: "complete" },
-                { id: "msg_3", role: "user", content: "User 2", timestamp: 3, state: "complete" },
-                { id: "msg_4", role: "tool", content: "Tool 1", timestamp: 4, state: "complete" },
+                {
+                    id: "msg_1",
+                    role: "user",
+                    content: "User 1",
+                    timestamp: 1,
+                    state: "complete",
+                },
+                {
+                    id: "msg_2",
+                    role: "assistant",
+                    content: "Assistant 1",
+                    timestamp: 2,
+                    state: "complete",
+                },
+                {
+                    id: "msg_3",
+                    role: "user",
+                    content: "User 2",
+                    timestamp: 3,
+                    state: "complete",
+                },
+                {
+                    id: "msg_4",
+                    role: "tool",
+                    content: "Tool 1",
+                    timestamp: 4,
+                    state: "complete",
+                },
             ];
-            messages.forEach(msg => manager.addMessage(msg));
+            messages.forEach((msg) => manager.addMessage(msg));
 
             // Act
             const userMessages = manager.getMessagesByRole("user");
@@ -254,12 +300,16 @@ describe("ConversationManager", () => {
         it("should include metadata if provided", () => {
             // Arrange
             const metadata = {
-                model: "gpt-4",
+                model: "gpt-5",
                 tokens: { input: 10, output: 20 },
             };
 
             // Act
-            const message = manager.createMessage("assistant", "Hello", metadata);
+            const message = manager.createMessage(
+                "assistant",
+                "Hello",
+                metadata,
+            );
 
             // Assert
             expect(message.metadata).toEqual(metadata);
@@ -289,15 +339,17 @@ describe("ConversationManager", () => {
             manager.updatePendingMessage(pendingMessage.id, {
                 content: "Final response",
                 state: "complete",
-                metadata: { model: "gpt-4" },
+                metadata: { model: "gpt-5" },
             });
 
             // Assert
             const conversation = manager.getCurrentConversation();
-            const updatedMessage = conversation?.messages.find(msg => msg.id === pendingMessage.id);
+            const updatedMessage = conversation?.messages.find(
+                (msg) => msg.id === pendingMessage.id,
+            );
             expect(updatedMessage?.content).toBe("Final response");
             expect(updatedMessage?.state).toBe("complete");
-            expect(updatedMessage?.metadata?.model).toBe("gpt-4");
+            expect(updatedMessage?.metadata?.model).toBe("gpt-5");
         });
     });
 
@@ -305,13 +357,43 @@ describe("ConversationManager", () => {
         it("should return conversation statistics", () => {
             // Arrange
             const messages: ChatMessage[] = [
-                { id: "msg_1", role: "user", content: "User 1", timestamp: 1, state: "complete" },
-                { id: "msg_2", role: "assistant", content: "Assistant 1", timestamp: 2, state: "complete" },
-                { id: "msg_3", role: "user", content: "User 2", timestamp: 3, state: "complete" },
-                { id: "msg_4", role: "tool", content: "Tool 1", timestamp: 4, state: "complete" },
-                { id: "msg_5", role: "error", content: "Error 1", timestamp: 5, state: "complete" },
+                {
+                    id: "msg_1",
+                    role: "user",
+                    content: "User 1",
+                    timestamp: 1,
+                    state: "complete",
+                },
+                {
+                    id: "msg_2",
+                    role: "assistant",
+                    content: "Assistant 1",
+                    timestamp: 2,
+                    state: "complete",
+                },
+                {
+                    id: "msg_3",
+                    role: "user",
+                    content: "User 2",
+                    timestamp: 3,
+                    state: "complete",
+                },
+                {
+                    id: "msg_4",
+                    role: "tool",
+                    content: "Tool 1",
+                    timestamp: 4,
+                    state: "complete",
+                },
+                {
+                    id: "msg_5",
+                    role: "error",
+                    content: "Error 1",
+                    timestamp: 5,
+                    state: "complete",
+                },
             ];
-            messages.forEach(msg => manager.addMessage(msg));
+            messages.forEach((msg) => manager.addMessage(msg));
 
             // Act
             const stats = manager.getStatistics();

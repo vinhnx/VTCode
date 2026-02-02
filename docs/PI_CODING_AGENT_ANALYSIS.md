@@ -9,25 +9,27 @@
 Mario Zechner's pi-coding-agent demonstrates that **minimalism works** in coding agent design. Benchmark results (Terminal-Bench 2.0) prove that a ~1,000 token system prompt and 4 core tools perform competitively against feature-rich harnesses.
 
 ### Key Finding
+
 > "Modern frontier models are RL-trained enough to understand coding agents without massive prompts."
 
 ## Current State: VT Code
 
 ### System Prompt Analysis
 
-| Prompt Type | Lines | Est. Tokens | Use Case |
-|------------|-------|-------------|----------|
-| DEFAULT_SYSTEM_PROMPT | ~116 | ~6,500 | Production |
-| DEFAULT_LIGHTWEIGHT_PROMPT | ~6 | ~300 | Resource-constrained |
-| DEFAULT_SPECIALIZED_PROMPT | ~10 | ~500 | Complex refactoring |
-| + AGENTS.md hierarchy | Variable | Variable | Project-specific |
-| + Configuration awareness | ~60 | ~800 | Runtime policies |
+| Prompt Type                | Lines    | Est. Tokens | Use Case             |
+| -------------------------- | -------- | ----------- | -------------------- |
+| DEFAULT_SYSTEM_PROMPT      | ~116     | ~6,500      | Production           |
+| DEFAULT_LIGHTWEIGHT_PROMPT | ~6       | ~300        | Resource-constrained |
+| DEFAULT_SPECIALIZED_PROMPT | ~10      | ~500        | Complex refactoring  |
+| + AGENTS.md hierarchy      | Variable | Variable    | Project-specific     |
+| + Configuration awareness  | ~60      | ~800        | Runtime policies     |
 
 **Total base overhead**: ~7,800 tokens (vs pi's <1,000)
 
 ### Tool Inventory
 
 **Built-in tools** (22):
+
 1. grep_file
 2. list_files
 3. run_pty_cmd
@@ -58,17 +60,17 @@ Mario Zechner's pi-coding-agent demonstrates that **minimalism works** in coding
 
 ## Pi's Philosophy vs VT Code
 
-| Aspect | Pi | VT Code | Gap |
-|--------|----|---------|----|
-| **System Prompt** | <1,000 tokens | ~7,800 tokens | 7.8x overhead |
-| **Core Tools** | 4 (read, write, edit, bash) | 22 built-in + MCP | 5.5x+ tools |
-| **MCP Support** | No (use CLI tools) | Yes | Context overhead |
-| **Security** | YOLO by default | Workspace boundaries, allowlists | Friction vs theater? |
-| **Todos** | External files (TODO.md) | Built-in `update_plan` tool | Internal state tracking |
-| **Plan Mode** | Files (PLAN.md) | Read-only mode via flags | Similar approach |
-| **Background Bash** | Use tmux | PTY session management | Better integration vs observability |
-| **Sub-agents** | Spawn via bash | Task tool with agents | Observability concern |
-| **Observability** | Full session visibility | Event system + logging | Good baseline |
+| Aspect              | Pi                          | VT Code                          | Gap                                 |
+| ------------------- | --------------------------- | -------------------------------- | ----------------------------------- |
+| **System Prompt**   | <1,000 tokens               | ~7,800 tokens                    | 7.8x overhead                       |
+| **Core Tools**      | 4 (read, write, edit, bash) | 22 built-in + MCP                | 5.5x+ tools                         |
+| **MCP Support**     | No (use CLI tools)          | Yes                              | Context overhead                    |
+| **Security**        | YOLO by default             | Workspace boundaries, allowlists | Friction vs theater?                |
+| **Todos**           | External files (TODO.md)    | Built-in `update_plan` tool      | Internal state tracking             |
+| **Plan Mode**       | Files (PLAN.md)             | Read-only mode via flags         | Similar approach                    |
+| **Background Bash** | Use tmux                    | PTY session management           | Better integration vs observability |
+| **Sub-agents**      | Spawn via bash              | Task tool with agents            | Observability concern               |
+| **Observability**   | Full session visibility     | Event system + logging           | Good baseline                       |
 
 ## Recommendations by Priority
 
@@ -77,12 +79,14 @@ Mario Zechner's pi-coding-agent demonstrates that **minimalism works** in coding
 #### 1. System Prompt Diet (Target: <3,000 tokens)
 
 **Current bloat areas**:
+
 - Verbose anti-giving-up policy (lines 54-66): ~500 tokens
 - Redundant tool picker guidance (line 95): ~300 tokens
 - Loop prevention duplication (lines 102-103): ~150 tokens
 - Final response rules (lines 108-113): ~200 tokens
 
 **Recommendation**: Create `MINIMAL_SYSTEM_PROMPT` variant:
+
 ```rust
 const MINIMAL_SYSTEM_PROMPT: &str = r#"# VT Code: Agentic Coding Assistant
 
@@ -109,6 +113,7 @@ See tool descriptions. Prefer MCP first when enabled.
 ```
 
 **Action**: Add configuration flag in `vtcode.toml`:
+
 ```toml
 [agent]
 system_prompt_mode = "minimal"  # vs "default" vs "specialized"
@@ -121,6 +126,7 @@ system_prompt_mode = "minimal"  # vs "default" vs "specialized"
 **Pi's approach**: Tools know their own usage; models trained on standard patterns
 
 **Solution**: Lazy load tool documentation
+
 ```rust
 pub struct ToolDocumentation {
     /// Minimal signature (always loaded)
@@ -149,6 +155,7 @@ impl ToolInventory {
 #### 3. Configuration: YOLO Mode
 
 Add explicit security mode choice:
+
 ```toml
 [security]
 mode = "yolo"  # vs "workspace" vs "paranoid"
@@ -159,6 +166,7 @@ mode = "yolo"  # vs "workspace" vs "paranoid"
 ```
 
 Document clearly in `docs/SECURITY_MODEL.md`:
+
 > **YOLO Mode Warning**: If an agent can write and execute code with network access,
 > data exfiltration is always possible. Security measures are largely theater.
 > Use containers for untrusted workloads.
@@ -168,6 +176,7 @@ Document clearly in `docs/SECURITY_MODEL.md`:
 #### 4. Split Tool Results (LLM vs UI)
 
 Implement pi's structured split pattern:
+
 ```rust
 // vtcode-core/src/tools/traits.rs
 pub struct ToolResult {
@@ -207,6 +216,7 @@ impl Tool for GrepFileTool {
 ```
 
 **Benefits**:
+
 - Reduced context pollution
 - Richer TUI display
 - Better token efficiency
@@ -216,6 +226,7 @@ impl Tool for GrepFileTool {
 #### 5. MCP Cost Analysis Tool
 
 Create diagnostic tool to measure MCP overhead:
+
 ```bash
 cargo run -- mcp analyze
 
@@ -236,6 +247,7 @@ cargo run -- mcp analyze
 #### 6. Session Export Format
 
 Implement clean JSON export for post-processing:
+
 ```rust
 // vtcode-core/src/utils/session_archive.rs
 pub struct SessionExport {
@@ -257,6 +269,7 @@ pub fn export_session(session: &Session) -> Result<SessionExport> {
 #### 7. Differential Rendering for TUI
 
 Apply pi's approach to Ratatui-based TUI:
+
 ```rust
 // src/ui/tui/differential_renderer.rs
 pub struct DifferentialRenderer {
@@ -295,6 +308,7 @@ impl DifferentialRenderer {
 #### 8. Context Handoff Testing
 
 Ensure mid-session model switching works:
+
 ```rust
 #[cfg(test)]
 mod cross_provider_tests {
@@ -309,7 +323,7 @@ mod cross_provider_tests {
         assert!(response.content.contains("450"));
 
         // Switch to GPT mid-session
-        session.set_model("openai", "gpt-4");
+        session.set_model("openai", "gpt-5");
         session.add_message(user("Is that correct?"));
         let response = session.run().await?;
 
@@ -322,11 +336,13 @@ mod cross_provider_tests {
 #### 9. Tool Consolidation Analysis
 
 Audit if some tools can merge:
+
 - `create_file` + `write_file` → `write_file` (creates if missing)
 - PTY tools (6) → Can some be consolidated?
 - `debug_agent` + `analyze_agent` → Different enough?
 
 **Guiding principle** (from pi):
+
 > "Bash is all you need" - Can the agent achieve this via `run_pty_cmd`?
 
 ### LONG-TERM (Strategic)
@@ -334,6 +350,7 @@ Audit if some tools can merge:
 #### 10. Terminal-Bench Integration
 
 Run VT Code through Terminal-Bench 2.0:
+
 ```bash
 git clone https://github.com/laude-institute/terminal-bench
 cd terminal-bench
@@ -350,6 +367,7 @@ cd terminal-bench
 #### 11. CLI Tool Ecosystem (MCP Alternative)
 
 Create `~/.vtcode/tools/` with README-based tools:
+
 ```
 ~/.vtcode/tools/
   ├── websearch/
@@ -362,12 +380,14 @@ Create `~/.vtcode/tools/` with README-based tools:
 ```
 
 Agent workflow:
+
 1. User asks for web search
 2. Agent: `run_pty_cmd("cat ~/.vtcode/tools/websearch/README.md")`
 3. Agent learns usage (progressive disclosure)
 4. Agent: `run_pty_cmd("~/.vtcode/tools/websearch/search.sh 'rust async')`
 
 **Benefits**:
+
 - Pay token cost only when needed
 - Composable via pipes
 - No MCP server overhead
@@ -376,6 +396,7 @@ Agent workflow:
 ## Configuration Proposal
 
 New `vtcode.toml` section:
+
 ```toml
 [agent.philosophy]
 # Minimalism mode (inspired by pi-coding-agent)
@@ -412,14 +433,14 @@ cli_tools_path = "~/.vtcode/tools"
 
 ## Measured Impact Projections
 
-| Change | Token Savings | Complexity | Priority |
-|--------|---------------|------------|----------|
-| Minimal system prompt | -4,800 tokens | Low | P0 |
-| Progressive tool docs | -2,500 tokens | Medium | P0 |
-| Split tool results | -20-30% on tool calls | Medium | P1 |
-| Remove verbose anti-giving-up | -500 tokens | Low | P0 |
-| MCP overhead warnings | N/A (awareness) | Low | P1 |
-| Differential rendering | N/A (UX) | High | P2 |
+| Change                        | Token Savings         | Complexity | Priority |
+| ----------------------------- | --------------------- | ---------- | -------- |
+| Minimal system prompt         | -4,800 tokens         | Low        | P0       |
+| Progressive tool docs         | -2,500 tokens         | Medium     | P0       |
+| Split tool results            | -20-30% on tool calls | Medium     | P1       |
+| Remove verbose anti-giving-up | -500 tokens           | Low        | P0       |
+| MCP overhead warnings         | N/A (awareness)       | Low        | P1       |
+| Differential rendering        | N/A (UX)              | High       | P2       |
 
 **Total potential savings**: ~7,800 tokens/request in minimal mode (50% reduction)
 
@@ -430,6 +451,7 @@ VT Code must decide: **Feature-rich or minimalist?**
 **Pi's answer**: Minimalism via configurability. Let users choose their complexity.
 
 **Recommendation for VT Code**:
+
 ```toml
 # Preset configurations
 [presets.minimal]  # Pi-inspired

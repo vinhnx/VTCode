@@ -849,7 +849,7 @@ fn test_result() {
 fn test_model_hint() {
     // Test string variant
     let hint_string = ModelHint {
-        name: Some("gpt-4".to_string()),
+        name: Some("gpt-5".to_string()),
     };
 
     validate_against_definition(serde_json::to_value(hint_string).unwrap(), "ModelHint");

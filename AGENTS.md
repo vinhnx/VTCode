@@ -96,39 +96,46 @@ See: `docs/HOMEBREW_RELEASE_GUIDE.md` for troubleshooting.
 These shortcuts match intuitive agent expectations (defined in `.cargo/config.toml`):
 
 **Testing:**
+
 - `cargo t` → `cargo nextest run`
 - `cargo tq` → `cargo nextest run --profile quick`
 - `cargo tc` → `cargo nextest run --profile ci`
 - `cargo tp <pkg>` → `cargo nextest run --package <pkg>`
 
 **Build & Check:**
+
 - `cargo c` → `cargo check`
 - `cargo ca` → `cargo check --all-targets`
 - `cargo cb` → `cargo check --all-targets --all-features`
 - `cargo cw` → `cargo check --workspace`
 
 **Clippy:**
+
 - `cargo cl` → `cargo clippy --all-targets`
 - `cargo cla` → `cargo clippy --all-targets --all-features`
 - `cargo clf` → `cargo clippy --fix --allow-dirty --allow-staged`
 
 **Build:**
+
 - `cargo b` → `cargo build`
 - `cargo brf` → `cargo build --profile release-fast` (thin LTO, ~3x faster)
 - `cargo br` → `cargo build --release` (full LTO, production)
 
 **Run:**
+
 - `cargo r` → `cargo run`
 - `cargo rrf` → `cargo run --profile release-fast` (fast optimized run)
 - `cargo rr` → `cargo run --release` (full optimized run)
 
 **Utility:**
+
 - `cargo f` → `cargo fmt`
 - `cargo fc` → `cargo fmt --check`
 - `cargo d` → `cargo doc --open`
 - `cargo ud` → `cargo update --dry-run`
 
 **Test patterns:**
+
 - `cargo nextest function_name` ✓ (this works)
 - `cargo nextest --lib` ✓ (unit tests only)
 - `cargo nextest --integration` ✓ (integration tests only)
@@ -380,7 +387,7 @@ pub async fn read_config(path: &str) -> Result<Config> {
 
 ```rust
 // NEVER hardcode values (especially model IDs)
-// ❌ let model = "gpt-4";
+// ❌ let model = "gpt-5";
 // ❌ let timeout = 30;
 
 // ✅ Use constants from vtcode-core/src/config/constants.rs
@@ -749,5 +756,6 @@ This CLAUDE.md focuses on the **VT Code codebase itself**.
 ## IMPORTANT:
 
 - When working on VT Code features, ALWAYS follow the guidelines in this document to ensure code quality, maintainability, and security.
-
 - Make sure the name is "VT Code" not "VTCODE" or "vtcode" in user-facing text.
+- Follow DRY principles—reuse existing functions and patterns wherever possible.
+- DO NOT use gpt-4 as the default model anywhere. Use `Ollama` and `gpt-oss:20b-cloud` as the default models.

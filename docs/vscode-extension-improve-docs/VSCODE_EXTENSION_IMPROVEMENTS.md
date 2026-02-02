@@ -38,10 +38,10 @@ interface ChatParticipant {
 
 **Benefits:**
 
--   Cleaner separation of concerns
--   Extensible architecture for future participants
--   Better UX with @ mentions for different contexts
--   Follows VS Code's native chat participant pattern
+- Cleaner separation of concerns
+- Extensible architecture for future participants
+- Better UX with @ mentions for different contexts
+- Follows VS Code's native chat participant pattern
 
 ---
 
@@ -73,10 +73,10 @@ export class AskCommand implements ICommand {
 
 **Benefits:**
 
--   Single Responsibility Principle
--   Easier testing
--   Cleaner extension.ts
--   Better maintainability
+- Single Responsibility Principle
+- Easier testing
+- Cleaner extension.ts
+- Better maintainability
 
 ---
 
@@ -156,17 +156,17 @@ interface ToolApprovalUI {
     displayToolResult(
         toolId: string,
         result: ToolExecutionResult,
-        format: "text" | "json" | "markdown"
+        format: "text" | "json" | "markdown",
     ): void;
 }
 ```
 
 **Benefits:**
 
--   Clear visual feedback for tool execution
--   Reduces approval friction
--   Better error handling and debugging
--   Professional UX
+- Clear visual feedback for tool execution
+- Reduces approval friction
+- Better error handling and debugging
+- Professional UX
 
 ---
 
@@ -191,7 +191,7 @@ class StreamingManager {
     private startTime = Date.now();
 
     async stream(
-        options: StreamingOptions
+        options: StreamingOptions,
     ): Promise<AsyncGenerator<StreamChunk>> {
         // Track tokens in real-time
         // Implement timeout handling
@@ -252,11 +252,11 @@ interface ChatMessageDisplay {
 
 **CSS/Styling Improvements:**
 
--   Dark/light theme compatibility
--   Consistent spacing and typography
--   Better code block styling with copy buttons
--   Proper markdown rendering
--   Responsive design for different panel widths
+- Dark/light theme compatibility
+- Consistent spacing and typography
+- Better code block styling with copy buttons
+- Proper markdown rendering
+- Responsive design for different panel widths
 
 ---
 
@@ -352,10 +352,10 @@ class RobustStreamingError extends Error {
 
 **Benefits:**
 
--   Better resilience
--   Fewer user interruptions
--   Clear recovery paths
--   Better diagnostics
+- Better resilience
+- Fewer user interruptions
+- Clear recovery paths
+- Better diagnostics
 
 ---
 
@@ -413,7 +413,7 @@ class ResponseCache {
     async getOrCompute(
         query: string,
         context: string,
-        compute: () => Promise<string>
+        compute: () => Promise<string>,
     ): Promise<string> {
         const key = this.hashQuery(query, context);
         const cached = this.cache.get(key);
@@ -609,7 +609,7 @@ class DiagnosticsManager {
 {
   "vtcode.enabled": true,
   "vtcode.autoStartChat": false,
-  "vtcode.defaultModel": "gpt-4",
+  "vtcode.defaultModel": "gpt-5",
   "vtcode.contextSize": "medium",
   "vtcode.autoApproveTools": ["list_files", "read_file"],
   "vtcode.telemetry": true
@@ -691,21 +691,18 @@ docs/extension/
 ### Week 1-2 (Low-Hanging Fruit)
 
 1. **Improve Chat UI Styling**
-
     - Better markdown rendering
     - Syntax highlighting in code blocks
     - Copy buttons on code blocks
     - Proper spacing and typography
 
 2. **Enhanced Status Display**
-
     - Show model name during streaming
     - Token count display
     - Elapsed time
     - Tool execution status
 
 3. **Better Error Messages**
-
     - Friendly error explanations
     - Suggested fixes
     - Link to documentation
@@ -718,13 +715,11 @@ docs/extension/
 ### Week 3-4 (High Impact, Medium Effort)
 
 5. **Tool Approval UI Redesign**
-
     - Modal approval in chat
     - Progress indication
     - Result formatting
 
 6. **Conversation History**
-
     - Session persistence
     - Thread switching
     - Recent conversations in quick pick
@@ -740,29 +735,26 @@ docs/extension/
 
 These improvements should maintain backward compatibility:
 
--   Keep existing command names
--   Maintain configuration format compatibility
--   Preserve existing UI structure where possible
--   Gradual deprecation of old features
+- Keep existing command names
+- Maintain configuration format compatibility
+- Preserve existing UI structure where possible
+- Gradual deprecation of old features
 
 ---
 
 ## Metrics to Track Post-Implementation
 
 1. **User Engagement**
-
     - Chat message frequency
     - Average conversation length
     - Tool approval accept rate
 
 2. **Performance**
-
     - Chat response time
     - Token efficiency
     - Memory usage
 
 3. **Reliability**
-
     - Error rate
     - Recovery success rate
     - MCP server uptime
@@ -776,10 +768,10 @@ These improvements should maintain backward compatibility:
 
 ## References
 
--   VS Copilot Chat Repository: https://github.com/microsoft/vscode-copilot-chat
--   VS Code API Documentation: https://code.visualstudio.com/api
--   VS Code Chat API: https://code.visualstudio.com/api/references/vscode-api#chat
--   MCP Specification: https://modelcontextprotocol.io/
+- VS Copilot Chat Repository: https://github.com/microsoft/vscode-copilot-chat
+- VS Code API Documentation: https://code.visualstudio.com/api
+- VS Code Chat API: https://code.visualstudio.com/api/references/vscode-api#chat
+- MCP Specification: https://modelcontextprotocol.io/
 
 ---
 
@@ -787,10 +779,10 @@ These improvements should maintain backward compatibility:
 
 By adopting patterns from the VS Copilot Chat open-source project, VT Code's VSCode extension can:
 
--   Provide a more polished, professional UX
--   Improve reliability and error handling
--   Better leverage VS Code's native APIs
--   Enable future extensibility
--   Reduce technical debt
+- Provide a more polished, professional UX
+- Improve reliability and error handling
+- Better leverage VS Code's native APIs
+- Enable future extensibility
+- Reduce technical debt
 
 The recommended approach is to implement quick wins first (styling, status display, command refactoring), then tackle high-impact features (chat participants, conversation persistence, MCP enhancements) over the next 2 months.

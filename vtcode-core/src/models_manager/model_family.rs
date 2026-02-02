@@ -221,9 +221,9 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
             shell_type: ShellToolType::ShellCommand,
         );
     }
-    if slug.starts_with("gpt-4") || slug.starts_with("chatgpt-4") {
+    if slug.starts_with("gpt-5") || slug.starts_with("chatgpt-4") {
         return model_family!(
-            slug, "gpt-4", Provider::OpenAI,
+            slug, "gpt-5", Provider::OpenAI,
             context_window: Some(DEFAULT_CONTEXT_WINDOW),
             supports_parallel_tool_calls: true,
         );

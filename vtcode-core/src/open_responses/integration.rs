@@ -285,14 +285,14 @@ mod tests {
             ..Default::default()
         };
         let mut integration = OpenResponsesIntegration::new(config);
-        integration.start_response("gpt-4");
+        integration.start_response("gpt-5");
         assert!(integration.current_response().is_some());
     }
 
     #[test]
     fn test_disabled_skips_events() {
         let mut integration = OpenResponsesIntegration::disabled();
-        integration.start_response("gpt-4");
+        integration.start_response("gpt-5");
         // Should not create a builder when disabled
         assert!(integration.current_response().is_none());
     }
