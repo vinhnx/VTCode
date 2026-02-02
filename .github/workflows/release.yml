@@ -147,25 +147,76 @@ jobs:
           # Get the previous tag
           PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "${{ github.event.inputs.tag }}" | head -n 1)
 
-          if [ -z "$PREV_TAG" ]; then
-            # If no previous tag, get all commits
-            CHANGELOG=$(git log --no-merges --pretty=format:"- %s (%h)" --since "$(git log -1 --format="%ad" --date=iso v0.1.0 2>/dev/null || echo "2020-01-01")")
-          else
-            # Generate changelog between previous tag and current
-            CHANGELOG=$(git log "$PREV_TAG"..HEAD --no-merges --pretty=format:"- %s (%h)")
-          fi
+          # Install conventional-changelog-cli if not available
+          npm install -g conventional-changelog-cli@^2.2.2 || echo "npm not available, using fallback"
 
-          # Format the changelog with proper header
-          {
-            echo "# Changelog for ${{ github.event.inputs.tag }}"
-            echo ""
-            echo "## Changes"
-            echo ""
-            echo "$CHANGELOG"
-            echo ""
-            echo "---"
-            echo "_Generated on $(date -u +%Y-%m-%d)_"
-          } > release_notes.md
+          if [ -n "$PREV_TAG" ]; then
+            # Generate conventional changelog between previous tag and current
+            if command -v conventional-changelog &> /dev/null; then
+              # Use conventional-changelog to generate properly formatted changelog
+              conventional-changelog --preset angular --output-unreleased --from "$PREV_TAG" --release-count 1 > release_notes.md
+            else
+              # Fallback: parse git log manually to categorize commits
+              echo "## Changes" > release_notes.md
+              echo "" >> release_notes.md
+
+              # Parse commits and categorize them
+              while IFS= read -r commit_line; do
+                if [ -n "$commit_line" ]; then
+                  COMMIT_HASH=$(echo "$commit_line" | cut -d'|' -f1)
+                  COMMIT_SUBJECT=$(echo "$commit_line" | cut -d'|' -f2)
+
+                  # Extract type from commit message (e.g., feat:, fix:, etc.)
+                  COMMIT_TYPE=""
+                  if [[ $COMMIT_SUBJECT =~ ^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: ]]; then
+                    COMMIT_TYPE="${BASH_REMATCH[1]}"
+                  elif [[ $COMMIT_SUBJECT =~ ^([a-z]+)(\(.+\))?: ]]; then
+                    COMMIT_TYPE="${BASH_REMATCH[1]}"
+                  else
+                    COMMIT_TYPE="other"
+                  fi
+
+                  # Map commit type to human-readable category
+                  case $COMMIT_TYPE in
+                    feat) CATEGORY="Features" ;;
+                    feature) CATEGORY="Features" ;;
+                    fix) CATEGORY="Bug Fixes" ;;
+                    bug) CATEGORY="Bug Fixes" ;;
+                    docs) CATEGORY="Documentation" ;;
+                    doc) CATEGORY="Documentation" ;;
+                    style) CATEGORY="Styles" ;;
+                    refactor) CATEGORY="Refactors" ;;
+                    perf) CATEGORY="Performance Improvements" ;;
+                    test) CATEGORY="Tests" ;;
+                    build) CATEGORY="Build System" ;;
+                    ci) CATEGORY="Continuous Integration" ;;
+                    chore) CATEGORY="Chore" ;;
+                    revert) CATEGORY="Reverts" ;;
+                    *) CATEGORY="Other Changes" ;;
+                  esac
+
+                  # Add to release notes under appropriate category
+                  if ! grep -q "^### $CATEGORY$" release_notes.md; then
+                    echo "### $CATEGORY" >> release_notes.md
+                    echo "" >> release_notes.md
+                  fi
+                  echo "- $COMMIT_SUBJECT ($COMMIT_HASH)" >> release_notes.md
+                fi
+              done < <(git log "$PREV_TAG"..HEAD --no-merges --pretty=format:"%h|%s")
+
+              echo "" >> release_notes.md
+              echo "##### [View changes on GitHub](https://github.com/vinhnx/vtcode/compare/$PREV_TAG...${{ github.event.inputs.tag }})" >> release_notes.md
+            fi
+          else
+            # If no previous tag, generate from all commits
+            if command -v conventional-changelog &> /dev/null; then
+              conventional-changelog --preset angular --output-unreleased --release-count 1 > release_notes.md
+            else
+              echo "## Changes" > release_notes.md
+              echo "" >> release_notes.md
+              echo "Initial release." >> release_notes.md
+            fi
+          fi
 
           # Output changelog for debugging
           echo "CHANGELOG_CONTENT<<EOF" >> $GITHUB_ENV
