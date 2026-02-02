@@ -242,7 +242,7 @@ default_participants = ["@workspace", "@code", "@git"]
 [profiles.research]
 [profiles.research.agent]
 provider = "anthropic"
-default_model = "claude-3-5-sonnet-latest"
+default_model = "claude-haiku-4-5"
 
 [profiles.research.tools.policies]
 web_search = "allow"
@@ -278,7 +278,7 @@ default_participants = ["@workspace", "@code", "@terminal"]
 # Settings for any workspace containing a Cargo.toml
 [workspace.rust]
 [workspace.rust.agent]
-default_model = "claude-3-5-sonnet-latest"
+default_model = "claude-haiku-4-5"
 
 [workspace.rust.participants]
 default_participants = ["@workspace", "@code", "@terminal", "@git"]

@@ -15,7 +15,7 @@ def create_word_document():
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
     response = client.messages.create(
-        model="claude-4-5-sonnet",
+        model="claude-haiku-4-5",
         max_tokens=4096,
         tools=[
             {
@@ -65,13 +65,13 @@ if __name__ == "__main__":
 
 ## Features Supported
 
--   **Text Formatting**: Bold, italic, underline
--   **Headings**: Multiple heading levels
--   **Lists**: Bullet points and numbered lists
--   **Tables**: Create and format tables
--   **Page Breaks**: Insert page breaks between sections
--   **Images**: Embed images in documents
--   **Styles**: Apply predefined or custom styles
+- **Text Formatting**: Bold, italic, underline
+- **Headings**: Multiple heading levels
+- **Lists**: Bullet points and numbered lists
+- **Tables**: Create and format tables
+- **Page Breaks**: Insert page breaks between sections
+- **Images**: Embed images in documents
+- **Styles**: Apply predefined or custom styles
 
 ## Usage Patterns
 
@@ -116,5 +116,5 @@ vtcode /skills use doc-generator "Create a project proposal document"
 
 ## See Also
 
--   PDF_GENERATION_EXAMPLE.md - Generate PDFs
--   SPREADSHEET_EXAMPLE.md - Create Excel spreadsheets
+- PDF_GENERATION_EXAMPLE.md - Generate PDFs
+- SPREADSHEET_EXAMPLE.md - Create Excel spreadsheets

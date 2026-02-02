@@ -6,10 +6,10 @@ Complete guide for setting up the VT Code Zed extension in your environment.
 
 **Complete Zed Extension** for VT Code AI coding assistant
 
--   Language support for `vtcode.toml` configuration files
--   Integration with VT Code CLI
--   WebAssembly binary (compiled and ready)
--   Full documentation and roadmap
+- Language support for `vtcode.toml` configuration files
+- Integration with VT Code CLI
+- WebAssembly binary (compiled and ready)
+- Full documentation and roadmap
 
 ## Directory Structure
 
@@ -34,14 +34,14 @@ zed-extension/
 
 ### Required
 
--   **Zed Editor**: Latest stable version
--   **Rust**: Installed via [rustup](https://www.rust-lang.org/tools/install)
--   **VT Code CLI**: Install with `cargo install vtcode`
+- **Zed Editor**: Latest stable version
+- **Rust**: Installed via [rustup](https://www.rust-lang.org/tools/install)
+- **VT Code CLI**: Install with `cargo install vtcode`
 
 ### Optional
 
--   **Git**: For cloning and version control
--   **Node.js**: If building from npm sources
+- **Git**: For cloning and version control
+- **Node.js**: If building from npm sources
 
 ## Installation Steps
 
@@ -105,7 +105,7 @@ Create `vtcode.toml` in your workspace root:
 # Minimal Configuration
 [ai]
 provider = "anthropic"
-model = "claude-4-5-sonnet"
+model = "claude-haiku-4-5"
 
 # Advanced Configuration
 [workspace]
@@ -223,13 +223,13 @@ source ~/.zshrc  # or ~/.bashrc
 
 ## Verification Checklist
 
--   [ ] Rust installed via rustup: `rustup --version`
--   [ ] Zed installed: `zed --version`
--   [ ] VT Code CLI installed: `vtcode --version`
--   [ ] Extension installed in Zed Extensions
--   [ ] `vtcode.toml` exists in workspace root
--   [ ] API key set in environment: `echo $ANTHROPIC_API_KEY`
--   [ ] Commands visible in command palette
+- [ ] Rust installed via rustup: `rustup --version`
+- [ ] Zed installed: `zed --version`
+- [ ] VT Code CLI installed: `vtcode --version`
+- [ ] Extension installed in Zed Extensions
+- [ ] `vtcode.toml` exists in workspace root
+- [ ] API key set in environment: `echo $ANTHROPIC_API_KEY`
+- [ ] Commands visible in command palette
 
 ## Next Steps
 
@@ -242,21 +242,21 @@ source ~/.zshrc  # or ~/.bashrc
 
 ### macOS
 
--   Zed Config: `~/.config/zed`
--   Extension Cache: `~/.cache/zed`
--   Logs: `~/.local/share/zed/logs`
+- Zed Config: `~/.config/zed`
+- Extension Cache: `~/.cache/zed`
+- Logs: `~/.local/share/zed/logs`
 
 ### Linux
 
--   Zed Config: `~/.config/zed`
--   Extension Cache: `~/.cache/zed`
--   Logs: `~/.local/share/zed/logs`
+- Zed Config: `~/.config/zed`
+- Extension Cache: `~/.cache/zed`
+- Logs: `~/.local/share/zed/logs`
 
 ### Windows
 
--   Zed Config: `%APPDATA%\Zed`
--   Extension Cache: `%LOCALAPPDATA%\Zed`
--   Logs: `%APPDATA%\Zed\logs`
+- Zed Config: `%APPDATA%\Zed`
+- Extension Cache: `%LOCALAPPDATA%\Zed`
+- Logs: `%APPDATA%\Zed\logs`
 
 ## Environment Variables
 
@@ -293,24 +293,24 @@ RUST_BACKTRACE=1  # For debugging build issues
 
 ## Security Considerations
 
--   **API Keys**: Never commit to version control
--   **Trust Model**: Respects Zed's workspace trust settings
--   **Sandboxing**: Extension runs in secure WASM environment
--   **File Access**: Limited to workspace directory
+- **API Keys**: Never commit to version control
+- **Trust Model**: Respects Zed's workspace trust settings
+- **Sandboxing**: Extension runs in secure WASM environment
+- **File Access**: Limited to workspace directory
 
 ## Getting Help
 
 ### Documentation
 
--   [VT Code Main Repo](https://github.com/vinhnx/vtcode)
--   [Zed Editor Docs](https://zed.dev/docs)
--   [Extension Source](./src/lib.rs)
+- [VT Code Main Repo](https://github.com/vinhnx/vtcode)
+- [Zed Editor Docs](https://zed.dev/docs)
+- [Extension Source](./src/lib.rs)
 
 ### Support
 
--   **Issues**: [GitHub Issues](https://github.com/vinhnx/vtcode/issues)
--   **Discussions**: [GitHub Discussions](https://github.com/vinhnx/vtcode/discussions)
--   **Feedback**: Star the repo if you find it useful
+- **Issues**: [GitHub Issues](https://github.com/vinhnx/vtcode/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/vinhnx/vtcode/discussions)
+- **Feedback**: Star the repo if you find it useful
 
 ## Uninstallation
 
@@ -331,11 +331,11 @@ rm -rf ~/.cache/zed/extensions/installed/vtcode
 
 ## Version Information
 
--   **Extension Version**: 0.1.0
--   **Zed Compatibility**: 0.150.0+
--   **VT Code CLI**: 0.1.0+
--   **Rust Edition**: 2021
--   **Last Updated**: November 2024
+- **Extension Version**: 0.1.0
+- **Zed Compatibility**: 0.150.0+
+- **VT Code CLI**: 0.1.0+
+- **Rust Edition**: 2021
+- **Last Updated**: November 2024
 
 ## License
 

@@ -24,12 +24,12 @@ use_for_compression = true
 
 By Provider:
 
-| Provider | Main Model | Small Model | Savings |
-|----------|-----------|-------------|---------|
+| Provider      | Main Model        | Small Model      | Savings |
+| ------------- | ----------------- | ---------------- | ------- |
 | **Anthropic** | Claude 3.5 Sonnet | Claude 3.5 Haiku | ~70-75% |
-| **OpenAI** | GPT-4o | GPT-4o Mini | ~75-80% |
-| **Google** | Gemini 2.0 Pro | Gemini 2.0 Flash | ~70% |
-| **Ollama** | mistral-7b | phi:2.7b | ~40% |
+| **OpenAI**    | GPT-4o            | GPT-4o Mini      | ~75-80% |
+| **Google**    | Gemini 2.0 Pro    | Gemini 2.0 Flash | ~70%    |
+| **Ollama**    | mistral-7b        | phi:2.7b         | ~40%    |
 
 ### Custom Configuration
 
@@ -38,7 +38,7 @@ Override with a specific model:
 ```toml
 [agent.small_model]
 enabled = true
-model = "claude-3-5-haiku"        # Explicitly use Haiku
+model = claude-4-5-haiku        # Explicitly use Haiku
 max_tokens = 800
 temperature = 0.2
 use_for_large_reads = true
@@ -54,6 +54,7 @@ use_for_compression = true
 **When to use:** Parsing, summarizing, extracting info from large files
 
 **Example:**
+
 ```rust
 // Reading a 100KB JSON log file to extract error messages
 if config.agent.small_model.use_for_large_reads {
@@ -69,6 +70,7 @@ if config.agent.small_model.use_for_large_reads {
 **When to use:** Fetching and summarizing URLs, extracting specific information
 
 **Example:**
+
 ```rust
 // Fetch a documentation page and extract API endpoints
 if config.agent.small_model.use_for_web_summary {
@@ -84,6 +86,7 @@ if config.agent.small_model.use_for_web_summary {
 **When to use:** Analyzing commit messages, understanding code evolution
 
 **Example:**
+
 ```rust
 // Process last 50 commits to categorize changes
 if config.agent.small_model.use_for_git_history {
@@ -99,6 +102,7 @@ if config.agent.small_model.use_for_git_history {
 **When to use:** Summarizing long conversations when context grows
 
 **Example:**
+
 ```rust
 // Compress 30-turn conversation into summary
 if config.agent.small_model.use_for_compression {
@@ -114,6 +118,7 @@ if config.agent.small_model.use_for_compression {
 **When to use:** Simple categorization, tagging, brief labels
 
 **Example:**
+
 ```rust
 // Label 1000 error messages by category
 if config.agent.small_model.enabled {
@@ -155,7 +160,7 @@ async fn process_items_batch(
     } else {
         &config.agent.default_model
     };
-    
+
     let mut results = Vec::new();
     for item in items {
         let response = llm_client.complete(
@@ -181,10 +186,12 @@ async fn process_items_batch(
 ### Example: Processing 1000-Item Dataset
 
 **With Main Model Only:**
+
 - Cost per item: 10 tokens @ $0.01/1K = $0.0001
 - Total: 1000 × $0.0001 = $0.10
 
 **With Small Model (80% cheaper):**
+
 - Cost per item: 10 tokens @ $0.002/1K = $0.00002
 - Total: 1000 × $0.00002 = $0.02
 - **Savings: $0.08 (80% reduction)**
@@ -192,6 +199,7 @@ async fn process_items_batch(
 ### Example: Context Compression Every 20 Turns
 
 Session with 100 turns:
+
 - 5 compression cycles × 5000 tokens each
 - Main model: 25,000 tokens @ $0.01/1K = $0.25
 - Small model: 25,000 tokens @ $0.002/1K = $0.05
@@ -201,12 +209,12 @@ Session with 100 turns:
 
 ### Use Cases by Temperature
 
-| Temperature | Use Case | Reason |
-|-----------|----------|--------|
-| **0.2** | Context compression | Consistent summaries |
-| **0.3** | Parsing, categorization | Deterministic output |
-| **0.5** | Summary extraction | Balanced accuracy |
-| **0.7** | Content analysis | Some creativity |
+| Temperature | Use Case                | Reason               |
+| ----------- | ----------------------- | -------------------- |
+| **0.2**     | Context compression     | Consistent summaries |
+| **0.3**     | Parsing, categorization | Deterministic output |
+| **0.5**     | Summary extraction      | Balanced accuracy    |
+| **0.7**     | Content analysis        | Some creativity      |
 
 **Default:** 0.3 (good for most parsing tasks)
 
@@ -230,7 +238,7 @@ async fn read_with_fallback(
     config: &AgentConfig,
 ) -> Result<String> {
     let file_size = std::fs::metadata(path)?.len();
-    
+
     // Try small model for large files
     if file_size > 50_000 && config.agent.small_model.enabled {
         match use_small_model_for_read(path, config).await {
@@ -241,7 +249,7 @@ async fn read_with_fallback(
             }
         }
     }
-    
+
     // Fallback to main model
     use_main_model_for_read(path, config).await
 }
@@ -252,20 +260,20 @@ async fn read_with_fallback(
 ### Metrics to Track
 
 1. **Token Usage Distribution**
-   - What % of total tokens go through small model?
-   - Target: ~50% of tokens through small model
+    - What % of total tokens go through small model?
+    - Target: ~50% of tokens through small model
 
 2. **Cost per Task**
-   - Track cost before/after small model usage
-   - Monitor for regressions
+    - Track cost before/after small model usage
+    - Monitor for regressions
 
 3. **Quality Metrics**
-   - Do small model summaries match main model quality?
-   - Are classifications accurate?
+    - Do small model summaries match main model quality?
+    - Are classifications accurate?
 
 4. **Latency**
-   - Small models are often faster (fewer parameters)
-   - Track wall-clock time improvements
+    - Small models are often faster (fewer parameters)
+    - Track wall-clock time improvements
 
 ### Example Monitoring
 
@@ -295,6 +303,7 @@ impl SmallModelMetrics {
 ### Issue: Small model not being used
 
 **Check:**
+
 1. Is `small_model.enabled = true` in config?
 2. Is the specific use case enabled (e.g., `use_for_large_reads`)?
 3. Is the task type matching the intended use case?
@@ -308,6 +317,7 @@ use_for_large_reads = true       # Should be true
 ### Issue: Quality degradation
 
 **Solutions:**
+
 1. Lower `max_tokens` to force concise responses
 2. Lower `temperature` for more deterministic output
 3. Add more context/examples in the prompt
@@ -321,6 +331,7 @@ temperature = 0.1                # Make more deterministic
 ### Issue: Small model not available
 
 **Fallback:**
+
 - Configuration allows graceful fallback to main model
 - Check `use_for_*` flags are appropriate for your provider
 - Some providers may not have suitable "small" models
@@ -345,10 +356,10 @@ temperature = 0.1                # Make more deterministic
 
 The small model tier enables:
 
-  **70-80% cost reduction** on ~50% of operations  
-  **Maintained quality** for parsing/summary tasks  
-  **Backward compatible** - Can be disabled completely  
-  **Flexible** - Customize per use case  
-  **Monitored** - Easy to track impact  
+**70-80% cost reduction** on ~50% of operations
+**Maintained quality** for parsing/summary tasks
+**Backward compatible** - Can be disabled completely
+**Flexible** - Customize per use case
+**Monitored** - Easy to track impact
 
 Start by enabling it for large file reads and web summaries. Expand based on results.

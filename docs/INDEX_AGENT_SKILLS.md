@@ -6,11 +6,11 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 
 ### I just want to...
 
--   **Use skills right now** → [Quick Reference](#quick-reference)
--   **Understand how skills work** → [Integration Guide](#integration-guide)
--   **See working code** → [Examples](#examples)
--   **Create a custom skill** → [Skills Guide](#skills-guide)
--   **Troubleshoot** → [Troubleshooting](#troubleshooting)
+- **Use skills right now** → [Quick Reference](#quick-reference)
+- **Understand how skills work** → [Integration Guide](#integration-guide)
+- **See working code** → [Examples](#examples)
+- **Create a custom skill** → [Skills Guide](#skills-guide)
+- **Troubleshoot** → [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -20,11 +20,11 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 
 **File:** `docs/AGENT_SKILLS_QUICKREF.md`
 
--   One-page quick reference
--   CLI commands at a glance
--   Common tasks
--   Built-in skills table
--   Error quick fixes
+- One-page quick reference
+- CLI commands at a glance
+- Common tasks
+- Built-in skills table
+- Error quick fixes
 
 **Start here if:** You want quick answers
 
@@ -32,12 +32,12 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 
 **File:** `docs/AGENT_SKILLS_INTEGRATION.md`
 
--   Complete integration guide
--   How to use skills with VT Code agent
--   Agent integration points
--   Code examples (Rust and Python)
--   Workflow patterns
--   Best practices
+- Complete integration guide
+- How to use skills with VT Code agent
+- Agent integration points
+- Code examples (Rust and Python)
+- Workflow patterns
+- Best practices
 
 **Start here if:** You need to understand how to use skills in the agent
 
@@ -45,12 +45,12 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 
 **File:** `docs/SKILLS_GUIDE.md`
 
--   Comprehensive skills documentation
--   Skill structure and creation
--   SKILL.md format and requirements
--   Progressive disclosure explained
--   File organization
--   Advanced topics
+- Comprehensive skills documentation
+- Skill structure and creation
+- SKILL.md format and requirements
+- Progressive disclosure explained
+- File organization
+- Advanced topics
 
 **Start here if:** You want to create or deeply understand skills
 
@@ -58,12 +58,12 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 
 **File:** `docs/AGENT_SKILLS_SUMMARY.md`
 
--   What was implemented
--   How to use skills
--   Architecture overview
--   File structure
--   Key features
--   Next steps
+- What was implemented
+- How to use skills
+- Architecture overview
+- File structure
+- Key features
+- Next steps
 
 **Start here if:** You want an overview of the implementation
 
@@ -77,23 +77,23 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 
 Contains VT Code's project-specific skills:
 
--   `spreadsheet-generator/` - Excel/xlsx skill
--   `doc-generator/` - Word/docx skill
--   `pdf-report-generator/` - PDF skill
--   `strict-architecture/` - Code governance skill
--   `bdd-workflow/` - BDD/TDD workflow skill
--   `code-orchestration/` - Orchestration skill
--   `forensic-debugging/` - CRASH-RCA skill
+- `spreadsheet-generator/` - Excel/xlsx skill
+- `doc-generator/` - Word/docx skill
+- `pdf-report-generator/` - PDF skill
+- `strict-architecture/` - Code governance skill
+- `bdd-workflow/` - BDD/TDD workflow skill
+- `code-orchestration/` - Orchestration skill
+- `forensic-debugging/` - CRASH-RCA skill
 
 ### Skills Directory Guide
 
 **File:** `.claude/skills/README.md`
 
--   All available skills documented
--   Usage patterns and examples
--   How to create new skills
--   Validation requirements
--   Tips and best practices
+- All available skills documented
+- Usage patterns and examples
+- How to create new skills
+- Validation requirements
+- Tips and best practices
 
 ---
 
@@ -103,46 +103,46 @@ Contains VT Code's project-specific skills:
 
 **File:** `docs/skills/SPREADSHEET_EXAMPLE.md`
 
--   Excel/xlsx skill examples
--   Use cases: financial reports, data analysis, inventory
--   Features: formulas, charts, formatting
--   Integration patterns
+- Excel/xlsx skill examples
+- Use cases: financial reports, data analysis, inventory
+- Features: formulas, charts, formatting
+- Integration patterns
 
 **Code:** `examples/skills_spreadsheet.py`
 
--   Create climate data spreadsheet
--   Create financial spreadsheet
--   Demonstrates code execution with xlsx skill
+- Create climate data spreadsheet
+- Create financial spreadsheet
+- Demonstrates code execution with xlsx skill
 
 ### Word Document Generation
 
 **File:** `docs/skills/WORD_DOCUMENT_EXAMPLE.md`
 
--   Word/docx skill examples
--   Use cases: proposals, meeting minutes, technical docs
--   Features: formatting, tables, styles
--   Document types and best practices
+- Word/docx skill examples
+- Use cases: proposals, meeting minutes, technical docs
+- Features: formatting, tables, styles
+- Document types and best practices
 
 **Code:** `examples/skills_word_document.py`
 
--   Create business report document
--   Create meeting minutes document
--   Demonstrates code execution with docx skill
+- Create business report document
+- Create meeting minutes document
+- Demonstrates code execution with docx skill
 
 ### PDF Generation
 
 **File:** `docs/skills/PDF_GENERATION_EXAMPLE.md`
 
--   PDF skill examples
--   Use cases: invoices, certificates, reports
--   Features: styling, charts, professional layout
--   Performance considerations
+- PDF skill examples
+- Use cases: invoices, certificates, reports
+- Features: styling, charts, professional layout
+- Performance considerations
 
 **Code:** `examples/skills_pdf_generation.py`
 
--   Generate invoice PDF
--   Generate data report PDF
--   Demonstrates code execution with pdf skill
+- Generate invoice PDF
+- Generate data report PDF
+- Demonstrates code execution with pdf skill
 
 ---
 
@@ -164,7 +164,7 @@ import anthropic
 
 client = anthropic.Anthropic()
 response = client.messages.create(
-    model="claude-4-5-sonnet",
+    model="claude-haiku-4-5",
     max_tokens=4096,
     tools=[{"type": "code_execution", "name": "bash"}],
     messages=[{
@@ -380,19 +380,16 @@ container={
 ## Best Practices
 
 1. **Choose Right Skill**
-
     - Spreadsheets for data/analysis
     - Word docs for collaborative content
     - PDFs for final distribution
 
 2. **Leverage Progressive Disclosure**
-
     - Metadata loaded first (cheap)
     - Instructions on-demand
     - Minimal context overhead
 
 3. **Error Handling**
-
     - Check code execution in responses
     - Verify file IDs
     - Handle API errors gracefully
@@ -441,10 +438,10 @@ VT Code/
 
 ## Related Documentation
 
--   `.claude/CLAUDE.md` - VT Code configuration (compatible)
--   `README.md` - Project overview
--   `CONTRIBUTING.md` - Contribution guidelines
--   `.claude/skills/README.md` - Skills directory guide (compatible)
+- `.claude/CLAUDE.md` - VT Code configuration (compatible)
+- `README.md` - Project overview
+- `CONTRIBUTING.md` - Contribution guidelines
+- `.claude/skills/README.md` - Skills directory guide (compatible)
 
 ---
 
@@ -452,16 +449,16 @@ VT Code/
 
 ### Official Documentation
 
--   [Anthropic Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
--   [Agent Skills Quickstart](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/quickstart)
--   [Agent Skills API Guide](https://platform.claude.com/docs/en/build-with-claude/skills-guide)
--   [Skills Cookbook](https://github.com/anthropics/claude-cookbooks/tree/main/skills)
+- [Anthropic Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
+- [Agent Skills Quickstart](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/quickstart)
+- [Agent Skills API Guide](https://platform.claude.com/docs/en/build-with-claude/skills-guide)
+- [Skills Cookbook](https://github.com/anthropics/claude-cookbooks/tree/main/skills)
 
 ### VT Code Implementation
 
--   `vtcode-core/src/skills/` - Core skills module
--   `src/cli/skills.rs` - CLI command handlers
--   `src/agent/runloop/skills_commands.rs` - Agent integration
+- `vtcode-core/src/skills/` - Core skills module
+- `src/cli/skills.rs` - CLI command handlers
+- `src/agent/runloop/skills_commands.rs` - Agent integration
 
 ---
 

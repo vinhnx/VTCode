@@ -127,7 +127,7 @@ The `Response` object follows the Open Responses specification:
 ```rust
 use vtcode_core::{OpenResponse as Response, ResponseStatus};
 
-let mut response = Response::new("resp_123", "claude-3-sonnet");
+let mut response = Response::new("resp_123", "gpt-4o-mini");
 assert_eq!(response.status, ResponseStatus::InProgress);
 assert_eq!(response.object, "response");
 

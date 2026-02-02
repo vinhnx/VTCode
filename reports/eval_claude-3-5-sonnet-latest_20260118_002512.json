@@ -1,7 +1,7 @@
 {
   "timestamp": "2026-01-18T00:25:12.115956",
   "provider": "anthropic",
-  "model": "claude-3-5-sonnet-latest",
+  "model": "claude-haiku-4-5",
   "summary": {
     "total": 2,
     "passed": 0,

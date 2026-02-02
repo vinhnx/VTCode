@@ -20,7 +20,7 @@ def load_env():
 load_env()
 
 class EvaluationEngine:
-    def __init__(self, provider="anthropic", model="claude-3-5-sonnet-latest"):
+    def __init__(self, provider="anthropic", model="claude-haiku-4-5"):
         self.provider = provider
         self.model = model
         self.metrics = {
@@ -43,7 +43,7 @@ class EvaluationEngine:
             if result.returncode != 0:
                 print(f"Error running vtcode: {result.stderr}")
                 return {"error": result.stderr}
-            
+
             try:
                 return json.loads(result.stdout)
             except json.JSONDecodeError:
@@ -56,11 +56,11 @@ class EvaluationEngine:
 
     def evaluate_test_case(self, test_case):
         print(f"Running test case: {test_case['id']} - {test_case['task']}")
-        
+
         start_time = time.time()
         response_json = self.run_command(test_case['task'])
         latency = time.time() - start_time
-        
+
         if "error" in response_json:
             return {
                 "id": test_case['id'],
@@ -71,20 +71,20 @@ class EvaluationEngine:
         # Extract content from the standardized LLMResponse JSON
         output = response_json.get("response", {}).get("content", "")
         usage = response_json.get("response", {}).get("usage") or {}
-        
+
         metric_name = test_case['metric']
         metric = self.metrics.get(metric_name)
-        
+
         if not metric:
             return {
                 "id": test_case['id'],
                 "error": f"Metric {metric_name} not found"
             }
-            
+
         if metric_name == "llm_grader":
             result = metric.evaluate(
-                output, 
-                test_case['rubric'], 
+                output,
+                test_case['rubric'],
                 scale=test_case.get('scale', 'binary')
             )
             res_val = result['result'].lower()
@@ -113,12 +113,12 @@ class EvaluationEngine:
     def run_suite(self, test_cases_path):
         with open(test_cases_path, 'r') as f:
             test_cases = json.load(f)
-            
+
         results = []
         for case in test_cases:
             result = self.evaluate_test_case(case)
             results.append(result)
-            
+
         return results
 
 if __name__ == "__main__":
@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
     engine = EvaluationEngine(provider=args.provider, model=args.model)
     results = engine.run_suite(args.cases)
-    
+
     # Save report
     report = {
         "timestamp": datetime.now().isoformat(),
@@ -143,12 +143,12 @@ if __name__ == "__main__":
         },
         "results": results
     }
-    
+
     os.makedirs("reports", exist_ok=True)
     report_path = f"reports/eval_{args.model}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(report_path, 'w') as f:
         json.dump(report, f, indent=2)
-        
+
     print(f"\nEvaluation Complete!")
     print(f"Passed: {report['summary']['passed']}/{report['summary']['total']}")
     print(f"Report saved to: {report_path}")

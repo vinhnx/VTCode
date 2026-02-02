@@ -16,7 +16,7 @@ def create_spreadsheet():
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
     response = client.messages.create(
-        model="claude-4-5-sonnet",
+        model="claude-haiku-4-5",
         max_tokens=4096,
         tools=[
             {
@@ -55,9 +55,9 @@ if __name__ == "__main__":
 
 The response will include:
 
--   Claude's planning and execution steps
--   File creation commands
--   A file reference containing the created Excel spreadsheet
+- Claude's planning and execution steps
+- File creation commands
+- A file reference containing the created Excel spreadsheet
 
 ## Next Steps
 

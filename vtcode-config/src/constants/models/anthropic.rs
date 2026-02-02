@@ -1,5 +1,5 @@
 // Standard model for straightforward tools - Sonnet 4.5 preferred for most use cases
-pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5-20250929";
+pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5";
 pub const SUPPORTED_MODELS: &[&str] = &[
     // Claude 4.5 series
     "claude-sonnet-4-5-20250929", // Latest flagship model for complex agents and coding
@@ -18,12 +18,12 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     // Claude 3.x series
     "claude-3-7-sonnet-20250219", // Latest Claude 3.7 Sonnet
     "claude-3-7-sonnet-latest",   // Alias for Claude 3.7 Sonnet
-    "claude-3-5-sonnet-20241022", // Latest Claude 3.5 Sonnet
-    "claude-3-5-sonnet-latest",   // Alias for Claude 3.5 Sonnet
+    "claude-haiku-4-5", // Latest Claude 3.5 Sonnet
+    "claude-haiku-4-5",   // Alias for Claude 3.5 Sonnet
     "claude-3-5-haiku-20241022",  // Latest Claude 3.5 Haiku
     "claude-3-5-haiku-latest",    // Alias for latest Claude 3.5 Haiku
     "claude-3-opus-20240229",     // Legacy Claude 3 Opus
-    "claude-3-sonnet-20240229",   // Legacy Claude 3 Sonnet
+    "claude-haiku-4-5-20240229",   // Legacy Claude 3 Sonnet
     "claude-3-haiku-20240307",    // Legacy Claude 3 Haiku
 ];
 
@@ -35,7 +35,7 @@ pub const CLAUDE_OPUS_4_1_20250805: &str = "claude-opus-4-1-20250805";
 pub const CLAUDE_SONNET_4_20250514: &str = "claude-sonnet-4-20250514";
 pub const CLAUDE_OPUS_4_20250514: &str = "claude-opus-4-20250514";
 pub const CLAUDE_3_7_SONNET_20250219: &str = "claude-3-7-sonnet-20250219";
-pub const CLAUDE_3_5_SONNET_20241022: &str = "claude-3-5-sonnet-20241022";
+pub const CLAUDE_3_5_SONNET_20241022: &str = "claude-haiku-4-5";
 pub const CLAUDE_3_5_HAIKU_20241022: &str = "claude-3-5-haiku-20241022";
 
 // Convenience constants for alias models
@@ -46,7 +46,7 @@ pub const CLAUDE_OPUS_4_1: &str = "claude-opus-4-1";
 pub const CLAUDE_SONNET_4_0: &str = "claude-sonnet-4-0";
 pub const CLAUDE_OPUS_4_0: &str = "claude-opus-4-0";
 pub const CLAUDE_3_7_SONNET_LATEST: &str = "claude-3-7-sonnet-latest";
-pub const CLAUDE_3_5_SONNET_LATEST: &str = "claude-3-5-sonnet-latest";
+pub const CLAUDE_3_5_SONNET_LATEST: &str = "claude-haiku-4-5";
 pub const CLAUDE_3_5_HAIKU_LATEST: &str = "claude-3-5-haiku-latest";
 
 // Legacy aliases for backwards compatibility

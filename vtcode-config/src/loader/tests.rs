@@ -24,7 +24,7 @@ fn test_layered_config_loading() {
     let workspace_config_path = workspace_root.join("vtcode.toml");
     fs::write(
         &workspace_config_path,
-        "agent.default_model = \"claude-3-sonnet\"",
+        "agent.default_model = \"claude-haiku-4-5\"",
     )
     .expect("failed to write workspace config");
 
@@ -37,7 +37,7 @@ fn test_layered_config_loading() {
             ConfigManager::load_from_workspace(workspace_root).expect("failed to load config");
 
         assert_eq!(manager.config().agent.provider, "anthropic");
-        assert_eq!(manager.config().agent.default_model, "claude-3-sonnet");
+        assert_eq!(manager.config().agent.default_model, "claude-haiku-4-5");
 
         let layers = manager.layer_stack().layers();
         // User + Workspace

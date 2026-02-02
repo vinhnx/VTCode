@@ -12,50 +12,50 @@ VT Code Zed Extension v0.3.0 is a complete, production-ready implementation of t
 
 ### Phase 1: Core Features (v0.2.0)
 
--   **CLI Integration**: Full VT Code command execution with proper error handling
--   **Command Palette**: 5 primary commands (Ask, Analyze, Chat, Status, About Selection)
--   **Output Channel**: Thread-safe message management with formatting
--   **Configuration**: TOML parsing with sensible defaults
+- **CLI Integration**: Full VT Code command execution with proper error handling
+- **Command Palette**: 5 primary commands (Ask, Analyze, Chat, Status, About Selection)
+- **Output Channel**: Thread-safe message management with formatting
+- **Configuration**: TOML parsing with sensible defaults
 
 ### Phase 2: Advanced Features
 
 #### Phase 2.1: Editor Integration
 
--   **EditorContext**: Code selection and workspace context
--   **Diagnostics**: Error/warning/info tracking with quick fixes
--   **StatusIndicator**: CLI availability status for status bar
--   **EditorState**: Thread-safe state management
+- **EditorContext**: Code selection and workspace context
+- **Diagnostics**: Error/warning/info tracking with quick fixes
+- **StatusIndicator**: CLI availability status for status bar
+- **EditorState**: Thread-safe state management
 
 #### Phase 2.2: Configuration Management
 
--   **Validation**: Comprehensive configuration rule checking
--   **Error Reporting**: Detailed errors with actionable suggestions
--   **Warning System**: Non-critical issue tracking
--   **Per-Section Validation**: AI, workspace, and security checks
+- **Validation**: Comprehensive configuration rule checking
+- **Error Reporting**: Detailed errors with actionable suggestions
+- **Warning System**: Non-critical issue tracking
+- **Per-Section Validation**: AI, workspace, and security checks
 
 #### Phase 2.3: Context Awareness
 
--   **Workspace Structure**: Directory traversal and file discovery
--   **File Content**: Size-limited extraction and management
--   **Selection Context**: Syntax-aware information extraction
--   **Open Buffers**: File tracking and state management
--   **Project Analysis**: Hierarchy analysis and language metrics
+- **Workspace Structure**: Directory traversal and file discovery
+- **File Content**: Size-limited extraction and management
+- **Selection Context**: Syntax-aware information extraction
+- **Open Buffers**: File tracking and state management
+- **Project Analysis**: Hierarchy analysis and language metrics
 
 ### Phase 3: Polish & Distribution
 
 #### Error Handling & Recovery
 
--   **Error Types**: Comprehensive error variants for all failure scenarios
--   **Recovery Strategies**: Automatic retry logic with backoff
--   **Professional Messages**: Actionable error reporting with suggestions
--   **Thread-Safe Management**: Safe error state handling
+- **Error Types**: Comprehensive error variants for all failure scenarios
+- **Recovery Strategies**: Automatic retry logic with backoff
+- **Professional Messages**: Actionable error reporting with suggestions
+- **Thread-Safe Management**: Safe error state handling
 
 #### Performance Optimization
 
--   **Multi-Level Caching**: Workspace, files, and command-level caching
--   **Intelligent Eviction**: LRU and TTL-based cache management
--   **Memory Bounds**: Max 100MB cache with monitoring
--   **Zero-Allocation Fast Path**: Optimized cache hit performance
+- **Multi-Level Caching**: Workspace, files, and command-level caching
+- **Intelligent Eviction**: LRU and TTL-based cache management
+- **Memory Bounds**: Max 100MB cache with monitoring
+- **Zero-Allocation Fast Path**: Optimized cache hit performance
 
 ## Metrics & Quality
 
@@ -114,11 +114,11 @@ lib.rs (main)
 
 ### Design Patterns
 
--   **Thread-Safe Sharing**: Arc<Mutex<T>> for concurrent access
--   **Result Types**: Comprehensive error handling with context
--   **Configuration Parsing**: TOML with validation
--   **Caching Strategy**: Multi-level with TTL and LRU eviction
--   **Error Recovery**: Automatic retry with backoff strategies
+- **Thread-Safe Sharing**: Arc<Mutex<T>> for concurrent access
+- **Result Types**: Comprehensive error handling with context
+- **Configuration Parsing**: TOML with validation
+- **Caching Strategy**: Multi-level with TTL and LRU eviction
+- **Error Recovery**: Automatic retry with backoff strategies
 
 ## API Overview
 
@@ -143,12 +143,12 @@ impl VTCodeExtension {
 
 ### Key Types
 
--   **Config**: Configuration container with AI, workspace, security settings
--   **EditorContext**: Current file, selection, language, cursor position
--   **Diagnostic**: Error/warning/info with optional quick fixes
--   **WorkspaceContext**: Directory structure, file discovery, metrics
--   **Cache**: Multi-level caching with eviction policies
--   **ErrorType**: Comprehensive error variants with recovery strategies
+- **Config**: Configuration container with AI, workspace, security settings
+- **EditorContext**: Current file, selection, language, cursor position
+- **Diagnostic**: Error/warning/info with optional quick fixes
+- **WorkspaceContext**: Directory structure, file discovery, metrics
+- **Cache**: Multi-level caching with eviction policies
+- **ErrorType**: Comprehensive error variants with recovery strategies
 
 ## Breaking Changes
 
@@ -165,20 +165,20 @@ None - This is the initial v0.3.0 release.
 
 ### Future Enhancements
 
--   Async command execution for non-blocking operations
--   Persistent disk-based caching
--   Real-time file watching
--   UI dialogs and progress indicators
--   Zed extension registry submission
+- Async command execution for non-blocking operations
+- Persistent disk-based caching
+- Real-time file watching
+- UI dialogs and progress indicators
+- Zed extension registry submission
 
 ## Testing
 
 ### Test Coverage
 
--   **Unit Tests**: 107 total (100% on new modules)
--   **Test Execution**: <100ms complete suite
--   **Coverage**: All public APIs covered
--   **Quality**: 0 failures, 0 skipped
+- **Unit Tests**: 107 total (100% on new modules)
+- **Test Execution**: <100ms complete suite
+- **Coverage**: All public APIs covered
+- **Quality**: 0 failures, 0 skipped
 
 ### Running Tests
 
@@ -216,10 +216,10 @@ cargo build --release
 
 ### System Requirements
 
--   **Rust**: 1.70+ (2021 edition)
--   **Zed**: 0.150.0+
--   **VT Code CLI**: 0.1.0+
--   **Target**: WebAssembly (WASM)
+- **Rust**: 1.70+ (2021 edition)
+- **Zed**: 0.150.0+
+- **VT Code CLI**: 0.1.0+
+- **Target**: WebAssembly (WASM)
 
 ## Configuration
 
@@ -230,7 +230,7 @@ The extension respects the following `vtcode.toml` sections:
 ```toml
 [ai]
 provider = "claude"
-model = "claude-3-5-sonnet"
+model = "claude-haiku-4-5"
 
 [workspace]
 root = "/path/to/workspace"
@@ -241,49 +241,49 @@ trust_workspace = false
 
 ### Validation Rules
 
--   Required fields are validated on startup
--   Missing optional fields use sensible defaults
--   Configuration errors report with suggestions
+- Required fields are validated on startup
+- Missing optional fields use sensible defaults
+- Configuration errors report with suggestions
 
 ## Performance Characteristics
 
 ### Extension Load
 
--   Initialization: <100ms
--   Config parsing: <10ms
--   CLI availability check: <50ms
+- Initialization: <100ms
+- Config parsing: <10ms
+- CLI availability check: <50ms
 
 ### Command Execution
 
--   Overhead: <5ms (cache hit)
--   CLI delegation: Depends on VT Code CLI
--   Output buffering: Efficient streaming
+- Overhead: <5ms (cache hit)
+- CLI delegation: Depends on VT Code CLI
+- Output buffering: Efficient streaming
 
 ### Memory Usage
 
--   Base footprint: ~2MB
--   Cache capacity: ~100MB max
--   No memory leaks detected
+- Base footprint: ~2MB
+- Cache capacity: ~100MB max
+- No memory leaks detected
 
 ## Support & Documentation
 
 ### Documentation Files
 
--   **STATUS.md** - Current project status
--   **IMPLEMENTATION_ROADMAP.md** - Feature roadmap
--   **PHASE\_\*\_COMPLETION.md** - Phase-specific details
--   **DEVELOPMENT.md** - Developer setup
--   **QUICK_START.md** - Getting started guide
+- **STATUS.md** - Current project status
+- **IMPLEMENTATION_ROADMAP.md** - Feature roadmap
+- **PHASE\_\*\_COMPLETION.md** - Phase-specific details
+- **DEVELOPMENT.md** - Developer setup
+- **QUICK_START.md** - Getting started guide
 
 ### API Documentation
 
 All public APIs are documented with:
 
--   Function descriptions
--   Parameter documentation
--   Return type documentation
--   Example usage patterns
--   Error handling guidance
+- Function descriptions
+- Parameter documentation
+- Return type documentation
+- Example usage patterns
+- Error handling guidance
 
 ## License
 
@@ -304,27 +304,27 @@ This extension is production-ready for v0.3.0. Future contributions should follo
 
 ### v0.3.0 (Current)
 
--   Phase 1: Core features (v0.2.0)
--   Phase 2: Advanced features (v0.3.0)
--   Phase 2.1: Editor integration
--   Phase 2.2: Configuration management
--   Phase 2.3: Context awareness
--   Phase 3: Polish & distribution (v0.3.0)
--   Error handling & recovery
--   Performance optimization
--   Quality assurance
--   **Status**: Production-ready
+- Phase 1: Core features (v0.2.0)
+- Phase 2: Advanced features (v0.3.0)
+- Phase 2.1: Editor integration
+- Phase 2.2: Configuration management
+- Phase 2.3: Context awareness
+- Phase 3: Polish & distribution (v0.3.0)
+- Error handling & recovery
+- Performance optimization
+- Quality assurance
+- **Status**: Production-ready
 
 ### v0.4.0 (Future)
 
--   Async operations
--   Persistent caching
--   UI enhancements
--   Registry submission
+- Async operations
+- Persistent caching
+- UI enhancements
+- Registry submission
 
 ### v0.2.0 (Previous)
 
--   Initial core features implementation
+- Initial core features implementation
 
 ## Contact & Feedback
 

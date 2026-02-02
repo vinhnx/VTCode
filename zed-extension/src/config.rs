@@ -51,7 +51,7 @@ fn default_provider() -> String {
 }
 
 fn default_model() -> String {
-    "claude-4-5-sonnet".to_string()
+    "claude-haiku-4-5".to_string()
 }
 
 fn default_max_tokens() -> usize {
@@ -157,7 +157,7 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.ai.provider, "anthropic");
-        assert_eq!(config.ai.model, "claude-4-5-sonnet");
+        assert_eq!(config.ai.model, "claude-haiku-4-5");
         assert_eq!(config.workspace.max_context_tokens, 8000);
         assert!(!config.workspace.analyze_on_startup);
         assert!(config.security.human_in_the_loop);
@@ -167,7 +167,7 @@ mod tests {
     fn test_ai_config_defaults() {
         let config = AiConfig::default();
         assert_eq!(config.provider, "anthropic");
-        assert_eq!(config.model, "claude-4-5-sonnet");
+        assert_eq!(config.model, "claude-haiku-4-5");
     }
 
     #[test]

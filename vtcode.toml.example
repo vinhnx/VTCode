@@ -29,7 +29,7 @@ provider = "anthropic"
 api_key_env = "ANTHROPIC_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "claude-sonnet-4-5"
+default_model = "claude-sonnet-4.5"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -68,7 +68,7 @@ refine_prompts_model = ""
 # Enable small model tier
 enabled = true
 
-# Small model ID (e.g., "claude-3-5-haiku", "gpt-4-mini", "gemini-2.0-flash")
+# Small model ID (e.g., ""claude-haiku-4-5", "gpt-5-mini", "gemini-3.0-flash-lite")
 # Leave empty to auto-select lightweight sibling of main model
 model = ""
 

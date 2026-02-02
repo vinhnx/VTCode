@@ -70,7 +70,7 @@ pub fn supports_structured_output(model: &str, default_model: &str) -> bool {
         || requested == models::anthropic::CLAUDE_OPUS_4_0
         || requested == models::anthropic::CLAUDE_OPUS_4_20250514
         || requested.contains("claude-3-7-sonnet")
-        || requested.contains("claude-3-5-sonnet")
+        || requested.contains("claude-haiku-4-5")
 }
 
 pub fn supports_vision(model: &str, default_model: &str) -> bool {
