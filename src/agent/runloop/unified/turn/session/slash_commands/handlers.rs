@@ -1517,7 +1517,7 @@ pub async fn handle_oauth_login(
     let timeout_secs = ctx
         .vt_cfg
         .as_ref()
-        .map(|cfg| cfg.auth.openrouter.flow_timeout_secs as u64)
+        .map(|cfg| cfg.auth.openrouter.flow_timeout_secs)
         .unwrap_or(300);
 
     // Start the OAuth callback server (it handles the full flow)
