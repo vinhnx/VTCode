@@ -14,7 +14,7 @@ use mcp_types::{
 use reqwest::header::HeaderMap;
 use rmcp::handler::client::ClientHandler;
 use rmcp::model::{
-    CancelledNotificationParam, CreateElicitationRequestParam, ElicitationAction, ListRootsResult,
+    CancelledNotificationParam, CreateElicitationRequestParams, ElicitationAction, ListRootsResult,
     LoggingLevel, LoggingMessageNotificationParam, ProgressNotificationParam,
     ResourceUpdatedNotificationParam, Root,
 };
@@ -260,7 +260,7 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<CallToolResult> {
         let service = self.service().await?;
-        let rmcp_params: rmcp::model::CallToolRequestParam = convert_to_rmcp(params)?;
+        let rmcp_params: rmcp::model::CallToolRequestParams = convert_to_rmcp(params)?;
         let rmcp_result =
             run_with_timeout(service.call_tool(rmcp_params), timeout, "tools/call").await?;
         convert_call_tool_result(rmcp_result)
@@ -272,7 +272,7 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<ReadResourceResult> {
         let service = self.service().await?;
-        let rmcp_params: rmcp::model::ReadResourceRequestParam = convert_to_rmcp(params)?;
+        let rmcp_params: rmcp::model::ReadResourceRequestParams = convert_to_rmcp(params)?;
         let rmcp_result = run_with_timeout(
             service.peer().read_resource(rmcp_params),
             timeout,
@@ -288,7 +288,7 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<GetPromptResult> {
         let service = self.service().await?;
-        let rmcp_params: rmcp::model::GetPromptRequestParam = convert_to_rmcp(params)?;
+        let rmcp_params: rmcp::model::GetPromptRequestParams = convert_to_rmcp(params)?;
         let rmcp_result = run_with_timeout(
             service.peer().get_prompt(rmcp_params),
             timeout,
@@ -398,7 +398,7 @@ impl LoggingClientHandler {
 impl ClientHandler for LoggingClientHandler {
     fn create_elicitation(
         &self,
-        request: CreateElicitationRequestParam,
+        request: CreateElicitationRequestParams,
         _context: RequestContext<RoleClient>,
     ) -> impl std::future::Future<
         Output = Result<rmcp::model::CreateElicitationResult, rmcp::ErrorData>,
