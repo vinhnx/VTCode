@@ -39,4 +39,3 @@ pub const O4_MINI: &str = "o4-mini";
 // Legacy GPT-4 series
 pub const GPT_4O: &str = "gpt-4o";
 pub const GPT_4O_MINI: &str = "gpt-4o-mini";
-

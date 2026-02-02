@@ -18,6 +18,7 @@ mod error;
 mod events;
 mod integration;
 mod items;
+mod request;
 mod response;
 mod status;
 mod usage;
@@ -33,6 +34,7 @@ pub use items::{
     CustomItem, FunctionCallItem, FunctionCallOutputItem, MessageItem, MessageRole, OutputItem,
     OutputItemId, ReasoningItem,
 };
+pub use request::{Request, SpecificToolChoice, ToolChoice, ToolChoiceMode};
 pub use response::{
     IncompleteDetails, IncompleteReason, Response, ResponseId, ResponseStatus, generate_item_id,
     generate_response_id,

@@ -415,7 +415,8 @@ struct SignalCleanupGuard {
 
 impl SignalCleanupGuard {
     fn new() -> Result<Self> {
-        let mut signals = Signals::new([SIGINT, SIGTERM]).context("failed to register signal handlers")?;
+        let mut signals =
+            Signals::new([SIGINT, SIGTERM]).context("failed to register signal handlers")?;
         let handle = signals.handle();
         let thread = std::thread::spawn(move || {
             for _signal in signals.forever() {
