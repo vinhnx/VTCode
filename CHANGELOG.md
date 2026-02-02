@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.13 - 2026-02-02
+
+- Update commit (171a2aa6) (@vinhnx)
+- Refactor agent guidelines, improve spacing in TODO, and enhance model picker logic; update Anthropic provider tests and configuration (0dece6ac) (@vinhnx)
+- refactor: enhance base URL resolution and improve JSON handling in request builder (584a82ca) (@vinhnx)
+- docs: add behavioral guidelines to reduce common LLM coding mistakes (75ca745d) (@vinhnx)
+- refactor: simplify conditional checks and remove unused imports (2602cbc8) (@vinhnx)
+- refactor: update tool policies to allow all actions and improve terminal cleanup logic (0e54e2ff) (@vinhnx)
+- chore: update homebrew formula to v0.74.12 (0e743b32)
+
+
 ## v0.74.12 - 2026-02-02
 
 - chore: update vtcode.gif resource (68cdf67b) (@vinhnx)
