@@ -15,7 +15,7 @@ def generate_pdf():
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
     response = client.messages.create(
-        model="claude-4-5-sonnet",
+        model="claude-haiku-4-5",
         max_tokens=4096,
         tools=[
             {
@@ -125,12 +125,12 @@ message = """Create a technical data sheet PDF with:
 
 ## Key Features
 
--   **Styling**: Full control over fonts, colors, and layouts
--   **Tables**: Create complex tables with merged cells
--   **Images**: Embed images and graphics
--   **Headers/Footers**: Add page numbers and persistent headers
--   **Sections**: Create multi-section documents
--   **Watermarks**: Add background text or images
+- **Styling**: Full control over fonts, colors, and layouts
+- **Tables**: Create complex tables with merged cells
+- **Images**: Embed images and graphics
+- **Headers/Footers**: Add page numbers and persistent headers
+- **Sections**: Create multi-section documents
+- **Watermarks**: Add background text or images
 
 ## Integration with VT Code Skills
 
@@ -165,10 +165,10 @@ When asked to generate a PDF report:
 
 ## Performance Considerations
 
--   **Large Documents**: For documents >50 pages, consider pagination strategies
--   **Image Quality**: Optimize image resolution for file size vs. quality
--   **Rendering Time**: Complex layouts may require longer processing
--   **File Size**: Typical documents are 100KB-5MB
+- **Large Documents**: For documents >50 pages, consider pagination strategies
+- **Image Quality**: Optimize image resolution for file size vs. quality
+- **Rendering Time**: Complex layouts may require longer processing
+- **File Size**: Typical documents are 100KB-5MB
 
 ## Error Handling
 
@@ -185,6 +185,6 @@ except IOError as e:
 
 ## See Also
 
--   SPREADSHEET_EXAMPLE.md - Create Excel spreadsheets
--   WORD_DOCUMENT_EXAMPLE.md - Create Word documents
--   CONTAINER_GUIDE.md - Understand skill containers
+- SPREADSHEET_EXAMPLE.md - Create Excel spreadsheets
+- WORD_DOCUMENT_EXAMPLE.md - Create Word documents
+- CONTAINER_GUIDE.md - Understand skill containers

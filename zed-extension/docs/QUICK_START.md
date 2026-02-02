@@ -133,7 +133,7 @@ model = "gpt-5"
 ```toml
 [ai]
 provider = "anthropic"
-model = "claude-4-5-sonnet"
+model = "claude-haiku-4-5"
 
 [workspace]
 analyze_on_startup = false
@@ -154,7 +154,7 @@ top_p = 0.9
 ```toml
 [ai]
 provider = "anthropic"
-model = "claude-4-5-sonnet"
+model = "claude-haiku-4-5"
 
 [workspace]
 analyze_on_startup = false

@@ -8,12 +8,12 @@ This document details the Phase 1 implementation of core features for the VT Cod
 
 #### 1. Process Execution Integration
 
--   **Module**: `src/executor.rs`
--   **Capabilities**:
-    -   Execute VT Code CLI commands from Rust
-    -   Capture stdout and stderr
-    -   Return structured results with status codes
-    -   Error handling for missing CLI
+- **Module**: `src/executor.rs`
+- **Capabilities**:
+    - Execute VT Code CLI commands from Rust
+    - Capture stdout and stderr
+    - Return structured results with status codes
+    - Error handling for missing CLI
 
 **Key Functions**:
 
@@ -35,12 +35,12 @@ if result.is_success() {
 
 #### 2. Configuration Management
 
--   **Module**: `src/config.rs`
--   **Capabilities**:
-    -   Parse `vtcode.toml` TOML files
-    -   Support for AI, workspace, and security settings
-    -   Default configurations
-    -   Recursive search for config file in parent directories
+- **Module**: `src/config.rs`
+- **Capabilities**:
+    - Parse `vtcode.toml` TOML files
+    - Support for AI, workspace, and security settings
+    - Default configurations
+    - Recursive search for config file in parent directories
 
 **Key Functions**:
 
@@ -61,12 +61,12 @@ pub struct Config {
 
 #### 3. Extension Core Initialization
 
--   **Module**: `src/lib.rs`
--   **Capabilities**:
-    -   Initialize extension with workspace detection
-    -   Load configuration from workspace
-    -   Verify VT Code CLI availability
-    -   Provide access to configuration and status
+- **Module**: `src/lib.rs`
+- **Capabilities**:
+    - Initialize extension with workspace detection
+    - Load configuration from workspace
+    - Verify VT Code CLI availability
+    - Provide access to configuration and status
 
 **Key Methods**:
 
@@ -339,7 +339,7 @@ test result: ok. 9 passed; 0 failed
 ```toml
 [ai]
 provider = "anthropic"
-model = "claude-4-5-sonnet"
+model = "claude-haiku-4-5"
 
 [workspace]
 analyze_on_startup = false
@@ -355,11 +355,11 @@ allowed_tools = ["read_file", "edit_file"]
 
 If `vtcode.toml` is not found:
 
--   AI Provider: `anthropic`
--   Model: `claude-4-5-sonnet`
--   Max tokens: `8000`
--   Auto-analysis: `false`
--   Human-in-loop: `true`
+- AI Provider: `anthropic`
+- Model: `claude-4-5-sonnet`
+- Max tokens: `8000`
+- Auto-analysis: `false`
+- Human-in-loop: `true`
 
 ## Next Steps (Phase 2)
 
@@ -367,21 +367,21 @@ The following features are planned for Phase 2 (v0.3.0):
 
 ### Command Palette Integration
 
--   Expose commands via Zed's command palette
--   User-friendly command prompts
--   Command history
+- Expose commands via Zed's command palette
+- User-friendly command prompts
+- Command history
 
 ### Output Channel
 
--   Dedicated output channel in Zed
--   Syntax highlighting for code blocks
--   Streaming response support
+- Dedicated output channel in Zed
+- Syntax highlighting for code blocks
+- Streaming response support
 
 ### Editor Integration
 
--   Code selection context passing
--   Inline diagnostics
--   Status bar integration
+- Code selection context passing
+- Inline diagnostics
+- Status bar integration
 
 ## File Structure After Phase 1
 
@@ -447,10 +447,10 @@ cargo install vtcode
 
 ## Performance Notes
 
--   **Startup Time**: <100ms (CLI check)
--   **Config Load**: <10ms (TOML parsing)
--   **Command Execution**: Depends on VT Code CLI performance
--   **Memory**: <5MB (extension overhead)
+- **Startup Time**: <100ms (CLI check)
+- **Config Load**: <10ms (TOML parsing)
+- **Command Execution**: Depends on VT Code CLI performance
+- **Memory**: <5MB (extension overhead)
 
 ## Compatibility
 
@@ -464,17 +464,17 @@ cargo install vtcode
 
 ### v0.2.0 (Phase 1) - 2024-11-09
 
--   Process execution integration
--   Configuration management system
--   Extension initialization
--   Unit tests (9 tests, 100% pass)
--   Complete documentation
+- Process execution integration
+- Configuration management system
+- Extension initialization
+- Unit tests (9 tests, 100% pass)
+- Complete documentation
 
 ### v0.1.0 (Initial) - 2024-11-09
 
--   Basic extension scaffold
--   Language support for vtcode.toml
--   Initial documentation
+- Basic extension scaffold
+- Language support for vtcode.toml
+- Initial documentation
 
 ## Contributing
 
@@ -488,10 +488,10 @@ To contribute to Phase 1 or work on Phase 2:
 
 ## References
 
--   [VT Code Main Repository](https://github.com/vinhnx/vtcode)
--   [Zed Extension API](https://zed.dev/docs/extensions)
--   [Rust std::process](https://doc.rust-lang.org/std/process/)
--   [TOML Format](https://toml.io/)
+- [VT Code Main Repository](https://github.com/vinhnx/vtcode)
+- [Zed Extension API](https://zed.dev/docs/extensions)
+- [Rust std::process](https://doc.rust-lang.org/std/process/)
+- [TOML Format](https://toml.io/)
 
 ---
 

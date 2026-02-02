@@ -481,7 +481,7 @@ mod tests {
 
         ```python
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-haiku-4-5",
             container={
                 "type": "skills",
                 "skills": [{"type": "anthropic", "skill_id": "pdf", "version": "latest"}]
@@ -554,7 +554,7 @@ mod tests {
 
         ```python
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-haiku-4-5",
             container={
                 "type": "skills",
                 "skills": [{"type": "anthropic", "skill_id": "pdf", "version": "latest"}]

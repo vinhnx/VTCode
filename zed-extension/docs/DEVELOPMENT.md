@@ -4,9 +4,9 @@ This guide covers developing and testing the VT Code extension for Zed.
 
 ## Prerequisites
 
--   **Rust**: Install via [rustup](https://www.rust-lang.org/tools/install)
--   **Zed**: Latest version of the Zed editor
--   **VT Code CLI**: Install using `cargo install vtcode` or your package manager
+- **Rust**: Install via [rustup](https://www.rust-lang.org/tools/install)
+- **Zed**: Latest version of the Zed editor
+- **VT Code CLI**: Install using `cargo install vtcode` or your package manager
 
 ## Building the Extension
 
@@ -46,7 +46,7 @@ Zed automatically handles the WASM compilation and linking when you install the 
     ```toml
     [ai]
     provider = "anthropic"
-    model = "claude-4-5-sonnet"
+    model = "claude-haiku-4-5"
     ```
 
 2. Open the workspace in Zed
@@ -128,16 +128,16 @@ Follow the [Zed Extension Publishing Guide](https://zed.dev/docs/extensions/deve
 
 Update version in both files:
 
--   `extension.toml`: `version = "x.y.z"`
--   `Cargo.toml`: `version = "x.y.z"`
+- `extension.toml`: `version = "x.y.z"`
+- `Cargo.toml`: `version = "x.y.z"`
 
 ## Troubleshooting
 
 ### Extension Not Appearing
 
--   Ensure `extension.toml` is valid TOML
--   Check Zed logs for compilation errors
--   Verify Rust is installed via rustup (required for dev extensions)
+- Ensure `extension.toml` is valid TOML
+- Check Zed logs for compilation errors
+- Verify Rust is installed via rustup (required for dev extensions)
 
 ### Build Failures
 
@@ -153,15 +153,15 @@ cargo check
 
 ### Language Support Not Working
 
--   Ensure `languages/vtcode/config.toml` exists
--   Check language configuration syntax
--   Verify the language name matches in configuration files
+- Ensure `languages/vtcode/config.toml` exists
+- Check language configuration syntax
+- Verify the language name matches in configuration files
 
 ## API Documentation
 
--   [Zed Extension API Reference](https://zed.dev/docs/extensions)
--   [Zed Extension Capabilities](https://zed.dev/docs/extensions/capabilities)
--   [Language Extensions](https://zed.dev/docs/extensions/languages)
+- [Zed Extension API Reference](https://zed.dev/docs/extensions)
+- [Zed Extension Capabilities](https://zed.dev/docs/extensions/capabilities)
+- [Language Extensions](https://zed.dev/docs/extensions/languages)
 
 ## Contributing
 
@@ -174,6 +174,6 @@ Contributions are welcome! Please:
 
 ## Additional Resources
 
--   [Zed Extension Developing Guide](https://zed.dev/docs/extensions/developing-extensions)
--   [VT Code Main Repository](https://github.com/vinhnx/vtcode)
--   [Rust by Example](https://doc.rust-lang.org/rust-by-example/)
+- [Zed Extension Developing Guide](https://zed.dev/docs/extensions/developing-extensions)
+- [VT Code Main Repository](https://github.com/vinhnx/vtcode)
+- [Rust by Example](https://doc.rust-lang.org/rust-by-example/)

@@ -722,7 +722,7 @@ VT Code's `small_model` configuration implements this pattern:
 ```toml
 [agent.small_model]
 enabled = true
-model = "claude-3-5-haiku"  # Leave empty for auto-select
+model = claude-4-5-haiku  # Leave empty for auto-select
 use_for_large_reads = true
 use_for_git_history = true
 ```

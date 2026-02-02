@@ -4,10 +4,10 @@
 
 Agent Skills are a simple, open format for giving agents new capabilities and expertise. VT Code implements the [open Agent Skills standard](http://agentskills.io/), allowing you to:
 
--   **Discover** skills from your filesystem or Anthropic's marketplace
--   **Load** skills into your agent sessions
--   **Create** custom skills tailored to your workflow
--   **Execute** skills with full access to VT Code's tools
+- **Discover** skills from your filesystem or Anthropic's marketplace
+- **Load** skills into your agent sessions
+- **Create** custom skills tailored to your workflow
+- **Execute** skills with full access to VT Code's tools
 
 Skills are modular instruction sets that guide Claude on how to complete specific tasks—whether that's processing documents, analyzing code, or automating workflows.
 
@@ -23,13 +23,13 @@ vtcode skills list
 
 Shows all discovered skills from multiple locations with precedence handling:
 
--   **VT Code User Skills** (`~/.vtcode/skills/`) - Highest precedence
--   **VT Code Project Skills** (`.vtcode/skills/`) - Project-specific skills
--   **Pi User Skills** (`~/.pi/skills/`) - Pi framework user skills
--   **Pi Project Skills** (`.pi/skills/`) - Pi framework project skills
--   **Claude User Skills** (`~/.claude/skills/`) - Claude Code user skills
--   **Claude Project Skills** (`.claude/skills/`) - Claude Code project skills
--   **Codex User Skills** (`~/.codex/skills/`) - Codex CLI user skills
+- **VT Code User Skills** (`~/.vtcode/skills/`) - Highest precedence
+- **VT Code Project Skills** (`.vtcode/skills/`) - Project-specific skills
+- **Pi User Skills** (`~/.pi/skills/`) - Pi framework user skills
+- **Pi Project Skills** (`.pi/skills/`) - Pi framework project skills
+- **Claude User Skills** (`~/.claude/skills/`) - Claude Code user skills
+- **Claude Project Skills** (`.claude/skills/`) - Claude Code project skills
+- **Codex User Skills** (`~/.codex/skills/`) - Codex CLI user skills
 
 Skills from higher precedence locations override skills with the same name from lower precedence locations.
 Claude skill directories support nested discovery; VT Code will scan nested `.claude/skills/**/SKILL.md` files.
@@ -50,9 +50,9 @@ vtcode skills create ~/.vtcode/skills/my-skill
 
 Generates a template with:
 
--   `SKILL.md` - Metadata (YAML) + Instructions (Markdown)
--   `scripts/` - Optional executable scripts
--   `templates/` - Optional reference materials
+- `SKILL.md` - Metadata (YAML) + Instructions (Markdown)
+- `scripts/` - Optional executable scripts
+- `templates/` - Optional reference materials
 
 ### Validate a Skill
 
@@ -116,36 +116,36 @@ author: Your Name
 
 **Required**:
 
--   `name` - Lowercase alphanumeric + hyphens, max 64 chars
-    -   Cannot contain "anthropic" or "claude"
-    -   If omitted, VT Code defaults to the skill directory name
--   `description` - Non-empty, max 1024 chars
-    -   Should include what it does and when to use it
-    -   If omitted, VT Code uses the first paragraph of the skill body
+- `name` - Lowercase alphanumeric + hyphens, max 64 chars
+    - Cannot contain "anthropic" or "claude"
+    - If omitted, VT Code defaults to the skill directory name
+- `description` - Non-empty, max 1024 chars
+    - Should include what it does and when to use it
+    - If omitted, VT Code uses the first paragraph of the skill body
 
 **Optional**:
 
--   `version` - Semantic versioning (e.g., "1.0.0")
--   `author` - Skill creator name
--   `license` - License name or bundled license file reference
--   `compatibility` - Environment requirements and product compatibility
--   `allowed-tools` - Space- or comma-delimited list of tools allowed for the skill
--   `argument-hint` - Usage hint for slash-command style invocation
--   `user-invocable` - Toggle visibility in user menus
--   `disable-model-invocation` - Prevents model invocation when skill is active
--   `when-to-use` - Short guidance for automatic triggering
--   `context` - Set to `fork` to run in a subagent context
--   `agent` - Subagent type when `context = "fork"`
--   `hooks` - Skill-scoped hook configuration
+- `version` - Semantic versioning (e.g., "1.0.0")
+- `author` - Skill creator name
+- `license` - License name or bundled license file reference
+- `compatibility` - Environment requirements and product compatibility
+- `allowed-tools` - Space- or comma-delimited list of tools allowed for the skill
+- `argument-hint` - Usage hint for slash-command style invocation
+- `user-invocable` - Toggle visibility in user menus
+- `disable-model-invocation` - Prevents model invocation when skill is active
+- `when-to-use` - Short guidance for automatic triggering
+- `context` - Set to `fork` to run in a subagent context
+- `agent` - Subagent type when `context = "fork"`
+- `hooks` - Skill-scoped hook configuration
 
 ### Compliance with Agent Skills Standard
 
 VT Code's skill system fully complies with the [open Agent Skills standard](http://agentskills.io/specification). Your skills are:
 
--   **Portable** - Work across any Agent Skills-compatible tool or agent
--   **Discoverable** - Listed and managed by VT Code's skill discovery system
--   **Standardized** - Follow the common SKILL.md format for consistency
--   **Composable** - Can be shared with other developers and teams
+- **Portable** - Work across any Agent Skills-compatible tool or agent
+- **Discoverable** - Listed and managed by VT Code's skill discovery system
+- **Standardized** - Follow the common SKILL.md format for consistency
+- **Composable** - Can be shared with other developers and teams
 
 For the complete specification, visit http://agentskills.io/specification.
 
@@ -246,7 +246,7 @@ import anthropic
 
 client = anthropic.Anthropic()
 response = client.messages.create(
-    model="claude-4-5-sonnet",
+    model="claude-haiku-4-5",
     max_tokens=4096,
     tools=[{"type": "code_execution", "name": "bash"}],
     messages=[{
@@ -263,11 +263,11 @@ response = client.messages.create(
 
 **Use Cases:**
 
--   Financial reports and dashboards
--   Data analysis and summaries
--   Employee records management
--   Inventory tracking
--   Sales performance reports
+- Financial reports and dashboards
+- Data analysis and summaries
+- Employee records management
+- Inventory tracking
+- Sales performance reports
 
 See [SPREADSHEET_EXAMPLE.md](docs/skills/SPREADSHEET_EXAMPLE.md) for detailed examples.
 
@@ -282,7 +282,7 @@ import anthropic
 
 client = anthropic.Anthropic()
 response = client.messages.create(
-    model="claude-4-5-sonnet",
+    model="claude-haiku-4-5",
     max_tokens=4096,
     tools=[{"type": "code_execution", "name": "bash"}],
     messages=[{
@@ -299,11 +299,11 @@ response = client.messages.create(
 
 **Use Cases:**
 
--   Project proposals and reports
--   Meeting minutes and agendas
--   API documentation
--   User guides and manuals
--   Contract and legal documents
+- Project proposals and reports
+- Meeting minutes and agendas
+- API documentation
+- User guides and manuals
+- Contract and legal documents
 
 See [WORD_DOCUMENT_EXAMPLE.md](docs/skills/WORD_DOCUMENT_EXAMPLE.md) for detailed examples.
 
@@ -318,7 +318,7 @@ import anthropic
 
 client = anthropic.Anthropic()
 response = client.messages.create(
-    model="claude-4-5-sonnet",
+    model="claude-haiku-4-5",
     max_tokens=4096,
     tools=[{"type": "code_execution", "name": "bash"}],
     messages=[{
@@ -335,11 +335,11 @@ response = client.messages.create(
 
 **Use Cases:**
 
--   Invoice and receipt generation
--   Certificate and diploma creation
--   Data reports and analysis
--   Marketing collateral
--   Technical documentation
+- Invoice and receipt generation
+- Certificate and diploma creation
+- Data reports and analysis
+- Marketing collateral
+- Technical documentation
 
 See [PDF_GENERATION_EXAMPLE.md](docs/skills/PDF_GENERATION_EXAMPLE.md) for detailed examples.
 
@@ -354,7 +354,7 @@ import anthropic
 
 client = anthropic.Anthropic()
 response = client.messages.create(
-    model="claude-4-5-sonnet",
+    model="claude-haiku-4-5",
     max_tokens=4096,
     tools=[{"type": "code_execution", "name": "bash"}],
     messages=[{
@@ -371,11 +371,11 @@ response = client.messages.create(
 
 **Slide Types:**
 
--   Title slide with branding
--   Content slides with bullet points
--   Two-column layouts
--   Image and multimedia slides
--   Data visualization slides
+- Title slide with branding
+- Content slides with bullet points
+- Two-column layouts
+- Image and multimedia slides
+- Data visualization slides
 
 ---
 
@@ -412,22 +412,22 @@ python examples/skills_pdf_generation.py
 
 **Level 1: Metadata** (~100 tokens)
 
--   Claude knows what skills are available
--   Names and brief descriptions only
--   Always included in system prompt
--   No context cost when unused
+- Claude knows what skills are available
+- Names and brief descriptions only
+- Always included in system prompt
+- No context cost when unused
 
 **Level 2: Instructions** (<5K tokens)
 
--   Full skill documentation and workflows
--   Loaded when skill is triggered
--   Consumed only during use
+- Full skill documentation and workflows
+- Loaded when skill is triggered
+- Consumed only during use
 
 **Level 3: Resources** (on-demand)
 
--   Scripts, templates, reference materials
--   Executed via bash without loading contents
--   No context overhead
+- Scripts, templates, reference materials
+- Executed via bash without loading contents
+- No context overhead
 
 ### File Output Handling
 
@@ -458,13 +458,13 @@ VT Code now supports a comprehensive skills location system similar to pi-mono, 
 
 **Supported Locations:**
 
--   **VT Code User Skills**: `~/.vtcode/skills/` (highest precedence)
--   **VT Code Project Skills**: `.vtcode/skills/`
--   **Pi User Skills**: `~/.pi/skills/`
--   **Pi Project Skills**: `.pi/skills/`
--   **Claude User Skills**: `~/.claude/skills/`
--   **Claude Project Skills**: `.claude/skills/`
--   **Codex User Skills**: `~/.codex/skills/` (lowest precedence)
+- **VT Code User Skills**: `~/.vtcode/skills/` (highest precedence)
+- **VT Code Project Skills**: `.vtcode/skills/`
+- **Pi User Skills**: `~/.pi/skills/`
+- **Pi Project Skills**: `.pi/skills/`
+- **Claude User Skills**: `~/.claude/skills/`
+- **Claude Project Skills**: `.claude/skills/`
+- **Codex User Skills**: `~/.codex/skills/` (lowest precedence)
 
 ### Key Features
 
@@ -474,8 +474,8 @@ VT Code now supports a comprehensive skills location system similar to pi-mono, 
 
 **Name Separators**: Different separators for different frameworks:
 
--   VT Code locations: `/` (path separator)
--   Pi locations: `:` (colon separator)
+- VT Code locations: `/` (path separator)
+- Pi locations: `:` (colon separator)
 
 **Backward Compatibility**: All existing Claude Code skills continue to work in their original locations.
 
@@ -500,7 +500,7 @@ Skills work seamlessly with code execution:
 
 ```python
 response = client.messages.create(
-    model="claude-4-5-sonnet",
+    model="claude-haiku-4-5",
     max_tokens=4096,
     tools=[
         {"type": "code_execution", "name": "bash"},
@@ -564,27 +564,27 @@ Common errors and solutions:
 
 **VT Code Global Skills** (`~/.vtcode/skills/`):
 
--   Reusable across all projects (highest precedence)
--   Examples: code-review, doc-generator, security-audit
+- Reusable across all projects (highest precedence)
+- Examples: code-review, doc-generator, security-audit
 
 **VT Code Project Skills** (`.vtcode/skills/`):
 
--   Specific to your project
--   Examples: brand-guidelines, api-spec, deployment-playbook
+- Specific to your project
+- Examples: brand-guidelines, api-spec, deployment-playbook
 
 **Pi Framework Skills** (`~/.pi/skills/`, `.pi/skills/`):
 
--   Skills following the Pi framework specification
--   Uses `:` as name separator for nested skills
+- Skills following the Pi framework specification
+- Uses `:` as name separator for nested skills
 
 **Claude Code Skills** (`~/.claude/skills/`, `.claude/skills/`):
 
--   Legacy Claude Code skills (backward compatible)
--   Examples: existing skills migrated from Claude Code
+- Legacy Claude Code skills (backward compatible)
+- Examples: existing skills migrated from Claude Code
 
 **Codex CLI Skills** (`~/.codex/skills/`):
 
--   Codex CLI compatible skills (lowest precedence)
+- Codex CLI compatible skills (lowest precedence)
 
 ### Precedence System
 
@@ -677,14 +677,14 @@ Document limitations and special cases:
 ```markdown
 ## Limitations
 
--   Only supports Python 3.9+
--   Requires git repository
--   Cannot analyze binary files
+- Only supports Python 3.9+
+- Requires git repository
+- Cannot analyze binary files
 
 ## When Not to Use
 
--   For real-time performance analysis (use profilers)
--   For dynamic code generation patterns
+- For real-time performance analysis (use profilers)
+- For dynamic code generation patterns
 ```
 
 ### 5. Use Scripts for Automation
@@ -709,21 +709,21 @@ Skills use three levels of loading for efficiency:
 
 **Level 1: Metadata** (~100 tokens)
 
--   Always available in system prompt
--   Agent knows skill exists and what it does
--   No context cost when unused
+- Always available in system prompt
+- Agent knows skill exists and what it does
+- No context cost when unused
 
 **Level 2: Instructions** (<5K tokens)
 
--   Loaded when skill is triggered
--   Full SKILL.md body with guidance
--   Consumed only when skill is used
+- Loaded when skill is triggered
+- Full SKILL.md body with guidance
+- Consumed only when skill is used
 
 **Level 3: Resources** (on-demand)
 
--   Scripts executed via bash (output only)
--   Templates accessed as needed
--   No context penalty for bundled files
+- Scripts executed via bash (output only)
+- Templates accessed as needed
+- No context penalty for bundled files
 
 ### Skill Composition
 
@@ -734,8 +734,8 @@ Skills can reference other skills:
 
 This skill pairs well with:
 
--   `code-review` - For comprehensive reviews
--   `testing` - For test generation
+- `code-review` - For comprehensive reviews
+- `testing` - For test generation
 
 ## Dependencies
 
@@ -749,6 +749,7 @@ Use semantic versioning to manage skill evolution:
 ```yaml
 version: 2.1.0 # Major.Minor.Patch
 
+
 # In SKILL.md, document breaking changes:
 # v2.0.0 - Changed output format from JSON to Markdown
 # v2.1.0 - Added support for TypeScript
@@ -760,10 +761,10 @@ version: 2.1.0 # Major.Minor.Patch
 
 When available, IDE extensions can:
 
--   Discover and list skills
--   Load skills with a single click
--   Execute skills on selected code
--   Display skill results inline
+- Discover and list skills
+- Load skills with a single click
+- Execute skills on selected code
+- Display skill results inline
 
 Check for Zed and VS Code extensions on the VT Code repository.
 
@@ -817,15 +818,15 @@ vtcode skills info <name>  # Preview
 
 ## Resources
 
--   **Agent Skills Standard**: http://agentskills.io/ - The open standard for agent skills
--   **Agent Skills Specification**: http://agentskills.io/specification - Complete SKILL.md format spec
--   **Agent Skills Integration Guide**: http://agentskills.io/integrate-skills - How to add skills support to your agent
--   **Anthropic Skills Spec**: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
--   **Skills Cookbook**: https://github.com/anthropics/claude-cookbooks/tree/main/skills
--   **VT Code Skills Implementation**: `SKILLS_IMPLEMENTATION_SUMMARY.md`
--   **Integration Plan**: `SKILLS_INTEGRATION_PLAN.md`
--   **Location System**: `vtcode-core/src/skills/locations.rs` - Implementation details
--   **Precedence System**: Follows pi-mono pattern with VT Code-specific enhancements
+- **Agent Skills Standard**: http://agentskills.io/ - The open standard for agent skills
+- **Agent Skills Specification**: http://agentskills.io/specification - Complete SKILL.md format spec
+- **Agent Skills Integration Guide**: http://agentskills.io/integrate-skills - How to add skills support to your agent
+- **Anthropic Skills Spec**: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
+- **Skills Cookbook**: https://github.com/anthropics/claude-cookbooks/tree/main/skills
+- **VT Code Skills Implementation**: `SKILLS_IMPLEMENTATION_SUMMARY.md`
+- **Integration Plan**: `SKILLS_INTEGRATION_PLAN.md`
+- **Location System**: `vtcode-core/src/skills/locations.rs` - Implementation details
+- **Precedence System**: Follows pi-mono pattern with VT Code-specific enhancements
 
 ---
 

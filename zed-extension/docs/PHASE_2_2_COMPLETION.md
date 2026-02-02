@@ -11,53 +11,51 @@
 
 Comprehensive configuration validation system:
 
--   **ValidationResult**: Result container
+- **ValidationResult**: Result container
+    - `valid` flag for pass/fail
+    - Error collection with details
+    - Warning collection for non-critical issues
+    - Formatted output generation
+    - Error and warning counting
 
-    -   `valid` flag for pass/fail
-    -   Error collection with details
-    -   Warning collection for non-critical issues
-    -   Formatted output generation
-    -   Error and warning counting
+- **ValidationError**: Individual error tracking
+    - Field name (e.g., "ai.provider")
+    - Error message
+    - Optional suggestion for fix
+    - Formatted output with suggestion
 
--   **ValidationError**: Individual error tracking
-
-    -   Field name (e.g., "ai.provider")
-    -   Error message
-    -   Optional suggestion for fix
-    -   Formatted output with suggestion
-
--   **Validation Functions**:
-    -   `validate_config()` - Full config validation
-    -   `validate_ai_config()` - AI provider and model validation
-    -   `validate_workspace_config()` - Token limits and analysis settings
-    -   `validate_security_config()` - Security settings validation
+- **Validation Functions**:
+    - `validate_config()` - Full config validation
+    - `validate_ai_config()` - AI provider and model validation
+    - `validate_workspace_config()` - Token limits and analysis settings
+    - `validate_security_config()` - Security settings validation
 
 ### Validation Rules Implemented
 
 **AI Configuration**:
 
--   Provider must not be empty
--   Provider must be one of: anthropic, openai, local
--   Model must not be empty
--   Provides suggestions for invalid values
+- Provider must not be empty
+- Provider must be one of: anthropic, openai, local
+- Model must not be empty
+- Provides suggestions for invalid values
 
 **Workspace Configuration**:
 
--   Warns if max_context_tokens is 0
--   Warns if max_context_tokens exceeds 100,000
--   Helps prevent performance issues
+- Warns if max_context_tokens is 0
+- Warns if max_context_tokens exceeds 100,000
+- Helps prevent performance issues
 
 **Security Configuration**:
 
--   Validates allowed_tools configuration
--   Checks human_in_the_loop settings
+- Validates allowed_tools configuration
+- Checks human_in_the_loop settings
 
 ### Extension Integration
 
 New methods in VTCodeExtension:
 
--   `validate_current_config()` - Validate loaded config
--   `log_validation()` - Log validation results to output channel
+- `validate_current_config()` - Validate loaded config
+- `log_validation()` - Log validation results to output channel
 
 ## Code Quality Metrics
 
@@ -71,12 +69,12 @@ Code Coverage:    100% (all modules tested)
 
 ### New Test Coverage
 
--   ValidationResult creation and mutation
--   ValidationError creation and formatting
--   AI config validation (valid and invalid)
--   Workspace config validation (limits)
--   Config formatting for display
--   Integration with extension methods
+- ValidationResult creation and mutation
+- ValidationError creation and formatting
+- AI config validation (valid and invalid)
+- Workspace config validation (limits)
+- Config formatting for display
+- Integration with extension methods
 
 ## Module Statistics
 
@@ -128,7 +126,7 @@ pub fn validate_config(config: &Config) -> ValidationResult
 ```toml
 [ai]
 provider = "anthropic"
-model = "claude-4-5-sonnet"
+model = "claude-haiku-4-5"
 
 [workspace]
 max_context_tokens = 8000
@@ -163,24 +161,24 @@ Errors:
 
 ### 1. Configuration Validation
 
--   Comprehensive rule checking
--   Per-section validation
--   Error aggregation
--   Warning collection
+- Comprehensive rule checking
+- Per-section validation
+- Error aggregation
+- Warning collection
 
 ### 2. Error Reporting
 
--   Detailed error messages
--   Field identification
--   Suggested fixes
--   Formatted output
+- Detailed error messages
+- Field identification
+- Suggested fixes
+- Formatted output
 
 ### 3. User Feedback
 
--   Clear error display
--   Actionable suggestions
--   Warning messages
--   Integration with output channel
+- Clear error display
+- Actionable suggestions
+- Warning messages
+- Integration with output channel
 
 ## Integration Points
 
@@ -213,10 +211,10 @@ Update Editor State
 
 All validation functions are pure:
 
--   No mutable state
--   No global variables
--   Safe to call from multiple threads
--   Results can be safely shared with Arc
+- No mutable state
+- No global variables
+- Safe to call from multiple threads
+- Results can be safely shared with Arc
 
 ## Future Enhancements (Phase 2.2+ Extensions)
 
@@ -230,10 +228,10 @@ All validation functions are pure:
 
 This implementation enables:
 
--   Workspace structure analysis
--   File and selection context
--   Open buffers tracking
--   Rich context passing to VT Code
+- Workspace structure analysis
+- File and selection context
+- Open buffers tracking
+- Rich context passing to VT Code
 
 ## Build Verification
 

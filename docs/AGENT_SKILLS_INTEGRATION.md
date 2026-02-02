@@ -195,13 +195,13 @@ mode: false
 
 #### Manifest Control Fields
 
--   `allowed-tools` (optional): explicit allowlist for the skill (e.g., `Read`, `Write`, `Bash(python {baseDir}/scripts/*:*)`). Keep minimal; do not expose unused tools.
--   `disable-model-invocation` (optional): gate direct model calls when the skill is active; prefer tools/scripts.
--   `when-to-use` (optional, <=512 chars): guidance appended to description in some stacks; rely on a descriptive `description` first since this field is not guaranteed in upstream docs.
--   `requires-container` / `disallow-container` (optional, mutually exclusive): declare container requirements so VT Code can filter or prefer VT Code-native flows without string heuristics.
--   `license` (optional): short license string for the skill.
--   `model` (optional): override model; default inherits session.
--   `mode` (optional): mark skills that change operating mode (highlighted separately in some UIs).
+- `allowed-tools` (optional): explicit allowlist for the skill (e.g., `Read`, `Write`, `Bash(python {baseDir}/scripts/*:*)`). Keep minimal; do not expose unused tools.
+- `disable-model-invocation` (optional): gate direct model calls when the skill is active; prefer tools/scripts.
+- `when-to-use` (optional, <=512 chars): guidance appended to description in some stacks; rely on a descriptive `description` first since this field is not guaranteed in upstream docs.
+- `requires-container` / `disallow-container` (optional, mutually exclusive): declare container requirements so VT Code can filter or prefer VT Code-native flows without string heuristics.
+- `license` (optional): short license string for the skill.
+- `model` (optional): override model; default inherits session.
+- `mode` (optional): mark skills that change operating mode (highlighted separately in some UIs).
 
 **Pathing best practice:** use `{baseDir}` in instructions when referencing bundled resources to avoid absolute paths and keep skills portable.
 
@@ -224,10 +224,10 @@ vtcode ask "Create a sales performance spreadsheet for Q4 2024"
 
 **Features:**
 
--   Multiple sheets and complex layouts
--   Formulas (SUM, AVERAGE, VLOOKUP)
--   Charts and visualizations
--   Professional formatting
+- Multiple sheets and complex layouts
+- Formulas (SUM, AVERAGE, VLOOKUP)
+- Charts and visualizations
+- Professional formatting
 
 ---
 
@@ -244,10 +244,10 @@ vtcode ask "Create project proposal document with timeline and budget"
 
 **Features:**
 
--   Rich text formatting
--   Heading styles and hierarchy
--   Tables and lists
--   Page management
+- Rich text formatting
+- Heading styles and hierarchy
+- Tables and lists
+- Page management
 
 ---
 
@@ -264,10 +264,10 @@ vtcode ask "Generate quarterly financial report PDF"
 
 **Features:**
 
--   Advanced styling
--   Charts and visualizations
--   Headers/footers
--   Professional branding
+- Advanced styling
+- Charts and visualizations
+- Headers/footers
+- Professional branding
 
 ---
 
@@ -410,7 +410,7 @@ client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 # Enable spreadsheet skill
 response = client.messages.create(
-    model="claude-4-5-sonnet",
+    model="claude-haiku-4-5",
     max_tokens=4096,
     tools=[{"type": "code_execution", "name": "bash"}],
     messages=[{
@@ -523,25 +523,21 @@ vtcode chat
 ## Best Practices
 
 1. **Use Appropriate Skill**
-
     - Financial reports → spreadsheet-generator
     - Technical docs → doc-generator
     - Final distribution → pdf-report-generator
 
 2. **Progressive Disclosure**
-
     - Metadata loaded first (minimal cost)
     - Full instructions on-demand
     - Resources executed without loading
 
 3. **Error Handling**
-
     - Check API responses for errors
     - Validate file creation
     - Handle edge cases gracefully
 
 4. **Performance**
-
     - Large documents may take longer
     - Optimize charts and images
     - Use summaries for 100+ page documents
@@ -612,11 +608,11 @@ vtcode ask "Create file with <skill>"
 
 ## Resources
 
--   `.claude/skills/README.md` - Skills directory overview
--   `docs/SKILLS_GUIDE.md` - Complete skills guide
--   `examples/skills_*.py` - Working examples
--   `docs/skills/*.md` - Specific skill documentation
--   https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview - Anthropic skills spec
+- `.claude/skills/README.md` - Skills directory overview
+- `docs/SKILLS_GUIDE.md` - Complete skills guide
+- `examples/skills_*.py` - Working examples
+- `docs/skills/*.md` - Specific skill documentation
+- https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview - Anthropic skills spec
 
 ---
 

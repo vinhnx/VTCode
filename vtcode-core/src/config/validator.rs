@@ -260,9 +260,6 @@ mod tests {
     "models": {
       "gpt-5": {
         "context": 128000
-      },
-      "gpt-4-turbo": {
-        "context": 128000
       }
     }
   }

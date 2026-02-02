@@ -277,7 +277,7 @@ mod tests {
             include_reasoning: true,
         };
         emitter
-            .enable_open_responses(config, "claude-3-sonnet", Some(or_path.clone()))
+            .enable_open_responses(config, "claude-haiku-4-5", Some(or_path.clone()))
             .expect("enable");
 
         // Emit events

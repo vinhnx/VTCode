@@ -58,7 +58,7 @@ curl -X POST http://localhost:11434/v1/messages \
   -H "x-api-key: ollama" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-3-5-sonnet",
+    "model": "claude-haiku-4-5",
     "max_tokens": 1024,
     "messages": [
       {
@@ -151,7 +151,7 @@ Afterwards, this new model name can be specified in the `model` field:
 curl http://localhost:11434/v1/messages \
     -H "Content-Type: application/json" \
     -d '{
-        "model": "claude-3-5-sonnet",
+        "model": "claude-haiku-4-5",
         "max_tokens": 1024,
         "messages": [
             {
@@ -203,7 +203,7 @@ curl -X POST http://localhost:11434/v1/messages \
   -H "Content-Type: application/json" \
   -H "x-api-key: ollama" \
   -d '{
-    "model": "claude-3-5-sonnet",
+    "model": "claude-haiku-4-5",
     "max_tokens": 10,
     "messages": [
       {
