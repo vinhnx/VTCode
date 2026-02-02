@@ -2,6 +2,28 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.12 - 2026-02-02
+
+- chore: update vtcode.gif resource (68cdf67b) (@vinhnx)
+- docs: add compliance testing section and request object for Open Responses (ee2bcf14) (@vinhnx)
+- chore(release): bump version to 0.74.11 [skip ci] (528d8846) (@vinhnx)
+- docs: update changelog for v0.74.11 [skip ci] (dcdaef82) (@vtcode-release-bot)
+- fix: update spinner finish behavior for cancellation handling (73a7d72f) (@vinhnx)
+- refactor: remove unused set_defer_rendering method from StreamingReasoningState (e429daf0) (@vinhnx)
+- refactor: remove deprecated model constants and clean up supported models list (eb9b6ff9) (@vinhnx)
+- fix: resolve duplicate model entries and correct legacy model references (a712a191) (@vinhnx)
+- Update model references to "claude-haiku-4-5" across configuration and tests (b06501f4) (@vinhnx)
+- feat: add signal handling for graceful termination in TUI (f4de0101) (@vinhnx)
+- Update model references from gpt-4 to gpt-5 across documentation and codebase (cec3d7c9) (@vinhnx)
+- refactor: improve reasoning content comparison and suppress duplication in response rendering (87b066cf) (@vinhnx)
+- chore: update default model and workspace trust settings in configuration fix: suppress duplicated content rendering in response handling refactor: clean up spacing logic in reasoning buffer add: implement streaming payload decoding helpers for OpenRouter (49a403fd) (@vinhnx)
+- Fix release note (f7562c14) (@vinhnx)
+- chore: update changelog header and release script title format (8f804b80) (@vinhnx)
+- Duplicate badge links for Agent Skills and protocols (b9216314) (@1097578+vinhnx)
+- Add star history section to README (3de92245) (@1097578+vinhnx)
+- chore: update homebrew formula to v0.74.10 (c08a491c)
+
+
 ## v0.74.11 - 2026-02-02
 
 - fix: update spinner finish behavior for cancellation handling (36d1f577) (@vinhnx)
