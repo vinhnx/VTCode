@@ -832,6 +832,7 @@ interleaved_thinking_budget_tokens = 31999
 interleaved_thinking_type_enabled = "enabled"
 effort = "low"
 count_tokens_enabled = false
+skip_model_validation = false
 # skip_model_validation = false  # DEPRECATED: Model validation removed in v0.75.0+
 
 [provider.anthropic.tool_search]

@@ -285,7 +285,6 @@ impl AnthropicProvider {
     fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         request_builder::convert_to_anthropic_format(request, &self.request_builder_context())
     }
-
 }
 
 #[async_trait]

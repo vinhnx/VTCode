@@ -9,7 +9,6 @@ use crate::prompts::system::default_system_prompt;
 use super::OpenRouterProvider;
 
 impl OpenRouterProvider {
-
     pub(super) fn convert_to_openrouter_format(
         &self,
         request: &LLMRequest,

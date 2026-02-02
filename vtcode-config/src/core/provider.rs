@@ -57,6 +57,7 @@ pub struct AnthropicConfig {
     pub count_tokens_enabled: bool,
 }
 
+#[allow(deprecated)]
 impl Default for AnthropicConfig {
     fn default() -> Self {
         Self {

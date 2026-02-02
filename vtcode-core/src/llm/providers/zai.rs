@@ -134,7 +134,6 @@ impl ZAIProvider {
 
         Ok(Value::Object(payload))
     }
-
 }
 
 #[async_trait]

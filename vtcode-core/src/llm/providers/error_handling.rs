@@ -67,7 +67,6 @@ pub async fn handle_openai_http_error(
     Err(parse_api_error(provider_name, status, &error_text))
 }
 
-
 /// Check if an error is a rate limit error based on status code and message
 #[inline]
 pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
@@ -249,5 +248,4 @@ mod tests {
         assert_eq!(STATUS_BAD_REQUEST, 400);
         assert_eq!(STATUS_TOO_MANY_REQUESTS, 429);
     }
-
 }
