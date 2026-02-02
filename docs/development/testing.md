@@ -110,6 +110,17 @@ mod integration_tests {
 }
 ```
 
+### Specification Compliance Tests
+
+Located in standalone files in `tests/`:
+
+-   `tests/open_responses_compliance.rs`: Validates strict adherence to the [Open Responses](https://www.openresponses.org/) specification.
+
+```bash
+# Run Open Responses compliance tests
+cargo test --test open_responses_compliance
+```
+
 ### Benchmarks
 
 Located in `benches/` directory:

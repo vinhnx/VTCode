@@ -18,12 +18,12 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     // Claude 3.x series
     "claude-3-7-sonnet-20250219", // Latest Claude 3.7 Sonnet
     "claude-3-7-sonnet-latest",   // Alias for Claude 3.7 Sonnet
-    "claude-haiku-4-5", // Latest Claude 3.5 Sonnet
-    "claude-haiku-4-5",   // Alias for Claude 3.5 Sonnet
+    "claude-haiku-4-5",           // Latest Claude 3.5 Sonnet
+    "claude-haiku-4-5",           // Alias for Claude 3.5 Sonnet
     "claude-3-5-haiku-20241022",  // Latest Claude 3.5 Haiku
     "claude-3-5-haiku-latest",    // Alias for latest Claude 3.5 Haiku
     "claude-3-opus-20240229",     // Legacy Claude 3 Opus
-    "claude-haiku-4-5-20240229",   // Legacy Claude 3 Sonnet
+    "claude-haiku-4-5-20240229",  // Legacy Claude 3 Sonnet
     "claude-3-haiku-20240307",    // Legacy Claude 3 Haiku
 ];
 

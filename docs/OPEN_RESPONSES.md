@@ -353,6 +353,26 @@ if let Some(response) = integration.finish_response() {
 }
 ```
 
+## Compliance Testing
+
+VT Code includes a comprehensive compliance test suite to ensure strict adherence to the Open Responses specification. This suite validates:
+
+- **Object Validity**: Verifies that `Response` and `Request` objects contain all mandatory fields and follow the correct JSON schema.
+- **State Machine Transitions**: Validates that items follow the state machine lifecycle (e.g., `in_progress` -> `completed`).
+- **Streaming Event Sequences**: Ensures events are emitted in the correct order (e.g., `response.created` before `response.output_item.added`).
+- **Extension Prefixing**: Validates that all custom items use the required `vendor:name` prefixing convention.
+- **Agentic Loops**: Verifies proper mapping of tool calls and reasoning items.
+
+### Running Compliance Tests
+
+To run the Open Responses compliance test suite:
+
+```bash
+cargo test --test open_responses_compliance
+```
+
+The test source is located at `tests/open_responses_compliance.rs`.
+
 ## References
 
 - [Open Responses Specification](https://www.openresponses.org/specification)
