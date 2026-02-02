@@ -67,20 +67,6 @@ pub async fn handle_openai_http_error(
     Err(parse_api_error(provider_name, status, &error_text))
 }
 
-/// Parse Anthropic error response to extract friendly message
-/// Returns Cow to avoid allocation when returning error_text directly
-fn parse_anthropic_error_message(error_text: &str) -> Cow<'_, str> {
-    if let Ok(error_json) = serde_json::from_str::<Value>(error_text) {
-        if let Some(message) = error_json
-            .get("error")
-            .and_then(|e| e.get("message"))
-            .and_then(|m| m.as_str())
-        {
-            return Cow::Owned(message.to_string());
-        }
-    }
-    Cow::Borrowed(error_text)
-}
 
 /// Check if an error is a rate limit error based on status code and message
 #[inline]
@@ -264,12 +250,4 @@ mod tests {
         assert_eq!(STATUS_TOO_MANY_REQUESTS, 429);
     }
 
-    #[test]
-    fn test_anthropic_error_parsing() {
-        let json_error = r#"{"error":{"message":"Invalid API key","type":"authentication_error"}}"#;
-        assert_eq!(parse_anthropic_error_message(json_error), "Invalid API key");
-
-        let plain_error = "Some error";
-        assert_eq!(parse_anthropic_error_message(plain_error), "Some error");
-    }
 }

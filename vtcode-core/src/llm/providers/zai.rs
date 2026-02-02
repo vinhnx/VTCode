@@ -135,49 +135,6 @@ impl ZAIProvider {
         Ok(Value::Object(payload))
     }
 
-    fn handle_zai_http_error(
-        &self,
-        status: reqwest::StatusCode,
-        body: &str,
-    ) -> Result<(), LLMError> {
-        if status.is_success() {
-            return Ok(());
-        }
-
-        let metadata = Some(LLMErrorMetadata::new(
-            PROVIDER_NAME,
-            Some(status.as_u16()),
-            None,
-            None,
-            None,
-            None,
-            Some(body.to_string()),
-        ));
-
-        match status {
-            reqwest::StatusCode::UNAUTHORIZED => {
-                let formatted = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    "Authentication failed: Invalid API key",
-                );
-                Err(LLMError::Authentication {
-                    message: formatted,
-                    metadata,
-                })
-            }
-            reqwest::StatusCode::TOO_MANY_REQUESTS => Err(LLMError::RateLimit { metadata }),
-            _ => {
-                let formatted = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("HTTP {}: {}", status, body),
-                );
-                Err(LLMError::Provider {
-                    message: formatted,
-                    metadata,
-                })
-            }
-        }
-    }
 }
 
 #[async_trait]

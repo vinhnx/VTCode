@@ -298,56 +298,6 @@ pub fn parse_openai_tool_calls(calls: &[Value]) -> Vec<ToolCall> {
         .collect()
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum StreamFragment {
-    Content(String),
-    Reasoning(String),
-}
-
-#[derive(Default, Debug)]
-pub struct StreamDelta {
-    fragments: Vec<StreamFragment>,
-}
-
-impl StreamDelta {
-    pub fn push_content(&mut self, text: &str) {
-        if text.is_empty() {
-            return;
-        }
-
-        match self.fragments.last_mut() {
-            Some(StreamFragment::Content(existing)) => existing.push_str(text),
-            _ => self
-                .fragments
-                .push(StreamFragment::Content(text.to_string())),
-        }
-    }
-
-    pub fn push_reasoning(&mut self, text: &str) {
-        if text.is_empty() {
-            return;
-        }
-
-        match self.fragments.last_mut() {
-            Some(StreamFragment::Reasoning(existing)) => existing.push_str(text),
-            _ => self
-                .fragments
-                .push(StreamFragment::Reasoning(text.to_string())),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.fragments.is_empty()
-    }
-
-    pub fn into_fragments(self) -> Vec<StreamFragment> {
-        self.fragments
-    }
-
-    pub fn extend(&mut self, other: StreamDelta) {
-        self.fragments.extend(other.fragments);
-    }
-}
 
 pub fn append_text_with_reasoning(
     text: &str,
