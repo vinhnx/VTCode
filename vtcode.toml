@@ -9,7 +9,7 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "minimax-m2.1:cloud"
+default_model = "gpt-oss:20b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -796,7 +796,7 @@ enabled = true
 enabled = true
 transport = "stdio"
 # workspace_trust controls ACP trust mode: "tools_policy" (prompts) or "full_auto" (no prompts)
-workspace_trust = "full_auto"
+workspace_trust = "tools_policy"
 
 [acp.zed.tools]
 read_file = true

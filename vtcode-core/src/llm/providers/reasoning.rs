@@ -23,21 +23,12 @@ impl ReasoningBuffer {
         }
 
         let last_has_spacing = self.text.ends_with(' ') || self.text.ends_with('\n');
-        let chunk_starts_with_space = chunk
-            .chars()
-            .next()
-            .map(|value| value.is_whitespace())
-            .unwrap_or(false);
         let leading_punctuation = Self::is_leading_punctuation(chunk);
         let trailing_connector = Self::ends_with_connector(&self.text);
 
         let mut delta = String::new();
 
-        if !self.text.is_empty()
-            && !last_has_spacing
-            && !chunk_starts_with_space
-            && !leading_punctuation
-            && !trailing_connector
+        if !self.text.is_empty() && !last_has_spacing && !leading_punctuation && !trailing_connector
         {
             delta.push(' ');
         }
@@ -460,5 +451,21 @@ mod tests {
         let input = "  line1  \n   \n  \n  line2  \n\t\n     \nline3";
         let cleaned = clean_reasoning_text(input);
         assert_eq!(cleaned, "  line1\n  line2\nline3");
+    }
+
+    #[test]
+    fn reasoning_buffer_preserves_leading_whitespace_spacing() {
+        let mut buffer = ReasoningBuffer::default();
+        let first = buffer.push("Hello");
+        assert_eq!(first.as_deref(), Some("Hello"));
+
+        let second = buffer.push(" world");
+        assert_eq!(second.as_deref(), Some(" world"));
+
+        let third = buffer.push("!");
+        assert_eq!(third.as_deref(), Some("!"));
+
+        let finalized = buffer.finalize();
+        assert_eq!(finalized.as_deref(), Some("Hello world!"));
     }
 }
