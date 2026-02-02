@@ -417,7 +417,7 @@ main() {
     
          # Create GitHub release with release notes
          if gh release create "v$released_version" \
-             --title "VT Code v$released_version" \
+             --title "v$released_version" \
              --notes "$release_body" \
              --draft=false \
              --prerelease=false; then
