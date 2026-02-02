@@ -146,26 +146,37 @@ jobs:
         run: |
           # Get the previous tag
           PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "${{ github.event.inputs.tag }}" | head -n 1)
-          
+
           if [ -z "$PREV_TAG" ]; then
-            CHANGELOG=$(npx changelogithub --dry 2>/dev/null || git log HEAD --no-merges --pretty=format:"* %s")
+            # If no previous tag, get all commits
+            CHANGELOG=$(git log --no-merges --pretty=format:"- %s (%h)" --since "$(git log -1 --format="%ad" --date=iso v0.1.0 2>/dev/null || echo "2020-01-01")")
           else
-            CHANGELOG=$(npx changelogithub --dry --from "$PREV_TAG" --to HEAD 2>/dev/null || git log "$PREV_TAG"..HEAD --no-merges --pretty=format:"* %s")
+            # Generate changelog between previous tag and current
+            CHANGELOG=$(git log "$PREV_TAG"..HEAD --no-merges --pretty=format:"- %s (%h)")
           fi
-          
-          # Extract the changelog content between separators (remove the --- lines)
-          CHANGELOG=$(echo "$CHANGELOG" | sed -n '/^-*$/,/^-*$/p' | sed '1d;$d')
-          
-          # Save to file for use in release
-          echo "$CHANGELOG" > release_notes.md
+
+          # Format the changelog with proper header
+          {
+            echo "# Changelog for ${{ github.event.inputs.tag }}"
+            echo ""
+            echo "## Changes"
+            echo ""
+            echo "$CHANGELOG"
+            echo ""
+            echo "---"
+            echo "_Generated on $(date -u +%Y-%m-%d)_"
+          } > release_notes.md
+
+          # Output changelog for debugging
           echo "CHANGELOG_CONTENT<<EOF" >> $GITHUB_ENV
-          echo "$CHANGELOG" >> $GITHUB_ENV
+          cat release_notes.md >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag }}
+          name: ${{ github.event.inputs.tag }}  # Explicitly set release name to just the tag
           files: |
             artifacts/*.tar.gz
             artifacts/*.sha256
