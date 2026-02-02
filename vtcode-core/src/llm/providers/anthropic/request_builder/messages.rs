@@ -271,16 +271,26 @@ pub fn tool_result_blocks(content: &str) -> Vec<Value> {
                     if let Some(text) = item.as_str() {
                         blocks.push(json!({"type": "text", "text": text}));
                     } else {
-                        blocks.push(json!({"type": "json", "json": item}));
+                        // Stringify JSON for Anthropic compatibility
+                        blocks.push(json!({
+                            "type": "text",
+                            "text": serde_json::to_string(&item).unwrap_or_default()
+                        }));
                     }
                 }
                 if blocks.is_empty() {
-                    vec![json!({"type": "json", "json": Value::Array(vec![])})]
+                    vec![json!({"type": "text", "text": "[]"})]
                 } else {
                     blocks
                 }
             }
-            other => vec![json!({"type": "json", "json": other})],
+            other => {
+                // Stringify JSON for Anthropic compatibility
+                vec![json!({
+                    "type": "text",
+                    "text": serde_json::to_string(&other).unwrap_or_default()
+                })]
+            }
         }
     } else {
         vec![json!({"type": "text", "text": content})]

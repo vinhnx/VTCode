@@ -26,7 +26,7 @@ use super::stream_decoder;
 use super::validation;
 
 use crate::llm::providers::common::{
-    extract_prompt_cache_settings, override_base_url, resolve_model,
+    extract_prompt_cache_settings, resolve_model,
 };
 use crate::llm::providers::error_handling::{
     format_network_error, format_parse_error, handle_anthropic_http_error,
@@ -126,15 +126,7 @@ impl AnthropicProvider {
             |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
         );
 
-        let base_url_value = if models::minimax::SUPPORTED_MODELS.contains(&model.as_str()) {
-            Self::resolve_minimax_base_url(base_url)
-        } else {
-            override_base_url(
-                urls::ANTHROPIC_API_BASE,
-                base_url,
-                Some(env_vars::ANTHROPIC_BASE_URL),
-            )
-        };
+        let base_url_value = Self::resolve_base_url_internal(base_url, &model);
 
         Self {
             api_key,
@@ -147,7 +139,7 @@ impl AnthropicProvider {
         }
     }
 
-    fn resolve_minimax_base_url(base_url: Option<String>) -> String {
+    pub(crate) fn resolve_base_url_internal(base_url: Option<String>, model: &str) -> String {
         fn sanitize(value: &str) -> Option<String> {
             let trimmed = value.trim();
             if trimmed.is_empty() {
@@ -157,20 +149,38 @@ impl AnthropicProvider {
             }
         }
 
+        let is_minimax = crate::config::constants::models::minimax::SUPPORTED_MODELS.contains(&model);
+
         let resolved = base_url
             .and_then(|value| sanitize(&value))
             .or_else(|| {
-                env::var(env_vars::MINIMAX_BASE_URL)
-                    .ok()
-                    .and_then(|value| sanitize(&value))
+                if is_minimax {
+                    env::var(env_vars::MINIMAX_BASE_URL)
+                        .ok()
+                        .and_then(|value| sanitize(&value))
+                } else {
+                    None
+                }
             })
             .or_else(|| {
                 env::var(env_vars::ANTHROPIC_BASE_URL)
                     .ok()
                     .and_then(|value| sanitize(&value))
             })
-            .or_else(|| sanitize(urls::MINIMAX_API_BASE))
-            .unwrap_or_else(|| urls::MINIMAX_API_BASE.trim_end_matches('/').to_string());
+            .or_else(|| {
+                if is_minimax {
+                    sanitize(urls::MINIMAX_API_BASE)
+                } else {
+                    sanitize(urls::ANTHROPIC_API_BASE)
+                }
+            })
+            .unwrap_or_else(|| {
+                if is_minimax {
+                    urls::MINIMAX_API_BASE.trim_end_matches('/').to_string()
+                } else {
+                    urls::ANTHROPIC_API_BASE.trim_end_matches('/').to_string()
+                }
+            });
 
         let mut normalized = resolved;
 
