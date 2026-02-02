@@ -278,6 +278,12 @@ When reporting an issue, please include enough details for others to reproduce t
 
 ---
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=vinhnx/vtcode&type=timeline&legend=top-left)](https://www.star-history.com/#vinhnx/vtcode&type=timeline&legend=top-left)
+
+---
+
 ## License
 
 This repository is licensed under the [MIT License](LICENSE).
