@@ -22,25 +22,23 @@ A comprehensive status indicator component that displays real-time chat state in
 
 #### Features
 
--   **Status Icons**: Visual indicators for different chat states
+- **Status Icons**: Visual indicators for different chat states
+    - Thinking
+    - Streaming response
+    - Executing tools
+    - Error occurred
+    - Idle/Ready
 
-    -   Thinking
-    -   Streaming response
-    -   Executing tools
-    -   Error occurred
-    -   Idle/Ready
+- **Real-time Metrics**:
+    - Elapsed time (formatted as "1m 23s")
+    - Token usage tracking
+    - Model name display
+    - Participant context
 
--   **Real-time Metrics**:
-
-    -   Elapsed time (formatted as "1m 23s")
-    -   Token usage tracking
-    -   Model name display
-    -   Participant context
-
--   **Progress Indicators**:
-    -   Current/total progress display
-    -   Custom progress messages
-    -   Automatic elapsed time updates
+- **Progress Indicators**:
+    - Current/total progress display
+    - Custom progress messages
+    - Automatic elapsed time updates
 
 #### Usage Example
 
@@ -52,7 +50,7 @@ const indicator = new StatusIndicator((text) => {
 // Set status and indicators
 indicator.setStatus("streaming");
 indicator.updateTokens(250);
-indicator.setModel("gpt-4");
+indicator.setModel("gpt-5");
 indicator.updateElapsedTime(1200);
 
 // Result: " Streaming response... | 1s | 250 tokens | gpt-4"
@@ -60,10 +58,10 @@ indicator.updateElapsedTime(1200);
 
 #### Display Examples
 
--   Idle: " Ready"
--   Streaming: " Streaming response... | 2s | 342 tokens | claude-3-sonnet"
--   Executing: " Executing tools... | 1m 05s"
--   Error: " Error occurred"
+- Idle: " Ready"
+- Streaming: " Streaming response... | 2s | 342 tokens | claude-3-sonnet"
+- Executing: " Executing tools... | 1m 05s"
+- Error: " Error occurred"
 
 ---
 
@@ -75,30 +73,26 @@ Converts technical errors to user-friendly messages with actionable suggestions:
 
 #### Supported Error Types
 
--   **Network Errors**
+- **Network Errors**
+    - Connection refused (ECONNREFUSED)
+    - Timeouts
+    - DNS/unreachable (ENOTFOUND)
 
-    -   Connection refused (ECONNREFUSED)
-    -   Timeouts
-    -   DNS/unreachable (ENOTFOUND)
+- **API Errors**
+    - Token limit exceeded
+    - Rate limiting (429)
+    - Authentication failures (401)
 
--   **API Errors**
+- **System Errors**
+    - File not found (ENOENT)
+    - Permission denied (EACCES)
 
-    -   Token limit exceeded
-    -   Rate limiting (429)
-    -   Authentication failures (401)
+- **Format Errors**
+    - JSON parsing failures
+    - Invalid response formats
 
--   **System Errors**
-
-    -   File not found (ENOENT)
-    -   Permission denied (EACCES)
-
--   **Format Errors**
-
-    -   JSON parsing failures
-    -   Invalid response formats
-
--   **Default Handler**
-    -   Unknown errors with context and suggestions
+- **Default Handler**
+    - Unknown errors with context and suggestions
 
 #### Error Presentation Interface
 
@@ -147,49 +141,44 @@ Comprehensive CSS improvements for rich markdown rendering and improved visual d
 
 #### Markdown Support
 
--   **Text Formatting**
+- **Text Formatting**
+    - Bold (`<strong>`) with proper styling
+    - Italic (`<em>`) support
+    - Inline code with syntax highlighting
 
-    -   Bold (`<strong>`) with proper styling
-    -   Italic (`<em>`) support
-    -   Inline code with syntax highlighting
+- **Code Blocks**
+    - Syntax-highlighted code with monospace font
+    - Proper background color and borders
+    - Horizontal scroll for long lines
+    - Copy button (hover-activated)
 
--   **Code Blocks**
-
-    -   Syntax-highlighted code with monospace font
-    -   Proper background color and borders
-    -   Horizontal scroll for long lines
-    -   Copy button (hover-activated)
-
--   **Structured Content**
-    -   Unordered and ordered lists with proper indentation
-    -   Tables with alternating row colors
-    -   Blockquotes with left border
-    -   Links with color and hover effects
+- **Structured Content**
+    - Unordered and ordered lists with proper indentation
+    - Tables with alternating row colors
+    - Blockquotes with left border
+    - Links with color and hover effects
 
 #### Visual Improvements
 
--   **Better Spacing**
+- **Better Spacing**
+    - Consistent margins between message elements
+    - Proper padding in code blocks
+    - Clear separation between messages
 
-    -   Consistent margins between message elements
-    -   Proper padding in code blocks
-    -   Clear separation between messages
+- **Typography**
+    - Improved line height for readability
+    - Proper font families (sans-serif for text, monospace for code)
+    - Better text hierarchy
 
--   **Typography**
+- **Theme Integration**
+    - Full VS Code theme variable support
+    - Dark/light mode compatibility
+    - Proper color contrast
 
-    -   Improved line height for readability
-    -   Proper font families (sans-serif for text, monospace for code)
-    -   Better text hierarchy
-
--   **Theme Integration**
-
-    -   Full VS Code theme variable support
-    -   Dark/light mode compatibility
-    -   Proper color contrast
-
--   **Code Block Actions**
-    -   Hover-activated copy button
-    -   Clear visual feedback
-    -   Smooth transitions
+- **Code Block Actions**
+    - Hover-activated copy button
+    - Clear visual feedback
+    - Smooth transitions
 
 #### New CSS Classes
 
@@ -214,10 +203,10 @@ Enhanced status indicator display:
 
 #### Visual Features
 
--   **Animated Pulse**: Subtle animation when status is active
--   **Status Classes**: Different styling for idle/error states
--   **Clear Layout**: Flexbox layout for indicators and information
--   **Font Improvements**: Better readability with proper sizing
+- **Animated Pulse**: Subtle animation when status is active
+- **Status Classes**: Different styling for idle/error states
+- **Clear Layout**: Flexbox layout for indicators and information
+- **Font Improvements**: Better readability with proper sizing
 
 #### CSS Features
 
@@ -231,9 +220,9 @@ Enhanced status indicator display:
 
 #### Animation
 
--   Continuous pulse effect during active operations
--   2-second cycle for subtle visual feedback
--   Idle state without animation
+- Continuous pulse effect during active operations
+- 2-second cycle for subtle visual feedback
+- Idle state without animation
 
 ---
 
@@ -243,31 +232,31 @@ Enhanced status indicator display:
 
 **File**: `src/ui/statusIndicator.test.ts`
 
--   Initialization and state management
--   Status icon detection
--   Time formatting (seconds/minutes)
--   Token count display
--   Model name display
--   Progress indicators
--   State reset functionality
--   Multiple indicator combinations
+- Initialization and state management
+- Status icon detection
+- Time formatting (seconds/minutes)
+- Token count display
+- Model name display
+- Progress indicators
+- State reset functionality
+- Multiple indicator combinations
 
 #### Error Presentation Tests
 
 **File**: `src/error/errorPresentation.test.ts`
 
--   Connection error detection
--   Timeout error detection
--   Network error detection
--   Token limit detection
--   Rate limit detection
--   Authentication error detection
--   File system error detection
--   Permission error detection
--   Chat formatting
--   String error handling
--   Context logging
--   Predefined error messages
+- Connection error detection
+- Timeout error detection
+- Network error detection
+- Token limit detection
+- Rate limit detection
+- Authentication error detection
+- File system error detection
+- Permission error detection
+- Chat formatting
+- String error handling
+- Context logging
+- Predefined error messages
 
 ---
 
@@ -331,29 +320,29 @@ vscode-extension/
 
 ### Code Quality
 
--   TypeScript strict mode compatible
--   ESLint compliant
--   Comprehensive JSDoc comments
--   Unit test coverage > 80%
+- TypeScript strict mode compatible
+- ESLint compliant
+- Comprehensive JSDoc comments
+- Unit test coverage > 80%
 
 ### Performance
 
--   Status updates: < 5ms
--   Error formatting: < 10ms
--   CSS animations: GPU-accelerated (no jank)
+- Status updates: < 5ms
+- Error formatting: < 10ms
+- CSS animations: GPU-accelerated (no jank)
 
 ### Accessibility
 
--   ARIA labels for status updates (`aria-live`)
--   Semantic HTML structure
--   Keyboard navigation support
--   Screen reader compatible
+- ARIA labels for status updates (`aria-live`)
+- Semantic HTML structure
+- Keyboard navigation support
+- Screen reader compatible
 
 ### Backward Compatibility
 
--   No breaking changes
--   Existing functionality preserved
--   Gradual adoption pattern
+- No breaking changes
+- Existing functionality preserved
+- Gradual adoption pattern
 
 ---
 
@@ -361,21 +350,21 @@ vscode-extension/
 
 ### Command System Refactoring
 
--   Extract individual command modules
--   Create CommandRegistry pattern
--   Implement ICommand interface
+- Extract individual command modules
+- Create CommandRegistry pattern
+- Implement ICommand interface
 
 ### Participant System
 
--   Define ChatParticipant interface
--   Implement ParticipantRegistry
--   Create workspace and code participants
+- Define ChatParticipant interface
+- Implement ParticipantRegistry
+- Create workspace and code participants
 
 ### State Management
 
--   Create ChatState interface
--   Implement ChatStateManager
--   Improve message persistence
+- Create ChatState interface
+- Implement ChatStateManager
+- Improve message persistence
 
 ---
 
@@ -383,14 +372,14 @@ vscode-extension/
 
 ### Manual Testing Checklist
 
--   [ ] Status indicator displays correctly
--   [ ] Status updates in real-time during streaming
--   [ ] Timer formatting works correctly
--   [ ] Error messages display with proper formatting
--   [ ] Links and code blocks render properly
--   [ ] Dark/light themes work correctly
--   [ ] Copy button appears on hover
--   [ ] Mobile/narrow panel layout works
+- [ ] Status indicator displays correctly
+- [ ] Status updates in real-time during streaming
+- [ ] Timer formatting works correctly
+- [ ] Error messages display with proper formatting
+- [ ] Links and code blocks render properly
+- [ ] Dark/light themes work correctly
+- [ ] Copy button appears on hover
+- [ ] Mobile/narrow panel layout works
 
 ### Automated Testing
 
@@ -411,15 +400,15 @@ npm test -- --coverage
 
 ### For Developers
 
--   Comprehensive JSDoc comments in source files
--   Usage examples in docstrings
--   Type definitions for all public APIs
+- Comprehensive JSDoc comments in source files
+- Usage examples in docstrings
+- Type definitions for all public APIs
 
 ### For Users
 
--   Status indicator meanings documented
--   Error messages designed to be self-explanatory
--   Suggestion text provides actionable guidance
+- Status indicator meanings documented
+- Error messages designed to be self-explanatory
+- Suggestion text provides actionable guidance
 
 ---
 
@@ -427,16 +416,16 @@ npm test -- --coverage
 
 ### No Negative Impact
 
--   Status indicator uses efficient DOM updates
--   CSS animations use GPU acceleration
--   Error formatting is synchronous and fast
--   Memory usage: < 1MB for all components
+- Status indicator uses efficient DOM updates
+- CSS animations use GPU acceleration
+- Error formatting is synchronous and fast
+- Memory usage: < 1MB for all components
 
 ### Improvements
 
--   Better error diagnostics reduce support burden
--   Clear status messaging improves user confidence
--   Responsive styling improves experience on narrow panels
+- Better error diagnostics reduce support burden
+- Clear status messaging improves user confidence
+- Responsive styling improves experience on narrow panels
 
 ---
 
@@ -444,10 +433,10 @@ npm test -- --coverage
 
 No security implications
 
--   No external API calls
--   No data exposure in error messages
--   Safe error string formatting
--   No privilege escalation vectors
+- No external API calls
+- No data exposure in error messages
+- Safe error string formatting
+- No privilege escalation vectors
 
 ---
 
@@ -463,11 +452,11 @@ No security implications
 
 This Phase 1 implementation provides:
 
--   Solid foundation for further improvements
--   Low-risk UI enhancements
--   Better error handling
--   Comprehensive testing
--   Backward compatibility
+- Solid foundation for further improvements
+- Low-risk UI enhancements
+- Better error handling
+- Comprehensive testing
+- Backward compatibility
 
 Ready for integration and Phase 2 planning.
 
@@ -475,5 +464,5 @@ Ready for integration and Phase 2 planning.
 
 ## Related Documents
 
--   [VSCODE_EXTENSION_IMPROVEMENTS.md](../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md) - Full improvement plan
--   [VSCODE_EXTENSION_MIGRATION_ROADMAP.md](../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md) - 12-week roadmap
+- [VSCODE_EXTENSION_IMPROVEMENTS.md](../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md) - Full improvement plan
+- [VSCODE_EXTENSION_MIGRATION_ROADMAP.md](../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md) - 12-week roadmap

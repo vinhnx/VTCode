@@ -480,7 +480,7 @@ mod tests {
 
     #[test]
     fn test_response_builder_thread_lifecycle() {
-        let mut builder = ResponseBuilder::new("gpt-4");
+        let mut builder = ResponseBuilder::new("gpt-5");
         let mut emitter = VecStreamEmitter::new();
 
         // Thread started
@@ -585,7 +585,7 @@ mod tests {
 
     #[test]
     fn test_atomic_completion_emits_added_and_done() {
-        let mut builder = ResponseBuilder::new("gpt-4");
+        let mut builder = ResponseBuilder::new("gpt-5");
         let mut emitter = VecStreamEmitter::new();
 
         // Complete item without prior start (atomic)
@@ -619,7 +619,7 @@ mod tests {
 
     #[test]
     fn test_update_without_start_handles_implicit_start() {
-        let mut builder = ResponseBuilder::new("gpt-4");
+        let mut builder = ResponseBuilder::new("gpt-5");
         let mut emitter = VecStreamEmitter::new();
 
         // Update without prior start
@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_unicode_delta_safety() {
-        let mut builder = ResponseBuilder::new("gpt-4");
+        let mut builder = ResponseBuilder::new("gpt-5");
         let mut emitter = VecStreamEmitter::new();
 
         // Start with emoji
@@ -683,7 +683,7 @@ mod tests {
 
     #[test]
     fn test_non_append_update_fallback() {
-        let mut builder = ResponseBuilder::new("gpt-4");
+        let mut builder = ResponseBuilder::new("gpt-5");
         let mut emitter = VecStreamEmitter::new();
 
         // Start with some text

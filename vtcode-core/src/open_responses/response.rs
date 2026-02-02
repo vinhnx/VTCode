@@ -294,16 +294,16 @@ mod tests {
 
     #[test]
     fn test_response_creation() {
-        let response = Response::new("resp_123", "gpt-4");
+        let response = Response::new("resp_123", "gpt-5");
         assert_eq!(response.id, "resp_123");
-        assert_eq!(response.model, "gpt-4");
+        assert_eq!(response.model, "gpt-5");
         assert_eq!(response.object, "response");
         assert_eq!(response.status, ResponseStatus::InProgress);
     }
 
     #[test]
     fn test_response_complete() {
-        let mut response = Response::new("resp_123", "gpt-4");
+        let mut response = Response::new("resp_123", "gpt-5");
         response.complete();
         assert_eq!(response.status, ResponseStatus::Completed);
         assert!(response.completed_at.is_some());
@@ -311,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_response_fail() {
-        let mut response = Response::new("resp_123", "gpt-4");
+        let mut response = Response::new("resp_123", "gpt-5");
         response.fail(OpenResponseError::server_error("Test error"));
         assert_eq!(response.status, ResponseStatus::Failed);
         assert!(response.error.is_some());

@@ -4,11 +4,11 @@ This guide covers the terminal optimization features available in VT Code, desig
 
 ## Table of Contents
 
--   [Theme and Appearance](#theme-and-appearance)
--   [Line Break Options](#line-break-options)
--   [Vim Mode](#vim-mode)
--   [Notification Setup](#notification-setup)
--   [Handling Large Inputs](#handling-large-inputs)
+- [Theme and Appearance](#theme-and-appearance)
+- [Line Break Options](#line-break-options)
+- [Vim Mode](#vim-mode)
+- [Notification Setup](#notification-setup)
+- [Handling Large Inputs](#handling-large-inputs)
 
 ## Theme and Appearance
 
@@ -27,22 +27,22 @@ VT Code provides multiple options for handling line breaks in the terminal:
 
 ### Backslash + Enter (Quick Escape)
 
--   Type `\` followed by `Enter` to create a newline without submitting the input
--   This is useful for multi-line input without triggering command execution
--   Example: When writing multi-line code snippets or complex commands
+- Type `\` followed by `Enter` to create a newline without submitting the input
+- This is useful for multi-line input without triggering command execution
+- Example: When writing multi-line code snippets or complex commands
 
 ### Shift+Enter
 
--   Press `Shift+Enter` to insert a newline character in the input field
--   This allows for multi-line input while staying in the same input context
--   Works in most terminal emulators including iTerm2, VS Code Terminal, Kitty, and others
+- Press `Shift+Enter` to insert a newline character in the input field
+- This allows for multi-line input while staying in the same input context
+- Works in most terminal emulators including iTerm2, VS Code Terminal, Kitty, and others
 
 ### Keyboard Shortcuts
 
--   `Enter` = Submit the current input
--   `Ctrl+Enter` or `Cmd+Enter` = Queue the input for later processing
--   `Shift+Enter` = Insert newline without submitting
--   `Esc` = Cancel current input or close modals
+- `Enter` = Submit the current input
+- `Ctrl+Enter` or `Cmd+Enter` = Queue the input for later processing
+- `Shift+Enter` = Insert newline without submitting
+- `Esc` = Cancel current input or close modals
 
 ## Vim Mode
 
@@ -50,36 +50,36 @@ VT Code includes a Vim mode with a subset of Vim keybindings for efficient text 
 
 ### Mode Switching
 
--   `i`, `a`, `o`, `O`, `A`, `I` → Enter Insert mode
--   `Esc` → Return to Normal mode
--   `/vim` → Toggle Vim mode on/off via slash command
+- `i`, `a`, `o`, `O`, `A`, `I` → Enter Insert mode
+- `Esc` → Return to Normal mode
+- `/vim` → Toggle Vim mode on/off via slash command
 
 ### Navigation (Normal Mode)
 
--   `h`, `j`, `k`, `l` → Move left/down/up/right
--   `w` → Move to next word start
--   `e` → Move to end of current word
--   `b` → Move to previous word start
--   `0` → Move to start of line
--   `$` → Move to end of line
--   `^` → Move to first non-blank character of line
--   `gg` → Move to top of transcript
--   `G` → Move to bottom of transcript
+- `h`, `j`, `k`, `l` → Move left/down/up/right
+- `w` → Move to next word start
+- `e` → Move to end of current word
+- `b` → Move to previous word start
+- `0` → Move to start of line
+- `$` → Move to end of line
+- `^` → Move to first non-blank character of line
+- `gg` → Move to top of transcript
+- `G` → Move to bottom of transcript
 
 ### Editing (Normal Mode)
 
--   `x` → Delete character under cursor
--   `dd` → Delete current line
--   `dw` → Delete word
--   `de` → Delete to end of word
--   `db` → Delete to start of word
--   `D` or `d$` → Delete to end of line
--   `cc` → Change current line
--   `cw` → Change word
--   `ce` → Change to end of word
--   `cb` → Change to start of word
--   `C` or `c$` → Change to end of line
--   `.` → Repeat last command
+- `x` → Delete character under cursor
+- `dd` → Delete current line
+- `dw` → Delete word
+- `de` → Delete to end of word
+- `db` → Delete to start of word
+- `D` or `d$` → Delete to end of line
+- `cc` → Change current line
+- `cw` → Change word
+- `ce` → Change to end of word
+- `cb` → Change to start of word
+- `C` or `c$` → Change to end of line
+- `.` → Repeat last command
 
 ## Notification Setup
 
@@ -87,7 +87,7 @@ VT Code provides comprehensive notification support for task completion and impo
 
 ### Task Completion Notifications
 
--   Configure task completion hooks in your `vtcode.toml`:
+- Configure task completion hooks in your `vtcode.toml`:
 
 ```toml
 [hooks.lifecycle]
@@ -106,8 +106,8 @@ task_completion = [
 
 ### System Notifications
 
--   VT Code supports terminal bell notifications for important events
--   Configure in security settings:
+- VT Code supports terminal bell notifications for important events
+- Configure in security settings:
 
 ```toml
 [security]
@@ -127,12 +127,12 @@ For iTerm2 users, you can configure system notifications:
 
 You can create custom notification hooks for various lifecycle events:
 
--   `session_start` - When a session begins
--   `session_end` - When a session ends
--   `user_prompt_submit` - When user submits a prompt
--   `pre_tool_use` - Before tools execute
--   `post_tool_use` - After tools execute successfully
--   `task_completion` - When tasks complete (new feature)
+- `session_start` - When a session begins
+- `session_end` - When a session ends
+- `user_prompt_submit` - When user submits a prompt
+- `pre_tool_use` - Before tools execute
+- `post_tool_use` - After tools execute successfully
+- `task_completion` - When tasks complete (new feature)
 
 ## Handling Large Inputs
 
@@ -142,9 +142,9 @@ VT Code provides several methods for handling large inputs efficiently:
 
 Use the `@` symbol to reference files directly in your input:
 
--   `@filename.txt` - Include content from filename.txt
--   `@"file with spaces.txt"` - Include content from files with spaces
--   `@'single quoted file.txt'` - Include content from files with special characters
+- `@filename.txt` - Include content from filename.txt
+- `@"file with spaces.txt"` - Include content from files with spaces
+- `@'single quoted file.txt'` - Include content from files with special characters
 
 This allows you to reference large files without pasting content directly into the terminal.
 
@@ -160,9 +160,9 @@ cat large_file.txt | vtcode ask "Analyze this content"
 
 VT Code automatically handles large tool outputs by:
 
--   Spooling large outputs to log files when they exceed configured thresholds
--   Providing compact output display modes
--   Supporting streaming for real-time processing
+- Spooling large outputs to log files when they exceed configured thresholds
+- Providing compact output display modes
+- Supporting streaming for real-time processing
 
 Configure large output handling in your `vtcode.toml`:
 
@@ -180,7 +180,7 @@ Here's a complete example configuration in `vtcode.toml` with optimization featu
 ```toml
 [agent]
 provider = "openai"
-default_model = "gpt-4"
+default_model = "gpt-5"
 theme = "vitesse-dark"
 
 [security]
@@ -229,20 +229,20 @@ session_start = [
 
 ### Vim Mode Issues
 
--   If Vim mode feels unresponsive, try using `/vim` to toggle it off and on
--   Some key combinations may conflict with terminal shortcuts; adjust as needed
+- If Vim mode feels unresponsive, try using `/vim` to toggle it off and on
+- Some key combinations may conflict with terminal shortcuts; adjust as needed
 
 ### Notification Issues
 
--   On macOS, ensure terminal has notification permissions
--   For iTerm2, check Terminal profile settings for bell configuration
--   Test hooks with simple commands before using complex notification scripts
+- On macOS, ensure terminal has notification permissions
+- For iTerm2, check Terminal profile settings for bell configuration
+- Test hooks with simple commands before using complex notification scripts
 
 ### Large Input Issues
 
--   If file references aren't working, ensure the file exists and is accessible
--   Check that the `@` symbol is followed by a valid file path
--   Use quotes for file paths containing spaces or special characters
+- If file references aren't working, ensure the file exists and is accessible
+- Check that the `@` symbol is followed by a valid file path
+- Use quotes for file paths containing spaces or special characters
 
 ## Performance Tips
 

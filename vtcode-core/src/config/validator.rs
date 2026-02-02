@@ -256,9 +256,9 @@ mod tests {
   },
   "openai": {
     "id": "openai",
-    "default_model": "gpt-4",
+    "default_model": "gpt-5",
     "models": {
-      "gpt-4": {
+      "gpt-5": {
         "context": 128000
       },
       "gpt-4-turbo": {
@@ -277,7 +277,7 @@ mod tests {
         let db = ModelsDatabase::from_file(&dir.path().join("models.json")).unwrap();
 
         assert!(db.model_exists("google", "gemini-2.5-flash"));
-        assert!(db.model_exists("openai", "gpt-4"));
+        assert!(db.model_exists("openai", "gpt-5"));
         assert!(!db.model_exists("google", "nonexistent"));
     }
 
@@ -290,7 +290,7 @@ mod tests {
             db.get_context_window("google", "gemini-2.5-flash"),
             Some(1000000)
         );
-        assert_eq!(db.get_context_window("openai", "gpt-4"), Some(128000));
+        assert_eq!(db.get_context_window("openai", "gpt-5"), Some(128000));
         assert_eq!(db.get_context_window("google", "nonexistent"), None);
     }
 

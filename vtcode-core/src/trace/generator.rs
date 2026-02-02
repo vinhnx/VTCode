@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_trace_with_git_revision() {
-        let ctx = TraceContext::new("gpt-4", "openai")
+        let ctx = TraceContext::new("gpt-5", "openai")
             .with_workspace_path("/workspace")
             .with_revision("abc123def456789012345678901234567890abcd");
 

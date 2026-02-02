@@ -229,7 +229,7 @@ timeout = 30  # seconds
 [profiles.development]
 [profiles.development.agent]
 provider = "openai"
-default_model = "gpt-4"
+default_model = "gpt-5"
 
 [profiles.development.security]
 human_in_the_loop = true
@@ -270,7 +270,7 @@ default_tool_policy = "allow"
 # Settings for any workspace containing a package.json
 [workspace.nodejs]
 [workspace.nodejs.agent]
-default_model = "gpt-4"
+default_model = "gpt-5"
 
 [workspace.nodejs.participants]
 default_participants = ["@workspace", "@code", "@terminal"]

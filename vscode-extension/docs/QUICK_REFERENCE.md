@@ -13,7 +13,7 @@ const indicator = new StatusIndicator((text) => {
 
 indicator.setStatus("streaming");
 indicator.updateTokens(250);
-indicator.setModel("gpt-4");
+indicator.setModel("gpt-5");
 ```
 
 ### Status Values
@@ -150,26 +150,26 @@ const x = 1;
 
 ### Minimal Integration (1 hour)
 
--   [ ] Import StatusIndicator in chatView.ts
--   [ ] Initialize in resolveWebviewView
--   [ ] Update status in handleUserMessage
--   [ ] Test basic functionality
+- [ ] Import StatusIndicator in chatView.ts
+- [ ] Initialize in resolveWebviewView
+- [ ] Update status in handleUserMessage
+- [ ] Test basic functionality
 
 ### Full Integration (3 hours)
 
--   [ ] All of above plus:
--   [ ] Import ErrorPresentationHandler
--   [ ] Format error messages
--   [ ] Add token tracking
--   [ ] Update webview message handler
--   [ ] Test error scenarios
+- [ ] All of above plus:
+- [ ] Import ErrorPresentationHandler
+- [ ] Format error messages
+- [ ] Add token tracking
+- [ ] Update webview message handler
+- [ ] Test error scenarios
 
 ### Advanced Integration (Optional)
 
--   [ ] Progress indicators for tools
--   [ ] Participant context display
--   [ ] Advanced metrics
--   [ ] Performance monitoring
+- [ ] Progress indicators for tools
+- [ ] Participant context display
+- [ ] Advanced metrics
+- [ ] Performance monitoring
 
 ---
 
@@ -314,17 +314,17 @@ import {
 
 ### Do
 
--   Update status every 100-500ms
--   Batch updates when possible
--   Use debouncing for frequent updates
--   Sample metrics instead of every event
+- Update status every 100-500ms
+- Batch updates when possible
+- Use debouncing for frequent updates
+- Sample metrics instead of every event
 
 ### Avoid
 
--   Status updates > 10 per second
--   Large error messages in logs
--   Unbounded message history
--   Synchronous file I/O in callbacks
+- Status updates > 10 per second
+- Large error messages in logs
+- Unbounded message history
+- Synchronous file I/O in callbacks
 
 ---
 
@@ -362,10 +362,10 @@ export const ERROR_MESSAGES
 
 ## Links & Resources
 
--   **Component Docs**: `docs/PHASE_1_IMPROVEMENTS.md`
--   **Integration Guide**: `docs/PHASE_1_INTEGRATION.md`
--   **Phase Status**: `PHASE_1_STATUS.md`
--   **Full Roadmap**: `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md`
+- **Component Docs**: `docs/PHASE_1_IMPROVEMENTS.md`
+- **Integration Guide**: `docs/PHASE_1_INTEGRATION.md`
+- **Phase Status**: `PHASE_1_STATUS.md`
+- **Full Roadmap**: `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md`
 
 ---
 

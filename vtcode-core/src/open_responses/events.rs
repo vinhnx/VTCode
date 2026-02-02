@@ -431,14 +431,14 @@ mod tests {
 
     #[test]
     fn test_event_type() {
-        let response = Response::new("resp_1", "gpt-4");
+        let response = Response::new("resp_1", "gpt-5");
         let event = ResponseStreamEvent::ResponseCreated { response };
         assert_eq!(event.event_type(), "response.created");
     }
 
     #[test]
     fn test_terminal_events() {
-        let response = Response::new("resp_1", "gpt-4");
+        let response = Response::new("resp_1", "gpt-5");
         let created = ResponseStreamEvent::ResponseCreated {
             response: response.clone(),
         };
@@ -450,7 +450,7 @@ mod tests {
     #[test]
     fn test_vec_emitter() {
         let mut emitter = VecStreamEmitter::new();
-        let response = Response::new("resp_1", "gpt-4");
+        let response = Response::new("resp_1", "gpt-5");
         emitter.response_created(response);
         assert_eq!(emitter.events().len(), 1);
     }
