@@ -83,9 +83,9 @@ add_username_tags() {
     # Process changelog and add @username tags
     local result=""
     while IFS= read -r entry; do
-        # Extract commit hash from entry (e.g., "[<samp>(f533a)</samp>]")
-        if [[ $entry =~ \[.*\(([a-f0-9]+)\) ]]; then
-            local short_hash="${BASH_REMATCH[1]}"
+        # Extract commit hash from entry (format: "... (commit_hash)")
+        if [[ $entry =~ \(([a-f0-9]+)\)$ ]]; then
+            local full_hash="${BASH_REMATCH[1]}"
             # Find username from the temporary file
             local username=""
             local found=0
@@ -95,7 +95,8 @@ add_username_tags() {
                     local map_hash map_username
                     map_hash=$(echo "$mapping_line" | cut -d'|' -f1)
                     map_username=$(echo "$mapping_line" | cut -d'|' -f2)
-                    if [[ $map_hash == ${short_hash}* ]]; then
+                    # Check if the full hash starts with the map hash (to match short vs full hashes)
+                    if [[ ${full_hash} == ${map_hash}* || ${map_hash} == ${full_hash}* ]]; then
                         username="$map_username"
                         found=1
                     fi
@@ -103,9 +104,9 @@ add_username_tags() {
             done < "$temp_mapping_file"
 
             if [[ -n "$username" ]]; then
-                # Add @username before the closing bracket if not already present
+                # Append @username to the entry if not already present
                 if [[ $entry != *"@$username"* ]]; then
-                    entry=$(echo "$entry" | sed "s/by \*\*\([^*]*\)\*\*/by [@\2](&) **\1**/")
+                    entry="$entry (@$username)"
                 fi
             fi
         fi
