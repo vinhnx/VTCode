@@ -22,8 +22,8 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     "claude-haiku-4-5",
     "claude-opus-4-5",
     // Legacy Claude 3.5 series
-    "claude-haiku-4-5",
-    claude-4-5-haiku,
+    "claude-3-5-sonnet",
+    "claude-4-5-haiku",
     // Google Gemini 2.5/3 series
     "gemini-2.5-flash",
     "gemini-2.5-pro",
@@ -72,8 +72,8 @@ pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5";
 pub const CLAUDE_OPUS_4_5: &str = "claude-opus-4-5";
 
 // Legacy Claude 3.5 series
-pub const CLAUDE_3_5_SONNET: &str = "claude-haiku-4-5";
-pub const CLAUDE_3_5_HAIKU: &str = claude-4-5-haiku;
+pub const CLAUDE_3_5_SONNET: &str = "claude-3-5-sonnet";
+pub const CLAUDE_3_5_HAIKU: &str = "claude-4-5-haiku";
 
 // Google Gemini series
 pub const GEMINI_2_5_FLASH: &str = "gemini-2.5-flash";
