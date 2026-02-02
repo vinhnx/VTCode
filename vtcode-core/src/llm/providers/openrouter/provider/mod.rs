@@ -6,9 +6,7 @@ use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::config::models::ModelId;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole, ToolChoice};
-use crate::llm::providers::common::{
-    override_base_url, resolve_model,
-};
+use crate::llm::providers::common::{override_base_url, resolve_model};
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::Value;
 use std::borrow::Cow;

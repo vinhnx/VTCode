@@ -813,6 +813,8 @@ pub(crate) async fn stream_and_render_response_with_options(
         }
     }
 
+    let mut suppress_content_due_to_duplication = false;
+
     // CRITICAL: Ensure content is ALWAYS displayed.
     // If response has content but we didn't stream any tokens, render it now.
     // This handles providers that send content only in the Completed event.
@@ -824,11 +826,17 @@ pub(crate) async fn stream_and_render_response_with_options(
                 .as_deref()
                 .map(|reasoning| reasoning_matches_content(reasoning, content))
                 .unwrap_or(false);
-            if reasoning_dupes_content
-                && (reasoning_state.rendered_reasoning() || reasoning_emitted)
-            {
-                // Skip rendering duplicated content when reasoning already rendered.
-                // Leave `aggregated` untouched to avoid showing content twice.
+
+            if reasoning_dupes_content {
+                suppress_content_due_to_duplication = true;
+                reasoning_state
+                    .finalize(
+                        renderer,
+                        response.reasoning.as_deref(),
+                        reasoning_emitted,
+                        false,
+                    )
+                    .map_err(|err| map_render_error(provider_name, err))?;
             } else {
                 // Check if we already rendered this content via Token events
                 let already_rendered = emitted_tokens
@@ -838,17 +846,12 @@ pub(crate) async fn stream_and_render_response_with_options(
                 if !already_rendered {
                     // Content wasn't rendered yet - render it now
                     // First, flush any pending reasoning
-                    let suppress_reasoning = response
-                        .reasoning
-                        .as_deref()
-                        .map(|reasoning| reasoning_matches_content(reasoning, content))
-                        .unwrap_or(false);
                     reasoning_state
                         .finalize(
                             renderer,
                             response.reasoning.as_deref(),
                             reasoning_emitted,
-                            suppress_reasoning,
+                            false,
                         )
                         .map_err(|err| map_render_error(provider_name, err))?;
 
@@ -877,13 +880,8 @@ pub(crate) async fn stream_and_render_response_with_options(
 
     // Finalize reasoning display (only if we haven't already in the content block above)
     let rendered_reasoning_before = reasoning_state.rendered_reasoning();
-    if response.content.is_none() || aggregated.trim().is_empty() {
-        let suppress_reasoning = response
-            .reasoning
-            .as_deref()
-            .zip(response.content.as_deref())
-            .map(|(reasoning, content)| reasoning_matches_content(reasoning, content))
-            .unwrap_or(false);
+    if response.content.is_none() || aggregated.trim().is_empty() || suppress_content_due_to_duplication {
+        let suppress_reasoning = false;
         reasoning_state
             .finalize(
                 renderer,

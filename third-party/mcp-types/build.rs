@@ -60,10 +60,13 @@ fn generate(version: &str) {
 
     // Handle read-only file system gracefully
     match fs::write(&out_file, contents) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) if e.kind() == std::io::ErrorKind::ReadOnlyFilesystem => {
-            println!("cargo:warning=Read-only file system detected, skipping file write: {}", e);
-        },
+            println!(
+                "cargo:warning=Read-only file system detected, skipping file write: {}",
+                e
+            );
+        }
         Err(e) => {
             panic!("Failed to write file: {}", e);
         }
