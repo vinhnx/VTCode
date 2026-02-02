@@ -25,12 +25,9 @@ pub struct OpenRouterProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
-    prompt_cache_enabled: bool,
-    prompt_cache_settings: OpenRouterPromptCacheSettings,
 }
 
 impl OpenRouterProvider {
-    const TOOL_UNSUPPORTED_ERROR: &'static str = "No endpoints found that support tool use";
 
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
@@ -58,8 +55,6 @@ impl OpenRouterProvider {
             http_client,
             base_url,
             model,
-            prompt_cache_enabled: false,
-            prompt_cache_settings: OpenRouterPromptCacheSettings::default(),
         }
     }
 
@@ -92,12 +87,6 @@ impl OpenRouterProvider {
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
-        let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
-            prompt_cache,
-            |providers| &providers.openrouter,
-            |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
-        );
-
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
@@ -107,8 +96,6 @@ impl OpenRouterProvider {
                 Some(env_vars::OPENROUTER_BASE_URL),
             ),
             model,
-            prompt_cache_enabled,
-            prompt_cache_settings,
         }
     }
 
@@ -122,10 +109,6 @@ impl OpenRouterProvider {
         } else {
             request.model.as_str()
         }
-    }
-
-    fn uses_responses_api_for(&self, request: &LLMRequest) -> bool {
-        Self::is_gpt5_codex_model(self.resolve_model(request))
     }
 
     fn request_includes_tools(request: &LLMRequest) -> bool {
@@ -195,17 +178,10 @@ impl OpenRouterProvider {
     }
 
     fn build_provider_payload(&self, request: &LLMRequest) -> Result<(Value, String), LLMError> {
-        if self.uses_responses_api_for(request) {
-            Ok((
-                self.convert_to_openrouter_responses_format(request)?,
-                format!("{}/responses", self.base_url),
-            ))
-        } else {
-            Ok((
-                self.convert_to_openrouter_format(request)?,
-                format!("{}/chat/completions", self.base_url),
-            ))
-        }
+        Ok((
+            self.convert_to_openrouter_format(request)?,
+            format!("{}/chat/completions", self.base_url),
+        ))
     }
 
     async fn dispatch_request(&self, url: &str, payload: &Value) -> Result<Response, LLMError> {
@@ -223,10 +199,6 @@ impl OpenRouterProvider {
                     metadata: None,
                 }
             })
-    }
-
-    fn is_tool_unsupported_error(status: StatusCode, body: &str) -> bool {
-        status == StatusCode::NOT_FOUND && body.contains(Self::TOOL_UNSUPPORTED_ERROR)
     }
 
     async fn send_with_tool_fallback(
@@ -255,7 +227,7 @@ impl OpenRouterProvider {
             return Err(LLMError::RateLimit { metadata: None });
         }
 
-        if request_with_tools && Self::is_tool_unsupported_error(status, &error_text) {
+        if request_with_tools && status == StatusCode::NOT_FOUND && error_text.contains("No endpoints found that support tool use") {
             let fallback_request = Self::tool_free_request(request_ref);
             let (mut fallback_payload, fallback_url) =
                 self.build_provider_payload(&fallback_request)?;

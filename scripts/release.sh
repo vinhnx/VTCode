@@ -62,34 +62,47 @@ get_github_username() {
 add_username_tags() {
     local changelog=$1
     local commits_range=$2
-    
-    # Create a mapping of commit hashes to usernames
-    local -A author_map
-    while IFS= read -r line; do
-        local hash author_email
-        hash=$(echo "$line" | cut -d'|' -f1)
-        author_email=$(echo "$line" | cut -d'|' -f2)
-        local username=$(get_github_username "$author_email")
-        author_map["$hash"]="$username"
-    done < <(git log "$commits_range" --no-merges --pretty=format:"%h|%ae")
-    
+
+    # Create a temporary file to store the mapping of commit hashes to usernames
+    local temp_mapping_file
+    temp_mapping_file=$(mktemp)
+
+    # Populate the mapping - use a subshell to avoid variable scoping issues
+    (
+        git log "$commits_range" --no-merges --pretty=format:"%h|%ae"
+    ) | while IFS= read -r line; do
+        if [[ -n "$line" ]]; then
+            local hash author_email
+            hash=$(echo "$line" | cut -d'|' -f1)
+            author_email=$(echo "$line" | cut -d'|' -f2)
+            local username=$(get_github_username "$author_email")
+            echo "$hash|$username"
+        fi
+    done > "$temp_mapping_file"
+
     # Process changelog and add @username tags
     local result=""
     while IFS= read -r entry; do
         # Extract commit hash from entry (e.g., "[<samp>(f533a)</samp>]")
         if [[ $entry =~ \[.*\(([a-f0-9]+)\) ]]; then
             local short_hash="${BASH_REMATCH[1]}"
-            # Find full hash from short hash
-            local full_hash=""
-            for hash in "${!author_map[@]}"; do
-                if [[ $hash == ${short_hash}* ]]; then
-                    full_hash="$hash"
-                    break
+            # Find username from the temporary file
+            local username=""
+            local found=0
+
+            while IFS= read -r mapping_line; do
+                if [[ -n "$mapping_line" && $found -eq 0 ]]; then
+                    local map_hash map_username
+                    map_hash=$(echo "$mapping_line" | cut -d'|' -f1)
+                    map_username=$(echo "$mapping_line" | cut -d'|' -f2)
+                    if [[ $map_hash == ${short_hash}* ]]; then
+                        username="$map_username"
+                        found=1
+                    fi
                 fi
-            done
-            
-            if [[ -n "$full_hash" && -n "${author_map[$full_hash]}" ]]; then
-                local username="${author_map[$full_hash]}"
+            done < "$temp_mapping_file"
+
+            if [[ -n "$username" ]]; then
                 # Add @username before the closing bracket if not already present
                 if [[ $entry != *"@$username"* ]]; then
                     entry=$(echo "$entry" | sed "s/by \*\*\([^*]*\)\*\*/by [@\2](&) **\1**/")
@@ -98,7 +111,10 @@ add_username_tags() {
         fi
         result+="$entry"$'\n'
     done <<< "$changelog"
-    
+
+    # Clean up
+    rm -f "$temp_mapping_file"
+
     echo "${result%$'\n'}"
 }
 
@@ -165,8 +181,11 @@ update_changelog_from_commits() {
         second_sep_line=$(echo "$full_output" | grep -n '^--------------$' | head -2 | tail -1 | cut -d: -f1)
         
         if [[ -n "$first_sep_line" && -n "$second_sep_line" ]]; then
+            # Ensure variables are treated as integers for arithmetic
+            local start_line=$((first_sep_line + 1))
+            local end_line=$((second_sep_line - 1))
             # Extract lines between separators (exclusive)
-            changelog_content=$(echo "$full_output" | sed -n "$((first_sep_line + 1)),$((second_sep_line - 1))p")
+            changelog_content=$(echo "$full_output" | sed -n "${start_line},${end_line}p")
             # Remove the version/tag line if present (e.g., "v0.74.6 -> v0.74.7 (4 commits)")
             changelog_content=$(echo "$changelog_content" | sed '/^v[0-9]\+\.[0-9]\+\.[0-9]\+.*$/d')
             # Replace ...HEAD with ...v$version in the comparison link
@@ -359,9 +378,15 @@ main() {
     else
         IFS='.' read -ra v <<< "$current_version"
         case "$release_argument" in
-            major) next_version="$((v[0] + 1)).0.0" ;;
-            minor) next_version="${v[0]}.$((v[1] + 1)).0" ;;
-            patch) next_version="${v[0]}.${v[1]}.$((v[2] + 1))" ;;
+            major)
+                local major_num=$((v[0] + 1))
+                next_version="${major_num}.0.0" ;;
+            minor)
+                local minor_num=$((v[1] + 1))
+                next_version="${v[0]}.${minor_num}.0" ;;
+            patch)
+                local patch_num=$((v[2] + 1))
+                next_version="${v[0]}.${v[1]}.${patch_num}" ;;
         esac
     fi
 

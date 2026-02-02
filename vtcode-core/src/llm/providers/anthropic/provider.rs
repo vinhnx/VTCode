@@ -286,13 +286,6 @@ impl AnthropicProvider {
         request_builder::convert_to_anthropic_format(request, &self.request_builder_context())
     }
 
-    fn parse_anthropic_response(
-        &self,
-        response_json: Value,
-        model: String,
-    ) -> Result<LLMResponse, LLMError> {
-        response_parser::parse_response(response_json, model)
-    }
 }
 
 #[async_trait]
