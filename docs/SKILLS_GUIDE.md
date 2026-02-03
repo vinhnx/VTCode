@@ -484,6 +484,18 @@ VT Code now supports a comprehensive skills location system similar to pi-mono, 
 
 All existing skills have been migrated from `.claude/skills` to `.agents/skills` to take advantage of the higher precedence system. The old locations are still supported for backward compatibility. Project skills in `.vtcode/skills/` are deprecated but will continue to load.
 
+### Migration from .vtcode/skills to .agents/skills
+
+Use the helper script to copy or move legacy project skills:
+
+```bash
+# Copy (default)
+scripts/migrate_skills.sh --copy
+
+# Move
+scripts/migrate_skills.sh --move
+```
+
 ### Discovery Process
 
 1. **Scanning**: VT Code scans all configured locations recursively

@@ -270,7 +270,7 @@ examples/
 
 ### 1. Skill Discovery
 
-- Searches `.claude/skills/`, `./skills/`, `~/.vtcode/skills/`
+- Searches `.agents/skills/`, `.claude/skills/`, `./skills/`, `~/.vtcode/skills/` (legacy `.vtcode/skills/` supported)
 - Automatic metadata extraction from SKILL.md
 - Progressive disclosure (metadata only at startup)
 
