@@ -75,10 +75,15 @@ done
 
 CRATES=(
     vtcode-commons
+    vtcode-acp-client
     vtcode-markdown-store
-    vtcode-indexer
-    vtcode-bash-runner
     vtcode-exec-events
+    vtcode-config
+    vtcode-indexer
+    vtcode-file-search
+    vtcode-bash-runner
+    vtcode-core
+    vtcode
 )
 
 if [[ -n "$START_FROM" ]]; then
@@ -155,7 +160,7 @@ fi
 for crate in "${CRATES[@]}"; do
     generate_docs "$crate"
     if [[ "$crate" == "vtcode-bash-runner" && $DRY_RUN -eq 0 ]]; then
-        echo "Re-running vtcode-bash-runner dry run now that vtcode-commons is published..."
+        echo "Re-running vtcode-bash-runner dry run now that vtcode-exec-events is published..."
         run_cmd "cargo publish --dry-run -p vtcode-bash-runner"
     fi
     publish_cmd "$crate"
