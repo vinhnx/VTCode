@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "openrouter"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENROUTER_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "minimax-m2.1:cloud"
+default_model = "stepfun/step-3.5-flash:free"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"

@@ -69,6 +69,33 @@
         "doc_comment": "Mistral Large 3 2512 - Mistral Large 3 2512 model via OpenRouter"
       }
     },
+    "stepfun/step-3.5-flash:free": {
+      "id": "stepfun/step-3.5-flash:free",
+      "name": "Step 3.5 Flash (free)",
+      "description": "Step 3.5 Flash is StepFun's most capable open-source foundation model. Built on a sparse Mixture of Experts (MoE) architecture, it selectively activates only 11B of its 196B parameters per token. It is a reasoning model that is incredibly speed efficient even at long contexts.",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 256000,
+      "vtcode": {
+        "variant": "OpenRouterStepfunStep35FlashFree",
+        "constant": "STEPFUN_STEP_3_5_FLASH_FREE",
+        "vendor": "stepfun",
+        "display": "Step 3.5 Flash (free)",
+        "description": "Step 3.5 Flash (free) model via OpenRouter",
+        "efficient": true,
+        "top_tier": true,
+        "generation": "Step-3.5",
+        "doc_comment": "Step 3.5 Flash (free) - StepFun's most capable open-source reasoning model via OpenRouter"
+      }
+    },
     "anthropic/claude-haiku-4.5": {
       "id": "anthropic/claude-haiku-4.5",
       "name": "Anthropic: Claude Haiku 4.5",
