@@ -389,11 +389,8 @@ impl ModelId {
             | ModelId::OpenRouterZaiGlm46V
             | ModelId::OpenRouterZaiGlm47
             | ModelId::OpenRouterZaiGlm47Flash
-            | ModelId::OpenRouterMoonshotaiKimiK25 => {
-                // Fallback description for OpenRouter models
-                // In production, these should have metadata
-                "Model available via OpenRouter marketplace"
-            }
+            | ModelId::OpenRouterStepfunStep35FlashFree
+            | ModelId::OpenRouterMoonshotaiKimiK25 => unreachable!(),
         }
     }
 

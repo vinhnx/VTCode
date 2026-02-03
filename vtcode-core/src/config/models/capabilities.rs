@@ -93,6 +93,7 @@ impl ModelId {
                 | ModelId::Gemini25FlashLite
                 | ModelId::Gemini3FlashPreview
                 | ModelId::ZaiGlm45Flash
+                | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::MinimaxM21Lightning
                 | ModelId::OllamaGemini3FlashPreviewCloud
         )
@@ -114,6 +115,7 @@ impl ModelId {
                 | ModelId::ZaiGlm46
                 | ModelId::ZaiGlm46DeepThinking
                 | ModelId::ZaiGlm45DeepThinking
+                | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::MinimaxM21
                 | ModelId::OllamaGlm47Cloud
                 | ModelId::OllamaMinimaxM21Cloud
@@ -169,6 +171,7 @@ impl ModelId {
                 | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm46
                 | ModelId::ZaiGlm46DeepThinking
+                | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::MoonshotKimiK25
         )
     }
@@ -336,6 +339,7 @@ impl ModelId {
             | ModelId::OpenRouterZaiGlm46V
             | ModelId::OpenRouterZaiGlm47
             | ModelId::OpenRouterZaiGlm47Flash
+            | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterMoonshotaiKimiK25 => "unknown", // fallback generation for OpenRouter models
         }
     }

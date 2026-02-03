@@ -307,6 +307,8 @@ pub enum ModelId {
     OpenRouterZaiGlm46V,
     /// GLM 4.7 - Z.AI GLM 4.7 next-generation reasoning model
     OpenRouterZaiGlm47,
+    /// Step 3.5 Flash (free) - StepFun's most capable open-source reasoning model via OpenRouter
+    OpenRouterStepfunStep35FlashFree,
     /// GLM 4.7 Flash - Z.AI GLM-4.7-Flash lightweight model via OpenRouter
     OpenRouterZaiGlm47Flash,
 }
