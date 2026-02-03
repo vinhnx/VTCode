@@ -136,3 +136,19 @@ finished
 improve the prefix bullet: "•" before tool, and indent the sub-bullets. "└" for sub-bullets tools arguments.
 
 add ">" before reasoning message.
+
+--
+
+https://github.com/vinhnx/VTCode/issues/595
+
+I installed the latest version and ran it. The previous JSON and URL issues seem resolved, but now I am encountering a new error during tool calls.
+
+Error Message:
+
+LLM request failed: Invalid request: Anthropic Invalid request: tool_call_id is not found
+
+It seems that when sending the tool result back to the API, the required tool_call_id is missing or not being correctly mapped.
+
+I asked vtcode to push to git, but when it ran git status, I encountered the following error:
+
+LLM request failed: Invalid request: Anthropic Invalid request: failed to convert tool result content: unsupported content type in ContentBlockParamUnion: json

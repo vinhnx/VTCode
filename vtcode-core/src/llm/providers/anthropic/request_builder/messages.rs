@@ -4,6 +4,7 @@ use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole};
 use crate::llm::providers::anthropic_types::{
     AnthropicContentBlock, AnthropicMessage, CacheControl,
 };
+use std::collections::HashSet;
 use serde_json::{Value, json};
 
 pub(crate) fn hoist_largest_user_message(messages: &mut Vec<Message>) {
@@ -36,6 +37,7 @@ pub(crate) fn build_messages(
     breakpoints_remaining: &mut usize,
 ) -> Result<Vec<AnthropicMessage>, LLMError> {
     let mut messages = Vec::with_capacity(messages_to_process.len());
+    let mut tool_use_ids = HashSet::new();
 
     for msg in messages_to_process {
         if msg.role == MessageRole::System {
@@ -47,6 +49,11 @@ pub(crate) fn build_messages(
 
         match msg.role {
             MessageRole::Assistant => {
+                if let Some(tool_calls) = &msg.tool_calls {
+                    for call in tool_calls {
+                        tool_use_ids.insert(call.id.clone());
+                    }
+                }
                 blocks.extend(build_reasoning_blocks(msg));
 
                 if !msg.content.is_empty() {
@@ -72,7 +79,9 @@ pub(crate) fn build_messages(
                 });
             }
             MessageRole::Tool => {
-                if let Some(tool_call_id) = &msg.tool_call_id {
+                if let Some(tool_call_id) = &msg.tool_call_id
+                    && tool_use_ids.contains(tool_call_id)
+                {
                     let tool_content_blocks = tool_result_blocks(&content_text);
                     let content_val = if tool_content_blocks.len() == 1
                         && tool_content_blocks[0]["type"] == "text"
@@ -263,25 +272,11 @@ pub fn tool_result_blocks(content: &str) -> Vec<Value> {
     }
 
     if let Ok(parsed) = serde_json::from_str::<Value>(content) {
-        match parsed {
-            Value::String(text) => vec![json!({"type": "text", "text": text})],
-            Value::Array(items) => {
-                let mut blocks = Vec::new();
-                for item in items {
-                    if let Some(text) = item.as_str() {
-                        blocks.push(json!({"type": "text", "text": text}));
-                    } else {
-                        blocks.push(json!({"type": "json", "json": item}));
-                    }
-                }
-                if blocks.is_empty() {
-                    vec![json!({"type": "json", "json": Value::Array(vec![])})]
-                } else {
-                    blocks
-                }
-            }
-            other => vec![json!({"type": "json", "json": other})],
-        }
+        let text = match parsed {
+            Value::String(text) => text,
+            other => serde_json::to_string(&other).unwrap_or_else(|_| "{}".to_string()),
+        };
+        vec![json!({"type": "text", "text": text})]
     } else {
         vec![json!({"type": "text", "text": content})]
     }

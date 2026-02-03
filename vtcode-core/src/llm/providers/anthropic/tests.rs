@@ -91,7 +91,7 @@ mod prompt_cache_tests {
 mod validation_tests {
     use crate::config::constants::models;
     use crate::config::core::AnthropicConfig;
-    use crate::llm::provider::{LLMRequest, Message};
+    use crate::llm::provider::LLMRequest;
     use crate::llm::providers::anthropic::validation::*;
     use serde_json::json;
 
@@ -283,6 +283,7 @@ mod request_builder_tests {
     fn test_tool_result_blocks_json_object() {
         let blocks = tool_result_blocks("{\"key\": \"value\"}");
         assert_eq!(blocks.len(), 1);
-        assert_eq!(blocks[0]["type"], "json");
+        assert_eq!(blocks[0]["type"], "text");
+        assert_eq!(blocks[0]["text"], "{\"key\":\"value\"}");
     }
 }
