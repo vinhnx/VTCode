@@ -474,29 +474,14 @@ main() {
         rm -rf "$binaries_dir"
     fi
 
-    # 5. Trigger GitHub Actions Release Workflow for full cross-platform builds
-     if [[ "$skip_binaries" == 'false' ]]; then
-         print_info "Step 5: Triggering GitHub Actions release workflow for cross-platform builds (Linux, Windows)..."
-         if command -v gh >/dev/null 2>&1; then
-             # Trigger the release workflow using gh CLI
-             if gh workflow run release.yml -f tag="v$released_version"; then
-                 print_success "GitHub Actions release workflow triggered"
-                 print_info "Monitor progress at: https://github.com/vinhnx/vtcode/actions/workflows/release.yml"
-             else
-                 print_warning "Failed to trigger GitHub Actions release workflow via gh CLI"
-             fi
-         else
-             print_warning "GitHub CLI not available. GitHub Actions release workflow must be triggered manually."
-         fi
-     fi
 
-     # 6. Update Homebrew
+     # 5. Update Homebrew
      if [[ "$skip_binaries" == 'false' ]]; then
-         print_info "Step 6: Updating Homebrew formula..."
+         print_info "Step 5: Updating Homebrew formula..."
          ./scripts/build-and-upload-binaries.sh -v "$released_version" --only-homebrew
      fi
 
-     # 7. Handle docs.rs rebuild
+     # 6. Handle docs.rs rebuild
      if [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]]; then
          trigger_docs_rs_rebuild "$released_version" false
      fi
@@ -504,9 +489,8 @@ main() {
      print_success "Release process finished for v$released_version"
      print_info "Distribution:"
      print_info "  ✓ Cargo (crates.io)"
-     print_info "  ✓ GitHub Releases (macOS built locally + Linux/Windows via Actions)"
+     print_info "  ✓ GitHub Releases (macOS built locally)"
      print_info "  ✓ Homebrew (vinhnx/tap/vtcode)"
-     print_info "Monitor GitHub Actions: https://github.com/vinhnx/vtcode/actions/workflows/release.yml"
 }
 
 main "$@"
