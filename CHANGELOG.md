@@ -2,6 +2,11 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.75.1 - 2026-02-03
+
+- refactor: reorganize release steps and update Homebrew process (e3d99f5a)
+
+
 ## v0.75.0 - 2026-02-03
 
 - fix: resolve tool call ID mapping issue and update JSON handling in messages (9af9d34b) (@vinhnx)
