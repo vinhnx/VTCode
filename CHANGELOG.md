@@ -2,6 +2,12 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.17 - 2026-02-03
+
+- feat: add Step 3.5 Flash model and update configuration for OpenRouter (c50770ab) (@vinhnx)
+- chore: update homebrew formula to v0.74.16 (a92e5a23)
+
+
 ## v0.74.16 - 2026-02-03
 
 - Improve release (ff4ae644) (@vinhnx)
