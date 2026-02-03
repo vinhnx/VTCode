@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.74.16"
+version = "0.74.17"
 edition = "2024"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers"
@@ -47,7 +47,7 @@ rand = "0.9"
 semver = "1.0"
 
 [workspace.package]
-version = "0.74.16"
+version = "0.74.17"
 edition = "2021"
 license = "MIT"
 
@@ -117,9 +117,9 @@ unwrap_used = "deny"
 
 
 [dependencies]
-vtcode-acp-client = { path = "vtcode-acp-client", version = "0.74.16" }
-vtcode-config = { path = "vtcode-config", version = "0.74.16" }
-vtcode-core = { path = "vtcode-core", version = "0.74.16" }
+vtcode-acp-client = { path = "vtcode-acp-client", version = "0.74.17" }
+vtcode-config = { path = "vtcode-config", version = "0.74.17" }
+vtcode-core = { path = "vtcode-core", version = "0.74.17" }
 anyhow = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
 serde_json = { workspace = true }
