@@ -118,3 +118,21 @@ Open call to agent builders: Let's read agent skills from `.agents/skills`, so p
 Today we pulled the trigger for Codex to read `.agents/skills`. Goal is to deprecate `.codex/skills`.
 
 Pls like/tag/RT for momentum.
+
+--
+
+Improve tool display
+
+verb:
+
+ongoing
+• Explore
+└ Read discovery.rs
+
+finished
+• Explored
+└ Read discovery.rs
+
+improve the prefix bullet: "•" before tool, and indent the sub-bullets. "└" for sub-bullets tools arguments.
+
+add ">" before reasoning message.
