@@ -92,3 +92,29 @@ The user wants to use Andre j Kar pathy 's skills. Let me first list the availab
 List skills .. Query: karpathy
 
 ```
+
+--
+
+fix this for vtcode:
+
+⚠️ AI agent skills are becoming a new attack surface and most teams aren’t prepared.
+
+In OpenClaw, “skills” are treated as documentation, but in reality, they can act as installers. And attackers are already exploiting that.
+
+@jmeller
+, VP & Security Strategist @1Password
+, found that a top-downloaded skill in a popular registry was being used to deliver macOS infostealing malware.
+
+This is why the future of agentic AI needs identity and access controls that are time-bound, revocable, and attributable.
+
+Applies to any harness that supports skills plus command execution.
+
+CC even goes so far as to allow markup in the skill file containing bash commands that get autoexecuted. An exceptionally bad idea.
+
+--
+
+Open call to agent builders: Let's read agent skills from `.agents/skills`, so people don't have to manage separate folders per agent.
+
+Today we pulled the trigger for Codex to read `.agents/skills`. Goal is to deprecate `.codex/skills`.
+
+Pls like/tag/RT for momentum.
