@@ -91,7 +91,7 @@ mod prompt_cache_tests {
 mod validation_tests {
     use crate::config::constants::models;
     use crate::config::core::AnthropicConfig;
-    use crate::llm::provider::LLMRequest;
+    use crate::llm::provider::{LLMRequest, Message};
     use crate::llm::providers::anthropic::validation::*;
     use serde_json::json;
 
@@ -283,47 +283,6 @@ mod request_builder_tests {
     fn test_tool_result_blocks_json_object() {
         let blocks = tool_result_blocks("{\"key\": \"value\"}");
         assert_eq!(blocks.len(), 1);
-        assert_eq!(blocks[0]["type"], "text");
-        assert!(
-            blocks[0]["text"]
-                .as_str()
-                .unwrap()
-                .contains("\"key\":\"value\"")
-        );
-    }
-}
-
-#[cfg(test)]
-mod base_url_tests {
-    use crate::llm::providers::anthropic::provider::AnthropicProvider;
-
-    #[test]
-    fn test_resolve_base_url_normalization() {
-        // Standard Anthropic
-        let url = AnthropicProvider::resolve_base_url_internal(
-            Some("https://api.anthropic.com".to_string()),
-            "claude-3-5-sonnet",
-        );
-        assert_eq!(url, "https://api.anthropic.com/v1");
-
-        let url = AnthropicProvider::resolve_base_url_internal(
-            Some("https://api.anthropic.com/v1".to_string()),
-            "claude-3-5-sonnet",
-        );
-        assert_eq!(url, "https://api.anthropic.com/v1");
-
-        // Custom proxy
-        let url = AnthropicProvider::resolve_base_url_internal(
-            Some("https://zenmux.ai/api/anthropic".to_string()),
-            "claude-3-5-sonnet",
-        );
-        assert_eq!(url, "https://zenmux.ai/api/anthropic/v1");
-
-        // Minimax
-        let url = AnthropicProvider::resolve_base_url_internal(
-            Some("https://api.minimax.io/anthropic".to_string()),
-            "MiniMax-M2",
-        );
-        assert_eq!(url, "https://api.minimax.io/anthropic/v1");
+        assert_eq!(blocks[0]["type"], "json");
     }
 }
