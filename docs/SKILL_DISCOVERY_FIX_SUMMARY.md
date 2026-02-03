@@ -18,7 +18,7 @@ The `search_tools_executor` function in `vtcode-core/src/tools/registry/executor
 -   **Used**: `SkillManager` from `vtcode-core/src/exec/skill_manager.rs`
 
     -   Looks for: `skill.json` + `skill.py`/`skill.js` files
-    -   Path: `.vtcode/skills/` (old format)
+    -   Path: `.agents/skills/` (old format; legacy `.vtcode/skills/` supported)
 
 -   **Should use**: `SkillLoader` from `vtcode-core/src/skills/loader.rs`
     -   Looks for: `SKILL.md` files (Claude Agent Skills format)
@@ -128,6 +128,6 @@ Agent: skill(name="spreadsheet-generator")
 
 ## Notes
 
--   The old `SkillManager` system is still present in the codebase (for backward compatibility with `.vtcode/skills/` format)
+-   The old `SkillManager` system is still present in the codebase (for backward compatibility with `.agents/skills/` format)
 -   The new `SkillLoader` system is the correct one for Claude Agent Skills (`.claude/skills/*/SKILL.md`)
 -   Both systems can coexist; the fix ensures `search_tools` uses the correct one

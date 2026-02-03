@@ -14,7 +14,9 @@ use tracing::{debug, info, warn};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SkillLocationType {
     /// VT Code user skills (highest precedence)
-    VtcodeUser = 6,
+    VtcodeUser = 7,
+    /// Project-level agent skills
+    AgentsProject = 6,
     /// VT Code project skills
     VtcodeProject = 5,
     /// Pi user skills
@@ -41,6 +43,8 @@ impl SkillLocationType {
                 || path_str.contains("/Users/"))
         {
             Some(SkillLocationType::VtcodeUser)
+        } else if path_str.contains(".agents/skills") {
+            Some(SkillLocationType::AgentsProject)
         } else if path_str.contains(".vtcode/skills") {
             Some(SkillLocationType::VtcodeProject)
         } else if path_str.contains(".pi/skills")
@@ -181,6 +185,11 @@ impl SkillLocations {
             SkillLocation::new(
                 SkillLocationType::VtcodeUser,
                 PathBuf::from("~/.vtcode/skills"),
+                true, // recursive
+            ),
+            SkillLocation::new(
+                SkillLocationType::AgentsProject,
+                PathBuf::from(".agents/skills"),
                 true, // recursive
             ),
             SkillLocation::new(
@@ -481,6 +490,7 @@ impl std::fmt::Display for SkillLocationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SkillLocationType::VtcodeUser => write!(f, "VT Code User"),
+            SkillLocationType::AgentsProject => write!(f, "Agents Project"),
             SkillLocationType::VtcodeProject => write!(f, "VT Code Project"),
             SkillLocationType::PiUser => write!(f, "Pi User"),
             SkillLocationType::PiProject => write!(f, "Pi Project"),
@@ -498,7 +508,8 @@ mod tests {
 
     #[test]
     fn test_skill_location_type_precedence() {
-        assert!(SkillLocationType::VtcodeUser > SkillLocationType::VtcodeProject);
+        assert!(SkillLocationType::VtcodeUser > SkillLocationType::AgentsProject);
+        assert!(SkillLocationType::AgentsProject > SkillLocationType::VtcodeProject);
         assert!(SkillLocationType::VtcodeProject > SkillLocationType::PiUser);
         assert!(SkillLocationType::PiUser > SkillLocationType::PiProject);
         assert!(SkillLocationType::PiProject > SkillLocationType::ClaudeUser);
@@ -554,22 +565,28 @@ mod tests {
     #[tokio::test]
     async fn test_location_discovery() {
         // Test with custom locations that exist in the current workspace
-        // Use the workspace root (where .vtcode/skills actually is)
+        // Use the workspace root (where .agents/skills or .vtcode/skills actually is)
         let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .to_path_buf();
+        let agents_skills = workspace_root.join(".agents/skills");
         let vtcode_skills = workspace_root.join(".vtcode/skills");
         let claude_skills = workspace_root.join(".claude/skills");
+        let (project_location_type, project_skills) = if agents_skills.exists() {
+            (SkillLocationType::AgentsProject, agents_skills)
+        } else {
+            (SkillLocationType::VtcodeProject, vtcode_skills)
+        };
 
         println!("Testing with workspace root: {}", workspace_root.display());
-        println!("VT Code skills path: {}", vtcode_skills.display());
+        println!("Project skills path: {}", project_skills.display());
         println!("Claude skills path: {}", claude_skills.display());
-        println!("VT Code path exists: {}", vtcode_skills.exists());
+        println!("Project skills path exists: {}", project_skills.exists());
         println!("Claude path exists: {}", claude_skills.exists());
 
         let locations = SkillLocations::with_locations(vec![
-            SkillLocation::new(SkillLocationType::VtcodeProject, vtcode_skills, true),
+            SkillLocation::new(project_location_type, project_skills, true),
             SkillLocation::new(SkillLocationType::ClaudeProject, claude_skills, true),
         ]);
 
@@ -577,7 +594,7 @@ mod tests {
 
         println!("Discovered {} skills from test locations", discovered.len());
 
-        // Should find at least the skills we moved to .vtcode/skills
+        // Should find at least the skills we moved to .agents/skills or .vtcode/skills
         let skill_names: Vec<String> = discovered
             .iter()
             .map(|d| d.skill_context.manifest().name.clone())
@@ -610,22 +627,28 @@ mod tests {
 
         println!("Default locations discovered {} skills", discovered.len());
 
-        // Test specific VT Code location
+        // Test specific project location
+        let agents_skills = workspace_root.join(".agents/skills");
         let vtcode_skills = workspace_root.join(".vtcode/skills");
-        let vtcode_locations = SkillLocations::with_locations(vec![SkillLocation::new(
-            SkillLocationType::VtcodeProject,
-            vtcode_skills,
+        let (project_location_type, project_skills) = if agents_skills.exists() {
+            (SkillLocationType::AgentsProject, agents_skills)
+        } else {
+            (SkillLocationType::VtcodeProject, vtcode_skills)
+        };
+        let project_locations = SkillLocations::with_locations(vec![SkillLocation::new(
+            project_location_type,
+            project_skills,
             true,
         )]);
 
-        let vtcode_discovered = vtcode_locations.discover_skills().unwrap();
+        let project_discovered = project_locations.discover_skills().unwrap();
         println!(
-            "VT Code location discovered {} skills",
-            vtcode_discovered.len()
+            "Project location discovered {} skills",
+            project_discovered.len()
         );
 
         // Verify we found the expected skills
-        let skill_names: Vec<String> = vtcode_discovered
+        let skill_names: Vec<String> = project_discovered
             .iter()
             .map(|d| d.skill_context.manifest().name.clone())
             .collect();

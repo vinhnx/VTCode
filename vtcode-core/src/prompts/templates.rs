@@ -63,6 +63,6 @@ impl PromptTemplates {
 
     /// Get skills available prompt (inspired by OpenAI Codex)
     pub fn skills_available_prompt() -> &'static str {
-        "## Skills\nSpecialized capabilities from .vtcode/skills/. Use search_tools to discover."
+        "## Skills\nSpecialized capabilities from .agents/skills/. Use search_tools to discover. (.vtcode/skills is deprecated but still supported.)"
     }
 }

@@ -161,7 +161,7 @@ A: Yes. All compilation and tests pass. Code quality is high. Documentation is c
 A: See [SKILL_TOOL_USAGE.md - Troubleshooting](SKILL_TOOL_USAGE.md#troubleshooting)
 
 **Q: How do I add a new skill?**
-A: See [SKILL_TOOL_USAGE.md - Skills System](SKILL_TOOL_USAGE.md) and create a `.vtcode/skills/my-skill/SKILL.md`
+A: See [SKILL_TOOL_USAGE.md - Skills System](SKILL_TOOL_USAGE.md) and create a `.agents/skills/my-skill/SKILL.md`. Legacy project skills in `.vtcode/skills/` are supported but deprecated.
 
 **Q: What tools are available?**
 A: See [AVAILABLE_TOOLS.md](AVAILABLE_TOOLS.md) for complete reference
@@ -203,7 +203,7 @@ A: See [SKILL_TOOLS_FINAL_SUMMARY.md - Performance Characteristics](SKILL_TOOLS_
 
 ### For Users
 1. Read [SKILL_TOOL_USAGE.md](SKILL_TOOL_USAGE.md)
-2. Try creating a custom skill in `.vtcode/skills/`
+2. Try creating a custom skill in `.agents/skills/`
 3. Use `list_skills` to discover available skills
 4. Load and activate a skill with `load_skill`
 

@@ -22,7 +22,8 @@ Agent Skills extend VT Code's capabilities with specialized expertise for docume
 vtcode skills list
 
 # Shows skills from:
-# - .vtcode/skills/          (project-local)
+# - .agents/skills/          (project-local)
+# - .vtcode/skills/          (legacy project skills - deprecated)
 # - ./skills/                (workspace)
 # - ~/.vtcode/skills/        (user global)
 ```
@@ -77,7 +78,9 @@ vtcode skills config
 # Output:
 # Workspace: /your/project
 # Skill Search Paths:
-#   • .claude/skills/       (project-local skills)
+#   • .agents/skills/       (project-local skills)
+#   • .vtcode/skills/       (legacy project skills - deprecated)
+#   • .claude/skills/       (legacy compatibility)
 #   • ./skills/             (workspace skills)
 #   • ~/.vtcode/skills/     (user global skills)
 ```

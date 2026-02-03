@@ -128,7 +128,7 @@ Load skill instructions and activate its associated tools.
     "references/color-palettes.json",
     "assets/themes.json"
   ],
-  "path": "/path/to/.vtcode/skills/theme-factory",
+  "path": "/path/to/.agents/skills/theme-factory",
   "description": "Apply theme styling to documents and UIs"
 }
 ```
@@ -246,7 +246,7 @@ This ensures your skill workflow continues seamlessly across sessions.
 ### Skill Not Found
 - Check spelling: `list_skills query="skill-name"`
 - The skill might be dormant; use `load_skill` to activate
-- Skills must be in `~/.vtcode/skills/` or project `.vtcode/skills/`
+- Skills must be in `~/.vtcode/skills/` or project `.agents/skills/` (legacy `.vtcode/skills/` supported)
 
 ### Resource Not Found
 - Verify resource path with `load_skill` output

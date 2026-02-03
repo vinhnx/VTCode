@@ -69,7 +69,7 @@
 //! working solutions across sessions:
 //!
 //! 1. **Discovery**: Agent writes code to solve an immediate problem
-//! 2. **Persistence**: If solution works, save to `.vtcode/skills/`
+//! 2. **Persistence**: If solution works, save to `.agents/skills/`
 //! 3. **Generalization**: Refactor for reuse (parameterize hard-coded values)
 //! 4. **Documentation**: Add purpose, parameters, returns, examples
 //! 5. **Reuse**: Future agents discover via `list_skills`/`load_skill`
@@ -79,7 +79,7 @@
 //! - Active instructions: Full `SKILL.md` via `load_skill`
 //! - Deep resources: Scripts/docs via `load_skill_resource`
 //!
-//! See: `.vtcode/skills/INDEX.md` for available skills.
+//! See: `.agents/skills/INDEX.md` for available skills.
 //!
 //! # Usage
 //!

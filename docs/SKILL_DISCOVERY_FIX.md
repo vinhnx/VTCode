@@ -131,6 +131,6 @@ grep -n "search_skills\|SkillManager" vtcode-core/src/tools/registry/executors.r
 ## Related
 
 -   `.claude/skills/` - Where Anthropic skills are stored
--   `.vtcode/skills/` - Where vtcode local skills are stored
+-   `.agents/skills/` - Where vtcode local skills are stored (legacy `.vtcode/skills/` supported)
 -   `vtcode-core/src/exec/skill_manager.rs` - Skill persistence & management
 -   `vtcode-core/src/tools/registry/executors.rs` - Tool executor implementations

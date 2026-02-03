@@ -917,7 +917,7 @@ persist_history = true
 # Sync MCP tool descriptions to .vtcode/mcp/tools/
 sync_mcp_tools = true
 
-# Generate skill index in .vtcode/skills/INDEX.md
+# Generate skill index in .agents/skills/INDEX.md
 sync_skills = true
 
 # Maximum age in seconds for spooled files before cleanup (default: 1 hour)

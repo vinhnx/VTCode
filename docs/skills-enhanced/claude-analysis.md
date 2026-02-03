@@ -17,7 +17,7 @@ After analyzing the Claude API Skills Authoring Best Practices documentation and
 
 #### 2. **Filesystem-Based Discovery**
 
--   **Auto-discovery**: Multiple search paths (`.claude/skills`, `./skills`, `~/.vtcode/skills`)
+-   **Auto-discovery**: Multiple search paths (`.agents/skills`, `.claude/skills`, `./skills`, `~/.vtcode/skills`; legacy `.vtcode/skills` project path supported)
 -   **YAML Frontmatter**: Proper parsing of SKILL.md metadata
 -   **Bash Integration**: Command execution and file operations
 -   **Security Model**: Script validation, permission checks, audit logging

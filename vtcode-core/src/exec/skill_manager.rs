@@ -1,7 +1,8 @@
 //! Skill persistence and management for reusable code functions.
 //!
 //! Agents can save working code implementations as reusable "skills" in the
-//! `.vtcode/skills/` directory. Each skill includes:
+//! `.agents/skills/` directory. Legacy `.vtcode/skills/` locations remain
+//! readable for backward compatibility. Each skill includes:
 //! - Function implementation (Python or JavaScript)
 //! - `SKILL.md` documentation
 //! - Input/output type hints
@@ -59,17 +60,31 @@ pub struct Skill {
     pub code: String,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum SkillOrigin {
+    Primary,
+    Legacy,
+}
+
+#[derive(Debug, Clone)]
+struct SkillEntry {
+    metadata: SkillMetadata,
+    origin: SkillOrigin,
+}
+
 /// Manager for skill storage and retrieval.
 #[derive(Clone)]
 pub struct SkillManager {
     skills_dir: PathBuf,
+    legacy_skills_dir: PathBuf,
 }
 
 impl SkillManager {
     /// Create a new skill manager.
     pub fn new(workspace_root: &Path) -> Self {
         Self {
-            skills_dir: workspace_root.join(".vtcode").join("skills"),
+            skills_dir: workspace_root.join(".agents").join("skills"),
+            legacy_skills_dir: workspace_root.join(".vtcode").join("skills"),
         }
     }
 
@@ -131,18 +146,37 @@ impl SkillManager {
     /// Load a skill by name.
     pub async fn load_skill(&self, name: &str) -> Result<Skill> {
         let skill_dir = self.skills_dir.join(name);
+        let legacy_skill_dir = self.legacy_skills_dir.join(name);
 
         // Try to find code file (python or javascript)
-        let (code_path, language) = if tokio::fs::try_exists(skill_dir.join("skill.py"))
+        let (code_path, language, skill_root) = if tokio::fs::try_exists(skill_dir.join("skill.py"))
             .await
             .unwrap_or(false)
         {
-            (skill_dir.join("skill.py"), "python3")
+            (skill_dir.join("skill.py"), "python3", skill_dir)
         } else if tokio::fs::try_exists(skill_dir.join("skill.js"))
             .await
             .unwrap_or(false)
         {
-            (skill_dir.join("skill.js"), "javascript")
+            (skill_dir.join("skill.js"), "javascript", skill_dir)
+        } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.py"))
+            .await
+            .unwrap_or(false)
+        {
+            (
+                legacy_skill_dir.join("skill.py"),
+                "python3",
+                legacy_skill_dir,
+            )
+        } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.js"))
+            .await
+            .unwrap_or(false)
+        {
+            (
+                legacy_skill_dir.join("skill.js"),
+                "javascript",
+                legacy_skill_dir,
+            )
         } else {
             return Err(anyhow!("skill '{}' not found", name));
         };
@@ -153,7 +187,7 @@ impl SkillManager {
             .context(ERR_READ_SKILL_CODE)?;
 
         // Load metadata
-        let metadata_path = skill_dir.join("skill.json");
+        let metadata_path = skill_root.join("skill.json");
         let metadata_json = tokio::fs::read_to_string(&metadata_path)
             .await
             .context(ERR_READ_SKILL_METADATA)?;
@@ -180,32 +214,12 @@ impl SkillManager {
 
     /// List all available skills.
     pub async fn list_skills(&self) -> Result<Vec<SkillMetadata>> {
-        if !tokio::fs::try_exists(&self.skills_dir)
-            .await
-            .unwrap_or(false)
-        {
-            return Ok(Vec::new());
-        }
-
-        // Pre-allocate skills vector - typically 10-20 skills per directory
-        let mut skills = Vec::with_capacity(16);
-        let mut dir_entries = tokio::fs::read_dir(&self.skills_dir)
-            .await
-            .context(ERR_READ_SKILLS_DIR)?;
-
-        while let Some(entry) = dir_entries.next_entry().await.context(ERR_READ_DIR_ENTRY)? {
-            let path = entry.path();
-            if path.is_dir() {
-                let metadata_path = path.join("skill.json");
-                if let Ok(metadata_json) = tokio::fs::read_to_string(&metadata_path).await
-                    && let Ok(metadata) = serde_json::from_str::<SkillMetadata>(&metadata_json)
-                {
-                    skills.push(metadata);
-                }
-            }
-        }
-
-        Ok(skills)
+        Ok(self
+            .list_skills_with_origin()
+            .await?
+            .into_iter()
+            .map(|entry| entry.metadata)
+            .collect())
     }
 
     /// Search skills by tag or keyword.
@@ -229,9 +243,21 @@ impl SkillManager {
     /// Delete a skill.
     pub async fn delete_skill(&self, name: &str) -> Result<()> {
         let skill_dir = self.skills_dir.join(name);
-        tokio::fs::remove_dir_all(&skill_dir)
+        let legacy_skill_dir = self.legacy_skills_dir.join(name);
+        if tokio::fs::try_exists(&skill_dir).await.unwrap_or(false) {
+            tokio::fs::remove_dir_all(&skill_dir)
+                .await
+                .context(ERR_DELETE_SKILL)?;
+        } else if tokio::fs::try_exists(&legacy_skill_dir)
             .await
-            .context(ERR_DELETE_SKILL)?;
+            .unwrap_or(false)
+        {
+            tokio::fs::remove_dir_all(&legacy_skill_dir)
+                .await
+                .context(ERR_DELETE_SKILL)?;
+        } else {
+            return Err(anyhow!("skill '{}' not found", name));
+        }
 
         info!(skill_name = %name, "Skill deleted successfully");
 
@@ -247,7 +273,7 @@ impl SkillManager {
     /// to discover available skills, then load specific skills as needed.
     /// This is more token-efficient than loading all skill definitions.
     pub async fn generate_index(&self) -> Result<std::path::PathBuf> {
-        let skills = self.list_skills().await?;
+        let skills = self.list_skills_with_origin().await?;
 
         let mut content = String::new();
         content.push_str("# Skills Index\n\n");
@@ -255,6 +281,14 @@ impl SkillManager {
         content.push_str(
             "Use `read_file` on individual skill directories for full documentation.\n\n",
         );
+        if skills
+            .iter()
+            .any(|entry| matches!(entry.origin, SkillOrigin::Legacy))
+        {
+            content.push_str(
+                "Legacy skills from `.vtcode/skills/` are included but deprecated. Move them to `.agents/skills/`.\n\n",
+            );
+        }
 
         if skills.is_empty() {
             content.push_str("*No skills available yet.*\n\n");
@@ -264,7 +298,8 @@ impl SkillManager {
             content.push_str("| Name | Language | Description | Tags |\n");
             content.push_str("|------|----------|-------------|------|\n");
 
-            for skill in &skills {
+            for entry in &skills {
+                let skill = &entry.metadata;
                 let tags = if skill.tags.is_empty() {
                     "-".to_string()
                 } else {
@@ -279,13 +314,18 @@ impl SkillManager {
             }
 
             content.push_str("\n## Quick Reference\n\n");
-            for skill in &skills {
+            for entry in &skills {
+                let skill = &entry.metadata;
+                let base_path = match entry.origin {
+                    SkillOrigin::Primary => ".agents/skills",
+                    SkillOrigin::Legacy => ".vtcode/skills",
+                };
                 let _ = writeln!(content, "### {}\n", skill.name);
                 let _ = writeln!(content, "{}\n", skill.description);
                 let _ = writeln!(
                     content,
-                    "- **Language**: {}\n- **Path**: `.vtcode/skills/{}/SKILL.md`\n",
-                    skill.language, skill.name
+                    "- **Language**: {}\n- **Path**: `{}/{}/SKILL.md`\n",
+                    skill.language, base_path, skill.name
                 );
             }
         }
@@ -315,6 +355,65 @@ impl SkillManager {
     /// Get the path to the INDEX.md file
     pub fn index_path(&self) -> std::path::PathBuf {
         self.skills_dir.join("INDEX.md")
+    }
+
+    async fn list_skills_with_origin(&self) -> Result<Vec<SkillEntry>> {
+        let mut entries = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        let primary = self
+            .read_skills_from_dir(&self.skills_dir)
+            .await
+            .context(ERR_READ_SKILLS_DIR)?;
+        for metadata in primary {
+            seen.insert(metadata.name.clone());
+            entries.push(SkillEntry {
+                metadata,
+                origin: SkillOrigin::Primary,
+            });
+        }
+
+        let legacy = self
+            .read_skills_from_dir(&self.legacy_skills_dir)
+            .await
+            .context(ERR_READ_SKILLS_DIR)?;
+        for metadata in legacy {
+            if seen.contains(&metadata.name) {
+                continue;
+            }
+            entries.push(SkillEntry {
+                metadata,
+                origin: SkillOrigin::Legacy,
+            });
+        }
+
+        Ok(entries)
+    }
+
+    async fn read_skills_from_dir(&self, dir: &Path) -> Result<Vec<SkillMetadata>> {
+        if !tokio::fs::try_exists(dir).await.unwrap_or(false) {
+            return Ok(Vec::new());
+        }
+
+        // Pre-allocate skills vector - typically 10-20 skills per directory
+        let mut skills = Vec::with_capacity(16);
+        let mut dir_entries = tokio::fs::read_dir(dir)
+            .await
+            .context(ERR_READ_SKILLS_DIR)?;
+
+        while let Some(entry) = dir_entries.next_entry().await.context(ERR_READ_DIR_ENTRY)? {
+            let path = entry.path();
+            if path.is_dir() {
+                let metadata_path = path.join("skill.json");
+                if let Ok(metadata_json) = tokio::fs::read_to_string(&metadata_path).await
+                    && let Ok(metadata) = serde_json::from_str::<SkillMetadata>(&metadata_json)
+                {
+                    skills.push(metadata);
+                }
+            }
+        }
+
+        Ok(skills)
     }
 
     /// Check if a skill is compatible with given tool versions

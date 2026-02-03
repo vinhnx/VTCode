@@ -70,7 +70,8 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
         println!("  vtcode skills create ./my-skill");
         println!("\nOr install skills in standard locations:");
         println!("  ~/.vtcode/skills/     (VT Code user skills)");
-        println!("  .vtcode/skills/       (Project skills)");
+        println!("  .agents/skills/       (Project skills)");
+        println!("  .vtcode/skills/       (Legacy project skills - deprecated)");
         println!("  ~/.claude/skills/     (Legacy compatibility)");
         println!("  ~/.codex/skills/      (Codex compatibility)");
         return Ok(());
@@ -408,7 +409,8 @@ pub async fn handle_skills_config(options: &SkillsCommandOptions) -> Result<()> 
     println!("Workspace: {}", options.workspace.display());
     println!("\nSkill Search Paths (by precedence):");
     println!("  • ~/.vtcode/skills/     (VT Code user skills - highest precedence)");
-    println!("  • .vtcode/skills/       (VT Code project skills)");
+    println!("  • .agents/skills/       (VT Code project skills)");
+    println!("  • .vtcode/skills/       (Legacy project skills - deprecated)");
     println!("  • ~/.pi/skills/         (Pi framework user skills)");
     println!("  • .pi/skills/           (Pi framework project skills)");
     println!("  • ~/.claude/skills/     (Legacy compatibility)");
@@ -557,17 +559,18 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
         // Traditional skills quick reference
         for skill_ctx in &discovery_result.skills {
             let manifest = skill_ctx.manifest();
+            let skill_md = skill_ctx.path().join("SKILL.md");
             let _ = writeln!(content, "### {}\n", manifest.name);
             let _ = writeln!(content, "{}\n", manifest.description);
             let _ = writeln!(
                 content,
-                "- **Type**: {}\n- **Path**: `~/.vtcode/skills/{}/SKILL.md`\n",
+                "- **Type**: {}\n- **Path**: `{}`\n",
                 if manifest.mode.unwrap_or(false) {
                     "Mode"
                 } else {
                     "Skill"
                 },
-                manifest.name
+                skill_md.display()
             );
         }
 

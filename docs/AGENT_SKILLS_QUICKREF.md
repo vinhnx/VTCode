@@ -137,9 +137,11 @@ vtcode ask "Review this code using strict-architecture rules"
 
 VT Code searches for skills in order:
 
-1. `.claude/skills/` (project-local)
-2. `./skills/` (workspace)
-3. `~/.vtcode/skills/` (user global)
+1. `~/.vtcode/skills/` (user global - highest)
+2. `.agents/skills/` (project-local)
+3. `.vtcode/skills/` (legacy project skills - deprecated)
+4. `.claude/skills/` (legacy compatibility)
+5. `./skills/` (workspace)
 
 ## File Handling
 

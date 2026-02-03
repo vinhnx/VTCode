@@ -41,6 +41,7 @@ impl Default for DiscoveryConfig {
     fn default() -> Self {
         Self {
             skill_paths: vec![
+                PathBuf::from(".agents/skills"),
                 PathBuf::from(".vtcode/skills"),
                 PathBuf::from(".claude/skills"),
                 PathBuf::from(".pi/skills"),
