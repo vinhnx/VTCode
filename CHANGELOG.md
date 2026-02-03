@@ -2,6 +2,15 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.74.16 - 2026-02-03
+
+- Improve release (ff4ae644) (@vinhnx)
+- chore(release): bump version to 0.74.15 [skip ci] (6a88018d) (@vinhnx)
+- docs: update changelog for v0.74.15 [skip ci] (0b859919) (@vtcode-release-bot)
+- Revert "refactor: enhance base URL resolution and improve JSON handling in request builder" (4cb8f2d9) (@vinhnx)
+- chore: update homebrew formula to v0.74.14 (03234509)
+
+
 ## v0.74.15 - 2026-02-03
 
 - Revert "refactor: enhance base URL resolution and improve JSON handling in request builder" (4cb8f2d9) (@vinhnx)
