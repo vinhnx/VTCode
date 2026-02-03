@@ -213,12 +213,16 @@ update_changelog_from_commits() {
     fi
 
     git add CHANGELOG.md
-    GIT_AUTHOR_NAME="vtcode-release-bot" \
-    GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-    GIT_COMMITTER_NAME="vtcode-release-bot" \
-    GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-    git commit -m "docs: update changelog for v$version [skip ci]"
-    print_success "Changelog updated and committed for version v$version"
+    if ! git diff --cached --quiet; then
+        GIT_AUTHOR_NAME="vtcode-release-bot" \
+        GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+        GIT_COMMITTER_NAME="vtcode-release-bot" \
+        GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+        git commit -m "docs: update changelog for v$version [skip ci]"
+        print_success "Changelog updated and committed for version v$version"
+    else
+        print_info "No changes to CHANGELOG.md to commit."
+    fi
 }
 
 get_current_version() {
