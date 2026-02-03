@@ -243,14 +243,14 @@ fn highlight_segments_marks_matching_spans() {
     );
 
     assert_eq!(segments.len(), 3);
-    assert_eq!(&*segments[0].content, "H");
+    assert_eq!(segments[0].content.as_ref(), "H");
     assert_eq!(segments[0].style, Style::default());
-    assert_eq!(&*segments[1].content, "el");
+    assert_eq!(segments[1].content.as_ref(), "el");
     assert_eq!(
         segments[1].style,
         Style::default().add_modifier(Modifier::BOLD)
     );
-    assert_eq!(&*segments[2].content, "lo");
+    assert_eq!(segments[2].content.as_ref(), "lo");
     assert_eq!(segments[2].style, Style::default());
 }
 
