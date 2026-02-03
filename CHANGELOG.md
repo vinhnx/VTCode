@@ -2,6 +2,12 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.75.0 - 2026-02-03
+
+- fix: resolve tool call ID mapping issue and update JSON handling in messages (9af9d34b) (@vinhnx)
+- chore: update homebrew formula to v0.74.17 (2af3f3ff)
+
+
 ## v0.74.17 - 2026-02-03
 
 - feat: add Step 3.5 Flash model and update configuration for OpenRouter (c50770ab) (@vinhnx)
