@@ -158,7 +158,7 @@ This file - complete changelog and impact analysis
 
 **Scopes**:
 - `user` - User-level skills from `~/.claude/skills/`
-- `repo` - Repository-level skills from `.vtcode/skills/`
+- `repo` - Repository-level skills from `.agents/skills/` (legacy `.vtcode/skills/` supported)
 
 ## Build & Test Status
 

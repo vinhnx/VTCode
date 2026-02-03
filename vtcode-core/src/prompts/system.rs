@@ -659,7 +659,7 @@ pub async fn compose_system_instruction_text(
             instruction.push_str("- `.vtcode/mcp/tools/` - MCP tool descriptions and schemas\n");
             instruction
                 .push_str("- `.vtcode/terminals/` - Terminal session output with metadata\n");
-            instruction.push_str("- `.vtcode/skills/INDEX.md` - Available skills index\n\n");
+            instruction.push_str("- `.agents/skills/INDEX.md` - Available skills index\n\n");
             instruction.push_str("**Tip**: When a tool result says 'spooled to file', use `read_file` to access the full output.\n");
         }
 

@@ -9,7 +9,7 @@ pub enum SkillScope {
     /// User-level skill (~/.vtcode/skills)
     #[default]
     User,
-    /// Repository-level skill (.vtcode/skills or .codex/skills in project root)
+    /// Repository-level skill (.agents/skills, .vtcode/skills, or .codex/skills in project root)
     Repo,
     /// System-level skill (embedded or system-wide)
     System,

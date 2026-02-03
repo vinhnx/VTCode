@@ -24,7 +24,7 @@ vtcode skills list
 Shows all discovered skills from multiple locations with precedence handling:
 
 - **VT Code User Skills** (`~/.vtcode/skills/`) - Highest precedence
-- **VT Code Project Skills** (`.vtcode/skills/`) - Project-specific skills
+- **VT Code Project Skills** (`.agents/skills/`) - Project-specific skills
 - **Pi User Skills** (`~/.pi/skills/`) - Pi framework user skills
 - **Pi Project Skills** (`.pi/skills/`) - Pi framework project skills
 - **Claude User Skills** (`~/.claude/skills/`) - Claude Code user skills
@@ -33,6 +33,7 @@ Shows all discovered skills from multiple locations with precedence handling:
 
 Skills from higher precedence locations override skills with the same name from lower precedence locations.
 Claude skill directories support nested discovery; VT Code will scan nested `.claude/skills/**/SKILL.md` files.
+Legacy note: `.vtcode/skills/` is deprecated for project skills but still supported for backward compatibility.
 
 ### View Skill Details
 
@@ -459,7 +460,7 @@ VT Code now supports a comprehensive skills location system similar to pi-mono, 
 **Supported Locations:**
 
 - **VT Code User Skills**: `~/.vtcode/skills/` (highest precedence)
-- **VT Code Project Skills**: `.vtcode/skills/`
+- **VT Code Project Skills**: `.agents/skills/` (legacy `.vtcode/skills/` supported)
 - **Pi User Skills**: `~/.pi/skills/`
 - **Pi Project Skills**: `.pi/skills/`
 - **Claude User Skills**: `~/.claude/skills/`
@@ -479,9 +480,9 @@ VT Code now supports a comprehensive skills location system similar to pi-mono, 
 
 **Backward Compatibility**: All existing Claude Code skills continue to work in their original locations.
 
-### Migration from .claude/skills to .vtcode/skills
+### Migration from .claude/skills to .agents/skills
 
-All existing skills have been migrated from `.claude/skills` to `.vtcode/skills` to take advantage of the higher precedence system. The old locations are still supported for backward compatibility.
+All existing skills have been migrated from `.claude/skills` to `.agents/skills` to take advantage of the higher precedence system. The old locations are still supported for backward compatibility. Project skills in `.vtcode/skills/` are deprecated but will continue to load.
 
 ### Discovery Process
 
@@ -567,7 +568,7 @@ Common errors and solutions:
 - Reusable across all projects (highest precedence)
 - Examples: code-review, doc-generator, security-audit
 
-**VT Code Project Skills** (`.vtcode/skills/`):
+**VT Code Project Skills** (`.agents/skills/`): (legacy `.vtcode/skills/` supported)
 
 - Specific to your project
 - Examples: brand-guidelines, api-spec, deployment-playbook
@@ -777,7 +778,7 @@ Check for Zed and VS Code extensions on the VT Code repository.
 ```bash
 # Verify skill exists in new VT Code locations
 ls ~/.vtcode/skills/
-ls .vtcode/skills/
+ls .agents/skills/
 
 # Check legacy locations
 ls ~/.claude/skills/
@@ -844,7 +845,7 @@ A: Yes! When integrated with the agent harness, skills can call VT Code tools (f
 A: Skills are reusable, discoverable, versioned modules with explicit metadata. Prompts are conversation-level instructions.
 
 **Q: Can I share skills with teammates?**
-A: Yes! Keep skills in `.vtcode/skills/` (version control) or `~/.vtcode/skills/` (personal). The new VT Code location system provides better precedence and organization.
+A: Yes! Keep skills in `.agents/skills/` (version control) or `~/.vtcode/skills/` (personal). Legacy project skills in `.vtcode/skills/` are supported but deprecated.
 
 ---
 

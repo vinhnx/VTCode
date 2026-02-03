@@ -15,7 +15,7 @@
 Changed from using `SkillManager` to `SkillLoader`:
 
 ```rust
-// BEFORE (Broken - searches .vtcode/skills/*/skill.json)
+// BEFORE (Broken - searches .agents/skills/*/skill.json)
 use crate::exec::SkillManager;
 let manager = SkillManager::new(&workspace_root);
 if let Ok(skill_results) = manager.search_skills(&parsed.keyword).await { ... }
@@ -82,7 +82,7 @@ VT Code now has TWO skill systems (both supported):
 ### 2. Executable Code Skills (OLD - Still works)
 
 -   **Format**: `skill.json` + `skill.py`/`skill.js`
--   **Location**: `.vtcode/skills/*/skill.*`
+-   **Location**: `.agents/skills/*/skill.*` (legacy `.vtcode/skills/` supported)
 -   **Purpose**: Reusable Python/JS functions with metadata
 -   **Manager**: `SkillManager` (`vtcode-core/src/exec/skill_manager.rs`)
 -   **Tools**: `save_skill`, `load_skill`, `list_skills`, `search_skills` (deprecated)

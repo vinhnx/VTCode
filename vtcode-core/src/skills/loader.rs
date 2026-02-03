@@ -94,9 +94,14 @@ fn skill_roots(config: &SkillLoaderConfig) -> Vec<SkillRoot> {
     let mut roots = Vec::new();
 
     // 1. Repo/Project roots (highest priority)
-    // We check for .codex/skills, .vtcode/skills, etc.
+    // We check for .agents/skills, .codex/skills, .vtcode/skills, etc.
     if let Some(project_root) = &config.project_root {
         // Traditional skills
+        roots.push(SkillRoot {
+            path: project_root.join(".agents/skills"),
+            scope: SkillScope::Repo,
+            is_tool_root: false,
+        });
         roots.push(SkillRoot {
             path: project_root.join(".codex/skills"),
             scope: SkillScope::Repo,

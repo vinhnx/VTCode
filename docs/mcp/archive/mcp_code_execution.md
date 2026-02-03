@@ -167,7 +167,7 @@ result = {"count": len(filtered), "files": filtered[:10]}
 
 3. **Storage Structure**:
    ```
-   .vtcode/skills/
+   .agents/skills/
     filter_test_files/
        skill.py (or skill.js)
        skill.json (metadata)

@@ -4,7 +4,9 @@
 
 Complete Agent Skills integration for VT Code, following the VT Code API quickstart guide and best practices.
 
-### New Skills in `.vtcode/skills/`
+### New Skills in `.agents/skills/`
+
+Legacy note: Project skills in `.vtcode/skills/` are deprecated but still supported.
 
 1. **spreadsheet-generator** (v1.0.0)
     - Generate Excel spreadsheets with data, formulas, charts

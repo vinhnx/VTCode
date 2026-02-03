@@ -24,7 +24,7 @@ When trying to use Claude Agent Skills (like `spreadsheet-generator`), the vtcod
 
 ```rust
 // BEFORE (Wrong system)
-use crate::exec::SkillManager;  // Looks for .vtcode/skills/*/skill.json
+use crate::exec::SkillManager;  // Looks for .agents/skills/*/skill.json (legacy .vtcode/skills supported)
 let manager = SkillManager::new(&workspace_root);
 manager.search_skills(&keyword)
 

@@ -74,12 +74,13 @@ VT Code discovers skills from multiple locations with precedence:
 
 ```
 1. ~/.vtcode/skills/           (VT Code user skills - highest)
-2. .vtcode/skills/             (Project-specific)
-3. ~/.pi/skills/               (Pi framework)
-4. .pi/skills/
-5. ~/.claude/skills/           (Claude Code legacy)
-6. .claude/skills/
-7. ~/.codex/skills/            (Codex CLI - lowest)
+2. .agents/skills/             (Project-specific)
+3. .vtcode/skills/             (Legacy project skills - deprecated)
+4. ~/.pi/skills/               (Pi framework)
+5. .pi/skills/
+6. ~/.claude/skills/           (Claude Code legacy)
+7. .claude/skills/
+8. ~/.codex/skills/            (Codex CLI - lowest)
 ```
 
 Higher precedence locations override same-named skills.
