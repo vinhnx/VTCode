@@ -32,16 +32,5 @@ async fn apply_patch_supports_patch_alias() {
     assert_eq!(contents, "Hello from patch alias!\n");
 }
 
-#[tokio::test]
-async fn apply_patch_supports_diff_alias() {
-    let temp_dir = TempDir::new().unwrap();
-    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-    registry.initialize_async().await.unwrap();
-
-    let result = registry
-        .execute_tool("apply_patch", json!({ "diff": SAMPLE_PATCH }))
-        .await
-        .expect("apply_patch should succeed with diff alias");
-
-    assert_eq!(result.get("success").and_then(|v| v.as_bool()), Some(true));
-}
+// NOTE: The "diff" alias was removed to prevent confusion with `git diff` (read operation)
+// vs `apply_patch` (write operation). Only "input" and "patch" parameters are supported.

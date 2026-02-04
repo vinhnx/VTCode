@@ -813,9 +813,8 @@ impl ToolRegistry {
         let patch_source = args
             .get("input")
             .or_else(|| args.get("patch"))
-            .or_else(|| args.get("diff"))
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Missing patch input"))?;
+            .ok_or_else(|| anyhow!("Missing patch input (use 'input' or 'patch' parameter)"))?;
 
         let patch = crate::tools::editing::Patch::parse(patch_source)?;
         let results = patch.apply(&self.workspace_root_owned()).await?;
