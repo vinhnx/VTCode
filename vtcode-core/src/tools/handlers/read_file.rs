@@ -815,6 +815,9 @@ fn trim_empty_lines(out: &mut VecDeque<&LineRecord>) {
 }
 
 fn condense_collected_lines(lines: &mut Vec<String>) {
+    if looks_like_diff_lines(lines) {
+        return;
+    }
     const CONDENSED_THRESHOLD: usize = 50;
     const HEAD_LINES: usize = 20;
     const TAIL_LINES: usize = 10;
@@ -849,6 +852,9 @@ fn condense_collected_lines(lines: &mut Vec<String>) {
 /// Condense lines for batch mode with stricter threshold.
 /// Returns (was_condensed, omitted_count).
 fn condense_for_batch(lines: &mut Vec<String>) -> (bool, usize) {
+    if looks_like_diff_lines(lines) {
+        return (false, 0);
+    }
     const HEAD_LINES: usize = 15;
     const TAIL_LINES: usize = 5;
 
@@ -871,6 +877,29 @@ fn condense_for_batch(lines: &mut Vec<String>) -> (bool, usize) {
 
     *lines = condensed;
     (true, omitted_count)
+}
+
+fn looks_like_diff_lines(lines: &[String]) -> bool {
+    lines.iter().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("diff --git ")
+            || trimmed.starts_with("@@ ")
+            || trimmed.starts_with("+++ ")
+            || trimmed.starts_with("--- ")
+            || trimmed.starts_with("index ")
+            || trimmed.starts_with("new file mode ")
+            || trimmed.starts_with("deleted file mode ")
+            || trimmed.starts_with("rename from ")
+            || trimmed.starts_with("rename to ")
+            || trimmed.starts_with("copy from ")
+            || trimmed.starts_with("copy to ")
+            || trimmed.starts_with("similarity index ")
+            || trimmed.starts_with("dissimilarity index ")
+            || trimmed.starts_with("old mode ")
+            || trimmed.starts_with("new mode ")
+            || trimmed.starts_with("Binary files ")
+            || trimmed.starts_with("\\ No newline at end of file")
+    })
 }
 
 mod defaults {

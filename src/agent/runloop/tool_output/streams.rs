@@ -50,7 +50,7 @@ use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::files::truncate_text_safe;
+use super::files::{format_diff_content_lines, truncate_text_safe};
 use super::large_output::{LargeOutputConfig, spool_large_output};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
@@ -116,6 +116,8 @@ pub(crate) async fn render_stream_section(
     let allow_ansi_for_tool = allow_ansi && !is_run_command;
     let apply_line_styles = !is_run_command;
     let force_tail_mode = is_run_command;
+    let stripped_for_diff = strip_ansi_codes(content);
+    let is_diff_content = apply_line_styles && looks_like_diff_content(stripped_for_diff.as_ref());
     let normalized_content = if allow_ansi_for_tool {
         Cow::Borrowed(content)
     } else {
@@ -226,6 +228,66 @@ pub(crate) async fn render_stream_section(
                 renderer.line(fallback_style, &msg_buffer)?;
             }
         }
+        return Ok(());
+    }
+
+    if is_diff_content {
+        let diff_lines = format_diff_content_lines(stripped_for_diff.as_ref());
+        let total = diff_lines.len();
+        let effective_limit =
+            if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
+                tail_limit.max(1000)
+            } else {
+                tail_limit
+            };
+        let (lines_slice, truncated) = if force_tail_mode || total > effective_limit {
+            let start = total.saturating_sub(effective_limit);
+            (&diff_lines[start..], total > effective_limit)
+        } else {
+            (&diff_lines[..], false)
+        };
+
+        if truncated {
+            let hidden = total.saturating_sub(lines_slice.len());
+            if hidden > 0 {
+                renderer.line(
+                    MessageStyle::ToolDetail,
+                    &format!("[... {} lines truncated ...]", hidden),
+                )?;
+            }
+        }
+
+        let indent = fallback_style.indent();
+        let mut display_buffer = String::with_capacity(128);
+        for line in lines_slice {
+            if line.is_empty() {
+                continue;
+            }
+            display_buffer.clear();
+            if !indent.is_empty() {
+                display_buffer.push_str(indent);
+            }
+            if line.len() > MAX_LINE_LENGTH {
+                let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
+                display_buffer.push_str(truncated);
+                display_buffer.push_str("...");
+            } else {
+                display_buffer.push_str(line);
+            }
+
+            if let Some(style) =
+                select_line_style(tool_name, &display_buffer, git_styles, ls_styles)
+            {
+                renderer.line_with_style(style, &display_buffer)?;
+            } else {
+                renderer.line_with_override_style(
+                    fallback_style,
+                    fallback_style.style(),
+                    &display_buffer,
+                )?;
+            }
+        }
+
         return Ok(());
     }
 
@@ -360,6 +422,23 @@ pub(crate) fn render_code_fence_blocks(
 
 fn should_render_as_code_block(style: MessageStyle) -> bool {
     matches!(style, MessageStyle::ToolOutput | MessageStyle::Output)
+}
+
+fn looks_like_diff_content(content: &str) -> bool {
+    content.lines().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("diff --")
+            || trimmed.starts_with("index ")
+            || trimmed.starts_with("@@")
+            || trimmed.starts_with("--- ")
+            || trimmed.starts_with("+++ ")
+            || trimmed.starts_with("new file mode")
+            || trimmed.starts_with("deleted file mode")
+            || trimmed.starts_with("*** Begin Patch")
+            || trimmed.starts_with("*** Update File:")
+            || trimmed.starts_with("*** Add File:")
+            || trimmed.starts_with("*** Delete File:")
+    })
 }
 
 fn build_markdown_code_block(lines: &[&str]) -> String {

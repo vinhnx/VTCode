@@ -873,6 +873,168 @@ fn highlight_code_block(
     lines
 }
 
+fn format_start_only_hunk_header(line: &str) -> Option<String> {
+    let trimmed = line.trim_end();
+    if !trimmed.starts_with("@@ -") {
+        return None;
+    }
+
+    let rest = trimmed.strip_prefix("@@ -")?;
+    let mut parts = rest.split_whitespace();
+    let old_part = parts.next()?;
+    let new_part = parts.next()?;
+
+    if !new_part.starts_with('+') {
+        return None;
+    }
+
+    let old_start = old_part.split(',').next()?.parse::<usize>().ok()?;
+    let new_start = new_part
+        .trim_start_matches('+')
+        .split(',')
+        .next()?
+        .parse::<usize>()
+        .ok()?;
+
+    Some(format!("@@ -{} +{} @@", old_start, new_start))
+}
+
+fn parse_diff_git_path(line: &str) -> Option<String> {
+    let mut parts = line.split_whitespace();
+    if parts.next()? != "diff" {
+        return None;
+    }
+    if parts.next()? != "--git" {
+        return None;
+    }
+    let _old = parts.next()?;
+    let new_path = parts.next()?;
+    Some(new_path.trim_start_matches("b/").to_string())
+}
+
+fn parse_diff_marker_path(line: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    if !(trimmed.starts_with("--- ") || trimmed.starts_with("+++ ")) {
+        return None;
+    }
+    let path = trimmed.split_whitespace().nth(1)?;
+    if path == "/dev/null" {
+        return None;
+    }
+    Some(
+        path.trim_start_matches("a/")
+            .trim_start_matches("b/")
+            .to_string(),
+    )
+}
+
+fn is_addition_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with('+') && !trimmed.starts_with("+++")
+}
+
+fn is_deletion_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with('-') && !trimmed.starts_with("---")
+}
+
+fn normalize_diff_lines(code: &str) -> Vec<String> {
+    #[derive(Default)]
+    struct DiffBlock {
+        header: String,
+        path: String,
+        lines: Vec<String>,
+        additions: usize,
+        deletions: usize,
+    }
+
+    let mut preface = Vec::new();
+    let mut blocks = Vec::new();
+    let mut current: Option<DiffBlock> = None;
+
+    for line in code.lines() {
+        if let Some(path) = parse_diff_git_path(line) {
+            if let Some(block) = current.take() {
+                blocks.push(block);
+            }
+            current = Some(DiffBlock {
+                header: line.to_string(),
+                path,
+                lines: Vec::new(),
+                additions: 0,
+                deletions: 0,
+            });
+            continue;
+        }
+
+        let rewritten = format_start_only_hunk_header(line).unwrap_or_else(|| line.to_string());
+        if let Some(block) = current.as_mut() {
+            if is_addition_line(line) {
+                block.additions += 1;
+            } else if is_deletion_line(line) {
+                block.deletions += 1;
+            }
+            block.lines.push(rewritten);
+        } else {
+            preface.push(rewritten);
+        }
+    }
+
+    if let Some(block) = current {
+        blocks.push(block);
+    }
+
+    if blocks.is_empty() {
+        let mut additions = 0usize;
+        let mut deletions = 0usize;
+        let mut fallback_path: Option<String> = None;
+        let mut summary_insert_index: Option<usize> = None;
+        let mut lines: Vec<String> = Vec::new();
+
+        for line in code.lines() {
+            if fallback_path.is_none() {
+                fallback_path = parse_diff_marker_path(line);
+            }
+            if summary_insert_index.is_none() && line.trim_start().starts_with("+++ ") {
+                summary_insert_index = Some(lines.len());
+            }
+            if is_addition_line(line) {
+                additions += 1;
+            } else if is_deletion_line(line) {
+                deletions += 1;
+            }
+            let rewritten = format_start_only_hunk_header(line).unwrap_or_else(|| line.to_string());
+            lines.push(rewritten);
+        }
+
+        let path = fallback_path.unwrap_or_else(|| "file".to_string());
+        let summary = format!("• Edited {} (+{} -{})", path, additions, deletions);
+
+        let mut output = Vec::with_capacity(lines.len() + 1);
+        if let Some(idx) = summary_insert_index {
+            output.extend(lines[..=idx].iter().cloned());
+            output.push(summary);
+            output.extend(lines[idx + 1..].iter().cloned());
+        } else {
+            output.push(summary);
+            output.extend(lines);
+        }
+        return output;
+    }
+
+    let mut output = Vec::new();
+    output.extend(preface);
+    for block in blocks {
+        output.push(block.header);
+        output.push(format!(
+            "• Edited {} (+{} -{})",
+            block.path, block.additions, block.deletions
+        ));
+        output.extend(block.lines);
+    }
+    output
+}
+
 fn render_diff_code_block(
     code: &str,
     theme_styles: &ThemeStyles,
@@ -883,18 +1045,20 @@ fn render_diff_code_block(
     let palette = DiffColorPalette::default();
     let context_style = code_block_style(theme_styles, base_style);
     let header_style = Style::new().fg_color(Some(Color::Rgb(palette.header_fg)));
+    let added_style = palette.added_style();
+    let removed_style = palette.removed_style();
 
-    for raw_line in LinesWithEndings::from(code) {
-        let trimmed = raw_line.trim_end_matches('\n');
+    for line in normalize_diff_lines(code) {
+        let trimmed = line.trim_end_matches('\n');
         let trimmed_start = trimmed.trim_start();
         let style = if trimmed.is_empty() {
             context_style
         } else if is_diff_header_line(trimmed_start) {
             header_style
         } else if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
-            palette.added_style()
+            added_style
         } else if trimmed.starts_with('-') && !trimmed.starts_with("---") {
-            palette.removed_style()
+            removed_style
         } else {
             context_style
         };
@@ -1371,7 +1535,8 @@ mod tests {
     #[test]
     fn test_markdown_diff_code_block_applies_backgrounds() {
         let markdown = "```diff\n@@ -1 +1 @@\n- old\n+ new\n context\n```\n";
-        let lines = render_markdown(markdown);
+        let lines =
+            render_markdown_to_lines(markdown, Style::default(), &theme::active_styles(), None);
 
         let added_line = lines
             .iter()
@@ -1414,7 +1579,8 @@ mod tests {
     #[test]
     fn test_markdown_unlabeled_diff_code_block_detects_diff() {
         let markdown = "```\n@@ -1 +1 @@\n- old\n+ new\n```\n";
-        let lines = render_markdown(markdown);
+        let lines =
+            render_markdown_to_lines(markdown, Style::default(), &theme::active_styles(), None);
         let added_line = lines
             .iter()
             .find(|line| line.segments.iter().any(|seg| seg.text.contains("+ new")))

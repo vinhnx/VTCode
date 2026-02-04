@@ -320,7 +320,7 @@ impl DiffRenderer {
     fn render_summary(&self, diff: &FileDiff) -> String {
         if !self.use_colors {
             return format!(
-                "▸ Edit {} +{} -{}",
+                "▸ Edit {} (+{} -{})",
                 diff.file_path, diff.stats.additions, diff.stats.deletions
             );
         }
@@ -347,6 +347,9 @@ impl DiffRenderer {
         output.push_str(&self.cached_styles.reset);
         output.push(' ');
 
+        // Opening paren for stats
+        output.push('(');
+
         // Additions
         output.push_str(&self.cached_styles.stat_added);
         output.push('+');
@@ -360,6 +363,7 @@ impl DiffRenderer {
         output.push('-');
         let _ = write!(output, "{}", diff.stats.deletions);
         output.push_str(&self.cached_styles.reset);
+        output.push(')');
 
         output
     }
@@ -443,6 +447,12 @@ impl DiffRenderer {
         let mut deletions = 0;
 
         for hunk in &bundle.hunks {
+            lines.push(DiffLine {
+                line_type: DiffLineType::Header,
+                content: format!("@@ -{} +{} @@", hunk.old_start, hunk.new_start),
+                line_number_old: None,
+                line_number_new: None,
+            });
             for line in &hunk.lines {
                 let line_type = match line.kind {
                     crate::utils::diff::DiffLineKind::Addition => {
@@ -925,5 +935,14 @@ mod tests {
         let output = renderer.render_multiple_changes(changes);
         assert!(output.contains("Multiple File Changes"));
         assert!(!output.contains(diff_constants::SUPPRESSION_MESSAGE));
+    }
+
+    #[test]
+    fn test_render_file_change_includes_summary_and_hunk_header() {
+        let renderer = DiffChatRenderer::new(true, 3, false);
+        let output = renderer.render_file_change(Path::new("file.rs"), "a\nb\n", "a\nc\n");
+
+        assert!(output.contains("▸ Edit file.rs (+1 -1)"));
+        assert!(output.contains("@@ -1 +1 @@"));
     }
 }
