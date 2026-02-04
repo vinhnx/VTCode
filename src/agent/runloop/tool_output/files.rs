@@ -1,3 +1,4 @@
+use anstyle::{AnsiColor, Color, Reset, Style as AnsiStyle};
 use anyhow::Result;
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
@@ -8,6 +9,7 @@ use super::styles::{GitStyles, LsStyles, select_line_style};
 /// Constants for line and content limits (compact display)
 const MAX_DIFF_LINE_LENGTH: usize = 100; // Reduced for compact view
 const MAX_DISPLAYED_FILES: usize = 100; // Limit displayed files to reduce clutter
+const DIFF_SUMMARY_PREFIX: &str = "• Diff ";
 
 /// Safely truncate text to a maximum character length, respecting UTF-8 boundaries
 pub(super) fn truncate_text_safe(text: &str, max_chars: usize) -> &str {
@@ -18,6 +20,39 @@ pub(super) fn truncate_text_safe(text: &str, max_chars: usize) -> &str {
         .nth(max_chars)
         .map(|(i, _)| &text[..i])
         .unwrap_or(text)
+}
+
+fn format_diff_summary_line(path: &str, additions: usize, deletions: usize) -> String {
+    format!(
+        "{DIFF_SUMMARY_PREFIX}{} (+{} -{})",
+        path, additions, deletions
+    )
+}
+
+fn parse_diff_summary_line(line: &str) -> Option<(&str, usize, usize)> {
+    let summary = line.strip_prefix(DIFF_SUMMARY_PREFIX)?;
+    let (path, counts) = summary.rsplit_once(" (")?;
+    let counts = counts.strip_suffix(')')?;
+    let mut parts = counts.split_whitespace();
+    let additions = parts.next()?.strip_prefix('+')?.parse().ok()?;
+    let deletions = parts.next()?.strip_prefix('-')?.parse().ok()?;
+    Some((path, additions, deletions))
+}
+
+pub(super) fn colorize_diff_summary_line(line: &str, use_color: bool) -> Option<String> {
+    let (path, additions, deletions) = parse_diff_summary_line(line)?;
+    if !use_color {
+        return Some(line.to_string());
+    }
+    let green = AnsiStyle::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
+    let red = AnsiStyle::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
+    let reset = format!("{}", Reset.render());
+    Some(format!(
+        "{DIFF_SUMMARY_PREFIX}{path} ({}{:+}{reset} {}-{deletions}{reset})",
+        green.render(),
+        additions,
+        red.render(),
+    ))
 }
 
 /// Helper to extract optional string from JSON value
@@ -186,7 +221,7 @@ pub(super) fn format_diff_content_lines(diff_content: &str) -> Vec<String> {
         }
 
         let path = fallback_path.unwrap_or_else(|| "file".to_string());
-        let summary = format!("• Edited {} (+{} -{})", path, additions, deletions);
+        let summary = format_diff_summary_line(&path, additions, deletions);
 
         let mut output = Vec::with_capacity(lines.len() + 1);
         if let Some(idx) = summary_insert_index {
@@ -204,9 +239,10 @@ pub(super) fn format_diff_content_lines(diff_content: &str) -> Vec<String> {
     output.extend(preface);
     for block in blocks {
         output.push(block.header);
-        output.push(format!(
-            "• Edited {} (+{} -{})",
-            block.path, block.additions, block.deletions
+        output.push(format_diff_summary_line(
+            &block.path,
+            block.additions,
+            block.deletions,
         ));
         output.extend(block.lines);
     }
@@ -475,17 +511,24 @@ fn render_diff_content(
     ls_styles: &LsStyles,
 ) -> Result<()> {
     let lines_to_render = format_diff_content_lines(diff_content);
-    let indent = MessageStyle::ToolDetail.indent();
 
     for line in lines_to_render {
         let truncated = truncate_text_safe(&line, MAX_DIFF_LINE_LENGTH);
+        if let Some(summary_line) =
+            colorize_diff_summary_line(truncated, renderer.capabilities().supports_color())
+        {
+            renderer.line_with_override_style(
+                MessageStyle::ToolDetail,
+                MessageStyle::ToolDetail.style(),
+                &summary_line,
+            )?;
+            continue;
+        }
+
         if let Some(style) =
             select_line_style(Some(tools::WRITE_FILE), truncated, git_styles, ls_styles)
         {
-            let mut buffer = String::with_capacity(indent.len() + truncated.len());
-            buffer.push_str(indent);
-            buffer.push_str(truncated);
-            renderer.line_with_style(style, &buffer)?;
+            renderer.line_with_override_style(MessageStyle::ToolDetail, style, truncated)?;
         } else {
             renderer.line(MessageStyle::ToolDetail, truncated)?;
         }
@@ -524,7 +567,7 @@ index 0000000..1111111 100644
 ";
         let lines = format_diff_content_lines(diff);
         assert_eq!(lines[0], "diff --git a/file1.txt b/file1.txt");
-        assert_eq!(lines[1], "• Edited file1.txt (+1 -1)");
+        assert_eq!(lines[1], "• Diff file1.txt (+1 -1)");
         assert!(lines.iter().any(|line| line == "@@ -1 +1 @@"));
     }
 
@@ -542,7 +585,7 @@ index 0000000..1111111 100644
             .iter()
             .position(|line| line.starts_with("+++ "))
             .expect("plus header exists");
-        assert_eq!(lines[plus_index + 1], "• Edited file2.txt (+1 -1)");
+        assert_eq!(lines[plus_index + 1], "• Diff file2.txt (+1 -1)");
         assert!(lines.iter().any(|line| line == "@@ -2 +2 @@"));
     }
 }

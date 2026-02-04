@@ -3,7 +3,7 @@
 use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::syntax_highlight::{find_syntax_by_token, load_theme, syntax_set};
 use crate::ui::theme::{self, ThemeStyles};
-use anstyle::{Color, Effects, Style};
+use anstyle::{Effects, Style};
 use anstyle_syntect::to_anstyle;
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::cmp::max;
@@ -105,6 +105,11 @@ enum ListKind {
     Ordered { next: usize },
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RenderMarkdownOptions {
+    pub preserve_code_indentation: bool,
+}
+
 /// Render markdown text to styled lines that can be written to the terminal renderer.
 pub fn render_markdown_to_lines(
     source: &str,
@@ -112,12 +117,28 @@ pub fn render_markdown_to_lines(
     theme_styles: &ThemeStyles,
     highlight_config: Option<&SyntaxHighlightingConfig>,
 ) -> Vec<MarkdownLine> {
-    let options = Options::ENABLE_STRIKETHROUGH
+    render_markdown_to_lines_with_options(
+        source,
+        base_style,
+        theme_styles,
+        highlight_config,
+        RenderMarkdownOptions::default(),
+    )
+}
+
+pub fn render_markdown_to_lines_with_options(
+    source: &str,
+    base_style: Style,
+    theme_styles: &ThemeStyles,
+    highlight_config: Option<&SyntaxHighlightingConfig>,
+    render_options: RenderMarkdownOptions,
+) -> Vec<MarkdownLine> {
+    let parser_options = Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TABLES
         | Options::ENABLE_TASKLISTS
         | Options::ENABLE_FOOTNOTES;
 
-    let parser = Parser::new_ext(source, options);
+    let parser = Parser::new_ext(source, parser_options);
 
     let mut lines = Vec::new();
     let mut current_line = MarkdownLine::default();
@@ -163,6 +184,7 @@ pub fn render_markdown_to_lines(
                             theme_styles,
                             base_style,
                             &prefix,
+                            render_options.preserve_code_indentation,
                         );
                         lines.extend(highlighted);
                         push_blank_line(&mut lines);
@@ -236,6 +258,7 @@ pub fn render_markdown_to_lines(
             theme_styles,
             base_style,
             &prefix,
+            render_options.preserve_code_indentation,
         );
         lines.extend(highlighted);
     }
@@ -782,11 +805,12 @@ fn highlight_code_block(
     theme_styles: &ThemeStyles,
     base_style: Style,
     prefix_segments: &[MarkdownSegment],
+    preserve_code_indentation: bool,
 ) -> Vec<MarkdownLine> {
     let mut lines = Vec::new();
 
-    // Always normalize indentation first, regardless of highlighting
-    let normalized_code = normalize_code_indentation(code, language);
+    // Normalize indentation unless we're preserving raw tool output.
+    let normalized_code = normalize_code_indentation(code, language, preserve_code_indentation);
     let code_to_display = &normalized_code;
     if is_diff_language(language)
         || (language.is_none() && looks_like_diff_content(code_to_display))
@@ -1008,7 +1032,7 @@ fn normalize_diff_lines(code: &str) -> Vec<String> {
         }
 
         let path = fallback_path.unwrap_or_else(|| "file".to_string());
-        let summary = format!("• Edited {} (+{} -{})", path, additions, deletions);
+        let summary = format!("• Diff {} (+{} -{})", path, additions, deletions);
 
         let mut output = Vec::with_capacity(lines.len() + 1);
         if let Some(idx) = summary_insert_index {
@@ -1027,7 +1051,7 @@ fn normalize_diff_lines(code: &str) -> Vec<String> {
     for block in blocks {
         output.push(block.header);
         output.push(format!(
-            "• Edited {} (+{} -{})",
+            "• Diff {} (+{} -{})",
             block.path, block.additions, block.deletions
         ));
         output.extend(block.lines);
@@ -1044,13 +1068,29 @@ fn render_diff_code_block(
     let mut lines = Vec::new();
     let palette = DiffColorPalette::default();
     let context_style = code_block_style(theme_styles, base_style);
-    let header_style = Style::new().fg_color(Some(Color::Rgb(palette.header_fg)));
+    let header_style = palette.header_style();
     let added_style = palette.added_style();
     let removed_style = palette.removed_style();
 
     for line in normalize_diff_lines(code) {
         let trimmed = line.trim_end_matches('\n');
         let trimmed_start = trimmed.trim_start();
+        if let Some((path, additions, deletions)) = parse_diff_summary_line(trimmed_start) {
+            let leading_len = trimmed.len().saturating_sub(trimmed_start.len());
+            let leading = &trimmed[..leading_len];
+            let mut line = MarkdownLine::default();
+            line.prepend_segments(prefix_segments);
+            if !leading.is_empty() {
+                line.push_segment(context_style, leading);
+            }
+            line.push_segment(context_style, &format!("• Diff {path} ("));
+            line.push_segment(added_style, &format!("+{additions}"));
+            line.push_segment(context_style, " ");
+            line.push_segment(removed_style, &format!("-{deletions}"));
+            line.push_segment(context_style, ")");
+            lines.push(line);
+            continue;
+        }
         let style = if trimmed.is_empty() {
             context_style
         } else if is_diff_header_line(trimmed_start) {
@@ -1078,6 +1118,16 @@ fn render_diff_code_block(
     }
 
     lines
+}
+
+fn parse_diff_summary_line(line: &str) -> Option<(&str, usize, usize)> {
+    let summary = line.strip_prefix("• Diff ")?;
+    let (path, counts) = summary.rsplit_once(" (")?;
+    let counts = counts.strip_suffix(')')?;
+    let mut parts = counts.split_whitespace();
+    let additions = parts.next()?.strip_prefix('+')?.parse().ok()?;
+    let deletions = parts.next()?.strip_prefix('-')?.parse().ok()?;
+    Some((path, additions, deletions))
 }
 
 fn is_diff_header_line(trimmed: &str) -> bool {
@@ -1151,7 +1201,14 @@ fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
 ///
 /// This function strips common leading indentation when ALL non-empty lines have at least
 /// that much indentation. It preserves the relative indentation structure within the code block.
-fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
+fn normalize_code_indentation(
+    code: &str,
+    language: Option<&str>,
+    preserve_indentation: bool,
+) -> String {
+    if preserve_indentation {
+        return code.to_string();
+    }
     // Check if we should normalize based on language hint
     let has_language_hint = language.is_some_and(|hint| {
         matches!(
@@ -1533,7 +1590,7 @@ mod tests {
     }
 
     #[test]
-    fn test_markdown_diff_code_block_applies_backgrounds() {
+    fn test_markdown_diff_code_block_strips_backgrounds() {
         let markdown = "```diff\n@@ -1 +1 @@\n- old\n+ new\n context\n```\n";
         let lines =
             render_markdown_to_lines(markdown, Style::default(), &theme::active_styles(), None);
@@ -1546,7 +1603,7 @@ mod tests {
             added_line
                 .segments
                 .iter()
-                .any(|seg| seg.style.get_bg_color().is_some())
+                .all(|seg| seg.style.get_bg_color().is_none())
         );
 
         let removed_line = lines
@@ -1557,7 +1614,7 @@ mod tests {
             removed_line
                 .segments
                 .iter()
-                .any(|seg| seg.style.get_bg_color().is_some())
+                .all(|seg| seg.style.get_bg_color().is_none())
         );
 
         let context_line = lines
@@ -1589,7 +1646,7 @@ mod tests {
             added_line
                 .segments
                 .iter()
-                .any(|seg| seg.style.get_bg_color().is_some())
+                .all(|seg| seg.style.get_bg_color().is_none())
         );
     }
 
@@ -1606,14 +1663,14 @@ mod tests {
     fn test_code_indentation_normalization_removes_common_indent() {
         let code_with_indent = "    fn hello() {\n        println!(\"world\");\n    }";
         let expected = "fn hello() {\n    println!(\"world\");\n}";
-        let result = normalize_code_indentation(code_with_indent, Some("rust"));
+        let result = normalize_code_indentation(code_with_indent, Some("rust"), false);
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_code_indentation_preserves_already_normalized() {
         let code = "fn hello() {\n    println!(\"world\");\n}";
-        let result = normalize_code_indentation(code, Some("rust"));
+        let result = normalize_code_indentation(code, Some("rust"), false);
         assert_eq!(result, code);
     }
 
@@ -1621,7 +1678,7 @@ mod tests {
     fn test_code_indentation_without_language_hint() {
         // Without language hint, normalization still happens - common indent is stripped
         let code = "    some code";
-        let result = normalize_code_indentation(code, None);
+        let result = normalize_code_indentation(code, None, false);
         assert_eq!(result, "some code");
     }
 
@@ -1629,7 +1686,7 @@ mod tests {
     fn test_code_indentation_preserves_relative_indentation() {
         let code = "    line1\n        line2\n    line3";
         let expected = "line1\n    line2\nline3";
-        let result = normalize_code_indentation(code, Some("python"));
+        let result = normalize_code_indentation(code, Some("python"), false);
         assert_eq!(result, expected);
     }
 
@@ -1637,7 +1694,7 @@ mod tests {
     fn test_code_indentation_mixed_whitespace_preserves_indent() {
         // Mixed tabs and spaces - common prefix should be empty if they differ
         let code = "    line1\n\tline2";
-        let result = normalize_code_indentation(code, None);
+        let result = normalize_code_indentation(code, None, false);
         // Should preserve original content rather than stripping incorrectly
         assert_eq!(result, code);
     }
@@ -1647,7 +1704,14 @@ mod tests {
         // Common prefix is present ("    ")
         let code = "    line1\n    \tline2";
         let expected = "line1\n\tline2";
-        let result = normalize_code_indentation(code, None);
+        let result = normalize_code_indentation(code, None, false);
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_code_indentation_preserve_when_requested() {
+        let code = "    line1\n        line2\n    line3\n";
+        let result = normalize_code_indentation(code, Some("rust"), true);
+        assert_eq!(result, code);
     }
 }

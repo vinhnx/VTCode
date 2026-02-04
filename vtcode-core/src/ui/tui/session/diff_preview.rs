@@ -16,10 +16,6 @@ use crate::ui::tui::types::{DiffPreviewState, TrustMode};
 use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_diff_with_theme};
 use crate::utils::diff_styles::DiffColorPalette;
 
-fn ratatui_rgb(rgb: anstyle::RgbColor) -> Color {
-    Color::Rgb(rgb.0, rgb.1, rgb.2)
-}
-
 pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect) {
     let Some(preview) = session.diff_preview.as_ref() else {
         return;
@@ -58,19 +54,19 @@ fn render_file_header(
     additions: usize,
     deletions: usize,
 ) {
-    let header_style = Style::default().fg(ratatui_rgb(palette.header_fg));
+    let header_style = Style::default().fg(anstyle_color_to_ratatui(palette.header_fg));
     let header = Line::from(vec![
         Span::styled("← Edit ", header_style),
         Span::styled(&preview.file_path, header_style),
         Span::styled(" (", header_style),
         Span::styled(
             format!("+{}", additions),
-            Style::default().fg(ratatui_rgb(palette.added_fg)),
+            Style::default().fg(anstyle_color_to_ratatui(palette.added_fg)),
         ),
         Span::styled(" ", header_style),
         Span::styled(
             format!("-{}", deletions),
-            Style::default().fg(ratatui_rgb(palette.removed_fg)),
+            Style::default().fg(anstyle_color_to_ratatui(palette.removed_fg)),
         ),
         Span::styled(")", header_style),
     ]);
@@ -218,24 +214,16 @@ fn render_diff_content(
             let text = diff_line.text.trim_end_matches('\n');
 
             let fg_line_num = Color::Rgb(0x4a, 0x4a, 0x4a);
-            let (prefix, fg, bg) = match diff_line.kind {
-                DiffLineKind::Context => (" ", fg_line_num, None),
-                DiffLineKind::Addition => (
-                    "+",
-                    ratatui_rgb(palette.added_fg),
-                    Some(ratatui_rgb(palette.added_bg)),
-                ),
-                DiffLineKind::Deletion => (
-                    "-",
-                    ratatui_rgb(palette.removed_fg),
-                    Some(ratatui_rgb(palette.removed_bg)),
-                ),
+            let (prefix, fg, is_change) = match diff_line.kind {
+                DiffLineKind::Context => (" ", fg_line_num, false),
+                DiffLineKind::Addition => ("+", anstyle_color_to_ratatui(palette.added_fg), true),
+                DiffLineKind::Deletion => ("-", anstyle_color_to_ratatui(palette.removed_fg), true),
             };
 
             let mut spans = vec![
                 Span::styled(
                     prefix,
-                    Style::default().fg(fg).add_modifier(if bg.is_some() {
+                    Style::default().fg(fg).add_modifier(if is_change {
                         Modifier::BOLD
                     } else {
                         Modifier::empty()
@@ -243,7 +231,7 @@ fn render_diff_content(
                 ),
                 Span::styled(line_num_str, Style::default().fg(fg)),
             ];
-            spans.extend(highlight_line_with_bg(text, language, bg));
+            spans.extend(highlight_line_with_bg(text, language, None));
             lines.push(Line::from(spans));
         }
     }

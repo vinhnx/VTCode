@@ -98,43 +98,37 @@ pub fn dimmed_color(color: AnsiColor) -> Style {
 /// Diff color palette for consistent git diff styling
 #[derive(Debug, Clone, Copy)]
 pub struct DiffColorPalette {
-    pub added_fg: anstyle::RgbColor,
-    pub added_bg: anstyle::RgbColor,
-    pub removed_fg: anstyle::RgbColor,
-    pub removed_bg: anstyle::RgbColor,
-    pub header_fg: anstyle::RgbColor,
-    pub header_bg: anstyle::RgbColor,
+    pub added_fg: Color,
+    pub added_bg: Color,
+    pub removed_fg: Color,
+    pub removed_bg: Color,
+    pub header_fg: Color,
+    pub header_bg: Color,
 }
 
 impl Default for DiffColorPalette {
     fn default() -> Self {
         Self {
-            added_fg: anstyle::RgbColor(180, 240, 180),
-            added_bg: anstyle::RgbColor(10, 24, 10),
-            removed_fg: anstyle::RgbColor(240, 180, 180),
-            removed_bg: anstyle::RgbColor(24, 10, 10),
-            header_fg: anstyle::RgbColor(150, 200, 220),
-            header_bg: anstyle::RgbColor(10, 16, 20),
+            added_fg: Color::Ansi(AnsiColor::Green),
+            added_bg: Color::Rgb(anstyle::RgbColor(10, 24, 10)),
+            removed_fg: Color::Ansi(AnsiColor::Red),
+            removed_bg: Color::Rgb(anstyle::RgbColor(24, 10, 10)),
+            header_fg: Color::Ansi(AnsiColor::Cyan),
+            header_bg: Color::Rgb(anstyle::RgbColor(10, 16, 20)),
         }
     }
 }
 
 impl DiffColorPalette {
     pub fn added_style(&self) -> Style {
-        Style::new()
-            .fg_color(Some(Color::Rgb(self.added_fg)))
-            .bg_color(Some(Color::Rgb(self.added_bg)))
+        Style::new().fg_color(Some(self.added_fg))
     }
 
     pub fn removed_style(&self) -> Style {
-        Style::new()
-            .fg_color(Some(Color::Rgb(self.removed_fg)))
-            .bg_color(Some(Color::Rgb(self.removed_bg)))
+        Style::new().fg_color(Some(self.removed_fg))
     }
 
     pub fn header_style(&self) -> Style {
-        Style::new()
-            .fg_color(Some(Color::Rgb(self.header_fg)))
-            .bg_color(Some(Color::Rgb(self.header_bg)))
+        Style::new().fg_color(Some(self.header_fg))
     }
 }

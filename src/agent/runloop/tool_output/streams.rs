@@ -50,7 +50,7 @@ use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::files::{format_diff_content_lines, truncate_text_safe};
+use super::files::{colorize_diff_summary_line, format_diff_content_lines, truncate_text_safe};
 use super::large_output::{LargeOutputConfig, spool_large_output};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
@@ -222,10 +222,14 @@ pub(crate) async fn render_stream_section(
                     && let Some(style) =
                         select_line_style(tool_name, &display_line, git_styles, ls_styles)
                 {
-                    renderer.line_with_style(style, &msg_buffer)?;
+                    renderer.line_with_override_style(fallback_style, style, &msg_buffer)?;
                     continue;
                 }
-                renderer.line(fallback_style, &msg_buffer)?;
+                renderer.line_with_override_style(
+                    fallback_style,
+                    fallback_style.style(),
+                    &msg_buffer,
+                )?;
             }
         }
         return Ok(());
@@ -257,16 +261,12 @@ pub(crate) async fn render_stream_section(
             }
         }
 
-        let indent = fallback_style.indent();
         let mut display_buffer = String::with_capacity(128);
         for line in lines_slice {
             if line.is_empty() {
                 continue;
             }
             display_buffer.clear();
-            if !indent.is_empty() {
-                display_buffer.push_str(indent);
-            }
             if line.len() > MAX_LINE_LENGTH {
                 let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
                 display_buffer.push_str(truncated);
@@ -275,10 +275,22 @@ pub(crate) async fn render_stream_section(
                 display_buffer.push_str(line);
             }
 
+            if let Some(summary_line) = colorize_diff_summary_line(
+                &display_buffer,
+                renderer.capabilities().supports_color(),
+            ) {
+                renderer.line_with_override_style(
+                    fallback_style,
+                    fallback_style.style(),
+                    &summary_line,
+                )?;
+                continue;
+            }
+
             if let Some(style) =
                 select_line_style(tool_name, &display_buffer, git_styles, ls_styles)
             {
-                renderer.line_with_style(style, &display_buffer)?;
+                renderer.line_with_override_style(fallback_style, style, &display_buffer)?;
             } else {
                 renderer.line_with_override_style(
                     fallback_style,
@@ -365,10 +377,14 @@ pub(crate) async fn render_stream_section(
             if apply_line_styles
                 && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
             {
-                renderer.line_with_style(style, &display_buffer)?;
+                renderer.line_with_override_style(fallback_style, style, &display_buffer)?;
                 continue;
             }
-            renderer.line(fallback_style, &display_buffer)?;
+            renderer.line_with_override_style(
+                fallback_style,
+                fallback_style.style(),
+                &display_buffer,
+            )?;
         }
     }
 
