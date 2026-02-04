@@ -95,9 +95,9 @@ pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
 pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
-    "Implement {feature} in {file} (@files, #prompts, /commands)";
+    "@files, #prompts, /commands, ctrl+r reverse history or Shift+Tab to switch modes";
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-    "Build something (@files, #prompts, /commands or Shift+Tab to switch to modes)";
+    "@files, #prompts, /commands, ctrl+r reverse history or Shift+Tab to switch modes";
 pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter send • Shift+Enter newline • Esc cancel • Ctrl+C interrupt • @ files • # prompts • / commands";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;

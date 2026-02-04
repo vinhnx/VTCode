@@ -61,8 +61,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     let raw_alt = modifiers.contains(KeyModifiers::ALT);
     let raw_meta = modifiers.contains(KeyModifiers::META);
     let has_super = modifiers.contains(KeyModifiers::SUPER);
-    let has_alt = raw_alt || (!has_super && raw_meta);
-    let has_command = has_super || (raw_meta && !has_alt);
+    // Command key detection: prioritize Command/Super over Alt
+    // On macOS: Command = SUPER, on some terminals Alt = META
+    let has_command = has_super || raw_meta;
+    let has_alt = raw_alt && !has_command;
 
     if let Some(modal) = session.modal.as_mut() {
         let result = modal.handle_list_key_event(
@@ -367,7 +369,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 if has_alt {
                     session.delete_word_backward();
                 } else if has_command {
-                    session.delete_sentence_backward();
+                    session.delete_to_start_of_line();
                 } else {
                     session.delete_char();
                 }
@@ -382,7 +384,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 if has_alt {
                     session.delete_word_backward();
                 } else if has_command {
-                    session.delete_sentence_backward();
+                    session.delete_to_end_of_line();
                 } else {
                     session.delete_char_forward();
                 }
