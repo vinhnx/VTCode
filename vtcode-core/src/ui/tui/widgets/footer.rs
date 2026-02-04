@@ -1,7 +1,6 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Modifier,
     text::{Line, Span},
     widgets::{Block, Clear, Paragraph, Widget},
 };
@@ -132,7 +131,7 @@ impl<'a> FooterWidget<'a> {
             }
             spans.push(Span::styled(
                 spinner.to_string(),
-                self.styles.accent_style().add_modifier(Modifier::BOLD),
+                self.styles.muted_style(),
             ));
         }
 

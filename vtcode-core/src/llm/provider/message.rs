@@ -93,7 +93,7 @@ impl MessageContent {
     }
 
     /// Returns the text content, avoiding allocation if possible.
-    /// For Parts variant, joins all text parts with spaces.
+    /// For Parts variant, concatenates text parts in order without adding spacing.
     pub fn as_text(&self) -> std::borrow::Cow<'_, str> {
         match self {
             MessageContent::Text(text) => std::borrow::Cow::Borrowed(text),
@@ -112,13 +112,9 @@ impl MessageContent {
                 }
 
                 // Pre-calculate capacity to avoid reallocations
-                let total_len = text_parts.iter().map(|s| s.len()).sum::<usize>()
-                    + text_parts.len().saturating_sub(1); // spaces between parts
+                let total_len = text_parts.iter().map(|s| s.len()).sum::<usize>();
                 let mut result = String::with_capacity(total_len);
-                for (i, part) in text_parts.iter().enumerate() {
-                    if i > 0 {
-                        result.push(' ');
-                    }
+                for part in text_parts {
                     result.push_str(part);
                 }
                 std::borrow::Cow::Owned(result)
@@ -612,5 +608,24 @@ impl MessageRole {
             }
             _ => Ok(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ContentPart, MessageContent};
+
+    #[test]
+    fn message_content_parts_concatenate_without_extra_spaces() {
+        let parts = vec![
+            ContentPart::text("Andre".to_string()),
+            ContentPart::text("j".to_string()),
+            ContentPart::text(" Kar".to_string()),
+            ContentPart::text("pathy".to_string()),
+            ContentPart::text("'s".to_string()),
+        ];
+        let content = MessageContent::Parts(parts);
+
+        assert_eq!(content.as_text().as_ref(), "Andrej Karpathy's");
     }
 }

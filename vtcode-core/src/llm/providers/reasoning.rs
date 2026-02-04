@@ -8,36 +8,18 @@ pub struct ReasoningBuffer {
 
 impl ReasoningBuffer {
     pub fn push(&mut self, chunk: &str) -> Option<String> {
-        if chunk.trim().is_empty() {
+        if chunk.is_empty() {
             return None;
         }
 
-        let normalized = Self::normalize_chunk(chunk);
-
-        if normalized.is_empty() {
+        if self.last_chunk.as_deref() == Some(chunk) {
             return None;
         }
 
-        if self.last_chunk.as_deref() == Some(&normalized) {
-            return None;
-        }
+        self.text.push_str(chunk);
+        self.last_chunk = Some(chunk.to_string());
 
-        let last_has_spacing = self.text.ends_with(' ') || self.text.ends_with('\n');
-        let leading_punctuation = Self::is_leading_punctuation(chunk);
-        let trailing_connector = Self::ends_with_connector(&self.text);
-
-        let mut delta = String::new();
-
-        if !self.text.is_empty() && !last_has_spacing && !leading_punctuation && !trailing_connector
-        {
-            delta.push(' ');
-        }
-
-        delta.push_str(&normalized);
-        self.text.push_str(&delta);
-        self.last_chunk = Some(normalized);
-
-        Some(delta)
+        Some(chunk.to_string())
     }
 
     pub fn finalize(self) -> Option<String> {
@@ -47,33 +29,6 @@ impl ReasoningBuffer {
         } else {
             Some(trimmed.to_string())
         }
-    }
-
-    fn normalize_chunk(chunk: &str) -> String {
-        let mut normalized = String::new();
-        for part in chunk.split_whitespace() {
-            if !normalized.is_empty() {
-                normalized.push(' ');
-            }
-            normalized.push_str(part);
-        }
-        normalized
-    }
-
-    fn is_leading_punctuation(chunk: &str) -> bool {
-        chunk
-            .chars()
-            .find(|ch| !ch.is_whitespace())
-            .map(|ch| matches!(ch, ',' | '.' | '!' | '?' | ':' | ';' | ')' | ']' | '}'))
-            .unwrap_or(false)
-    }
-
-    fn ends_with_connector(text: &str) -> bool {
-        text.chars()
-            .rev()
-            .find(|ch| !ch.is_whitespace())
-            .map(|ch| matches!(ch, '(' | '[' | '{' | '/' | '-'))
-            .unwrap_or(false)
     }
 }
 
@@ -467,5 +422,18 @@ mod tests {
 
         let finalized = buffer.finalize();
         assert_eq!(finalized.as_deref(), Some("Hello world!"));
+    }
+
+    #[test]
+    fn reasoning_buffer_keeps_subword_tokens_together() {
+        let mut buffer = ReasoningBuffer::default();
+        buffer.push("Andre");
+        buffer.push("j");
+        buffer.push(" Kar");
+        buffer.push("pathy");
+        buffer.push("'s");
+
+        let finalized = buffer.finalize();
+        assert_eq!(finalized.as_deref(), Some("Andrej Karpathy's"));
     }
 }

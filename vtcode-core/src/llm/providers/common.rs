@@ -428,14 +428,18 @@ pub fn extract_content_from_message(message: &Value) -> Option<String> {
             }
         }
         Value::Array(parts) => {
-            let text = parts
-                .iter()
-                .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" ");
-            if text.is_empty() { None } else { Some(text) }
+            let mut combined = String::new();
+            for part in parts {
+                if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                    combined.push_str(text);
+                }
+            }
+            let trimmed = combined.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
         }
         _ => None,
     })

@@ -77,24 +77,6 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 --
 
-fix message text spacing
-
-```
-
-
-The user wants me to use Andre j Kar pathy 's skills. This likely refers to a skill set related to Andre j Kar pathy 's teaching and code examples, particularly his
-works like nano GPT, educational content about neural networks, etc. Let me first check what skills are available and if there's an and re j -k ar pathy skill.
-The user wants me to use Andre j Kar pathy 's skills. This likely refers to a skill set related to Andre j Kar pathy 's teaching and code examples, particularly his
-works like nano GPT, educational content about neural networks, etc. Let me first check what skills are available and if there's an and re j -k ar pathy skill.
-List skills .. Query: andrej karpathy
-The user wants to use Andre j Kar pathy 's skills. Let me first list the available skills to see what's available.
-The user wants to use Andre j Kar pathy 's skills. Let me first list the available skills to see what's available.
-List skills .. Query: karpathy
-
-```
-
---
-
 fix this for vtcode:
 
 ⚠️ AI agent skills are becoming a new attack surface and most teams aren’t prepared.
@@ -109,7 +91,7 @@ This is why the future of agentic AI needs identity and access controls that are
 
 Applies to any harness that supports skills plus command execution.
 
-CC even goes so far as to allow markup in the skill file containing bash commands that get autoexecuted. An exceptionally bad idea.
+Claude Code even goes so far as to allow markup in the skill file containing bash commands that get autoexecuted. An exceptionally bad idea.
 
 --
 
@@ -161,3 +143,21 @@ Background terminal Run long-running terminal commands in the background.
 
 Shell snapshot Snapshot your shell environment to avoid re-running
 login scripts for every command.
+
+---
+
+curl https://router.huggingface.co/v1/chat/completions \
+ -H "Authorization: Bearer $HF_TOKEN" \
+ -H 'Content-Type: application/json' \
+ -d '{
+"messages": [
+{
+"role": "user",
+"content": "What is the capital of France?"
+}
+],
+"model": "Qwen/Qwen3-Coder-Next:novita",
+"stream": true
+}'
+
+to novita huggingface inference provider.
