@@ -1,5 +1,7 @@
 use crate::config::loader::SyntaxHighlightingConfig;
-use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
+use crate::ui::markdown::{
+    MarkdownLine, MarkdownSegment, RenderMarkdownOptions, render_markdown_to_lines_with_options,
+};
 use crate::ui::theme;
 use crate::ui::tui::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
@@ -271,18 +273,28 @@ impl AnsiRenderer {
         text: &str,
     ) -> Result<()> {
         let kind = Self::message_kind(fallback);
+        let indent = fallback.indent();
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline(style, "", text, kind)?;
+            sink.write_multiline(style, indent, text, kind)?;
             self.last_line_was_empty = text.trim().is_empty();
             return Ok(());
         }
-        if self.color {
-            writeln!(self.writer, "{style}{}{Reset}", text)?;
+        let mut combined;
+        let display = if !indent.is_empty() && !text.is_empty() {
+            combined = String::with_capacity(indent.len() + text.len());
+            combined.push_str(indent);
+            combined.push_str(text);
+            combined.as_str()
         } else {
-            writeln!(self.writer, "{}", text)?;
+            text
+        };
+        if self.color {
+            writeln!(self.writer, "{style}{}{Reset}", display)?;
+        } else {
+            writeln!(self.writer, "{}", display)?;
         }
         self.writer.flush()?;
-        transcript::append(text);
+        transcript::append(display);
         self.last_line_was_empty = text.trim().is_empty();
         Ok(())
     }
@@ -314,6 +326,14 @@ impl AnsiRenderer {
         let styles = theme::active_styles();
         let base_style = style.style();
         let indent = style.indent();
+        let preserve_code_indentation = matches!(
+            style,
+            MessageStyle::Output
+                | MessageStyle::ToolOutput
+                | MessageStyle::ToolDetail
+                | MessageStyle::Response
+                | MessageStyle::Reasoning
+        );
 
         // Strip ANSI codes from agent response to prevent interference with markdown rendering
         let text_storage;
@@ -325,8 +345,13 @@ impl AnsiRenderer {
         };
 
         if let Some(sink) = &mut self.sink {
-            let last_empty =
-                sink.write_markdown(text, indent, base_style, Self::message_kind(style))?;
+            let last_empty = sink.write_markdown(
+                text,
+                indent,
+                base_style,
+                Self::message_kind(style),
+                preserve_code_indentation,
+            )?;
             self.last_line_was_empty = last_empty;
             return Ok(());
         }
@@ -335,7 +360,15 @@ impl AnsiRenderer {
         } else {
             None
         };
-        let mut lines = render_markdown_to_lines(text, base_style, &styles, highlight_cfg);
+        let mut lines = render_markdown_to_lines_with_options(
+            text,
+            base_style,
+            &styles,
+            highlight_cfg,
+            RenderMarkdownOptions {
+                preserve_code_indentation,
+            },
+        );
         if lines.is_empty() {
             lines.push(MarkdownLine::default());
         }
@@ -366,7 +399,7 @@ impl AnsiRenderer {
         let indent = style.indent();
         if let Some(sink) = &mut self.sink {
             let (prepared, plain_lines, last_empty) =
-                sink.prepare_markdown_lines(text, indent, base_style, true);
+                sink.prepare_markdown_lines(text, indent, base_style, true, true);
             let line_count = prepared.len();
             sink.replace_inline_lines(
                 previous_line_count,
@@ -383,7 +416,13 @@ impl AnsiRenderer {
         } else {
             None
         };
-        let mut lines = render_markdown_to_lines(text, base_style, &styles, highlight_cfg);
+        let mut lines = render_markdown_to_lines_with_options(
+            text,
+            base_style,
+            &styles,
+            highlight_cfg,
+            RenderMarkdownOptions::default(),
+        );
         if lines.is_empty() {
             lines.push(MarkdownLine::default());
         }
@@ -614,6 +653,7 @@ impl InlineSink {
         indent: &str,
         base_style: Style,
         preserve_blank_lines: bool,
+        preserve_code_indentation: bool,
     ) -> (Vec<Vec<InlineSegment>>, Vec<String>, bool) {
         let fallback = self.resolve_fallback_style(base_style);
         let fallback_arc = Arc::new(fallback.clone());
@@ -622,7 +662,15 @@ impl InlineSink {
             .highlight_config
             .enabled
             .then_some(&self.highlight_config);
-        let mut rendered = render_markdown_to_lines(text, base_style, &theme_styles, highlight_cfg);
+        let mut rendered = render_markdown_to_lines_with_options(
+            text,
+            base_style,
+            &theme_styles,
+            highlight_cfg,
+            RenderMarkdownOptions {
+                preserve_code_indentation,
+            },
+        );
         if preserve_blank_lines {
             let mut cleaned = Vec::with_capacity(rendered.len());
             let mut last_blank = false;
@@ -711,10 +759,11 @@ impl InlineSink {
         indent: &str,
         base_style: Style,
         kind: InlineMessageKind,
+        preserve_code_indentation: bool,
     ) -> Result<bool> {
         let record_transcript = Self::should_record_transcript(kind);
         let (prepared, plain, last_empty) =
-            self.prepare_markdown_lines(text, indent, base_style, true);
+            self.prepare_markdown_lines(text, indent, base_style, true, preserve_code_indentation);
         for (segments, line) in prepared.into_iter().zip(plain.iter()) {
             if segments.is_empty() {
                 self.handle.append_line(kind, Vec::new());
@@ -1169,7 +1218,8 @@ mod tests {
         let base_style = MessageStyle::Response.style();
         let markdown = "```rust\nlet value = 1;\n```";
 
-        let (prepared, plain, _) = sink.prepare_markdown_lines(markdown, "", base_style, true);
+        let (prepared, plain, _) =
+            sink.prepare_markdown_lines(markdown, "", base_style, true, false);
 
         let (segments, plain_line) = prepared
             .iter()

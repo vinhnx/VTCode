@@ -733,64 +733,32 @@ Edited vtcode-core/src/utils/ansi.rs (+1 -13)
     70      }
 ```
 
+--
+
+render markdown as usual for reasoning message (codeblock, quote, code fence)
+like standard agent message
+
+--
+
+agent standard agent message, add paragraph padding and "•" in the message content. so it is not jammed to the left padding. eg:
+
+```
+• Hello, here is the information you requested. This is
+  an example of a standard agent message. and it has proper padding.
+```
+
 ---
 
-fix "Info" block Border block showing in wrong place for git diff
+hide cursor in chat input when scrolling, so cursor does not appear in wrong place when scrolling up/down. show cursor when stopped scrolling.
 
-```
-• Run command Use Unified exec output
-└ $ git diff vtcode-core/src/ui/tui/session/diff_preview.rs
-└ Timeout: 120000
+--
 
-╭─ Info ───────────────────────────────────────────────────────────────────────╮
-│     diff --git a/vtcode-core/src/ui/tui/session/diff_preview.rs b/vtcode-core│
-│ /src/ui/tui/session/diff_preview.rs                                          │
-╰──────────────────────────────────────────────────────────────────────────────╯
+when the tui shimmer is active, the cursor has bug that is cursor blinking and animate alongside with the shimmer effect -> fix it.
 
-• Edited vtcode-core/src/ui/tui/session/diff_preview.rs (+45 -21)
-╭─ Info ───────────────────────────────────────────────────────────────────────╮
-│     index 44b4086b..32ebb070 100644                                          │
-│     --- a/vtcode-core/src/ui/tui/session/diff_preview.rs                     │
-│     +++ b/vtcode-core/src/ui/tui/session/diff_preview.rs                     │
-│     @@ -13 +13 @@                                                            │
-╰──────────────────────────────────────────────────────────────────────────────╯
+--
 
-use crate::ui::markdown::highlight_line_for_diff;
-│     index 44b4086b..32ebb070 100644                                          │
-│     --- a/vtcode-core/src/ui/tui/session/diff_preview.rs                     │
-│     +++ b/vtcode-core/src/ui/tui/session/diff_preview.rs                     │
-│     @@ -13 +13 @@                                                            │
-╰──────────────────────────────────────────────────────────────────────────────╯
+command+delete to delete all chat input message
 
-use crate::ui::markdown::highlight_line_for_diff;
-use crate::ui::tui::session::Session;
-use crate::ui::tui::types::{DiffPreviewState, TrustMode};
-╭─ Info ───────────────────────────────────────────────────────────────────────╮
-│     -use crate::utils::diff::{DiffLineKind, DiffOptions, compute_diff_with_th│
-│ eme};                                                                        │
-│     +use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_│
-│ diff_with_theme};                                                            │
-╰──────────────────────────────────────────────────────────────────────────────╯
+---
 
-use crate::utils::diff_styles::DiffColorPalette;
-
-fn ratatui_rgb(rgb: anstyle::RgbColor) -> Color {
-╭─ Info ───────────────────────────────────────────────────────────────────────╮
-│     @@ -26 +26 @@                                                            │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-};
-
-╭─ Info ───────────────────────────────────────────────────────────────────────╮
-│          let palette = DiffColorPalette::default();                          │
-│     +    let diff_bundle = compute_diff_with_theme(                          │
-│     +        &preview.before,                                                │
-│     +        &preview.after,                                                 │
-│     +        DiffOptions {                                                   │
-│     +            context_lines: 3,                                           │
-│     +            old_label: None,                                            │
-│     +            new_label: None,                                            │
-│     +            missing_newline_hint: false,                                │
-│     +        },                                                              │
-│     +    );                                                                  │
-```
+option+delete to delete word by word in chat input
