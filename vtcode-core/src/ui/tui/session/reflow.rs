@@ -63,11 +63,15 @@ impl Session {
             return self.reflow_pty_lines(index, width);
         }
 
-        if matches!(
-            message.kind,
-            InlineMessageKind::Error | InlineMessageKind::Warning
-        ) || (message.kind == InlineMessageKind::Info && !is_tool_summary_line(message))
-        {
+        if is_info_box_line(message) {
+            if index > 0
+                && self
+                    .lines
+                    .get(index - 1)
+                    .is_some_and(|prev| prev.kind == message.kind && is_info_box_line(prev))
+            {
+                return Vec::new();
+            }
             return self.reflow_error_warning_lines(index, width);
         }
 
@@ -183,9 +187,29 @@ impl Session {
             width as usize
         };
 
-        let content = render::render_message_spans(self, index);
+        let mut grouped_lines = Vec::new();
+        let mut cursor = index;
+        while let Some(current) = self.lines.get(cursor) {
+            if current.kind != line.kind || !is_info_box_line(current) {
+                break;
+            }
+            let mut spans = render::render_message_spans(self, cursor);
+            for span in &mut spans {
+                span.style = span.style.remove_modifier(Modifier::BOLD);
+            }
+            let line_text: String = spans.iter().map(|span| &*span.content).collect();
+            if !line_text.trim().is_empty() {
+                grouped_lines.push(Line::from(spans));
+            }
+            cursor = cursor.saturating_add(1);
+        }
+
+        if grouped_lines.is_empty() {
+            return Vec::new();
+        }
+
         if max_width == usize::MAX {
-            return vec![Line::from(content)];
+            return grouped_lines;
         }
 
         let border_style = {
@@ -193,7 +217,9 @@ impl Session {
                 color: self.theme.secondary.or(self.theme.foreground),
                 ..Default::default()
             };
-            ratatui_style_from_inline(&inline, self.theme.foreground).add_modifier(Modifier::DIM)
+            ratatui_style_from_inline(&inline, self.theme.foreground)
+                .add_modifier(Modifier::DIM)
+                .remove_modifier(Modifier::BOLD)
         };
 
         let border_type = terminal_capabilities::get_border_type();
@@ -211,7 +237,7 @@ impl Session {
         let content_width = max_width.saturating_sub(prefix_width + border_width);
 
         if content_width == 0 {
-            return vec![Line::from(content)];
+            return grouped_lines;
         }
 
         let inner_width = content_width + 1;
@@ -243,10 +269,22 @@ impl Session {
 
         let mut lines = Vec::new();
         lines.push(Line::styled(top, border_style));
-        let base_line = Line::from(content);
-        let mut wrapped = self.wrap_line(base_line, content_width);
+        let mut wrapped = Vec::new();
+        for line in grouped_lines {
+            let line_wrapped = self.wrap_line(line, content_width);
+            for wrapped_line in line_wrapped {
+                let text: String = wrapped_line
+                    .spans
+                    .iter()
+                    .map(|span| &*span.content)
+                    .collect();
+                if !text.trim().is_empty() {
+                    wrapped.push(wrapped_line);
+                }
+            }
+        }
         if wrapped.is_empty() {
-            wrapped.push(Line::default());
+            return Vec::new();
         }
         for line in &mut wrapped {
             let line_width = line.spans.iter().map(|s| s.width()).sum::<usize>();
@@ -875,6 +913,13 @@ fn is_tool_summary_line(message: &MessageLine) -> bool {
         .collect();
     let trimmed = text.trim_start();
     trimmed.starts_with("• ") || trimmed.starts_with("└ ")
+}
+
+fn is_info_box_line(message: &MessageLine) -> bool {
+    matches!(
+        message.kind,
+        InlineMessageKind::Error | InlineMessageKind::Warning
+    ) || (message.kind == InlineMessageKind::Info && !is_tool_summary_line(message))
 }
 
 /// Collapse multiple consecutive newlines (3 or more) into at most 2 newlines
