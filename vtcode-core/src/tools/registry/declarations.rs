@@ -597,13 +597,11 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                 "type": "object",
                 "properties": {
                     "input": {"type": "string", "description": "Patch in VT Code format: *** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch"},
-                    "patch": {"type": "string", "description": "Alias for input"},
-                    "diff": {"type": "string", "description": "Alias for input"}
+                    "patch": {"type": "string", "description": "Alias for input"}
                 },
                 "anyOf": [
                     {"required": ["input"]},
-                    {"required": ["patch"]},
-                    {"required": ["diff"]}
+                    {"required": ["patch"]}
                 ]
             }),
         },

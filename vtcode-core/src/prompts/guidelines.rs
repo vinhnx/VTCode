@@ -67,6 +67,14 @@ pub fn generate_tool_guidelines(
         );
 
         guidelines.push(
+            "**Git Diff vs Apply Patch**: `git diff` is a READ-ONLY operation to VIEW changes - \
+             use `unified_exec` with the git command. `apply_patch` is for WRITING changes to files. \
+             NEVER use `apply_patch` or `unified_file` (action='patch') when the user only wants to \
+             view a diff. These are fundamentally different operations."
+                .to_string(),
+        );
+
+        guidelines.push(
             "**Dotfile Protection**: Hidden configuration files (dotfiles like .gitignore, .env, \
              .bashrc, .ssh/*, etc.) are PROTECTED and require explicit user confirmation before \
              modification. If a dotfile modification is blocked, do NOT retry - instead inform \
