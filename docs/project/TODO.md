@@ -77,24 +77,6 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 --
 
-Improve tool display
-
-verb:
-
-ongoing
-• Explore
-└ Read discovery.rs
-
-finished
-• Explored
-└ Read discovery.rs
-
-improve the prefix bullet: "•" before tool, and indent the sub-bullets. "└" for sub-bullets tools arguments.
-
-add ">" before reasoning message.
-
---
-
 https://github.com/vinhnx/VTCode/issues/595
 
 I installed the latest version and ran it. The previous JSON and URL issues seem resolved, but now I am encountering a new error during tool calls.
