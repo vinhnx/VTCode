@@ -274,9 +274,6 @@ license: MIT
 # user-invocable: true             # Hide from menu when false
 # context: "fork"                  # Run in subagent context
 # agent: "explore"                 # Subagent type when context=fork
-# hooks:
-#   pre_tool_use:
-#     - command: "echo pre"
 # metadata:
 #   version: "1.0"
 #   author: your-org

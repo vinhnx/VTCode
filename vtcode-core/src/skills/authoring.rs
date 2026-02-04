@@ -24,9 +24,6 @@ description: [TODO: Complete and informative explanation of what the skill does 
 # compatibility: "Designed for VT Code (or similar CLI agents)"
 # context: "fork"                   # Run in a subagent context
 # agent: "explore"                  # Subagent type when context=fork
-# hooks:
-#   pre_tool_use:
-#     - command: "echo pre"
 # license: MIT
 # metadata:
 #   author: Your Name

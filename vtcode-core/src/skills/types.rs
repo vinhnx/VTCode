@@ -265,6 +265,10 @@ impl SkillManifest {
             );
         }
 
+        if self.hooks.is_some() {
+            anyhow::bail!("hooks are not supported in VT Code skills; remove hooks from SKILL.md");
+        }
+
         // Validate allowed-tools field
         if let Some(allowed_tools) = &self.allowed_tools {
             // Parse space-delimited string per Agent Skills spec
@@ -645,6 +649,21 @@ mod tests {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
             allowed_tools: Some(tools),
+            ..Default::default()
+        };
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn test_hooks_rejected() {
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            hooks: Some(serde_json::json!({
+                "pre_tool_use": [
+                    { "command": "echo pre" }
+                ]
+            })),
             ..Default::default()
         };
         assert!(m.validate().is_err());
