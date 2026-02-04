@@ -55,6 +55,31 @@ async fn test_pty_functionality_with_exit_code() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn test_pty_waits_for_completion_over_yield() {
+    let registry = ToolRegistry::new(PathBuf::from(".")).await;
+    registry.allow_all_tools().await.ok();
+
+    let result = registry
+        .execute_tool(
+            "run_pty_cmd",
+            json!({
+                "mode": "pty",
+                "command": "sleep 1; echo done",
+                "yield_time_ms": 50,
+            }),
+        )
+        .await
+        .expect("sleep result");
+
+    assert_eq!(result["success"], true);
+    assert_eq!(result.get("process_id"), None);
+    assert_eq!(result["exit_code"].as_i64(), Some(0));
+    let output = result["output"].as_str().unwrap_or_default();
+    assert!(output.contains("done"));
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn test_pty_shell_option_runs_through_requested_shell() {
     let registry = ToolRegistry::new(PathBuf::from(".")).await;
     registry.allow_all_tools().await.ok();

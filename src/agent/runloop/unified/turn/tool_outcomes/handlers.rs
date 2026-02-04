@@ -4,6 +4,7 @@ use anyhow::Result;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tokio::sync::Mutex;
 use vtcode_core::llm::provider as uni;
 
@@ -47,36 +48,111 @@ pub struct ToolOutcomeContext<'a, 'b> {
 
 struct PtyStreamState {
     lines: VecDeque<String>,
+    current_line: String,
     displayed_count: usize,
+    total_lines: usize,
 }
 
 impl PtyStreamState {
     fn new() -> Self {
         Self {
             lines: VecDeque::new(),
+            current_line: String::new(),
             displayed_count: 0,
+            total_lines: 0,
         }
     }
 
-    fn push_lines<I>(&mut self, lines: I, limit: usize)
-    where
-        I: IntoIterator<Item = String>,
-    {
+    fn apply_chunk(&mut self, chunk: &str, limit: usize) {
         if limit == 0 {
             self.lines.clear();
+            self.current_line.clear();
             self.displayed_count = 0;
+            self.total_lines = 0;
             return;
         }
 
-        for line in lines {
-            if line.trim().is_empty() {
-                continue;
-            }
-            self.lines.push_back(line);
-            while self.lines.len() > limit {
-                self.lines.pop_front();
+        let mut chars = chunk.chars().peekable();
+        while let Some(ch) = chars.next() {
+            match ch {
+                '\r' => {
+                    if matches!(chars.peek(), Some('\n')) {
+                        let _ = chars.next();
+                        self.push_line(limit);
+                    } else {
+                        self.current_line.clear();
+                    }
+                }
+                '\n' => {
+                    self.push_line(limit);
+                }
+                _ => {
+                    self.current_line.push(ch);
+                }
             }
         }
+    }
+
+    fn push_line(&mut self, limit: usize) {
+        let trimmed = self.current_line.trim_end();
+        if trimmed.trim().is_empty() {
+            self.current_line.clear();
+            return;
+        }
+        self.lines.push_back(trimmed.to_string());
+        self.total_lines += 1;
+        self.current_line.clear();
+        while self.lines.len() > limit {
+            self.lines.pop_front();
+        }
+    }
+
+    fn render_lines(&self, limit: usize) -> Vec<String> {
+        if limit == 0 {
+            return Vec::new();
+        }
+
+        let has_current = !self.current_line.trim().is_empty();
+        let total = self.total_lines + usize::from(has_current);
+        if total == 0 {
+            return Vec::new();
+        }
+
+        let mut truncated = false;
+        let mut tail_limit = limit;
+        if total > limit {
+            truncated = true;
+            tail_limit = tail_limit.saturating_sub(1);
+        }
+
+        let start = total.saturating_sub(tail_limit);
+        let base_index = self.total_lines.saturating_sub(self.lines.len());
+        let mut rendered = Vec::new();
+        if truncated {
+            rendered.push("[... truncated ...]".to_string());
+        }
+
+        let mut idx = 0usize;
+        for line in &self.lines {
+            let absolute = base_index + idx;
+            if absolute >= start {
+                rendered.push(line.clone());
+            }
+            idx += 1;
+        }
+        let current_index = base_index + self.lines.len();
+        if has_current && current_index >= start {
+            rendered.push(self.current_line.trim_end().to_string());
+        }
+
+        rendered
+    }
+
+    fn last_display_line(&self) -> Option<String> {
+        if !self.current_line.trim().is_empty() {
+            return Some(self.current_line.trim_end().to_string());
+        }
+        self.lines.back().cloned()
     }
 }
 
@@ -223,11 +299,37 @@ pub(crate) async fn validate_tool_call<'a>(
         };
 
         if should_block {
+            tracing::warn!(tool = %tool_name, "Loop detector blocked tool");
+            if let Some(mut spooled) = ctx.tool_registry.find_recent_spooled_output(
+                tool_name,
+                args_val,
+                Duration::from_secs(120),
+            ) {
+                if let Some(obj) = spooled.as_object_mut() {
+                    obj.insert(
+                        "reused_spooled_output".to_string(),
+                        serde_json::Value::Bool(true),
+                    );
+                    obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
+                    obj.insert(
+                        "loop_detected_note".to_string(),
+                        serde_json::Value::String(
+                            "Loop detected; reusing spooled output from a recent identical call. Read the spooled file instead of re-running the tool.".to_string(),
+                        ),
+                    );
+                }
+                push_tool_response(
+                    ctx.working_history,
+                    tool_call_id.to_string(),
+                    spooled.to_string(),
+                );
+                return Ok(ValidationResult::Blocked);
+            }
+
             let error_msg = format!(
                 "Tool '{}' is blocked due to excessive repetition (Loop Detected).",
                 tool_name
             );
-            tracing::warn!(tool = %tool_name, "Loop detector blocked tool");
             push_tool_response(
                 ctx.working_history,
                 tool_call_id.to_string(),
@@ -603,53 +705,33 @@ async fn execute_and_handle_tool_call_inner<'a>(
                 }
 
                 if is_pty && !output_owned.is_empty() {
-                    let mut cleaned_lines = Vec::new();
-                    for line in output_owned.lines() {
-                        let clean_line = vtcode_core::utils::ansi_parser::strip_ansi(line);
-                        let trimmed = clean_line.trim();
-                        if !trimmed.is_empty() {
-                            cleaned_lines.push(trimmed.to_string());
-                        }
-                    }
+                    let cleaned_output = vtcode_core::utils::ansi_parser::strip_ansi(&output_owned);
 
-                    let last_trimmed = cleaned_lines
-                        .last()
-                        .cloned()
-                        .or_else(|| {
-                            output_owned.lines().last().map(|line| {
-                                vtcode_core::utils::ansi_parser::strip_ansi(line)
-                                    .trim()
-                                    .to_string()
+                    let (replace_count, segments, last_line) = {
+                        let mut state = stream_state.lock().await;
+                        state.apply_chunk(&cleaned_output, tail_limit);
+                        let rendered = state.render_lines(tail_limit);
+                        let style = std::sync::Arc::new(InlineTextStyle::default());
+                        let segments: Vec<Vec<InlineSegment>> = rendered
+                            .iter()
+                            .map(|line| {
+                                vec![InlineSegment {
+                                    text: line.clone(),
+                                    style: style.clone(),
+                                }]
                             })
-                        })
-                        .filter(|line| !line.is_empty());
+                            .collect();
+                        let replace_count = state.displayed_count;
+                        state.displayed_count = segments.len();
+                        let last_line = state.last_display_line();
+                        (replace_count, segments, last_line)
+                    };
 
-                    if tail_limit > 0 && !cleaned_lines.is_empty() {
-                        let (replace_count, segments) = {
-                            let mut state = stream_state.lock().await;
-                            state.push_lines(cleaned_lines, tail_limit);
-                            let style = std::sync::Arc::new(InlineTextStyle::default());
-                            let segments: Vec<Vec<InlineSegment>> = state
-                                .lines
-                                .iter()
-                                .map(|line| {
-                                    vec![InlineSegment {
-                                        text: line.clone(),
-                                        style: style.clone(),
-                                    }]
-                                })
-                                .collect();
-                            let replace_count = state.displayed_count;
-                            state.displayed_count = segments.len();
-                            (replace_count, segments)
-                        };
-
-                        if !segments.is_empty() && stream_active.load(Ordering::Relaxed) {
-                            handle.replace_last(replace_count, InlineMessageKind::Pty, segments);
-                        }
+                    if !segments.is_empty() && stream_active.load(Ordering::Relaxed) {
+                        handle.replace_last(replace_count, InlineMessageKind::Pty, segments);
                     }
 
-                    if let Some(last_line) = last_trimmed {
+                    if let Some(last_line) = last_line {
                         reporter.set_message(last_line).await;
                     }
                 } else if let Some(last_line) = output_owned.lines().last() {

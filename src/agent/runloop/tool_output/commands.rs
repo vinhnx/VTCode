@@ -178,8 +178,10 @@ pub(crate) async fn render_terminal_command_panel(
         return Ok(());
     }
 
+    let inline_streaming = is_pty_session && renderer.prefers_untruncated_output();
+
     if stdout.trim().is_empty() && stderr.trim().is_empty() {
-        if !is_pty_session || is_completed {
+        if !inline_streaming && (!is_pty_session || is_completed) {
             renderer.line(MessageStyle::ToolDetail, "(no output)")?;
         } else if is_pty_session && !is_completed {
             // For running PTY sessions with no output yet, don't show "no output"
@@ -189,7 +191,7 @@ pub(crate) async fn render_terminal_command_panel(
     }
 
     // Render stdout/PTY output (skipped for exit code 127 above)
-    if !stdout.trim().is_empty() {
+    if !stdout.trim().is_empty() && !inline_streaming {
         let label = if is_pty_session { "" } else { "stdout" }; // Don't label PTY output as stdout
         render_stream_section(
             renderer,
@@ -208,9 +210,10 @@ pub(crate) async fn render_terminal_command_panel(
     }
 
     // Render stderr if present, even for PTY sessions
-    if !<Cow<'_, str> as AsRef<str>>::as_ref(&stderr)
-        .trim()
-        .is_empty()
+    if !inline_streaming
+        && !<Cow<'_, str> as AsRef<str>>::as_ref(&stderr)
+            .trim()
+            .is_empty()
     {
         render_stream_section(
             renderer,
