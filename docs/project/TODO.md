@@ -152,3 +152,12 @@ It seems that when sending the tool result back to the API, the required tool_ca
 I asked vtcode to push to git, but when it ran git status, I encountered the following error:
 
 LLM request failed: Invalid request: Anthropic Invalid request: failed to convert tool result content: unsupported content type in ContentBlockParamUnion: json
+
+--
+
+Background terminal Run long-running terminal commands in the background.
+
+---
+
+Shell snapshot Snapshot your shell environment to avoid re-running
+login scripts for every command.
