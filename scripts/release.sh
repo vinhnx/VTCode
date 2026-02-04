@@ -138,6 +138,166 @@ Options:
 USAGE
 }
 
+# Parse commit type from conventional commit message
+parse_commit_type() {
+    local message="$1"
+    # Extract type from conventional commit format: type(scope): message or type: message
+    # Use sed to extract the type prefix
+    local type=$(echo "$message" | sed -E 's/^([a-z]+)(\([^)]+\))?:.*/\1/')
+    if [[ "$type" == "$message" ]]; then
+        echo "other"
+    else
+        echo "$type"
+    fi
+}
+
+# Get prefix indicator for commit type (text-based, no emoji)
+get_type_prefix() {
+    local type="$1"
+    case "$type" in
+        feat) echo "[FEAT]" ;;
+        fix) echo "[FIX]" ;;
+        perf) echo "[PERF]" ;;
+        refactor) echo "[REFACTOR]" ;;
+        docs) echo "[DOCS]" ;;
+        test) echo "[TEST]" ;;
+        build) echo "[BUILD]" ;;
+        ci) echo "[CI]" ;;
+        chore) echo "[CHORE]" ;;
+        security) echo "[SECURITY]" ;;
+        deps) echo "[DEPS]" ;;
+        *) echo "" ;;
+    esac
+}
+
+# Get human-readable title for commit type
+get_type_title() {
+    local type="$1"
+    case "$type" in
+        feat) echo "Features" ;;
+        fix) echo "Bug Fixes" ;;
+        perf) echo "Performance" ;;
+        refactor) echo "Refactors" ;;
+        docs) echo "Documentation" ;;
+        test) echo "Tests" ;;
+        build) echo "Build" ;;
+        ci) echo "CI" ;;
+        chore) echo "Chores" ;;
+        security) echo "Security" ;;
+        deps) echo "Dependencies" ;;
+        *) echo "Other" ;;
+    esac
+}
+
+# Clean commit message by removing the type prefix
+clean_commit_message() {
+    local message="$1"
+    # Remove conventional commit prefix (type(scope): or type:)
+    echo "$message" | sed -E 's/^[a-z]+(\([^)]+\))?:[[:space:]]*//'
+}
+
+# Group commits by type and generate structured changelog
+# Note: Uses simple arrays instead of associative arrays for bash 3.2 compatibility (macOS)
+generate_structured_changelog() {
+    local commits_range="$1"
+
+    # Define type order (priority)
+    local type_order="feat fix perf refactor security docs test build ci deps chore other"
+
+    # Initialize storage for each type (using prefix variables instead of associative arrays)
+    local feat_commits=""
+    local fix_commits=""
+    local perf_commits=""
+    local refactor_commits=""
+    local security_commits=""
+    local docs_commits=""
+    local test_commits=""
+    local build_commits=""
+    local ci_commits=""
+    local deps_commits=""
+    local chore_commits=""
+    local other_commits=""
+
+    # Get commits with their hashes
+    while IFS='|' read -r hash message; do
+        [[ -z "$hash" ]] && continue
+
+        local type=$(parse_commit_type "$message")
+        local clean_msg=$(clean_commit_message "$message")
+
+        # Skip excluded patterns
+        if [[ "$message" =~ (chore\(release\):|bump version|update version|version bump|release v[0-9]+\.[0-9]+\.[0-9]+|chore.*version|chore.*release|build.*version|update.*version.*number|bump.*version.*to|update homebrew|update changelog) ]]; then
+            continue
+        fi
+
+        # Get author for this commit
+        local author_email=$(git log -1 --pretty=format:"%ae" "$hash" 2>/dev/null || echo "")
+        local username=""
+        if [[ -n "$author_email" ]]; then
+            username=$(get_github_username "$author_email")
+        fi
+
+        # Build entry
+        local entry="- $clean_msg ($hash)"
+        if [[ -n "$username" && "$username" != "vtcode-release-bot" ]]; then
+            entry="$entry (@$username)"
+        fi
+
+        # Add to appropriate group using prefix variables
+        case "$type" in
+            feat) feat_commits="${feat_commits}${entry}"$'\n' ;;
+            fix) fix_commits="${fix_commits}${entry}"$'\n' ;;
+            perf) perf_commits="${perf_commits}${entry}"$'\n' ;;
+            refactor) refactor_commits="${refactor_commits}${entry}"$'\n' ;;
+            security) security_commits="${security_commits}${entry}"$'\n' ;;
+            docs) docs_commits="${docs_commits}${entry}"$'\n' ;;
+            test) test_commits="${test_commits}${entry}"$'\n' ;;
+            build) build_commits="${build_commits}${entry}"$'\n' ;;
+            ci) ci_commits="${ci_commits}${entry}"$'\n' ;;
+            deps) deps_commits="${deps_commits}${entry}"$'\n' ;;
+            chore) chore_commits="${chore_commits}${entry}"$'\n' ;;
+            *) other_commits="${other_commits}${entry}"$'\n' ;;
+        esac
+    done < <(git log "$commits_range" --no-merges --pretty=format:"%h|%s")
+
+    # Generate structured output
+    local output=""
+    local has_content=false
+
+    # Process each type in order (using case for bash 3.2 compatibility)
+    for type in $type_order; do
+        local commits=""
+        case "$type" in
+            feat) commits="$feat_commits" ;;
+            fix) commits="$fix_commits" ;;
+            perf) commits="$perf_commits" ;;
+            refactor) commits="$refactor_commits" ;;
+            security) commits="$security_commits" ;;
+            docs) commits="$docs_commits" ;;
+            test) commits="$test_commits" ;;
+            build) commits="$build_commits" ;;
+            ci) commits="$ci_commits" ;;
+            deps) commits="$deps_commits" ;;
+            chore) commits="$chore_commits" ;;
+            other) commits="$other_commits" ;;
+        esac
+
+        if [[ -n "$commits" ]]; then
+            local title=$(get_type_title "$type")
+
+            output="${output}### ${title}"$'\n\n'
+            output="${output}${commits}"$'\n'
+            has_content=true
+        fi
+    done
+
+    if [[ "$has_content" == false ]]; then
+        output="*No significant changes*"$'\n'
+    fi
+
+    echo "$output"
+}
+
 # Changelog generation from commits
 update_changelog_from_commits() {
     local version=$1
@@ -159,32 +319,31 @@ update_changelog_from_commits() {
     local date_str
     date_str=$(date +%Y-%m-%d)
 
-    local changelog_content
-    # Use git log directly instead of changelogithub to avoid parsing issues
-    print_info "Generating changelog from commits using git log..."
-    changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"- %s (%h)")
-
-    # If no commits found, use a default message
-    if [[ -z "$changelog_content" ]]; then
-        changelog_content="- No significant changes"
-    fi
-
-    # Add @username tags to changelog entries
-    if [[ -n "$commits_range" && "$commits_range" != "HEAD" ]]; then
-        changelog_content=$(add_username_tags "$changelog_content" "$commits_range")
-    fi
+    # Generate structured changelog
+    print_info "Generating structured changelog from commits..."
+    local structured_changelog
+    structured_changelog=$(generate_structured_changelog "$commits_range")
 
     # Save to global variable for release notes use (GitHub Release body)
-    echo -e "$changelog_content" > "$RELEASE_NOTES_FILE"
+    {
+        echo "## What's Changed"
+        echo ""
+        echo "$structured_changelog"
+        echo ""
+        echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${previous_tag}...v${version}"
+    } > "$RELEASE_NOTES_FILE"
 
     if [[ "$dry_run_flag" == 'true' ]]; then
         print_info "Dry run - would update CHANGELOG.md"
+        print_info "Release notes preview:"
+        cat "$RELEASE_NOTES_FILE"
         return 0
     fi
 
     # Format for CHANGELOG.md (with version header)
     local changelog_entry
-    changelog_entry="## v$version - $date_str\n\n$changelog_content\n\n"
+    changelog_entry="## v$version - $date_str"$'\n\n'
+    changelog_entry="${changelog_entry}${structured_changelog}"$'\n'
 
     if [[ -f CHANGELOG.md ]]; then
         # Check if this version already exists in the changelog
