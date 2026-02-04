@@ -88,19 +88,20 @@ impl SafeCommandRegistry {
     fn default_rules() -> HashMap<String, CommandRule> {
         let mut rules = HashMap::new();
 
-        // ──── Git (safe: branch, status, log, diff, show) ────
+        // ──── Git (safe: status, log, diff, show; branch is conditionally safe) ────
+        // Note: git branch is NOT in the safe list because branch deletion (-d/-D/--delete)
+        // is destructive. Only read-only branch operations (--show-current, --list) are safe.
         rules.insert(
             "git".to_string(),
             CommandRule {
                 safe_subcommands: Some(vec![
-                    "branch".to_string(),
                     "status".to_string(),
                     "log".to_string(),
                     "diff".to_string(),
                     "show".to_string(),
                 ]),
                 forbidden_options: vec![],
-                custom_check: None,
+                custom_check: Some(Self::check_git),
             },
         );
 
@@ -249,6 +250,83 @@ impl SafeCommandRegistry {
     }
 
     // ──── Custom Checks ────
+
+    /// Git: allow status, log, diff, show; branch only for read-only operations
+    fn check_git(command: &[String]) -> SafetyDecision {
+        if command.len() < 2 {
+            return SafetyDecision::Unknown;
+        }
+
+        // Use the shared git subcommand finder to skip global options
+        let subcommands = &["status", "log", "diff", "show", "branch"];
+        let Some((idx, subcommand)) =
+            crate::command_safety::dangerous_commands::find_git_subcommand(command, subcommands)
+        else {
+            return SafetyDecision::Unknown;
+        };
+
+        match subcommand {
+            "status" | "log" | "diff" | "show" => SafetyDecision::Allow,
+            "branch" => {
+                // Only allow read-only branch operations
+                let branch_args = &command[idx + 1..];
+                let is_read_only = branch_args.iter().all(|arg| {
+                    let arg = arg.as_str();
+                    // Safe: --show-current, --list, -l (list), -v (verbose), -a (all), -r (remote)
+                    // Unsafe: -d, -D, --delete, -m, -M, --move, -c, -C, --create
+                    matches!(
+                        arg,
+                        "--show-current"
+                            | "--list"
+                            | "-l"
+                            | "-v"
+                            | "-vv"
+                            | "-a"
+                            | "-r"
+                            | "--all"
+                            | "--remote"
+                            | "--verbose"
+                            | "--format"
+                    ) || arg.starts_with("--format=")
+                        || arg.starts_with("--sort=")
+                        || arg.starts_with("--contains=")
+                        || arg.starts_with("--no-contains=")
+                        || arg.starts_with("--merged=")
+                        || arg.starts_with("--no-merged=")
+                        || arg.starts_with("--points-at=")
+                });
+
+                // Also check for any delete/move/create flags
+                let has_dangerous_flag = branch_args.iter().any(|arg| {
+                    let arg = arg.as_str();
+                    matches!(
+                        arg,
+                        "-d" | "-D" | "--delete"
+                            | "-m" | "-M" | "--move"
+                            | "-c" | "-C" | "--create"
+                            | "--set-upstream"
+                            | "--set-upstream-to"
+                            | "--unset-upstream"
+                    ) || arg.starts_with("--delete=")
+                        || arg.starts_with("--move=")
+                        || arg.starts_with("--create=")
+                        || arg.starts_with("--set-upstream-to=")
+                });
+
+                if has_dangerous_flag {
+                    SafetyDecision::Deny(
+                        "git branch with modification flags is not allowed".to_string(),
+                    )
+                } else if is_read_only || branch_args.is_empty() {
+                    SafetyDecision::Allow
+                } else {
+                    // Unknown flags - be conservative
+                    SafetyDecision::Deny("git branch with unknown flags requires approval".to_string())
+                }
+            }
+            _ => SafetyDecision::Unknown,
+        }
+    }
 
     /// Cargo: allow check, build, clippy
     fn check_cargo(command: &[String]) -> SafetyDecision {

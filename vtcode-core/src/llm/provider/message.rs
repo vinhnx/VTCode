@@ -626,6 +626,6 @@ mod tests {
         ];
         let content = MessageContent::Parts(parts);
 
-        assert_eq!(content.as_text().as_ref(), "Andrej Karpathy's");
+        assert_eq!(content.as_text().as_ref() as &str, "Andrej Karpathy's");
     }
 }
