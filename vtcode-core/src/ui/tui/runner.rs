@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use futures::{FutureExt, StreamExt};
 use ratatui::crossterm::{
+    cursor::SetCursorStyle,
     event::{
         DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
         Event as CrosstermEvent,
@@ -519,6 +520,7 @@ async fn drive_terminal<B: Backend>(
     event_channels: EventChannels,
     event_callback: Option<InlineEventCallback>,
 ) -> Result<()> {
+    let mut cursor_steady = false;
     'main: loop {
         // Process all pending commands without blocking
         loop {
@@ -564,6 +566,17 @@ async fn drive_terminal<B: Backend>(
             .load(std::sync::atomic::Ordering::Acquire)
             && session.take_redraw()
         {
+            let desired_steady = session.use_steady_cursor();
+            if desired_steady != cursor_steady {
+                let style = if desired_steady {
+                    SetCursorStyle::SteadyBlock
+                } else {
+                    SetCursorStyle::DefaultUserShape
+                };
+                execute!(io::stderr(), style)
+                    .context("failed to update cursor style for inline session")?;
+                cursor_steady = desired_steady;
+            }
             terminal
                 .draw(|frame| session.render(frame))
                 .map_err(|e| anyhow::anyhow!("failed to draw inline session: {}", e))?;
@@ -700,6 +713,8 @@ fn prepare_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Result<()> {
 }
 
 fn finalize_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Result<()> {
+    execute!(io::stderr(), SetCursorStyle::DefaultUserShape)
+        .context("failed to restore cursor style after inline session")?;
     terminal
         .show_cursor()
         .map_err(|e| anyhow::anyhow!("failed to show cursor after inline session: {}", e))?;

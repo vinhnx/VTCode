@@ -128,6 +128,13 @@ impl ToolOutputSpooler {
         if !self.config.enabled {
             return false;
         }
+        if value
+            .get("no_spool")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            return false;
+        }
 
         let serialized = value.to_string();
         serialized.len() > self.config.threshold_bytes
@@ -541,6 +548,18 @@ mod tests {
         let large_content = "x".repeat(200);
         let large_value = json!({"content": large_content});
         assert!(spooler.should_spool(&large_value));
+    }
+
+    #[tokio::test]
+    async fn test_should_not_spool_when_disabled() {
+        let temp = tempdir().unwrap();
+        let mut config = SpoolerConfig::default();
+        config.threshold_bytes = 100; // Low threshold for testing
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+
+        let large_content = "x".repeat(200);
+        let large_value = json!({"output": large_content, "no_spool": true});
+        assert!(!spooler.should_spool(&large_value));
     }
 
     #[tokio::test]

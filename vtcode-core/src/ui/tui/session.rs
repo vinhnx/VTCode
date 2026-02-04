@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::VecDeque, sync::Arc, time::Instant};
 
 use anyhow::Result;
 
@@ -143,6 +143,8 @@ pub struct Session {
     /// Track if transcript content changed (not just scroll position)
     pub(crate) transcript_content_changed: bool,
     should_exit: bool,
+    scroll_cursor_steady_until: Option<Instant>,
+    last_shimmer_active: bool,
     pub(crate) view_rows: u16,
     pub(crate) input_height: u16,
     pub(crate) transcript_rows: u16,

@@ -146,6 +146,10 @@ pub(crate) async fn render_tool_output(
     let tail_limit = resolve_stdout_tail_limit(vt_config);
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
+    let disable_spool = val
+        .get("no_spool")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     // PTY tools use "output" field instead of "stdout"
     if let Some(output) = val.get("output").and_then(Value::as_str) {
@@ -160,6 +164,7 @@ pub(crate) async fn render_tool_output(
             &ls_styles,
             MessageStyle::ToolOutput,
             allow_tool_ansi,
+            disable_spool,
             vt_config,
         )
         .await?;
@@ -175,6 +180,7 @@ pub(crate) async fn render_tool_output(
             &ls_styles,
             MessageStyle::ToolOutput,
             allow_tool_ansi,
+            disable_spool,
             vt_config,
         )
         .await?;
@@ -191,6 +197,7 @@ pub(crate) async fn render_tool_output(
             &ls_styles,
             MessageStyle::ToolError,
             allow_tool_ansi,
+            disable_spool,
             vt_config,
         )
         .await?;
