@@ -63,7 +63,11 @@ impl Session {
             return self.reflow_pty_lines(index, width);
         }
 
-        if message.kind == InlineMessageKind::Error || message.kind == InlineMessageKind::Warning {
+        if matches!(
+            message.kind,
+            InlineMessageKind::Error | InlineMessageKind::Warning
+        ) || (message.kind == InlineMessageKind::Info && !is_tool_summary_line(message))
+        {
             return self.reflow_error_warning_lines(index, width);
         }
 
@@ -162,16 +166,16 @@ impl Session {
         wrapped
     }
 
-    /// Reflow error and warning messages with a bordered block.
+    /// Reflow error, warning, and info messages with a bordered block.
     #[allow(dead_code)]
     pub(super) fn reflow_error_warning_lines(
         &self,
         index: usize,
         width: u16,
     ) -> Vec<Line<'static>> {
-        if self.lines.get(index).is_none() {
+        let Some(line) = self.lines.get(index) else {
             return vec![Line::default()];
-        }
+        };
 
         let max_width = if width == 0 {
             usize::MAX
@@ -194,6 +198,12 @@ impl Session {
 
         let border_type = terminal_capabilities::get_border_type();
         let border = block_chars(border_type);
+        let label = match line.kind {
+            InlineMessageKind::Error => "Error",
+            InlineMessageKind::Warning => "Warning",
+            InlineMessageKind::Info => "Info",
+            _ => "",
+        };
 
         let body_prefix = format!("  {} ", border.vertical);
         let prefix_width = body_prefix.chars().count();
@@ -205,12 +215,25 @@ impl Session {
         }
 
         let inner_width = content_width + 1;
-        let top = format!(
-            "  {}{}{}",
-            border.top_left,
-            border.horizontal.repeat(inner_width),
-            border.top_right
-        );
+        let top_inner = if label.is_empty() {
+            border.horizontal.repeat(inner_width)
+        } else {
+            let label_segment = format!(" {} ", label);
+            let label_width = label_segment.chars().count();
+            let base_width = label_width + 2;
+            if inner_width <= base_width {
+                border.horizontal.repeat(inner_width)
+            } else {
+                let mut inner = String::new();
+                inner.push_str(border.horizontal);
+                inner.push_str(&label_segment);
+                inner.push_str(border.horizontal);
+                let remaining = inner_width.saturating_sub(base_width);
+                inner.push_str(&border.horizontal.repeat(remaining));
+                inner
+            }
+        };
+        let top = format!("  {}{}{}", border.top_left, top_inner, border.top_right);
         let bottom = format!(
             "  {}{}{}",
             border.bottom_left,

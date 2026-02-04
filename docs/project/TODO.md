@@ -143,3 +143,26 @@ to novita huggingface inference provider.
 2. for warnings and info message feedbacks in the transcript. add Borders like error message. '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-02-04 at 11.31.47 AM.png'
 
 3. For each error, warning, info, show the message info type in the BORDER box https://ratatui.rs/examples/widgets/block/
+
+--
+
+vtcode-config/src/constants/ui.rs review overall ui for clean, minimal and non-clutter ui. improve
+accessiblity, and reabaility while maintain robustness of the vtcode agent.
+
+--
+
+Need to run cargo fmt, but likely formatting issues. We should run cargo check.
+
+Compiling ring v0.17.14
+Building [======================> ] 803/840: ring(build) Building [==============
+========> ] 803/840: ring(build) Compiling rustls v0.23.35
+Compiling vtcode-config v0.75.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-config)
+Building [======================> ] 804/840: vtcode-config(build), ring,… Building [==============
+========> ] 805/840: vtcode-config(build), ring,… Building [=======================> ] 807/840: ri
+ng, ring
+Building [======================> ] 804/840: vtcode-config(build), ring,… Building [==============
+========> ] 805/840: vtcode-config(build), ring,… Building [=======================> ] 807/840: ri
+ng, ring Checking rustls-webpki v0.103.8
+Building [=======================> ] 808/840: ring, rustls-webpki
+
+--> the PTY command output is showing in raw text in agent's response. need to fix that to just show tail lines and progressive update only. use tools output decoration.
