@@ -787,16 +787,28 @@ pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<
     spans
 }
 
-fn agent_prefix_spans(session: &Session, line: &MessageLine) -> Vec<Span<'static>> {
+pub(super) fn agent_prefix_spans(session: &Session, line: &MessageLine) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     let prefix_style_inline = prefix_style(session, line);
     let prefix_style_ratatui =
         ratatui_style_from_inline(&prefix_style_inline, session.theme.foreground);
+    let has_label = session
+        .labels
+        .agent
+        .as_ref()
+        .is_some_and(|label| !label.is_empty());
+    let prefix_has_trailing_space = ui::INLINE_AGENT_QUOTE_PREFIX
+        .chars()
+        .last()
+        .is_some_and(|ch| ch.is_whitespace());
     if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
         spans.push(Span::styled(
             ui::INLINE_AGENT_QUOTE_PREFIX.to_owned(),
             prefix_style_ratatui,
         ));
+        if has_label && !prefix_has_trailing_space {
+            spans.push(Span::styled(" ".to_owned(), prefix_style_ratatui));
+        }
     }
 
     if let Some(label) = &session.labels.agent

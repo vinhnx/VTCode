@@ -738,15 +738,6 @@ Edited vtcode-core/src/utils/ansi.rs (+1 -13)
 render markdown as usual for reasoning message (codeblock, quote, code fence)
 like standard agent message
 
---
-
-agent standard agent message, add paragraph padding and "•" in the message content. so it is not jammed to the left padding. eg:
-
-```
-• Hello, here is the information you requested. This is
-  an example of a standard agent message. and it has proper padding.
-```
-
 ---
 
 hide cursor in chat input when scrolling, so cursor does not appear in wrong place when scrolling up/down. show cursor when stopped scrolling.

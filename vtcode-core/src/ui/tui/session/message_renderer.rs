@@ -93,11 +93,19 @@ fn agent_prefix_spans(
 ) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     let prefix_style = ratatui_style_from_inline(&prefix_style_fn(line), theme.foreground);
+    let has_label = labels.agent.as_ref().is_some_and(|label| !label.is_empty());
+    let prefix_has_trailing_space = ui::INLINE_AGENT_QUOTE_PREFIX
+        .chars()
+        .last()
+        .is_some_and(|ch| ch.is_whitespace());
     if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
         spans.push(Span::styled(
             ui::INLINE_AGENT_QUOTE_PREFIX.to_owned(),
             prefix_style,
         ));
+        if has_label && !prefix_has_trailing_space {
+            spans.push(Span::styled(" ".to_owned(), prefix_style));
+        }
     }
 
     if let Some(label) = &labels.agent

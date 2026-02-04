@@ -761,27 +761,47 @@ fn header_height_expands_when_wrapping_required() {
 #[test]
 fn agent_messages_include_left_padding() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(
+            "Hello, here is the information you requested. This is an example of a standard agent message.",
+        )],
+    );
 
-    let lines = session.reflow_transcript_lines(VIEW_WIDTH);
-    let message_line = lines
+    let lines = session.reflow_transcript_lines(32);
+    let content_lines: Vec<String> = lines
         .iter()
         .map(line_text)
-        .find(|text| text.contains("Response"))
-        .expect("agent message should be visible");
+        .filter(|text| !text.trim().is_empty())
+        .collect();
+    assert!(
+        content_lines.len() >= 2,
+        "expected wrapped agent lines to be visible"
+    );
+    let first_line = &content_lines[0];
+    let second_line = &content_lines[1];
 
     let expected_prefix = format!(
         "{}{}",
         ui::INLINE_AGENT_QUOTE_PREFIX,
         ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
     );
+    let continuation_prefix = " ".repeat(expected_prefix.chars().count());
 
     assert!(
-        message_line.starts_with(&expected_prefix),
+        first_line.starts_with(&expected_prefix),
         "agent message should include left padding",
     );
     assert!(
-        !message_line.contains('│'),
+        second_line.starts_with(&continuation_prefix),
+        "agent message continuation should align with content padding",
+    );
+    assert!(
+        !second_line.starts_with(&expected_prefix),
+        "agent message continuation should not repeat bullet prefix",
+    );
+    assert!(
+        !first_line.contains('│'),
         "agent message should not render a left border",
     );
 }
@@ -998,13 +1018,24 @@ fn agent_label_uses_accent_color_without_border() {
         .expect("agent message should be available");
     let spans = session.render_message_spans(index);
 
-    assert!(spans.len() >= 3);
+    assert!(!spans.is_empty());
 
-    let label_span = &spans[0];
-    assert_eq!(label_span.content.clone().into_owned(), "Agent");
+    let prefix_span = &spans[0];
+    assert_eq!(
+        prefix_span.content.clone().into_owned(),
+        ui::INLINE_AGENT_QUOTE_PREFIX
+    );
+
+    let label_index = spans
+        .iter()
+        .position(|span| span.content.clone().into_owned() == "Agent")
+        .expect("agent label span should be present");
+    let label_span = &spans[label_index];
     assert_eq!(label_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
 
-    let padding_span = &spans[1];
+    let padding_span = spans
+        .get(label_index + 1)
+        .expect("agent label should be followed by padding");
     assert_eq!(
         padding_span.content.clone().into_owned(),
         ui::INLINE_AGENT_MESSAGE_LEFT_PADDING

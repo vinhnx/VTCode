@@ -108,13 +108,18 @@ impl Session {
             wrapped.push(divider);
         }
 
-        let mut lines = self.wrap_line(base_line, max_width);
-        if !lines.is_empty() {
-            lines = self.justify_wrapped_lines(lines, max_width, message.kind);
-        }
-        if lines.is_empty() {
-            lines.push(Line::default());
-        }
+        let lines = if message.kind == InlineMessageKind::Agent {
+            self.reflow_agent_message_lines(message, max_width, !is_new_turn)
+        } else {
+            let mut lines = self.wrap_line(base_line, max_width);
+            if !lines.is_empty() {
+                lines = self.justify_wrapped_lines(lines, max_width, message.kind);
+            }
+            if lines.is_empty() {
+                lines.push(Line::default());
+            }
+            lines
+        };
 
         wrapped.extend(lines);
 
@@ -314,6 +319,88 @@ impl Session {
     /// Wrap a line of text to fit within a maximum width
     pub(super) fn wrap_line(&self, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
         text_utils::wrap_line(line, max_width)
+    }
+
+    fn reflow_agent_message_lines(
+        &self,
+        message: &MessageLine,
+        max_width: usize,
+        suppress_prefix_bullet: bool,
+    ) -> Vec<Line<'static>> {
+        if max_width == 0 {
+            return vec![Line::default()];
+        }
+
+        let mut prefix_spans = render::agent_prefix_spans(self, message);
+        let left_padding = ui::INLINE_AGENT_MESSAGE_LEFT_PADDING;
+        let prefix_width = prefix_spans.iter().map(|span| span.width()).sum::<usize>()
+            + UnicodeWidthStr::width(left_padding);
+
+        let content_width = max_width.saturating_sub(prefix_width);
+        let fallback = self.text_fallback(message.kind).or(self.theme.foreground);
+        let mut content_spans = Vec::new();
+        for segment in &message.segments {
+            let style = ratatui_style_from_inline(&segment.style, fallback);
+            content_spans.push(Span::styled(segment.text.clone(), style));
+        }
+
+        let mut wrapped = if content_width == 0 {
+            vec![Line::default()]
+        } else {
+            self.wrap_line(Line::from(content_spans), content_width)
+        };
+
+        if !wrapped.is_empty() {
+            wrapped = self.justify_wrapped_lines(wrapped, content_width, message.kind);
+        }
+        if wrapped.is_empty() {
+            wrapped.push(Line::default());
+        }
+
+        let suppress_prefix_bullet = suppress_prefix_bullet
+            || wrapped.first().is_some_and(|line| {
+                let line_text = line
+                    .spans
+                    .iter()
+                    .map(|span| AsRef::<str>::as_ref(&span.content))
+                    .collect::<String>();
+                let stripped = text_utils::strip_ansi_codes(&line_text);
+                text_utils::is_list_item(stripped.as_ref())
+            });
+        if suppress_prefix_bullet && !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
+            if let Some(prefix_span) = prefix_spans
+                .first_mut()
+                .filter(|span| AsRef::<str>::as_ref(&span.content) == ui::INLINE_AGENT_QUOTE_PREFIX)
+            {
+                let replacement = " ".repeat(UnicodeWidthStr::width(ui::INLINE_AGENT_QUOTE_PREFIX));
+                prefix_span.content = replacement.into();
+            }
+        }
+
+        let indent = " ".repeat(prefix_width);
+        let mut lines = Vec::with_capacity(wrapped.len());
+        for (index, mut line) in wrapped.into_iter().enumerate() {
+            let mut spans = Vec::new();
+            if index == 0 {
+                spans.append(&mut prefix_spans);
+                if !left_padding.is_empty() {
+                    spans.push(Span::raw(left_padding));
+                }
+            } else if !indent.is_empty() {
+                spans.push(Span::raw(indent.clone()));
+            }
+            spans.append(&mut line.spans);
+            if spans.is_empty() {
+                spans.push(Span::raw(String::new()));
+            }
+            lines.push(Line::from(spans));
+        }
+
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+
+        lines
     }
 
     /// Wrap content with left and right borders

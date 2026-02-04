@@ -51,13 +51,14 @@ fi
 echo "Building vtcode in debug mode..."
 
 # Try building with sccache first, fall back to regular cargo if sccache fails
-if ! cargo build 2>/tmp/vtcode_build_error.log; then
-    BUILD_ERROR=$(cat /tmp/vtcode_build_error.log)
+# Show build progress with cargo's default terminal output
+echo ""
+if ! cargo build 2>&1 | tee /tmp/vtcode_build.log; then
+    BUILD_ERROR=$(cat /tmp/vtcode_build.log)
     if [[ "$BUILD_ERROR" == *"sccache: error: Operation not permitted"* ]]; then
         echo "sccache permission error detected. Retrying without sccache..."
-        # Temporarily disable sccache by setting RUSTC_WRAPPER to empty
         export RUSTC_WRAPPER=""
-        cargo build
+        cargo build 2>&1 | tee /tmp/vtcode_build.log
         RESULT=$?
         if [ $RESULT -ne 0 ]; then
             echo "Build failed even without sccache. Check errors above."
@@ -69,7 +70,7 @@ if ! cargo build 2>/tmp/vtcode_build_error.log; then
         exit 1
     fi
 else
-    echo "Build completed successfully with sccache."
+    echo "Build completed successfully."
 fi
 
 echo ""
