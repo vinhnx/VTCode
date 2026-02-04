@@ -57,6 +57,18 @@ pub fn generate_tool_guidelines(
         );
     }
 
+    // Git diff guidance - requires bash to run git commands
+    if has_bash {
+        guidelines.push(
+            "**Git Diff Requests**: When user asks to 'show diff', 'git diff', or 'view changes': \
+             ALWAYS run `git diff -- <path>` via `unified_exec`. NEVER read file content and fabricate a diff - \
+             reading a file shows current content, not what changed. \
+             Examples: `git diff` (all changes), `git diff -- src/main.rs` (specific file), \
+             `git diff HEAD~1` (vs previous commit)."
+                .to_string(),
+        );
+    }
+
     if has_file {
         guidelines.push(
             "**File Workflow**: Always use `unified_file` (action='read') to examine content before \
@@ -67,10 +79,9 @@ pub fn generate_tool_guidelines(
         );
 
         guidelines.push(
-            "**Git Diff vs Apply Patch**: `git diff` is a READ-ONLY operation to VIEW changes - \
-             use `unified_exec` with the git command. `apply_patch` is for WRITING changes to files. \
-             NEVER use `apply_patch` or `unified_file` (action='patch') when the user only wants to \
-             view a diff. These are fundamentally different operations."
+            "**Diff vs Patch**: `git diff` (via `unified_exec`) is READ-ONLY to VIEW changes. \
+             `apply_patch` / `unified_file` (action='patch') is for WRITING changes. \
+             Never use patch tools when user only wants to view a diff."
                 .to_string(),
         );
 
