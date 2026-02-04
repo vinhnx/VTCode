@@ -36,7 +36,8 @@ impl ModelId {
             | ModelId::HuggingFaceKimiK25Novita
             | ModelId::HuggingFaceMinimaxM21Novita
             | ModelId::HuggingFaceDeepseekV32Novita
-            | ModelId::HuggingFaceXiaomiMimoV2FlashNovita => Provider::HuggingFace,
+            | ModelId::HuggingFaceXiaomiMimoV2FlashNovita
+            | ModelId::HuggingFaceQwen3CoderNextNovita => Provider::HuggingFace,
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
             | ModelId::XaiGrok4Code

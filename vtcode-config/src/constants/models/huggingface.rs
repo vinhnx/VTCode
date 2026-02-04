@@ -24,6 +24,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MINIMAX_M2_1_NOVITA,
     DEEPSEEK_V32_NOVITA,
     XIAOMI_MIMO_V2_FLASH_NOVITA,
+    QWEN3_CODER_NEXT_NOVITA,
 ];
 
 // Recommended conversational LLMs
@@ -51,6 +52,7 @@ pub const ZAI_GLM_45V: &str = "zai-org/GLM-4.5V:zai-org";
 pub const MINIMAX_M2_1_NOVITA: &str = "MiniMaxAI/MiniMax-M2.1:novita";
 pub const DEEPSEEK_V32_NOVITA: &str = "deepseek-ai/DeepSeek-V3.2:novita";
 pub const XIAOMI_MIMO_V2_FLASH_NOVITA: &str = "XiaomiMiMo/MiMo-V2-Flash:novita";
+pub const QWEN3_CODER_NEXT_NOVITA: &str = "Qwen/Qwen3-Coder-Next:novita";
 
 pub const REASONING_MODELS: &[&str] = &[
     // All recommended models support reasoning
@@ -72,4 +74,5 @@ pub const REASONING_MODELS: &[&str] = &[
     DEEPSEEK_V32_NOVITA,
     MINIMAX_M2_1_NOVITA,
     XIAOMI_MIMO_V2_FLASH_NOVITA,
+    QWEN3_CODER_NEXT_NOVITA,
 ];

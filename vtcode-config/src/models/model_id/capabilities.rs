@@ -176,6 +176,7 @@ impl ModelId {
             ModelId::MinimaxM2 => "M2",
             ModelId::HuggingFaceDeepseekV32 | ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
+            ModelId::HuggingFaceQwen3CoderNextNovita => "qwen3-coder-next",
             ModelId::HuggingFaceGlm47 => "4.7",
             ModelId::HuggingFaceKimiK2Thinking => "k2",
             ModelId::HuggingFaceKimiK25Novita => "k2.5",

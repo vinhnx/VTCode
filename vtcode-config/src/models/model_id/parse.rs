@@ -134,6 +134,9 @@ impl FromStr for ModelId {
             s if s == models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA => {
                 Ok(ModelId::HuggingFaceXiaomiMimoV2FlashNovita)
             }
+            s if s == models::huggingface::QWEN3_CODER_NEXT_NOVITA => {
+                Ok(ModelId::HuggingFaceQwen3CoderNextNovita)
+            }
             _ => Err(ModelParseError::InvalidModel(s.to_string())),
         }
     }
