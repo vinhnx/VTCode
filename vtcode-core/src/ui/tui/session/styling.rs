@@ -183,10 +183,6 @@ impl SessionStyles {
             style.color = self.text_fallback(kind).or(self.theme.foreground);
         }
         let resolved = ratatui_style_from_inline(&style, self.theme.foreground);
-        if kind == InlineMessageKind::User {
-            resolved
-        } else {
-            resolved.add_modifier(Modifier::DIM)
-        }
+        resolved.add_modifier(Modifier::DIM)
     }
 }

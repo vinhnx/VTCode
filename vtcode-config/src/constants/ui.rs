@@ -29,7 +29,7 @@ pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
 pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
 pub const INLINE_STACKED_NAVIGATION_PERCENT: u16 = INLINE_NAVIGATION_PERCENT;
 pub const INLINE_SCROLLBAR_EDGE_PADDING: u16 = 1;
-pub const INLINE_TRANSCRIPT_BOTTOM_PADDING: u16 = 6;
+pub const INLINE_TRANSCRIPT_BOTTOM_PADDING: u16 = 4;
 pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
 pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
 pub const HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS: usize = 48;
@@ -98,7 +98,7 @@ pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
     "Implement {feature} in {file} (@files, #prompts, /commands)";
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
     "Build something (@files, #prompts, /commands or Shift+Tab to switch to modes)";
-pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter=submit | Shift+Enter=newline | Ctrl/Cmd+Enter=queue | Esc=cancel | Ctrl+C=interrupt | @=file picker | #=custom prompts | /=slash commands";
+pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter send • Shift+Enter newline • Esc cancel • Ctrl+C interrupt • @ files • # prompts • / commands";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
