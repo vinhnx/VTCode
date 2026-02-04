@@ -2,6 +2,23 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.75.2 - 2026-02-04
+
+- Update TODO (fb065df0) (@vinhnx)
+- feat: add Qwen3 Coder Next model with enhanced reasoning capabilities (26a65840) (@vinhnx)
+- feat: enhance file output rendering to display diff content when applicable (0c05c762) (@vinhnx)
+- feat: simplify debug script by removing sccache handling; enhance markdown diff rendering (cd8cdd28) (@vinhnx)
+- feat: improve sccache error handling in debug script; retry without sccache on permission errors (29bff726) (@vinhnx)
+- feat: enhance debug script to handle sccache permission errors during build and run (0beccb9e) (@vinhnx)
+- feat: enhance message rendering for info boxes; group consecutive info messages and improve styling (3557bd25) (@vinhnx)
+- feat: enhance UI styling and message rendering; improve error and info message handling (fa61cea9) (@vinhnx)
+- feat: update tool policies, enhance message rendering, and modify default model configuration (436ac6cb) (@vinhnx)
+- feat: reject hooks in skill definitions and update validation logic (6a4105e9) (@vinhnx)
+- feat: update tool policies and enhance message handling; modify configuration for LLM provider (1c093ab7) (@vinhnx)
+- Add webapp-testing skill with Playwright scripts and examples; introduce xlsx skill for spreadsheet handling (e2dfd86a) (@vinhnx)
+- chore: update homebrew formula to v0.75.1 (b52a37dd)
+
+
 ## v0.75.1 - 2026-02-03
 
 - refactor: reorganize release steps and update Homebrew process (e3d99f5a)
