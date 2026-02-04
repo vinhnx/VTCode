@@ -2,15 +2,25 @@
 //!
 //! Provides workspace-safe shell operations (cd, ls, pwd, etc.) and
 //! handles platform-specific shell detection.
+//!
+//! ## Shell Snapshots
+//!
+//! This module integrates with the shell snapshot system to avoid re-running
+//! login scripts for every command. When a snapshot is available, commands
+//! can be executed with the cached environment, significantly improving
+//! startup time.
 
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::process::Command;
+use tracing::debug;
 
 use crate::utils::path::{canonicalize_workspace, normalize_path};
 use crate::utils::validation::validate_path_exists;
+
+use super::shell_snapshot::{ShellSnapshot, global_snapshot_manager};
 
 /// Represents a workspace-safe shell runner
 pub struct ShellRunner<E: CommandExecutor = SystemExecutor> {
@@ -85,6 +95,83 @@ impl CommandExecutor for DryRunExecutor {
     }
 }
 
+/// Executor that uses shell snapshots for faster command execution.
+///
+/// This executor captures the shell environment once (after login scripts run)
+/// and reuses it for subsequent commands, avoiding the overhead of re-running
+/// login scripts for every command.
+pub struct SnapshotExecutor {
+    shell: String,
+    snapshot: Option<std::sync::Arc<ShellSnapshot>>,
+}
+
+impl SnapshotExecutor {
+    /// Create a new snapshot executor.
+    ///
+    /// The snapshot will be lazily captured on first command execution.
+    pub fn new() -> Self {
+        Self {
+            shell: resolve_fallback_shell(),
+            snapshot: None,
+        }
+    }
+
+    /// Create a snapshot executor with a pre-captured snapshot.
+    pub fn with_snapshot(snapshot: std::sync::Arc<ShellSnapshot>) -> Self {
+        Self {
+            shell: snapshot.shell_path.clone(),
+            snapshot: Some(snapshot),
+        }
+    }
+
+    /// Get or capture a shell snapshot.
+    async fn get_snapshot(&self) -> Result<std::sync::Arc<ShellSnapshot>> {
+        if let Some(ref snap) = self.snapshot {
+            return Ok(std::sync::Arc::clone(snap));
+        }
+        global_snapshot_manager().get_or_capture().await
+    }
+}
+
+impl Default for SnapshotExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait::async_trait]
+impl CommandExecutor for SnapshotExecutor {
+    async fn execute(&self, command_str: &str, cwd: &Path) -> Result<ShellOutput> {
+        let snapshot = self.get_snapshot().await?;
+
+        let mut cmd = Command::new(&self.shell);
+        cmd.arg("-c")
+            .arg(command_str)
+            .current_dir(cwd)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        cmd.env_clear();
+        for (key, value) in &snapshot.env {
+            cmd.env(key, value);
+        }
+
+        debug!(
+            shell = %self.shell,
+            env_vars = snapshot.env.len(),
+            "Executing command with snapshot environment"
+        );
+
+        let output = cmd.output().await?;
+
+        Ok(ShellOutput {
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            exit_code: output.status.code().unwrap_or(-1),
+        })
+    }
+}
+
 impl ShellRunner<SystemExecutor> {
     /// Create a new system shell runner anchored to the workspace root
     pub fn new(workspace_root: PathBuf) -> Self {
@@ -93,6 +180,34 @@ impl ShellRunner<SystemExecutor> {
             workspace_root: canonical_root.clone(),
             working_dir: canonical_root,
             executor: SystemExecutor::default(),
+        }
+    }
+}
+
+impl ShellRunner<SnapshotExecutor> {
+    /// Create a new shell runner that uses environment snapshots.
+    ///
+    /// This avoids re-running login scripts for every command by capturing
+    /// the shell environment once and reusing it.
+    pub fn with_snapshot(workspace_root: PathBuf) -> Self {
+        let canonical_root = canonicalize_workspace(&workspace_root);
+        Self {
+            workspace_root: canonical_root.clone(),
+            working_dir: canonical_root,
+            executor: SnapshotExecutor::new(),
+        }
+    }
+
+    /// Create a new shell runner with a pre-captured snapshot.
+    pub fn with_existing_snapshot(
+        workspace_root: PathBuf,
+        snapshot: std::sync::Arc<ShellSnapshot>,
+    ) -> Self {
+        let canonical_root = canonicalize_workspace(&workspace_root);
+        Self {
+            workspace_root: canonical_root.clone(),
+            working_dir: canonical_root,
+            executor: SnapshotExecutor::with_snapshot(snapshot),
         }
     }
 }

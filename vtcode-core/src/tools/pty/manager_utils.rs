@@ -7,6 +7,7 @@ use portable_pty::{CommandBuilder, PtySize};
 
 use super::command_utils::is_shell_program;
 use crate::tools::path_env;
+use crate::tools::shell_snapshot::ShellSnapshot;
 
 pub(super) fn clamp_timeout(duration: Duration) -> u64 {
     duration.as_millis().min(u64::MAX as u128) as u64
@@ -68,6 +69,68 @@ pub(super) fn set_command_environment(
 
     // Suppress macOS malloc debugging junk that can pollute PTY output
     // This is especially common when running in login shells (-l)
+    builder.env_remove("MallocStackLogging");
+    builder.env_remove("MallocStackLoggingNoCompact");
+    builder.env_remove("MallocStackLoggingDirectory");
+    builder.env_remove("MallocErrorAbort");
+    builder.env_remove("MallocCheckHeapStart");
+    builder.env_remove("MallocCheckHeapEach");
+    builder.env_remove("MallocCheckHeapSleep");
+    builder.env_remove("MallocCheckHeapAbort");
+    builder.env_remove("MallocGuardEdges");
+    builder.env_remove("MallocScribble");
+    builder.env_remove("MallocDoNotProtectSentinel");
+    builder.env_remove("MallocQuiet");
+
+    if is_shell_program(program) {
+        builder.env("SHELL", program);
+    }
+}
+
+/// Set command environment from a shell snapshot for faster startup.
+///
+/// This uses a pre-captured shell environment instead of inheriting from the
+/// parent process, which can speed up command execution by avoiding the need
+/// to run login scripts via `-l` flag.
+#[allow(dead_code)] // Infrastructure for future snapshot-based PTY execution
+pub(super) fn set_command_environment_from_snapshot(
+    builder: &mut CommandBuilder,
+    snapshot: &ShellSnapshot,
+    program: &str,
+    size: PtySize,
+    workspace_root: &Path,
+    extra_paths: &[PathBuf],
+) {
+    // Start with the snapshot environment
+    for (key, value) in &snapshot.env {
+        builder.env(key, value);
+    }
+
+    // Merge extra paths into PATH
+    let path_key = OsString::from("PATH");
+    let current_path = snapshot.env.get("PATH").map(OsString::from);
+    let current_path_ref = current_path.as_ref().map(|p| p.as_os_str());
+    if let Some(merged) = path_env::merge_path_env(current_path_ref, extra_paths) {
+        builder.env(path_key, merged);
+    }
+
+    // Override or set specific environment variables for TTY
+    builder.env("TERM", "xterm-256color");
+    builder.env("PAGER", "cat");
+    builder.env("GIT_PAGER", "cat");
+    builder.env("LESS", "R");
+    builder.env("COLUMNS", size.cols.to_string());
+    builder.env("LINES", size.rows.to_string());
+    builder.env("WORKSPACE_DIR", workspace_root.as_os_str());
+
+    // Disable automatic color output
+    builder.env("CLICOLOR", "0");
+    builder.env("CLICOLOR_FORCE", "0");
+    builder.env("LS_COLORS", "");
+    builder.env("NO_COLOR", "1");
+    builder.env("CARGO_TERM_COLOR", "never");
+
+    // Suppress macOS malloc debugging
     builder.env_remove("MallocStackLogging");
     builder.env_remove("MallocStackLoggingNoCompact");
     builder.env_remove("MallocStackLoggingDirectory");

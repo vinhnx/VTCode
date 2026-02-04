@@ -161,6 +161,7 @@ pub mod result_metadata;
 pub mod safety_gateway;
 pub mod search_metrics;
 pub mod shell;
+pub mod shell_snapshot;
 pub mod skills;
 pub mod summarizers;
 pub mod terminal_app;
@@ -247,6 +248,10 @@ pub use safety_gateway::{
     SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
 };
 pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
+pub use shell_snapshot::{
+    FileFingerprint, ShellKind, ShellSnapshot, ShellSnapshotManager, SnapshotStats,
+    apply_snapshot_env, global_snapshot_manager,
+};
 pub use tool_effectiveness::{
     AdaptiveToolSelector, ToolEffectiveness, ToolEffectivenessTracker, ToolFailureMode,
     ToolSelectionContext, ToolSelector,
