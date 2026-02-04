@@ -3,7 +3,7 @@
 use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::syntax_highlight::{find_syntax_by_token, load_theme, syntax_set};
 use crate::ui::theme::{self, ThemeStyles};
-use anstyle::{Effects, Style};
+use anstyle::{Color, Effects, Style};
 use anstyle_syntect::to_anstyle;
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::cmp::max;
@@ -12,6 +12,8 @@ use syntect::highlighting::Theme;
 use syntect::parsing::SyntaxReference;
 use syntect::util::LinesWithEndings;
 use unicode_width::UnicodeWidthStr;
+
+use crate::utils::diff_styles::DiffColorPalette;
 
 const LIST_INDENT_WIDTH: usize = 2;
 const CODE_LINE_NUMBER_MIN_WIDTH: usize = 3;
@@ -786,6 +788,11 @@ fn highlight_code_block(
     // Always normalize indentation first, regardless of highlighting
     let normalized_code = normalize_code_indentation(code, language);
     let code_to_display = &normalized_code;
+    if is_diff_language(language)
+        || (language.is_none() && looks_like_diff_content(code_to_display))
+    {
+        return render_diff_code_block(code_to_display, theme_styles, base_style, prefix_segments);
+    }
     let use_line_numbers =
         language.is_some_and(|lang| !lang.trim().is_empty()) && !is_diff_language(language);
 
@@ -864,6 +871,74 @@ fn highlight_code_block(
     }
 
     lines
+}
+
+fn render_diff_code_block(
+    code: &str,
+    theme_styles: &ThemeStyles,
+    base_style: Style,
+    prefix_segments: &[MarkdownSegment],
+) -> Vec<MarkdownLine> {
+    let mut lines = Vec::new();
+    let palette = DiffColorPalette::default();
+    let context_style = code_block_style(theme_styles, base_style);
+    let header_style = Style::new().fg_color(Some(Color::Rgb(palette.header_fg)));
+
+    for raw_line in LinesWithEndings::from(code) {
+        let trimmed = raw_line.trim_end_matches('\n');
+        let trimmed_start = trimmed.trim_start();
+        let style = if trimmed.is_empty() {
+            context_style
+        } else if is_diff_header_line(trimmed_start) {
+            header_style
+        } else if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
+            palette.added_style()
+        } else if trimmed.starts_with('-') && !trimmed.starts_with("---") {
+            palette.removed_style()
+        } else {
+            context_style
+        };
+
+        let mut line = MarkdownLine::default();
+        line.prepend_segments(prefix_segments);
+        if !trimmed.is_empty() {
+            line.push_segment(style, trimmed);
+        }
+        lines.push(line);
+    }
+
+    if code.ends_with('\n') {
+        let mut line = MarkdownLine::default();
+        line.prepend_segments(prefix_segments);
+        lines.push(line);
+    }
+
+    lines
+}
+
+fn is_diff_header_line(trimmed: &str) -> bool {
+    trimmed.starts_with("diff --git ")
+        || trimmed.starts_with("@@ ")
+        || trimmed.starts_with("index ")
+        || trimmed.starts_with("new file mode ")
+        || trimmed.starts_with("deleted file mode ")
+        || trimmed.starts_with("rename from ")
+        || trimmed.starts_with("rename to ")
+        || trimmed.starts_with("copy from ")
+        || trimmed.starts_with("copy to ")
+        || trimmed.starts_with("similarity index ")
+        || trimmed.starts_with("dissimilarity index ")
+        || trimmed.starts_with("old mode ")
+        || trimmed.starts_with("new mode ")
+        || trimmed.starts_with("Binary files ")
+        || trimmed.starts_with("\\ No newline at end of file")
+        || trimmed.starts_with("+++ ")
+        || trimmed.starts_with("--- ")
+}
+
+fn looks_like_diff_content(code: &str) -> bool {
+    code.lines()
+        .any(|line| is_diff_header_line(line.trim_start()))
 }
 
 fn line_prefix_segments(
@@ -1291,6 +1366,65 @@ mod tests {
             .find(|line| line.contains("fn main() {}"))
             .expect("code line exists");
         assert!(!code_line.contains("  1  "));
+    }
+
+    #[test]
+    fn test_markdown_diff_code_block_applies_backgrounds() {
+        let markdown = "```diff\n@@ -1 +1 @@\n- old\n+ new\n context\n```\n";
+        let lines = render_markdown(markdown);
+
+        let added_line = lines
+            .iter()
+            .find(|line| line.segments.iter().any(|seg| seg.text.contains("+ new")))
+            .expect("added line exists");
+        assert!(
+            added_line
+                .segments
+                .iter()
+                .any(|seg| seg.style.get_bg_color().is_some())
+        );
+
+        let removed_line = lines
+            .iter()
+            .find(|line| line.segments.iter().any(|seg| seg.text.contains("- old")))
+            .expect("removed line exists");
+        assert!(
+            removed_line
+                .segments
+                .iter()
+                .any(|seg| seg.style.get_bg_color().is_some())
+        );
+
+        let context_line = lines
+            .iter()
+            .find(|line| {
+                line.segments
+                    .iter()
+                    .any(|seg| seg.text.contains(" context"))
+            })
+            .expect("context line exists");
+        assert!(
+            context_line
+                .segments
+                .iter()
+                .all(|seg| seg.style.get_bg_color().is_none())
+        );
+    }
+
+    #[test]
+    fn test_markdown_unlabeled_diff_code_block_detects_diff() {
+        let markdown = "```\n@@ -1 +1 @@\n- old\n+ new\n```\n";
+        let lines = render_markdown(markdown);
+        let added_line = lines
+            .iter()
+            .find(|line| line.segments.iter().any(|seg| seg.text.contains("+ new")))
+            .expect("added line exists");
+        assert!(
+            added_line
+                .segments
+                .iter()
+                .any(|seg| seg.style.get_bg_color().is_some())
+        );
     }
 
     #[test]

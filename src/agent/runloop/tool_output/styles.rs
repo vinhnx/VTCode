@@ -135,8 +135,17 @@ pub(crate) fn select_line_style(
     git: &GitStyles,
     ls: &LsStyles,
 ) -> Option<AnsiStyle> {
-    if let Some(tools::RUN_PTY_CMD | tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH) =
-        tool_name
+    if let Some(
+        tools::UNIFIED_EXEC
+        | tools::RUN_PTY_CMD
+        | tools::EXECUTE_CODE
+        | tools::EXEC_PTY_CMD
+        | tools::EXEC
+        | tools::SHELL
+        | tools::WRITE_FILE
+        | tools::EDIT_FILE
+        | tools::APPLY_PATCH,
+    ) = tool_name
     {
         let trimmed = line.trim_start();
         // Improved diff header detection: covers diff markers, index lines, hunk headers, and file mode changes
