@@ -278,7 +278,14 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
         )?;
     }
 
-    // Content is loaded and available via file tools context; no need to echo summary
+    if let Some(content) = get_string(val, "content")
+        && looks_like_diff_content(content)
+    {
+        let git_styles = GitStyles::new();
+        let ls_styles = LsStyles::from_env();
+        renderer.line(MessageStyle::ToolDetail, "▼ diff")?;
+        render_diff_content(renderer, content, &git_styles, &ls_styles)?;
+    }
 
     Ok(())
 }
@@ -341,4 +348,17 @@ fn render_diff_content(
     }
 
     Ok(())
+}
+
+fn looks_like_diff_content(content: &str) -> bool {
+    content.lines().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("diff --")
+            || trimmed.starts_with("index ")
+            || trimmed.starts_with("@@")
+            || trimmed.starts_with("---")
+            || trimmed.starts_with("+++")
+            || trimmed.starts_with("new file mode")
+            || trimmed.starts_with("deleted file mode")
+    })
 }
