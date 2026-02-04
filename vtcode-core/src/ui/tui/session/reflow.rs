@@ -11,8 +11,8 @@ use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 
 use super::super::style::ratatui_style_from_inline;
-use super::super::types::InlineMessageKind;
-use super::{Session, render, text_utils};
+use super::super::types::{InlineMessageKind, InlineTextStyle};
+use super::{Session, message::MessageLine, render, terminal_capabilities, text_utils};
 use crate::config::constants::ui;
 
 impl Session {
@@ -61,6 +61,10 @@ impl Session {
 
         if message.kind == InlineMessageKind::Pty {
             return self.reflow_pty_lines(index, width);
+        }
+
+        if message.kind == InlineMessageKind::Error || message.kind == InlineMessageKind::Warning {
+            return self.reflow_error_warning_lines(index, width);
         }
 
         let spans = render::render_message_spans(self, index);
@@ -112,11 +116,22 @@ impl Session {
         }
 
         // Add spacing after messages for visual grouping (respects message_block_spacing config)
-        let next_kind = self.lines.get(index + 1).map(|l| l.kind);
+        let next_line = self.lines.get(index + 1);
+        let next_kind = next_line.map(|l| l.kind);
         match message.kind {
             InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Warning => {
-                for _ in 0..spacing {
-                    wrapped.push(Line::default());
+                let skip_spacing = is_tool_summary_line(message)
+                    && match next_line {
+                        Some(next) if next.kind == InlineMessageKind::Info => {
+                            is_tool_summary_line(next)
+                        }
+                        Some(next) if next.kind == InlineMessageKind::Tool => true,
+                        _ => false,
+                    };
+                if !skip_spacing {
+                    for _ in 0..spacing {
+                        wrapped.push(Line::default());
+                    }
                 }
             }
             InlineMessageKind::Policy => {
@@ -145,6 +160,95 @@ impl Session {
         }
 
         wrapped
+    }
+
+    /// Reflow error and warning messages with a bordered block.
+    #[allow(dead_code)]
+    pub(super) fn reflow_error_warning_lines(
+        &self,
+        index: usize,
+        width: u16,
+    ) -> Vec<Line<'static>> {
+        if self.lines.get(index).is_none() {
+            return vec![Line::default()];
+        }
+
+        let max_width = if width == 0 {
+            usize::MAX
+        } else {
+            width as usize
+        };
+
+        let content = render::render_message_spans(self, index);
+        if max_width == usize::MAX {
+            return vec![Line::from(content)];
+        }
+
+        let border_style = {
+            let inline = InlineTextStyle {
+                color: self.theme.secondary.or(self.theme.foreground),
+                ..Default::default()
+            };
+            ratatui_style_from_inline(&inline, self.theme.foreground).add_modifier(Modifier::DIM)
+        };
+
+        let border_type = terminal_capabilities::get_border_type();
+        let border = block_chars(border_type);
+
+        let body_prefix = format!("  {} ", border.vertical);
+        let prefix_width = body_prefix.chars().count();
+        let border_width = border.vertical.chars().count();
+        let content_width = max_width.saturating_sub(prefix_width + border_width);
+
+        if content_width == 0 {
+            return vec![Line::from(content)];
+        }
+
+        let inner_width = content_width + 1;
+        let top = format!(
+            "  {}{}{}",
+            border.top_left,
+            border.horizontal.repeat(inner_width),
+            border.top_right
+        );
+        let bottom = format!(
+            "  {}{}{}",
+            border.bottom_left,
+            border.horizontal.repeat(inner_width),
+            border.bottom_right
+        );
+
+        let mut lines = Vec::new();
+        lines.push(Line::styled(top, border_style));
+        let base_line = Line::from(content);
+        let mut wrapped = self.wrap_line(base_line, content_width);
+        if wrapped.is_empty() {
+            wrapped.push(Line::default());
+        }
+        for line in &mut wrapped {
+            let line_width = line.spans.iter().map(|s| s.width()).sum::<usize>();
+            let padding = content_width.saturating_sub(line_width);
+            let mut new_spans = vec![Span::styled(body_prefix.to_owned(), border_style)];
+            new_spans.append(&mut line.spans);
+            if padding > 0 {
+                new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
+            }
+            new_spans.push(Span::styled(border.vertical.to_owned(), border_style));
+            line.spans = new_spans;
+        }
+        lines.extend(wrapped);
+        lines.push(Line::styled(bottom, border_style));
+
+        let spacing = self.appearance.message_block_spacing.min(2) as usize;
+        for _ in 0..spacing {
+            lines.push(Line::default());
+        }
+
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+
+        lines
     }
 
     /// Wrap a line of text to fit within a maximum width
@@ -276,9 +380,8 @@ impl Session {
             width as usize
         };
 
-        let mut border_style =
+        let border_style =
             ratatui_style_from_inline(&self.styles.tool_border_style(), self.theme.foreground);
-        border_style = border_style.add_modifier(Modifier::DIM);
 
         let is_detail = line
             .segments
@@ -308,7 +411,11 @@ impl Session {
         // Add visual separator at start of tool block
         if is_start {
             let spacing = self.appearance.message_block_spacing.min(2) as usize;
-            if index > 0 {
+            let skip_spacing = index > 0
+                && self.lines.get(index - 1).is_some_and(|prev| {
+                    prev.kind == InlineMessageKind::Info && is_tool_summary_line(prev)
+                });
+            if index > 0 && !skip_spacing {
                 for _ in 0..spacing {
                     lines.push(Line::default());
                 }
@@ -427,8 +534,7 @@ impl Session {
             color: self.theme.secondary.or(self.theme.foreground),
             ..Default::default()
         };
-        let mut border_style = ratatui_style_from_inline(&border_inline, self.theme.foreground);
-        border_style = border_style.add_modifier(Modifier::DIM);
+        let border_style = ratatui_style_from_inline(&border_inline, self.theme.foreground);
 
         let prev_is_pty = index
             .checked_sub(1)
@@ -705,6 +811,47 @@ impl Session {
 
         Line::from(new_spans)
     }
+}
+
+#[derive(Clone, Copy)]
+struct BlockChars {
+    top_left: &'static str,
+    top_right: &'static str,
+    bottom_left: &'static str,
+    bottom_right: &'static str,
+    horizontal: &'static str,
+    vertical: &'static str,
+}
+
+fn block_chars(border_type: ratatui::widgets::BorderType) -> BlockChars {
+    match border_type {
+        ratatui::widgets::BorderType::Rounded => BlockChars {
+            top_left: ui::INLINE_BLOCK_TOP_LEFT,
+            top_right: ui::INLINE_BLOCK_TOP_RIGHT,
+            bottom_left: ui::INLINE_BLOCK_BOTTOM_LEFT,
+            bottom_right: ui::INLINE_BLOCK_BOTTOM_RIGHT,
+            horizontal: ui::INLINE_BLOCK_HORIZONTAL,
+            vertical: ui::INLINE_BLOCK_BODY_LEFT,
+        },
+        _ => BlockChars {
+            top_left: "+",
+            top_right: "+",
+            bottom_left: "+",
+            bottom_right: "+",
+            horizontal: "-",
+            vertical: "|",
+        },
+    }
+}
+
+fn is_tool_summary_line(message: &MessageLine) -> bool {
+    let text: String = message
+        .segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect();
+    let trimmed = text.trim_start();
+    trimmed.starts_with("• ") || trimmed.starts_with("└ ")
 }
 
 /// Collapse multiple consecutive newlines (3 or more) into at most 2 newlines

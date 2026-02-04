@@ -46,7 +46,8 @@ impl MessageStyle {
     /// Get the indentation string for this message style
     pub fn indent(self) -> &'static str {
         match self {
-            Self::Response | Self::Tool | Self::Reasoning => "  ",
+            Self::Response | Self::Tool => "  ",
+            Self::Reasoning => "  > ",
             Self::ToolDetail | Self::ToolOutput | Self::ToolError => "    ",
             _ => "",
         }

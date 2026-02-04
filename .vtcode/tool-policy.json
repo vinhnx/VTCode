@@ -88,9 +88,7 @@
     "plan_mode": "prompt",
     "start_implementation": "prompt",
     "start_planning": "prompt",
-    "request_user_input": "allow",
-    "list_skills": "allow",
-    "load_skill": "allow"
+    "request_user_input": "allow"
   },
   "constraints": {},
   "mcp": {
