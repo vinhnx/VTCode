@@ -82,6 +82,8 @@ pub enum ModelId {
     HuggingFaceDeepseekV32Novita,
     /// Xiaomi MiMo-V2-Flash via Novita on Hugging Face router
     HuggingFaceXiaomiMimoV2FlashNovita,
+    /// Qwen3-Coder-Next via Novita inference provider on Hugging Face router
+    HuggingFaceQwen3CoderNextNovita,
 
     // xAI models
     /// Grok-4 - Flagship xAI model with advanced reasoning
@@ -246,6 +248,8 @@ pub enum ModelId {
     OpenRouterQwen3CoderFlash,
     /// Qwen3 Coder 30B A3B Instruct - Large Mixture-of-Experts coding deployment
     OpenRouterQwen3Coder30bA3bInstruct,
+    /// Qwen3 Coder Next - Next-generation Qwen3 coding model with enhanced reasoning
+    OpenRouterQwen3CoderNext,
     /// DeepSeek V3.2 Chat - Official chat model via OpenRouter
     OpenRouterDeepseekChat,
     /// DeepSeek V3.2 - Standard model with thinking support via OpenRouter

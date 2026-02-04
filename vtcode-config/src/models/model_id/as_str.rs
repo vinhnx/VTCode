@@ -100,6 +100,9 @@ impl ModelId {
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
             }
+            ModelId::HuggingFaceQwen3CoderNextNovita => {
+                models::huggingface::QWEN3_CODER_NEXT_NOVITA
+            }
             // MiniMax models
             ModelId::MinimaxM21 => models::minimax::MINIMAX_M2_1,
             ModelId::MinimaxM21Lightning => models::minimax::MINIMAX_M2_1_LIGHTNING,

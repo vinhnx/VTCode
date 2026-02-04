@@ -355,6 +355,7 @@ impl ModelId {
             | ModelId::OpenRouterQwen3CoderPlus
             | ModelId::OpenRouterQwen3CoderFlash
             | ModelId::OpenRouterQwen3Coder30bA3bInstruct
+            | ModelId::OpenRouterQwen3CoderNext
             | ModelId::OpenRouterDeepSeekV32Exp
             | ModelId::OpenRouterDeepSeekChatV31
             | ModelId::OpenRouterDeepSeekR1

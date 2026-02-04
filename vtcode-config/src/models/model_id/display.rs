@@ -91,6 +91,7 @@ impl ModelId {
             ModelId::HuggingFaceMinimaxM21Novita => "MiniMax-M2.1 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
+            ModelId::HuggingFaceQwen3CoderNextNovita => "Qwen3-Coder-Next (Novita)",
             // MiniMax models
             ModelId::MinimaxM21 => "MiniMax-M2.1",
             ModelId::MinimaxM21Lightning => "MiniMax-M2.1-lightning",

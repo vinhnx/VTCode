@@ -194,6 +194,9 @@ impl ModelId {
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 "Xiaomi MiMo-V2-Flash via Novita on HuggingFace router."
             }
+            ModelId::HuggingFaceQwen3CoderNextNovita => {
+                "Qwen3-Coder-Next via Novita inference provider on HuggingFace router. Coding-optimized model with reasoning capabilities."
+            }
             _ => unreachable!(),
         }
     }

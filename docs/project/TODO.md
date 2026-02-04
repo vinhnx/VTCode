@@ -118,24 +118,6 @@ Background terminal Run long-running terminal commands in the background.
 Shell snapshot Snapshot your shell environment to avoid re-running
 login scripts for every command.
 
----
-
-curl https://router.huggingface.co/v1/chat/completions \
- -H "Authorization: Bearer $HF_TOKEN" \
- -H 'Content-Type: application/json' \
- -d '{
-"messages": [
-{
-"role": "user",
-"content": "What is the capital of France?"
-}
-],
-"model": "Qwen/Qwen3-Coder-Next:novita",
-"stream": true
-}'
-
-to novita huggingface inference provider.
-
 --
 
 --> the PTY command output is showing in raw text in agent's response. need to fix that to just show tail lines and progressive update only. use tools output decoration, or at least dim the text and use proper code identation, or try to group and wrapped the pty command output in a box with border (like error/warnings/info message box).

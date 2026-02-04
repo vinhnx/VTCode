@@ -40,6 +40,10 @@ fn test_model_string_conversion() {
         ModelId::HuggingFaceKimiK25Novita.as_str(),
         models::huggingface::MOONSHOT_KIMI_K2_5_NOVITA
     );
+    assert_eq!(
+        ModelId::HuggingFaceQwen3CoderNextNovita.as_str(),
+        models::huggingface::QWEN3_CODER_NEXT_NOVITA
+    );
     // xAI models
     assert_eq!(ModelId::XaiGrok4.as_str(), models::xai::GROK_4);
     assert_eq!(ModelId::XaiGrok4Mini.as_str(), models::xai::GROK_4_MINI);
@@ -144,6 +148,12 @@ fn test_model_from_string() {
             .parse::<ModelId>()
             .unwrap(),
         ModelId::HuggingFaceKimiK25Novita
+    );
+    assert_eq!(
+        models::huggingface::QWEN3_CODER_NEXT_NOVITA
+            .parse::<ModelId>()
+            .unwrap(),
+        ModelId::HuggingFaceQwen3CoderNextNovita
     );
     // xAI models
     assert_eq!(
@@ -564,6 +574,11 @@ fn test_models_for_provider() {
     assert!(lmstudio_models.contains(&ModelId::LmStudioGemma29BIt));
     assert!(lmstudio_models.contains(&ModelId::LmStudioPhi31Mini4kInstruct));
     assert_eq!(lmstudio_models.len(), 6);
+
+    let hf_models = ModelId::models_for_provider(Provider::HuggingFace);
+    assert!(hf_models.contains(&ModelId::HuggingFaceDeepseekV32));
+    assert!(hf_models.contains(&ModelId::HuggingFaceQwen3CoderNextNovita));
+    assert!(hf_models.contains(&ModelId::HuggingFaceXiaomiMimoV2FlashNovita));
 }
 
 #[test]

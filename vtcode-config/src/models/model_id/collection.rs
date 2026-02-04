@@ -89,6 +89,7 @@ impl ModelId {
             ModelId::HuggingFaceMinimaxM21Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
+            ModelId::HuggingFaceQwen3CoderNextNovita,
         ];
         models.extend(Self::openrouter_models());
         models
