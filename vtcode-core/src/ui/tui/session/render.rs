@@ -1311,8 +1311,12 @@ fn pad_diff_line(_session: &Session, line: &Line<'static>, max_width: usize) -> 
         return line.clone();
     }
 
-    // Apply padding without background color
-    let padding_style = Style::default();
+    let padding_style = line
+        .spans
+        .iter()
+        .find_map(|span| span.style.bg)
+        .map(|bg| Style::default().bg(bg))
+        .unwrap_or_default();
 
     let new_spans: Vec<_> = line
         .spans

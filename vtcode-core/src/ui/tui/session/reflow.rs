@@ -858,7 +858,12 @@ impl Session {
             return line.clone();
         }
 
-        let padding_style = Style::default();
+        let padding_style = line
+            .spans
+            .iter()
+            .find_map(|span| span.style.bg)
+            .map(|bg| Style::default().bg(bg))
+            .unwrap_or_default();
 
         let new_spans: Vec<_> = line
             .spans

@@ -2,9 +2,6 @@
 
 # VTCODE - Debug Mode Launch Script
 # This script provides fast development builds
-#
-# Environment Variables:
-#   DISABLE_SCCACHE=1    - Disable sccache if experiencing permission issues (macOS)
 
 set -e
 
@@ -52,26 +49,7 @@ fi
 
 # Build and run in debug mode (much faster)
 echo "Building vtcode in debug mode..."
-
-# Check if sccache should be disabled
-if [[ -n "$DISABLE_SCCACHE" ]]; then
-    echo "Building with sccache disabled..."
-    cargo build --config 'build.rustc-wrapper=""'
-else
-    # Attempt to build with sccache, but check for permission errors first
-    if output=$(cargo build 2>&1); then
-        echo "$output"
-    else
-        if echo "$output" | grep -q "Operation not permitted"; then
-            echo "Detected sccache permission error, retrying without sccache..."
-            echo "Building with sccache disabled..."
-            cargo build --config 'build.rustc-wrapper=""'
-        else
-            echo "$output"
-            exit 1
-        fi
-    fi
-fi
+cargo build
 
 echo ""
 echo "Debug build complete!"
@@ -100,21 +78,4 @@ fi
 
 # Run with advanced features enabled by default
 # Note: Interactive chat is launched via the TUI without a subcommand
-if [[ -n "$DISABLE_SCCACHE" ]]; then
-    cargo run --config 'build.rustc-wrapper=""' -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
-else
-    # Run directly first to preserve TTY for interactive TUI
-    # Capture exit code but don't capture output (allows TUI to work)
-    cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug || {
-        exit_code=$?
-        # If it failed, check if it was a sccache permission error by re-running to capture output
-        # This is a quick check - the actual run above was the real one
-        output=$(cargo build 2>&1 || true)
-        if echo "$output" | grep -q "Operation not permitted"; then
-            echo "Detected sccache permission error, retrying without sccache..."
-            cargo run --config 'build.rustc-wrapper=""' -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
-        else
-            exit $exit_code
-        fi
-    }
-fi
+cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
