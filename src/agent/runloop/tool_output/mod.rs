@@ -14,7 +14,9 @@ pub(crate) use large_output::{
 };
 // Re-export stream utilities
 #[allow(unused_imports)]
-pub(crate) use streams::{render_code_fence_blocks, spool_output_with_notification};
+pub(crate) use streams::{
+    render_code_fence_blocks, resolve_stdout_tail_limit, spool_output_with_notification,
+};
 
 use anyhow::Result;
 use serde_json::Value;
@@ -30,7 +32,7 @@ use mcp::{
     render_context7_output, render_generic_output, render_sequential_output,
     resolve_renderer_profile,
 };
-use streams::{render_stream_section, resolve_stdout_tail_limit};
+use streams::render_stream_section;
 use styles::{GitStyles, LsStyles};
 
 pub(crate) async fn render_tool_output(

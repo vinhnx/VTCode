@@ -591,11 +591,9 @@ impl Session {
             return Vec::new();
         }
 
-        let border_inline = super::super::types::InlineTextStyle {
-            color: self.theme.secondary.or(self.theme.foreground),
-            ..Default::default()
-        };
-        let border_style = ratatui_style_from_inline(&border_inline, self.theme.foreground);
+        let mut border_style =
+            ratatui_style_from_inline(&self.styles.tool_border_style(), self.theme.foreground);
+        border_style = border_style.add_modifier(Modifier::DIM);
 
         let prev_is_pty = index
             .checked_sub(1)
@@ -622,32 +620,20 @@ impl Session {
         let mut body_spans = Vec::new();
         for segment in &line.segments {
             let stripped_text = render::strip_ansi_codes(&segment.text);
-            let style = ratatui_style_from_inline(&segment.style, fallback);
+            let mut style = ratatui_style_from_inline(&segment.style, fallback);
+            style = style.add_modifier(Modifier::DIM);
             body_spans.push(Span::styled(stripped_text.into_owned(), style));
         }
 
-        if is_start {
-            // Simple indent prefix without border characters
-            let first_prefix = "  ";
-            let continuation_prefix = "  ";
-            lines.extend(self.wrap_block_lines_no_right_border(
-                first_prefix,
-                continuation_prefix,
-                body_spans,
-                max_width,
-                border_style,
-            ));
-        } else {
-            // Simple indent prefix without border characters
-            let body_prefix = "  ";
-            lines.extend(self.wrap_block_lines_no_right_border(
-                body_prefix,
-                body_prefix,
-                body_spans,
-                max_width,
-                border_style,
-            ));
-        }
+        let body_prefix = "  ";
+        let continuation_prefix = "  ";
+        lines.extend(self.wrap_block_lines_no_right_border(
+            body_prefix,
+            continuation_prefix,
+            body_spans,
+            max_width,
+            border_style,
+        ));
 
         if lines.is_empty() {
             lines.push(Line::default());

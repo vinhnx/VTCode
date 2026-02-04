@@ -558,6 +558,9 @@ struct InlineSink {
 }
 
 impl InlineSink {
+    fn should_record_transcript(kind: InlineMessageKind) -> bool {
+        kind != InlineMessageKind::Pty
+    }
     fn ansi_from_ratatui_color(color: RatColor) -> Option<AnsiColorEnum> {
         match color {
             RatColor::Reset => None,
@@ -709,6 +712,7 @@ impl InlineSink {
         base_style: Style,
         kind: InlineMessageKind,
     ) -> Result<bool> {
+        let record_transcript = Self::should_record_transcript(kind);
         let (prepared, plain, last_empty) =
             self.prepare_markdown_lines(text, indent, base_style, true);
         for (segments, line) in prepared.into_iter().zip(plain.iter()) {
@@ -717,7 +721,9 @@ impl InlineSink {
             } else {
                 self.handle.append_line(kind, segments);
             }
-            crate::utils::transcript::append(line);
+            if record_transcript {
+                crate::utils::transcript::append(line);
+            }
         }
         Ok(last_empty)
     }
@@ -730,7 +736,9 @@ impl InlineSink {
         kind: InlineMessageKind,
     ) {
         self.handle.replace_last(count, kind, lines);
-        crate::utils::transcript::replace_last(count, plain);
+        if Self::should_record_transcript(kind) {
+            crate::utils::transcript::replace_last(count, plain);
+        }
     }
 
     fn new(handle: InlineHandle, highlight_config: SyntaxHighlightingConfig) -> Self {
@@ -908,6 +916,7 @@ impl InlineSink {
         let fallback = self.resolve_fallback_style(style);
         let fallback_arc = Arc::new(fallback.clone());
         let (converted_lines, plain_lines) = self.convert_plain_lines(text, &fallback);
+        let record_transcript = Self::should_record_transcript(kind);
 
         // Combine multiple lines into a single append for User and Tool to avoid
         // creating a separate inline entry for each line. This prevents the
@@ -949,7 +958,9 @@ impl InlineSink {
             }
 
             self.handle.append_line(kind, combined_segments);
-            crate::utils::transcript::append(&combined_plain);
+            if record_transcript {
+                crate::utils::transcript::append(&combined_plain);
+            }
         } else {
             let fallback_arc_opt = if !indent.is_empty() {
                 Some(Arc::new(fallback.clone()))
@@ -977,7 +988,9 @@ impl InlineSink {
                 } else {
                     self.handle.append_line(kind, segments);
                 }
-                crate::utils::transcript::append(&plain);
+                if record_transcript {
+                    crate::utils::transcript::append(&plain);
+                }
             }
         }
 
@@ -1038,7 +1051,9 @@ impl InlineSink {
             .map(|segment| segment.text.clone())
             .collect::<String>();
         self.handle.append_line(kind, converted);
-        crate::utils::transcript::append(&plain);
+        if Self::should_record_transcript(kind) {
+            crate::utils::transcript::append(&plain);
+        }
         Ok(())
     }
 
