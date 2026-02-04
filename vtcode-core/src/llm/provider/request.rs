@@ -69,6 +69,10 @@ pub struct LLMRequest {
 
     /// Optional coding agent specific settings
     pub coding_agent_settings: Option<CodingAgentSettings>,
+
+    /// Optional turn metadata for git context (remote URLs, commit hash, etc.)
+    /// This is sent as X-Turn-Metadata header to providers that support it
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// Settings to refine model behavior for coding agent tasks

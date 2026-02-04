@@ -20,6 +20,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::prompts::sort_tool_definitions;
+use vtcode_core::turn_metadata;
 
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -92,6 +93,10 @@ pub(crate) async fn execute_llm_request(
     } else {
         None
     };
+
+    // Build turn metadata with git context for the LLM request
+    let metadata = turn_metadata::build_turn_metadata_value(&ctx.config.workspace).ok();
+
     let request = uni::LLMRequest {
         // HP-1: Single clone only when building LLMRequest
         messages: ctx.working_history.to_vec(),
@@ -103,6 +108,7 @@ pub(crate) async fn execute_llm_request(
         tool_choice,
         parallel_tool_config: parallel_config,
         reasoning_effort,
+        metadata,
         ..Default::default()
     };
 

@@ -67,18 +67,21 @@ impl OpenAIProvider {
 
         let url = format!("{}/responses", self.base_url);
 
-        let response = headers::apply_responses_beta(self.authorize(self.http_client.post(&url)))
-            .json(&openai_request)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                provider::LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+        let response = headers::apply_turn_metadata(
+            headers::apply_responses_beta(self.authorize(self.http_client.post(&url))),
+            &request.metadata,
+        )
+        .json(&openai_request)
+        .send()
+        .await
+        .map_err(|e| {
+            let formatted_error =
+                error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
+            provider::LLMError::Network {
+                message: formatted_error,
+                metadata: None,
+            }
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -187,19 +190,21 @@ impl OpenAIProvider {
         }
         let url = format!("{}/chat/completions", self.base_url);
 
-        let response = self
-            .authorize(self.http_client.post(&url))
-            .json(&openai_request)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                provider::LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+        let response = headers::apply_turn_metadata(
+            self.authorize(self.http_client.post(&url)),
+            &request.metadata,
+        )
+        .json(&openai_request)
+        .send()
+        .await
+        .map_err(|e| {
+            let formatted_error =
+                error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
+            provider::LLMError::Network {
+                message: formatted_error,
+                metadata: None,
+            }
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
