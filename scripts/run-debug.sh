@@ -103,16 +103,18 @@ fi
 if [[ -n "$DISABLE_SCCACHE" ]]; then
     cargo run --config 'build.rustc-wrapper=""' -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
 else
-    # Attempt to run with sccache, but check for permission errors first
-    if output=$(cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug 2>&1); then
-        echo "$output"
-    else
+    # Run directly first to preserve TTY for interactive TUI
+    # Capture exit code but don't capture output (allows TUI to work)
+    cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug || {
+        exit_code=$?
+        # If it failed, check if it was a sccache permission error by re-running to capture output
+        # This is a quick check - the actual run above was the real one
+        output=$(cargo build 2>&1 || true)
         if echo "$output" | grep -q "Operation not permitted"; then
-            echo "Detected sccache permission error during run, retrying without sccache..."
+            echo "Detected sccache permission error, retrying without sccache..."
             cargo run --config 'build.rustc-wrapper=""' -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
         else
-            echo "$output"
-            exit 1
+            exit $exit_code
         fi
-    fi
+    }
 fi
