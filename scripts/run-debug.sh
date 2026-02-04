@@ -2,6 +2,9 @@
 
 # VTCODE - Debug Mode Launch Script
 # This script provides fast development builds
+#
+# Environment Variables:
+#   DISABLE_SCCACHE=1    - Disable sccache if experiencing permission issues (macOS)
 
 set -e
 
@@ -49,7 +52,26 @@ fi
 
 # Build and run in debug mode (much faster)
 echo "Building vtcode in debug mode..."
-cargo build
+
+# Check if sccache should be disabled
+if [[ -n "$DISABLE_SCCACHE" ]]; then
+    echo "Building with sccache disabled..."
+    cargo build --config 'build.rustc-wrapper=""'
+else
+    # Attempt to build with sccache, but check for permission errors first
+    if output=$(cargo build 2>&1); then
+        echo "$output"
+    else
+        if echo "$output" | grep -q "Operation not permitted"; then
+            echo "Detected sccache permission error, retrying without sccache..."
+            echo "Building with sccache disabled..."
+            cargo build --config 'build.rustc-wrapper=""'
+        else
+            echo "$output"
+            exit 1
+        fi
+    fi
+fi
 
 echo ""
 echo "Debug build complete!"
@@ -78,4 +100,19 @@ fi
 
 # Run with advanced features enabled by default
 # Note: Interactive chat is launched via the TUI without a subcommand
-cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
+if [[ -n "$DISABLE_SCCACHE" ]]; then
+    cargo run --config 'build.rustc-wrapper=""' -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
+else
+    # Attempt to run with sccache, but check for permission errors first
+    if output=$(cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug 2>&1); then
+        echo "$output"
+    else
+        if echo "$output" | grep -q "Operation not permitted"; then
+            echo "Detected sccache permission error during run, retrying without sccache..."
+            cargo run --config 'build.rustc-wrapper=""' -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
+        else
+            echo "$output"
+            exit 1
+        fi
+    fi
+fi
