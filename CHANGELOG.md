@@ -2,6 +2,31 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.76.0 - 2026-02-05
+
+### Features
+
+- add turn metadata support for LLM requests with git context (46a57d6d) (@vinhnx)
+- enhance command safety checks for git subcommands and improve branch operation validation (ca9833f4) (@vinhnx)
+- improve git changelog generator to group by commit types (9d2b46d1) (@vinhnx)
+- implement shell snapshot feature to optimize command execution (e5d9d7fe) (@vinhnx)
+- add git diff guidance to tool guidelines (934d723e) (@vinhnx)
+- enhance agent message rendering with left padding and improved line handling (dc8025a6) (@vinhnx)
+- update text deletion commands for improved line handling (7c003cae) (@vinhnx)
+- clarify patch input parameters and remove 'diff' alias to prevent confusion (466549b7) (@vinhnx)
+- enhance diff rendering with summary formatting and colorization (bbed557c) (@vinhnx)
+- add support for inline streaming and recent spooled output retrieval (eee866c7) (@vinhnx)
+- enhance diff view with changed lines count summary and line numbers (808464e9) (@vinhnx)
+
+### Refactors
+
+- simplify workspace directory creation in first run setup (6a35774d) (@vinhnx)
+
+### Other
+
+- Implement no_spool functionality for tool output and enhance cursor behavior during scrolling and shimmer states (477209fd) (@vinhnx)
+- Refactor diff handling and rendering for improved clarity and summary display (f8dbf9e1) (@vinhnx)
+
 ## v0.75.2 - 2026-02-04
 
 - Update TODO (fb065df0) (@vinhnx)
