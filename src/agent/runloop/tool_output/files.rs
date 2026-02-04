@@ -6,7 +6,6 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 
 /// Constants for line and content limits (compact display)
-const MAX_DIFF_LINES: usize = 30; // Reduced for compact view
 const MAX_DIFF_LINE_LENGTH: usize = 100; // Reduced for compact view
 const MAX_DISPLAYED_FILES: usize = 100; // Limit displayed files to reduce clutter
 
@@ -34,6 +33,184 @@ fn get_bool(val: &Value, key: &str) -> bool {
 /// Helper to extract optional u64 from JSON value
 fn get_u64(val: &Value, key: &str) -> Option<u64> {
     val.get(key).and_then(|v| v.as_u64())
+}
+
+fn format_start_only_hunk_header(line: &str) -> Option<String> {
+    let trimmed = line.trim_end();
+    if !trimmed.starts_with("@@ -") {
+        return None;
+    }
+
+    let rest = trimmed.strip_prefix("@@ -")?;
+    let mut parts = rest.split_whitespace();
+    let old_part = parts.next()?;
+    let new_part = parts.next()?;
+
+    if !new_part.starts_with('+') {
+        return None;
+    }
+
+    let old_start = old_part.split(',').next()?.parse::<usize>().ok()?;
+    let new_start = new_part
+        .trim_start_matches('+')
+        .split(',')
+        .next()?
+        .parse::<usize>()
+        .ok()?;
+
+    Some(format!("@@ -{} +{} @@", old_start, new_start))
+}
+
+fn is_addition_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with('+') && !trimmed.starts_with("+++")
+}
+
+fn is_deletion_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with('-') && !trimmed.starts_with("---")
+}
+
+fn parse_diff_git_path(line: &str) -> Option<String> {
+    let mut parts = line.split_whitespace();
+    if parts.next()? != "diff" {
+        return None;
+    }
+    if parts.next()? != "--git" {
+        return None;
+    }
+    let _old = parts.next()?;
+    let new_path = parts.next()?;
+    Some(new_path.trim_start_matches("b/").to_string())
+}
+
+fn parse_apply_patch_path(line: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    let rest = trimmed.strip_prefix("*** ")?;
+    let (kind, path) = rest.split_once(':')?;
+    let kind = kind.trim();
+    if !matches!(kind, "Update File" | "Add File" | "Delete File") {
+        return None;
+    }
+    let path = path.trim();
+    if path.is_empty() {
+        return None;
+    }
+    Some(path.to_string())
+}
+
+fn parse_diff_marker_path(line: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    if !(trimmed.starts_with("--- ") || trimmed.starts_with("+++ ")) {
+        return None;
+    }
+    let path = trimmed.split_whitespace().nth(1)?;
+    if path == "/dev/null" {
+        return None;
+    }
+    Some(
+        path.trim_start_matches("a/")
+            .trim_start_matches("b/")
+            .to_string(),
+    )
+}
+
+pub(super) fn format_diff_content_lines(diff_content: &str) -> Vec<String> {
+    #[derive(Default)]
+    struct DiffBlock {
+        header: String,
+        path: String,
+        lines: Vec<String>,
+        additions: usize,
+        deletions: usize,
+    }
+
+    let mut preface: Vec<String> = Vec::new();
+    let mut blocks: Vec<DiffBlock> = Vec::new();
+    let mut current: Option<DiffBlock> = None;
+
+    for line in diff_content.lines() {
+        if let Some(path) = parse_diff_git_path(line).or_else(|| parse_apply_patch_path(line)) {
+            if let Some(block) = current.take() {
+                blocks.push(block);
+            }
+            current = Some(DiffBlock {
+                header: line.to_string(),
+                path,
+                lines: Vec::new(),
+                additions: 0,
+                deletions: 0,
+            });
+            continue;
+        }
+
+        let rewritten = format_start_only_hunk_header(line).unwrap_or_else(|| line.to_string());
+        if let Some(block) = current.as_mut() {
+            if is_addition_line(line) {
+                block.additions += 1;
+            } else if is_deletion_line(line) {
+                block.deletions += 1;
+            }
+            block.lines.push(rewritten);
+        } else {
+            preface.push(rewritten);
+        }
+    }
+
+    if let Some(block) = current {
+        blocks.push(block);
+    }
+
+    if blocks.is_empty() {
+        let mut additions = 0usize;
+        let mut deletions = 0usize;
+        let mut fallback_path: Option<String> = None;
+        let mut summary_insert_index: Option<usize> = None;
+        let mut lines: Vec<String> = Vec::new();
+
+        for line in diff_content.lines() {
+            if fallback_path.is_none() {
+                fallback_path =
+                    parse_diff_marker_path(line).or_else(|| parse_apply_patch_path(line));
+            }
+            if summary_insert_index.is_none() && line.trim_start().starts_with("+++ ") {
+                summary_insert_index = Some(lines.len());
+            }
+            if is_addition_line(line) {
+                additions += 1;
+            } else if is_deletion_line(line) {
+                deletions += 1;
+            }
+            let rewritten = format_start_only_hunk_header(line).unwrap_or_else(|| line.to_string());
+            lines.push(rewritten);
+        }
+
+        let path = fallback_path.unwrap_or_else(|| "file".to_string());
+        let summary = format!("• Edited {} (+{} -{})", path, additions, deletions);
+
+        let mut output = Vec::with_capacity(lines.len() + 1);
+        if let Some(idx) = summary_insert_index {
+            output.extend(lines[..=idx].iter().cloned());
+            output.push(summary);
+            output.extend(lines[idx + 1..].iter().cloned());
+        } else {
+            output.push(summary);
+            output.extend(lines);
+        }
+        return output;
+    }
+
+    let mut output = Vec::new();
+    output.extend(preface);
+    for block in blocks {
+        output.push(block.header);
+        output.push(format!(
+            "• Edited {} (+{} -{})",
+            block.path, block.additions, block.deletions
+        ));
+        output.extend(block.lines);
+    }
+    output
 }
 
 pub(crate) fn render_write_file_preview(
@@ -297,54 +474,21 @@ fn render_diff_content(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    let total_lines = diff_content.lines().count();
-    let mut added_count = 0;
-    let mut removed_count = 0;
-    let mut lines_to_render = Vec::new();
+    let lines_to_render = format_diff_content_lines(diff_content);
+    let indent = MessageStyle::ToolDetail.indent();
 
-    // Collect lines to render in a single pass
-    for (line_count, line) in diff_content.lines().enumerate() {
-        if line_count >= MAX_DIFF_LINES {
-            lines_to_render.push((
-                true,
-                format!(
-                    "… ({} more lines, view full diff in logs)",
-                    total_lines - MAX_DIFF_LINES
-                ),
-            ));
-            break;
-        }
-
-        let trimmed = line.trim_start();
-        if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
-            added_count += 1;
-        } else if trimmed.starts_with('-') && !trimmed.starts_with("---") {
-            removed_count += 1;
-        }
-
-        let truncated = truncate_text_safe(line, MAX_DIFF_LINE_LENGTH);
-        lines_to_render.push((false, truncated.to_string()));
-    }
-
-    // Render all lines compactly (minimal padding)
-    for (is_truncation, content) in lines_to_render {
-        if is_truncation {
-            renderer.line(MessageStyle::ToolDetail, &format!("…{}", content))?;
-        } else if let Some(style) =
-            select_line_style(Some(tools::WRITE_FILE), &content, git_styles, ls_styles)
+    for line in lines_to_render {
+        let truncated = truncate_text_safe(&line, MAX_DIFF_LINE_LENGTH);
+        if let Some(style) =
+            select_line_style(Some(tools::WRITE_FILE), truncated, git_styles, ls_styles)
         {
-            renderer.line_with_style(style, &content)?;
+            let mut buffer = String::with_capacity(indent.len() + truncated.len());
+            buffer.push_str(indent);
+            buffer.push_str(truncated);
+            renderer.line_with_style(style, &buffer)?;
         } else {
-            renderer.line(MessageStyle::ToolDetail, &content)?;
+            renderer.line(MessageStyle::ToolDetail, truncated)?;
         }
-    }
-
-    // Show summary stats if we rendered changes (compact format)
-    if added_count + removed_count > 0 {
-        renderer.line(
-            MessageStyle::ToolDetail,
-            &format!("▸ +{} -{}", added_count, removed_count),
-        )?;
     }
 
     Ok(())
@@ -361,4 +505,44 @@ fn looks_like_diff_content(content: &str) -> bool {
             || trimmed.starts_with("new file mode")
             || trimmed.starts_with("deleted file mode")
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_unified_diff_with_summary_and_hunk_headers() {
+        let diff = "\
+diff --git a/file1.txt b/file1.txt
+index 0000000..1111111 100644
+--- a/file1.txt
++++ b/file1.txt
+@@ -1,2 +1,2 @@
+-old
++new
+";
+        let lines = format_diff_content_lines(diff);
+        assert_eq!(lines[0], "diff --git a/file1.txt b/file1.txt");
+        assert_eq!(lines[1], "• Edited file1.txt (+1 -1)");
+        assert!(lines.iter().any(|line| line == "@@ -1 +1 @@"));
+    }
+
+    #[test]
+    fn formats_diff_without_git_header_with_summary_after_plus() {
+        let diff = "\
+--- a/file2.txt
++++ b/file2.txt
+@@ -2,3 +2,3 @@
+-before
++after
+";
+        let lines = format_diff_content_lines(diff);
+        let plus_index = lines
+            .iter()
+            .position(|line| line.starts_with("+++ "))
+            .expect("plus header exists");
+        assert_eq!(lines[plus_index + 1], "• Edited file2.txt (+1 -1)");
+        assert!(lines.iter().any(|line| line == "@@ -2 +2 @@"));
+    }
 }

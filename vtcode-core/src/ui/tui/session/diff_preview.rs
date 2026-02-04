@@ -13,7 +13,7 @@ use ratatui::{
 use crate::ui::markdown::highlight_line_for_diff;
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{DiffPreviewState, TrustMode};
-use crate::utils::diff::{DiffLineKind, DiffOptions, compute_diff_with_theme};
+use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_diff_with_theme};
 use crate::utils::diff_styles::DiffColorPalette;
 
 fn ratatui_rgb(rgb: anstyle::RgbColor) -> Color {
@@ -26,6 +26,17 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     };
 
     let palette = DiffColorPalette::default();
+    let diff_bundle = compute_diff_with_theme(
+        &preview.before,
+        &preview.after,
+        DiffOptions {
+            context_lines: 3,
+            old_label: None,
+            new_label: None,
+            missing_newline_hint: false,
+        },
+    );
+    let (additions, deletions) = count_diff_changes(&diff_bundle);
 
     let chunks = Layout::vertical([
         Constraint::Length(2),
@@ -34,8 +45,8 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     ])
     .split(area);
 
-    render_file_header(frame, chunks[0], preview, &palette);
-    render_diff_content(frame, chunks[1], preview, &palette);
+    render_file_header(frame, chunks[0], preview, &palette, additions, deletions);
+    render_diff_content(frame, chunks[1], preview, &palette, &diff_bundle);
     render_controls(frame, chunks[2], preview);
 }
 
@@ -44,16 +55,24 @@ fn render_file_header(
     area: Rect,
     preview: &DiffPreviewState,
     palette: &DiffColorPalette,
+    additions: usize,
+    deletions: usize,
 ) {
+    let header_style = Style::default().fg(ratatui_rgb(palette.header_fg));
     let header = Line::from(vec![
+        Span::styled("← Edit ", header_style),
+        Span::styled(&preview.file_path, header_style),
+        Span::styled(" (", header_style),
         Span::styled(
-            "← Edit ",
-            Style::default().fg(ratatui_rgb(palette.header_fg)),
+            format!("+{}", additions),
+            Style::default().fg(ratatui_rgb(palette.added_fg)),
         ),
+        Span::styled(" ", header_style),
         Span::styled(
-            &preview.file_path,
-            Style::default().fg(ratatui_rgb(palette.header_fg)),
+            format!("-{}", deletions),
+            Style::default().fg(ratatui_rgb(palette.removed_fg)),
         ),
+        Span::styled(")", header_style),
     ]);
     frame.render_widget(Paragraph::new(header), area);
 }
@@ -146,23 +165,31 @@ fn highlight_line_with_bg(
     }
 }
 
+fn count_diff_changes(diff_bundle: &DiffBundle) -> (usize, usize) {
+    let mut additions = 0usize;
+    let mut deletions = 0usize;
+
+    for hunk in &diff_bundle.hunks {
+        for line in &hunk.lines {
+            match line.kind {
+                DiffLineKind::Addition => additions += 1,
+                DiffLineKind::Deletion => deletions += 1,
+                DiffLineKind::Context => {}
+            }
+        }
+    }
+
+    (additions, deletions)
+}
+
 fn render_diff_content(
     frame: &mut Frame<'_>,
     area: Rect,
     preview: &DiffPreviewState,
     palette: &DiffColorPalette,
+    diff_bundle: &DiffBundle,
 ) {
     let language = detect_language(&preview.file_path);
-    let diff_bundle = compute_diff_with_theme(
-        &preview.before,
-        &preview.after,
-        DiffOptions {
-            context_lines: 3,
-            old_label: None,
-            new_label: None,
-            missing_newline_hint: false,
-        },
-    );
 
     let mut lines: Vec<Line> = Vec::new();
     let max_display = area.height.saturating_sub(1) as usize;
@@ -173,10 +200,7 @@ fn render_diff_content(
         }
 
         lines.push(Line::from(Span::styled(
-            format!(
-                "@@ -{},{} +{},{} @@",
-                hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
-            ),
+            format!("@@ -{} +{} @@", hunk.old_start, hunk.new_start),
             Style::default().fg(Color::Cyan),
         )));
 
