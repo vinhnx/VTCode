@@ -258,6 +258,8 @@ agent_info = "allow"
 unified_file = "allow"
 unified_exec = "allow"
 load_skill = "allow"
+open_file = "allow"
+search_file = "allow"
 
 [sandbox]
 enabled = true

@@ -49,7 +49,28 @@ fi
 
 # Build and run in debug mode (much faster)
 echo "Building vtcode in debug mode..."
-cargo build
+
+# Try building with sccache first, fall back to regular cargo if sccache fails
+if ! cargo build 2>/tmp/vtcode_build_error.log; then
+    BUILD_ERROR=$(cat /tmp/vtcode_build_error.log)
+    if [[ "$BUILD_ERROR" == *"sccache: error: Operation not permitted"* ]]; then
+        echo "sccache permission error detected. Retrying without sccache..."
+        # Temporarily disable sccache by setting RUSTC_WRAPPER to empty
+        export RUSTC_WRAPPER=""
+        cargo build
+        RESULT=$?
+        if [ $RESULT -ne 0 ]; then
+            echo "Build failed even without sccache. Check errors above."
+            exit $RESULT
+        fi
+    else
+        echo "Build failed with non-sccache error:"
+        echo "$BUILD_ERROR"
+        exit 1
+    fi
+else
+    echo "Build completed successfully with sccache."
+fi
 
 echo ""
 echo "Debug build complete!"
@@ -61,7 +82,9 @@ echo "  - Type your coding questions and requests"
 echo "  - Press Ctrl+C to exit"
 echo "  - The agent has access to file operations and coding tools"
 echo ""
-echo "Tip: Use 'cargo rrf' for fast optimized runs (release-fast profile)"
+echo "Tip: Use './scripts/rrf.sh' for fast optimized runs (release-fast profile)"
+echo "      Or add 'alias rrf=\"$(pwd)/scripts/rrf.sh\"' to your shell config for convenience"
+echo "      Or add '$(pwd)/bin' to your PATH and use 'rrf' from anywhere in the project"
 echo ""
 
 # Build optional args from environment
@@ -78,4 +101,12 @@ fi
 
 # Run with advanced features enabled by default
 # Note: Interactive chat is launched via the TUI without a subcommand
-cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
+if [[ "${RUSTC_WRAPPER:-}" == "" ]]; then
+    # If RUSTC_WRAPPER was set to empty string, run with it still empty
+    RUSTC_WRAPPER="" cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
+    # Clean up the environment variable after running
+    unset RUSTC_WRAPPER
+else
+    # Otherwise run normally
+    cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug
+fi

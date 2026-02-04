@@ -1,4 +1,3 @@
-use anstyle::Effects;
 /// Transcript reflow and wrapping operations for Session
 ///
 /// This module handles transcript line wrapping, reflowing, and formatting including:
@@ -444,11 +443,6 @@ impl Session {
         let border_style =
             ratatui_style_from_inline(&self.styles.tool_border_style(), self.theme.foreground);
 
-        let is_detail = line
-            .segments
-            .iter()
-            .any(|segment| segment.style.effects.contains(Effects::ITALIC));
-
         // Check if this is the start of a tool block
         let prev_is_tool = if index > 0 {
             self.lines
@@ -483,28 +477,45 @@ impl Session {
             }
         }
 
-        if is_detail {
-            // Simple indent prefix without border characters
-            let body_prefix = "  ";
-            let content = render::render_tool_segments(self, line);
-            lines.extend(self.wrap_block_lines(
-                body_prefix,
-                body_prefix,
-                content,
-                max_width,
-                border_style,
-            ));
-        } else {
-            // For tool call summaries, preserve inline colors and add padded borders.
-            let content = render::render_tool_segments(self, line);
-            let body_prefix = format!("  {} ", ui::INLINE_BLOCK_BODY_LEFT);
-            lines.extend(self.wrap_block_lines(
-                &body_prefix,
-                &body_prefix,
-                content,
-                max_width,
-                border_style,
-            ));
+        let content = render::render_tool_segments(self, line);
+        let split_lines = split_tool_spans(content);
+        let summary_prefix = format!("  {} ", ui::INLINE_BLOCK_BODY_LEFT);
+        let detail_prefix = summary_prefix.clone();
+        let detail_border_style = border_style.add_modifier(Modifier::DIM);
+
+        for line_spans in split_lines {
+            let mut line_text = String::new();
+            for span in &line_spans {
+                line_text.push_str(<std::borrow::Cow<'_, str> as AsRef<str>>::as_ref(
+                    &span.content,
+                ));
+            }
+            let trimmed = line_text.trim_start();
+            let is_summary = trimmed.starts_with("• ") || trimmed.starts_with("└ ");
+
+            if is_summary {
+                // For tool call summaries, preserve inline colors and add padded borders.
+                lines.extend(self.wrap_block_lines(
+                    &summary_prefix,
+                    &summary_prefix,
+                    line_spans,
+                    max_width,
+                    border_style,
+                ));
+            } else {
+                // Dim tool output and avoid right-side padding borders.
+                let mut detail_spans = line_spans;
+                for span in &mut detail_spans {
+                    span.style = span.style.add_modifier(Modifier::DIM);
+                }
+                lines.extend(self.wrap_block_lines_no_right_border(
+                    &detail_prefix,
+                    &detail_prefix,
+                    detail_spans,
+                    max_width,
+                    detail_border_style,
+                ));
+            }
         }
 
         // Add optional spacing after tool block for clean separation
@@ -904,6 +915,31 @@ fn is_tool_summary_line(message: &MessageLine) -> bool {
         .collect();
     let trimmed = text.trim_start();
     trimmed.starts_with("• ") || trimmed.starts_with("└ ")
+}
+
+fn split_tool_spans(spans: Vec<Span<'static>>) -> Vec<Vec<Span<'static>>> {
+    let mut lines: Vec<Vec<Span<'static>>> = Vec::new();
+    let mut current: Vec<Span<'static>> = Vec::new();
+
+    for span in spans {
+        let style = span.style;
+        let text = span.content.into_owned();
+        let mut parts = text.split('\n').peekable();
+        while let Some(part) = parts.next() {
+            if !part.is_empty() {
+                current.push(Span::styled(part.to_string(), style));
+            }
+            if parts.peek().is_some() {
+                lines.push(std::mem::take(&mut current));
+            }
+        }
+    }
+
+    if !current.is_empty() || lines.is_empty() {
+        lines.push(current);
+    }
+
+    lines
 }
 
 fn is_info_box_line(message: &MessageLine) -> bool {

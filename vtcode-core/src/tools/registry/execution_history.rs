@@ -215,6 +215,42 @@ impl ToolExecutionHistory {
         failures
     }
 
+    /// Find the most recent spooled output for a tool call with identical args.
+    pub fn find_recent_spooled_result(
+        &self,
+        tool_name: &str,
+        args: &Value,
+        max_age: Duration,
+    ) -> Option<Value> {
+        let records = self.records.read().unwrap();
+        let now = SystemTime::now();
+
+        for record in records.iter().rev() {
+            if record.tool_name != tool_name || !record.success || record.args != *args {
+                continue;
+            }
+
+            let age_ok = match now.duration_since(record.timestamp) {
+                Ok(age) => age <= max_age,
+                Err(_) => false,
+            };
+            if !age_ok {
+                continue;
+            }
+
+            if let Ok(result) = &record.result {
+                if result
+                    .get("spooled_to_file")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                {
+                    return Some(result.clone());
+                }
+            }
+        }
+        None
+    }
+
     /// Clear all records.
     pub fn clear(&self) {
         let mut records = self.records.write().unwrap();
@@ -304,5 +340,71 @@ impl ToolExecutionHistory {
 impl Default for ToolExecutionHistory {
     fn default() -> Self {
         Self::new(100)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn make_snapshot() -> HarnessContextSnapshot {
+        HarnessContextSnapshot::new("session_test".to_string(), None)
+    }
+
+    #[test]
+    fn finds_recent_spooled_result() {
+        let history = ToolExecutionHistory::new(10);
+        let args = json!({"command": "git diff"});
+        let result = json!({
+            "spooled_to_file": true,
+            "file_path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "success": true
+        });
+
+        history.add_record(ToolExecutionRecord::success(
+            "run_pty_cmd".to_string(),
+            "run_pty_cmd".to_string(),
+            false,
+            None,
+            args.clone(),
+            result.clone(),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let found =
+            history.find_recent_spooled_result("run_pty_cmd", &args, Duration::from_secs(60));
+        assert_eq!(found, Some(result));
+    }
+
+    #[test]
+    fn ignores_non_spooled_or_stale_results() {
+        let history = ToolExecutionHistory::new(10);
+        let args = json!({"path": "README.md"});
+
+        let mut record = ToolExecutionRecord::success(
+            "read_file".to_string(),
+            "read_file".to_string(),
+            false,
+            None,
+            args.clone(),
+            json!({"content": "small", "spooled_to_file": false}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        );
+        record.timestamp = SystemTime::UNIX_EPOCH;
+        history.add_record(record);
+
+        let found = history.find_recent_spooled_result("read_file", &args, Duration::from_secs(60));
+        assert!(found.is_none());
     }
 }

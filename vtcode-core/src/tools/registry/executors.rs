@@ -541,24 +541,58 @@ impl ToolRegistry {
             },
         )?;
 
-        let capture = self.wait_for_pty_yield(&session_id, yield_duration).await;
-
-        let mut output = filter_pty_output(&strip_ansi(&capture.output));
+        let mut output = String::new();
         let mut truncated = false;
+        let max_output_len = max_tokens.saturating_mul(4);
+        let timeout_seconds = self.pty_config().command_timeout_seconds;
+        let mut exit_code = None;
+        let start = Instant::now();
+        let allow_polling = !yield_duration.is_zero();
 
-        if max_tokens > 0 && output.len() > max_tokens * 4 {
-            output.truncate(max_tokens * 4);
-            output.push_str("\n[Output truncated]");
-            truncated = true;
+        loop {
+            if timeout_seconds > 0 && start.elapsed() >= Duration::from_secs(timeout_seconds) {
+                break;
+            }
+
+            let remaining = if timeout_seconds > 0 {
+                Duration::from_secs(timeout_seconds).saturating_sub(start.elapsed())
+            } else {
+                yield_duration
+            };
+            let wait_duration = if allow_polling {
+                yield_duration.min(remaining)
+            } else {
+                Duration::ZERO
+            };
+
+            let capture = self.wait_for_pty_yield(&session_id, wait_duration).await;
+            if !truncated {
+                let cleaned_output = filter_pty_output(&strip_ansi(&capture.output));
+                output.push_str(&cleaned_output);
+                if max_tokens > 0 && output.len() > max_output_len {
+                    output.truncate(max_output_len);
+                    output.push_str("\n[Output truncated]");
+                    truncated = true;
+                }
+            }
+
+            if let Some(code) = capture.exit_code {
+                exit_code = Some(code);
+                break;
+            }
+
+            if !allow_polling {
+                break;
+            }
         }
 
-        let wall_time = capture.duration.as_secs_f64();
+        let wall_time = start.elapsed().as_secs_f64();
         let mut response = json!({
             "output": output,
             "wall_time": wall_time,
         });
 
-        if let Some(code) = capture.exit_code {
+        if let Some(code) = exit_code {
             response["exit_code"] = json!(code);
             self.decrement_active_pty_sessions();
         } else {
@@ -568,7 +602,7 @@ impl ToolRegistry {
         if truncated {
             response["truncated"] = json!(true);
         }
-        if truncated || capture.exit_code.is_none() {
+        if truncated || exit_code.is_none() {
             response["follow_up_prompt"] = json!(format!(
                 "Command output incomplete. Read more with read_pty_session session_id=\"{}\" before rerunning the command.",
                 session_id
