@@ -4,26 +4,8 @@ continue with your recommendation, proceed with outcome. don't stop. review over
 
 --
 
-Background terminal Run long-running terminal commands in the background.
-
-suggest ui
-
-```
-Background terminals
-
-  • cargo clippy -p vtcode-core --no-deps
-    ↳     Checking vtcode-exec-events v0.75.2 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcod [...]
-          Checking vtcode-file-search v0.75.2 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcod [...]
-          Checking vtcode-bash-runner v0.75.2 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcod [...]
-
-• Waiting for background terminal · cargo clippy -p vtcode-core --no-deps (36m 38s • esc to interrupt)
-  1 background terminal running · /ps to view
-```
-
 ---
 
-Shell snapshot Snapshot your shell environment to avoid re-running
-login scripts for every command.
 
 ---
 
