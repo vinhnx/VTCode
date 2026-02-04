@@ -13,7 +13,7 @@ use chrono;
 use futures::future::BoxFuture;
 use serde_json::{Value, json};
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
 
@@ -437,6 +437,7 @@ impl ToolRegistry {
             "run_pty_cmd requires a 'command' value",
             "PTY command cannot be empty",
         )?;
+        let is_git_diff = is_git_diff_command(&command);
 
         let shell_program = resolve_shell_preference(
             payload.get("shell").and_then(|value| value.as_str()),
@@ -607,6 +608,10 @@ impl ToolRegistry {
                 "Command output incomplete. Read more with read_pty_session session_id=\"{}\" before rerunning the command.",
                 session_id
             ));
+        }
+        if is_git_diff {
+            response["no_spool"] = json!(true);
+            response["content_type"] = json!("git_diff");
         }
 
         Ok(response)
@@ -955,6 +960,21 @@ fn parse_command_parts(
     Ok((parts, raw_command))
 }
 
+fn is_git_diff_command(parts: &[String]) -> bool {
+    let Some(first) = parts.first() else {
+        return false;
+    };
+    let basename = Path::new(first)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(first.as_str())
+        .to_ascii_lowercase();
+    if basename != "git" && basename != "git.exe" {
+        return false;
+    }
+    parts.iter().skip(1).any(|part| part == "diff")
+}
+
 fn resolve_shell_preference(pref: Option<&str>, config: &crate::config::PtyConfig) -> String {
     pref.map(|s| s.to_string()).unwrap_or_else(|| {
         config
@@ -1135,5 +1155,40 @@ mod token_efficiency_tests {
         assert_eq!(suggest_max_tokens_for_command("ls -la"), None);
         assert_eq!(suggest_max_tokens_for_command("grep pattern file"), None);
         assert_eq!(suggest_max_tokens_for_command("echo hello"), None);
+    }
+}
+
+#[cfg(test)]
+mod git_diff_tests {
+    use super::is_git_diff_command;
+
+    #[test]
+    fn detects_git_diff() {
+        let cmd = vec!["git".to_string(), "diff".to_string()];
+        assert!(is_git_diff_command(&cmd));
+    }
+
+    #[test]
+    fn detects_git_diff_with_flags() {
+        let cmd = vec![
+            "git".to_string(),
+            "-c".to_string(),
+            "color.ui=always".to_string(),
+            "diff".to_string(),
+            "--stat".to_string(),
+        ];
+        assert!(is_git_diff_command(&cmd));
+    }
+
+    #[test]
+    fn detects_git_diff_with_path() {
+        let cmd = vec!["/usr/bin/git".to_string(), "diff".to_string()];
+        assert!(is_git_diff_command(&cmd));
+    }
+
+    #[test]
+    fn ignores_other_git_commands() {
+        let cmd = vec!["git".to_string(), "status".to_string()];
+        assert!(!is_git_diff_command(&cmd));
     }
 }

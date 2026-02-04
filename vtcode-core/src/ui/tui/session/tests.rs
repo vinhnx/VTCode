@@ -9,6 +9,7 @@ use ratatui::{
     style::{Color, Modifier},
     text::{Line, Span},
 };
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 const VIEW_ROWS: u16 = 14;
@@ -133,6 +134,49 @@ fn arrow_keys_navigate_input_history() {
     assert!(down_restore.is_none());
     assert!(session.input_manager.content().is_empty());
     assert!(session.input_manager.history_index().is_none());
+}
+
+#[test]
+fn cursor_visible_while_scrolling() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let initial = session.build_input_widget_data(VIEW_WIDTH, 1);
+    assert!(initial.cursor_should_be_visible);
+
+    session.scroll_line_down();
+    let during_scroll = session.build_input_widget_data(VIEW_WIDTH, 1);
+    assert!(during_scroll.cursor_should_be_visible);
+    assert!(session.use_steady_cursor());
+
+    session.scroll_cursor_steady_until = Some(Instant::now() - Duration::from_millis(1));
+    session.handle_tick();
+
+    assert!(!session.use_steady_cursor());
+    let after_scroll = session.build_input_widget_data(VIEW_WIDTH, 1);
+    assert!(after_scroll.cursor_should_be_visible);
+}
+
+#[test]
+fn cursor_steady_during_shimmer() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let initial = session.build_input_widget_data(VIEW_WIDTH, 1);
+    assert!(initial.cursor_should_be_visible);
+    assert!(!session.use_steady_cursor());
+
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running command: test".to_string()),
+        right: None,
+    });
+    let during_shimmer = session.build_input_widget_data(VIEW_WIDTH, 1);
+    assert!(during_shimmer.cursor_should_be_visible);
+    assert!(session.use_steady_cursor());
+
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: None,
+        right: None,
+    });
+    assert!(!session.use_steady_cursor());
+    let after_shimmer = session.build_input_widget_data(VIEW_WIDTH, 1);
+    assert!(after_shimmer.cursor_should_be_visible);
 }
 
 #[test]

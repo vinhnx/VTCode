@@ -9,6 +9,7 @@
 /// - Timeline pane toggling
 /// - Scroll management operations
 use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -60,16 +61,23 @@ impl Session {
     /// Advance animation state on tick and request redraw when a frame changes.
     pub fn handle_tick(&mut self) {
         let mut animation_updated = false;
-        if self.thinking_spinner.is_active {
-            if self.thinking_spinner.update() {
-                animation_updated = true;
-            }
+        if self.thinking_spinner.is_active && self.thinking_spinner.update() {
+            animation_updated = true;
         }
-        if self.is_running_activity() || self.has_status_spinner() {
-            if self.shimmer_state.update() {
-                animation_updated = true;
-            }
+        let shimmer_active = self.is_shimmer_active();
+        if shimmer_active && self.shimmer_state.update() {
+            animation_updated = true;
         }
+        if let Some(until) = self.scroll_cursor_steady_until
+            && Instant::now() >= until
+        {
+            self.scroll_cursor_steady_until = None;
+            self.needs_redraw = true;
+        }
+        if self.last_shimmer_active && !shimmer_active {
+            self.needs_redraw = true;
+        }
+        self.last_shimmer_active = shimmer_active;
         if animation_updated {
             self.needs_redraw = true;
         }
@@ -99,6 +107,23 @@ impl Session {
             return false;
         }
         is_spinner_frame(indicator)
+    }
+
+    pub(super) fn is_shimmer_active(&self) -> bool {
+        self.is_running_activity() || self.has_status_spinner()
+    }
+
+    pub(crate) fn use_steady_cursor(&self) -> bool {
+        self.is_shimmer_active() || self.scroll_cursor_steady_until.is_some()
+    }
+
+    pub(super) fn mark_scrolling(&mut self) {
+        let steady_duration = Duration::from_millis(ui::TUI_SCROLL_CURSOR_STEADY_MS);
+        if steady_duration.is_zero() {
+            self.scroll_cursor_steady_until = None;
+        } else {
+            self.scroll_cursor_steady_until = Some(Instant::now() + steady_duration);
+        }
     }
 
     /// Mark a specific line as dirty to optimize reflow scans
@@ -226,6 +251,7 @@ impl Session {
 
     /// Scroll operations
     pub fn scroll_line_up(&mut self) {
+        self.mark_scrolling();
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(1);
         if self.scroll_manager.offset() != previous_offset {
@@ -234,6 +260,7 @@ impl Session {
     }
 
     pub fn scroll_line_down(&mut self) {
+        self.mark_scrolling();
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(1);
         if self.scroll_manager.offset() != previous_offset {
@@ -242,6 +269,7 @@ impl Session {
     }
 
     pub(super) fn scroll_page_up(&mut self) {
+        self.mark_scrolling();
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(self.viewport_height().max(1));
         if self.scroll_manager.offset() != previous_offset {
@@ -250,6 +278,7 @@ impl Session {
     }
 
     pub(super) fn scroll_page_down(&mut self) {
+        self.mark_scrolling();
         let page = self.viewport_height().max(1);
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(page);
@@ -265,6 +294,7 @@ impl Session {
     /// Apply coalesced scroll from accumulated scroll events
     /// This is more efficient than calling scroll_line_up/down multiple times
     pub(crate) fn apply_coalesced_scroll(&mut self, line_delta: i32, page_delta: i32) {
+        self.mark_scrolling();
         let previous_offset = self.scroll_manager.offset();
 
         // Apply page scroll first (larger movements)

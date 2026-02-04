@@ -47,6 +47,10 @@ pub(crate) async fn render_terminal_command_panel(
         .and_then(Value::as_str)
         .unwrap_or("");
     let command_tokens = parse_command_tokens(&unwrapped_payload);
+    let disable_spool = unwrapped_payload
+        .get("no_spool")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     // Check for session completion status (is_exited indicates if process is still running)
     let is_completed = unwrapped_payload
@@ -204,6 +208,7 @@ pub(crate) async fn render_terminal_command_panel(
             ls_styles,
             MessageStyle::ToolOutput, // Dimmed, non-italic style for tool output
             allow_ansi,
+            disable_spool,
             vt_config,
         )
         .await?;
@@ -226,6 +231,7 @@ pub(crate) async fn render_terminal_command_panel(
             ls_styles,
             MessageStyle::ToolError, // Error output
             allow_ansi,
+            disable_spool,
             vt_config,
         )
         .await?;

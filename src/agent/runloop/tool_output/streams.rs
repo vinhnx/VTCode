@@ -105,6 +105,7 @@ pub(crate) async fn render_stream_section(
     ls_styles: &LsStyles,
     fallback_style: MessageStyle,
     allow_ansi: bool,
+    disable_spool: bool,
     config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     use std::fmt::Write as FmtWrite;
@@ -128,7 +129,8 @@ pub(crate) async fn render_stream_section(
     let effective_normalized_content = normalized_content.clone();
     let was_truncated_by_tokens = false;
 
-    if let Some(tool) = tool_name
+    if !disable_spool
+        && let Some(tool) = tool_name
         && let Ok(Some(log_path)) =
             spool_output_if_needed(effective_normalized_content.as_ref(), tool, config).await
     {

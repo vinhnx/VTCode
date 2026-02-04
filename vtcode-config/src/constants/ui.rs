@@ -139,9 +139,11 @@ pub const TUI_IDLE_TICK_RATE_HZ: f64 = 4.0;
 /// Duration (ms) to remain in active mode after last input
 pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 500;
 /// Shimmer frame interval in milliseconds
-pub const TUI_SHIMMER_FRAME_INTERVAL_MS: u64 = 50;
+pub const TUI_SHIMMER_FRAME_INTERVAL_MS: u64 = 33;
 /// Shimmer sweep duration in milliseconds
 pub const TUI_SHIMMER_SWEEP_DURATION_MS: u64 = 2000;
+/// Keep cursor steady for this duration after scroll events
+pub const TUI_SCROLL_CURSOR_STEADY_MS: u64 = 250;
 
 // Viewport size limits to prevent pathological CPU usage with huge terminals
 // (e.g., 2000+ columns causes 100% CPU without these guards)

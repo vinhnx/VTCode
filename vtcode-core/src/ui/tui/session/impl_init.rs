@@ -106,6 +106,8 @@ impl Session {
             needs_full_clear: false,
             transcript_content_changed: true,
             should_exit: false,
+            scroll_cursor_steady_until: None,
+            last_shimmer_active: false,
             view_rows: resolved_rows,
             input_height: Self::input_block_height_for_lines(1),
             transcript_rows: initial_transcript_rows,
