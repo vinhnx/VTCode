@@ -413,6 +413,29 @@ impl SkillValidator {
 
         match parse_skill_file(skill_file.parent().unwrap()) {
             Ok((manifest, _instructions)) => {
+                if let Err(err) = manifest.validate() {
+                    let mut details = serde_json::Map::new();
+                    details.insert(
+                        "name".to_string(),
+                        serde_json::Value::String(manifest.name.clone()),
+                    );
+                    details.insert(
+                        "description".to_string(),
+                        serde_json::Value::String(manifest.description.clone()),
+                    );
+                    details.insert(
+                        "version".to_string(),
+                        serde_json::to_value(&manifest.version).unwrap(),
+                    );
+                    return CheckResult {
+                        name: "skill_file_valid".to_string(),
+                        status: CheckStatus::Failed,
+                        message: format!("SKILL.md validation failed: {}", err),
+                        details: Some(serde_json::Value::Object(details)),
+                        execution_time_ms: start_time.elapsed().as_millis() as u64,
+                    };
+                }
+
                 // Validate required fields
                 let mut warnings = vec![];
 
@@ -1112,6 +1135,35 @@ mod tests {
 
         let report = result.unwrap();
         assert_eq!(report.status, ValidationStatus::Invalid);
+    }
+
+    #[tokio::test]
+    async fn test_skill_validation_rejects_hooks() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_dir = temp_dir.path().join("hook-skill");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+
+        let skill_md = r#"---
+name: hook-skill
+description: Skill with hooks
+hooks:
+  pre_tool_use:
+    - command: "echo pre"
+---
+# Hook Skill
+"#;
+        std::fs::write(skill_dir.join("SKILL.md"), skill_md).unwrap();
+
+        let mut validator = SkillValidator::new();
+        let report = validator
+            .validate_skill_directory(&skill_dir)
+            .await
+            .unwrap();
+
+        assert_eq!(report.status, ValidationStatus::Invalid);
+        let check = report.checks.get("skill_file_valid").unwrap();
+        assert_eq!(check.status, CheckStatus::Failed);
+        assert!(check.message.contains("hooks"));
     }
 
     #[tokio::test]
