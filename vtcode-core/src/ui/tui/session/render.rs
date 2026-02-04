@@ -1067,11 +1067,10 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
         return Vec::new();
     }
 
-    let border_inline = InlineTextStyle {
-        color: session.theme.secondary.or(session.theme.foreground),
-        ..Default::default()
-    };
-    let mut border_style = ratatui_style_from_inline(&border_inline, session.theme.foreground);
+    let mut border_style = ratatui_style_from_inline(
+        &session.styles.tool_border_style(),
+        session.theme.foreground,
+    );
     border_style = border_style.add_modifier(Modifier::DIM);
 
     let prev_is_pty = index
@@ -1097,7 +1096,8 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
     let mut body_spans = Vec::new();
     for segment in &line.segments {
         let stripped_text = strip_ansi_codes(&segment.text);
-        let style = ratatui_style_from_inline(&segment.style, fallback);
+        let mut style = ratatui_style_from_inline(&segment.style, fallback);
+        style = style.add_modifier(Modifier::DIM);
         body_spans.push(Span::styled(stripped_text.into_owned(), style));
     }
 
@@ -1117,12 +1117,11 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
                 border_style,
             ));
         } else {
-            // Simple indent prefix without border characters
-            let first_prefix = "  ";
+            let body_prefix = "  ";
             let continuation_prefix = "  ";
             lines.extend(wrap_block_lines_no_right_border(
                 session,
-                first_prefix,
+                body_prefix,
                 continuation_prefix,
                 body_spans,
                 max_width,
@@ -1130,12 +1129,12 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
             ));
         }
     } else {
-        // Simple indent prefix without border characters
         let body_prefix = "  ";
+        let continuation_prefix = "  ";
         lines.extend(wrap_block_lines_no_right_border(
             session,
             body_prefix,
-            body_prefix,
+            continuation_prefix,
             body_spans,
             max_width,
             border_style,

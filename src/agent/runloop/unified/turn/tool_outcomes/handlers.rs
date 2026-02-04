@@ -1,12 +1,17 @@
 //! Tool outcome handling helpers for turn execution.
 
 use anyhow::Result;
+use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::Mutex;
 use vtcode_core::llm::provider as uni;
 
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
+use vtcode_core::ui::tui::{InlineMessageKind, InlineSegment, InlineTextStyle};
 use vtcode_core::utils::ansi::MessageStyle;
 
+use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::tool_call_safety::SafetyError;
 use crate::agent::runloop::unified::tool_pipeline::{
@@ -38,6 +43,41 @@ pub struct ToolOutcomeContext<'a, 'b> {
     pub ctx: &'b mut TurnProcessingContext<'a>,
     pub repeated_tool_attempts: &'b mut std::collections::HashMap<String, usize>,
     pub turn_modified_files: &'b mut std::collections::BTreeSet<std::path::PathBuf>,
+}
+
+struct PtyStreamState {
+    lines: VecDeque<String>,
+    displayed_count: usize,
+}
+
+impl PtyStreamState {
+    fn new() -> Self {
+        Self {
+            lines: VecDeque::new(),
+            displayed_count: 0,
+        }
+    }
+
+    fn push_lines<I>(&mut self, lines: I, limit: usize)
+    where
+        I: IntoIterator<Item = String>,
+    {
+        if limit == 0 {
+            self.lines.clear();
+            self.displayed_count = 0;
+            return;
+        }
+
+        for line in lines {
+            if line.trim().is_empty() {
+                continue;
+            }
+            self.lines.push_back(line);
+            while self.lines.len() > limit {
+                self.lines.pop_front();
+            }
+        }
+    }
 }
 
 /// Unified handler for a single tool call (whether native or textual).
@@ -542,6 +582,10 @@ async fn execute_and_handle_tool_call_inner<'a>(
     let is_pty_command = tool_name == vtcode_core::config::constants::tools::RUN_PTY_CMD
         || tool_name == vtcode_core::config::constants::tools::UNIFIED_EXEC
         || tool_name == vtcode_core::config::constants::tools::SEND_PTY_INPUT;
+    let pty_tail_limit = resolve_stdout_tail_limit(ctx.vt_cfg);
+    let pty_stream_state = Arc::new(Mutex::new(PtyStreamState::new()));
+    let pty_stream_active = Arc::new(AtomicBool::new(true));
+    let pty_stream_active_clone = pty_stream_active.clone();
 
     ctx.tool_registry
         .set_progress_callback(Arc::new(move |name: &str, output: &str| {
@@ -549,30 +593,64 @@ async fn execute_and_handle_tool_call_inner<'a>(
             let output_owned = output.to_string();
             let handle = handle_clone.clone();
             let is_pty = is_pty_command || name == "run_pty_cmd" || name == "unified_exec";
+            let stream_state = pty_stream_state.clone();
+            let stream_active = pty_stream_active_clone.clone();
+            let tail_limit = pty_tail_limit;
 
             tokio::spawn(async move {
+                if !stream_active.load(Ordering::Relaxed) {
+                    return;
+                }
+
                 if is_pty && !output_owned.is_empty() {
+                    let mut cleaned_lines = Vec::new();
                     for line in output_owned.lines() {
                         let clean_line = vtcode_core::utils::ansi_parser::strip_ansi(line);
                         let trimmed = clean_line.trim();
                         if !trimmed.is_empty() {
-                            handle.append_line(
-                                vtcode_core::ui::tui::InlineMessageKind::Pty,
-                                vec![vtcode_core::ui::tui::InlineSegment {
-                                    text: trimmed.to_string(),
-                                    style: std::sync::Arc::new(
-                                        vtcode_core::ui::tui::InlineTextStyle::default(),
-                                    ),
-                                }],
-                            );
+                            cleaned_lines.push(trimmed.to_string());
                         }
                     }
-                    if let Some(last_line) = output_owned.lines().last() {
-                        let clean_line = vtcode_core::utils::ansi_parser::strip_ansi(last_line);
-                        let trimmed = clean_line.trim();
-                        if !trimmed.is_empty() {
-                            reporter.set_message(trimmed.to_string()).await;
+
+                    let last_trimmed = cleaned_lines
+                        .last()
+                        .cloned()
+                        .or_else(|| {
+                            output_owned.lines().last().map(|line| {
+                                vtcode_core::utils::ansi_parser::strip_ansi(line)
+                                    .trim()
+                                    .to_string()
+                            })
+                        })
+                        .filter(|line| !line.is_empty());
+
+                    if tail_limit > 0 && !cleaned_lines.is_empty() {
+                        let (replace_count, segments) = {
+                            let mut state = stream_state.lock().await;
+                            state.push_lines(cleaned_lines, tail_limit);
+                            let style = std::sync::Arc::new(InlineTextStyle::default());
+                            let segments: Vec<Vec<InlineSegment>> = state
+                                .lines
+                                .iter()
+                                .map(|line| {
+                                    vec![InlineSegment {
+                                        text: line.clone(),
+                                        style: style.clone(),
+                                    }]
+                                })
+                                .collect();
+                            let replace_count = state.displayed_count;
+                            state.displayed_count = segments.len();
+                            (replace_count, segments)
+                        };
+
+                        if !segments.is_empty() && stream_active.load(Ordering::Relaxed) {
+                            handle.replace_last(replace_count, InlineMessageKind::Pty, segments);
                         }
+                    }
+
+                    if let Some(last_line) = last_trimmed {
+                        reporter.set_message(last_line).await;
                     }
                 } else if let Some(last_line) = output_owned.lines().last() {
                     let clean_line = vtcode_core::utils::ansi_parser::strip_ansi(last_line);
@@ -597,6 +675,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
     )
     .await;
 
+    pty_stream_active.store(false, Ordering::Relaxed);
     ctx.tool_registry.clear_progress_callback();
 
     let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);

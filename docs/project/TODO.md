@@ -163,3 +163,18 @@ les/widgets/block/
 ```
 
 ===
+
+• Edited vtcode-core/src/ui/tui/session/reflow.rs (+8 -0)
+597
+598 + let prev_is_pty = index
+599 + .checked_sub(1)
+600 + .and_then(|prev| self.lines.get(prev))
+601 + .map(|prev| prev.kind == InlineMessageKind::Pty)
+602 + .unwrap_or(false);
+603 +
+604 + let is_start = !prev_is_pty;
+605 +
+606 let mut lines = Vec::new();
+
+--> enhance diff view with (+N -M) changed lines count summary for each file.
+--> also try to show line numbers for each hunk in the diff view.
