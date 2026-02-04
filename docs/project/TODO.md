@@ -755,10 +755,4 @@ hide cursor in chat input when scrolling, so cursor does not appear in wrong pla
 
 when the tui shimmer is active, the cursor has bug that is cursor blinking and animate alongside with the shimmer effect -> fix it.
 
---
-
-command+delete to delete all chat input message
-
 ---
-
-option+delete to delete word by word in chat input

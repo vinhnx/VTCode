@@ -152,63 +152,43 @@ impl Session {
         }
     }
 
-    /// Delete from the beginning of the line to the cursor (kill sentence backward)
-    pub(super) fn delete_sentence_backward(&mut self) {
-        if self.input_manager.cursor() == 0 {
-            return;
-        }
+    /// Delete from cursor to start of current line (Command+Backspace on macOS)
+    pub(super) fn delete_to_start_of_line(&mut self) {
+        let content = self.input_manager.content();
+        let cursor = self.input_manager.cursor();
 
-        let input_before_cursor = &self.input_manager.content()[..self.input_manager.cursor()];
-        let chars: Vec<(usize, char)> = input_before_cursor.char_indices().collect();
+        // Find the previous newline or start of string
+        let before = &content[..cursor];
+        let delete_start = if let Some(newline_pos) = before.rfind('\n') {
+            newline_pos + 1 // Delete after the newline
+        } else {
+            0 // Delete from start
+        };
 
-        if chars.is_empty() {
-            return;
-        }
-
-        // Look backwards from cursor for the most recent sentence ending followed by whitespace
-        let mut delete_start = 0;
-
-        // Search backwards to find the most recent sentence boundary
-        for i in (0..chars.len()).rev() {
-            let (idx, ch) = chars[i];
-
-            // Check if this is a sentence-ending punctuation
-            if matches!(ch, '.' | '!' | '?') {
-                // Look ahead to see if followed by whitespace or end
-                if i + 1 < chars.len() {
-                    let (_next_idx, next_ch) = chars[i + 1];
-                    if next_ch.is_whitespace() {
-                        // Found a sentence boundary - delete from after the whitespace
-                        if i + 2 < chars.len() {
-                            delete_start = chars[i + 2].0;
-                        } else {
-                            // At the end, delete from after whitespace to cursor
-                            delete_start = input_before_cursor.len();
-                        }
-                        break;
-                    }
-                } else {
-                    // Punctuation at end - delete from after it
-                    delete_start = idx + ch.len_utf8();
-                    break;
-                }
-            }
-
-            // Check for newline as sentence boundary
-            if ch == '\n' {
-                delete_start = idx + 1;
-                break;
-            }
-        }
-
-        // Delete from delete_start to cursor
-        if delete_start < self.input_manager.cursor() {
-            let before = &self.input_manager.content()[..delete_start];
-            let after = &self.input_manager.content()[self.input_manager.cursor()..];
-            let new_content = format!("{}{}", before, after);
-
+        if delete_start < cursor {
+            let new_content = format!("{}{}", &content[..delete_start], &content[cursor..]);
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(delete_start);
+            slash::update_slash_suggestions(self);
+        }
+    }
+
+    /// Delete from cursor to end of current line (Command+Delete on macOS)
+    pub(super) fn delete_to_end_of_line(&mut self) {
+        let content = self.input_manager.content();
+        let cursor = self.input_manager.cursor();
+
+        // Find the next newline or end of string
+        let rest = &content[cursor..];
+        let delete_len = if let Some(newline_pos) = rest.find('\n') {
+            newline_pos
+        } else {
+            rest.len()
+        };
+
+        if delete_len > 0 {
+            let new_content = format!("{}{}", &content[..cursor], &content[cursor + delete_len..]);
+            self.input_manager.set_content(new_content);
             slash::update_slash_suggestions(self);
         }
     }

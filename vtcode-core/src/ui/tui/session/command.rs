@@ -637,66 +637,40 @@ pub(super) fn delete_word_backward(session: &mut Session) {
 }
 
 #[allow(dead_code)]
-pub(super) fn delete_sentence_backward(session: &mut Session) {
-    if session.input_manager.cursor() == 0 {
-        return;
-    }
+pub(super) fn delete_to_start_of_line(session: &mut Session) {
+    let content = session.input_manager.content();
+    let cursor = session.input_manager.cursor();
 
-    let input_before_cursor = &session.input_manager.content()[..session.input_manager.cursor()];
-    let chars: Vec<(usize, char)> = input_before_cursor.char_indices().collect();
+    let before = &content[..cursor];
+    let delete_start = if let Some(newline_pos) = before.rfind('\n') {
+        newline_pos + 1
+    } else {
+        0
+    };
 
-    if chars.is_empty() {
-        return;
-    }
-
-    // Look backwards from cursor for the most recent sentence ending followed by whitespace
-    // A sentence typically ends with ., !, ? followed by space, tab, newline or end of input
-    let mut delete_start = 0;
-
-    // Search backwards to find the most recent sentence boundary
-    for i in (0..chars.len()).rev() {
-        let (pos, ch) = chars[i];
-
-        if matches!(ch, '.' | '!' | '?') {
-            // Check if this punctuation is followed by whitespace or we're at the end
-            // Since we're looking at input before cursor, we check the original full input
-            if pos + ch.len_utf8() < session.input_manager.content().len() {
-                // Check the character after the punctuation in the full input string
-                let after_punct = &session.input_manager.content()
-                    [pos + ch.len_utf8()..session.input_manager.cursor()];
-                if !after_punct.is_empty() {
-                    let next_char = after_punct.chars().next().unwrap();
-                    if next_char.is_whitespace() {
-                        // Found sentence ending punctuation followed by whitespace
-                        delete_start = pos + ch.len_utf8();
-                        break;
-                    }
-                } else {
-                    // At the end of the text being considered (before cursor)
-                    // This might be a sentence boundary if there's whitespace after cursor
-                    delete_start = pos + ch.len_utf8();
-                    break;
-                }
-            } else {
-                // At the end of the entire input string
-                delete_start = pos + ch.len_utf8();
-                break;
-            }
-        } else if matches!(ch, '\n' | '\r') {
-            // Newlines can also separate sentences
-            delete_start = pos + ch.len_utf8();
-            break;
-        }
-    }
-
-    // Delete from delete_start to cursor
-    if delete_start < session.input_manager.cursor() {
-        let content = session.input_manager.content().to_owned();
-        let mut new_content = String::new();
-        new_content.push_str(&content[..delete_start]);
-        new_content.push_str(&content[session.input_manager.cursor()..]);
+    if delete_start < cursor {
+        let new_content = format!("{}{}", &content[..delete_start], &content[cursor..]);
         session.input_manager.set_content(new_content);
         session.input_manager.set_cursor(delete_start);
+        super::slash::update_slash_suggestions(session);
+    }
+}
+
+#[allow(dead_code)]
+pub(super) fn delete_to_end_of_line(session: &mut Session) {
+    let content = session.input_manager.content();
+    let cursor = session.input_manager.cursor();
+
+    let rest = &content[cursor..];
+    let delete_len = if let Some(newline_pos) = rest.find('\n') {
+        newline_pos
+    } else {
+        rest.len()
+    };
+
+    if delete_len > 0 {
+        let new_content = format!("{}{}", &content[..cursor], &content[cursor + delete_len..]);
+        session.input_manager.set_content(new_content);
         super::slash::update_slash_suggestions(session);
     }
 }
