@@ -138,19 +138,13 @@ to novita huggingface inference provider.
 
 --
 
-1. dimmed the message's divider line
+--> the PTY command output is showing in raw text in agent's response. need to fix that to just show tail lines and progressive update only. use tools output decoration, or at least dim the text and use proper code identation, or try to group and wrapped the pty command output in a box with border (like error/warnings/info message box).
 
-2. for warnings and info message feedbacks in the transcript. add Borders like error message. '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-02-04 at 11.31.47 AM.png'
+# log:
 
-3. For each error, warning, info, show the message info type in the BORDER box https://ratatui.rs/examples/widgets/block/
+git diff
 
---
-
-vtcode-config/src/constants/ui.rs review overall ui for clean, minimal and non-clutter ui. improve
-accessiblity, and reabaility while maintain robustness of the vtcode agent.
-
---
-
+```
 Need to run cargo fmt, but likely formatting issues. We should run cargo check.
 
 Compiling ring v0.17.14
@@ -165,8 +159,6 @@ Building [======================> ] 804/840: vtcode-config(build), ring,… Buil
 ng, ring Checking rustls-webpki v0.103.8
 Building [=======================> ] 808/840: ring, rustls-webpki
 
---> the PTY command output is showing in raw text in agent's response. need to fix that to just show tail lines and progressive update only. use tools output decoration.
-git diff
 
 diff --git a/docs/project/TODO.md b/docs/project/TODO.md
 index 148240c7..28ec2008 100644
@@ -204,45 +196,6 @@ les/widgets/block/
 
 * line.push_str("• ");
 
---
-
-style diff render with text color for diff and basic syntax highlight for code blocks. check diff tools
-
 ```
 
-Latest git diff
-
-diff --git a/docs/project/TODO.md b/docs/project/TODO.md
-index 148240c7..28ec2008 100644
---- a/docs/project/TODO.md
-+++ b/docs/project/TODO.md
-@@
-2. for warnings and info message feedbacks in the transcript. add Borders like error message. '/Users/
-vinhnguyenxuan/Desktop/Screenshot 2026-02-04 at 11.31.47 AM.png'
-
-3. For each error, warning, info, show the message info type in the BORDER box https://ratatui.rs/exam
-ples/widgets/block/
-
-+--
-+
-+vtcode-config/src/constants/ui.rs review overall ui for clean, minimal and non-clutter ui. improve
-+accessiblity, and reabaility while maintain robustness of the vtcode agent.
-+
-+--
-+
-+Need to run cargo fmt, but likely formatting issues. We should run cargo check.
-+
-+Compiling ring v0.17.14
-+Building [======================> ] 803/840: ring(build) Building [==============
-+… [+174 lines omitted; use read_file with offset/limit (1-indexed line numbers) for full content]
-+        }
-+        let resolved = ratatui_style_from_inline(&style, self.theme.foreground);
-+-        if kind == InlineMessageKind::User {
-+-            resolved
-+-        } else {
-+-            resolved.add_modifier(Modifier::DIM)
-+-        }
-++        resolved.add_modifier(Modifier::DIM)
-+     }
-+ }
-```
+===
