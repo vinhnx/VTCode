@@ -344,6 +344,13 @@ impl LLMProvider for AnthropicProvider {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
 
+        // Add turn metadata header if present in request
+        if let Some(metadata) = &request.metadata {
+            if let Ok(metadata_str) = serde_json::to_string(metadata) {
+                request_builder = request_builder.header("X-Turn-Metadata", metadata_str);
+            }
+        }
+
         let response = request_builder
             .json(&anthropic_request)
             .send()
@@ -404,6 +411,13 @@ impl LLMProvider for AnthropicProvider {
             include_effort,
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
+        }
+
+        // Add turn metadata header if present in request
+        if let Some(metadata) = &request.metadata {
+            if let Ok(metadata_str) = serde_json::to_string(metadata) {
+                request_builder = request_builder.header("X-Turn-Metadata", metadata_str);
+            }
         }
 
         let response = request_builder

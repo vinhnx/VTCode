@@ -144,6 +144,7 @@ pub mod exec;
 pub mod exec_policy; // Codex-style execution policy management
 pub mod execpolicy;
 pub mod gemini;
+pub mod git_info; // Git repository information collection
 pub mod http_client;
 pub mod instructions;
 pub mod llm;
@@ -170,6 +171,7 @@ pub mod terminal_setup;
 pub mod tool_policy;
 pub mod tools;
 pub mod trace; // Agent Trace specification for AI code attribution
+pub mod turn_metadata; // Turn metadata for LLM requests (git context)
 pub mod types;
 pub mod ui;
 pub mod utils;
