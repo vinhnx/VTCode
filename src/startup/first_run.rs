@@ -79,14 +79,12 @@ async fn run_first_run_setup(
     }
 
     let workspace_dot_dir = workspace.join(".vtcode");
-    if !workspace_dot_dir.exists() {
-        fs::create_dir_all(&workspace_dot_dir).with_context(|| {
-            format!(
-                "Failed to create workspace .vtcode directory at {}",
-                workspace_dot_dir.display()
-            )
-        })?;
-    }
+    fs::create_dir_all(&workspace_dot_dir).with_context(|| {
+        format!(
+            "Failed to create workspace .vtcode directory at {}",
+            workspace_dot_dir.display()
+        )
+    })?;
 
     let mut renderer = AnsiRenderer::stdout();
     renderer.line(
