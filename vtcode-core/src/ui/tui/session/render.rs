@@ -766,11 +766,7 @@ pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<
         // Render PTY content directly without header decoration
         let fallback = text_fallback(session, line.kind).or(session.theme.foreground);
         for segment in &line.segments {
-            let mut dim_style = InlineTextStyle::default().dim();
-            dim_style.color = segment.style.color;
-            dim_style.bg_color = segment.style.bg_color;
-            dim_style.effects |= segment.style.effects;
-            let style = ratatui_style_from_inline(&dim_style, fallback);
+            let style = ratatui_style_from_inline(&segment.style, fallback);
             spans.push(Span::styled(segment.text.clone(), style));
         }
         if !spans.is_empty() {

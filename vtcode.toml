@@ -9,7 +9,7 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "minimax-m2.1:cloud"
+default_model = "gpt-oss:20b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -123,7 +123,7 @@ reasoning_visible_default = false
 layout_mode = "auto"
 show_message_dividers = false
 dim_completed_todos = true
-message_block_spacing = false
+message_block_spacing = true
 display_mode = "focused"
 show_sidebar = false
 minimum_contrast = 4.5

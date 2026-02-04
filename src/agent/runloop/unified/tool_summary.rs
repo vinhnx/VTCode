@@ -138,17 +138,12 @@ pub(crate) fn render_tool_call_summary(
     let summary = build_tool_summary(&action_label, &headline);
 
     let mut line = String::new();
+    line.push_str("• ");
     line.push_str(&render_summary_with_highlights(
         &summary,
         &summary_highlights,
         &palette,
     ));
-
-    // Details in dim gray if present - these are the call parameters
-    if !details.is_empty() {
-        line.push_str(" .. ");
-        line.push_str(&render_styled(&details.join(" .. "), palette.success, None));
-    }
 
     if let Some(stream) = stream_label {
         line.push(' ');
@@ -159,9 +154,18 @@ pub(crate) fn render_tool_call_summary(
 
     if let Some(command_line) = command_line {
         let mut styled = String::new();
+        styled.push_str("  └ ");
         styled.push_str(&render_styled("$", palette.accent, None));
         styled.push(' ');
         styled.push_str(&render_styled(&command_line, palette.muted, None));
+        renderer.line(MessageStyle::Info, &styled)?;
+    }
+
+    // Details in dim gray if present - these are the call parameters
+    for detail in details {
+        let mut styled = String::new();
+        styled.push_str("  └ ");
+        styled.push_str(&render_styled(&detail, palette.success, None));
         renderer.line(MessageStyle::Info, &styled)?;
     }
 

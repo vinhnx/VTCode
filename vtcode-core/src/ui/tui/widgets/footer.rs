@@ -129,10 +129,7 @@ impl<'a> FooterWidget<'a> {
             if !spans.is_empty() {
                 spans.push(Span::raw(" "));
             }
-            spans.push(Span::styled(
-                spinner.to_string(),
-                self.styles.muted_style(),
-            ));
+            spans.push(Span::styled(spinner.to_string(), self.styles.muted_style()));
         }
 
         // Calculate space needed for right status

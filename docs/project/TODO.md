@@ -135,3 +135,11 @@ curl https://router.huggingface.co/v1/chat/completions \
 }'
 
 to novita huggingface inference provider.
+
+--
+
+1. dimmed the message's divider line
+
+2. for warnings and info message feedbacks in the transcript. add Borders like error message. '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-02-04 at 11.31.47 AM.png'
+
+3. For each error, warning, info, show the message info type in the BORDER box https://ratatui.rs/examples/widgets/block/
