@@ -306,7 +306,8 @@ mod tests {
         let mut event = McpEvent::new("time".to_string(), "get_current_time".to_string(), None);
         event.success(Some(serde_json::json!({"time": "12:00"})));
 
-        assert_eq!(event.compact_title(), "[OK] MCP time `get_current_time`");
+        // The symbol() method returns "[OK]" with brackets, and compact_title wraps it again
+        assert_eq!(event.compact_title(), "[[OK]] MCP time `get_current_time`");
 
         let detailed = event.detailed_title();
         assert!(detailed.contains("[OK]"));
