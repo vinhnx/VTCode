@@ -398,6 +398,7 @@ impl CliToolBridge {
             compatibility: None,
             variety: crate::skills::types::SkillVariety::SystemUtility,
             metadata: None,
+            tools: None,
         };
 
         let mut skill = Skill::new(

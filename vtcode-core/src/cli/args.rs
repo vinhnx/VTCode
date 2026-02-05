@@ -706,6 +706,35 @@ pub enum SkillsSubcommand {
     /// Regenerate skills index file
     #[command(name = "regenerate-index")]
     RegenerateIndex,
+
+    /// skills-ref compatible commands (agentskills.io spec)
+    #[command(name = "skills-ref", subcommand)]
+    SkillsRef(SkillsRefSubcommand),
+}
+
+/// skills-ref compatible subcommands per agentskills.io specification
+#[derive(Debug, Subcommand, Clone)]
+pub enum SkillsRefSubcommand {
+    /// Validate a skill directory
+    #[command(name = "validate")]
+    Validate {
+        /// Path to skill directory
+        path: PathBuf,
+    },
+
+    /// Generate <available_skills> XML for agent prompts
+    #[command(name = "to-prompt")]
+    ToPrompt {
+        /// Paths to skill directories
+        paths: Vec<PathBuf>,
+    },
+
+    /// List discovered skills
+    #[command(name = "list")]
+    List {
+        /// Optional path to search (defaults to current directory)
+        path: Option<PathBuf>,
+    },
 }
 
 /// Configuration file structure with latest features

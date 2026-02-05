@@ -69,6 +69,9 @@ pub struct SkillYaml {
     pub compatibility: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
+    /// Tool dependencies for this skill (Agent Skills spec extension)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -194,6 +197,7 @@ pub fn parse_skill_content_with_defaults(
         compatibility: yaml.compatibility,
         variety: crate::skills::types::SkillVariety::AgentSkill,
         metadata: yaml.metadata,
+        tools: yaml.tools,
     };
 
     manifest.validate()?;

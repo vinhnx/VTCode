@@ -408,14 +408,20 @@ pub async fn handle_skills_config(options: &SkillsCommandOptions) -> Result<()> 
     println!("Skill Configuration\n");
     println!("Workspace: {}", options.workspace.display());
     println!("\nSkill Search Paths (by precedence):");
-    println!("  • ~/.vtcode/skills/     (VT Code user skills - highest precedence)");
-    println!("  • .agents/skills/       (VT Code project skills)");
-    println!("  • .vtcode/skills/       (Legacy project skills - deprecated)");
-    println!("  • ~/.pi/skills/         (Pi framework user skills)");
+    println!(
+        "  • .github/skills/       (Agent Skills spec recommended - highest project precedence)"
+    );
+    println!("  • .agents/skills/       (VT Code native project skills)");
+    println!("  • .vtcode/skills/       (Legacy VT Code project skills)");
+    println!("  • .claude/skills/       (Claude Code legacy compatibility)");
     println!("  • .pi/skills/           (Pi framework project skills)");
-    println!("  • ~/.claude/skills/     (Legacy compatibility)");
-    println!("  • .claude/skills/       (Legacy compatibility)");
-    println!("  • ~/.codex/skills/      (Codex compatibility - lowest precedence)");
+    println!("  • .codex/skills/        (Codex compatibility)");
+    println!("  • ./skills              (Generic project skills)");
+    println!("  • ~/.vtcode/skills/     (VT Code user skills)");
+    println!("  • ~/.copilot/skills/    (VS Code Copilot compatibility)");
+    println!("  • ~/.claude/skills/     (Claude Code user compatibility)");
+    println!("  • ~/.pi/agent/skills/   (Pi framework user skills)");
+    println!("  • ~/.codex/skills/      (Codex user compatibility - lowest precedence)");
 
     println!("\nSkill Directory Structure:");
     println!("  my-skill/");

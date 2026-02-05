@@ -363,6 +363,20 @@ async fn run() -> Result<()> {
                 SkillsSubcommand::Unload { .. } => {
                     println!("Skill unload not yet implemented");
                 }
+                SkillsSubcommand::SkillsRef(skills_ref_cmd) => {
+                    use vtcode_core::cli::args::SkillsRefSubcommand;
+                    match skills_ref_cmd {
+                        SkillsRefSubcommand::Validate { path } => {
+                            cli::skills_ref::handle_skills_ref_validate(path).await?;
+                        }
+                        SkillsRefSubcommand::ToPrompt { paths } => {
+                            cli::skills_ref::handle_skills_ref_to_prompt(paths).await?;
+                        }
+                        SkillsRefSubcommand::List { path } => {
+                            cli::skills_ref::handle_skills_ref_list(path.as_deref()).await?;
+                        }
+                    }
+                }
             }
         }
         Some(Commands::Marketplace(marketplace_cmd)) => {
