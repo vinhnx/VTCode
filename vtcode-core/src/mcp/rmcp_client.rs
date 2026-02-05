@@ -275,12 +275,8 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<GetPromptResult> {
         let service = self.service().await?;
-        let result = run_with_timeout(
-            service.peer().get_prompt(params),
-            timeout,
-            "prompts/get",
-        )
-        .await?;
+        let result =
+            run_with_timeout(service.peer().get_prompt(params), timeout, "prompts/get").await?;
         Ok(result)
     }
 

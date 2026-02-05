@@ -5,11 +5,19 @@ use once_cell::sync::Lazy;
 use quick_cache::sync::Cache;
 use serde_json::Value;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::sync::Mutex;
 
+use parking_lot::RwLock;
+
+use vtcode_config::FileReadCacheConfig;
+
 /// Global file cache instance
 pub static FILE_CACHE: Lazy<FileCache> = Lazy::new(|| FileCache::new(1000));
+
+static FILE_READ_CACHE_CONFIG: Lazy<RwLock<FileReadCacheConfig>> =
+    Lazy::new(|| RwLock::new(FileReadCacheConfig::default()));
 
 /// Enhanced file cache with quick-cache for high-performance caching
 ///
@@ -20,8 +28,8 @@ pub struct FileCache {
     file_cache: Arc<Cache<String, EnhancedCacheEntry<Arc<Value>>>>,
     directory_cache: Arc<Cache<String, EnhancedCacheEntry<Arc<Value>>>>,
     stats: Arc<Mutex<EnhancedCacheStats>>,
-    max_size_bytes: usize,
-    ttl: Duration,
+    max_size_bytes: AtomicUsize,
+    ttl_millis: AtomicU64,
 }
 
 impl FileCache {
@@ -30,9 +38,19 @@ impl FileCache {
             file_cache: Arc::new(Cache::new(capacity)),
             directory_cache: Arc::new(Cache::new(capacity / 2)),
             stats: Arc::new(Mutex::new(EnhancedCacheStats::default())),
-            max_size_bytes: 50 * 1024 * 1024, // 50MB default
-            ttl: Duration::from_secs(300),    // 5 minutes default
+            max_size_bytes: AtomicUsize::new(50 * 1024 * 1024), // 50MB default
+            ttl_millis: AtomicU64::new(300_000),                // 5 minutes default
         }
+    }
+
+    #[inline]
+    fn ttl(&self) -> Duration {
+        Duration::from_millis(self.ttl_millis.load(Ordering::Relaxed))
+    }
+
+    #[inline]
+    fn max_size_bytes(&self) -> usize {
+        self.max_size_bytes.load(Ordering::Relaxed)
     }
 
     /// Get cached file content (clones the value for backwards compatibility)
@@ -46,7 +64,7 @@ impl FileCache {
 
         if let Some(entry) = self.file_cache.get(key) {
             // Check if entry is still valid
-            if entry.timestamp.elapsed() < self.ttl {
+            if entry.timestamp.elapsed() < self.ttl() {
                 // Note: quick-cache handles access tracking automatically
                 stats.hits += 1;
                 return Some(Arc::clone(&entry.data));
@@ -81,7 +99,7 @@ impl FileCache {
         let mut stats = self.stats.lock().await;
 
         // Check memory limits (quick-cache handles eviction automatically, but we track stats)
-        if stats.total_size_bytes + size_bytes > self.max_size_bytes {
+        if stats.total_size_bytes + size_bytes > self.max_size_bytes() {
             stats.memory_evictions += 1;
         }
 
@@ -100,7 +118,7 @@ impl FileCache {
         let mut stats = self.stats.lock().await;
 
         if let Some(entry) = self.directory_cache.get(key) {
-            if entry.timestamp.elapsed() < self.ttl {
+            if entry.timestamp.elapsed() < self.ttl() {
                 stats.hits += 1;
                 return Some(Arc::clone(&entry.data));
             } else {
@@ -160,7 +178,7 @@ impl FileCache {
         let mut stats = self.stats.lock().await;
 
         let current_size = stats.total_size_bytes;
-        let max_size = self.max_size_bytes;
+        let max_size = self.max_size_bytes();
 
         if current_size > max_size {
             // Tier 1: Clear directory cache first (cheaper to rebuild)
@@ -217,16 +235,34 @@ impl FileCache {
 
     /// Set explicit memory limit in bytes
     pub fn set_capacity_limit(&mut self, max_bytes: usize) {
-        self.max_size_bytes = max_bytes;
+        self.max_size_bytes.store(max_bytes, Ordering::Relaxed);
+    }
+
+    /// Update cache policy from configuration
+    pub fn apply_read_cache_config(&self, config: &FileReadCacheConfig) {
+        self.max_size_bytes
+            .store(config.max_size_bytes, Ordering::Relaxed);
+        self.ttl_millis
+            .store(config.ttl_secs.saturating_mul(1000), Ordering::Relaxed);
     }
 
     /// Adjust cache capacity based on system memory availability.
     /// target_memory_ratio: 0.0 to 1.0 (fraction of total system memory to use).
-    pub fn adjust_capacity(&mut self, target_memory_ratio: f64) {
+    pub fn adjust_capacity(&self, target_memory_ratio: f64) {
         // Heuristic: Assume 16GB system if we can't query (conservative default)
         const ASSUMED_SYSTEM_MEMORY: usize = 16 * 1024 * 1024 * 1024;
 
         let target_bytes = (ASSUMED_SYSTEM_MEMORY as f64 * target_memory_ratio) as usize;
-        self.max_size_bytes = target_bytes;
+        self.max_size_bytes.store(target_bytes, Ordering::Relaxed);
     }
+}
+
+/// Configure global file cache from optimization settings.
+pub fn configure_file_cache(config: &FileReadCacheConfig) {
+    *FILE_READ_CACHE_CONFIG.write() = config.clone();
+    FILE_CACHE.apply_read_cache_config(config);
+}
+
+pub fn file_read_cache_config() -> FileReadCacheConfig {
+    FILE_READ_CACHE_CONFIG.read().clone()
 }

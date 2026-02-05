@@ -52,21 +52,21 @@ mod integration_tests {
     }
 
     #[test]
-    fn test_permission_cache_expiration() {
+    fn test_permission_cache_retains_entries() {
         use std::thread;
         use std::time::Duration;
 
-        let mut cache = PermissionCache::with_ttl(Duration::from_millis(50));
+        let mut cache = PermissionCache::new();
 
         cache.put("test", true, "reason");
         assert_eq!(
             cache.get("test"),
             Some(true),
-            "Should be available immediately"
+            "Should be available immediately",
         );
 
         thread::sleep(Duration::from_millis(100));
-        assert_eq!(cache.get("test"), None, "Should expire after TTL");
+        assert_eq!(cache.get("test"), Some(true), "Should remain without TTL",);
     }
 
     #[test]
@@ -169,8 +169,8 @@ mod integration_tests {
         assert_eq!(cache.get("cmd2"), Some(false));
         assert_eq!(cache.get("cmd3"), Some(true));
 
-        let (total, _expired) = cache.stats();
-        assert_eq!(total, 3);
+        let stats = cache.stats();
+        assert_eq!(stats.cached_entries, 3);
     }
 
     #[test]
@@ -180,13 +180,13 @@ mod integration_tests {
         cache.put("cmd1", true, "test");
         cache.put("cmd2", false, "test");
 
-        let (total_before, _) = cache.stats();
-        assert_eq!(total_before, 2);
+        let stats_before = cache.stats();
+        assert_eq!(stats_before.cached_entries, 2);
 
         cache.clear();
 
-        let (total_after, _) = cache.stats();
-        assert_eq!(total_after, 0);
+        let stats_after = cache.stats();
+        assert_eq!(stats_after.cached_entries, 0);
 
         assert_eq!(cache.get("cmd1"), None);
     }

@@ -1,4 +1,6 @@
+use crate::config::constants::defaults;
 use crate::llm::provider::{Message, MessageContent, MessageRole};
+use crate::telemetry::perf::PerfSpan;
 use crate::utils::dot_config::DotManager;
 use crate::utils::file_utils::{
     ensure_dir_exists, read_json_file, read_json_file_sync, write_json_file_sync,
@@ -6,10 +8,13 @@ use crate::utils::file_utils::{
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 const SESSION_FILE_PREFIX: &str = "session";
 const SESSION_FILE_EXTENSION: &str = "json";
@@ -274,6 +279,27 @@ pub struct SessionArchive {
     path: PathBuf,
     metadata: SessionArchiveMetadata,
     started_at: DateTime<Utc>,
+    progress_throttle: Arc<Mutex<ProgressThrottle>>,
+}
+
+#[derive(Debug)]
+struct ProgressThrottle {
+    last_written: Instant,
+    last_turn: usize,
+}
+
+impl ProgressThrottle {
+    fn new() -> Self {
+        let min_interval =
+            Duration::from_millis(defaults::DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS);
+        let last_written = Instant::now()
+            .checked_sub(min_interval)
+            .unwrap_or_else(Instant::now);
+        Self {
+            last_written,
+            last_turn: 0,
+        }
+    }
 }
 
 impl SessionArchive {
@@ -294,6 +320,7 @@ impl SessionArchive {
             path,
             metadata,
             started_at,
+            progress_throttle: Arc::new(Mutex::new(ProgressThrottle::new())),
         })
     }
 
@@ -319,6 +346,9 @@ impl SessionArchive {
     }
 
     pub fn persist_progress(&self, args: SessionProgressArgs) -> Result<PathBuf> {
+        let mut perf = PerfSpan::new("vtcode.perf.session_progress_write_ms");
+        perf.tag("mode", "sync");
+
         let tool_summaries = args.distinct_tools.clone();
         let snapshot = SessionSnapshot {
             metadata: self.metadata.clone(),
@@ -341,9 +371,69 @@ impl SessionArchive {
         self.write_snapshot(snapshot)
     }
 
+    pub async fn persist_progress_async(&self, args: SessionProgressArgs) -> Result<PathBuf> {
+        let mut perf = PerfSpan::new("vtcode.perf.session_progress_write_ms");
+        perf.tag("mode", "async");
+
+        if !self.should_persist_progress(args.turn_number) {
+            return Ok(self.path.clone());
+        }
+
+        let tool_summaries = args.distinct_tools.clone();
+        let snapshot = SessionSnapshot {
+            metadata: self.metadata.clone(),
+            started_at: self.started_at,
+            ended_at: Utc::now(),
+            total_messages: args.total_messages,
+            distinct_tools: args.distinct_tools,
+            transcript: Vec::new(),
+            messages: args.recent_messages.clone(),
+            progress: Some(SessionProgress {
+                turn_number: args.turn_number,
+                recent_messages: args.recent_messages,
+                tool_summaries,
+                token_usage: args.token_usage,
+                max_context_tokens: args.max_context_tokens,
+                loaded_skills: args.loaded_skills.unwrap_or_default(),
+            }),
+        };
+
+        self.write_snapshot_async(snapshot).await
+    }
+
     fn write_snapshot(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
         write_json_file_sync(&self.path, &snapshot)?;
         Ok(self.path.clone())
+    }
+
+    async fn write_snapshot_async(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
+        if let Some(parent) = self.path.parent() {
+            ensure_dir_exists(parent).await?;
+        }
+
+        let json = serde_json::to_string_pretty(&snapshot)?;
+        tokio::fs::write(&self.path, json).await?;
+        Ok(self.path.clone())
+    }
+
+    fn should_persist_progress(&self, turn_number: usize) -> bool {
+        let min_interval =
+            Duration::from_millis(defaults::DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS);
+        let min_turns = defaults::DEFAULT_SESSION_PROGRESS_MIN_TURN_DELTA;
+
+        let mut throttle = self.progress_throttle.lock().unwrap();
+        if turn_number <= throttle.last_turn {
+            return false;
+        }
+        if throttle.last_written.elapsed() < min_interval
+            && turn_number.saturating_sub(throttle.last_turn) < min_turns
+        {
+            return false;
+        }
+
+        throttle.last_written = Instant::now();
+        throttle.last_turn = turn_number;
+        true
     }
     /// Update loaded skills in the archive metadata
     pub fn set_loaded_skills(&mut self, skills: Vec<String>) {
@@ -395,6 +485,7 @@ impl SessionArchive {
             path,
             metadata: forked_metadata,
             started_at,
+            progress_throttle: Arc::new(Mutex::new(ProgressThrottle::new())),
         })
     }
 }

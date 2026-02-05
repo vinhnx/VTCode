@@ -559,15 +559,18 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
 
-                if let Err(err) = archive.persist_progress(SessionProgressArgs {
-                    total_messages: conversation_history.len(),
-                    distinct_tools: distinct_tools.clone(),
-                    recent_messages,
-                    turn_number: progress_turn,
-                    token_usage: None,
-                    max_context_tokens: None, // Context trim config removed
-                    loaded_skills: Some(skill_names),
-                }) {
+                if let Err(err) = archive
+                    .persist_progress_async(SessionProgressArgs {
+                        total_messages: conversation_history.len(),
+                        distinct_tools: distinct_tools.clone(),
+                        recent_messages,
+                        turn_number: progress_turn,
+                        token_usage: None,
+                        max_context_tokens: None, // Context trim config removed
+                        loaded_skills: Some(skill_names),
+                    })
+                    .await
+                {
                     tracing::warn!("Failed to persist session progress: {}", err);
                 }
             }

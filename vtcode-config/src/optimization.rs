@@ -29,6 +29,51 @@ pub struct OptimizationConfig {
     /// Performance profiling settings
     #[serde(default)]
     pub profiling: ProfilingConfig,
+
+    /// File read cache configuration
+    #[serde(default)]
+    pub file_read_cache: FileReadCacheConfig,
+
+    /// Read-only command result cache
+    #[serde(default)]
+    pub command_cache: CommandCacheConfig,
+}
+
+/// File read cache configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileReadCacheConfig {
+    /// Enable file read caching
+    pub enabled: bool,
+
+    /// Minimum file size (bytes) before caching
+    pub min_size_bytes: usize,
+
+    /// Maximum cached file size (bytes)
+    pub max_size_bytes: usize,
+
+    /// Cache TTL in seconds
+    pub ttl_secs: u64,
+
+    /// Maximum number of cached entries
+    pub max_entries: usize,
+}
+
+/// Read-only command cache configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandCacheConfig {
+    /// Enable command caching
+    pub enabled: bool,
+
+    /// Cache TTL in milliseconds
+    pub ttl_ms: u64,
+
+    /// Maximum number of cached entries
+    pub max_entries: usize,
+
+    /// Allowlist of command prefixes eligible for caching
+    pub allowlist: Vec<String>,
 }
 
 /// Memory pool configuration
@@ -185,6 +230,32 @@ impl Default for MemoryPoolConfig {
     }
 }
 
+impl Default for FileReadCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            min_size_bytes: crate::constants::optimization::FILE_READ_CACHE_MIN_SIZE_BYTES,
+            max_size_bytes: crate::constants::optimization::FILE_READ_CACHE_MAX_SIZE_BYTES,
+            ttl_secs: crate::constants::optimization::FILE_READ_CACHE_TTL_SECS,
+            max_entries: crate::constants::optimization::FILE_READ_CACHE_MAX_ENTRIES,
+        }
+    }
+}
+
+impl Default for CommandCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            ttl_ms: crate::constants::optimization::COMMAND_CACHE_TTL_MS,
+            max_entries: crate::constants::optimization::COMMAND_CACHE_MAX_ENTRIES,
+            allowlist: crate::constants::optimization::COMMAND_CACHE_ALLOWLIST
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        }
+    }
+}
+
 impl Default for ToolRegistryConfig {
     fn default() -> Self {
         Self {
@@ -293,6 +364,8 @@ impl OptimizationConfig {
                 auto_export_results: true,
                 ..Default::default()
             },
+            file_read_cache: FileReadCacheConfig::default(),
+            command_cache: CommandCacheConfig::default(),
         }
     }
 
@@ -347,6 +420,22 @@ impl OptimizationConfig {
                 export_file_path: "/var/log/vtcode/benchmark_results.json".to_string(),
                 enable_regression_testing: true,
                 max_regression_percent: 5.0,
+            },
+            file_read_cache: FileReadCacheConfig {
+                enabled: true,
+                min_size_bytes: crate::constants::optimization::FILE_READ_CACHE_PROD_MIN_SIZE_BYTES,
+                max_size_bytes: crate::constants::optimization::FILE_READ_CACHE_PROD_MAX_SIZE_BYTES,
+                ttl_secs: crate::constants::optimization::FILE_READ_CACHE_PROD_TTL_SECS,
+                max_entries: crate::constants::optimization::FILE_READ_CACHE_PROD_MAX_ENTRIES,
+            },
+            command_cache: CommandCacheConfig {
+                enabled: true,
+                ttl_ms: crate::constants::optimization::COMMAND_CACHE_PROD_TTL_MS,
+                max_entries: crate::constants::optimization::COMMAND_CACHE_PROD_MAX_ENTRIES,
+                allowlist: crate::constants::optimization::COMMAND_CACHE_PROD_ALLOWLIST
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
             },
         }
     }

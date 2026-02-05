@@ -11,6 +11,7 @@
 //! 2. Include file reference in summary message
 //! 3. Agent can search history with `grep_file` when details are needed
 
+use crate::telemetry::perf::PerfSpan;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -157,6 +158,10 @@ impl HistoryFileManager {
         modified_files: &[String],
         executed_commands: &[String],
     ) -> Result<HistoryWriteResult> {
+        let mut perf = PerfSpan::new("vtcode.perf.history_write_ms");
+        perf.tag("mode", "sync");
+        perf.tag("reason", reason.to_string());
+
         if !self.config.enabled {
             return Err(anyhow::anyhow!("History persistence is disabled"));
         }
@@ -245,6 +250,10 @@ impl HistoryFileManager {
         modified_files: &[String],
         executed_commands: &[String],
     ) -> Result<HistoryWriteResult> {
+        let mut perf = PerfSpan::new("vtcode.perf.history_write_ms");
+        perf.tag("mode", "async");
+        perf.tag("reason", reason.to_string());
+
         if !self.config.enabled {
             return Err(anyhow::anyhow!("History persistence is disabled"));
         }

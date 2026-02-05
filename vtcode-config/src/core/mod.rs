@@ -35,6 +35,6 @@ pub use sandbox::{
     NetworkAllowlistEntryConfig, NetworkConfig, ResourceLimitsConfig, ResourceLimitsPreset,
     SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
 };
-pub use security::SecurityConfig;
+pub use security::{GatekeeperConfig, SecurityConfig};
 pub use skills::{PromptFormat, SkillsConfig, SkillsRenderMode};
 pub use tools::{ToolPolicy, ToolsConfig, WebFetchConfig};

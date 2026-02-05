@@ -427,7 +427,7 @@ impl SignalCleanupGuard {
             Signals::new([SIGINT, SIGTERM]).context("failed to register signal handlers")?;
         let handle = signals.handle();
         let thread = std::thread::spawn(move || {
-            for _signal in signals.forever() {
+            if signals.forever().next().is_some() {
                 let _ = crate::ui::tui::panic_hook::restore_tui();
                 std::process::exit(130);
             }

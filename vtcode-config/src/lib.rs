@@ -56,11 +56,12 @@ pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AuthConfig, AutomationConfig,
     CommandsConfig, DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType,
-    FullAutoConfig, MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
-    OpenResponsesConfig, OpenRouterAuthConfig, PluginRuntimeConfig, PluginTrustLevel,
-    PromptCachingConfig, ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset,
-    SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig,
-    SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
+    FullAutoConfig, GatekeeperConfig, MicroVMSandboxConfig, ModelConfig,
+    NetworkAllowlistEntryConfig, NetworkConfig, OpenResponsesConfig, OpenRouterAuthConfig,
+    PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig, ProviderPromptCachingConfig,
+    ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig, SandboxMode, SeccompConfig,
+    SeccompProfilePreset, SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode,
+    ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{
@@ -82,8 +83,8 @@ pub use mcp::{
 };
 pub use models::{ModelId, OpenRouterMetadata};
 pub use optimization::{
-    AgentExecutionConfig, AsyncPipelineConfig, LLMClientConfig, MemoryPoolConfig,
-    OptimizationConfig, ProfilingConfig, ToolRegistryConfig,
+    AgentExecutionConfig, AsyncPipelineConfig, CommandCacheConfig, FileReadCacheConfig,
+    LLMClientConfig, MemoryPoolConfig, OptimizationConfig, ProfilingConfig, ToolRegistryConfig,
 };
 pub use output_styles::{OutputStyle, OutputStyleConfig, OutputStyleManager};
 pub use root::{LayoutModeOverride, PtyConfig, ToolOutputMode, UiConfig, UiDisplayMode};

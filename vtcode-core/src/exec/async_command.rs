@@ -13,6 +13,9 @@ use tokio::sync::Mutex;
 use tokio::time::{Sleep, sleep};
 use tokio_util::sync::{CancellationToken, WaitForCancellationFutureOwned};
 
+use crate::telemetry::perf;
+use crate::utils::gatekeeper;
+
 const DEFAULT_CAPTURE_LIMIT: usize = 256 * 1024; // 256 KiB
 
 #[derive(Debug, Clone)]
@@ -59,6 +62,13 @@ impl AsyncProcessRunner {
         if options.program.is_empty() {
             return Err(anyhow!("program cannot be empty"));
         }
+
+        let mut tags = std::collections::HashMap::new();
+        tags.insert("subsystem".to_string(), "async_command".to_string());
+        tags.insert("program".to_string(), options.program.clone());
+        perf::record_value("vtcode.perf.spawn_count", 1.0, tags);
+
+        gatekeeper::check_quarantine_for_program(&options.program);
 
         let start = Instant::now();
         let mut command = AsyncCommand::new(&options.program);

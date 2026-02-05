@@ -21,3 +21,15 @@ pub const DEFAULT_PTY_OUTPUT_BYTE_FUSE: usize = 40 * 1024; // 40 KiB
 pub const DEFAULT_MAX_TOOL_CALLS_PER_TURN: usize = 32;
 pub const DEFAULT_MAX_TOOL_WALL_CLOCK_SECS: u64 = 600;
 pub const DEFAULT_MAX_TOOL_RETRIES: u32 = 2;
+
+/// Default macOS Gatekeeper auto-clear paths (relative or home-expanded)
+pub const DEFAULT_GATEKEEPER_AUTO_CLEAR_PATHS: &[&str] = &[".vtcode/bin", "~/.vtcode/bin"];
+
+/// Minimum interval between session progress snapshots (milliseconds)
+pub const DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS: u64 = 1000;
+
+/// Minimum turns between session progress snapshots
+pub const DEFAULT_SESSION_PROGRESS_MIN_TURN_DELTA: usize = 1;
+
+/// Async trajectory log channel capacity (lines)
+pub const DEFAULT_TRAJECTORY_LOG_CHANNEL_CAPACITY: usize = 1024;

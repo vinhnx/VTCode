@@ -6,7 +6,6 @@ continue with your recommendation, proceed with outcome. don't stop. review over
 
 ---
 
-
 ---
 
 improve git changelog generator to group by commit types and show more structured changelog output. https://github.com/openai/codex/releases/tag/rust-v0.95.0
@@ -36,7 +35,7 @@ Working on addressing this. Several things to fix but don’t have a “one thin
 
 Plan mode
 
-```---
+````---
 name: Plan
 description: Researches and outlines multi-step plans
 argument-hint: Outline the goal or problem to research
@@ -137,11 +136,22 @@ Keep iterating until explicit approval or handoff.
 
 **Decisions** (if applicable)
 - {Decision: chose X over Y}
-```
+````
 
 Rules:
+
 - NO code blocks — describe changes, link to files/symbols
 - NO questions at the end — ask during workflow via #tool:vscode/askQuestions
 - Keep scannable
-</plan_style_guide>
+  </plan_style_guide>
+
 ```
+
+```
+
+---
+
+- 🎨 Clean UI Transition: Removed the input prompt box border to provide a more modern, seamless terminal experience.
+- 📝 Large Paste Handling: Improved the readability of chat history by replacing massive text pastes with a clean, toggleable [Pasted Text: X lines] placeholder.
+- ⚡ Vim Mode Shortcuts: Added new quick-clear input shortcuts for power users operating in Vim mode.
+- 🧹 Clear context for Hooks: AfterAgent hooks can use clearContext to clear the sessions context when triggered.
