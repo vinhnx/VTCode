@@ -7,6 +7,7 @@ use crate::tools::handlers::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState}
 use crate::tools::request_user_input::RequestUserInputTool;
 
 use super::registration::ToolRegistration;
+use super::progressive_docs::minimal_tool_signatures;
 use super::{ToolInventory, ToolRegistry};
 
 /// Register all builtin tools into the inventory using the shared plan mode state.
@@ -28,7 +29,9 @@ pub(super) fn builtin_tool_registrations(
         .cloned()
         .unwrap_or_else(|| PlanModeState::new(PathBuf::new()));
 
-    vec![
+    let sigs = minimal_tool_signatures();
+
+    let mut registrations = vec![
         // ============================================================
         // HUMAN-IN-THE-LOOP (HITL)
         // ============================================================
@@ -244,5 +247,14 @@ pub(super) fn builtin_tool_registrations(
         // - load_skill
         // - load_skill_resource
         // - spawn_subagent
-    ]
+    ];
+
+    // Apply descriptions from signatures where available
+    for reg in &mut registrations {
+        if let Some(sig) = sigs.get(reg.name()) {
+            *reg = reg.clone().with_description(sig.brief);
+        }
+    }
+
+    registrations
 }
