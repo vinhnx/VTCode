@@ -17,6 +17,7 @@ use super::super::types::{
     InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
     WizardModalMode, WizardStep,
 };
+use super::status_requires_shimmer;
 use super::{
     Session,
     modal::{ModalListState, ModalSearchState, ModalState, WizardModalState},
@@ -100,17 +101,11 @@ impl Session {
         let Some(left) = self.input_status_left.as_deref() else {
             return false;
         };
-        let Some((indicator, rest)) = left.split_once(' ') else {
-            return false;
-        };
-        if indicator.chars().count() != 1 || rest.trim().is_empty() {
-            return false;
-        }
-        is_spinner_frame(indicator)
+        status_requires_shimmer(left)
     }
 
     pub(super) fn is_shimmer_active(&self) -> bool {
-        self.is_running_activity() || self.has_status_spinner()
+        self.has_status_spinner()
     }
 
     pub(crate) fn use_steady_cursor(&self) -> bool {
@@ -454,24 +449,4 @@ impl Session {
         self.mark_dirty();
         self.emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
     }
-}
-
-fn is_spinner_frame(indicator: &str) -> bool {
-    matches!(
-        indicator,
-        "⠋" | "⠙"
-            | "⠹"
-            | "⠸"
-            | "⠼"
-            | "⠴"
-            | "⠦"
-            | "⠧"
-            | "⠇"
-            | "⠏"
-            | "-"
-            | "\\"
-            | "|"
-            | "/"
-            | "."
-    )
 }

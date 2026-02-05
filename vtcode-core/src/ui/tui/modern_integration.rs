@@ -76,9 +76,15 @@ pub async fn run_modern_tui(
                                 break 'main;
                             }
                             Event::Tick => {
-                                // Update logic can go here if needed
+                                // Update animation state on a tick when needed
+                                if session.use_steady_cursor() || session.thinking_spinner.is_active {
+                                    session.handle_tick();
+                                }
                             }
                             Event::Render => {
+                                if session.use_steady_cursor() || session.thinking_spinner.is_active {
+                                    session.handle_tick();
+                                }
                                 // Draw the session to the terminal with performance tracking
                                 let start = std::time::Instant::now();
                                 tui.terminal.draw(|frame| {

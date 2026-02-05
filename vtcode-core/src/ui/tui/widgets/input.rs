@@ -1,6 +1,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
+    style::Modifier,
     text::Line,
     widgets::{Block, Borders, Clear, Paragraph, Widget, Wrap},
 };
@@ -118,11 +119,19 @@ impl<'a> Widget for InputWidget<'a> {
                 .min(inner.height.saturating_sub(1))
                 .saturating_add(inner.y);
 
-            // Set cursor position using buffer's set_span method with cursor positioning
             if let Some(cell) = buf.cell_mut((cursor_x, cursor_y)) {
-                cell.set_symbol("");
-                // The cursor position is managed by the terminal, we just need to ensure
-                // the cell is accessible for cursor placement
+                if input_data.use_fake_cursor {
+                    let mut style = cell.style();
+                    style = style.add_modifier(Modifier::REVERSED);
+                    cell.set_style(style);
+                    if cell.symbol().is_empty() {
+                        cell.set_symbol(" ");
+                    }
+                } else {
+                    cell.set_symbol("");
+                    // The cursor position is managed by the terminal, we just need to ensure
+                    // the cell is accessible for cursor placement
+                }
             }
         }
 

@@ -4,6 +4,7 @@ use crate::config::constants::ui;
 use crate::ui::tui::types::{EditingMode, InlineTextStyle};
 use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
+    buffer::Buffer,
     prelude::*,
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
@@ -108,7 +109,11 @@ impl Session {
                 .cursor_y
                 .min(inner.height.saturating_sub(1))
                 .saturating_add(inner.y);
-            frame.set_cursor_position(Position::new(cursor_x, cursor_y));
+            if self.use_fake_cursor() {
+                render_fake_cursor(frame.buffer_mut(), cursor_x, cursor_y);
+            } else {
+                frame.set_cursor_position(Position::new(cursor_x, cursor_y));
+            }
         }
 
         if let (Some(status_rect), Some(line)) = (status_area, status_line) {
@@ -334,17 +339,11 @@ impl Session {
         let dim_style = self.styles.default_style().add_modifier(Modifier::DIM);
         let mut spans = Vec::new();
 
-        // Add left content (git status)
+        // Add left content (git status or shimmered activity)
         if let Some(left_value) = left.as_ref() {
-            if let Some((indicator, rest)) = split_running_command_status(left_value) {
-                let indicator_style = ratatui_style_from_inline(
-                    &self.styles.tool_inline_style("run"),
-                    self.theme.foreground,
-                );
-                spans.push(Span::styled(indicator, indicator_style));
-                spans.push(Span::raw(" "));
+            if status_requires_shimmer(left_value) {
                 spans.extend(shimmer_spans_with_style_at_phase(
-                    &rest,
+                    left_value,
                     dim_style,
                     self.shimmer_state.phase(),
                 ));
@@ -427,6 +426,10 @@ impl Session {
         self.cursor_visible && (self.input_enabled || loading_state)
     }
 
+    fn use_fake_cursor(&self) -> bool {
+        self.has_status_spinner()
+    }
+
     fn secure_prompt_active(&self) -> bool {
         self.modal
             .as_ref()
@@ -471,6 +474,7 @@ impl Session {
             is_full_auto_trust: self.is_full_auto_trust(),
             is_tools_policy_trust: self.is_tools_policy_trust(),
             cursor_should_be_visible: self.cursor_should_be_visible(),
+            use_fake_cursor: self.use_fake_cursor(),
             border_style,
             default_style: self.styles.default_style(),
         }
@@ -479,18 +483,6 @@ impl Session {
     /// Build input status line for external widgets
     pub fn build_input_status_widget_data(&self, width: u16) -> Option<Vec<Span<'static>>> {
         self.render_input_status_line(width).map(|line| line.spans)
-    }
-}
-
-fn split_running_command_status(text: &str) -> Option<(String, String)> {
-    let (indicator, rest) = text.split_once(' ')?;
-    if indicator.chars().count() != 1 {
-        return None;
-    }
-    if is_spinner_frame(indicator) && !rest.trim().is_empty() {
-        Some((indicator.to_string(), rest.to_string()))
-    } else {
-        None
     }
 }
 
@@ -514,6 +506,25 @@ fn is_spinner_frame(indicator: &str) -> bool {
     )
 }
 
+pub(crate) fn status_requires_shimmer(text: &str) -> bool {
+    if text.contains("Running command:")
+        || text.contains("Running tool:")
+        || text.contains("Running:")
+        || text.contains("Running ")
+        || text.contains("Executing ")
+        || text.contains("Press Ctrl+C to cancel")
+    {
+        return true;
+    }
+    let Some((indicator, rest)) = text.split_once(' ') else {
+        return false;
+    };
+    if indicator.chars().count() != 1 || rest.trim().is_empty() {
+        return false;
+    }
+    is_spinner_frame(indicator)
+}
+
 /// Data structure for input widget rendering
 #[derive(Clone, Debug)]
 pub struct InputWidgetData {
@@ -523,6 +534,18 @@ pub struct InputWidgetData {
     pub is_full_auto_trust: bool,
     pub is_tools_policy_trust: bool,
     pub cursor_should_be_visible: bool,
+    pub use_fake_cursor: bool,
     pub border_style: Style,
     pub default_style: Style,
+}
+
+fn render_fake_cursor(buf: &mut Buffer, cursor_x: u16, cursor_y: u16) {
+    if let Some(cell) = buf.cell_mut((cursor_x, cursor_y)) {
+        let mut style = cell.style();
+        style = style.add_modifier(Modifier::REVERSED);
+        cell.set_style(style);
+        if cell.symbol().is_empty() {
+            cell.set_symbol(" ");
+        }
+    }
 }

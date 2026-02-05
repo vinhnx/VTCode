@@ -9,7 +9,6 @@ use vtcode_core::llm::providers::clean_reasoning_text;
 
 use anyhow::{Error, Result};
 use futures::StreamExt;
-use indicatif::ProgressStyle;
 use tokio::sync::{Notify, mpsc};
 use tokio::task;
 use tokio::time::sleep;
@@ -139,33 +138,6 @@ fn create_mini_progress_bar(percentage: u8, width: usize) -> String {
     bar
 }
 
-/// Create an indeterminate progress indicator that shows activity
-fn create_indeterminate_progress_indicator(tick: u64) -> String {
-    let patterns = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    let pattern_index = (tick / 2 % patterns.len() as u64) as usize;
-    patterns[pattern_index].to_string()
-}
-
-struct SpinnerFrameGenerator {
-    style: ProgressStyle,
-    tick: u64,
-}
-
-impl SpinnerFrameGenerator {
-    fn new() -> Self {
-        // Use a more elaborate spinner style that's more visible
-        let style = ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
-        Self { style, tick: 0 }
-    }
-
-    fn next_frame(&mut self) -> &str {
-        let frame = self.style.get_tick_str(self.tick);
-        self.tick = self.tick.wrapping_add(1);
-        frame
-    }
-}
-
 #[allow(dead_code)]
 pub(crate) struct PlaceholderSpinner {
     handle: InlineHandle,
@@ -208,12 +180,14 @@ impl PlaceholderSpinner {
         let (message_sender, mut message_receiver) = mpsc::unbounded_channel::<String>();
         let message_sender_clone = message_sender.clone();
 
+        let initial_display = message_with_hint.clone();
+
         // Set initial status
-        spinner_handle.set_input_status(Some(message_with_hint.clone()), status_right.clone());
+        spinner_handle.set_input_status(Some(initial_display.clone()), status_right.clone());
 
         let task = task::spawn(async move {
-            let mut frames = SpinnerFrameGenerator::new();
             let mut current_message = message_with_hint;
+            let mut last_display = initial_display;
             while spinner_active.load(Ordering::SeqCst) {
                 // Check for message updates
                 while let Ok(new_message) = message_receiver.try_recv() {
@@ -234,11 +208,6 @@ impl PlaceholderSpinner {
                         // Add mini progress bar (width 8 for more compact display) and percentage
                         let progress_bar = create_mini_progress_bar(progress.percentage, 8);
                         parts.push(format!("{} {:.0}%", progress_bar, progress.percentage));
-                    } else if progress.total == 0 && !progress.message.is_empty() {
-                        // Use modern indicatif-style spinner for all indeterminate progress
-                        let activity_indicator =
-                            create_indeterminate_progress_indicator(frames.tick);
-                        parts.push(activity_indicator);
                     }
 
                     let eta = progress.eta_formatted();
@@ -251,15 +220,17 @@ impl PlaceholderSpinner {
                     String::new()
                 };
 
-                let frame = frames.next_frame();
                 let display = if progress_info.is_empty() {
-                    format!("{} {}", frame, current_message)
+                    current_message.clone()
                 } else {
-                    format!("{} {}: {}", frame, current_message, progress_info)
+                    format!("{}: {}", current_message, progress_info)
                 };
 
                 // Update the status with spinner animation and progress
-                spinner_handle.set_input_status(Some(display), status_right.clone());
+                if display != last_display {
+                    spinner_handle.set_input_status(Some(display.clone()), status_right.clone());
+                    last_display = display;
+                }
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
             }
 
