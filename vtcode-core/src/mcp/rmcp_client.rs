@@ -1,22 +1,16 @@
 use super::rmcp_transport::create_stdio_transport_with_stderr;
-use super::{
-    McpElicitationHandler, convert_call_tool_result, convert_to_mcp, convert_to_rmcp,
-    create_env_for_mcp_server,
-};
+use super::{McpElicitationHandler, convert_to_rmcp, create_env_for_mcp_server};
 use anyhow::{Context, Result, anyhow};
 use futures::FutureExt;
 use jsonschema::Validator;
-use mcp_types::{
-    CallToolRequestParams, CallToolResult, GetPromptRequestParams, GetPromptResult,
-    InitializeRequestParams, InitializeResult, Prompt, ReadResourceRequestParams,
-    ReadResourceResult, Resource, Tool,
-};
 use reqwest::header::HeaderMap;
 use rmcp::handler::client::ClientHandler;
 use rmcp::model::{
-    CancelledNotificationParam, CreateElicitationRequestParams, ElicitationAction, ListRootsResult,
-    LoggingLevel, LoggingMessageNotificationParam, ProgressNotificationParam,
-    ResourceUpdatedNotificationParam, Root,
+    CallToolRequestParams, CallToolResult, CancelledNotificationParam,
+    CreateElicitationRequestParams, ElicitationAction, GetPromptRequestParams, GetPromptResult,
+    InitializeRequestParams, InitializeResult, ListRootsResult, LoggingLevel,
+    LoggingMessageNotificationParam, ProgressNotificationParam, Prompt, ReadResourceRequestParams,
+    ReadResourceResult, Resource, ResourceTemplate, ResourceUpdatedNotificationParam, Root, Tool,
 };
 use rmcp::service::{self, NotificationContext, RequestContext, RoleClient, RunningService};
 use rmcp::transport::child_process::TokioChildProcess;
@@ -201,11 +195,11 @@ impl RmcpClient {
             None => transport_future.await?,
         };
 
-        let initialize_result_rmcp = service
+        let initialize_result = service
             .peer()
             .peer_info()
-            .ok_or_else(|| anyhow!("Handshake succeeded but server info missing"))?;
-        let initialize_result = convert_to_mcp(initialize_result_rmcp)?;
+            .ok_or_else(|| anyhow!("Handshake succeeded but server info missing"))?
+            .clone();
 
         let mut guard = self.state.lock().await;
         *guard = ClientState::Ready {
@@ -218,25 +212,15 @@ impl RmcpClient {
     pub(super) async fn list_all_tools(&self, timeout: Option<Duration>) -> Result<Vec<Tool>> {
         let service = self.service().await?;
         let rmcp_future = service.peer().list_all_tools();
-        let rmcp_tools = run_with_timeout(rmcp_future, timeout, "tools/list").await?;
-
-        rmcp_tools
-            .into_iter()
-            .map(convert_to_mcp::<_, Tool>)
-            .collect::<Result<Vec<_>>>()
-            .context("Failed to convert MCP tool list")
+        let tools = run_with_timeout(rmcp_future, timeout, "tools/list").await?;
+        Ok(tools)
     }
 
     pub(super) async fn list_all_prompts(&self, timeout: Option<Duration>) -> Result<Vec<Prompt>> {
         let service = self.service().await?;
         let rmcp_future = service.peer().list_all_prompts();
-        let rmcp_prompts = run_with_timeout(rmcp_future, timeout, "prompts/list").await?;
-
-        rmcp_prompts
-            .into_iter()
-            .map(convert_to_mcp::<_, Prompt>)
-            .collect::<Result<Vec<_>>>()
-            .context("Failed to convert MCP prompt list")
+        let prompts = run_with_timeout(rmcp_future, timeout, "prompts/list").await?;
+        Ok(prompts)
     }
 
     pub(super) async fn list_all_resources(
@@ -245,13 +229,19 @@ impl RmcpClient {
     ) -> Result<Vec<Resource>> {
         let service = self.service().await?;
         let rmcp_future = service.peer().list_all_resources();
-        let rmcp_resources = run_with_timeout(rmcp_future, timeout, "resources/list").await?;
+        let resources = run_with_timeout(rmcp_future, timeout, "resources/list").await?;
+        Ok(resources)
+    }
 
-        rmcp_resources
-            .into_iter()
-            .map(convert_to_mcp::<_, Resource>)
-            .collect::<Result<Vec<_>>>()
-            .context("Failed to convert MCP resource list")
+    #[allow(dead_code)]
+    pub(super) async fn list_all_resource_templates(
+        &self,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<ResourceTemplate>> {
+        let service = self.service().await?;
+        let rmcp_future = service.peer().list_all_resource_templates();
+        let templates = run_with_timeout(rmcp_future, timeout, "resources/templates/list").await?;
+        Ok(templates)
     }
 
     pub(super) async fn call_tool(
@@ -260,10 +250,8 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<CallToolResult> {
         let service = self.service().await?;
-        let rmcp_params: rmcp::model::CallToolRequestParams = convert_to_rmcp(params)?;
-        let rmcp_result =
-            run_with_timeout(service.call_tool(rmcp_params), timeout, "tools/call").await?;
-        convert_call_tool_result(rmcp_result)
+        let result = run_with_timeout(service.call_tool(params), timeout, "tools/call").await?;
+        Ok(result)
     }
 
     pub(super) async fn read_resource(
@@ -272,14 +260,13 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<ReadResourceResult> {
         let service = self.service().await?;
-        let rmcp_params: rmcp::model::ReadResourceRequestParams = convert_to_rmcp(params)?;
-        let rmcp_result = run_with_timeout(
-            service.peer().read_resource(rmcp_params),
+        let result = run_with_timeout(
+            service.peer().read_resource(params),
             timeout,
             "resources/read",
         )
         .await?;
-        convert_to_mcp(rmcp_result).context("Failed to convert MCP resource contents")
+        Ok(result)
     }
 
     pub(super) async fn get_prompt(
@@ -288,14 +275,13 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<GetPromptResult> {
         let service = self.service().await?;
-        let rmcp_params: rmcp::model::GetPromptRequestParams = convert_to_rmcp(params)?;
-        let rmcp_result = run_with_timeout(
-            service.peer().get_prompt(rmcp_params),
+        let result = run_with_timeout(
+            service.peer().get_prompt(params),
             timeout,
             "prompts/get",
         )
         .await?;
-        convert_to_mcp(rmcp_result).context("Failed to convert MCP prompt result")
+        Ok(result)
     }
 
     pub(super) async fn shutdown(&self) -> Result<()> {

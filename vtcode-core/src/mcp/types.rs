@@ -1,7 +1,6 @@
 //! Core MCP data types for tool, resource, and prompt information.
 
-use mcp_types::{PromptArgument, PromptMessage, ReadResourceResultContentsItem};
-use rmcp::model::ElicitationAction;
+use rmcp::model::{ElicitationAction, PromptArgument, PromptMessage, ResourceContents};
 use serde_json::{Map, Value};
 
 /// Information about an MCP tool exposed by a provider.
@@ -29,7 +28,7 @@ pub struct McpResourceInfo {
 pub struct McpResourceData {
     pub provider: String,
     pub uri: String,
-    pub contents: Vec<ReadResourceResultContentsItem>,
+    pub contents: Vec<ResourceContents>,
     pub meta: Map<String, Value>,
 }
 

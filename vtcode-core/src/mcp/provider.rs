@@ -1,8 +1,7 @@
 use anyhow::{Context, Result, anyhow};
-use mcp_types::{
+use rmcp::model::{
     CallToolRequestParams, CallToolResult, GetPromptRequestParams, InitializeRequestParams,
-    InitializeResult, Prompt, ReadResourceRequestParams, Resource, SUPPORTED_PROTOCOL_VERSIONS,
-    Tool,
+    InitializeResult, Prompt, ReadResourceRequestParams, Resource, Tool,
 };
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -12,6 +11,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
 use tracing::warn;
+
+use super::{LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS};
 
 use crate::config::mcp::{McpAllowListConfig, McpProviderConfig, McpTransportConfig};
 
@@ -23,6 +24,7 @@ use super::{
 
 pub struct McpProvider {
     pub(super) name: String,
+    #[allow(dead_code)]
     pub(super) protocol_version: String,
     client: Arc<RmcpClient>,
     pub(crate) semaphore: Arc<Semaphore>,
@@ -57,7 +59,7 @@ impl McpProvider {
                     elicitation_handler.clone(),
                 )
                 .await?;
-                (client, mcp_types::LATEST_PROTOCOL_VERSION.to_string())
+                (client, LATEST_PROTOCOL_VERSION.to_string())
             }
             McpTransportConfig::Http(http) => {
                 if !SUPPORTED_PROTOCOL_VERSIONS
@@ -124,14 +126,15 @@ impl McpProvider {
     ) -> Result<()> {
         let result = self.client.initialize(params, startup_timeout).await?;
 
+        let protocol_version_str = result.protocol_version.to_string();
         if !SUPPORTED_PROTOCOL_VERSIONS
             .iter()
-            .any(|supported| supported == &result.protocol_version)
+            .any(|supported| *supported == protocol_version_str)
         {
             return Err(anyhow!(
                 "MCP server for '{}' negotiated unsupported protocol version '{}'",
                 self.name,
-                result.protocol_version
+                protocol_version_str
             ));
         }
 
@@ -204,8 +207,10 @@ impl McpProvider {
                 )
             })?;
         let params = CallToolRequestParams {
-            name: tool_name.to_string(),
-            arguments,
+            name: tool_name.to_string().into(),
+            arguments: Some(arguments),
+            meta: None,
+            task: None,
         };
         self.client.call_tool(params, timeout).await
     }
@@ -308,13 +313,14 @@ impl McpProvider {
             .context("Failed to acquire MCP request slot")?;
         let params = ReadResourceRequestParams {
             uri: uri.to_string(),
+            meta: None,
         };
         let result = self.client.read_resource(params, timeout).await?;
         Ok(McpResourceData {
             provider: self.name.clone(),
             uri: uri.to_string(),
             contents: result.contents,
-            meta: result.meta,
+            meta: Map::new(),
         })
     }
 
@@ -372,9 +378,16 @@ impl McpProvider {
             .acquire_owned()
             .await
             .context("Failed to acquire MCP request slot")?;
+        // Convert HashMap<String, String> to JsonObject (BTreeMap<String, Value>)
+        let args_json: serde_json::Map<String, Value> = arguments
+            .into_iter()
+            .map(|(k, v)| (k, Value::String(v)))
+            .collect();
+
         let params = GetPromptRequestParams {
             name: prompt_name.to_string(),
-            arguments,
+            arguments: Some(args_json),
+            meta: None,
         };
         let result = self.client.get_prompt(params, timeout).await?;
         Ok(McpPromptDetail {
@@ -382,7 +395,7 @@ impl McpProvider {
             name: prompt_name.to_string(),
             description: result.description,
             messages: result.messages,
-            meta: result.meta,
+            meta: Map::new(),
         })
     }
 
@@ -399,10 +412,10 @@ impl McpProvider {
             .into_iter()
             .filter(|tool| allowlist.is_tool_allowed(&self.name, &tool.name))
             .map(|tool| McpToolInfo {
-                description: tool.description.unwrap_or_default(),
-                input_schema: serde_json::to_value(tool.input_schema).unwrap_or(Value::Null),
+                description: tool.description.unwrap_or_default().to_string(),
+                input_schema: serde_json::to_value(&tool.input_schema).unwrap_or(Value::Null),
                 provider: self.name.clone(),
-                name: tool.name,
+                name: tool.name.to_string(),
             })
             .collect()
     }
@@ -417,11 +430,11 @@ impl McpProvider {
             .filter(|resource| allowlist.is_resource_allowed(&self.name, &resource.uri))
             .map(|resource| McpResourceInfo {
                 provider: self.name.clone(),
-                uri: resource.uri,
-                name: resource.name,
-                description: resource.description,
-                mime_type: resource.mime_type,
-                size: resource.size,
+                uri: resource.uri.clone(),
+                name: resource.name.clone(),
+                description: resource.description.clone(),
+                mime_type: resource.mime_type.clone(),
+                size: resource.size.map(|s| s as i64),
             })
             .collect()
     }
@@ -436,9 +449,9 @@ impl McpProvider {
             .filter(|prompt| allowlist.is_prompt_allowed(&self.name, &prompt.name))
             .map(|prompt| McpPromptInfo {
                 provider: self.name.clone(),
-                name: prompt.name,
-                description: prompt.description,
-                arguments: prompt.arguments,
+                name: prompt.name.clone(),
+                description: prompt.description.clone(),
+                arguments: prompt.arguments.clone().unwrap_or_default(),
             })
             .collect()
     }

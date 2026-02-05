@@ -11,7 +11,10 @@ pub(crate) fn apply_responses_beta(builder: RequestBuilder) -> RequestBuilder {
 
 /// Apply turn metadata header if metadata is present in the request.
 /// This header provides git context (remote URLs, commit hash) to the provider.
-pub(crate) fn apply_turn_metadata(builder: RequestBuilder, metadata: &Option<Value>) -> RequestBuilder {
+pub(crate) fn apply_turn_metadata(
+    builder: RequestBuilder,
+    metadata: &Option<Value>,
+) -> RequestBuilder {
     if let Some(metadata) = metadata {
         if let Ok(metadata_str) = serde_json::to_string(metadata) {
             return builder.header("X-Turn-Metadata", metadata_str);

@@ -136,7 +136,10 @@ mod tests {
     #[test]
     fn test_workspace_info_serialization() {
         let mut remotes = BTreeMap::new();
-        remotes.insert("origin".to_string(), "https://github.com/user/repo.git".to_string());
+        remotes.insert(
+            "origin".to_string(),
+            "https://github.com/user/repo.git".to_string(),
+        );
 
         let workspace = WorkspaceInfo {
             remote_urls: remotes,

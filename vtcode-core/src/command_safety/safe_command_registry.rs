@@ -301,9 +301,14 @@ impl SafeCommandRegistry {
                     let arg = arg.as_str();
                     matches!(
                         arg,
-                        "-d" | "-D" | "--delete"
-                            | "-m" | "-M" | "--move"
-                            | "-c" | "-C" | "--create"
+                        "-d" | "-D"
+                            | "--delete"
+                            | "-m"
+                            | "-M"
+                            | "--move"
+                            | "-c"
+                            | "-C"
+                            | "--create"
                             | "--set-upstream"
                             | "--set-upstream-to"
                             | "--unset-upstream"
@@ -321,7 +326,9 @@ impl SafeCommandRegistry {
                     SafetyDecision::Allow
                 } else {
                     // Unknown flags - be conservative
-                    SafetyDecision::Deny("git branch with unknown flags requires approval".to_string())
+                    SafetyDecision::Deny(
+                        "git branch with unknown flags requires approval".to_string(),
+                    )
                 }
             }
             _ => SafetyDecision::Unknown,
