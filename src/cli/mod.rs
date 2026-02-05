@@ -18,6 +18,7 @@ pub mod analyze;
 pub mod benchmark;
 pub mod exec;
 pub mod skills;
+pub mod skills_ref;
 pub mod update;
 
 pub use vtcode_core::cli::args::AskCommandOptions;

@@ -41,14 +41,18 @@ impl Default for DiscoveryConfig {
     fn default() -> Self {
         Self {
             skill_paths: vec![
-                PathBuf::from(".agents/skills"),
-                PathBuf::from(".vtcode/skills"),
-                PathBuf::from(".claude/skills"),
-                PathBuf::from(".pi/skills"),
-                PathBuf::from(".codex/skills"),
-                PathBuf::from("./skills"),
+                // Project-level skills (highest priority)
+                PathBuf::from(".github/skills"), // Agent Skills spec recommended
+                PathBuf::from(".agents/skills"), // VT Code native
+                PathBuf::from(".vtcode/skills"), // Legacy VT Code
+                PathBuf::from(".claude/skills"), // Claude Code legacy
+                PathBuf::from(".pi/skills"),     // Pi compatibility
+                PathBuf::from(".codex/skills"),  // Codex compatibility
+                PathBuf::from("./skills"),       // Generic project skills
+                // User-level skills
                 PathBuf::from("~/.vtcode/skills"),
                 PathBuf::from("~/.claude/skills"),
+                PathBuf::from("~/.copilot/skills"), // VS Code Copilot compatibility
                 PathBuf::from("~/.pi/agent/skills"),
                 PathBuf::from("~/.codex/skills"),
             ],
@@ -517,6 +521,7 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         compatibility: None,
         variety: SkillVariety::SystemUtility,
         metadata: None,
+            tools: None,
     };
 
     Ok(SkillContext::MetadataOnly(

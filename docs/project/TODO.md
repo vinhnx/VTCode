@@ -122,11 +122,8 @@ Rules:
 
 ---
 
-- Clean UI Transition: Removed the input prompt box border to provide a more modern, seamless terminal experience.
 - Large Paste Handling: Improved the readability of chat history by replacing massive text pastes with a clean, toggleable [Pasted Text: X lines] placeholder.
 - Vim Mode Shortcuts: Added new quick-clear input shortcuts for power users operating in Vim mode.
-- Clear context for Hooks: AfterAgent hooks can use clearContext to clear the sessions context when triggered.
-
 ---
 
 https://agentskills.io/integrate-skills

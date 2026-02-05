@@ -101,6 +101,9 @@ pub struct SkillManifest {
     /// Arbitrary key-value metadata (Agent Skills spec)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
+    /// Tool dependencies for this skill (Agent Skills spec extension)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
 }
 
 impl Default for SkillManifest {
@@ -127,6 +130,7 @@ impl Default for SkillManifest {
             compatibility: None,
             variety: SkillVariety::AgentSkill,
             metadata: None,
+            tools: None,
         }
     }
 }
@@ -681,6 +685,7 @@ mod tests {
             version: Some("1.0.0".to_string()),
             author: Some("Test Author".to_string()),
             metadata: Some(metadata),
+            tools: None,
             ..Default::default()
         };
         assert!(m.validate().is_ok());

@@ -27,6 +27,7 @@ mod validation_tests {
             disallow_container: None,
             compatibility: None,
             metadata: None,
+            tools: None,
         };
         let result = m.validate();
         assert!(result.is_err());
@@ -57,6 +58,7 @@ mod validation_tests {
             disallow_container: None,
             compatibility: None,
             metadata: None,
+            tools: None,
         };
         let result = m.validate();
         assert!(result.is_err());
@@ -87,6 +89,7 @@ mod validation_tests {
             disallow_container: None,
             compatibility: None,
             metadata: None,
+            tools: None,
         };
         let result = m.validate();
         assert!(result.is_err());
@@ -117,6 +120,7 @@ mod validation_tests {
             disallow_container: None,
             compatibility: None,
             metadata: None,
+            tools: None,
         };
         let result = m.validate();
         assert!(result.is_err());
@@ -153,6 +157,7 @@ mod validation_tests {
             disallow_container: None,
             compatibility: None,
             metadata: None,
+            tools: None,
         };
         
         let result = m.validate_directory_name_match(&skill_md);
@@ -188,6 +193,7 @@ mod validation_tests {
             disallow_container: None,
             compatibility: None,
             metadata: None,
+            tools: None,
         };
         
         let result = m.validate_directory_name_match(&skill_md);
@@ -228,6 +234,7 @@ mod validation_tests {
             disallow_container: None,
             compatibility: None,
             metadata: None,
+            tools: None,
         };
         
         // CLI tools should skip directory name validation
