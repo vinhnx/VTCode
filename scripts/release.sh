@@ -561,78 +561,14 @@ main() {
         print_warning "Released version $released_version differs from expected $next_version"
     fi
 
-    # 3.5 GitHub Release Creation and Binary Upload via gh
-     print_info "Step 3.5: Creating GitHub Release with binaries..."
-    
-     # Ensure GITHUB_TOKEN is available
-     if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
-         export GITHUB_TOKEN=$(gh auth token)
-     fi
-    
-     # Check if release already exists
-     if gh release view "v$released_version" &>/dev/null; then
-         print_warning "Release v$released_version already exists"
-     else
-         # Read release notes from file
-         local release_body=""
-         if [[ -f "$RELEASE_NOTES_FILE" ]]; then
-             release_body=$(cat "$RELEASE_NOTES_FILE")
-         fi
-    
-         # Create GitHub release with release notes
-         if gh release create "v$released_version" \
-             --title "v$released_version" \
-             --notes "$release_body" \
-             --draft=false \
-             --prerelease=false; then
-             print_success "GitHub Release v$released_version created successfully"
-         else
-             print_error "Failed to create GitHub Release"
-             exit 1
-         fi
-     fi
-
-    # 4. Upload Binaries to GitHub Release
+    # 3.5 & 4. GitHub Release Creation and Binary Upload
     if [[ "$skip_binaries" == 'false' ]]; then
-        print_info "Step 4: Packaging and uploading binaries to GitHub Release v$released_version..."
+        print_info "Step 4: Uploading binaries to GitHub Release v$released_version..."
         
-        local binaries_dir="/tmp/vtcode-release-$released_version"
-        mkdir -p "$binaries_dir"
-        
-        # Build and package binaries
-        print_info "Building binaries for macOS architectures..."
-        
-        # x86_64-apple-darwin
-        if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
-            tar -C target/x86_64-apple-darwin/release -czf "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.tar.gz" vtcode
-            shasum -a 256 "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.sha256"
-            print_success "Built x86_64-apple-darwin"
-        else
-            print_warning "Failed to build x86_64-apple-darwin"
-        fi
-        
-        # aarch64-apple-darwin
-        if cargo build --release --target aarch64-apple-darwin &>/dev/null; then
-            tar -C target/aarch64-apple-darwin/release -czf "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.tar.gz" vtcode
-            shasum -a 256 "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.sha256"
-            print_success "Built aarch64-apple-darwin"
-        else
-            print_warning "Failed to build aarch64-apple-darwin"
-        fi
-        
-        # Upload binaries to GitHub Release
-        print_info "Uploading binaries to GitHub Release..."
-        if gh release upload "v$released_version" "$binaries_dir"/*.tar.gz "$binaries_dir"/*.sha256 --clobber; then
-            print_success "Binaries uploaded successfully"
-        else
-            print_error "Failed to upload binaries to GitHub Release"
-            exit 1
-        fi
-        
-        # Cleanup
-        rm -rf "$binaries_dir"
+        # Use the specialized script to upload binaries, which also creates the release if needed
+        local upload_args=(-v "$released_version" --only-upload --notes-file "$RELEASE_NOTES_FILE")
+        ./scripts/build-and-upload-binaries.sh "${upload_args[@]}"
     fi
-
 
      # 5. Update Homebrew
      if [[ "$skip_binaries" == 'false' ]]; then
