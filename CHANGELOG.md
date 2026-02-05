@@ -2,6 +2,12 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.76.1 - 2026-02-05
+
+### Other
+
+- Refactor MCP integration and update dependencies (b31b5407) (@vinhnx)
+
 ## v0.76.0 - 2026-02-05
 
 ### Features
