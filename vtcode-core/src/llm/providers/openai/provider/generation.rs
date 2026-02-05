@@ -67,10 +67,8 @@ impl OpenAIProvider {
             .send()
             .await
             .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!("Network error: {}", e),
-                );
+                let formatted_error =
+                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
                 provider::LLMError::Network {
                     message: formatted_error,
                     metadata: None,

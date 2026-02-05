@@ -83,9 +83,7 @@ pub fn get_head_commit_hash(cwd: &Path) -> Result<Option<String>> {
         return Ok(None);
     }
 
-    let hash = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .to_string();
+    let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
     if hash.is_empty() {
         Ok(None)
@@ -106,15 +104,18 @@ pub fn get_git_repo_root(cwd: &Path) -> Result<Option<String>> {
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(cwd)
         .output()
-        .with_context(|| format!("Failed to run git rev-parse --show-toplevel in {}", cwd.display()))?;
+        .with_context(|| {
+            format!(
+                "Failed to run git rev-parse --show-toplevel in {}",
+                cwd.display()
+            )
+        })?;
 
     if !output.status.success() {
         return Ok(None);
     }
 
-    let root = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .to_string();
+    let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
     if root.is_empty() {
         Ok(None)

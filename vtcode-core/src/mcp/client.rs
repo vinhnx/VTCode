@@ -4,11 +4,10 @@ use crate::config::mcp::{
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use chrono::Utc;
-use mcp_types::{
-    CallToolResult, CallToolResultContentItem, ClientCapabilities, ClientCapabilitiesRoots,
-    Implementation, InitializeRequestParams,
-};
 use parking_lot::RwLock;
+use rmcp::model::{
+    CallToolResult, ClientCapabilities, Implementation, InitializeRequestParams, RootsCapabilities,
+};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -17,9 +16,9 @@ use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
 use super::{
-    ELICITATION_SCHEMA_VALIDATION_FLAG, McpClientStatus, McpElicitationHandler, McpPromptDetail,
-    McpPromptInfo, McpProvider, McpResourceData, McpResourceInfo, McpToolExecutor, McpToolInfo,
-    format_tool_markdown, sanitize_filename,
+    McpClientStatus, McpElicitationHandler, McpPromptDetail, McpPromptInfo, McpProvider,
+    McpResourceData, McpResourceInfo, McpToolExecutor, McpToolInfo, format_tool_markdown,
+    sanitize_filename,
 };
 
 pub struct McpClient {
@@ -835,33 +834,32 @@ impl McpClient {
         }
     }
 
-    fn build_initialize_params(&self, provider: &McpProvider) -> InitializeRequestParams {
+    fn build_initialize_params(&self, _provider: &McpProvider) -> InitializeRequestParams {
         let mut capabilities = ClientCapabilities {
-            roots: Some(ClientCapabilitiesRoots {
+            roots: Some(RootsCapabilities {
                 list_changed: Some(true),
             }),
             ..Default::default()
         };
 
         if self.elicitation_handler.is_some() {
-            let mut elicitation_capability = Map::new();
-            elicitation_capability.insert(
-                ELICITATION_SCHEMA_VALIDATION_FLAG.to_string(),
-                Value::Bool(true),
-            );
-            // Use experimental field for elicitation support until it's in the stable published version
-            capabilities
-                .experimental
-                .insert("elicitation".to_owned(), elicitation_capability);
+            // Elicitation is now a first-class capability in rmcp
+            capabilities.elicitation = Some(rmcp::model::ElicitationCapability {
+                schema_validation: Some(true),
+            });
         }
 
         InitializeRequestParams {
+            meta: None,
             capabilities,
             client_info: Implementation {
                 name: "vtcode".to_owned(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
+                title: None,
+                icons: None,
+                website_url: None,
             },
-            protocol_version: provider.protocol_version.clone(),
+            protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
         }
     }
 
@@ -882,18 +880,32 @@ impl McpClient {
         tool_name: &str,
         result: CallToolResult,
     ) -> Result<Value> {
-        if result.is_error.unwrap_or(false) {
-            let mut message = result
-                .meta
-                .get("message")
+        // Convert result to JSON to access fields flexibly
+        let result_json = serde_json::to_value(&result)?;
+        let result_obj = result_json.as_object();
+
+        // Check for error - handle both rmcp's is_error field and meta message
+        let is_error = result_obj
+            .and_then(|o| o.get("isError"))
+            .or_else(|| result_obj.and_then(|o| o.get("is_error")))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        if is_error {
+            let mut message = result_obj
+                .and_then(|o| o.get("_meta"))
+                .or_else(|| result_obj.and_then(|o| o.get("meta")))
+                .and_then(|m| m.get("message"))
                 .and_then(Value::as_str)
                 .map(str::to_owned);
 
+            // Try to find text content in the content array
             if message.is_none() {
-                message = result.content.iter().find_map(|block| match block {
-                    CallToolResultContentItem::TextContent(text) => Some(text.text.clone()),
-                    _ => None,
-                });
+                if let Some(content) = result_obj.and_then(|o| o.get("content")).and_then(Value::as_array) {
+                    message = content.iter().find_map(|block| {
+                        block.get("text").and_then(Value::as_str).map(str::to_owned)
+                    });
+                }
             }
 
             let message = message.unwrap_or_else(|| "Unknown MCP tool error".to_owned());
@@ -909,12 +921,22 @@ impl McpClient {
         payload.insert("provider".into(), Value::String(provider_name.to_string()));
         payload.insert("tool".into(), Value::String(tool_name.to_string()));
 
-        if !result.meta.is_empty() {
-            payload.insert("meta".into(), Value::Object(result.meta.clone()));
+        // Add meta if present
+        if let Some(meta) = result_obj
+            .and_then(|o| o.get("_meta"))
+            .or_else(|| result_obj.and_then(|o| o.get("meta")))
+            .and_then(Value::as_object)
+        {
+            if !meta.is_empty() {
+                payload.insert("meta".into(), Value::Object(meta.clone()));
+            }
         }
 
-        if !result.content.is_empty() {
-            payload.insert("content".into(), serde_json::to_value(result.content)?);
+        // Add content if present
+        if let Some(content) = result_obj.and_then(|o| o.get("content")) {
+            if !content.is_null() && !content.as_array().map(|a| a.is_empty()).unwrap_or(true) {
+                payload.insert("content".into(), content.clone());
+            }
         }
 
         Ok(Value::Object(payload))
@@ -933,7 +955,7 @@ impl McpToolExecutor for McpClient {
 
     async fn has_mcp_tool(&self, tool_name: &str) -> Result<bool> {
         if !self.config.enabled {
-            bail!("MCP support is disabled in the current configuration");
+            return Ok(false);
         }
 
         if self.provider_for_tool(tool_name).is_some() {

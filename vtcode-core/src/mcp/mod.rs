@@ -56,35 +56,16 @@ pub use utils::{
     ensure_timezone_argument, schema_requires_field,
 };
 
-use anyhow::{Context, Result, anyhow};
-use mcp_types::CallToolResult;
+use anyhow::{Result, anyhow};
 pub use rmcp::model::ElicitationAction;
-use serde_json::Value;
 use std::collections::HashMap;
 
-const ELICITATION_SCHEMA_VALIDATION_FLAG: &str = "schemaValidation";
+/// MCP protocol version constants
+pub const LATEST_PROTOCOL_VERSION: &str = "2024-11-05";
+pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[LATEST_PROTOCOL_VERSION];
 
-fn convert_call_tool_result(result: rmcp::model::CallToolResult) -> Result<CallToolResult> {
-    let mut value = serde_json::to_value(result)?;
-    if let Some(obj) = value.as_object_mut() {
-        let missing_or_null = obj.get("content").is_none_or(Value::is_null);
-        if missing_or_null {
-            obj.insert("content".to_owned(), Value::Array(Vec::new()));
-        }
-    }
-    serde_json::from_value(value).context("Failed to convert call tool result")
-}
-
-fn convert_to_rmcp<T, U>(value: T) -> Result<U>
-where
-    T: serde::Serialize,
-    U: serde::de::DeserializeOwned,
-{
-    let json = serde_json::to_value(value)?;
-    serde_json::from_value(json).map_err(|err| anyhow!(err))
-}
-
-fn convert_to_mcp<T, U>(value: T) -> Result<U>
+/// Convert any serializable type to rmcp model type via JSON serialization
+pub(crate) fn convert_to_rmcp<T, U>(value: T) -> Result<U>
 where
     T: serde::Serialize,
     U: serde::de::DeserializeOwned,
@@ -295,9 +276,12 @@ mod tests {
     use crate::mcp::rmcp_client::{
         build_elicitation_validator, directory_to_file_uri, validate_elicitation_payload,
     };
-    use mcp_types::InitializeRequestParams;
-    use mcp_types::{ClientCapabilities, ClientCapabilitiesRoots, Implementation};
     use serde_json::{Map, Value, json};
+
+    // Re-export rmcp types for tests
+    use rmcp::model::{
+        ClientCapabilities, Implementation, InitializeRequestParams, RootsCapabilities,
+    };
 
     struct EnvGuard {
         key: &'static str,
@@ -383,7 +367,7 @@ mod tests {
     async fn convert_to_rmcp_round_trip() {
         let params = InitializeRequestParams {
             capabilities: ClientCapabilities {
-                roots: Some(ClientCapabilitiesRoots {
+                roots: Some(RootsCapabilities {
                     list_changed: Some(true),
                 }),
                 ..Default::default()
@@ -391,15 +375,19 @@ mod tests {
             client_info: Implementation {
                 name: "vtcode".to_owned(),
                 version: "1.0".to_owned(),
+                title: None,
+                icons: None,
+                website_url: None,
             },
-            protocol_version: mcp_types::LATEST_PROTOCOL_VERSION.to_string(),
+            protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
+            meta: None,
         };
 
         let converted: rmcp::model::InitializeRequestParams =
             convert_to_rmcp(params.clone()).unwrap();
-        let round_trip: InitializeRequestParams = convert_to_mcp(converted).unwrap();
-        assert_eq!(round_trip.client_info.name, "vtcode");
-        assert_eq!(round_trip.client_info.version, "1.0");
+        // Verify the conversion succeeded by checking the name
+        assert_eq!(converted.client_info.name, "vtcode");
+        assert_eq!(converted.client_info.version, "1.0");
     }
 
     #[test]
