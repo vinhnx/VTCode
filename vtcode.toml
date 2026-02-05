@@ -9,10 +9,10 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-oss:20b-cloud"
+default_model = "minimax-m2.1:cloud"
 
 # Visual theme for the terminal interface
-theme = "ciapre-dark"
+theme = "vitesse-black"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -30,7 +30,7 @@ system_prompt_mode = "default"
 tool_documentation_mode = "minimal"
 enable_split_tool_results = true
 todo_planning_mode = false
-verbosity = "low"
+verbosity = "medium"
 refine_temperature = 0.3
 enable_self_review = false
 max_review_passes = 1
@@ -187,7 +187,7 @@ max_scrollback_bytes = 25000000
 large_output_threshold_kb = 5000
 
 [agent.checkpointing]
-enabled = false
+enabled = true
 max_snapshots = 50
 max_age_days = 30
 
@@ -677,7 +677,7 @@ rate_limit_rps = 10.0
 rate_limit_burst = 20
 
 [prompt_cache]
-enabled = true
+enabled = false
 cache_dir = "~/.vtcode/cache/prompts"
 max_entries = 1000
 max_age_days = 30
