@@ -76,7 +76,9 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     } else {
         0
     };
-    let inner_width = size.width.saturating_sub(2);
+    let inner_width = size
+        .width
+        .saturating_sub(ui::INLINE_INPUT_PADDING_HORIZONTAL.saturating_mul(2));
     let desired_lines = session.desired_input_lines(inner_width);
     let block_height = Session::input_block_height_for_lines(desired_lines);
     let input_height = block_height.saturating_add(status_height);
