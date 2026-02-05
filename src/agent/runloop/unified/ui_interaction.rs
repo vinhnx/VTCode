@@ -976,6 +976,7 @@ mod tests {
             character_reinforcement: false,
             character_name: None,
             coding_agent_settings: None,
+            metadata: None,
         }
     }
 

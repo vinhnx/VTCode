@@ -17,6 +17,10 @@ use std::process::Stdio;
 use tokio::process::Command;
 use tracing::debug;
 
+use crate::telemetry::perf;
+use crate::tools::command_cache::{
+    InFlightState, cache_output, enter_inflight, finish_inflight, get_cached_output,
+};
 use crate::utils::path::{canonicalize_workspace, normalize_path};
 use crate::utils::validation::validate_path_exists;
 
@@ -52,6 +56,11 @@ impl Default for SystemExecutor {
 #[async_trait::async_trait]
 impl CommandExecutor for SystemExecutor {
     async fn execute(&self, command_str: &str, cwd: &Path) -> Result<ShellOutput> {
+        let mut tags = std::collections::HashMap::new();
+        tags.insert("subsystem".to_string(), "shell".to_string());
+        tags.insert("program".to_string(), self.shell.clone());
+        perf::record_value("vtcode.perf.spawn_count", 1.0, tags);
+
         let mut cmd = Command::new(&self.shell);
         cmd.arg("-c")
             .arg(command_str)
@@ -143,6 +152,11 @@ impl Default for SnapshotExecutor {
 impl CommandExecutor for SnapshotExecutor {
     async fn execute(&self, command_str: &str, cwd: &Path) -> Result<ShellOutput> {
         let snapshot = self.get_snapshot().await?;
+
+        let mut tags = std::collections::HashMap::new();
+        tags.insert("subsystem".to_string(), "shell_snapshot".to_string());
+        tags.insert("program".to_string(), self.shell.clone());
+        perf::record_value("vtcode.perf.spawn_count", 1.0, tags);
 
         let mut cmd = Command::new(&self.shell);
         cmd.arg("-c")
@@ -277,7 +291,37 @@ impl<E: CommandExecutor> ShellRunner<E> {
 
     /// Execute a shell command in the current working directory
     pub async fn exec(&self, command_str: &str) -> Result<ShellOutput> {
-        self.executor.execute(command_str, &self.working_dir).await
+        if let Some(cached) = get_cached_output(command_str, &self.working_dir) {
+            return Ok(cached);
+        }
+
+        let mut inflight_token = None;
+        if let Some(inflight) = enter_inflight(command_str, &self.working_dir).await {
+            match inflight {
+                InFlightState::Wait(receiver) => {
+                    if let Ok(result) = receiver.await {
+                        return result.map_err(|msg| anyhow::anyhow!(msg));
+                    }
+                }
+                InFlightState::Owner(token) => {
+                    inflight_token = Some(token);
+                }
+            }
+        }
+
+        let output = self.executor.execute(command_str, &self.working_dir).await;
+
+        if let Some(token) = inflight_token {
+            let result = output
+                .as_ref()
+                .map(|out| out.clone())
+                .map_err(|err| err.to_string());
+            finish_inflight(token, result).await;
+        }
+
+        let output = output?;
+        cache_output(command_str, &self.working_dir, output.clone());
+        Ok(output)
     }
 
     /// Resolve a path relative to current working directory
@@ -303,6 +347,7 @@ impl<E: CommandExecutor> ShellRunner<E> {
 }
 
 /// Output from a shell command
+#[derive(Clone, Debug)]
 pub struct ShellOutput {
     pub stdout: String,
     pub stderr: String,

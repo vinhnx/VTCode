@@ -71,6 +71,7 @@ fn test_openai_tool_call_format() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -137,6 +138,7 @@ fn test_anthropic_tool_call_format() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -203,6 +205,7 @@ fn test_gemini_tool_call_format() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());
@@ -250,6 +253,7 @@ fn test_all_providers_tool_validation() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     let openai_request = LLMRequest {
@@ -278,6 +282,7 @@ fn test_all_providers_tool_validation() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     let anthropic_request = LLMRequest {
@@ -306,6 +311,7 @@ fn test_all_providers_tool_validation() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     let openrouter_request = LLMRequest {
@@ -334,6 +340,7 @@ fn test_all_providers_tool_validation() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     assert!(gemini.validate_request(&gemini_request).is_ok());
@@ -367,6 +374,7 @@ fn test_all_providers_tool_validation() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     assert!(lmstudio.validate_request(&lmstudio_request).is_ok());
@@ -397,6 +405,7 @@ fn test_all_providers_tool_validation() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     assert!(
@@ -462,6 +471,7 @@ fn test_openrouter_tool_call_format() {
         character_reinforcement: false,
         character_name: None,
         coding_agent_settings: None,
+        metadata: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());

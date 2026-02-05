@@ -108,7 +108,7 @@ impl CommandPolicyEvaluator {
 
         // Check cache first
         {
-            let cache = self.cache.lock().await;
+            let mut cache = self.cache.lock().await;
             if let Some(allowed) = cache.get(cmd) {
                 let reason = if allowed {
                     "Cached allow decision"

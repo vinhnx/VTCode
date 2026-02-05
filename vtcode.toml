@@ -261,6 +261,14 @@ load_skill = "allow"
 open_file = "allow"
 search_file = "allow"
 
+[security.gatekeeper]
+warn_on_quarantine = true
+auto_clear_quarantine = false
+auto_clear_paths = [
+    ".vtcode/bin",
+    "~/.vtcode/bin",
+]
+
 [sandbox]
 enabled = true
 default_mode = "read_only"
@@ -618,6 +626,7 @@ dashboards_enabled = true
 sample_interval_ms = 1000
 retention_days = 14
 bottleneck_tracing = true
+perf_events = true
 
 [optimization.tool_registry]
 use_optimized_registry = false
@@ -675,6 +684,24 @@ response_cache_size = 50
 cache_ttl_secs = 300
 rate_limit_rps = 10.0
 rate_limit_burst = 20
+
+[optimization.file_read_cache]
+enabled = true
+min_size_bytes = 262144
+max_size_bytes = 10485760
+ttl_secs = 300
+max_entries = 128
+
+[optimization.command_cache]
+enabled = true
+ttl_ms = 2000
+max_entries = 128
+allowlist = [
+    "rg",
+    "ls",
+    "git status",
+    "git diff --stat",
+]
 
 [prompt_cache]
 enabled = false

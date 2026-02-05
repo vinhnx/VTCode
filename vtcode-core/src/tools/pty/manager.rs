@@ -49,9 +49,11 @@ const THREAD_JOIN_GRACE_PERIOD_MS: u64 = 500;
 
 use crate::audit::PermissionAuditLog;
 use crate::config::{CommandsConfig, PtyConfig};
+use crate::telemetry::perf;
 use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::types::VTCodePtySession;
+use crate::utils::gatekeeper;
 use crate::utils::path::normalize_path;
 use crate::utils::unicode_monitor::UNICODE_MONITOR;
 
@@ -124,6 +126,13 @@ impl PtyManager {
         let work_dir = request.working_dir.clone();
         let size = request.size;
         let start = Instant::now();
+
+        let mut tags = std::collections::HashMap::new();
+        tags.insert("subsystem".to_string(), "pty".to_string());
+        tags.insert("program".to_string(), program.clone());
+        perf::record_value("vtcode.perf.spawn_count", 1.0, tags);
+
+        gatekeeper::check_quarantine_for_program(&program);
         self.ensure_within_workspace(&work_dir)?;
         let workspace_root = self.workspace_root.clone();
         let extra_paths = self.extra_paths.lock().clone();

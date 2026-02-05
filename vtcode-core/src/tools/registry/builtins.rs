@@ -6,8 +6,8 @@ use crate::tools::ask_user_question::AskUserQuestionTool;
 use crate::tools::handlers::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
 use crate::tools::request_user_input::RequestUserInputTool;
 
-use super::registration::ToolRegistration;
 use super::progressive_docs::minimal_tool_signatures;
+use super::registration::ToolRegistration;
 use super::{ToolInventory, ToolRegistry};
 
 /// Register all builtin tools into the inventory using the shared plan mode state.

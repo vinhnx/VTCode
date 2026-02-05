@@ -3,12 +3,16 @@ use super::is_image_path;
 mod legacy;
 mod logging;
 mod segments;
+use crate::telemetry::perf::PerfSpan;
 use crate::tools::builder::ToolResponseBuilder;
+use crate::tools::cache::{FILE_CACHE, file_read_cache_config};
 use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler};
 use crate::tools::traits::FileTool;
 use crate::tools::types::{Input, PathArgs};
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
+use std::path::Path;
+use std::time::UNIX_EPOCH;
 
 fn is_legacy_read_request(args: &Value, is_image: bool) -> bool {
     if is_image {
@@ -54,8 +58,67 @@ fn build_read_handler_args(args: &Value, canonical_path: &std::path::Path) -> Va
     handler_args_json
 }
 
+fn is_history_jsonl(path: &Path) -> bool {
+    if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+        return false;
+    }
+
+    let mut saw_vtcode = false;
+    for component in path.components() {
+        let segment = component.as_os_str().to_string_lossy();
+        if segment == ".vtcode" {
+            saw_vtcode = true;
+            continue;
+        }
+        if saw_vtcode && segment == "history" {
+            return true;
+        }
+    }
+    false
+}
+
+fn build_history_cache_key(
+    path: &Path,
+    metadata: &std::fs::Metadata,
+    args: &Value,
+) -> Option<String> {
+    let modified = metadata.modified().ok()?;
+    let mtime = modified.duration_since(UNIX_EPOCH).ok()?.as_millis();
+    let size = metadata.len();
+
+    let mode = args.get("mode").and_then(Value::as_str).unwrap_or("legacy");
+    let indentation = args
+        .get("indentation")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let offset = args
+        .get("offset")
+        .or_else(|| args.get("offset_lines"))
+        .or_else(|| args.get("offset_bytes"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let limit = args
+        .get("limit")
+        .or_else(|| args.get("page_size_lines"))
+        .or_else(|| args.get("page_size_bytes"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let max_bytes = args.get("max_bytes").and_then(Value::as_u64).unwrap_or(0);
+    let max_tokens = args.get("max_tokens").and_then(Value::as_u64).unwrap_or(0);
+    let encoding = args.get("encoding").and_then(Value::as_str).unwrap_or("");
+
+    Some(format!(
+        "read_file:history:{}:{}:{}:mode={mode}|indent={indentation}|offset={offset}|limit={limit}|max_bytes={max_bytes}|max_tokens={max_tokens}|encoding={encoding}",
+        path.display(),
+        size,
+        mtime
+    ))
+}
+
 impl FileOpsTool {
     pub async fn read_file(&self, args: Value) -> Result<Value> {
+        let mut perf = PerfSpan::new("vtcode.perf.read_file_ms");
+
         let path_args: PathArgs = serde_json::from_value(args.clone()).map_err(|_| {
             let received = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
             anyhow!(
@@ -92,9 +155,37 @@ impl FileOpsTool {
             }
 
             let size_bytes = metadata.len();
+            let history_jsonl = is_history_jsonl(&canonical);
+            perf.tag(
+                "path_class",
+                if history_jsonl {
+                    "history_jsonl"
+                } else {
+                    "other"
+                },
+            );
             let is_image = is_image_path(&canonical);
             let is_legacy_request = is_legacy_read_request(&args, is_image);
             let is_new_request = is_new_read_request(&args);
+
+            let cache_config = file_read_cache_config();
+            let cache_key = if cache_config.enabled
+                && history_jsonl
+                && size_bytes >= cache_config.min_size_bytes as u64
+                && size_bytes <= cache_config.max_size_bytes as u64
+            {
+                build_history_cache_key(&canonical, &metadata, &args)
+            } else {
+                None
+            };
+
+            if let Some(key) = cache_key.as_ref()
+                && let Some(cached) = FILE_CACHE.get_file(key).await
+            {
+                perf.tag("cache", "hit");
+                return Ok(cached);
+            }
+            perf.tag("cache", if cache_key.is_some() { "miss" } else { "skip" });
 
             if !is_image && (is_new_request || !is_legacy_request) {
                 let handler_args_json = build_read_handler_args(&args, &canonical);
@@ -103,7 +194,7 @@ impl FileOpsTool {
                         let handler = ReadFileHandler;
                         let content = handler.handle(read_args).await?;
 
-                        return Ok(ToolResponseBuilder::new("read_file")
+                        let response = ToolResponseBuilder::new("read_file")
                             .success()
                             .message(format!(
                                 "Successfully read file {}",
@@ -112,7 +203,13 @@ impl FileOpsTool {
                             .content(content)
                             .field("path", json!(self.workspace_relative_display(&canonical)))
                             .data("size_bytes", json!(size_bytes))
-                            .build_json());
+                            .build_json();
+
+                        if let Some(key) = cache_key.as_ref() {
+                            FILE_CACHE.put_file(key.clone(), response.clone()).await;
+                        }
+
+                        return Ok(response);
                     }
                     Err(e) => {
                         if is_new_request {
@@ -196,7 +293,12 @@ impl FileOpsTool {
                 }
             }
 
-            return Ok(builder.build_json());
+            let response = builder.build_json();
+            if let Some(key) = cache_key.as_ref() {
+                FILE_CACHE.put_file(key.clone(), response.clone()).await;
+            }
+
+            return Ok(response);
         }
 
         Err(anyhow!(
@@ -216,7 +318,44 @@ mod read_tests {
     use super::*;
     use crate::tools::grep_file::GrepSearchManager;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
+
+    #[test]
+    fn history_jsonl_detection() {
+        assert!(is_history_jsonl(Path::new(
+            "/tmp/.vtcode/history/test.jsonl"
+        )));
+        assert!(!is_history_jsonl(Path::new(
+            "/tmp/.vtcode/history/test.txt"
+        )));
+        assert!(!is_history_jsonl(Path::new("/tmp/history/test.jsonl")));
+    }
+
+    #[test]
+    fn history_cache_key_varies_with_offset() {
+        let temp_dir = TempDir::new().unwrap();
+        let history_dir = temp_dir.path().join(".vtcode/history");
+        fs::create_dir_all(&history_dir).unwrap();
+        let file_path = history_dir.join("session_0001.jsonl");
+        fs::write(&file_path, "line1\nline2\n").unwrap();
+
+        let metadata = fs::metadata(&file_path).unwrap();
+        let key_a = build_history_cache_key(
+            &file_path,
+            &metadata,
+            &json!({"offset_lines": 0, "page_size_lines": 1}),
+        )
+        .unwrap();
+        let key_b = build_history_cache_key(
+            &file_path,
+            &metadata,
+            &json!({"offset_lines": 1, "page_size_lines": 1}),
+        )
+        .unwrap();
+
+        assert_ne!(key_a, key_b);
+    }
 
     #[tokio::test]
     async fn test_read_file_paging_lines() {

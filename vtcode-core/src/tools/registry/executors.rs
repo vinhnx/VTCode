@@ -1,6 +1,6 @@
-use crate::mcp::{DetailLevel, ToolDiscovery};
 use crate::exec::code_executor::Language;
 use crate::exec::skill_manager::{Skill, SkillMetadata};
+use crate::mcp::{DetailLevel, ToolDiscovery};
 use crate::tools::file_tracker::FileTracker;
 use crate::tools::registry::declarations::{
     UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction,

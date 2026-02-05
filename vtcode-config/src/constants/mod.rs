@@ -36,6 +36,8 @@ pub mod message_roles;
 pub mod model_helpers;
 /// Model ID constants to sync with docs/models.json
 pub mod models;
+/// Optimization defaults
+pub mod optimization;
 /// Output limits to prevent unbounded memory growth.
 pub mod output_limits;
 /// Project doc constants

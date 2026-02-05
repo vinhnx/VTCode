@@ -21,6 +21,10 @@ pub struct TelemetryConfig {
     /// Emit bottleneck traces for slow paths
     #[serde(default)]
     pub bottleneck_tracing: bool,
+
+    /// Emit performance events for file I/O, spawns, and UI latency
+    #[serde(default = "default_true")]
+    pub perf_events: bool,
 }
 
 impl Default for TelemetryConfig {
@@ -31,6 +35,7 @@ impl Default for TelemetryConfig {
             sample_interval_ms: default_interval(),
             retention_days: default_retention_days(),
             bottleneck_tracing: true,
+            perf_events: true,
         }
     }
 }

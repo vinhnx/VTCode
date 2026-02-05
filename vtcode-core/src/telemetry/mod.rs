@@ -1,5 +1,6 @@
 //! Telemetry pipeline for real-time KPIs and historical benchmarking.
 
+pub mod perf;
 mod pipeline;
 
 pub use pipeline::{TelemetryEvent, TelemetryPipeline};

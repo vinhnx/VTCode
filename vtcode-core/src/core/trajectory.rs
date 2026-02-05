@@ -1,29 +1,29 @@
 use serde::Serialize;
-use std::fs::{OpenOptions, create_dir_all};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::sync::Arc;
+
+use crate::telemetry::perf::PerfSpan;
+use crate::utils::async_line_writer::AsyncLineWriter;
 
 #[derive(Clone)]
 pub struct TrajectoryLogger {
-    path: PathBuf,
     enabled: bool,
+    writer: Option<Arc<AsyncLineWriter>>,
 }
 
 impl TrajectoryLogger {
     pub fn new(workspace: &Path) -> Self {
         let dir = workspace.join(".vtcode").join("logs");
-        let _ = create_dir_all(&dir);
         let path = dir.join("trajectory.jsonl");
-        Self {
-            path,
-            enabled: true,
-        }
+        let writer = AsyncLineWriter::new(path).ok().map(Arc::new);
+        let enabled = writer.is_some();
+        Self { enabled, writer }
     }
 
     pub fn disabled() -> Self {
         Self {
-            path: PathBuf::from("/dev/null"),
             enabled: false,
+            writer: None,
         }
     }
 
@@ -31,13 +31,19 @@ impl TrajectoryLogger {
         if !self.enabled {
             return;
         }
+        let mut perf = PerfSpan::new("vtcode.perf.trajectory_log_ms");
+        perf.tag("mode", "async");
         if let Ok(line) = serde_json::to_string(record)
-            && let Ok(mut f) = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&self.path)
+            && let Some(writer) = self.writer.as_ref()
         {
-            let _ = writeln!(f, "{line}");
+            writer.write_line(line);
+        }
+    }
+
+    #[cfg(test)]
+    pub fn flush(&self) {
+        if let Some(writer) = self.writer.as_ref() {
+            writer.flush();
         }
     }
 
@@ -102,6 +108,7 @@ mod tests {
             "standard",
             "test user input for logging",
         );
+        logger.flush();
 
         // Check that the log file was created and contains expected content
         let log_path = temp_dir.path().join(".vtcode/logs/trajectory.jsonl");

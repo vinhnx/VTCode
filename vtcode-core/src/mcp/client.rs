@@ -901,7 +901,10 @@ impl McpClient {
 
             // Try to find text content in the content array
             if message.is_none() {
-                if let Some(content) = result_obj.and_then(|o| o.get("content")).and_then(Value::as_array) {
+                if let Some(content) = result_obj
+                    .and_then(|o| o.get("content"))
+                    .and_then(Value::as_array)
+                {
                     message = content.iter().find_map(|block| {
                         block.get("text").and_then(Value::as_str).map(str::to_owned)
                     });

@@ -1,5 +1,22 @@
 use serde::{Deserialize, Serialize};
 
+/// Gatekeeper mitigation configuration (macOS only)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct GatekeeperConfig {
+    /// Warn when a quarantined executable is detected
+    #[serde(default = "default_true")]
+    pub warn_on_quarantine: bool,
+
+    /// Attempt to clear quarantine automatically (opt-in)
+    #[serde(default)]
+    pub auto_clear_quarantine: bool,
+
+    /// Paths eligible for quarantine auto-clear
+    #[serde(default = "default_gatekeeper_auto_clear_paths")]
+    pub auto_clear_paths: Vec<String>,
+}
+
 /// Security configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -34,6 +51,10 @@ pub struct SecurityConfig {
     /// Play terminal bell notification when HITL approval is required.
     #[serde(default = "default_true")]
     pub hitl_notification_bell: bool,
+
+    /// Gatekeeper mitigation options (macOS only)
+    #[serde(default)]
+    pub gatekeeper: GatekeeperConfig,
 }
 
 impl Default for SecurityConfig {
@@ -46,6 +67,7 @@ impl Default for SecurityConfig {
             encrypt_payloads: true,
             integrity_checks: default_true(),
             hitl_notification_bell: default_true(),
+            gatekeeper: GatekeeperConfig::default(),
         }
     }
 }
@@ -53,6 +75,23 @@ impl Default for SecurityConfig {
 #[inline]
 const fn default_true() -> bool {
     true
+}
+
+fn default_gatekeeper_auto_clear_paths() -> Vec<String> {
+    crate::constants::defaults::DEFAULT_GATEKEEPER_AUTO_CLEAR_PATHS
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
+impl Default for GatekeeperConfig {
+    fn default() -> Self {
+        Self {
+            warn_on_quarantine: default_true(),
+            auto_clear_quarantine: false,
+            auto_clear_paths: default_gatekeeper_auto_clear_paths(),
+        }
+    }
 }
 
 #[cfg(test)]
