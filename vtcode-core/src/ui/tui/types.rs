@@ -179,6 +179,7 @@ pub struct InlineSegment {
 #[derive(Clone, Debug, Default)]
 pub struct InlineTheme {
     pub foreground: Option<AnsiColorEnum>,
+    pub background: Option<AnsiColorEnum>,
     pub primary: Option<AnsiColorEnum>,
     pub secondary: Option<AnsiColorEnum>,
     pub tool_accent: Option<AnsiColorEnum>,

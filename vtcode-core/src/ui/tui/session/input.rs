@@ -1,12 +1,11 @@
-use super::terminal_capabilities;
 use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_style_from_inline};
 use crate::config::constants::ui;
-use crate::ui::tui::types::{EditingMode, InlineTextStyle};
+use crate::ui::tui::types::InlineTextStyle;
 use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
     buffer::Buffer,
     prelude::*,
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Clear, Padding, Paragraph, Wrap},
 };
 use tui_shimmer::shimmer_spans_with_style_at_phase;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -62,43 +61,19 @@ impl Session {
             status_line = Some(line);
         }
 
-        // Determine border styling based on editing mode and autonomous state
-        let base_border_style = self.styles.accent_style();
-        let autonomous_style = ratatui::style::Style::default()
-            .fg(ratatui::style::Color::Green)
-            .add_modifier(ratatui::style::Modifier::BOLD);
-        let border_style = match self.header_context.editing_mode {
-            EditingMode::Plan => ratatui::style::Style::default()
-                .fg(ratatui::style::Color::Yellow)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-            EditingMode::Edit => {
-                if self.header_context.autonomous_mode {
-                    autonomous_style
-                } else {
-                    base_border_style
-                }
-            }
-        };
-
-        // Determine border type - use double borders for trust modes
-        let border_type = if self.is_full_auto_trust() || self.is_tools_policy_trust() {
-            ratatui::widgets::BorderType::Double
-        } else {
-            terminal_capabilities::get_border_type()
-        };
-
-        let block = Block::new()
-            .borders(Borders::TOP | Borders::BOTTOM)
-            .border_type(border_type)
-            .style(self.styles.default_style())
-            .border_style(border_style);
+        let background_style = self.styles.input_background_style();
+        let block = Block::new().style(background_style).padding(Padding::new(
+            ui::INLINE_INPUT_PADDING_HORIZONTAL,
+            ui::INLINE_INPUT_PADDING_HORIZONTAL,
+            ui::INLINE_INPUT_PADDING_VERTICAL,
+            ui::INLINE_INPUT_PADDING_VERTICAL,
+        ));
         let inner = block.inner(input_area);
         let input_render = self.build_input_render(inner.width, inner.height);
         let paragraph = Paragraph::new(input_render.text)
-            .style(self.styles.default_style())
-            .wrap(Wrap { trim: false })
-            .block(block);
-        frame.render_widget(paragraph, input_area);
+            .style(background_style)
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph.block(block), input_area);
 
         if self.cursor_should_be_visible() && inner.width > 0 && inner.height > 0 {
             let cursor_x = input_render
@@ -146,7 +121,9 @@ impl Session {
     }
 
     pub(crate) fn input_block_height_for_lines(lines: u16) -> u16 {
-        lines.max(1).saturating_add(2)
+        lines
+            .max(1)
+            .saturating_add(ui::INLINE_INPUT_PADDING_VERTICAL.saturating_mul(2))
     }
 
     fn input_layout(&self, width: u16, prompt_display_width: u16) -> InputLayout {
@@ -437,45 +414,18 @@ impl Session {
             .is_some()
     }
 
-    fn is_full_auto_trust(&self) -> bool {
-        self.header_context.workspace_trust.contains("full auto")
-    }
-
-    fn is_tools_policy_trust(&self) -> bool {
-        self.header_context.workspace_trust.contains("tools policy")
-    }
-
     /// Build input render data for external widgets
     pub fn build_input_widget_data(&self, width: u16, height: u16) -> InputWidgetData {
         let input_render = self.build_input_render(width, height);
-
-        // Determine border styling based on editing mode and autonomous state
-        let base_border_style = self.styles.accent_style();
-        let autonomous_style = ratatui::style::Style::default()
-            .fg(ratatui::style::Color::Green)
-            .add_modifier(ratatui::style::Modifier::BOLD);
-        let border_style = match self.header_context.editing_mode {
-            EditingMode::Plan => ratatui::style::Style::default()
-                .fg(ratatui::style::Color::Yellow)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-            EditingMode::Edit => {
-                if self.header_context.autonomous_mode {
-                    autonomous_style
-                } else {
-                    base_border_style
-                }
-            }
-        };
+        let background_style = self.styles.input_background_style();
 
         InputWidgetData {
             text: input_render.text,
             cursor_x: input_render.cursor_x,
             cursor_y: input_render.cursor_y,
-            is_full_auto_trust: self.is_full_auto_trust(),
-            is_tools_policy_trust: self.is_tools_policy_trust(),
             cursor_should_be_visible: self.cursor_should_be_visible(),
             use_fake_cursor: self.use_fake_cursor(),
-            border_style,
+            background_style,
             default_style: self.styles.default_style(),
         }
     }
@@ -531,11 +481,9 @@ pub struct InputWidgetData {
     pub text: Text<'static>,
     pub cursor_x: u16,
     pub cursor_y: u16,
-    pub is_full_auto_trust: bool,
-    pub is_tools_policy_trust: bool,
     pub cursor_should_be_visible: bool,
     pub use_fake_cursor: bool,
-    pub border_style: Style,
+    pub background_style: Style,
     pub default_style: Style,
 }
 

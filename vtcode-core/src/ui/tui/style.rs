@@ -33,6 +33,7 @@ pub fn convert_style(style: AnsiStyle) -> InlineTextStyle {
 pub fn theme_from_styles(styles: &theme::ThemeStyles) -> InlineTheme {
     InlineTheme {
         foreground: convert_ansi_color(styles.foreground),
+        background: convert_ansi_color(styles.background),
         primary: convert_style_color(&styles.primary),
         secondary: convert_style_color(&styles.secondary),
         tool_accent: convert_style_color(&styles.tool),

@@ -1,6 +1,7 @@
-use anstyle::{AnsiColor, Color as AnsiColorEnum};
+use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use ratatui::prelude::*;
 
+use crate::config::constants::ui;
 use crate::ui::tui::{
     style::{ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{InlineMessageKind, InlineTextStyle, InlineTheme},
@@ -145,6 +146,23 @@ impl SessionStyles {
             .add_modifier(Modifier::DIM)
     }
 
+    pub fn input_background_style(&self) -> Style {
+        let mut style = self.default_style();
+        let Some(background) = self.theme.background else {
+            return style;
+        };
+
+        let resolved = match (background, self.theme.foreground) {
+            (AnsiColorEnum::Rgb(bg), Some(AnsiColorEnum::Rgb(fg))) => {
+                AnsiColorEnum::Rgb(mix_rgb(bg, fg, ui::THEME_INPUT_BACKGROUND_MIX_RATIO))
+            }
+            (color, _) => color,
+        };
+
+        style = style.bg(ratatui_color_from_ansi(resolved));
+        style
+    }
+
     /// Get the prefix style for a message line
     pub fn prefix_style(&self, line: &MessageLine) -> InlineTextStyle {
         let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
@@ -185,4 +203,19 @@ impl SessionStyles {
         let resolved = ratatui_style_from_inline(&style, self.theme.foreground);
         resolved.add_modifier(Modifier::DIM)
     }
+}
+
+fn mix_rgb(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
+    let ratio = ratio.clamp(0.0, 1.0);
+    let blend = |channel: u8, target_channel: u8| -> u8 {
+        let channel = f64::from(channel);
+        let target_channel = f64::from(target_channel);
+        ((channel + (target_channel - channel) * ratio).round()).clamp(0.0, 255.0) as u8
+    };
+
+    RgbColor(
+        blend(color.0, target.0),
+        blend(color.1, target.1),
+        blend(color.2, target.2),
+    )
 }

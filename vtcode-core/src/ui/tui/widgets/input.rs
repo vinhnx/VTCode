@@ -3,17 +3,17 @@ use ratatui::{
     layout::Rect,
     style::Modifier,
     text::Line,
-    widgets::{Block, Borders, Clear, Paragraph, Widget, Wrap},
+    widgets::{Clear, Paragraph, Widget, Wrap},
 };
 
-use crate::ui::tui::session::{Session, terminal_capabilities};
+use crate::config::constants::ui;
+use crate::ui::tui::session::Session;
 
 /// Widget for rendering the input area with user text entry
 ///
 /// This widget handles:
-/// - Input box rendering with borders (TOP and BOTTOM only)
+/// - Input area rendering with a subtle background shade and padding
 /// - Status line rendering below the input box
-/// - Trust mode border styling ("Full Auto Trust" and "Tools Policy Trust")
 /// - Cursor positioning using buffer capabilities
 /// - Text content from session's input widget data
 ///
@@ -66,44 +66,22 @@ impl<'a> Widget for InputWidget<'a> {
             status_line = Some(Line::from(spans));
         }
 
-        // Create the border block first to get the inner area
-        let temp_data = self.session.build_input_widget_data(1, 1); // Temporary data for style access
-
-        // Determine border styling based on editing mode (trust mode styling removed, using double borders instead)
-        let border_style = temp_data.border_style;
-
-        // Determine the trust mode title for the border
-        let trust_title = if temp_data.is_full_auto_trust {
-            "Full Auto Trust"
-        } else if temp_data.is_tools_policy_trust {
-            "Tools Policy Trust"
-        } else {
-            ""
-        };
-
-        // Determine border type - use double borders for trust modes
-        let border_type = if temp_data.is_full_auto_trust || temp_data.is_tools_policy_trust {
-            ratatui::widgets::BorderType::Double
-        } else {
-            terminal_capabilities::get_border_type()
-        };
-
-        let block = Block::new()
-            .borders(Borders::TOP | Borders::BOTTOM)
-            .border_type(border_type)
-            .style(temp_data.default_style)
-            .border_style(border_style)
-            .title(trust_title);
-
+        let temp_data = self.session.build_input_widget_data(1, 1);
+        let block = ratatui::widgets::Block::new()
+            .style(temp_data.background_style)
+            .padding(ratatui::widgets::Padding::new(
+                ui::INLINE_INPUT_PADDING_HORIZONTAL,
+                ui::INLINE_INPUT_PADDING_HORIZONTAL,
+                ui::INLINE_INPUT_PADDING_VERTICAL,
+                ui::INLINE_INPUT_PADDING_VERTICAL,
+            ));
         let inner = block.inner(input_area);
-
-        // Now get the actual input data with the correct dimensions
         let input_data = self
             .session
             .build_input_widget_data(inner.width, inner.height);
 
         let paragraph = Paragraph::new(input_data.text)
-            .style(input_data.default_style)
+            .style(input_data.background_style)
             .wrap(Wrap { trim: false })
             .block(block);
         paragraph.render(input_area, buf);

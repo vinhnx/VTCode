@@ -12,7 +12,7 @@ api_key_env = "OLLAMA_API_KEY"
 default_model = "minimax-m2.1:cloud"
 
 # Visual theme for the terminal interface
-theme = "vitesse-black"
+theme = "vitesse-dark"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -48,7 +48,7 @@ include_working_directory = true
 # "edit" - Full tool access for file modifications and command execution (default)
 # "plan" - Read-only mode that produces implementation plans without making changes
 # Toggle during session with Shift+Tab or /plan command
-default_editing_mode = "edit"
+default_editing_mode = "plan"
 require_plan_confirmation = true
 autonomous_mode = false
 
