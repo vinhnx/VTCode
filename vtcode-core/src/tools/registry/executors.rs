@@ -1,3 +1,4 @@
+use crate::mcp::{DetailLevel, ToolDiscovery};
 use crate::exec::code_executor::Language;
 use crate::exec::skill_manager::{Skill, SkillMetadata};
 use crate::tools::file_tracker::FileTracker;
@@ -122,11 +123,13 @@ impl ToolRegistry {
                 // Smart action inference based on parameters
                 if args.get("pattern").is_some() || args.get("query").is_some() {
                     Some("grep")
+                } else if args.get("keyword").is_some() {
+                    Some("tools")
                 } else if args.get("operation").is_some() {
                     Some("intelligence")
                 } else if args.get("url").is_some() {
                     Some("web")
-                } else if args.get("sub_action").is_some() {
+                } else if args.get("sub_action").is_some() || args.get("name").is_some() {
                     Some("skill")
                 } else if args.get("scope").is_some() {
                     Some("errors")
@@ -262,6 +265,13 @@ impl ToolRegistry {
         let sub_action = args
             .get("sub_action")
             .and_then(|v| v.as_str())
+            .or_else(|| {
+                if args.get("name").is_some() {
+                    Some("load")
+                } else {
+                    None
+                }
+            })
             .ok_or_else(|| anyhow!("Missing sub_action in skill"))?;
 
         let skill_manager = self.inventory.skill_manager();
@@ -803,15 +813,82 @@ impl ToolRegistry {
     }
 
     async fn execute_search_tools(&self, args: Value) -> Result<Value> {
-        let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+        let keyword = args
+            .get("keyword")
+            .or_else(|| args.get("query"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let detail_level_str = args
+            .get("detail_level")
+            .and_then(|v| v.as_str())
+            .unwrap_or("name-and-description");
+        let detail_level = match detail_level_str {
+            "name-only" => DetailLevel::NameOnly,
+            "full" => DetailLevel::Full,
+            _ => DetailLevel::NameAndDescription,
+        };
+
+        // 1. Search local tools and aliases
+        let mut results = Vec::new();
         let available_tools = self.available_tools().await;
 
-        let filtered: Vec<String> = available_tools
-            .into_iter()
-            .filter(|t| t.contains(query))
-            .collect();
+        for tool_name in available_tools {
+            // Skip MCP tools as they will be handled by ToolDiscovery
+            if tool_name.starts_with("mcp_") {
+                continue;
+            }
 
-        Ok(json!({ "tools": filtered }))
+            // Get description from inventory if available
+            let description = if let Some(reg) = self.inventory.get_registration(&tool_name) {
+                reg.metadata().description().unwrap_or("").to_string()
+            } else {
+                "".to_string()
+            };
+
+            if keyword.is_empty()
+                || tool_name.to_lowercase().contains(&keyword.to_lowercase())
+                || description.to_lowercase().contains(&keyword.to_lowercase())
+            {
+                results.push(json!({
+                    "name": tool_name,
+                    "provider": "builtin",
+                    "description": description,
+                }));
+            }
+        }
+
+        // 2. Search MCP tools using ToolDiscovery
+        if let Some(mcp_client) = self.mcp_client() {
+            let discovery = ToolDiscovery::new(mcp_client);
+            if let Ok(mcp_results) = discovery.search_tools(keyword, detail_level).await {
+                for r in mcp_results {
+                    results.push(r.to_json(detail_level));
+                }
+            }
+        }
+
+        // 3. Search skills
+        let skill_manager = self.inventory.skill_manager();
+        if let Ok(skills) = skill_manager.list_skills().await {
+            for skill in skills {
+                if keyword.is_empty()
+                    || skill.name.to_lowercase().contains(&keyword.to_lowercase())
+                    || skill
+                        .description
+                        .to_lowercase()
+                        .contains(&keyword.to_lowercase())
+                {
+                    results.push(json!({
+                        "name": skill.name,
+                        "provider": "skill",
+                        "description": skill.description,
+                    }));
+                }
+            }
+        }
+
+        Ok(json!({ "tools": results }))
     }
 
     async fn execute_apply_patch_internal(&self, args: Value) -> Result<Value> {

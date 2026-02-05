@@ -34,7 +34,7 @@ pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
 pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
 pub const HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS: usize = 48;
 pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = " ";
-pub const INLINE_AGENT_QUOTE_PREFIX: &str = "  •";
+pub const INLINE_AGENT_QUOTE_PREFIX: &str = " •";
 pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
 
 /// Scroll percentage format in status bar
@@ -95,9 +95,9 @@ pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
 pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
-    "@files, #prompts, /commands, ctrl+r reverse history or Shift+Tab to switch modes";
+    "Type your message (or @files, #prompts, /commands, ctrl+r, Shift+Tab to switch modes)";
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-    "@files, #prompts, /commands, ctrl+r reverse history or Shift+Tab to switch modes";
+    "Continue (or @files, #prompts, /commands, ctrl+r, Shift+Tab to switch modes)";
 pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter send • Shift+Enter newline • Esc cancel • Ctrl+C interrupt • @ files • # prompts • / commands";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;

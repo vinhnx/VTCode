@@ -13,6 +13,7 @@ use std::fmt;
 
 #[derive(Debug, Clone, Default)]
 pub struct ToolMetadata {
+    description: Option<String>,
     parameter_schema: Option<Value>,
     config_schema: Option<Value>,
     state_schema: Option<Value>,
@@ -25,6 +26,11 @@ pub struct ToolMetadata {
 }
 
 impl ToolMetadata {
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
     pub fn with_parameter_schema(mut self, schema: Value) -> Self {
         self.parameter_schema = Some(schema);
         self
@@ -68,6 +74,10 @@ impl ToolMetadata {
     pub fn with_server_hint(mut self, hint: impl Into<String>) -> Self {
         self.server_hint = Some(hint.into());
         self
+    }
+
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
     }
 
     pub fn parameter_schema(&self) -> Option<&Value> {
@@ -154,7 +164,7 @@ impl ToolRegistration {
     }
 
     pub fn from_tool(name: &'static str, capability: CapabilityLevel, tool: Arc<dyn Tool>) -> Self {
-        let mut metadata = ToolMetadata::default();
+        let mut metadata = ToolMetadata::default().with_description(tool.description());
         if let Some(schema) = tool.parameter_schema() {
             metadata = metadata.with_parameter_schema(schema);
         }
@@ -268,6 +278,11 @@ impl ToolRegistration {
 
     pub fn with_metadata(mut self, metadata: ToolMetadata) -> Self {
         self.metadata = metadata;
+        self
+    }
+
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.metadata = self.metadata.clone().with_description(description);
         self
     }
 
