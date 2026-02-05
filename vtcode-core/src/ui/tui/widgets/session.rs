@@ -322,21 +322,30 @@ impl<'a> SessionWidget<'a> {
             footer_hints::EDITING
         };
 
-        let spinner = if self.session.thinking_spinner.is_active {
-            Some(self.session.thinking_spinner.current_frame())
-        } else {
+        let input_status_visible = self
+            .session
+            .input_status_left
+            .as_ref()
+            .is_some_and(|value| !value.trim().is_empty())
+            || self
+                .session
+                .input_status_right
+                .as_ref()
+                .is_some_and(|value| !value.trim().is_empty());
+        let shimmer_phase = if input_status_visible {
             None
+        } else {
+            Some(self.session.shimmer_state.phase())
         };
 
         let mut footer = FooterWidget::new(&self.session.styles)
             .left_status(left_status)
             .right_status(right_status)
             .hint(hint)
-            .mode(mode)
-            .shimmer_phase(self.session.shimmer_state.phase());
+            .mode(mode);
 
-        if let Some(spinner_frame) = spinner {
-            footer = footer.spinner(spinner_frame);
+        if let Some(phase) = shimmer_phase {
+            footer = footer.shimmer_phase(phase);
         }
 
         footer.render(area, buf);

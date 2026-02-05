@@ -85,6 +85,7 @@ use self::message::{MessageLabels, MessageLine};
 use self::modal::{ModalState, WizardModalState};
 
 use self::config::AppearanceConfig;
+pub(crate) use self::input::status_requires_shimmer;
 use self::prompt_palette::PromptPalette;
 use self::queue::QueueOverlay;
 use self::scroll::ScrollManager;

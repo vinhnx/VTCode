@@ -180,6 +180,31 @@ fn cursor_steady_during_shimmer() {
 }
 
 #[test]
+fn cursor_fake_during_status_shimmer() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let initial = session.build_input_widget_data(VIEW_WIDTH, 1);
+    assert!(initial.cursor_should_be_visible);
+    assert!(!initial.use_fake_cursor);
+
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Loading (Press Ctrl+C to cancel)".to_string()),
+        right: None,
+    });
+    let during_shimmer = session.build_input_widget_data(VIEW_WIDTH, 1);
+    assert!(during_shimmer.cursor_should_be_visible);
+    assert!(during_shimmer.use_fake_cursor);
+    assert!(session.use_steady_cursor());
+
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: None,
+        right: None,
+    });
+    let after_shimmer = session.build_input_widget_data(VIEW_WIDTH, 1);
+    assert!(after_shimmer.cursor_should_be_visible);
+    assert!(!after_shimmer.use_fake_cursor);
+}
+
+#[test]
 fn shift_enter_inserts_newline() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 

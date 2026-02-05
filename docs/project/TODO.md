@@ -132,3 +132,12 @@ Rules:
 - 📝 Large Paste Handling: Improved the readability of chat history by replacing massive text pastes with a clean, toggleable [Pasted Text: X lines] placeholder.
 - ⚡ Vim Mode Shortcuts: Added new quick-clear input shortcuts for power users operating in Vim mode.
 - 🧹 Clear context for Hooks: AfterAgent hooks can use clearContext to clear the sessions context when triggered.
+
+---
+
+14:39:35 ❯ cargo insta review
+done: no snapshots to review
+warning: found undiscovered pending snapshots in some paths which are not picked up by cargo insta. Use --include-ignored and --include-hidden if you have snapshots in ignored or hidden paths. Files:
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/tests/snapshots/advanced_tui_scenario_tests**message_combo_error_scenario.snap.new
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/tests/snapshots/advanced_tui_scenario_tests**styled_segment_bold_text.snap.new
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/tests/snapshots/advanced_tui_scenario_tests\_\_header_context_advanced_context.snap.new
