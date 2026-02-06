@@ -81,10 +81,7 @@ impl provider::LLMProvider for OpenAIProvider {
     }
 
     fn validate_request(&self, request: &provider::LLMRequest) -> Result<(), provider::LLMError> {
-        let supported_models = models::openai::SUPPORTED_MODELS
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>();
+        let supported_models = self.supported_models();
 
         super::super::super::common::validate_request_common(
             request,
