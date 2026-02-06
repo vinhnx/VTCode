@@ -289,7 +289,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::ScrollPageDown)
         }
         KeyCode::Up => {
-            if session.navigate_history_previous() {
+            if has_alt && !session.queued_inputs.is_empty() {
+                if let Some(latest) = session.pop_latest_queued_input() {
+                    session.input_manager.set_content(latest);
+                    session.input_compact_mode = session.input_compact_placeholder().is_some();
+                    session.scroll_manager.set_offset(0);
+                    crate::ui::tui::session::slash::update_slash_suggestions(session);
+                }
+                session.mark_dirty();
+                Some(InlineEvent::EditQueue)
+            } else if session.navigate_history_previous() {
                 session.mark_dirty();
                 Some(InlineEvent::HistoryPrevious)
             } else {
@@ -333,8 +342,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            // Check for multiline input options
-            if has_shift || has_control || has_alt || has_command {
+            let queue_submit = has_control;
+            // Check for multiline input options (Shift/Alt)
+            if has_shift || has_alt {
                 // Insert newline for multiline input
                 session.insert_char('\n');
                 session.mark_dirty();
@@ -359,11 +369,35 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             // Instead, it's added in session_loop.rs after the user message is displayed,
             // ensuring proper message ordering in the transcript (user message first, then spinner).
 
-            if has_control || has_command {
+            if queue_submit {
+                session.push_queued_input(submitted.clone());
+                session.mark_dirty();
                 Some(InlineEvent::QueueSubmit(submitted))
             } else {
                 Some(InlineEvent::Submit(submitted))
             }
+        }
+        KeyCode::Tab => {
+            if !session.input_enabled {
+                return None;
+            }
+
+            let submitted = session.input_manager.content().to_owned();
+            let submitted_entry = session.input_manager.current_history_entry();
+            session.input_manager.clear();
+            session.input_compact_mode = false;
+            session.scroll_manager.set_offset(0);
+            crate::ui::tui::session::slash::update_slash_suggestions(session);
+
+            if submitted.trim().is_empty() {
+                session.mark_dirty();
+                return None;
+            }
+
+            session.remember_submitted_input(submitted_entry);
+            session.push_queued_input(submitted.clone());
+            session.mark_dirty();
+            Some(InlineEvent::QueueSubmit(submitted))
         }
         KeyCode::Backspace => {
             if session.input_enabled {

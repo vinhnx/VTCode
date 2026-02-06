@@ -717,6 +717,8 @@ impl EditingMode {
 pub enum InlineEvent {
     Submit(String),
     QueueSubmit(String),
+    /// Edit the newest queued input (pop into input buffer)
+    EditQueue,
     ListModalSubmit(InlineListSelection),
     ListModalCancel,
     WizardModalSubmit(Vec<InlineListSelection>),

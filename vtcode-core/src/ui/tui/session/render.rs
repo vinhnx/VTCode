@@ -81,8 +81,9 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
         .saturating_sub(ui::INLINE_INPUT_PADDING_HORIZONTAL.saturating_mul(2));
     let desired_lines = session.desired_input_lines(inner_width);
     let block_height = Session::input_block_height_for_lines(desired_lines);
+    let queue_height = session.queue_input_lines(inner_width).len() as u16;
     let input_height = block_height.saturating_add(status_height);
-    session.apply_input_height(input_height);
+    session.apply_input_height(input_height.saturating_add(queue_height));
 
     let chunks = Layout::vertical([
         Constraint::Length(header_height),

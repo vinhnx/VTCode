@@ -151,7 +151,7 @@ impl Default for KeyBindingConfig {
 
         // Input
         bindings.insert("submit".to_owned(), vec!["enter".to_owned()]);
-        bindings.insert("submit_queue".to_owned(), vec!["ctrl+enter".to_owned()]);
+        bindings.insert("submit_queue".to_owned(), vec!["tab".to_owned()]);
         bindings.insert("cancel".to_owned(), vec!["esc".to_owned()]);
         bindings.insert("interrupt".to_owned(), vec!["ctrl+c".to_owned()]);
 
