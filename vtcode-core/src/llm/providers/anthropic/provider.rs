@@ -282,6 +282,17 @@ impl AnthropicProvider {
         }
     }
 
+    fn effective_betas(&self, request: &LLMRequest) -> Option<Vec<String>> {
+        let mut betas = request.betas.clone().unwrap_or_default();
+        if request.context_management.is_some()
+            && !betas.iter().any(|beta| beta == "compact-2026-01-12")
+        {
+            betas.push("compact-2026-01-12".to_string());
+        }
+
+        if betas.is_empty() { None } else { Some(betas) }
+    }
+
     fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         request_builder::convert_to_anthropic_format(request, &self.request_builder_context())
     }
@@ -321,6 +332,7 @@ impl LLMProvider for AnthropicProvider {
         let include_tool_search = self.requires_tool_search_beta(&request);
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
         let url = format!("{}/messages", self.base_url);
+        let betas = self.effective_betas(&request);
 
         let mut request_builder = self
             .http_client
@@ -338,7 +350,7 @@ impl LLMProvider for AnthropicProvider {
             &self.model,
             include_structured,
             include_tool_search,
-            request.betas.as_ref(),
+            betas.as_ref(),
             include_effort,
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
@@ -383,6 +395,7 @@ impl LLMProvider for AnthropicProvider {
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         let include_tool_search = self.requires_tool_search_beta(&request);
         let mut anthropic_request = self.convert_to_anthropic_format(&request)?;
+        let betas = self.effective_betas(&request);
 
         if let Some(obj) = anthropic_request.as_object_mut() {
             obj.insert("stream".to_string(), Value::Bool(true));
@@ -407,7 +420,7 @@ impl LLMProvider for AnthropicProvider {
             &self.model,
             include_structured,
             include_tool_search,
-            request.betas.as_ref(),
+            betas.as_ref(),
             include_effort,
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);

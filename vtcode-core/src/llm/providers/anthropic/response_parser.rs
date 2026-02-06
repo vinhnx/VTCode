@@ -155,6 +155,7 @@ pub fn parse_finish_reason(stop_reason: &str) -> FinishReason {
         "max_tokens" => FinishReason::Length,
         "stop_sequence" => FinishReason::Stop,
         "tool_use" => FinishReason::ToolCalls,
+        "compaction" => FinishReason::Pause,
         "pause_turn" => FinishReason::Pause,
         "refusal" => FinishReason::Refusal,
         other => FinishReason::Error(other.to_string()),

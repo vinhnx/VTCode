@@ -66,6 +66,8 @@ pub struct AnthropicMessagesRequest {
     pub thinking: Option<bool>,
     #[serde(default)]
     pub betas: Option<Vec<String>>,
+    #[serde(default)]
+    pub context_management: Option<Value>,
 }
 
 /// Anthropic Message
@@ -648,6 +650,7 @@ fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> Result
         stop_sequences: request.stop_sequences,
         verbosity: None,
         betas: request.betas,
+        context_management: request.context_management,
         thinking_budget: None,
         prefill: None,
     })

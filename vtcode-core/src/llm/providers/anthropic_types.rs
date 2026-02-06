@@ -20,6 +20,8 @@ pub struct AnthropicRequest {
     pub reasoning: Option<Value>, // Deprecated in favor of thinking, but kept for backward compat or direct effort passing
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_config: Option<AnthropicOutputConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_management: Option<Value>,
     pub stream: bool,
 }
 
@@ -80,6 +82,12 @@ pub enum AnthropicContentBlock {
     #[serde(rename = "redacted_thinking")]
     RedactedThinking {
         data: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+    },
+    #[serde(rename = "compaction")]
+    Compaction {
+        content: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         cache_control: Option<CacheControl>,
     },
@@ -236,6 +244,8 @@ pub enum AnthropicStreamDelta {
     ThinkingDelta { thinking: String },
     #[serde(rename = "signature_delta")]
     SignatureDelta { signature: String },
+    #[serde(rename = "compaction_delta")]
+    CompactionDelta { content: String },
 }
 
 #[derive(Debug, Deserialize)]
