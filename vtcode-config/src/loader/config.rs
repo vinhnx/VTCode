@@ -16,7 +16,7 @@ use crate::hooks::HooksConfig;
 use crate::mcp::McpClientConfig;
 use crate::optimization::OptimizationConfig;
 use crate::output_styles::OutputStyleConfig;
-use crate::root::{PtyConfig, UiConfig};
+use crate::root::{ChatConfig, PtyConfig, UiConfig};
 use crate::subagent::SubagentsConfig;
 use crate::telemetry::TelemetryConfig;
 use crate::timeouts::TimeoutsConfig;
@@ -67,6 +67,10 @@ pub struct VTCodeConfig {
     /// UI settings
     #[serde(default)]
     pub ui: UiConfig,
+
+    /// Chat settings
+    #[serde(default)]
+    pub chat: ChatConfig,
 
     /// PTY settings
     #[serde(default)]

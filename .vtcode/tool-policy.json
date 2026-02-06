@@ -3,7 +3,9 @@
   "available_tools": [
     "agent_info",
     "apply_patch",
+    "ask_questions",
     "ask_user_question",
+    "askquestions",
     "close_pty_session",
     "code_intelligence",
     "copy_file",
@@ -88,7 +90,9 @@
     "plan_mode": "prompt",
     "start_implementation": "prompt",
     "start_planning": "prompt",
-    "request_user_input": "allow"
+    "request_user_input": "allow",
+    "ask_questions": "allow",
+    "askquestions": "allow"
   },
   "constraints": {},
   "mcp": {

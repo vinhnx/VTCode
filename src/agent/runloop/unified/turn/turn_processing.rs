@@ -425,11 +425,14 @@ pub(crate) fn process_llm_response(
     response: &vtcode_core::llm::provider::LLMResponse,
     renderer: &mut AnsiRenderer,
     conversation_len: usize,
+    allow_plan_interview: bool,
+    ask_questions_enabled: bool,
     validation_cache: Option<
         &std::sync::Arc<vtcode_core::tools::validation_cache::ValidationCache>,
     >,
 ) -> Result<TurnProcessingResult> {
     use crate::agent::runloop::unified::turn::harmony::strip_harmony_syntax;
+    use vtcode_core::config::constants::tools;
     use vtcode_core::llm::provider as uni;
 
     let mut final_text = response.content.clone();
@@ -506,6 +509,24 @@ pub(crate) fn process_llm_response(
         }
     }
 
+    if !interpreted_textual_call
+        && allow_plan_interview
+        && ask_questions_enabled
+        && tool_calls.is_empty()
+        && let Some(text) = final_text.clone()
+        && let Some(args) = build_interview_args_from_text(&text)
+    {
+        let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+        let call_id = format!("call_interview_{}", conversation_len);
+        tool_calls.push(uni::ToolCall::function(
+            call_id.clone(),
+            tools::ASK_QUESTIONS.to_string(),
+            args_json,
+        ));
+        interpreted_textual_call = true;
+        final_text = None;
+    }
+
     // Build result
     if !tool_calls.is_empty() {
         return Ok(TurnProcessingResult::ToolCalls {
@@ -529,4 +550,768 @@ pub(crate) fn process_llm_response(
     }
 
     Ok(TurnProcessingResult::Empty)
+}
+
+fn build_interview_args_from_text(text: &str) -> Option<serde_json::Value> {
+    let questions = extract_interview_questions(text);
+    if questions.is_empty() {
+        return None;
+    }
+
+    let payload = questions
+        .iter()
+        .enumerate()
+        .map(|(index, question)| {
+            serde_json::json!({
+                "id": format!("question_{}", index + 1),
+                "header": format!("Q{}", index + 1),
+                "question": question,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Some(serde_json::json!({ "questions": payload }))
+}
+
+pub(crate) fn extract_interview_questions(text: &str) -> Vec<String> {
+    let mut questions = Vec::new();
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(question) = parse_numbered_question(trimmed) {
+            questions.push(question);
+            continue;
+        }
+        if let Some(question) = parse_bullet_question(trimmed) {
+            questions.push(question);
+        }
+    }
+
+    if questions.is_empty() {
+        let trimmed = text.trim();
+        let normalized = normalize_question_line(trimmed);
+        if !normalized.is_empty() && normalized.contains('?') && normalized.len() <= 200 {
+            questions.push(normalized);
+        }
+    }
+
+    questions.truncate(3);
+    questions
+}
+
+fn parse_numbered_question(line: &str) -> Option<String> {
+    let mut digits_len = 0usize;
+    for ch in line.chars() {
+        if ch.is_ascii_digit() {
+            digits_len += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if digits_len == 0 {
+        return None;
+    }
+
+    let rest = line[digits_len..].trim_start();
+    let mut chars = rest.chars();
+    let punct = chars.next()?;
+    if punct != '.' && punct != ')' {
+        return None;
+    }
+    let remainder = chars.as_str().trim_start();
+    let normalized = normalize_question_line(remainder);
+    if normalized.contains('?') {
+        Some(normalized)
+    } else {
+        None
+    }
+}
+
+fn parse_bullet_question(line: &str) -> Option<String> {
+    for prefix in ["- ", "* ", "• "] {
+        if let Some(stripped) = line.strip_prefix(prefix) {
+            let candidate = normalize_question_line(stripped.trim());
+            if candidate.contains('?') {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+fn normalize_question_line(line: &str) -> String {
+    let mut current = line.trim();
+
+    if let Some(stripped) = current.strip_prefix('>') {
+        current = stripped.trim_start();
+    }
+
+    let mut changed = true;
+    while changed {
+        changed = false;
+        if let Some(stripped) = strip_wrapping(current, "**", "**") {
+            current = stripped;
+            changed = true;
+        } else if let Some(stripped) = strip_wrapping(current, "__", "__") {
+            current = stripped;
+            changed = true;
+        } else if let Some(stripped) = strip_wrapping(current, "`", "`") {
+            current = stripped;
+            changed = true;
+        } else if let Some(stripped) = strip_wrapping(current, "*", "*") {
+            current = stripped;
+            changed = true;
+        } else if let Some(stripped) = strip_wrapping(current, "_", "_") {
+            current = stripped;
+            changed = true;
+        } else if let Some(stripped) = strip_wrapping(current, "\"", "\"") {
+            current = stripped;
+            changed = true;
+        } else if let Some(stripped) = strip_wrapping(current, "'", "'") {
+            current = stripped;
+            changed = true;
+        }
+    }
+
+    current.trim().to_string()
+}
+
+fn strip_wrapping<'a>(line: &'a str, prefix: &str, suffix: &str) -> Option<&'a str> {
+    if line.len() <= prefix.len() + suffix.len() {
+        return None;
+    }
+    if !line.starts_with(prefix) || !line.ends_with(suffix) {
+        return None;
+    }
+    Some(line[prefix.len()..line.len() - suffix.len()].trim())
+}
+
+const MIN_PLAN_MODE_TURNS_BEFORE_INTERVIEW: usize = 1;
+
+fn has_discovery_tool(session_stats: &crate::agent::runloop::unified::state::SessionStats) -> bool {
+    use vtcode_core::config::constants::tools;
+
+    [
+        tools::READ_FILE,
+        tools::LIST_FILES,
+        tools::GREP_FILE,
+        tools::UNIFIED_SEARCH,
+        tools::CODE_INTELLIGENCE,
+        tools::SPAWN_SUBAGENT,
+    ]
+    .iter()
+    .any(|tool| session_stats.has_tool(tool))
+}
+
+pub(crate) fn plan_mode_interview_ready(
+    session_stats: &crate::agent::runloop::unified::state::SessionStats,
+) -> bool {
+    has_discovery_tool(session_stats)
+        && session_stats.plan_mode_turns() >= MIN_PLAN_MODE_TURNS_BEFORE_INTERVIEW
+}
+
+fn strip_assistant_text(processing_result: TurnProcessingResult) -> TurnProcessingResult {
+    match processing_result {
+        TurnProcessingResult::ToolCalls {
+            tool_calls,
+            assistant_text: _,
+            reasoning,
+        } => TurnProcessingResult::ToolCalls {
+            tool_calls,
+            assistant_text: String::new(),
+            reasoning,
+        },
+        TurnProcessingResult::TextResponse { .. } => TurnProcessingResult::Empty,
+        TurnProcessingResult::Empty
+        | TurnProcessingResult::Completed
+        | TurnProcessingResult::Cancelled
+        | TurnProcessingResult::Aborted => processing_result,
+    }
+}
+
+fn inject_exit_plan_mode(
+    processing_result: TurnProcessingResult,
+    conversation_len: usize,
+) -> TurnProcessingResult {
+    use vtcode_core::config::constants::tools;
+
+    let args = serde_json::json!({
+        "reason": "auto_plan_ready"
+    });
+    let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+    let call_id = format!("call_plan_ready_{}", conversation_len);
+    let call = uni::ToolCall::function(call_id, tools::EXIT_PLAN_MODE.to_string(), args_json);
+
+    match processing_result {
+        TurnProcessingResult::ToolCalls {
+            mut tool_calls,
+            assistant_text,
+            reasoning,
+        } => {
+            tool_calls.push(call);
+            TurnProcessingResult::ToolCalls {
+                tool_calls,
+                assistant_text,
+                reasoning,
+            }
+        }
+        TurnProcessingResult::TextResponse { text, reasoning } => TurnProcessingResult::ToolCalls {
+            tool_calls: vec![call],
+            assistant_text: text,
+            reasoning,
+        },
+        TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
+            TurnProcessingResult::ToolCalls {
+                tool_calls: vec![call],
+                assistant_text: String::new(),
+                reasoning: None,
+            }
+        }
+        TurnProcessingResult::Cancelled | TurnProcessingResult::Aborted => processing_result,
+    }
+}
+
+pub(crate) fn maybe_force_plan_mode_interview(
+    processing_result: TurnProcessingResult,
+    response_text: Option<&str>,
+    session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
+    conversation_len: usize,
+) -> TurnProcessingResult {
+    let allow_interview = plan_mode_interview_ready(session_stats);
+
+    let response_has_plan = response_text
+        .map(|text| text.contains("<proposed_plan>"))
+        .unwrap_or(false);
+
+    if response_has_plan {
+        if !session_stats.plan_mode_interview_shown() && allow_interview {
+            let stripped = strip_assistant_text(processing_result);
+            return inject_plan_mode_interview(stripped, session_stats, conversation_len);
+        }
+
+        if session_stats.plan_mode_interview_shown() {
+            let stripped = strip_assistant_text(processing_result);
+            return inject_exit_plan_mode(stripped, conversation_len);
+        }
+
+        return processing_result;
+    }
+
+    let filter_outcome = filter_interview_tool_calls(
+        processing_result,
+        session_stats,
+        allow_interview,
+        response_has_plan,
+    );
+    let processing_result = filter_outcome.processing_result;
+    let has_interview_tool_calls = filter_outcome.had_interview_tool_calls;
+    let has_non_interview_tool_calls = filter_outcome.had_non_interview_tool_calls;
+
+    if session_stats.plan_mode_interview_shown() {
+        if has_interview_tool_calls {
+            session_stats.mark_plan_mode_interview_shown();
+        }
+        return processing_result;
+    }
+
+    if session_stats.plan_mode_interview_pending() {
+        if has_interview_tool_calls && allow_interview {
+            session_stats.mark_plan_mode_interview_shown();
+            return processing_result;
+        }
+
+        if has_non_interview_tool_calls {
+            return processing_result;
+        }
+
+        if !allow_interview {
+            return processing_result;
+        }
+
+        return inject_plan_mode_interview(processing_result, session_stats, conversation_len);
+    }
+
+    let explicit_questions = response_text
+        .map(|text| !extract_interview_questions(text).is_empty())
+        .unwrap_or(false);
+
+    if explicit_questions {
+        if allow_interview {
+            session_stats.mark_plan_mode_interview_shown();
+        }
+        return processing_result;
+    }
+
+    if has_interview_tool_calls {
+        if allow_interview {
+            session_stats.mark_plan_mode_interview_shown();
+        } else {
+            session_stats.mark_plan_mode_interview_pending();
+        }
+        return processing_result;
+    }
+
+    if has_non_interview_tool_calls {
+        session_stats.mark_plan_mode_interview_pending();
+        return processing_result;
+    }
+
+    if !allow_interview {
+        return processing_result;
+    }
+
+    inject_plan_mode_interview(processing_result, session_stats, conversation_len)
+}
+
+fn default_plan_mode_interview_args() -> serde_json::Value {
+    serde_json::json!({
+        "questions": [
+            {
+                "id": "goal",
+                "header": "Goal",
+                "question": "What outcome should this change deliver?"
+            },
+            {
+                "id": "constraints",
+                "header": "Constraints",
+                "question": "Any constraints, preferences, or non-goals I should follow?"
+            },
+            {
+                "id": "verification",
+                "header": "Verification",
+                "question": "How should we verify the result (tests or manual checks)?"
+            }
+        ]
+    })
+}
+
+fn inject_plan_mode_interview(
+    processing_result: TurnProcessingResult,
+    session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
+    conversation_len: usize,
+) -> TurnProcessingResult {
+    use vtcode_core::config::constants::tools;
+
+    let args = default_plan_mode_interview_args();
+    let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+    let call_id = format!("call_plan_interview_{}", conversation_len);
+    let call = uni::ToolCall::function(call_id, tools::ASK_QUESTIONS.to_string(), args_json);
+
+    session_stats.mark_plan_mode_interview_shown();
+
+    match processing_result {
+        TurnProcessingResult::ToolCalls {
+            mut tool_calls,
+            assistant_text,
+            reasoning,
+        } => {
+            tool_calls.push(call);
+            TurnProcessingResult::ToolCalls {
+                tool_calls,
+                assistant_text,
+                reasoning,
+            }
+        }
+        TurnProcessingResult::TextResponse { text, reasoning } => TurnProcessingResult::ToolCalls {
+            tool_calls: vec![call],
+            assistant_text: text,
+            reasoning,
+        },
+        TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
+            TurnProcessingResult::ToolCalls {
+                tool_calls: vec![call],
+                assistant_text: String::new(),
+                reasoning: None,
+            }
+        }
+        TurnProcessingResult::Cancelled | TurnProcessingResult::Aborted => processing_result,
+    }
+}
+
+struct InterviewToolCallFilter {
+    processing_result: TurnProcessingResult,
+    had_interview_tool_calls: bool,
+    had_non_interview_tool_calls: bool,
+}
+
+fn filter_interview_tool_calls(
+    processing_result: TurnProcessingResult,
+    session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
+    allow_interview: bool,
+    response_has_plan: bool,
+) -> InterviewToolCallFilter {
+    use vtcode_core::config::constants::tools;
+
+    let TurnProcessingResult::ToolCalls {
+        tool_calls,
+        assistant_text,
+        reasoning,
+    } = processing_result
+    else {
+        return InterviewToolCallFilter {
+            processing_result,
+            had_interview_tool_calls: false,
+            had_non_interview_tool_calls: false,
+        };
+    };
+
+    let mut had_interview = false;
+    let mut had_non_interview = false;
+    let mut filtered = Vec::with_capacity(tool_calls.len());
+
+    for call in tool_calls {
+        let is_interview = call
+            .function
+            .as_ref()
+            .map(|func| {
+                matches!(
+                    func.name.as_str(),
+                    tools::ASK_QUESTIONS | tools::REQUEST_USER_INPUT
+                )
+            })
+            .unwrap_or(false);
+
+        if is_interview {
+            had_interview = true;
+            if allow_interview && !response_has_plan {
+                filtered.push(call);
+            }
+        } else {
+            had_non_interview = true;
+            filtered.push(call);
+        }
+    }
+
+    if had_interview && (had_non_interview || !allow_interview) && !response_has_plan {
+        session_stats.mark_plan_mode_interview_pending();
+    }
+
+    let processing_result = if filtered.is_empty() {
+        if assistant_text.trim().is_empty() {
+            TurnProcessingResult::ToolCalls {
+                tool_calls: Vec::new(),
+                assistant_text,
+                reasoning,
+            }
+        } else {
+            TurnProcessingResult::TextResponse {
+                text: assistant_text,
+                reasoning,
+            }
+        }
+    } else {
+        TurnProcessingResult::ToolCalls {
+            tool_calls: filtered,
+            assistant_text,
+            reasoning,
+        }
+    };
+
+    InterviewToolCallFilter {
+        processing_result,
+        had_interview_tool_calls: had_interview,
+        had_non_interview_tool_calls: had_non_interview,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::runloop::unified::state::SessionStats;
+    use vtcode_core::config::constants::tools;
+    use vtcode_core::llm::provider::{FinishReason, LLMResponse};
+
+    #[test]
+    fn extract_interview_questions_from_numbered_lines() {
+        let text = "1. First question?\n2) Second question?\n3. Third question?";
+        let questions = extract_interview_questions(text);
+        assert_eq!(questions.len(), 3);
+        assert_eq!(questions[0], "First question?");
+        assert_eq!(questions[1], "Second question?");
+        assert_eq!(questions[2], "Third question?");
+    }
+
+    #[test]
+    fn extract_interview_questions_from_bullets() {
+        let text = "- Should we do X?\n- Should we do Y?";
+        let questions = extract_interview_questions(text);
+        assert_eq!(questions.len(), 2);
+        assert_eq!(questions[0], "Should we do X?");
+    }
+
+    #[test]
+    fn process_llm_response_turns_questions_into_tool_call() {
+        let response = LLMResponse {
+            content: Some("1. First question?\n2. Second question?".to_string()),
+            tool_calls: None,
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result = process_llm_response(&response, &mut renderer, 0, true, true, None)
+            .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+                assert_eq!(tool_calls.len(), 1);
+            }
+            _ => panic!("Expected tool calls"),
+        }
+    }
+
+    #[test]
+    fn process_llm_response_skips_questions_when_interview_not_ready() {
+        let response = LLMResponse {
+            content: Some("1. First question?\n2. Second question?".to_string()),
+            tool_calls: None,
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result = process_llm_response(&response, &mut renderer, 0, false, true, None)
+            .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::TextResponse { text, .. } => {
+                assert!(text.contains("First question"));
+            }
+            _ => panic!("Expected text response without tool calls"),
+        }
+    }
+
+    #[test]
+    fn extract_interview_questions_strips_markdown_wrapping() {
+        let text = "**How should we proceed?**";
+        let questions = extract_interview_questions(text);
+        assert_eq!(questions, vec!["How should we proceed?".to_string()]);
+    }
+
+    #[test]
+    fn extract_interview_questions_handles_bold_bullets() {
+        let text = "- **Should we do X?**";
+        let questions = extract_interview_questions(text);
+        assert_eq!(questions, vec!["Should we do X?".to_string()]);
+    }
+
+    #[test]
+    fn maybe_force_plan_mode_interview_inserts_tool_call() {
+        let mut stats = SessionStats::default();
+        let processing_result = TurnProcessingResult::TextResponse {
+            text: "Proceeding without explicit questions.".to_string(),
+            reasoning: None,
+        };
+
+        stats.record_tool(tools::READ_FILE);
+        stats.increment_plan_mode_turns();
+
+        let result = maybe_force_plan_mode_interview(
+            processing_result,
+            Some("Proceeding without explicit questions."),
+            &mut stats,
+            1,
+        );
+
+        match result {
+            TurnProcessingResult::ToolCalls {
+                tool_calls,
+                assistant_text,
+                ..
+            } => {
+                assert_eq!(assistant_text, "Proceeding without explicit questions.");
+                assert!(!tool_calls.is_empty());
+                let name = tool_calls
+                    .last()
+                    .and_then(|call| call.function.as_ref())
+                    .map(|func| func.name.as_str())
+                    .unwrap_or("");
+                assert_eq!(name, tools::ASK_QUESTIONS);
+            }
+            _ => panic!("Expected tool calls with forced interview"),
+        }
+    }
+
+    #[test]
+    fn maybe_force_plan_mode_interview_skips_when_questions_present() {
+        let mut stats = SessionStats::default();
+        let processing_result = TurnProcessingResult::TextResponse {
+            text: "What should I do next?".to_string(),
+            reasoning: None,
+        };
+
+        stats.increment_plan_mode_turns();
+
+        let result = maybe_force_plan_mode_interview(
+            processing_result,
+            Some("What should I do next?"),
+            &mut stats,
+            2,
+        );
+
+        match result {
+            TurnProcessingResult::TextResponse { text, .. } => {
+                assert_eq!(text, "What should I do next?");
+                assert!(!stats.plan_mode_interview_shown());
+                assert!(!stats.plan_mode_interview_pending());
+            }
+            _ => panic!("Expected text response without forced interview"),
+        }
+    }
+
+    #[test]
+    fn maybe_force_plan_mode_interview_marks_shown_when_plan_present() {
+        let mut stats = SessionStats::default();
+        let processing_result = TurnProcessingResult::TextResponse {
+            text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
+            reasoning: None,
+        };
+
+        stats.record_tool(tools::READ_FILE);
+        stats.increment_plan_mode_turns();
+
+        let result = maybe_force_plan_mode_interview(
+            processing_result,
+            Some("<proposed_plan>\nPlan content\n</proposed_plan>"),
+            &mut stats,
+            1,
+        );
+
+        match result {
+            TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+                let name = tool_calls
+                    .last()
+                    .and_then(|call| call.function.as_ref())
+                    .map(|func| func.name.as_str())
+                    .unwrap_or("");
+                assert_eq!(name, tools::ASK_QUESTIONS);
+            }
+            _ => panic!("Expected tool calls for plan interview"),
+        }
+    }
+
+    #[test]
+    fn maybe_force_plan_mode_interview_triggers_exit_when_plan_ready() {
+        let mut stats = SessionStats::default();
+        let processing_result = TurnProcessingResult::TextResponse {
+            text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
+            reasoning: None,
+        };
+
+        stats.record_tool(tools::READ_FILE);
+        stats.increment_plan_mode_turns();
+        stats.mark_plan_mode_interview_shown();
+
+        let result = maybe_force_plan_mode_interview(
+            processing_result,
+            Some("<proposed_plan>\nPlan content\n</proposed_plan>"),
+            &mut stats,
+            2,
+        );
+
+        match result {
+            TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+                let name = tool_calls
+                    .last()
+                    .and_then(|call| call.function.as_ref())
+                    .map(|func| func.name.as_str())
+                    .unwrap_or("");
+                assert_eq!(name, tools::EXIT_PLAN_MODE);
+            }
+            _ => panic!("Expected tool calls for plan confirmation"),
+        }
+    }
+
+    #[test]
+    fn maybe_force_plan_mode_interview_defers_when_tool_calls_present() {
+        let mut stats = SessionStats::default();
+        stats.increment_plan_mode_turns();
+        stats.increment_plan_mode_turns();
+
+        let processing_result = TurnProcessingResult::ToolCalls {
+            tool_calls: vec![uni::ToolCall::function(
+                "call_read".to_string(),
+                tools::READ_FILE.to_string(),
+                "{}".to_string(),
+            )],
+            assistant_text: String::new(),
+            reasoning: None,
+        };
+
+        let result = maybe_force_plan_mode_interview(
+            processing_result,
+            Some("Going to read files."),
+            &mut stats,
+            3,
+        );
+
+        match result {
+            TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+                assert_eq!(tool_calls.len(), 1);
+                assert!(stats.plan_mode_interview_pending());
+            }
+            _ => panic!("Expected tool calls to continue without interview"),
+        }
+    }
+
+    #[test]
+    fn maybe_force_plan_mode_interview_strips_interview_from_mixed_tool_calls() {
+        let mut stats = SessionStats::default();
+        stats.increment_plan_mode_turns();
+        stats.increment_plan_mode_turns();
+        stats.increment_plan_mode_turns();
+
+        let processing_result = TurnProcessingResult::ToolCalls {
+            tool_calls: vec![
+                uni::ToolCall::function(
+                    "call_read".to_string(),
+                    tools::READ_FILE.to_string(),
+                    "{}".to_string(),
+                ),
+                uni::ToolCall::function(
+                    "call_interview".to_string(),
+                    tools::ASK_QUESTIONS.to_string(),
+                    "{}".to_string(),
+                ),
+            ],
+            assistant_text: String::new(),
+            reasoning: None,
+        };
+
+        let result = maybe_force_plan_mode_interview(
+            processing_result,
+            Some("Going to read files."),
+            &mut stats,
+            3,
+        );
+
+        match result {
+            TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+                assert_eq!(tool_calls.len(), 1);
+                let name = tool_calls
+                    .first()
+                    .and_then(|call| call.function.as_ref())
+                    .map(|func| func.name.as_str())
+                    .unwrap_or("");
+                assert_eq!(name, tools::READ_FILE);
+                assert!(stats.plan_mode_interview_pending());
+            }
+            _ => panic!("Expected tool calls with interview stripped"),
+        }
+    }
 }

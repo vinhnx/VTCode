@@ -8,6 +8,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use vtcode_core::acp::PermissionGrant;
 use vtcode_core::acp::permission_cache::ToolPermissionCache;
+use vtcode_core::config::constants::tools;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::tools::registry::ToolRegistry;
@@ -121,6 +122,16 @@ async fn test_execute_tool_with_timeout() {
         }
         other => panic!("Unexpected result type: {:?}", other),
     }
+}
+
+#[tokio::test]
+async fn test_ask_questions_alias_resolves_to_request_user_input() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
+    let tool = registry
+        .get_tool(tools::ASK_QUESTIONS)
+        .expect("ask_questions alias should resolve");
+    assert_eq!(tool.name(), tools::REQUEST_USER_INPUT);
 }
 
 #[test]
@@ -310,6 +321,83 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
         }
         other => panic!("Expected permission denial, got: {:?}", other),
     }
+}
+
+#[tokio::test]
+async fn test_run_tool_call_auto_switches_plan_mode_for_mutating_tool() {
+    let mut test_ctx = TestContext::new().await;
+    let mut registry = test_ctx.registry;
+
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    {
+        let mut cache = permission_cache_arc.write().await;
+        cache.cache_grant(tools::WRITE_FILE.to_string(), PermissionGrant::Permanent);
+    }
+
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = test_ctx.approval_recorder;
+    let traj = TrajectoryLogger::new(&test_ctx.workspace);
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+    registry.enable_plan_mode();
+    registry.plan_mode_state().enable();
+    session_stats.switch_to_planner();
+
+    let mut harness_state = build_harness_state();
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+        renderer: &mut test_ctx.renderer,
+        handle: &test_ctx.handle,
+        tool_registry: &mut registry,
+        tools: &tools,
+        tool_result_cache: &result_cache,
+        tool_permission_cache: &permission_cache_arc,
+        decision_ledger: &decision_ledger,
+        session_stats: &mut session_stats,
+        mcp_panel_state: &mut mcp_panel,
+        approval_recorder: &approval_recorder,
+        session: &mut test_ctx.session,
+        traj: &traj,
+        harness_state: &mut harness_state,
+        harness_emitter: None,
+    };
+
+    let payload = serde_json::to_string(&json!({
+        "path": "notes.txt",
+        "content": "hello plan mode"
+    }))
+    .expect("serialize tool args");
+    let call = vtcode_core::llm::provider::ToolCall::function(
+        "call_plan_write".to_string(),
+        tools::WRITE_FILE.to_string(),
+        payload,
+    );
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let outcome = run_tool_call(
+        &mut ctx,
+        &call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+    )
+    .await
+    .expect("run_tool_call must run");
+
+    assert!(matches!(
+        outcome.status,
+        ToolExecutionStatus::Success { .. }
+    ));
+    assert!(session_stats.is_plan_mode());
+    assert!(registry.is_plan_mode());
+    assert!(registry.plan_mode_state().is_active());
 }
 
 /*

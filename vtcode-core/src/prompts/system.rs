@@ -240,31 +240,33 @@ Tools hidden by default (saves context):
 
 ## Plan Mode (Read-Only Exploration)
 
-Plan Mode is a read-only exploration phase where mutating tools are blocked:
+Plan Mode is a read-only exploration phase where mutating tools are normally blocked:
 
 **ExecPlan Methodology**: For complex multi-hour tasks, use ExecPlans (see `.vtcode/PLANS.md`). ExecPlans are self-contained, living design documents with mandatory sections for progress tracking, decision logging, and retrospectives.
 
 **Entering Plan Mode**:
 - The session may start in Plan Mode (check status bar showing "Plan")
-- In Plan Mode, you can only use read-only tools: `read_file`, `grep_file`, `list_files`, `code_intelligence`, `unified_search`
+- In Plan Mode, you can use read-only tools: `read_file`, `grep_file`, `list_files`, `code_intelligence`, `unified_search`
 - Exception: You CAN write to `.vtcode/plans/` to create your implementation plan
 
 **During Plan Mode**:
 - Explore the codebase thoroughly before proposing changes
 - Write your plan to `.vtcode/plans/plan-name.md` with structured steps
 - Ask clarifying questions if requirements are ambiguous
+- If you need full tools for discovery, the system will temporarily switch to Edit mode, run the tool, then return you to Plan Mode
+- Avoid modifying files outside `.vtcode/plans/` unless the user has approved implementation
 
 **Exiting Plan Mode** (CRITICAL):
 - When user says "start implement", "execute", "proceed", or signals readiness to act:
   1. Call `exit_plan_mode` tool - this triggers the confirmation dialog
   2. User will see the Implementation Blueprint panel with your plan
-  3. User chooses: "Execute" (enable editing), "Edit Plan" (stay in plan mode), or "Cancel"
-  4. Only after user confirmation will mutating tools be enabled
-- **Never** try to use mutating tools directly in Plan Mode—always exit first
+  3. User chooses: "Execute" (enable editing) or "Stay in Plan Mode" (continue planning)
+  4. Only after user confirmation will mutating tools be enabled for implementation
+- Use `exit_plan_mode` only when ready to implement, not for discovery
 
 **If tools are denied in Plan Mode**:
-- Error message "tool denied by plan mode" means you must call `exit_plan_mode` first
-- Don't retry the same tool—ask user if they want to proceed with implementation
+- Error message "tool denied by plan mode" means the auto-switch did not apply
+- Use a read-only alternative or ask the user whether to proceed with implementation
 
 ## Design Philosophy: Desire Paths
 
@@ -326,7 +328,7 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 
 **Git**: Never `git commit`, `git push`, or branch unless explicitly requested.
 
-**Plan Mode**: If in Plan Mode (status bar shows "Plan"), mutating tools are blocked. When user says "implement" or "proceed", call `exit_plan_mode` to trigger confirmation dialog. User must approve before editing is enabled.
+**Plan Mode**: If in Plan Mode (status bar shows "Plan"), mutating tools are normally blocked. The system may temporarily switch to Edit mode for discovery tool calls and then return. When user says "implement" or "proceed", call `exit_plan_mode` to trigger confirmation dialog. User must approve before editing is enabled.
 
 **AGENTS.md**: Obey scoped instructions; check subdirectories when outside CWD scope.
 
@@ -640,6 +642,14 @@ pub async fn compose_system_instruction_text(
             cfg.tools.max_tool_loops.max(1),
             repeated_desc
         );
+
+        if cfg.chat.ask_questions.enabled {
+            instruction.push_str(
+                "- **Ask Questions tool**: Enabled (`ask_questions` alias for `request_user_input`)\n",
+            );
+        } else {
+            instruction.push_str("- **Ask Questions tool**: Disabled\n");
+        }
 
         if cfg.mcp.enabled {
             instruction.push_str(

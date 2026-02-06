@@ -240,8 +240,12 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         // Initialize plan mode from CLI flag
         if plan_mode {
-            session_stats.set_plan_mode(true);
             tool_registry.enable_plan_mode();
+            let plan_state = tool_registry.plan_mode_state();
+            plan_state.enable();
+            session_stats.switch_to_planner();
+            session_stats.set_plan_mode(true);
+            handle.set_editing_mode(vtcode_core::ui::tui::EditingMode::Plan);
         }
         // Optimization: Pre-allocate with small capacity for typical usage
         let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);
@@ -302,23 +306,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     last_forced_redraw: &mut last_forced_redraw,
                     harness_config: harness_config.clone(),
                 };
-
-                // Phase 3 Optimization: Session Memory Bounds
-                // Check if we've exceeded the maximum allowed turns/messages
-                // We approximate turns as history/2 for safety
-                if interaction_ctx.conversation_history.len()
-                    > interaction_ctx.config.max_conversation_turns * 2
-                {
-                    // Double check specific turn count if we had it, but history length is the main memory driver
-                    interaction_ctx.renderer.line(
-                        vtcode_core::utils::ansi::MessageStyle::Warning,
-                        &format!(
-                            "Session reached maximum conversation limit ({} turns). Ending session to prevent performance degradation.",
-                            interaction_ctx.config.max_conversation_turns
-                        )
-                    )?;
-                    return Ok(()); // Or break?
-                }
 
                 let mut interaction_state =
                     crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {

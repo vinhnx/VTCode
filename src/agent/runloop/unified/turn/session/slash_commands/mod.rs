@@ -130,8 +130,14 @@ pub async fn handle_outcome(
         SlashCommandOutcome::RewindToTurn { turn, scope } => {
             handlers::handle_rewind_to_turn(ctx, turn, scope).await
         }
-        SlashCommandOutcome::TogglePlanMode { enable } => {
-            handlers::handle_toggle_plan_mode(ctx, enable).await
+        SlashCommandOutcome::TogglePlanMode { enable, prompt } => {
+            let control = handlers::handle_toggle_plan_mode(ctx, enable).await?;
+            if matches!(control, SlashCommandControl::Continue)
+                && let Some(prompt) = prompt
+            {
+                return Ok(SlashCommandControl::SubmitPrompt(prompt));
+            }
+            Ok(control)
         }
         SlashCommandOutcome::ToggleAutonomous { enable } => {
             handlers::handle_toggle_autonomous_mode(ctx, enable).await

@@ -25,7 +25,8 @@ impl Tool for AskUserQuestionTool {
     }
 
     fn description(&self) -> &'static str {
-        "Ask the human a question via VT Code's interactive UI (HITL)."
+        "Ask the human a question via VT Code's interactive UI with tabbed choices. Prefer \
+        request_user_input for simple clarifications."
     }
 
     fn parameter_schema(&self) -> Option<Value> {

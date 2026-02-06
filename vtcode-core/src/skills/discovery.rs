@@ -521,7 +521,7 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         compatibility: None,
         variety: SkillVariety::SystemUtility,
         metadata: None,
-            tools: None,
+        tools: None,
     };
 
     Ok(SkillContext::MetadataOnly(

@@ -87,7 +87,10 @@ pub use optimization::{
     LLMClientConfig, MemoryPoolConfig, OptimizationConfig, ProfilingConfig, ToolRegistryConfig,
 };
 pub use output_styles::{OutputStyle, OutputStyleConfig, OutputStyleManager};
-pub use root::{LayoutModeOverride, PtyConfig, ToolOutputMode, UiConfig, UiDisplayMode};
+pub use root::{
+    AskQuestionsConfig, ChatConfig, LayoutModeOverride, PtyConfig, ToolOutputMode, UiConfig,
+    UiDisplayMode,
+};
 #[cfg(feature = "schema")]
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
 pub use status_line::{StatusLineConfig, StatusLineMode};

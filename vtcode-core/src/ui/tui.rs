@@ -25,7 +25,7 @@ pub use types::{
     InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineListItem,
     InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineSession,
     InlineTextStyle, InlineTheme, PlanConfirmationResult, PlanContent, PlanPhase, PlanStep,
-    SecurePromptConfig, TrustMode, WizardStep,
+    SecurePromptConfig, TrustMode, WizardModalMode, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

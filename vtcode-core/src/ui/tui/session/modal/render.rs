@@ -92,7 +92,19 @@ pub fn render_wizard_modal_body(
         return;
     }
 
-    // Layout: [Tabs (1)] [Search (optional)] [Question (2)] [List]
+    let is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
+    let notes_line = if is_multistep {
+        wizard.notes_line()
+    } else {
+        None
+    };
+    let instruction_lines = if is_multistep {
+        wizard.instruction_lines()
+    } else {
+        Vec::new()
+    };
+
+    // Layout: [Header (1)] [Search (optional)] [Question (2)] [List] [Notes?] [Instructions?]
     let mut constraints = Vec::new();
     constraints.push(Constraint::Length(1));
     if wizard.search.is_some() {
@@ -100,17 +112,33 @@ pub fn render_wizard_modal_body(
     }
     constraints.push(Constraint::Length(2));
     constraints.push(Constraint::Min(3));
+    if notes_line.is_some() {
+        constraints.push(Constraint::Length(1));
+    }
+    if !instruction_lines.is_empty() {
+        constraints.push(Constraint::Length(
+            instruction_lines.len().min(u16::MAX as usize) as u16,
+        ));
+    }
 
     let chunks = Layout::vertical(constraints).split(area);
 
     let mut idx = 0;
-    render_wizard_tabs(
-        frame,
-        chunks[idx],
-        &wizard.steps,
-        wizard.current_step,
-        styles,
-    );
+    if is_multistep {
+        let header = Paragraph::new(Line::from(Span::styled(
+            wizard.question_header(),
+            styles.header,
+        )));
+        frame.render_widget(header, chunks[idx]);
+    } else {
+        render_wizard_tabs(
+            frame,
+            chunks[idx],
+            &wizard.steps,
+            wizard.current_step,
+            styles,
+        );
+    }
     idx += 1;
 
     if let Some(search) = wizard.search.as_ref() {
@@ -119,16 +147,34 @@ pub fn render_wizard_modal_body(
     }
 
     if let Some(step) = wizard.steps.get(wizard.current_step) {
-        let question = Paragraph::new(Line::from(Span::styled(
-            step.question.clone(),
-            styles.header,
-        )));
+        let question_text = if is_multistep {
+            format!("  {}", step.question)
+        } else {
+            step.question.clone()
+        };
+        let question = Paragraph::new(Line::from(Span::styled(question_text, styles.header)));
         frame.render_widget(question, chunks[idx]);
     }
     idx += 1;
 
     if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
         render_modal_list(frame, chunks[idx], &mut step.list, styles);
+    }
+    idx += 1;
+
+    if let Some(notes_text) = notes_line {
+        let notes = Paragraph::new(Line::from(Span::styled(notes_text, styles.selectable)));
+        frame.render_widget(notes, chunks[idx]);
+        idx += 1;
+    }
+
+    if !instruction_lines.is_empty() && idx < chunks.len() {
+        let lines = instruction_lines
+            .into_iter()
+            .map(|line| Line::from(Span::styled(line, styles.hint)))
+            .collect::<Vec<_>>();
+        let instructions = Paragraph::new(lines);
+        frame.render_widget(instructions, chunks[idx]);
     }
 }
 

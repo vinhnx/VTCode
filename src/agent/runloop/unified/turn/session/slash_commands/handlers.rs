@@ -1270,7 +1270,7 @@ pub async fn handle_toggle_plan_mode(
         ctx.renderer.line(
             MessageStyle::Info,
             if current {
-                "Plan Mode is already enabled (read-only: no edits or commands)."
+                "Plan Mode is already enabled (read-only by default; discovery tools may auto-switch)."
             } else {
                 "Plan Mode is already disabled."
             },
@@ -1290,6 +1290,10 @@ pub async fn handle_toggle_plan_mode(
 
     if new_state {
         ctx.tool_registry.enable_plan_mode();
+        let plan_state = ctx.tool_registry.plan_mode_state();
+        plan_state.enable();
+        plan_state.set_plan_file(None).await;
+        plan_state.set_plan_baseline(None).await;
         ctx.session_stats.switch_to_planner();
         ctx.renderer.line(
             MessageStyle::Info,
@@ -1297,19 +1301,22 @@ pub async fn handle_toggle_plan_mode(
         )?;
         ctx.renderer.line(
             MessageStyle::Output,
-            "  The agent will only read/analyze the codebase and produce step-by-step plans.",
+            "  The agent will focus on analysis and planning with a structured plan.",
         )?;
         ctx.renderer.line(
             MessageStyle::Output,
-            "  File edits, commands, and tests are disabled until you run /plan off.",
+            "  Mutating tools are normally blocked; discovery calls may auto-switch to full tools and return.",
         )?;
         ctx.renderer.line(MessageStyle::Output, "")?;
         ctx.renderer.line(
             MessageStyle::Info,
-            "Allowed tools: read_file, list_files, grep_file, code_intelligence, ask_user_question, request_user_input",
+            "Allowed tools: read_file, list_files, grep_file, code_intelligence, unified_search, ask_questions, request_user_input, spawn_subagent",
         )?;
     } else {
         ctx.tool_registry.disable_plan_mode();
+        let plan_state = ctx.tool_registry.plan_mode_state();
+        plan_state.disable();
+        plan_state.set_plan_file(None).await;
         ctx.session_stats.switch_to_coder();
         ctx.renderer.line(
             MessageStyle::Info,
@@ -1410,8 +1417,13 @@ pub async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashComm
     // Handle registry state based on new mode
     if new_mode == EditingMode::Plan {
         ctx.tool_registry.enable_plan_mode();
+        let plan_state = ctx.tool_registry.plan_mode_state();
+        plan_state.enable();
     } else {
         ctx.tool_registry.disable_plan_mode();
+        let plan_state = ctx.tool_registry.plan_mode_state();
+        plan_state.disable();
+        plan_state.set_plan_file(None).await;
     }
 
     match new_mode {

@@ -218,7 +218,7 @@ impl IncrementalSystemPrompt {
                 let _ = writeln!(prompt, "\n# PLAN MODE (READ-ONLY)");
                 let _ = writeln!(
                     prompt,
-                    "Plan Mode is active. Mutating tools are blocked except for `.vtcode/plans/` directory."
+                    "Plan Mode is active. Mutating tools are normally blocked except for `.vtcode/plans/` directory. The system may temporarily switch to Edit mode for discovery tools and then return."
                 );
                 let _ = writeln!(
                     prompt,

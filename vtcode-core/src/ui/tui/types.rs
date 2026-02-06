@@ -973,7 +973,7 @@ impl InlineHandle {
     /// Show plan confirmation dialog (Claude Code style Implementation Blueprint)
     ///
     /// Displays the implementation plan and asks user to approve before execution.
-    /// User can choose: Execute, Edit Plan, Cancel, or Auto-Accept (for session).
+    /// User can choose: Execute or Stay in Plan Mode (continue planning).
     pub fn show_plan_confirmation(&self, plan: PlanContent) {
         self.send_command(InlineCommand::ShowPlanConfirmation {
             plan: Box::new(plan),

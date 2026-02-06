@@ -216,7 +216,7 @@ pub async fn run_turn_loop(
     use crate::agent::runloop::unified::turn::guards::run_proactive_guards;
     use crate::agent::runloop::unified::turn::turn_processing::{
         HandleTurnProcessingResultParams, execute_llm_request, handle_turn_processing_result,
-        process_llm_response,
+        maybe_force_plan_mode_interview, process_llm_response,
     };
     use vtcode_core::llm::provider as uni;
 
@@ -247,10 +247,13 @@ pub async fn run_turn_loop(
 
     // Reset safety validator for a new turn
     {
-        let max_session_turns = ctx
-            .vt_cfg
-            .map(|c| c.agent.max_conversation_turns)
-            .unwrap_or(150);
+        let max_session_turns = if ctx.session_stats.is_plan_mode() {
+            usize::MAX
+        } else {
+            ctx.vt_cfg
+                .map(|c| c.agent.max_conversation_turns)
+                .unwrap_or(150)
+        };
         let mut validator = ctx.safety_validator.write().await;
         validator.set_limits(max_tool_loops, max_session_turns);
         validator.start_turn();
@@ -550,13 +553,40 @@ pub async fn run_turn_loop(
         // Track token usage for context awareness before any borrows occur
         let response_usage = response.usage.clone();
 
+        let ask_questions_enabled = ctx
+            .vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.chat.ask_questions.enabled)
+            .unwrap_or(true);
+
+        if turn_processing_ctx.session_stats.is_plan_mode() {
+            turn_processing_ctx
+                .session_stats
+                .increment_plan_mode_turns();
+        }
+
         // Process the LLM response
-        let processing_result = process_llm_response(
+        let allow_plan_interview = turn_processing_ctx.session_stats.is_plan_mode()
+            && ask_questions_enabled
+            && crate::agent::runloop::unified::turn::turn_processing::plan_mode_interview_ready(
+                turn_processing_ctx.session_stats,
+            );
+        let mut processing_result = process_llm_response(
             &response,
             turn_processing_ctx.renderer,
             turn_processing_ctx.working_history.len(),
+            allow_plan_interview,
+            ask_questions_enabled,
             Some(&validation_cache),
         )?;
+        if turn_processing_ctx.session_stats.is_plan_mode() && ask_questions_enabled {
+            processing_result = maybe_force_plan_mode_interview(
+                processing_result,
+                response.content.as_deref(),
+                turn_processing_ctx.session_stats,
+                turn_processing_ctx.working_history.len(),
+            );
+        }
 
         // Restore input status if there are no tool calls (turn is completing)
         // This handles the case where defer_restore was set but no tool spinners will take over

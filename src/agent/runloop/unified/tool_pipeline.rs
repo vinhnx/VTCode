@@ -3,12 +3,14 @@ use std::time::Duration;
 
 mod cache;
 mod execution;
+mod hitl;
 mod status;
 #[cfg(test)]
 mod tests;
 mod timeout;
 
 pub(crate) use execution::{execute_tool_with_timeout_ref, run_tool_call};
+pub(crate) use hitl::execute_hitl_tool;
 pub(crate) use status::{ToolExecutionStatus, ToolPipelineOutcome};
 
 /// Default timeout for tool execution if no policy is configured

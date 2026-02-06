@@ -19,6 +19,12 @@ pub(crate) struct SessionStats {
     /// Active agent profile name - the subagent config driving the main conversation
     /// This replaces EditingMode with a more flexible approach
     pub active_agent_name: String,
+    /// Whether the plan mode interview has already been shown in this session
+    plan_mode_interview_shown: bool,
+    /// Whether the plan mode interview should be prompted after current tool work
+    plan_mode_interview_pending: bool,
+    /// Number of plan-mode turns observed since entering plan mode
+    plan_mode_turns: usize,
     /// Autonomous mode - auto-approve safe tools with reduced HITL prompts
     pub autonomous_mode: bool,
     #[allow(dead_code)]
@@ -38,6 +44,10 @@ pub(crate) struct SessionStats {
 impl SessionStats {
     pub(crate) fn record_tool(&mut self, name: &str) {
         self.tools.insert(name.to_string());
+    }
+
+    pub(crate) fn has_tool(&self, name: &str) -> bool {
+        self.tools.contains(name)
     }
 
     pub(crate) fn sorted_tools(&self) -> Vec<String> {
@@ -61,6 +71,12 @@ impl SessionStats {
         } else {
             EditingMode::Edit
         };
+        if enabled {
+            self.plan_mode_interview_shown = false;
+            self.plan_mode_interview_pending = false;
+            self.plan_mode_turns = 0;
+            self.tools.clear();
+        }
     }
 
     /// Set the editing mode directly
@@ -116,6 +132,31 @@ impl SessionStats {
     /// Switch to planner agent (convenience method)
     pub(crate) fn switch_to_planner(&mut self) {
         self.set_active_agent(PLANNER_AGENT);
+    }
+
+    pub(crate) fn plan_mode_interview_shown(&self) -> bool {
+        self.plan_mode_interview_shown
+    }
+
+    pub(crate) fn mark_plan_mode_interview_shown(&mut self) {
+        self.plan_mode_interview_shown = true;
+        self.plan_mode_interview_pending = false;
+    }
+
+    pub(crate) fn plan_mode_turns(&self) -> usize {
+        self.plan_mode_turns
+    }
+
+    pub(crate) fn increment_plan_mode_turns(&mut self) {
+        self.plan_mode_turns = self.plan_mode_turns.saturating_add(1);
+    }
+
+    pub(crate) fn plan_mode_interview_pending(&self) -> bool {
+        self.plan_mode_interview_pending
+    }
+
+    pub(crate) fn mark_plan_mode_interview_pending(&mut self) {
+        self.plan_mode_interview_pending = true;
     }
 
     /// Switch to coder agent (convenience method)

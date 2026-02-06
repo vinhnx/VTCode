@@ -1,18 +1,17 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::Notify;
-use tokio::task;
 
 use vtcode_core::ui::tui::{
-    InlineEvent, InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineSession, WizardStep,
+    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSession,
+    WizardStep,
 };
 
-use super::state::{CtrlCSignal, CtrlCState};
+use super::state::CtrlCState;
+use super::wizard_modal::{WizardModalOutcome, wait_for_wizard_modal};
 
 #[derive(Debug, Deserialize)]
 struct AskUserQuestionArgs {
@@ -115,93 +114,24 @@ pub(crate) async fn execute_ask_user_question_tool(
 
     handle.show_tabbed_list_modal(title, steps, current_step, search);
     handle.force_redraw();
-    task::yield_now().await;
-
-    loop {
-        if ctrl_c_state.is_cancel_requested() {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(json!({"cancelled": true}));
-        }
-
-        let notify = ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(json!({"cancelled": true}));
-        };
-
-        match event {
-            InlineEvent::Interrupt => {
-                let signal = if ctrl_c_state.is_exit_requested() {
-                    CtrlCSignal::Exit
-                } else if ctrl_c_state.is_cancel_requested() {
-                    CtrlCSignal::Cancel
-                } else {
-                    ctrl_c_state.register_signal()
-                };
-                ctrl_c_notify.notify_waiters();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
+    match wait_for_wizard_modal(handle, session, ctrl_c_state, ctrl_c_notify).await? {
+        WizardModalOutcome::Submitted(mut selections) => {
+            if let Some(InlineListSelection::AskUserChoice { tab_id, choice_id }) = selections.pop()
+            {
                 return Ok(json!({
-                    "cancelled": true,
-                    "signal": match signal {
-                        CtrlCSignal::Exit => "exit",
-                        CtrlCSignal::Cancel => "cancel",
-                    }
+                    "tab_id": tab_id,
+                    "choice_id": choice_id
                 }));
             }
-            InlineEvent::WizardModalSubmit(mut selections) => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
 
-                if let Some(InlineListSelection::AskUserChoice { tab_id, choice_id }) =
-                    selections.pop()
-                {
-                    return Ok(json!({
-                        "tab_id": tab_id,
-                        "choice_id": choice_id
-                    }));
-                }
-
-                return Ok(json!({"cancelled": true}));
+            Ok(json!({"cancelled": true}))
+        }
+        WizardModalOutcome::Cancelled { signal } => {
+            if let Some(signal) = signal {
+                Ok(json!({"cancelled": true, "signal": signal}))
+            } else {
+                Ok(json!({"cancelled": true}))
             }
-            InlineEvent::WizardModalCancel | InlineEvent::ListModalCancel | InlineEvent::Cancel => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(json!({"cancelled": true}));
-            }
-            InlineEvent::Exit => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(json!({"cancelled": true, "signal": "exit"}));
-            }
-            InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => {
-                // Ignore text input while modal is shown.
-                continue;
-            }
-            _ => {}
         }
     }
 }
