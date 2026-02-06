@@ -31,6 +31,7 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => "GPT-OSS 20B",
             ModelId::OpenAIGptOss120b => "GPT-OSS 120B",
             // Anthropic models
+            ModelId::ClaudeOpus46 => "Claude Opus 4.6",
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeOpus45 => "Claude Opus 4.5",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
@@ -163,6 +164,9 @@ impl ModelId {
                 "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization"
             }
             // Anthropic models
+            ModelId::ClaudeOpus46 => {
+                "Next-gen Anthropic flagship with extended and adaptive thinking support"
+            }
             ModelId::ClaudeOpus41 => "Specialized reasoning model for complex tasks",
             ModelId::ClaudeOpus45 => "Premium flagship model with exceptional intelligence",
             ModelId::ClaudeSonnet45 => "Balanced flagship model for coding and agentic workflows",
@@ -421,6 +425,7 @@ impl ModelId {
             ModelId::GPT51Mini,
             ModelId::CodexMiniLatest,
             // Anthropic models
+            ModelId::ClaudeOpus46,
             ModelId::ClaudeOpus45,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,

@@ -18,6 +18,7 @@ pub struct AnthropicConfig {
     /// When enabled, Claude uses internal reasoning before responding, providing
     /// enhanced reasoning capabilities for complex tasks.
     /// Only supported by Claude 4, Claude 4.5, and Claude 3.7 Sonnet models.
+    /// Claude 4.6 uses adaptive thinking instead of extended thinking.
     /// Note: Extended thinking is now auto-enabled by default (31,999 tokens).
     /// Set MAX_THINKING_TOKENS=63999 environment variable for 2x budget on 64K models.
     /// See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking
@@ -46,7 +47,7 @@ pub struct AnthropicConfig {
     /// Effort level for token usage (high, medium, low)
     /// Controls how many tokens Claude uses when responding, trading off between
     /// response thoroughness and token efficiency.
-    /// Only supported by Claude Opus 4.5 (claude-opus-4-5-20251101)
+    /// Supported by Claude Opus 4.5/4.6 (4.5 requires effort beta header)
     #[serde(default = "default_effort")]
     pub effort: String,
 

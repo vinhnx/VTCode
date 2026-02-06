@@ -24,6 +24,7 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
+            ModelId::ClaudeOpus46 => models::CLAUDE_OPUS_4_6,
             ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,

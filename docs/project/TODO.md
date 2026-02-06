@@ -678,3 +678,7 @@ https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
 ---
 
 https://platform.claude.com/docs/en/build-with-claude/effort
+
+--
+
+https://platform.claude.com/docs/en/about-claude/models/migration-guide

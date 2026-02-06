@@ -21,7 +21,8 @@ impl ModelId {
             | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
-            ModelId::ClaudeOpus45
+            ModelId::ClaudeOpus46
+            | ModelId::ClaudeOpus45
             | ModelId::ClaudeOpus41
             | ModelId::ClaudeSonnet45
             | ModelId::ClaudeHaiku45

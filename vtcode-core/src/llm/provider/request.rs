@@ -35,7 +35,7 @@ pub struct LLMRequest {
     pub reasoning_effort: Option<ReasoningEffortLevel>,
 
     /// Effort level for overall token usage (high, medium, low)
-    /// Applies to: Claude Opus 4.5 (claude-opus-4-5-20251101) with effort-2025-11-24 beta
+    /// Applies to: Claude Opus 4.5 (beta) and Claude Opus 4.6 (GA)
     /// Controls how many tokens Claude uses when responding, trading off between
     /// response thoroughness and token efficiency.
     pub effort: Option<String>,

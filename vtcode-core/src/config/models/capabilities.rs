@@ -67,9 +67,10 @@ impl ModelId {
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
             ModelId::ZaiGlm47 => Some(ModelId::ZaiGlm45Flash),
             ModelId::ZaiGlm46 => Some(ModelId::ZaiGlm45Flash),
-            ModelId::ClaudeOpus45 | ModelId::ClaudeOpus4 | ModelId::ClaudeOpus41 => {
-                Some(ModelId::ClaudeSonnet45)
-            }
+            ModelId::ClaudeOpus46
+            | ModelId::ClaudeOpus45
+            | ModelId::ClaudeOpus4
+            | ModelId::ClaudeOpus41 => Some(ModelId::ClaudeSonnet45),
             ModelId::ClaudeSonnet37 => Some(ModelId::ClaudeSonnet45),
             ModelId::MinimaxM21 => Some(ModelId::MinimaxM21Lightning),
             _ => None,
@@ -107,6 +108,7 @@ impl ModelId {
                 | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT5Codex
+                | ModelId::ClaudeOpus46
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
@@ -158,6 +160,7 @@ impl ModelId {
                 | ModelId::GPT52
                 | ModelId::GPT5
                 | ModelId::GPT5Codex
+                | ModelId::ClaudeOpus46
                 | ModelId::ClaudeOpus45
                 | ModelId::ClaudeOpus41
                 | ModelId::ClaudeOpus4
@@ -218,6 +221,7 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
+            ModelId::ClaudeOpus46 => "4.6",
             ModelId::ClaudeOpus45 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeOpus41 => "4.1",
             ModelId::ClaudeOpus4 | ModelId::ClaudeSonnet4 => "4",
