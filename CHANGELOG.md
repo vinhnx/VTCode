@@ -2,6 +2,22 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.78.1 - 2026-02-07
+
+### Features
+
+- enhance input handling with queue overlay and update input placeholders (8394895f) (@vinhnx)
+- implement queue editing functionality and update input handling (6c0d373b) (@vinhnx)
+- add support for inline data URLs and images in message content (90254442) (@vinhnx)
+
+### Bug Fixes
+
+- add exit_plan_mode tool to planner agent and update tests (63a6835e) (@vinhnx)
+
+### Other
+
+- Implement collapsible pasted message handling and improve image path parsing (5efac36e) (@vinhnx)
+
 ## v0.78.0 - 2026-02-06
 
 ### Documentation
