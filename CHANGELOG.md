@@ -2,6 +2,21 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.78.0 - 2026-02-06
+
+### Documentation
+
+- add task summaries feature to agent teams and enhance subagent matching logic (5fa919c1) (@vinhnx)
+
+### Other
+
+- Refactor CLI argument documentation for clarity and consistency (087be239) (@vinhnx)
+- Enhance user input tools to restrict usage to Plan mode only (93675177) (@vinhnx)
+- Improve output spooler and system prompt handling (255e0a44) (@vinhnx)
+- Add experimental agent teams feature with slash commands and configuration (b70ce06e) (@vinhnx)
+- Update script (35c8d01f) (@vinhnx)
+- Remove code repetition and special casing of local providers (ec4b2099) (@gzsombor)
+
 ## v0.77.1 - 2026-02-06
 
 ### Chores
