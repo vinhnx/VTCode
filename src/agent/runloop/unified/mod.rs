@@ -15,6 +15,7 @@ mod mcp_tool_manager;
 mod model_selection;
 mod palettes;
 mod plan_confirmation;
+mod plan_mode_switch;
 mod progress;
 mod prompts;
 mod request_user_input;
@@ -32,6 +33,7 @@ mod tool_routing;
 mod tool_summary;
 pub mod turn;
 mod ui_interaction;
+mod wizard_modal;
 mod workspace_links;
 
 // Reasoning utilities (centralized)

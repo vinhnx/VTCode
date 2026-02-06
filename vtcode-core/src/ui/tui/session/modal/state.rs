@@ -48,6 +48,10 @@ pub struct WizardStepState {
     pub completed: bool,
     /// The selected answer for this step
     pub answer: Option<InlineListSelection>,
+    /// Optional notes for the current step (free text)
+    pub notes: String,
+    /// Whether notes input is active for the current step
+    pub notes_active: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -426,6 +430,23 @@ impl ModalListState {
         }
     }
 
+    pub fn select_nth_selectable(&mut self, target_index: usize) -> bool {
+        let mut count = 0usize;
+        for (visible_pos, &item_index) in self.visible_indices.iter().enumerate() {
+            if self.items[item_index].selection.is_some() {
+                if count == target_index {
+                    self.list_state.select(Some(visible_pos));
+                    if let Some(rows) = self.viewport_rows {
+                        self.ensure_visible(rows);
+                    }
+                    return true;
+                }
+                count += 1;
+            }
+        }
+        false
+    }
+
     pub fn page_up(&mut self) {
         let step = self.page_step();
         if step == 0 {
@@ -634,12 +655,26 @@ impl WizardModalState {
     ) -> Self {
         let step_states: Vec<WizardStepState> = steps
             .into_iter()
-            .map(|step| WizardStepState {
-                title: step.title,
-                question: step.question,
-                list: ModalListState::new(step.items, step.answer.clone()),
-                completed: step.completed,
-                answer: step.answer,
+            .map(|step| {
+                let notes_active = step
+                    .items
+                    .first()
+                    .and_then(|item| item.selection.as_ref())
+                    .is_some_and(|selection| match selection {
+                        InlineListSelection::RequestUserInputAnswer {
+                            selected, other, ..
+                        } => selected.is_empty() && other.is_some(),
+                        _ => false,
+                    });
+                WizardStepState {
+                    title: step.title,
+                    question: step.question,
+                    list: ModalListState::new(step.items, step.answer.clone()),
+                    completed: step.completed,
+                    answer: step.answer,
+                    notes: String::new(),
+                    notes_active,
+                }
             })
             .collect();
 
@@ -664,6 +699,31 @@ impl WizardModalState {
         key: &KeyEvent,
         modifiers: ModalKeyModifiers,
     ) -> ModalListKeyResult {
+        if let Some(step) = self.steps.get_mut(self.current_step)
+            && step.notes_active
+        {
+            match key.code {
+                KeyCode::Char(ch) if !modifiers.control && !modifiers.alt && !modifiers.command => {
+                    step.notes.push(ch);
+                    return ModalListKeyResult::Redraw;
+                }
+                KeyCode::Backspace => {
+                    if step.notes.pop().is_some() {
+                        return ModalListKeyResult::Redraw;
+                    }
+                    return ModalListKeyResult::HandledNoRedraw;
+                }
+                KeyCode::Tab | KeyCode::Esc => {
+                    if !step.notes.is_empty() {
+                        step.notes.clear();
+                    }
+                    step.notes_active = false;
+                    return ModalListKeyResult::Redraw;
+                }
+                _ => {}
+            }
+        }
+
         // Search handling (if enabled)
         if let Some(search) = self.search.as_mut() {
             if let Some(step) = self.steps.get_mut(self.current_step) {
@@ -708,7 +768,37 @@ impl WizardModalState {
             }
         }
 
+        if self.mode == WizardModalMode::MultiStep
+            && !modifiers.control
+            && !modifiers.alt
+            && !modifiers.command
+            && self.search.is_none()
+        {
+            if let KeyCode::Char(ch) = key.code
+                && ch.is_ascii_digit()
+                && ch != '0'
+            {
+                let target_index = ch.to_digit(10).unwrap_or(1).saturating_sub(1) as usize;
+                if let Some(step) = self.steps.get_mut(self.current_step)
+                    && step.list.select_nth_selectable(target_index)
+                {
+                    return self.submit_current_selection();
+                }
+                return ModalListKeyResult::HandledNoRedraw;
+            }
+        }
+
         match key.code {
+            KeyCode::Char('n') | KeyCode::Char('N')
+                if modifiers.control && self.mode == WizardModalMode::MultiStep =>
+            {
+                if self.current_step < self.steps.len().saturating_sub(1) {
+                    self.current_step += 1;
+                    ModalListKeyResult::Redraw
+                } else {
+                    ModalListKeyResult::HandledNoRedraw
+                }
+            }
             // Left arrow: go to previous step if available
             KeyCode::Left => {
                 if self.current_step > 0 {
@@ -733,35 +823,7 @@ impl WizardModalState {
                 }
             }
             // Enter: select current item and mark step complete
-            KeyCode::Enter => {
-                if let Some(selection) = self.current_selection() {
-                    match self.mode {
-                        WizardModalMode::TabbedList => {
-                            ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(vec![
-                                selection,
-                            ]))
-                        }
-                        WizardModalMode::MultiStep => {
-                            self.complete_current_step(selection.clone());
-                            // Advance to next step if available, else submit
-                            if self.current_step < self.steps.len().saturating_sub(1) {
-                                self.current_step += 1;
-                                ModalListKeyResult::Submit(InlineEvent::WizardModalStepComplete {
-                                    step: self.current_step.saturating_sub(1),
-                                    answer: selection,
-                                })
-                            } else {
-                                // Final step, submit all answers
-                                ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(
-                                    self.collect_answers(),
-                                ))
-                            }
-                        }
-                    }
-                } else {
-                    ModalListKeyResult::HandledNoRedraw
-                }
-            }
+            KeyCode::Enter => self.submit_current_selection(),
             // Escape: cancel wizard
             KeyCode::Esc => ModalListKeyResult::Cancel(InlineEvent::WizardModalCancel),
             // Up/Down/Tab: delegate to current step's list
@@ -785,10 +847,21 @@ impl WizardModalState {
                             ModalListKeyResult::Redraw
                         }
                         KeyCode::Tab => {
-                            if self.search.is_none() {
+                            if self.search.is_none()
+                                && self.mode == WizardModalMode::MultiStep
+                                && step.list.current_selection().is_some_and(|selection| {
+                                    matches!(
+                                        selection,
+                                        InlineListSelection::RequestUserInputAnswer { .. }
+                                    )
+                                })
+                            {
+                                step.notes_active = true;
+                                ModalListKeyResult::Redraw
+                            } else {
                                 step.list.select_next();
+                                ModalListKeyResult::Redraw
                             }
-                            ModalListKeyResult::Redraw
                         }
                         KeyCode::BackTab => {
                             step.list.select_previous();
@@ -808,7 +881,33 @@ impl WizardModalState {
     fn current_selection(&self) -> Option<InlineListSelection> {
         self.steps
             .get(self.current_step)
-            .and_then(|step| step.list.current_selection())
+            .and_then(|step| {
+                step.list
+                    .current_selection()
+                    .map(|selection| (selection, step))
+            })
+            .map(|(selection, step)| match selection {
+                InlineListSelection::RequestUserInputAnswer {
+                    question_id,
+                    selected,
+                    other,
+                } => {
+                    let notes = step.notes.clone();
+                    let next_other = if other.is_some() {
+                        Some(notes)
+                    } else if notes.is_empty() {
+                        None
+                    } else {
+                        Some(notes)
+                    };
+                    InlineListSelection::RequestUserInputAnswer {
+                        question_id,
+                        selected,
+                        other: next_other,
+                    }
+                }
+                _ => selection,
+            })
     }
 
     /// Check if current step is completed
@@ -816,6 +915,57 @@ impl WizardModalState {
         self.steps
             .get(self.current_step)
             .is_some_and(|step| step.completed)
+    }
+
+    fn current_step_supports_notes(&self) -> bool {
+        self.steps
+            .get(self.current_step)
+            .and_then(|step| step.list.current_selection())
+            .is_some_and(|selection| {
+                matches!(
+                    selection,
+                    InlineListSelection::RequestUserInputAnswer { .. }
+                )
+            })
+    }
+
+    pub fn unanswered_count(&self) -> usize {
+        self.steps.iter().filter(|step| !step.completed).count()
+    }
+
+    pub fn question_header(&self) -> String {
+        format!(
+            "Question {}/{} ({} unanswered)",
+            self.current_step.saturating_add(1),
+            self.steps.len(),
+            self.unanswered_count()
+        )
+    }
+
+    pub fn notes_line(&self) -> Option<String> {
+        let step = self.steps.get(self.current_step)?;
+        if step.notes_active || !step.notes.is_empty() {
+            Some(format!("› {}", step.notes))
+        } else {
+            None
+        }
+    }
+
+    pub fn notes_active(&self) -> bool {
+        self.steps
+            .get(self.current_step)
+            .is_some_and(|step| step.notes_active)
+    }
+
+    pub fn instruction_lines(&self) -> Vec<String> {
+        if self.notes_active() {
+            vec!["tab or esc to clear notes | enter to submit answer".to_string()]
+        } else {
+            vec![
+                "tab to add notes | enter to submit answer".to_string(),
+                "ctrl + n next question | esc to interrupt".to_string(),
+            ]
+        }
     }
 
     /// Mark current step as completed with the given answer
@@ -832,6 +982,32 @@ impl WizardModalState {
             .iter()
             .filter_map(|step| step.answer.clone())
             .collect()
+    }
+
+    fn submit_current_selection(&mut self) -> ModalListKeyResult {
+        let Some(selection) = self.current_selection() else {
+            return ModalListKeyResult::HandledNoRedraw;
+        };
+
+        match self.mode {
+            WizardModalMode::TabbedList => {
+                ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(vec![selection]))
+            }
+            WizardModalMode::MultiStep => {
+                self.complete_current_step(selection.clone());
+                if self.current_step < self.steps.len().saturating_sub(1) {
+                    self.current_step += 1;
+                    ModalListKeyResult::Submit(InlineEvent::WizardModalStepComplete {
+                        step: self.current_step.saturating_sub(1),
+                        answer: selection,
+                    })
+                } else {
+                    ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(
+                        self.collect_answers(),
+                    ))
+                }
+            }
+        }
     }
 
     /// Check if all steps are completed

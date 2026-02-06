@@ -446,7 +446,7 @@ const fn default_enable_split_tool_results() -> bool {
 
 #[inline]
 const fn default_max_conversation_turns() -> usize {
-    150
+    defaults::DEFAULT_MAX_CONVERSATION_TURNS
 }
 
 #[inline]

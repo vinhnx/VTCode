@@ -7,12 +7,13 @@ use tokio::sync::Notify;
 use tokio::time;
 use tracing::debug;
 
-use crate::agent::runloop::unified::ask_user_question::execute_ask_user_question_tool;
 use crate::agent::runloop::unified::plan_confirmation::{
     PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
 };
+use crate::agent::runloop::unified::plan_mode_switch::{
+    maybe_disable_plan_mode_for_tool, restore_plan_mode_after_tool,
+};
 use crate::agent::runloop::unified::progress::ProgressReporter;
-use crate::agent::runloop::unified::request_user_input;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_routing::ToolPermissionFlow;
@@ -35,6 +36,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::exec::events::CommandExecutionStatus;
 
 use super::cache::{cache_target_path, create_enhanced_cache_key, is_tool_cacheable};
+use super::execute_hitl_tool;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
 use super::timeout::{TimeoutWarningGuard, create_timeout_error};
 use super::{DEFAULT_TOOL_TIMEOUT, MAX_RETRY_BACKOFF, RETRY_BACKOFF_BASE};
@@ -89,6 +91,11 @@ pub(crate) async fn run_tool_call(
         let _ = emitter.emit(tool_started_event(tool_item_id.clone(), &name));
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
+    let resolved_name = ctx
+        .tool_registry
+        .get_tool(&name)
+        .map(|tool| tool.name())
+        .unwrap_or(name.as_str());
 
     // Pre-flight permission check
     match ensure_tool_permission(
@@ -143,18 +150,17 @@ pub(crate) async fn run_tool_call(
         }
     }
 
-    // Special-case HITL tool: handled entirely in the TUI/runloop.
-    if name == tools::ASK_USER_QUESTION {
-        let output = execute_ask_user_question_tool(
-            ctx.handle,
-            ctx.session,
-            &args_val,
-            ctrl_c_state,
-            ctrl_c_notify,
-        )
-        .await;
-
-        let outcome = ToolPipelineOutcome::from_status(match output {
+    if let Some(hitl_result) = execute_hitl_tool(
+        resolved_name,
+        ctx.handle,
+        ctx.session,
+        &args_val,
+        ctrl_c_state,
+        ctrl_c_notify,
+    )
+    .await
+    {
+        let outcome = ToolPipelineOutcome::from_status(match hitl_result {
             Ok(value) => ToolExecutionStatus::Success {
                 output: value,
                 stdout: None,
@@ -180,42 +186,14 @@ pub(crate) async fn run_tool_call(
         return Ok(outcome);
     }
 
-    // Special-case request_user_input HITL tool: simpler Q&A format.
-    if name == tools::REQUEST_USER_INPUT {
-        let output = request_user_input::execute_request_user_input_tool(
-            ctx.handle,
-            ctx.session,
-            &args_val,
-            ctrl_c_state,
-            ctrl_c_notify,
-        )
-        .await;
-
-        let outcome = ToolPipelineOutcome::from_status(match output {
-            Ok(value) => ToolExecutionStatus::Success {
-                output: value,
-                stdout: None,
-                modified_files: vec![],
-                command_success: true,
-                has_more: false,
-            },
-            Err(error) => ToolExecutionStatus::Failure { error },
-        });
-        if let Some(emitter) = ctx.harness_emitter {
-            let status = if matches!(outcome.status, ToolExecutionStatus::Success { .. }) {
-                CommandExecutionStatus::Completed
-            } else {
-                CommandExecutionStatus::Failed
-            };
-            let _ = emitter.emit(tool_completed_event(
-                tool_item_id.clone(),
-                &name,
-                status,
-                None,
-            ));
-        }
-        return Ok(outcome);
-    }
+    let restore_plan_mode = maybe_disable_plan_mode_for_tool(
+        ctx.session_stats,
+        ctx.tool_registry,
+        ctx.renderer,
+        ctx.handle,
+        resolved_name,
+        &args_val,
+    )?;
 
     // Special-case enter_plan_mode: execute tool and enable plan mode in registry.
     // This ensures the registry's plan_read_only_mode flag is set when agent enters plan mode.
@@ -237,8 +215,7 @@ pub(crate) async fn run_tool_call(
             // Enable plan mode unless we were already in plan mode
             if status == Some("success") {
                 ctx.tool_registry.enable_plan_mode();
-                ctx.session_stats
-                    .set_editing_mode(vtcode_core::ui::EditingMode::Plan);
+                ctx.session_stats.set_plan_mode(true);
                 // Update TUI header indicator (OpenCode-style event handling)
                 ctx.handle
                     .set_editing_mode(vtcode_core::ui::EditingMode::Plan);
@@ -576,6 +553,14 @@ pub(crate) async fn run_tool_call(
             cache.insert_arc(cache_key, Arc::new(output_json));
         }
     }
+
+    restore_plan_mode_after_tool(
+        ctx.session_stats,
+        ctx.tool_registry,
+        ctx.renderer,
+        ctx.handle,
+        restore_plan_mode,
+    )?;
 
     let mut pipeline_outcome = ToolPipelineOutcome::from_status(outcome);
 

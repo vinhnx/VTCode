@@ -79,6 +79,7 @@ pub enum SlashCommandOutcome {
     },
     TogglePlanMode {
         enable: Option<bool>,
+        prompt: Option<String>,
     },
     /// /agent command - toggle autonomous mode (auto-approve safe tools)
     ToggleAutonomous {
@@ -789,30 +790,54 @@ pub async fn handle_slash_command(
             }
         }
         "plan" => {
-            let arg = args.trim().to_ascii_lowercase();
-            let enable = match arg.as_str() {
-                "" | "toggle" => None,
-                "on" | "enable" => Some(true),
-                "off" | "disable" => Some(false),
-                _ => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        "Usage: /plan [on|off] - Toggle Plan Mode (read-only, no edits or commands)",
-                    )?;
-                    renderer.line(MessageStyle::Info, "  /plan     - Toggle Plan Mode on/off")?;
-                    renderer.line(
-                        MessageStyle::Info,
-                        "  /plan on  - Enable Plan Mode (read-only: analyze codebase, create plans)",
-                    )?;
-                    renderer.line(
-                        MessageStyle::Info,
-                        "  /plan off - Disable Plan Mode (allow edits, commands, tests)",
-                    )?;
-                    return Ok(SlashCommandOutcome::Handled);
-                }
-            };
+            let trimmed = args.trim();
+            if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("toggle") {
+                return Ok(SlashCommandOutcome::TogglePlanMode {
+                    enable: None,
+                    prompt: None,
+                });
+            }
 
-            Ok(SlashCommandOutcome::TogglePlanMode { enable })
+            let mut parts = trimmed.splitn(2, char::is_whitespace);
+            let first = parts.next().unwrap_or("");
+            let rest = parts.next().unwrap_or("").trim();
+
+            match first.to_ascii_lowercase().as_str() {
+                "on" | "enable" => Ok(SlashCommandOutcome::TogglePlanMode {
+                    enable: Some(true),
+                    prompt: if rest.is_empty() {
+                        None
+                    } else {
+                        Some(rest.to_string())
+                    },
+                }),
+                "off" | "disable" => {
+                    if !rest.is_empty() {
+                        renderer.line(
+                            MessageStyle::Error,
+                            "Usage: /plan [on|off] [task] - Enable Plan Mode and optionally submit a planning prompt",
+                        )?;
+                        renderer.line(
+                            MessageStyle::Info,
+                            "  /plan <task> - Enable Plan Mode and start planning",
+                        )?;
+                        renderer.line(
+                            MessageStyle::Info,
+                            "  /plan on <task> - Enable Plan Mode and start planning",
+                        )?;
+                        renderer.line(MessageStyle::Info, "  /plan off - Disable Plan Mode")?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                    Ok(SlashCommandOutcome::TogglePlanMode {
+                        enable: Some(false),
+                        prompt: None,
+                    })
+                }
+                _ => Ok(SlashCommandOutcome::TogglePlanMode {
+                    enable: Some(true),
+                    prompt: Some(trimmed.to_string()),
+                }),
+            }
         }
         "agent" => {
             let arg = args.trim().to_ascii_lowercase();

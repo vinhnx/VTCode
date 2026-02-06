@@ -17,7 +17,7 @@ use super::{
     message::MessageLine,
     modal::{
         ModalBodyContext, ModalListLayout, ModalRenderStyles, compute_modal_area,
-        modal_content_width, render_modal_body,
+        modal_content_width, render_modal_body, render_wizard_modal_body,
     },
     prompt_palette::PromptPalette,
     text_utils,
@@ -1374,6 +1374,56 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
     }
 
     let styles = modal_render_styles(session);
+    if let Some(wizard) = session.wizard_modal.as_mut() {
+        let is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
+        let mut width_lines = Vec::new();
+        if is_multistep {
+            width_lines.push(wizard.question_header());
+        }
+        if let Some(step) = wizard.steps.get(wizard.current_step) {
+            width_lines.push(step.question.clone());
+        }
+        if is_multistep {
+            if let Some(notes) = wizard.notes_line() {
+                width_lines.push(notes);
+            }
+            width_lines.extend(wizard.instruction_lines());
+        }
+
+        let list_state = wizard.steps.get(wizard.current_step).map(|step| &step.list);
+        let width_hint =
+            modal_content_width(&width_lines, list_state, None, wizard.search.as_ref());
+        let text_lines = width_lines.len();
+        let search_lines = wizard.search.as_ref().map(|_| 3).unwrap_or(0);
+        let area = compute_modal_area(viewport, width_hint, text_lines, 0, search_lines, true);
+
+        let block = Block::bordered()
+            .title(Line::styled(wizard.title.clone(), styles.title))
+            .border_type(terminal_capabilities::get_border_type())
+            .border_style(styles.border);
+
+        frame.render_widget(Clear, area);
+        frame.render_widget(block, area);
+
+        if area.width <= 2 || area.height <= 2 {
+            return;
+        }
+
+        let inner = Rect {
+            x: area.x.saturating_add(1),
+            y: area.y.saturating_add(1),
+            width: area.width.saturating_sub(2),
+            height: area.height.saturating_sub(2),
+        };
+
+        if inner.width == 0 || inner.height == 0 {
+            return;
+        }
+
+        render_wizard_modal_body(frame, inner, wizard, &styles);
+        return;
+    }
+
     let Some(modal) = session.modal.as_mut() else {
         return;
     };

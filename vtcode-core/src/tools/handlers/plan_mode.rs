@@ -20,6 +20,7 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::SystemTime;
 
 use crate::tools::traits::Tool;
 use crate::ui::tui::PlanContent;
@@ -31,6 +32,8 @@ pub struct PlanModeState {
     is_active: Arc<AtomicBool>,
     /// Path to the current plan file (if any)
     current_plan_file: Arc<tokio::sync::RwLock<Option<PathBuf>>>,
+    /// Baseline time to require plan updates after initial creation
+    plan_baseline: Arc<tokio::sync::RwLock<Option<SystemTime>>>,
     /// Workspace root for plan directory
     workspace_root: PathBuf,
 }
@@ -40,6 +43,7 @@ impl PlanModeState {
         Self {
             is_active: Arc::new(AtomicBool::new(false)),
             current_plan_file: Arc::new(tokio::sync::RwLock::new(None)),
+            plan_baseline: Arc::new(tokio::sync::RwLock::new(None)),
             workspace_root,
         }
     }
@@ -68,6 +72,17 @@ impl PlanModeState {
     pub async fn set_plan_file(&self, path: Option<PathBuf>) {
         let mut guard = self.current_plan_file.write().await;
         *guard = path;
+    }
+
+    /// Set the baseline time for plan readiness checks
+    pub async fn set_plan_baseline(&self, baseline: Option<SystemTime>) {
+        let mut guard = self.plan_baseline.write().await;
+        *guard = baseline;
+    }
+
+    /// Get the baseline time for plan readiness checks
+    pub async fn plan_baseline(&self) -> Option<SystemTime> {
+        self.plan_baseline.read().await.clone()
     }
 
     /// Get the current plan file path
@@ -227,6 +242,11 @@ Dependencies: (to be identified)
 
         // Track the current plan file
         self.state.set_plan_file(Some(plan_file.clone())).await;
+        let baseline = tokio::fs::metadata(&plan_file)
+            .await
+            .and_then(|meta| meta.modified())
+            .unwrap_or_else(|_| SystemTime::now());
+        self.state.set_plan_baseline(Some(baseline)).await;
 
         Ok(json!({
             "status": "success",
@@ -305,6 +325,53 @@ impl ExitPlanModeTool {
     }
 }
 
+fn plan_has_actionable_steps(content: &str) -> bool {
+    let mut in_action_section = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if let Some(header) = trimmed.strip_prefix("## ") {
+            let header_lower = header.trim().to_lowercase();
+            in_action_section = header_lower == "plan of work"
+                || header_lower == "concrete steps"
+                || header_lower.starts_with("phase ");
+            continue;
+        }
+
+        if !in_action_section {
+            continue;
+        }
+
+        if trimmed.is_empty() || trimmed.starts_with('(') {
+            continue;
+        }
+
+        let is_checkbox =
+            trimmed.starts_with("[ ]") || trimmed.starts_with("[x]") || trimmed.starts_with("[X]");
+        let is_bullet =
+            trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ ");
+        let mut is_numbered = false;
+        let mut seen_digit = false;
+        for ch in trimmed.chars() {
+            if ch.is_ascii_digit() {
+                seen_digit = true;
+                continue;
+            }
+            if seen_digit && (ch == '.' || ch == ')') {
+                is_numbered = true;
+            }
+            break;
+        }
+
+        if is_checkbox || is_bullet || is_numbered {
+            return true;
+        }
+    }
+
+    false
+}
+
 #[async_trait]
 impl Tool for ExitPlanModeTool {
     async fn execute(&self, args: Value) -> Result<Value> {
@@ -321,6 +388,7 @@ impl Tool for ExitPlanModeTool {
 
         // Get the current plan file
         let plan_file = self.state.get_plan_file().await;
+        let plan_baseline = self.state.plan_baseline().await;
 
         // Read the plan content if file exists
         let (plan_content, plan_title) = if let Some(ref path) = plan_file {
@@ -345,6 +413,34 @@ impl Tool for ExitPlanModeTool {
                 plan_file.as_ref().map(|p| p.display().to_string()),
             )
         });
+
+        let plan_ready = plan_content
+            .as_deref()
+            .map(plan_has_actionable_steps)
+            .unwrap_or(false);
+        let plan_recently_updated =
+            if let (Some(path), Some(baseline)) = (plan_file.as_ref(), plan_baseline) {
+                match tokio::fs::metadata(path)
+                    .await
+                    .and_then(|meta| meta.modified())
+                {
+                    Ok(modified) => modified > baseline,
+                    Err(_) => false,
+                }
+            } else {
+                true
+            };
+
+        if !plan_ready || !plan_recently_updated {
+            return Ok(json!({
+                "status": "not_ready",
+                "message": "Plan not ready for confirmation. Add actionable steps under a Plan of Work/Concrete Steps section (or a Phase section) and update the plan file in this session, then retry.",
+                "reason": args.reason,
+                "plan_file": plan_file.map(|p| p.display().to_string()),
+                "plan_content": plan_content,
+                "requires_confirmation": false
+            }));
+        }
 
         // Build plan summary for JSON response
         let plan_summary = structured_plan.as_ref().map(|p| {
@@ -389,7 +485,7 @@ impl Tool for ExitPlanModeTool {
             "pending_active_agent": "coder",
             "next_steps": [
                 "User will see the Implementation Blueprint panel",
-                "User can choose: Execute, Edit Plan, or Cancel",
+                "User can choose: Execute or Stay in Plan Mode",
                 "If approved, active agent switches to 'coder' and mutating tools will be enabled",
                 "Execute the plan step by step after approval"
             ],
@@ -501,6 +597,57 @@ mod tests {
         let summary = &result["plan_summary"];
         assert_eq!(summary["total_steps"], 2);
         assert_eq!(summary["completed_steps"], 1);
+    }
+
+    #[tokio::test]
+    async fn test_exit_plan_mode_not_ready_without_actionable_steps() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+
+        state.enable();
+        let plans_dir = state.plans_dir();
+        std::fs::create_dir_all(&plans_dir).unwrap();
+        let plan_file = plans_dir.join("test.md");
+        std::fs::write(
+            &plan_file,
+            "# Test Plan\n\n## Plan of Work\n(Describe the sequence of edits and additions. For each edit, name the file and location.)\n",
+        )
+        .unwrap();
+        state.set_plan_file(Some(plan_file)).await;
+
+        let tool = ExitPlanModeTool::new(state.clone());
+        let result = tool.execute(json!({})).await.unwrap();
+
+        assert_eq!(result["status"], "not_ready");
+        assert_eq!(result["requires_confirmation"], false);
+    }
+
+    #[tokio::test]
+    async fn test_exit_plan_mode_not_ready_when_plan_not_updated_since_baseline() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let tool = EnterPlanModeTool::new(state.clone());
+
+        let result = tool
+            .execute(json!({ "plan_name": "baseline-test" }))
+            .await
+            .unwrap();
+        assert_eq!(result["status"], "success");
+
+        let plan_file = state.get_plan_file().await.unwrap();
+        std::fs::write(&plan_file, "# Test Plan\n\n## Plan of Work\n- Step one\n").unwrap();
+
+        // Reset baseline to simulate no updates after template creation.
+        let baseline = std::fs::metadata(&plan_file)
+            .and_then(|meta| meta.modified())
+            .unwrap();
+        state.set_plan_baseline(Some(baseline)).await;
+
+        let exit_tool = ExitPlanModeTool::new(state.clone());
+        let exit_result = exit_tool.execute(json!({})).await.unwrap();
+
+        assert_eq!(exit_result["status"], "not_ready");
+        assert_eq!(exit_result["requires_confirmation"], false);
     }
 
     #[tokio::test]

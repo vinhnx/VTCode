@@ -272,51 +272,41 @@ fn show_list_modal(
     mark_dirty(session);
 }
 
-/// Show plan confirmation modal - simplified version
+/// Show plan confirmation modal.
 ///
-/// Displays the plan file path and summary.
-/// User can choose: Execute, Edit Plan, or Cancel.
+/// Displays the plan markdown and asks for confirmation.
+/// User can choose: Execute or stay in plan mode.
 pub(crate) fn show_plan_confirmation_modal(
     session: &mut Session,
     plan: crate::ui::tui::types::PlanContent,
 ) {
     use crate::ui::tui::types::{InlineListItem, InlineListSelection};
 
-    // Build simple display
-    let mut lines = Vec::new();
-
-    if !plan.summary.is_empty() {
+    let mut lines: Vec<String> = plan
+        .raw_content
+        .lines()
+        .map(|line| line.to_string())
+        .collect();
+    if lines.is_empty() && !plan.summary.is_empty() {
         lines.push(plan.summary.clone());
     }
 
-    if let Some(ref path) = plan.file_path {
-        lines.push(format!("📁 {}", path));
-    }
-
-    // Simple 3-option menu
+    // Two-option confirmation menu
     let items = vec![
         InlineListItem {
-            title: "Execute Plan".to_string(),
-            subtitle: Some("Start implementing this plan".to_string()),
+            title: "Yes, implement this plan".to_string(),
+            subtitle: Some("Switch to Default and start coding.".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::PlanApprovalExecute),
             search_value: None,
         },
         InlineListItem {
-            title: "Edit Plan".to_string(),
-            subtitle: Some("Return to plan mode to revise".to_string()),
+            title: "No, stay in Plan mode".to_string(),
+            subtitle: Some("Continue planning with the model.".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::PlanApprovalEditPlan),
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Cancel".to_string(),
-            subtitle: Some("Discard this plan".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::PlanApprovalCancel),
             search_value: None,
         },
     ];
@@ -324,7 +314,7 @@ pub(crate) fn show_plan_confirmation_modal(
     let list_state = ModalListState::new(items, Some(InlineListSelection::PlanApprovalExecute));
 
     let state = ModalState {
-        title: "Plan Ready".to_string(),
+        title: "Implement this plan?".to_string(),
         lines,
         list: Some(list_state),
         secure_prompt: None,

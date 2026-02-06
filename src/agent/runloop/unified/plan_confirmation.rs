@@ -35,7 +35,7 @@ pub enum PlanConfirmationOutcome {
 /// Execute the plan confirmation HITL flow after exit_plan_mode tool.
 ///
 /// This shows the Implementation Blueprint panel with the plan summary
-/// and waits for user to choose: Execute, Edit Plan, or Cancel.
+/// and waits for user to choose: Execute or Stay in Plan Mode.
 pub(crate) async fn execute_plan_confirmation(
     handle: &InlineHandle,
     session: &mut InlineSession,

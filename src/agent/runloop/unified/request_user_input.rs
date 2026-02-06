@@ -1,19 +1,18 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::task;
 
 use vtcode_core::ui::tui::{
-    InlineEvent, InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineSession, WizardStep,
+    InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineSession, InlineTextStyle, WizardModalMode, WizardStep,
 };
 
-use super::state::{CtrlCSignal, CtrlCState};
+use super::state::CtrlCState;
+use super::wizard_modal::{WizardModalOutcome, wait_for_wizard_modal};
 
 /// Arguments parsed from the request_user_input tool call.
 #[derive(Debug, Deserialize)]
@@ -79,8 +78,9 @@ pub(crate) async fn execute_request_user_input_tool(
             let items = if let Some(ref options) = q.options {
                 options
                     .iter()
-                    .map(|opt| InlineListItem {
-                        title: opt.label.clone(),
+                    .enumerate()
+                    .map(|(index, opt)| InlineListItem {
+                        title: format!("{}. {}", index + 1, opt.label),
                         subtitle: Some(opt.description.clone()),
                         badge: None,
                         indent: 0,
@@ -124,108 +124,91 @@ pub(crate) async fn execute_request_user_input_tool(
         "Questions".to_string()
     };
 
-    // Enable search for better UX
-    let search = Some(InlineListSearchConfig {
-        label: "Search".to_string(),
-        placeholder: Some("Type to filter…".to_string()),
-    });
+    let search = None;
 
-    handle.show_tabbed_list_modal(title, steps, 0, search);
+    handle.show_wizard_modal_with_mode(title, steps, 0, search, WizardModalMode::MultiStep);
     handle.force_redraw();
     task::yield_now().await;
 
-    loop {
-        if ctrl_c_state.is_cancel_requested() {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(json!({"cancelled": true}));
-        }
+    match wait_for_wizard_modal(handle, session, ctrl_c_state, ctrl_c_notify).await? {
+        WizardModalOutcome::Submitted(selections) => {
+            // Convert selections to response format
+            let mut answers: HashMap<String, RequestUserInputAnswer> = HashMap::new();
 
-        let notify = ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(json!({"cancelled": true}));
-        };
-
-        match event {
-            InlineEvent::Interrupt => {
-                let signal = if ctrl_c_state.is_exit_requested() {
-                    CtrlCSignal::Exit
-                } else if ctrl_c_state.is_cancel_requested() {
-                    CtrlCSignal::Cancel
-                } else {
-                    ctrl_c_state.register_signal()
-                };
-                ctrl_c_notify.notify_waiters();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                return Ok(json!({
-                    "cancelled": true,
-                    "signal": match signal {
-                        CtrlCSignal::Exit => "exit",
-                        CtrlCSignal::Cancel => "cancel",
-                    }
-                }));
-            }
-            InlineEvent::WizardModalSubmit(selections) => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                // Convert selections to response format
-                let mut answers: HashMap<String, RequestUserInputAnswer> = HashMap::new();
-
-                for selection in selections {
-                    if let InlineListSelection::RequestUserInputAnswer {
-                        question_id,
-                        selected,
-                        other,
-                    } = selection
-                    {
-                        answers.insert(question_id, RequestUserInputAnswer { selected, other });
-                    }
+            for selection in selections {
+                if let InlineListSelection::RequestUserInputAnswer {
+                    question_id,
+                    selected,
+                    other,
+                } = selection
+                {
+                    answers.insert(question_id, RequestUserInputAnswer { selected, other });
                 }
+            }
 
-                let response = RequestUserInputResponse { answers };
-                return serde_json::to_value(response)
-                    .map_err(|e| anyhow::anyhow!("Failed to serialize response: {}", e));
+            let answered_count = answers.len();
+            let total_count = parsed.questions.len();
+            let summary_style = std::sync::Arc::new(InlineTextStyle::default());
+            let summary_segment = |text: String| InlineSegment {
+                text,
+                style: summary_style.clone(),
+            };
+
+            handle.append_line(
+                InlineMessageKind::Info,
+                vec![summary_segment(format!(
+                    "• Questions {}/{} answered",
+                    answered_count, total_count
+                ))],
+            );
+
+            for question in &parsed.questions {
+                handle.append_line(
+                    InlineMessageKind::Info,
+                    vec![summary_segment(format!("  • {}", question.question))],
+                );
+                let answer_text = answers
+                    .get(&question.id)
+                    .map(|answer| {
+                        let mut parts = Vec::new();
+                        if !answer.selected.is_empty() {
+                            parts.push(answer.selected.join(", "));
+                        }
+                        if let Some(other) = answer
+                            .other
+                            .as_ref()
+                            .map(|text| text.trim())
+                            .filter(|text| !text.is_empty())
+                        {
+                            if parts.is_empty() {
+                                parts.push(other.to_string());
+                            } else {
+                                parts.push(format!("notes: {}", other));
+                            }
+                        }
+                        if parts.is_empty() {
+                            "(unanswered)".to_string()
+                        } else {
+                            parts.join(" — ")
+                        }
+                    })
+                    .unwrap_or_else(|| "(unanswered)".to_string());
+                handle.append_line(
+                    InlineMessageKind::Info,
+                    vec![summary_segment(format!("    answer: {}", answer_text))],
+                );
             }
-            InlineEvent::WizardModalCancel | InlineEvent::ListModalCancel | InlineEvent::Cancel => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(json!({"cancelled": true}));
+
+            let response = RequestUserInputResponse { answers };
+            serde_json::to_value(response)
+                .map_err(|e| anyhow::anyhow!("Failed to serialize response: {}", e))
+        }
+        WizardModalOutcome::Cancelled { signal } => {
+            if let Some(signal) = signal {
+                Ok(json!({"cancelled": true, "signal": signal}))
+            } else {
+                Ok(json!({"cancelled": true}))
             }
-            InlineEvent::Exit => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(json!({"cancelled": true, "signal": "exit"}));
-            }
-            InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => {
-                // Ignore text input while modal is shown.
-                continue;
-            }
-            _ => {}
         }
     }
 }

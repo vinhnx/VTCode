@@ -133,4 +133,36 @@ mod config_verification {
             config.pty.max_scrollback_bytes / 1_000_000
         );
     }
+
+    /// Test: Ask Questions config defaults to enabled
+    #[test]
+    fn test_ask_questions_default_enabled() {
+        let config = VTCodeConfig::default();
+        assert!(
+            config.chat.ask_questions.enabled,
+            "Ask Questions should be enabled by default"
+        );
+    }
+
+    /// Test: Ask Questions config parses camelCase and snake_case
+    #[test]
+    fn test_ask_questions_alias_parsing() {
+        let cfg: VTCodeConfig = toml::from_str(
+            r#"
+[chat.askQuestions]
+enabled = false
+"#,
+        )
+        .expect("Failed to parse chat.askQuestions");
+        assert!(!cfg.chat.ask_questions.enabled);
+
+        let cfg: VTCodeConfig = toml::from_str(
+            r#"
+[chat.ask_questions]
+enabled = false
+"#,
+        )
+        .expect("Failed to parse chat.ask_questions");
+        assert!(!cfg.chat.ask_questions.enabled);
+    }
 }

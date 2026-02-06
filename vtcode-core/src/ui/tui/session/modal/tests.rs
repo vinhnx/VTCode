@@ -68,6 +68,10 @@ fn make_key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::empty())
 }
 
+fn make_key_with_modifiers(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
+    KeyEvent::new(code, modifiers)
+}
+
 #[test]
 fn wizard_tabbed_list_allows_tab_switching_without_completion() {
     let steps = vec![
@@ -154,6 +158,166 @@ fn wizard_tabbed_list_enter_submits_single_selection() {
                 selections[0],
                 InlineListSelection::AskUserChoice { .. }
             ));
+        }
+        other => panic!("Expected submit, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wizard_multistep_ctrl_n_advances_without_completion() {
+    let steps = vec![
+        WizardStep {
+            title: "Q1".to_owned(),
+            question: "Pick".to_owned(),
+            items: vec![InlineListItem {
+                title: "Choice".to_owned(),
+                selection: Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: "q1".to_owned(),
+                    selected: vec!["Choice".to_owned()],
+                    other: None,
+                }),
+                ..base_item("Choice")
+            }],
+            completed: false,
+            answer: None,
+        },
+        WizardStep {
+            title: "Q2".to_owned(),
+            question: "Pick".to_owned(),
+            items: vec![InlineListItem {
+                title: "Choice".to_owned(),
+                selection: Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: "q2".to_owned(),
+                    selected: vec!["Choice".to_owned()],
+                    other: None,
+                }),
+                ..base_item("Choice")
+            }],
+            completed: false,
+            answer: None,
+        },
+    ];
+
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        steps,
+        0,
+        None,
+        WizardModalMode::MultiStep,
+    );
+
+    let result = wizard.handle_key_event(
+        &make_key_with_modifiers(KeyCode::Char('n'), KeyModifiers::CONTROL),
+        ModalKeyModifiers {
+            control: true,
+            alt: false,
+            command: false,
+        },
+    );
+    assert!(matches!(result, ModalListKeyResult::Redraw));
+    assert_eq!(wizard.current_step, 1);
+    assert!(!wizard.steps[0].completed);
+}
+
+#[test]
+fn wizard_notes_input_sets_other_answer() {
+    let steps = vec![WizardStep {
+        title: "Q1".to_owned(),
+        question: "Pick".to_owned(),
+        items: vec![InlineListItem {
+            title: "None of the above".to_owned(),
+            selection: Some(InlineListSelection::RequestUserInputAnswer {
+                question_id: "q1".to_owned(),
+                selected: vec!["None of the above".to_owned()],
+                other: None,
+            }),
+            ..base_item("None of the above")
+        }],
+        completed: false,
+        answer: None,
+    }];
+
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        steps,
+        0,
+        None,
+        WizardModalMode::MultiStep,
+    );
+
+    let result = wizard.handle_key_event(&make_key(KeyCode::Tab), ModalKeyModifiers::default());
+    assert!(matches!(result, ModalListKeyResult::Redraw));
+
+    let result =
+        wizard.handle_key_event(&make_key(KeyCode::Char('m')), ModalKeyModifiers::default());
+    assert!(matches!(result, ModalListKeyResult::Redraw));
+    let result =
+        wizard.handle_key_event(&make_key(KeyCode::Char('e')), ModalKeyModifiers::default());
+    assert!(matches!(result, ModalListKeyResult::Redraw));
+
+    let result = wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
+    match result {
+        ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(selections)) => {
+            assert_eq!(selections.len(), 1);
+            match &selections[0] {
+                InlineListSelection::RequestUserInputAnswer { other, .. } => {
+                    assert_eq!(other.as_deref(), Some("me"));
+                }
+                other => panic!("unexpected selection: {:?}", other),
+            }
+        }
+        other => panic!("Expected submit, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wizard_multistep_numeric_select_submits() {
+    let steps = vec![WizardStep {
+        title: "Q1".to_owned(),
+        question: "Pick".to_owned(),
+        items: vec![
+            InlineListItem {
+                title: "Choice A".to_owned(),
+                selection: Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: "q1".to_owned(),
+                    selected: vec!["Choice A".to_owned()],
+                    other: None,
+                }),
+                ..base_item("Choice A")
+            },
+            InlineListItem {
+                title: "Choice B".to_owned(),
+                selection: Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: "q1".to_owned(),
+                    selected: vec!["Choice B".to_owned()],
+                    other: None,
+                }),
+                ..base_item("Choice B")
+            },
+        ],
+        completed: false,
+        answer: None,
+    }];
+
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        steps,
+        0,
+        None,
+        WizardModalMode::MultiStep,
+    );
+
+    let result =
+        wizard.handle_key_event(&make_key(KeyCode::Char('2')), ModalKeyModifiers::default());
+    match result {
+        ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(selections)) => {
+            assert_eq!(selections.len(), 1);
+            match &selections[0] {
+                InlineListSelection::RequestUserInputAnswer { selected, .. } => {
+                    assert_eq!(selected, &vec!["Choice B".to_owned()]);
+                }
+                other => panic!("unexpected selection: {:?}", other),
+            }
         }
         other => panic!("Expected submit, got: {:?}", other),
     }

@@ -262,7 +262,7 @@ pub fn test_skills_prompt_generation() {
         compatibility: None,
         variety: crate::skills::types::SkillVariety::AgentSkill,
         metadata: None,
-            tools: None,
+        tools: None,
     };
 
     let skill = SkillMetadata {
@@ -384,7 +384,7 @@ mod tests {
                 compatibility: None,
                 variety: crate::skills::types::SkillVariety::AgentSkill,
                 metadata: None,
-            tools: None,
+                tools: None,
             };
 
             let skill = SkillMetadata {

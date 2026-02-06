@@ -73,6 +73,14 @@ impl Tool for LoadSkillTool {
         ToolPolicy::Allow
     }
 
+    fn is_mutating(&self) -> bool {
+        false
+    }
+
+    fn is_parallel_safe(&self) -> bool {
+        false
+    }
+
     async fn execute(&self, args: Value) -> anyhow::Result<Value> {
         let name = args
             .get("name")
@@ -215,6 +223,14 @@ impl Tool for ListSkillsTool {
         ToolPolicy::Allow
     }
 
+    fn is_mutating(&self) -> bool {
+        false
+    }
+
+    fn is_parallel_safe(&self) -> bool {
+        true
+    }
+
     async fn execute(&self, args: Value) -> anyhow::Result<Value> {
         let query = args
             .get("query")
@@ -355,6 +371,14 @@ impl Tool for LoadSkillResourceTool {
 
     fn default_permission(&self) -> ToolPolicy {
         ToolPolicy::Allow
+    }
+
+    fn is_mutating(&self) -> bool {
+        false
+    }
+
+    fn is_parallel_safe(&self) -> bool {
+        true
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<Value> {

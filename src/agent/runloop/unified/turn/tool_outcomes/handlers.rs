@@ -13,10 +13,16 @@ use vtcode_core::ui::tui::{InlineMessageKind, InlineSegment, InlineTextStyle};
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
+use crate::agent::runloop::unified::plan_confirmation::{
+    PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
+};
+use crate::agent::runloop::unified::plan_mode_switch::{
+    maybe_disable_plan_mode_for_tool, restore_plan_mode_after_tool,
+};
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::tool_call_safety::SafetyError;
 use crate::agent::runloop::unified::tool_pipeline::{
-    ToolPipelineOutcome, execute_tool_with_timeout_ref,
+    ToolPipelineOutcome, execute_hitl_tool, execute_tool_with_timeout_ref,
 };
 use crate::agent::runloop::unified::tool_routing::{
     ensure_tool_permission, prompt_session_limit_increase,
@@ -24,6 +30,9 @@ use crate::agent::runloop::unified::tool_routing::{
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
+use vtcode_core::config::constants::tools;
+use vtcode_core::tools::names::canonical_tool_name;
+use vtcode_core::ui::tui::PlanContent;
 
 use super::execution_result::handle_tool_execution_result;
 use super::helpers::{push_tool_response, resolve_max_tool_retries, update_repetition_tracker};
@@ -659,6 +668,213 @@ async fn execute_and_handle_tool_call_inner<'a>(
         }
     }
 
+    let tool_execution_start = std::time::Instant::now();
+    let max_tool_retries = resolve_max_tool_retries(tool_name, ctx.vt_cfg);
+    let canonical_name = canonical_tool_name(tool_name);
+    let canonical: &str = canonical_name.as_ref();
+
+    if let Some(hitl_result) = execute_hitl_tool(
+        canonical,
+        ctx.handle,
+        ctx.session,
+        &args_val,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+    )
+    .await
+    {
+        let pipeline_outcome = ToolPipelineOutcome::from_status(match hitl_result {
+            Ok(value) => {
+                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
+                    output: value,
+                    stdout: None,
+                    modified_files: vec![],
+                    command_success: true,
+                    has_more: false,
+                }
+            }
+            Err(error) => {
+                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Failure {
+                    error,
+                }
+            }
+        });
+
+        let mut t_ctx = ToolOutcomeContext {
+            ctx,
+            repeated_tool_attempts,
+            turn_modified_files,
+        };
+
+        handle_tool_execution_result(
+            &mut t_ctx,
+            tool_call_id,
+            tool_name,
+            &args_val,
+            &pipeline_outcome,
+            tool_execution_start,
+        )
+        .await?;
+
+        return Ok(());
+    }
+
+    if canonical == tools::EXIT_PLAN_MODE {
+        let tool_result = execute_tool_with_timeout_ref(
+            ctx.tool_registry,
+            tool_name,
+            &args_val,
+            ctx.ctrl_c_state,
+            ctx.ctrl_c_notify,
+            None,
+            max_tool_retries,
+        )
+        .await;
+
+        let pipeline_outcome =
+            if let crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
+                ref output,
+                ..
+            } = tool_result
+            {
+                let require_confirmation = ctx
+                    .vt_cfg
+                    .map(|cfg| cfg.agent.require_plan_confirmation)
+                    .unwrap_or(true);
+
+                let status = output.get("status").and_then(|s| s.as_str());
+                let requires_confirmation_from_result = output
+                    .get("requires_confirmation")
+                    .and_then(|r| r.as_bool())
+                    .unwrap_or(false);
+
+                if status == Some("pending_confirmation")
+                    && requires_confirmation_from_result
+                    && require_confirmation
+                {
+                    let plan_content = if let Some(raw_content) =
+                        output.get("plan_content").and_then(|v| v.as_str())
+                    {
+                        let title = output
+                            .get("plan_summary")
+                            .and_then(|s| s.get("title"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("Implementation Plan")
+                            .to_string();
+                        let file_path = output
+                            .get("plan_file")
+                            .and_then(|p| p.as_str())
+                            .map(|s| s.to_string());
+                        PlanContent::from_markdown(title, raw_content, file_path)
+                    } else {
+                        parse_plan_content_from_json(
+                            &output.get("plan_summary").cloned().unwrap_or_default(),
+                        )
+                    };
+
+                    let confirmation_outcome = execute_plan_confirmation(
+                        ctx.handle,
+                        ctx.session,
+                        plan_content,
+                        ctx.ctrl_c_state,
+                        ctx.ctrl_c_notify,
+                    )
+                    .await;
+
+                    let final_output = match confirmation_outcome {
+                        Ok(outcome) => {
+                            if matches!(
+                                outcome,
+                                PlanConfirmationOutcome::Execute
+                                    | PlanConfirmationOutcome::AutoAccept
+                            ) {
+                                ctx.tool_registry.disable_plan_mode();
+                                let plan_state = ctx.tool_registry.plan_mode_state();
+                                plan_state.disable();
+                                plan_state.set_plan_file(None).await;
+                                ctx.session_stats
+                                    .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                                ctx.handle
+                                    .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                                ctx.session_stats.switch_to_coder();
+                            }
+                            plan_confirmation_outcome_to_json(&outcome)
+                        }
+                        Err(e) => serde_json::json!({
+                            "status": "error",
+                            "error": format!("Plan confirmation failed: {}", e)
+                        }),
+                    };
+
+                    ToolPipelineOutcome::from_status(
+                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
+                        output: final_output,
+                        stdout: None,
+                        modified_files: vec![],
+                        command_success: true,
+                        has_more: false,
+                    },
+                )
+                } else if !require_confirmation {
+                    ctx.tool_registry.disable_plan_mode();
+                    let plan_state = ctx.tool_registry.plan_mode_state();
+                    plan_state.disable();
+                    plan_state.set_plan_file(None).await;
+                    ctx.session_stats
+                        .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                    ctx.handle
+                        .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
+                    ctx.session_stats.switch_to_coder();
+
+                    ToolPipelineOutcome::from_status(
+                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
+                        output: serde_json::json!({
+                            "status": "approved",
+                            "action": "execute",
+                            "auto_accept": true,
+                            "message": "Plan confirmation disabled. Proceeding with implementation."
+                        }),
+                        stdout: None,
+                        modified_files: vec![],
+                        command_success: true,
+                        has_more: false,
+                    },
+                )
+                } else {
+                    ToolPipelineOutcome::from_status(tool_result)
+                }
+            } else {
+                ToolPipelineOutcome::from_status(tool_result)
+            };
+
+        let mut t_ctx = ToolOutcomeContext {
+            ctx,
+            repeated_tool_attempts,
+            turn_modified_files,
+        };
+
+        handle_tool_execution_result(
+            &mut t_ctx,
+            tool_call_id,
+            tool_name,
+            &args_val,
+            &pipeline_outcome,
+            tool_execution_start,
+        )
+        .await?;
+
+        return Ok(());
+    }
+
+    let restore_plan_mode = maybe_disable_plan_mode_for_tool(
+        ctx.session_stats,
+        ctx.tool_registry,
+        ctx.renderer,
+        ctx.handle,
+        canonical,
+        &args_val,
+    )?;
+
     let progress_reporter = if let Some(r) = batch_progress_reporter {
         r.clone()
     } else {
@@ -744,8 +960,6 @@ async fn execute_and_handle_tool_call_inner<'a>(
             });
         }));
 
-    let tool_execution_start = std::time::Instant::now();
-    let max_tool_retries = resolve_max_tool_retries(tool_name, ctx.vt_cfg);
     let tool_result = execute_tool_with_timeout_ref(
         ctx.tool_registry,
         tool_name,
@@ -787,7 +1001,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
         turn_modified_files,
     };
 
-    handle_tool_execution_result(
+    let handle_result = handle_tool_execution_result(
         &mut t_ctx,
         tool_call_id,
         tool_name,
@@ -795,7 +1009,130 @@ async fn execute_and_handle_tool_call_inner<'a>(
         &pipeline_outcome,
         tool_execution_start,
     )
-    .await?;
+    .await;
+
+    restore_plan_mode_after_tool(
+        ctx.session_stats,
+        ctx.tool_registry,
+        ctx.renderer,
+        ctx.handle,
+        restore_plan_mode,
+    )?;
+
+    handle_result?;
 
     Ok(())
+}
+
+fn parse_plan_content_from_json(json: &serde_json::Value) -> PlanContent {
+    let title = json
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Implementation Plan")
+        .to_string();
+
+    let summary = json
+        .get("summary")
+        .or_else(|| json.get("description"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let file_path = json
+        .get("file_path")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let raw_content = json
+        .get("raw_content")
+        .or_else(|| json.get("content"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let open_questions = json
+        .get("open_questions")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|q| q.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut step_number = 0;
+    let phases: Vec<vtcode_core::ui::tui::PlanPhase> = json
+        .get("phases")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|phase| {
+                    let name = phase.get("name").and_then(|v| v.as_str())?.to_string();
+                    let steps: Vec<vtcode_core::ui::tui::PlanStep> = phase
+                        .get("steps")
+                        .and_then(|v| v.as_array())
+                        .map(|steps_arr| {
+                            steps_arr
+                                .iter()
+                                .filter_map(|step| {
+                                    step_number += 1;
+                                    let step_desc =
+                                        step.get("description").and_then(|v| v.as_str())?;
+                                    let details = step
+                                        .get("details")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string());
+                                    let files = step
+                                        .get("files")
+                                        .and_then(|v| v.as_array())
+                                        .map(|f| {
+                                            f.iter()
+                                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                                .collect()
+                                        })
+                                        .unwrap_or_default();
+                                    let completed = step
+                                        .get("completed")
+                                        .and_then(|v| v.as_bool())
+                                        .unwrap_or(false);
+
+                                    Some(vtcode_core::ui::tui::PlanStep {
+                                        number: step_number,
+                                        description: step_desc.to_string(),
+                                        details,
+                                        files,
+                                        completed,
+                                    })
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let completed = steps.iter().all(|step| step.completed);
+
+                    Some(vtcode_core::ui::tui::PlanPhase {
+                        name,
+                        steps,
+                        completed,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let total_steps = phases.iter().map(|p| p.steps.len()).sum();
+    let completed_steps = phases
+        .iter()
+        .map(|phase| phase.steps.iter().filter(|s| s.completed).count())
+        .sum();
+
+    PlanContent {
+        title,
+        summary,
+        file_path,
+        phases,
+        open_questions,
+        raw_content,
+        total_steps,
+        completed_steps,
+    }
 }

@@ -80,32 +80,9 @@ impl ContextManager {
     /// Checks session boundaries to correct runaway sessions.
     pub(crate) fn pre_request_check(
         &self,
-        history: &[uni::Message],
+        _history: &[uni::Message],
         context_window_size: usize,
     ) -> PreRequestAction {
-        let hard_limit = self
-            .agent_config
-            .as_ref()
-            .map(|c| c.max_conversation_turns)
-            .unwrap_or(150);
-        let soft_limit = hard_limit.saturating_sub(30).max(10);
-
-        let msg_count = history.len();
-
-        if msg_count > hard_limit {
-            return PreRequestAction::Stop(format!(
-                "Session limit reached ({} messages). Please update artifacts (task.md/docs) to persist progress, then start a new session.",
-                msg_count
-            ));
-        }
-
-        if msg_count > soft_limit {
-            return PreRequestAction::Warn(format!(
-                "Session is getting long ({} messages). Consider updating key artifacts (task.md/docs) to persist context soon.",
-                msg_count
-            ));
-        }
-
         let usage_ratio = if context_window_size == 0 {
             0.0
         } else {
@@ -328,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pre_request_check_limits() {
+    fn test_pre_request_check_ignores_conversation_length() {
         use vtcode_config::core::AgentConfig;
         let manager = ContextManager::new(
             "sys".into(),
@@ -345,10 +322,10 @@ mod tests {
             history.push(uni::Message::user("test".to_string()));
         }
 
-        assert!(matches!(
+        assert_eq!(
             manager.pre_request_check(&history, 200_000),
-            super::PreRequestAction::Warn(_)
-        ));
+            super::PreRequestAction::Proceed
+        );
     }
 
     #[test]

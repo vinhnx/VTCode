@@ -806,6 +806,11 @@ mode = "auto"
 # Timeout for command execution in status line (milliseconds)
 command_timeout_ms = 200
 
+# Ask Questions tool configuration
+[chat.askQuestions]
+# Enable Ask Questions tool for structured clarifications
+enabled = true
+
 # Timeout ceilings and warning threshold for long-running tools
 [timeouts]
 # Maximum duration for standard (non-PTY) tools in seconds. Set to 0 to disable.

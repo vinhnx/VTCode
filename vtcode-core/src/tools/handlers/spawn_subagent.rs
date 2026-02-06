@@ -230,6 +230,14 @@ impl Tool for SpawnSubagentTool {
     fn default_permission(&self) -> ToolPolicy {
         ToolPolicy::Prompt
     }
+
+    fn is_mutating(&self) -> bool {
+        false
+    }
+
+    fn is_parallel_safe(&self) -> bool {
+        false
+    }
 }
 
 /// Truncate text for LLM context efficiency

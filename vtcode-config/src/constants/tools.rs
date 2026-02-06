@@ -76,6 +76,8 @@ pub const GET_ERRORS: &str = "get_errors";
 // ============================================================
 /// Ask the human a question via the interactive UI (TUI) and return the selection.
 pub const ASK_USER_QUESTION: &str = "ask_user_question";
+/// Ask Questions tool alias (routes to request_user_input).
+pub const ASK_QUESTIONS: &str = "ask_questions";
 /// Request structured user input with 1-3 questions and optional multiple-choice options.
 pub const REQUEST_USER_INPUT: &str = "request_user_input";
 

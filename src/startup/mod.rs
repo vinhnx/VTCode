@@ -398,7 +398,7 @@ impl StartupContext {
             checkpointing_storage_dir,
             checkpointing_max_snapshots: config.agent.checkpointing.max_snapshots,
             checkpointing_max_age_days: config.agent.checkpointing.max_age_days,
-            max_conversation_turns: 50,
+            max_conversation_turns: config.agent.max_conversation_turns,
         };
 
         let skip_confirmations = args.skip_confirmations || full_auto_requested;

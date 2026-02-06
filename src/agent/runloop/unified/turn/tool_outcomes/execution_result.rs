@@ -81,7 +81,15 @@ pub(crate) async fn handle_tool_execution_result<'a>(
             .await?;
         }
         ToolExecutionStatus::Failure { error } => {
-            handle_failure(t_ctx, tool_call_id, tool_name, error, tool_start_time).await?;
+            handle_failure(
+                t_ctx,
+                tool_call_id,
+                tool_name,
+                args_val,
+                error,
+                tool_start_time,
+            )
+            .await?;
         }
         ToolExecutionStatus::Timeout { error } => {
             handle_timeout(t_ctx, tool_call_id, tool_name, error).await?;
@@ -136,11 +144,18 @@ async fn handle_failure<'a>(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'a, '_>,
     tool_call_id: String,
     tool_name: &str,
+    args_val: &serde_json::Value,
     error: &anyhow::Error,
     tool_start_time: std::time::Instant,
 ) -> Result<()> {
     let error_str = error.to_string();
     let is_plan_mode_denial = error_str.contains("tool denied by plan mode");
+    let should_auto_exit = is_plan_mode_denial
+        && t_ctx.ctx.session_stats.is_plan_mode()
+        && !t_ctx
+            .ctx
+            .tool_registry
+            .is_plan_mode_allowed(tool_name, args_val);
 
     let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
     tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
@@ -154,7 +169,7 @@ async fn handle_failure<'a>(
     );
 
     // Handle auto-exit from Plan Mode if applicable
-    if is_plan_mode_denial && t_ctx.ctx.session_stats.is_plan_mode() {
+    if should_auto_exit {
         handle_plan_mode_auto_exit(t_ctx, tool_start_time).await?;
     }
 

@@ -116,7 +116,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "plan",
-            description: "Toggle Plan Mode: read-only exploration and planning (usage: /plan [on|off])",
+            description: "Plan Mode: read-only planning with optional prompt (usage: /plan [on|off] [task])",
         },
         SlashCommandInfo {
             name: "agent",

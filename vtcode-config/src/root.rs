@@ -172,6 +172,10 @@ fn default_message_block_spacing() -> bool {
     true
 }
 
+fn default_ask_questions_enabled() -> bool {
+    true
+}
+
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
@@ -195,6 +199,32 @@ impl Default for UiConfig {
             bold_is_bright: default_bold_is_bright(),
             safe_colors_only: default_safe_colors_only(),
             color_scheme_mode: default_color_scheme_mode(),
+        }
+    }
+}
+
+/// Chat configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ChatConfig {
+    /// Ask Questions tool configuration (chat.askQuestions.*)
+    #[serde(default, rename = "askQuestions", alias = "ask_questions")]
+    pub ask_questions: AskQuestionsConfig,
+}
+
+/// Ask Questions tool configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AskQuestionsConfig {
+    /// Enable the Ask Questions tool in interactive chat
+    #[serde(default = "default_ask_questions_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for AskQuestionsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_ask_questions_enabled(),
         }
     }
 }
