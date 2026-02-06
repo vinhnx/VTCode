@@ -4,8 +4,9 @@ use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    Message, MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
+    ContentPart, FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,
+    LLMStreamEvent, Message, MessageContent, MessageRole, ToolCall, ToolChoice, ToolDefinition,
+    Usage,
 };
 use crate::llm::types as llm_types;
 use crate::utils::http_client;
@@ -439,11 +440,12 @@ impl OllamaProvider {
                 tool_calls: None,
                 tool_call_id: None,
                 tool_name: None,
+                images: None,
             });
         }
 
         for message in &request.messages {
-            let content_text = message.content.as_text();
+            let (content_text, images) = Self::extract_content_and_images(&message.content);
             match message.role {
                 MessageRole::Tool => {
                     let tool_name = message
@@ -452,19 +454,21 @@ impl OllamaProvider {
                         .and_then(|id| tool_names.get(id).cloned());
                     messages.push(OllamaChatMessage {
                         role: "tool".to_string(),
-                        content: Some(content_text.into_owned()),
+                        content: Some(content_text),
                         tool_calls: None,
                         tool_call_id: message.tool_call_id.clone(),
                         tool_name,
+                        images: None,
                     });
                 }
                 _ => {
                     let mut payload_message = OllamaChatMessage {
                         role: message.role.as_generic_str().to_string(),
-                        content: Some(content_text.into_owned()),
+                        content: Some(content_text),
                         tool_calls: None,
                         tool_call_id: None,
                         tool_name: None,
+                        images,
                     };
 
                     if let Some(tool_calls) = message.get_tool_calls() {
@@ -539,6 +543,25 @@ impl OllamaProvider {
             tools,
             think: Self::think_value(request),
         })
+    }
+
+    fn extract_content_and_images(content: &MessageContent) -> (String, Option<Vec<String>>) {
+        let mut images = Vec::new();
+        if let MessageContent::Parts(parts) = content {
+            for part in parts {
+                if let ContentPart::Image { data, .. } = part {
+                    images.push(data.clone());
+                }
+            }
+        }
+
+        let text = content.as_text().into_owned();
+        let images = if images.is_empty() {
+            None
+        } else {
+            Some(images)
+        };
+        (text, images)
     }
 
     fn parse_tool_arguments(arguments: &str) -> Result<Value, LLMError> {
@@ -696,6 +719,8 @@ struct OllamaChatMessage {
     role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    images: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<OllamaToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1066,5 +1091,62 @@ impl LLMClient for OllamaProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::provider::{ContentPart, Message, MessageContent};
+
+    fn test_provider() -> OllamaProvider {
+        OllamaProvider::from_config(
+            None,
+            Some("test-model".to_string()),
+            Some("http://localhost".to_string()),
+            None,
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn build_payload_includes_images() {
+        let provider = test_provider();
+        let parts = vec![
+            ContentPart::text("see ".to_string()),
+            ContentPart::image("BASE64DATA".to_string(), "image/png".to_string()),
+        ];
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            messages: vec![Message::user_with_parts(parts)],
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+        assert_eq!(payload.messages.len(), 1);
+        let message = &payload.messages[0];
+        assert_eq!(message.content.as_deref(), Some("see "));
+        assert_eq!(
+            message.images.as_ref(),
+            Some(&vec!["BASE64DATA".to_string()])
+        );
+    }
+
+    #[test]
+    fn build_payload_omits_images_when_none_present() {
+        let provider = test_provider();
+        let content = MessageContent::text("no images".to_string());
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            messages: vec![Message::user(content.as_text().into_owned())],
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+        assert_eq!(payload.messages.len(), 1);
+        let message = &payload.messages[0];
+        assert_eq!(message.content.as_deref(), Some("no images"));
+        assert!(message.images.is_none());
     }
 }
