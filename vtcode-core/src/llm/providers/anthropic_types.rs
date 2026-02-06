@@ -283,10 +283,8 @@ pub struct AnthropicErrorBody {
 
 /// Output configuration for Anthropic API (e.g., effort parameter)
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "type")]
-pub enum AnthropicOutputConfig {
-    #[serde(rename = "effort")]
-    Effort { effort: String },
+pub struct AnthropicOutputConfig {
+    pub effort: String,
 }
 
 /// Request body for Anthropic's count_tokens endpoint

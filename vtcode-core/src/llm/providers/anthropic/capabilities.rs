@@ -32,6 +32,18 @@ pub fn supports_reasoning_effort(model: &str, default_model: &str) -> bool {
     models::anthropic::REASONING_MODELS.contains(&requested)
 }
 
+pub fn supports_effort(model: &str, default_model: &str) -> bool {
+    let requested = if model.trim().is_empty() {
+        default_model
+    } else {
+        model
+    };
+
+    requested == models::anthropic::CLAUDE_OPUS_4_6
+        || requested == models::anthropic::CLAUDE_OPUS_4_5
+        || requested == models::anthropic::CLAUDE_OPUS_4_5_20251101
+}
+
 pub fn supports_parallel_tool_config(_model: &str) -> bool {
     true
 }
