@@ -9,7 +9,7 @@ use crate::config::core::AnthropicConfig;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMRequest, MessageRole, ToolChoice};
 
-use super::capabilities::{supports_reasoning_effort, supports_structured_output};
+use super::capabilities::{supports_effort, supports_reasoning_effort, supports_structured_output};
 
 pub fn validate_request(
     request: &LLMRequest,
@@ -50,6 +50,10 @@ pub fn validate_request(
         }
     }
 
+    if let Some(ref effort) = request.effort {
+        validate_effort_setting(effort, &request.model, default_model)?;
+    }
+
     if let Some(budget) = request.thinking_budget {
         if budget < 1024 {
             let formatted_error = error_display::format_llm_error(
@@ -87,6 +91,64 @@ pub fn validate_request(
                 metadata: None,
             });
         }
+    }
+
+    Ok(())
+}
+
+fn validate_effort_setting(effort: &str, model: &str, default_model: &str) -> Result<(), LLMError> {
+    let normalized = effort.trim().to_ascii_lowercase();
+    let is_supported = supports_effort(model, default_model);
+
+    if !is_supported {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            &format!(
+                "effort is not supported for model '{}'. Supported models are Claude Opus 4.5 and Claude Opus 4.6.",
+                if model.trim().is_empty() {
+                    default_model
+                } else {
+                    model
+                }
+            ),
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
+    }
+
+    let allowed = ["low", "medium", "high", "max"];
+    if !allowed.contains(&normalized.as_str()) {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            &format!(
+                "effort must be one of low, medium, high, or max (got '{}').",
+                effort
+            ),
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
+    }
+
+    let resolved_model = if model.trim().is_empty() {
+        default_model
+    } else {
+        model
+    };
+    if normalized == "max"
+        && resolved_model != crate::config::constants::models::anthropic::CLAUDE_OPUS_4_6
+    {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            "effort='max' is only supported by Claude Opus 4.6.",
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     Ok(())

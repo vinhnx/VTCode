@@ -14,6 +14,7 @@ use crate::llm::providers::anthropic_types::{
 };
 use serde_json::Value;
 
+use super::capabilities::supports_effort;
 use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
 use messages::{build_messages, hoist_largest_user_message};
 use system::build_system_prompt;
@@ -124,13 +125,28 @@ pub fn convert_to_anthropic_format(
         } else {
             None
         };
-    let effort_value = request.effort.as_ref().or(adaptive_effort.as_ref()).or({
-        let eff = &ctx.anthropic_config.effort;
-        if eff == "high" { None } else { Some(eff) }
-    });
-    let output_config = effort_value.map(|effort| AnthropicOutputConfig::Effort {
-        effort: effort.clone(),
-    });
+    let effort_value = if supports_effort(resolved_model, ctx.model) {
+        request
+            .effort
+            .as_ref()
+            .map(|effort| effort.to_ascii_lowercase())
+            .or_else(|| {
+                adaptive_effort
+                    .as_ref()
+                    .map(|effort| effort.to_ascii_lowercase())
+            })
+            .or_else(|| {
+                let eff = ctx.anthropic_config.effort.as_str();
+                if eff.eq_ignore_ascii_case("high") {
+                    None
+                } else {
+                    Some(eff.to_ascii_lowercase())
+                }
+            })
+    } else {
+        None
+    };
+    let output_config = effort_value.map(|effort| AnthropicOutputConfig { effort });
 
     let effective_temperature = if thinking_val.is_some() {
         None

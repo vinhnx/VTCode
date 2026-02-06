@@ -45,6 +45,22 @@ mod capabilities_tests {
     }
 
     #[test]
+    fn test_supports_effort() {
+        assert!(supports_effort(
+            models::CLAUDE_OPUS_4_6,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_effort(
+            models::CLAUDE_OPUS_4_5,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(!supports_effort(
+            models::CLAUDE_SONNET_4_5,
+            models::anthropic::DEFAULT_MODEL
+        ));
+    }
+
+    #[test]
     fn test_effective_context_size() {
         assert_eq!(
             effective_context_size("claude-sonnet-4-5-latest"),
@@ -150,6 +166,38 @@ mod validation_tests {
             "additionalProperties": false
         });
         assert!(validate_anthropic_schema(&schema).is_err());
+    }
+
+    #[test]
+    fn test_validate_effort_rejects_unsupported_models() {
+        let request = LLMRequest {
+            messages: vec![crate::llm::provider::Message::user("hi")],
+            model: models::CLAUDE_SONNET_4_5.to_string(),
+            effort: Some("medium".to_string()),
+            ..Default::default()
+        };
+        let config = AnthropicConfig::default();
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_effort_max_only_for_opus_4_6() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![crate::llm::provider::Message::user("hi")],
+            model: models::CLAUDE_OPUS_4_5.to_string(),
+            effort: Some("max".to_string()),
+            ..Default::default()
+        };
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+
+        let request = LLMRequest {
+            messages: vec![crate::llm::provider::Message::user("hi")],
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            effort: Some("max".to_string()),
+            ..Default::default()
+        };
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
     }
 }
 

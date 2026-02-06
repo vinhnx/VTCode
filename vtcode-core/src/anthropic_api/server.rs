@@ -6,6 +6,7 @@
 use crate::llm::provider::{
     LLMProvider, LLMRequest, LLMStreamEvent, Message, MessageRole, ToolDefinition,
 };
+use crate::llm::providers::anthropic_types::AnthropicOutputConfig;
 use axum::{
     Json, Router,
     extract::State,
@@ -68,6 +69,8 @@ pub struct AnthropicMessagesRequest {
     pub betas: Option<Vec<String>>,
     #[serde(default)]
     pub context_management: Option<Value>,
+    #[serde(default)]
+    pub output_config: Option<AnthropicOutputConfig>,
 }
 
 /// Anthropic Message
@@ -639,6 +642,7 @@ fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> Result
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        effort: request.output_config.map(|config| config.effort),
         output_format: None,
         character_reinforcement: false,
         character_name: None,
