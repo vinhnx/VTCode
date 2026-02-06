@@ -168,6 +168,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Prompt optimization, workflow automation
   - **User Questions**: "How do system prompts work?", "Can I customize behavior?", "How do I optimize prompts?"
 
+- **File**: `docs/agent-teams.md`
+  - **Content**: Experimental agent teams in VT Code
+  - **Topics**: Enablement, slash commands, limitations, subagent-based teams
+  - **User Questions**: "How do I use agent teams?", "Are agent teams supported?", "How do teams compare to subagents?"
+
 - **File**: `docs/advanced/AGENT_COORDINATION.md`
   - **Content**: Multi-agent system coordination and orchestration
   - **Topics**: Agent types, coordination patterns, task delegation, workflow orchestration

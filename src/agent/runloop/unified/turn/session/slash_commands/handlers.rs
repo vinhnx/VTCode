@@ -16,7 +16,9 @@ use vtcode_core::utils::session_archive;
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
-use crate::agent::runloop::slash_commands::{AgentCommandAction, McpCommandAction};
+use crate::agent::runloop::slash_commands::{
+    AgentCommandAction, McpCommandAction, SubagentConfigCommandAction, TeamCommandAction,
+};
 use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
 use crate::agent::runloop::unified::display::persist_theme_preference;
 use crate::agent::runloop::unified::mcp_support::{
@@ -28,7 +30,8 @@ use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, apply_prompt_style, show_sessions_palette, show_theme_palette,
 };
-use crate::agent::runloop::unified::state::SessionStats;
+use crate::agent::runloop::unified::state::{ModelPickerTarget, SessionStats};
+use crate::agent::runloop::unified::team_state::{TeamState, TeamTaskStatus};
 use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
 use crate::agent::runloop::unified::turn::utils::{
     enforce_history_limits, truncate_message_content,
@@ -39,6 +42,7 @@ use crate::agent::runloop::unified::turn::workspace::{
 use crate::agent::runloop::unified::ui_interaction::display_session_status;
 use crate::agent::runloop::unified::workspace_links::handle_workspace_directory_command;
 use crate::hooks::lifecycle::SessionEndReason;
+use vtcode_core::subagents::{SpawnParams, SubagentRegistry, SubagentRunner};
 use webbrowser;
 
 use super::{SlashCommandContext, SlashCommandControl};
@@ -344,6 +348,11 @@ pub async fn handle_start_file_browser(
 pub async fn handle_start_model_selection(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
+    ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
+    start_model_picker(ctx).await
+}
+
+async fn start_model_picker(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if ctx.model_picker_state.is_some() {
         ctx.renderer.line(
             MessageStyle::Error,
@@ -1250,6 +1259,420 @@ pub async fn handle_manage_agents(
                 "Documentation: https://code.claude.com/docs/en/sub-agents",
             )?;
             Ok(SlashCommandControl::Continue)
+        }
+    }
+}
+
+fn agent_teams_enabled(vt_cfg: &Option<VTCodeConfig>) -> bool {
+    if let Ok(value) = std::env::var("VTCODE_EXPERIMENTAL_AGENT_TEAMS") {
+        let normalized = value.trim().to_ascii_lowercase();
+        if matches!(normalized.as_str(), "1" | "true" | "yes") {
+            return true;
+        }
+    }
+
+    vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.agent_teams.enabled)
+        .unwrap_or(false)
+}
+
+fn resolve_max_teammates(vt_cfg: &Option<VTCodeConfig>) -> usize {
+    let max_teammates = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.agent_teams.max_teammates)
+        .unwrap_or(4);
+    max_teammates.max(1)
+}
+
+fn subagents_enabled(vt_cfg: &Option<VTCodeConfig>) -> bool {
+    vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.subagents.enabled)
+        .unwrap_or(false)
+}
+
+fn render_team_usage(renderer: &mut vtcode_core::utils::ansi::AnsiRenderer) -> Result<()> {
+    renderer.line(MessageStyle::Info, "Agent Teams (experimental)")?;
+    renderer.line(MessageStyle::Output, "")?;
+    renderer.line(
+        MessageStyle::Output,
+        "  /team start [name] [count] [subagent_type]",
+    )?;
+    renderer.line(MessageStyle::Output, "  /team add <name> [subagent_type]")?;
+    renderer.line(MessageStyle::Output, "  /team remove <name>")?;
+    renderer.line(MessageStyle::Output, "  /team task add <description>")?;
+    renderer.line(MessageStyle::Output, "  /team assign <task_id> <teammate>")?;
+    renderer.line(MessageStyle::Output, "  /team tasks")?;
+    renderer.line(MessageStyle::Output, "  /team teammates")?;
+    renderer.line(MessageStyle::Output, "  /team model")?;
+    renderer.line(MessageStyle::Output, "  /team stop")?;
+    Ok(())
+}
+
+pub async fn handle_manage_teams(
+    ctx: SlashCommandContext<'_>,
+    action: TeamCommandAction,
+) -> Result<SlashCommandControl> {
+    if !agent_teams_enabled(ctx.vt_cfg) {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Agent teams are disabled. Enable [agent_teams] enabled = true or set VTCODE_EXPERIMENTAL_AGENT_TEAMS=1.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    if !subagents_enabled(ctx.vt_cfg) {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Subagents are disabled. Enable [subagents] enabled = true before using /team.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    match action {
+        TeamCommandAction::Help => {
+            render_team_usage(ctx.renderer)?;
+            return Ok(SlashCommandControl::Continue);
+        }
+        TeamCommandAction::Model => {
+            ctx.session_stats.model_picker_target = ModelPickerTarget::TeamDefault;
+            return start_model_picker(ctx).await;
+        }
+        TeamCommandAction::Stop => {
+            ctx.session_stats.team_state = None;
+            ctx.renderer.line(MessageStyle::Info, "Team stopped.")?;
+            return Ok(SlashCommandControl::Continue);
+        }
+        _ => {}
+    }
+
+    match action {
+        TeamCommandAction::Start {
+            name,
+            count,
+            subagent_type,
+        } => {
+            if ctx.session_stats.team_state.is_some() {
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    "Team already running. Use /team stop before starting a new team.",
+                )?;
+                return Ok(SlashCommandControl::Continue);
+            }
+
+            let team_name = name.unwrap_or_else(|| "team".to_string());
+            let default_subagent = subagent_type.unwrap_or_else(|| "general".to_string());
+            let desired_count = count.unwrap_or(3);
+            if desired_count == 0 {
+                ctx.renderer
+                    .line(MessageStyle::Error, "Team size must be at least 1.")?;
+                return Ok(SlashCommandControl::Continue);
+            }
+
+            let max_teammates = resolve_max_teammates(ctx.vt_cfg);
+            if desired_count > max_teammates {
+                ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!(
+                        "Team size {} exceeds max_teammates {}.",
+                        desired_count, max_teammates
+                    ),
+                )?;
+                return Ok(SlashCommandControl::Continue);
+            }
+
+            let mut team = TeamState::new(team_name.clone(), default_subagent.clone());
+            for idx in 1..=desired_count {
+                let name = format!("teammate-{}", idx);
+                team.add_teammate(name, default_subagent.clone())?;
+            }
+
+            ctx.session_stats.team_state = Some(team);
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Team '{}' started with {} teammates (default: {}).",
+                    team_name, desired_count, default_subagent
+                ),
+            )?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                "Use /team task add <description> to queue work.",
+            )?;
+            Ok(SlashCommandControl::Continue)
+        }
+        TeamCommandAction::Add {
+            name,
+            subagent_type,
+        } => {
+            let max_teammates = resolve_max_teammates(ctx.vt_cfg);
+            let team = match ctx.session_stats.team_state.as_mut() {
+                Some(team) => team,
+                None => {
+                    ctx.renderer
+                        .line(MessageStyle::Info, "No active team. Use /team start.")?;
+                    return Ok(SlashCommandControl::Continue);
+                }
+            };
+
+            if team.teammates.len() >= max_teammates {
+                ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!("Team already at max_teammates {}.", max_teammates),
+                )?;
+                return Ok(SlashCommandControl::Continue);
+            }
+
+            let subagent = subagent_type.unwrap_or_else(|| team.default_subagent.clone());
+            team.add_teammate(name.clone(), subagent.clone())?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("Teammate '{}' added ({}).", name, subagent),
+            )?;
+            Ok(SlashCommandControl::Continue)
+        }
+        TeamCommandAction::Remove { name } => {
+            let team = match ctx.session_stats.team_state.as_mut() {
+                Some(team) => team,
+                None => {
+                    ctx.renderer
+                        .line(MessageStyle::Info, "No active team. Use /team start.")?;
+                    return Ok(SlashCommandControl::Continue);
+                }
+            };
+            team.remove_teammate(&name)?;
+            ctx.renderer
+                .line(MessageStyle::Info, &format!("Teammate '{}' removed.", name))?;
+            Ok(SlashCommandControl::Continue)
+        }
+        TeamCommandAction::TaskAdd { description } => {
+            let team = match ctx.session_stats.team_state.as_mut() {
+                Some(team) => team,
+                None => {
+                    ctx.renderer
+                        .line(MessageStyle::Info, "No active team. Use /team start.")?;
+                    return Ok(SlashCommandControl::Continue);
+                }
+            };
+            let id = team.add_task(description);
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("Task #{} added. Use /team assign {} <teammate>.", id, id),
+            )?;
+            Ok(SlashCommandControl::Continue)
+        }
+        TeamCommandAction::Tasks => {
+            let team = match ctx.session_stats.team_state.as_ref() {
+                Some(team) => team,
+                None => {
+                    ctx.renderer
+                        .line(MessageStyle::Info, "No active team. Use /team start.")?;
+                    return Ok(SlashCommandControl::Continue);
+                }
+            };
+            if team.tasks.is_empty() {
+                ctx.renderer.line(MessageStyle::Info, "No tasks yet.")?;
+                return Ok(SlashCommandControl::Continue);
+            }
+            ctx.renderer.line(MessageStyle::Info, "Team tasks:")?;
+            for task in &team.tasks {
+                let status = match task.status {
+                    TeamTaskStatus::Pending => "pending",
+                    TeamTaskStatus::InProgress => "in_progress",
+                    TeamTaskStatus::Completed => "completed",
+                    TeamTaskStatus::Failed => "failed",
+                };
+                let assignee = task.assigned_to.as_deref().unwrap_or("unassigned");
+                ctx.renderer.line(
+                    MessageStyle::Output,
+                    &format!(
+                        "  #{} [{}] {} (assigned: {})",
+                        task.id, status, task.description, assignee
+                    ),
+                )?;
+            }
+            Ok(SlashCommandControl::Continue)
+        }
+        TeamCommandAction::Teammates => {
+            let team = match ctx.session_stats.team_state.as_ref() {
+                Some(team) => team,
+                None => {
+                    ctx.renderer
+                        .line(MessageStyle::Info, "No active team. Use /team start.")?;
+                    return Ok(SlashCommandControl::Continue);
+                }
+            };
+            if team.teammates.is_empty() {
+                ctx.renderer.line(MessageStyle::Info, "No teammates yet.")?;
+                return Ok(SlashCommandControl::Continue);
+            }
+            ctx.renderer.line(MessageStyle::Info, "Teammates:")?;
+            for teammate in team.teammates.values() {
+                let agent_id = teammate.agent_id.as_deref().unwrap_or("not spawned");
+                ctx.renderer.line(
+                    MessageStyle::Output,
+                    &format!(
+                        "  {} ({}, id: {})",
+                        teammate.name, teammate.subagent_type, agent_id
+                    ),
+                )?;
+            }
+            Ok(SlashCommandControl::Continue)
+        }
+        TeamCommandAction::Assign { task_id, teammate } => {
+            let (team_name, prompt, subagent_type, resume_id) = {
+                let team = match ctx.session_stats.team_state.as_mut() {
+                    Some(team) => team,
+                    None => {
+                        ctx.renderer
+                            .line(MessageStyle::Info, "No active team. Use /team start.")?;
+                        return Ok(SlashCommandControl::Continue);
+                    }
+                };
+
+                if team.busy {
+                    ctx.renderer
+                        .line(MessageStyle::Info, "A teammate task is already running.")?;
+                    return Ok(SlashCommandControl::Continue);
+                }
+
+                let teammate_entry = match team.teammates.get(&teammate) {
+                    Some(entry) => entry,
+                    None => {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Teammate '{}' not found.", teammate),
+                        )?;
+                        return Ok(SlashCommandControl::Continue);
+                    }
+                };
+
+                let task_index = match team.tasks.iter().position(|task| task.id == task_id) {
+                    Some(index) => index,
+                    None => {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Task #{} not found.", task_id),
+                        )?;
+                        return Ok(SlashCommandControl::Continue);
+                    }
+                };
+
+                if team.tasks[task_index].status != TeamTaskStatus::Pending {
+                    ctx.renderer
+                        .line(MessageStyle::Error, "Only pending tasks can be assigned.")?;
+                    return Ok(SlashCommandControl::Continue);
+                }
+
+                let task_description = team.tasks[task_index].description.clone();
+                let teammate_name = teammate_entry.name.clone();
+                let subagent_type = teammate_entry.subagent_type.clone();
+                let resume_id = teammate_entry.agent_id.clone();
+                let team_name = team.name.clone();
+
+                team.tasks[task_index].status = TeamTaskStatus::InProgress;
+                team.tasks[task_index].assigned_to = Some(teammate.clone());
+                team.busy = true;
+
+                let prompt = format!(
+                    "You are teammate '{}' in team '{}'. Task: {}. Provide concise results and next steps.",
+                    teammate_name, team_name, task_description
+                );
+                (team_name, prompt, subagent_type, resume_id)
+            };
+
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("Assigning task #{} to {}...", task_id, teammate),
+            )?;
+
+            let mut subagent_config = ctx
+                .vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.subagents.clone())
+                .unwrap_or_default();
+            if let Some(model) = ctx
+                .vt_cfg
+                .as_ref()
+                .and_then(|cfg| cfg.agent_teams.default_model.clone())
+            {
+                subagent_config.default_model = Some(model);
+            }
+            let registry = SubagentRegistry::new(ctx.config.workspace.clone(), subagent_config)
+                .await
+                .context("Failed to initialize subagent registry")?;
+
+            let runner = SubagentRunner::new(
+                Arc::new(registry),
+                ctx.config.clone(),
+                Arc::new(ctx.tool_registry.clone()),
+                ctx.config.workspace.clone(),
+            );
+
+            let mut params = SpawnParams::new(&prompt).with_subagent(subagent_type);
+            if let Some(resume) = resume_id.clone() {
+                params = params.with_resume(resume);
+            }
+            params = params
+                .with_parent_context(format!("Team '{}', teammate '{}'", team_name, teammate));
+
+            let result = runner.spawn(params).await;
+
+            let team = ctx.session_stats.team_state.as_mut().unwrap();
+            team.busy = false;
+            if let Some(task) = team.find_task_mut(task_id) {
+                match result {
+                    Ok(result) if result.success => {
+                        task.status = TeamTaskStatus::Completed;
+                        task.result_summary = Some(truncate_message_content(&result.output));
+                        if let Some(teammate_entry) = team.teammates.get_mut(&teammate) {
+                            teammate_entry.agent_id = Some(result.agent_id.clone());
+                        }
+                        ctx.renderer.line(
+                            MessageStyle::Info,
+                            &format!("Task #{} completed by {}.", task_id, teammate),
+                        )?;
+                    }
+                    Ok(result) => {
+                        task.status = TeamTaskStatus::Failed;
+                        task.result_summary = result.error.clone();
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!(
+                                "Task #{} failed: {}",
+                                task_id,
+                                result.error.unwrap_or_default()
+                            ),
+                        )?;
+                    }
+                    Err(err) => {
+                        task.status = TeamTaskStatus::Failed;
+                        task.result_summary = Some(err.to_string());
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Task #{} failed: {}", task_id, err),
+                        )?;
+                    }
+                }
+            }
+
+            Ok(SlashCommandControl::Continue)
+        }
+        TeamCommandAction::Help | TeamCommandAction::Model | TeamCommandAction::Stop => {
+            Ok(SlashCommandControl::Continue)
+        }
+    }
+}
+
+pub async fn handle_manage_subagent_config(
+    ctx: SlashCommandContext<'_>,
+    action: SubagentConfigCommandAction,
+) -> Result<SlashCommandControl> {
+    match action {
+        SubagentConfigCommandAction::Model => {
+            ctx.session_stats.model_picker_target = ModelPickerTarget::SubagentDefault;
+            start_model_picker(ctx).await
         }
     }
 }

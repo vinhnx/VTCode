@@ -21,9 +21,11 @@ use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
 
-use crate::agent::runloop::unified::model_selection::finalize_model_selection;
+use crate::agent::runloop::unified::model_selection::{
+    finalize_model_selection, finalize_subagent_model_selection, finalize_team_model_selection,
+};
 use crate::agent::runloop::unified::palettes::ActivePalette;
-use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
+use crate::agent::runloop::unified::state::{CtrlCState, ModelPickerTarget, SessionStats};
 use crate::agent::runloop::welcome::SessionBootstrap;
 
 use crate::agent::runloop::unified::turn::session::{
@@ -412,23 +414,59 @@ pub(crate) async fn run_interaction_loop(
                 }
                 ModelPickerProgress::Completed(selection) => {
                     let picker_state = state.model_picker_state.take().unwrap();
-                    if let Err(err) = finalize_model_selection(
-                        ctx.renderer,
-                        &picker_state,
-                        selection,
-                        ctx.config,
-                        ctx.vt_cfg,
-                        ctx.provider_client,
-                        ctx.session_bootstrap,
-                        ctx.handle,
-                        ctx.full_auto,
-                    )
-                    .await
-                    {
-                        ctx.renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to apply model selection: {}", err),
-                        )?;
+                    let target = ctx.session_stats.model_picker_target;
+                    ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
+                    match target {
+                        ModelPickerTarget::Main => {
+                            if let Err(err) = finalize_model_selection(
+                                ctx.renderer,
+                                &picker_state,
+                                selection,
+                                ctx.config,
+                                ctx.vt_cfg,
+                                ctx.provider_client,
+                                ctx.session_bootstrap,
+                                ctx.handle,
+                                ctx.full_auto,
+                            )
+                            .await
+                            {
+                                ctx.renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Failed to apply model selection: {}", err),
+                                )?;
+                            }
+                        }
+                        ModelPickerTarget::SubagentDefault => {
+                            if let Err(err) = finalize_subagent_model_selection(
+                                ctx.renderer,
+                                selection,
+                                ctx.vt_cfg,
+                                &ctx.config.workspace,
+                            )
+                            .await
+                            {
+                                ctx.renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Failed to set subagent model: {}", err),
+                                )?;
+                            }
+                        }
+                        ModelPickerTarget::TeamDefault => {
+                            if let Err(err) = finalize_team_model_selection(
+                                ctx.renderer,
+                                selection,
+                                ctx.vt_cfg,
+                                &ctx.config.workspace,
+                            )
+                            .await
+                            {
+                                ctx.renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Failed to set team model: {}", err),
+                                )?;
+                            }
+                        }
                     }
                     continue;
                 }

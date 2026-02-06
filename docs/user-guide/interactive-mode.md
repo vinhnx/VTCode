@@ -42,6 +42,12 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
 
+### Agent Teams (Experimental)
+
+Use `/team` commands to coordinate multiple subagents in a single session. This MVP is in-process and sequential. See `docs/agent-teams.md` for enablement and limitations.
+
+Use `/team model` or `/subagent model` to set default models interactively.
+
 ## Vim Editor Mode
 
 Enable Vim-style editing by running `/vim` or enabling it via `/config`.

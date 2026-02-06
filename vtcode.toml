@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "anthropic"
+provider = "huggingface"
 
 # Environment variable containing the API key for the provider
-api_key_env = "ANTHROPIC_API_KEY"
+api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "claude-opus-4-6"
+default_model = "MiniMaxAI/MiniMax-M2.1:novita"
 
 # Visual theme for the terminal interface
 theme = "vitesse-black"
@@ -29,7 +29,7 @@ reasoning_effort = "low"
 system_prompt_mode = "default"
 tool_documentation_mode = "minimal"
 enable_split_tool_results = true
-todo_planning_mode = true
+todo_planning_mode = false
 verbosity = "medium"
 refine_temperature = 0.3
 enable_self_review = false
@@ -48,7 +48,7 @@ include_working_directory = true
 # "edit" - Full tool access for file modifications and command execution (default)
 # "plan" - Read-only mode that produces implementation plans without making changes
 # Toggle during session with Shift+Tab or /plan command
-default_editing_mode = "plan"
+default_editing_mode = "edit"
 require_plan_confirmation = true
 autonomous_mode = false
 
@@ -889,10 +889,15 @@ min-keyword-matches = 2
 active_style = "default"
 
 [subagents]
-enabled = false
+enabled = true
+default_model = "MiniMaxAI/MiniMax-M2.1:novita"
 max_concurrent = 3
 default_timeout_seconds = 300
 additional_agent_dirs = []
+
+[agent_teams]
+enabled = true
+max_teammates = 3
 
 [dotfile_protection]
 enabled = true

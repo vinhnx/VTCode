@@ -222,6 +222,17 @@ enabled = false
 # Additional directories to search for subagent definitions
 # additional_agent_dirs = []
 
+# Agent teams (experimental)
+[agent_teams]
+# Enable agent teams (default: false)
+enabled = false
+
+# Maximum number of teammates per team
+# max_teammates = 4
+
+# Default model for agent team subagents
+# default_model = ""
+
 # External editor configuration
 # Uses the editor-command crate to detect and launch the user's preferred editor
 # https://docs.rs/editor-command/latest/editor_command/

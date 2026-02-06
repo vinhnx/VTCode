@@ -51,6 +51,7 @@ pub use acp::{
     AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode,
     WorkspaceTrustLevel,
 };
+pub use agent_teams::AgentTeamsConfig;
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
@@ -110,3 +111,4 @@ pub use auth::{
     AuthStatus, OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge, clear_oauth_token,
     generate_pkce_challenge, get_auth_status, get_auth_url, load_oauth_token, save_oauth_token,
 };
+pub mod agent_teams;

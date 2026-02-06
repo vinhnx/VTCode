@@ -69,6 +69,12 @@ pub enum SlashCommandOutcome {
     ManageAgents {
         action: AgentCommandAction,
     },
+    ManageTeams {
+        action: TeamCommandAction,
+    },
+    ManageSubagentConfig {
+        action: SubagentConfigCommandAction,
+    },
     SubmitPrompt {
         prompt: String,
     },
@@ -109,6 +115,39 @@ pub enum AgentCommandAction {
     Delete(String),
     #[allow(dead_code)]
     Help,
+}
+
+#[derive(Clone, Debug)]
+pub enum TeamCommandAction {
+    Start {
+        name: Option<String>,
+        count: Option<usize>,
+        subagent_type: Option<String>,
+    },
+    Add {
+        name: String,
+        subagent_type: Option<String>,
+    },
+    Remove {
+        name: String,
+    },
+    TaskAdd {
+        description: String,
+    },
+    Assign {
+        task_id: u64,
+        teammate: String,
+    },
+    Tasks,
+    Teammates,
+    Model,
+    Stop,
+    Help,
+}
+
+#[derive(Clone, Debug)]
+pub enum SubagentConfigCommandAction {
+    Model,
 }
 
 #[derive(Clone, Debug)]
@@ -788,6 +827,129 @@ pub async fn handle_slash_command(
                     Ok(SlashCommandOutcome::Handled)
                 }
             }
+        }
+        "team" => {
+            if args.is_empty() {
+                return Ok(SlashCommandOutcome::ManageTeams {
+                    action: TeamCommandAction::Help,
+                });
+            }
+
+            let tokens = match shell_split(args) {
+                Ok(tokens) => tokens,
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to parse arguments: {}", err),
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            };
+
+            if tokens.is_empty() {
+                return Ok(SlashCommandOutcome::ManageTeams {
+                    action: TeamCommandAction::Help,
+                });
+            }
+
+            let subcommand = tokens[0].to_ascii_lowercase();
+            match subcommand.as_str() {
+                "start" => Ok(SlashCommandOutcome::ManageTeams {
+                    action: TeamCommandAction::Start {
+                        name: tokens.get(1).cloned(),
+                        count: tokens.get(2).and_then(|v| v.parse::<usize>().ok()),
+                        subagent_type: tokens.get(3).cloned(),
+                    },
+                }),
+                "add" => {
+                    if tokens.len() < 2 {
+                        return Ok(SlashCommandOutcome::ManageTeams {
+                            action: TeamCommandAction::Help,
+                        });
+                    }
+                    Ok(SlashCommandOutcome::ManageTeams {
+                        action: TeamCommandAction::Add {
+                            name: tokens[1].clone(),
+                            subagent_type: tokens.get(2).cloned(),
+                        },
+                    })
+                }
+                "remove" | "rm" => {
+                    if tokens.len() < 2 {
+                        return Ok(SlashCommandOutcome::ManageTeams {
+                            action: TeamCommandAction::Help,
+                        });
+                    }
+                    Ok(SlashCommandOutcome::ManageTeams {
+                        action: TeamCommandAction::Remove {
+                            name: tokens[1].clone(),
+                        },
+                    })
+                }
+                "task" => {
+                    if tokens.len() >= 2 && tokens[1].eq_ignore_ascii_case("add") {
+                        let description =
+                            tokens.iter().skip(2).cloned().collect::<Vec<_>>().join(" ");
+                        if description.is_empty() {
+                            return Ok(SlashCommandOutcome::ManageTeams {
+                                action: TeamCommandAction::Help,
+                            });
+                        }
+                        return Ok(SlashCommandOutcome::ManageTeams {
+                            action: TeamCommandAction::TaskAdd { description },
+                        });
+                    }
+                    Ok(SlashCommandOutcome::ManageTeams {
+                        action: TeamCommandAction::Help,
+                    })
+                }
+                "tasks" => Ok(SlashCommandOutcome::ManageTeams {
+                    action: TeamCommandAction::Tasks,
+                }),
+                "assign" => {
+                    if tokens.len() < 3 {
+                        return Ok(SlashCommandOutcome::ManageTeams {
+                            action: TeamCommandAction::Help,
+                        });
+                    }
+                    let task_id = tokens[1].parse::<u64>().ok();
+                    if task_id.is_none() {
+                        return Ok(SlashCommandOutcome::ManageTeams {
+                            action: TeamCommandAction::Help,
+                        });
+                    }
+                    Ok(SlashCommandOutcome::ManageTeams {
+                        action: TeamCommandAction::Assign {
+                            task_id: task_id.unwrap(),
+                            teammate: tokens[2].clone(),
+                        },
+                    })
+                }
+                "teammates" => Ok(SlashCommandOutcome::ManageTeams {
+                    action: TeamCommandAction::Teammates,
+                }),
+                "model" => Ok(SlashCommandOutcome::ManageTeams {
+                    action: TeamCommandAction::Model,
+                }),
+                "stop" | "end" => Ok(SlashCommandOutcome::ManageTeams {
+                    action: TeamCommandAction::Stop,
+                }),
+                "help" | "--help" => Ok(SlashCommandOutcome::ManageTeams {
+                    action: TeamCommandAction::Help,
+                }),
+                _ => Ok(SlashCommandOutcome::ManageTeams {
+                    action: TeamCommandAction::Help,
+                }),
+            }
+        }
+        "subagent" => {
+            if args.trim().is_empty() || args.trim().eq_ignore_ascii_case("model") {
+                return Ok(SlashCommandOutcome::ManageSubagentConfig {
+                    action: SubagentConfigCommandAction::Model,
+                });
+            }
+            renderer.line(MessageStyle::Error, "Usage: /subagent model")?;
+            Ok(SlashCommandOutcome::Handled)
         }
         "plan" => {
             let trimmed = args.trim();
