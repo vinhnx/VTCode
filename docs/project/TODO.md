@@ -43,10 +43,6 @@ example:
 
 --
 
-the agent can't use and call `exit_plan_mode` to exit plan mode properly. it's got stuck
-
-"Plan Mode still active. Call `exit_plan_mode` to review the plan or refine the plan before retrying"
-
 ---
 
 the final propose plan could reference this
