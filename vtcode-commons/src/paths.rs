@@ -128,17 +128,15 @@ pub trait WorkspacePaths: Send + Sync {
             return PathScope::Config;
         }
 
-        if let Some(cache_dir) = self.cache_dir() {
-            if path.starts_with(&cache_dir) {
+        if let Some(cache_dir) = self.cache_dir()
+            && path.starts_with(&cache_dir) {
                 return PathScope::Cache;
             }
-        }
 
-        if let Some(telemetry_dir) = self.telemetry_dir() {
-            if path.starts_with(&telemetry_dir) {
+        if let Some(telemetry_dir) = self.telemetry_dir()
+            && path.starts_with(&telemetry_dir) {
                 return PathScope::Telemetry;
             }
-        }
 
         PathScope::Cache
     }
