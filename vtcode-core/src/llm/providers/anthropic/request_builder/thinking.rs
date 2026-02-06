@@ -1,4 +1,4 @@
-use crate::config::constants::env_vars;
+use crate::config::constants::{env_vars, models};
 use crate::config::core::AnthropicConfig;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::provider::LLMRequest;
@@ -14,10 +14,19 @@ pub(crate) fn build_thinking_config(
     anthropic_config: &AnthropicConfig,
     default_model: &str,
 ) -> (Option<ThinkingConfig>, Option<Value>) {
+    let resolved_model = if request.model.trim().is_empty() {
+        default_model
+    } else {
+        request.model.as_str()
+    };
     let thinking_enabled = anthropic_config.extended_thinking_enabled
         && supports_reasoning_effort(&request.model, default_model);
 
     if thinking_enabled {
+        if resolved_model == models::anthropic::CLAUDE_OPUS_4_6 {
+            return (Some(ThinkingConfig::Adaptive), None);
+        }
+
         let max_thinking_tokens: Option<u32> = env::var(env_vars::MAX_THINKING_TOKENS)
             .ok()
             .and_then(|v| v.parse().ok());
@@ -59,4 +68,38 @@ pub(crate) fn build_thinking_config(
     }
 
     (None, None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::models;
+
+    #[test]
+    fn uses_adaptive_thinking_for_opus_4_6_by_default() {
+        let request = LLMRequest {
+            model: models::anthropic::CLAUDE_OPUS_4_6.to_string(),
+            ..Default::default()
+        };
+        let config = AnthropicConfig::default();
+        let (thinking, reasoning) =
+            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
+
+        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive)));
+        assert!(reasoning.is_none());
+    }
+
+    #[test]
+    fn ignores_explicit_budget_for_opus_4_6() {
+        let request = LLMRequest {
+            model: models::anthropic::CLAUDE_OPUS_4_6.to_string(),
+            thinking_budget: Some(2048),
+            ..Default::default()
+        };
+        let config = AnthropicConfig::default();
+        let (thinking, _) =
+            build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
+
+        assert!(matches!(thinking, Some(ThinkingConfig::Adaptive)));
+    }
 }

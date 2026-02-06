@@ -5,7 +5,9 @@ mod system;
 mod thinking;
 mod tools;
 
+use crate::config::constants::models;
 use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
+use crate::config::types::ReasoningEffortLevel;
 use crate::llm::provider::{LLMError, LLMRequest};
 use crate::llm::providers::anthropic_types::{
     AnthropicOutputConfig, AnthropicRequest, CacheControl,
@@ -109,7 +111,20 @@ pub fn convert_to_anthropic_format(
 
     let final_tool_choice = build_tool_choice(request, &thinking_val);
 
-    let effort_value = request.effort.as_ref().or({
+    let resolved_model = if request.model.trim().is_empty() {
+        ctx.model
+    } else {
+        request.model.as_str()
+    };
+    let adaptive_effort =
+        if resolved_model == models::anthropic::CLAUDE_OPUS_4_6 && request.effort.is_none() {
+            request
+                .reasoning_effort
+                .map(|effort| effort_from_reasoning_for_adaptive(effort).to_string())
+        } else {
+            None
+        };
+    let effort_value = request.effort.as_ref().or(adaptive_effort.as_ref()).or({
         let eff = &ctx.anthropic_config.effort;
         if eff == "high" { None } else { Some(eff) }
     });
@@ -144,4 +159,15 @@ pub fn convert_to_anthropic_format(
         message: format!("Serialization error: {}", e),
         metadata: None,
     })
+}
+
+fn effort_from_reasoning_for_adaptive(effort: ReasoningEffortLevel) -> &'static str {
+    match effort {
+        ReasoningEffortLevel::None | ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
+            "low"
+        }
+        ReasoningEffortLevel::Medium => "medium",
+        ReasoningEffortLevel::High => "high",
+        ReasoningEffortLevel::XHigh => "max",
+    }
 }
