@@ -186,6 +186,14 @@ impl Widget for &mut SessionWidget<'_> {
             .layout_mode
             .unwrap_or_else(|| LayoutMode::from_area(area));
 
+        // Reserve input height so transcript/header never render under input
+        let layout_height = area.height.saturating_sub(self.session.input_height);
+        let layout_area = Rect::new(area.x, area.y, area.width, layout_height);
+        if layout_area.height == 0 || layout_area.width == 0 {
+            self.render_overlays(area, buf);
+            return;
+        }
+
         // Handle deferred triggers
         if self.session.deferred_file_browser_trigger {
             self.session.deferred_file_browser_trigger = false;
@@ -205,7 +213,7 @@ impl Widget for &mut SessionWidget<'_> {
         self.session.poll_log_entries();
 
         // Compute responsive layout
-        let layout = self.compute_layout(area, mode);
+        let layout = self.compute_layout(layout_area, mode);
 
         // Update header rows if changed
         if layout.header.height != self.session.header_rows {
