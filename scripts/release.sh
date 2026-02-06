@@ -571,6 +571,7 @@ main() {
             
             # Define the order for publishing based on dependency graph
             # Crates without dependencies should be published first
+            # Note: Only crates with publish = true or unset are included here
             local dependency_order=(
                 "vtcode-commons"
                 "vtcode-config" 
@@ -580,9 +581,6 @@ main() {
                 "vtcode-bash-runner"
                 "vtcode-file-search"
                 "vtcode-acp-client"
-                "vtcode-llm"
-                "vtcode-lmstudio"
-                "vtcode-tools"
                 "vtcode-core"
                 "vtcode"  # main crate
             )
@@ -590,6 +588,12 @@ main() {
             # Publish each crate in dependency order
             for crate in "${dependency_order[@]}"; do
                 if [[ -d "$crate" ]]; then
+                    # Check if this crate is allowed to be published
+                    if grep -q "publish = false" "$crate/Cargo.toml"; then
+                        print_info "Skipping $crate (publish = false)..."
+                        continue
+                    fi
+                    
                     print_info "Publishing $crate..."
                     (
                         cd "$crate"
@@ -640,6 +644,12 @@ main() {
                 done
                 
                 if [[ "$already_attempted" == false && -d "$member" ]]; then
+                    # Check if this crate is allowed to be published
+                    if grep -q "publish = false" "$member/Cargo.toml"; then
+                        print_info "Skipping $member (publish = false)..."
+                        continue
+                    fi
+                    
                     print_info "Publishing remaining crate: $member..."
                     (
                         cd "$member"
