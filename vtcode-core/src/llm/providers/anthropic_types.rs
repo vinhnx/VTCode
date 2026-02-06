@@ -29,6 +29,7 @@ pub struct AnthropicRequest {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ThinkingConfig {
     Enabled { budget_tokens: u32 },
+    Adaptive,
     Disabled,
 }
 

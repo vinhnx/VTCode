@@ -661,11 +661,6 @@ codex-rs/core/src/codex.rs#L1803
 
 refence and apply to vtcode for plan and rquest user input for plan mode (current git changes)
 
----
-
-add claude opus 4.6
-
-Claude Opus 4.6 is available today on claude.ai, our API, and all major cloud platforms. If you’re a developer, use claude-opus-4-6 via the Claude API. Pricing remains the same at $5/$25 per million tokens; for full details, see our pricing page.
 
 ---
 
@@ -679,6 +674,3 @@ https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
 
 https://platform.claude.com/docs/en/build-with-claude/effort
 
---
-
-https://platform.claude.com/docs/en/about-claude/models/migration-guide
