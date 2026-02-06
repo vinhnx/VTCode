@@ -58,15 +58,15 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub model: Option<String>,
 
-    /// **LLM Provider** (gemini, openai, anthropic, deepseek, openrouter, xai, zai, moonshot, minimax, ollama, lmstudio)
+    /// LLM Provider (gemini, openai, anthropic, deepseek, openrouter, xai, zai, moonshot, minimax, ollama, lmstudio)
     #[arg(long, global = true)]
     pub provider: Option<String>,
 
-    /// **API key environment variable** (auto-detects GEMINI_API_KEY, OPENAI_API_KEY, etc.)
+    /// API key environment variable (auto-detects GEMINI_API_KEY, OPENAI_API_KEY, etc.)
     #[arg(long, global = true, default_value = crate::config::constants::defaults::DEFAULT_API_KEY_ENV)]
     pub api_key_env: String,
 
-    /// **Workspace root directory** (default: current directory)
+    /// Workspace root directory (default: current directory)
     #[arg(
         long,
         global = true,
@@ -76,47 +76,47 @@ pub struct Cli {
     )]
     pub workspace: Option<PathBuf>,
 
-    /// **Enable tree-sitter code analysis**
+    /// Enable tree-sitter code analysis
     #[arg(long, global = true)]
     pub enable_tree_sitter: bool,
 
-    /// **Enable research-preview features**
+    /// Enable research-preview features
     #[arg(long, global = true)]
     pub research_preview: bool,
 
-    /// **Security level** for tool execution (strict, moderate, permissive)
+    /// Security level for tool execution (strict, moderate, permissive)
     #[arg(long, global = true, default_value = "moderate")]
     pub security_level: String,
 
-    /// **Show diffs for file changes** in chat interface
+    /// Show diffs for file changes in chat interface
     #[arg(long, global = true)]
     pub show_file_diffs: bool,
 
-    /// **Maximum concurrent async operations**
+    /// Maximum concurrent async operations
     #[arg(long, global = true, default_value_t = 5)]
     pub max_concurrent_ops: usize,
 
-    /// **Maximum API requests per minute**
+    /// Maximum API requests per minute
     #[arg(long, global = true, default_value_t = 30)]
     pub api_rate_limit: usize,
 
-    /// **Maximum tool calls per session**
+    /// Maximum tool calls per session
     #[arg(long, global = true, default_value_t = 10)]
     pub max_tool_calls: usize,
 
-    /// **Enable debug output** for troubleshooting
+    /// Enable debug output for troubleshooting
     #[arg(long, global = true)]
     pub debug: bool,
 
-    /// **Enable verbose logging**
+    /// Enable verbose logging
     #[arg(long, global = true)]
     pub verbose: bool,
 
-    /// **Suppress all non-essential output** (for scripting, CI/CD)
+    /// Suppress all non-essential output (for scripting, CI/CD)
     #[arg(short, long, global = true)]
     pub quiet: bool,
 
-    /// **Configuration overrides or file path** (KEY=VALUE or PATH)
+    /// Configuration overrides or file path (KEY=VALUE or PATH)
     #[arg(
         short = 'c',
         long = "config",
@@ -126,43 +126,43 @@ pub struct Cli {
     )]
     pub config: Vec<String>,
 
-    /// **Log level** (error, warn, info, debug, trace)
+    /// Log level (error, warn, info, debug, trace)
     #[arg(long, global = true, default_value = "info")]
     pub log_level: String,
 
-    /// **Disable color output** (for log files, CI/CD)
+    /// Disable color output (for log files, CI/CD)
     #[arg(long, global = true)]
     pub no_color: bool,
 
-    /// **Select UI theme** (e.g., ciapre-dark, ciapre-blue)
+    /// Select UI theme (e.g., ciapre-dark, ciapre-blue)
     #[arg(long, global = true, value_name = "THEME")]
     pub theme: Option<String>,
 
-    /// **App tick rate** in milliseconds (default: 250)
+    /// App tick rate in milliseconds (default: 250)
     #[arg(short = 't', long, default_value_t = 250)]
     pub tick_rate: u64,
 
-    /// **Frame rate** in FPS (default: 60)
+    /// Frame rate in FPS (default: 60)
     #[arg(short = 'f', long, default_value_t = 60)]
     pub frame_rate: u64,
 
-    /// **Enable skills system**
+    /// Enable skills system
     #[arg(long, global = true)]
     pub enable_skills: bool,
 
-    /// **Enable Chrome browser integration** for web automation
+    /// Enable Chrome browser integration for web automation
     #[arg(long, global = true)]
     pub chrome: bool,
 
-    /// **Disable Chrome browser integration**
+    /// Disable Chrome browser integration
     #[arg(long = "no-chrome", global = true, conflicts_with = "chrome")]
     pub no_chrome: bool,
 
-    /// **Skip safety confirmations** (use with caution)
+    /// Skip safety confirmations (use with caution)
     #[arg(long, global = true)]
     pub skip_confirmations: bool,
 
-    /// **Print response without launching the interactive TUI**
+    /// Print response without launching the interactive TUI
     #[arg(
         short = 'p',
         long = "print",
@@ -175,7 +175,7 @@ pub struct Cli {
     )]
     pub print: Option<String>,
 
-    /// **Enable full-auto mode** (no interaction) or run a headless task
+    /// Enable full-auto mode (no interaction) or run a headless task
     #[arg(
         long = "full-auto",
         visible_alias = "auto",
@@ -187,7 +187,7 @@ pub struct Cli {
     )]
     pub full_auto: Option<String>,
 
-    /// **Resume a previous conversation** (use without ID for interactive picker)
+    /// Resume a previous conversation (use without ID for interactive picker)
     #[arg(
         short = 'r',
         long = "resume",
@@ -199,7 +199,7 @@ pub struct Cli {
     )]
     pub resume_session: Option<String>,
 
-    /// **Continue the most recent conversation automatically**
+    /// Continue the most recent conversation automatically
     #[arg(
         long = "continue",
         visible_alias = "continue-session",
@@ -208,7 +208,7 @@ pub struct Cli {
     )]
     pub continue_latest: bool,
 
-    /// **Fork an existing session** with a new session ID
+    /// Fork an existing session with a new session ID
     #[arg(
         long = "fork-session",
         global = true,
@@ -217,35 +217,35 @@ pub struct Cli {
     )]
     pub fork_session: Option<String>,
 
-    /// **Custom suffix for session identifier** (alphanumeric, dash, underscore only, max 64 chars)
+    /// Custom suffix for session identifier (alphanumeric, dash, underscore only, max 64 chars)
     #[arg(long = "session-id", global = true, value_name = "CUSTOM_SUFFIX")]
     pub session_id: Option<String>,
 
-    /// **Override the default agent model** for this session
+    /// Override the default agent model for this session
     #[arg(long, global = true, value_name = "AGENT")]
     pub agent: Option<String>,
 
-    /// **Add additional working directories** for the agent to access
+    /// Add additional working directories for the agent to access
     #[arg(long = "add-dir", global = true, value_name = "PATH", value_hint = ValueHint::DirPath)]
     pub additional_dirs: Vec<PathBuf>,
 
-    /// **Tools that execute without prompting** (comma-separated, supports patterns like "Bash(git:*)")
+    /// Tools that execute without prompting (comma-separated, supports patterns like "Bash(git:*)")
     #[arg(long = "allowed-tools", global = true, value_name = "TOOLS", action = ArgAction::Append)]
     pub allowed_tools: Vec<String>,
 
-    /// **Tools that cannot be used** by the agent
+    /// Tools that cannot be used by the agent
     #[arg(long = "disallowed-tools", global = true, value_name = "TOOLS", action = ArgAction::Append)]
     pub disallowed_tools: Vec<String>,
 
-    /// **Skip all permission prompts** (reduces security - use with caution)
+    /// Skip all permission prompts (reduces security - use with caution)
     #[arg(long = "dangerously-skip-permissions", global = true)]
     pub dangerously_skip_permissions: bool,
 
-    /// **Explicitly connect to IDE on startup** (auto-detects available IDEs)
+    /// Explicitly connect to IDE on startup (auto-detects available IDEs)
     #[arg(long, global = true)]
     pub ide: bool,
 
-    /// **Begin in a specified permission mode** (ask, suggest, auto-approved, full-auto, plan)
+    /// Begin in a specified permission mode (ask, suggest, auto-approved, full-auto, plan)
     #[arg(long, global = true, value_name = "MODE")]
     pub permission_mode: Option<String>,
 
