@@ -288,8 +288,8 @@ where
     let old_lines_owned = split_lines_with_terminator(old);
     let new_lines_owned = split_lines_with_terminator(new);
 
-    let old_refs: Vec<&str> = old_lines_owned.iter().map(|s| s.as_str()).collect();
-    let new_refs: Vec<&str> = new_lines_owned.iter().map(|s| s.as_str()).collect();
+    let old_refs: Vec<&str> = old_lines_owned.iter().map(String::as_str).collect();
+    let new_refs: Vec<&str> = new_lines_owned.iter().map(String::as_str).collect();
 
     let records = collect_line_records(&old_refs, &new_refs);
     let has_changes = records

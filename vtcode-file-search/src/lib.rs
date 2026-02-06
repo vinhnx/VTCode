@@ -133,7 +133,7 @@ impl BestMatchesList {
     fn clone_matches(&self) -> Vec<(u32, String)> {
         self.matches
             .iter()
-            .map(|Reverse((score, path))| (*score, path.clone()))
+            .map(|Reverse((score, path))| (*score, path.to_owned()))
             .collect()
     }
 }

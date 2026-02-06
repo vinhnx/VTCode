@@ -43,7 +43,7 @@ impl OutputStyleManager {
         self.styles.get(name)
     }
 
-    pub fn list_styles(&self) -> Vec<(String, &OutputStyle)> {
-        self.styles.iter().map(|(k, v)| (k.clone(), v)).collect()
+    pub fn list_styles(&self) -> Vec<(&str, &OutputStyle)> {
+        self.styles.iter().map(|(k, v)| (k.as_str(), v)).collect()
     }
 }

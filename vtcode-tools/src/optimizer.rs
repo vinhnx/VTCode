@@ -179,15 +179,15 @@ impl WorkflowOptimizer {
     /// Check if tools likely have dependencies (simple heuristic).
     fn tools_have_dependencies(&self, tools: &[String]) -> bool {
         // Heuristic: grep likely depends on find, etc.
-        let dependencies = vec![("grep_file", "find_files"), ("edit_file", "list_files")];
+        let dependencies = [("grep_file", "find_files"), ("edit_file", "list_files")];
 
         for (i, tool1) in tools.iter().enumerate() {
-            for (j, tool2) in tools.iter().enumerate() {
-                if i != j {
-                    for (dep1, dep2) in &dependencies {
-                        if tool1.contains(dep1) && tool2.contains(dep2) {
-                            return true;
-                        }
+            for (_j, tool2) in tools.iter().enumerate().skip(i + 1) {
+                for (dep1, dep2) in &dependencies {
+                    if (tool1.contains(dep1) && tool2.contains(dep2))
+                        || (tool1.contains(dep2) && tool2.contains(dep1))
+                    {
+                        return true;
                     }
                 }
             }

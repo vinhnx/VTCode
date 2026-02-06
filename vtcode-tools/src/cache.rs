@@ -231,7 +231,7 @@ impl<V: Send + Sync> LruCache<V> {
         }
 
         let entry = CacheEntry {
-            value: value.clone(),
+            value,
             inserted_at: Instant::now(),
             accessed_at: Instant::now(),
             access_count: 0,
