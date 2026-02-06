@@ -28,7 +28,7 @@ impl Tool for RequestUserInputTool {
     }
 
     fn description(&self) -> &'static str {
-        "Request user input for one to three short questions and wait for the response."
+        "Request user input for one to three short questions and wait for the response. Only available in Plan mode."
     }
 
     fn parameter_schema(&self) -> Option<Value> {

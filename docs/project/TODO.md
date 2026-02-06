@@ -404,15 +404,6 @@ questions interview.
     after the interview.
 ```
 
---
-
-https://github.com/openai/codex/blob/7b28b350e17c8a000fb3f3fde1f4a1a5f99dd9ad/
-codex-rs/core/src/tools/handlers/request_user_input.rs#L41
-https://github.com/openai/codex/blob/7b28b350e17c8a000fb3f3fde1f4a1a5f99dd9ad/
-codex-rs/core/src/codex.rs#L1803
-
-refence and apply to vtcode for plan and rquest user input for plan mode (current git changes)
-
 ---
 
 Planning Mode [X] │

@@ -645,7 +645,7 @@ pub async fn compose_system_instruction_text(
 
         if cfg.chat.ask_questions.enabled {
             instruction.push_str(
-                "- **Ask Questions tool**: Enabled (`ask_questions` alias for `request_user_input`)\n",
+                "- **Ask Questions tool**: Enabled in Plan mode only (`ask_questions` alias for `request_user_input`)\n",
             );
         } else {
             instruction.push_str("- **Ask Questions tool**: Disabled\n");
