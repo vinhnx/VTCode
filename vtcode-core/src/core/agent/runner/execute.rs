@@ -12,7 +12,7 @@ use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::state::TaskRunState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::gemini::{Content, Part};
-use crate::llm::provider::{LLMRequest, Message, ToolCall};
+use crate::llm::provider::{LLMRequest, Message, ParallelToolConfig, ToolCall, ToolChoice};
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
 use anyhow::Result;
@@ -31,11 +31,13 @@ impl AgentRunner {
         self.tool_registry.set_harness_task(Some(task.id.clone()));
 
         // Ensure the tool registry is ready before entering the turn loop to avoid per-turn reinit.
+        let mut tool_init_warning = None;
         if let Err(err) = self.tool_registry.initialize_async().await {
             warn!(
                 error = %err,
                 "Tool registry initialization failed at task start"
             );
+            tool_init_warning = Some(format!("Tool registry init failed: {err}"));
         }
 
         let result = {
@@ -76,6 +78,7 @@ impl AgentRunner {
 
             // Build available tools for this agent
             let tools = self.build_universal_tools().await?;
+            let has_tools = !tools.is_empty();
 
             // Maintain a mirrored conversation history for providers that expect
             // OpenAI/Anthropic style message roles.
@@ -98,14 +101,15 @@ impl AgentRunner {
             // Typical: 2-3 messages per turn (user input + assistant response + potential tool calls)
             task_state.conversation_messages.reserve(self.max_turns * 3);
 
-            if let Err(err) = self.tool_registry.initialize_async().await {
-                warn!(
-                    error = %err,
-                    "Tool registry initialization failed at task start"
-                );
-                task_state
-                    .warnings
-                    .push(format!("Tool registry init failed: {err}"));
+            if let Some(warning) = tool_init_warning.take() {
+                match self.tool_registry.initialize_async().await {
+                    Ok(()) => task_state
+                        .warnings
+                        .push(format!("{warning}; retry succeeded on second attempt")),
+                    Err(err) => task_state
+                        .warnings
+                        .push(format!("{warning}; retry failed: {err}")),
+                }
             }
 
             // Agent execution loop uses max_turns for conversation flow
@@ -163,16 +167,11 @@ impl AgentRunner {
                     utilization,
                 );
 
-                let parallel_tool_config = if self.model.len() < 20 {
-                    None
-                } else if self
-                    .provider_client
-                    .supports_parallel_tool_config(&turn_model)
-                {
-                    Some(crate::llm::provider::ParallelToolConfig::anthropic_optimized())
-                } else {
-                    None
-                };
+                let parallel_tool_config = resolve_parallel_tool_config(
+                    has_tools,
+                    self.provider_client
+                        .supports_parallel_tool_config(&turn_model),
+                );
 
                 let provider_kind = turn_model
                     .parse::<ModelId>()
@@ -222,6 +221,7 @@ impl AgentRunner {
                 } else {
                     Some(0.7)
                 };
+                let tool_choice = resolve_tool_choice(has_tools);
                 let request = LLMRequest {
                     messages: task_state.conversation_messages.clone(),
                     system_prompt: Some(system_instruction.clone()),
@@ -233,6 +233,7 @@ impl AgentRunner {
                     parallel_tool_config,
                     reasoning_effort,
                     verbosity: turn_verbosity,
+                    tool_choice,
                     ..Default::default()
                 };
 
@@ -498,5 +499,24 @@ impl AgentRunner {
 
         self.tool_registry.set_harness_task(None);
         result
+    }
+}
+
+pub(super) fn resolve_parallel_tool_config(
+    has_tools: bool,
+    supports_parallel: bool,
+) -> Option<ParallelToolConfig> {
+    if has_tools && supports_parallel {
+        Some(ParallelToolConfig::anthropic_optimized())
+    } else {
+        None
+    }
+}
+
+pub(super) fn resolve_tool_choice(has_tools: bool) -> Option<ToolChoice> {
+    if has_tools {
+        Some(ToolChoice::auto())
+    } else {
+        None
     }
 }

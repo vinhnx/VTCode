@@ -1,6 +1,8 @@
+use super::execute::{resolve_parallel_tool_config, resolve_tool_choice};
 use super::*;
 use crate::core::agent::state::TaskRunState;
 use crate::core::agent::state::record_turn_duration;
+use crate::llm::provider::ToolChoice;
 
 #[test]
 fn record_turn_duration_records_once() {
@@ -74,4 +76,17 @@ fn into_results_computes_metrics() {
     assert_eq!(results.executed_commands, vec!["write_file".to_owned()]);
     assert_eq!(results.summary, "summary");
     assert_eq!(results.warnings, vec!["warning".to_owned()]);
+}
+
+#[test]
+fn resolves_parallel_tool_config_only_when_supported_and_present() {
+    assert!(resolve_parallel_tool_config(true, true).is_some());
+    assert!(resolve_parallel_tool_config(false, true).is_none());
+    assert!(resolve_parallel_tool_config(true, false).is_none());
+}
+
+#[test]
+fn resolves_tool_choice_to_auto_when_tools_exist() {
+    assert!(matches!(resolve_tool_choice(true), Some(ToolChoice::Auto)));
+    assert!(resolve_tool_choice(false).is_none());
 }
