@@ -47,6 +47,7 @@ export VTCODE_EXPERIMENTAL_AGENT_TEAMS=1
 - **Lazy spawn**: teammate subagent sessions start on first assignment.
 - **Session scope**: no persistence or resumption across sessions.
 - **Lead-only messaging**: you interact through the lead session only.
+- **Task summaries**: `/team tasks` shows a summary for completed and failed tasks.
 
 ## When to Use
 

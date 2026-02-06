@@ -8,7 +8,7 @@
 
 use anyhow::Result;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -527,11 +527,17 @@ impl SubagentRegistry {
     /// Find best matching subagent for a task description
     pub fn find_best_match(&self, description: &str) -> Option<&SubagentConfig> {
         let description_lower = description.to_lowercase();
+        let description_tokens = tokenize_description(&description_lower);
 
-        // Score each agent based on keyword matches in description
+        // Score each agent based on name/keyword matches in description
         let mut best_match: Option<(&SubagentConfig, usize)> = None;
 
-        for agent in self.agents.values() {
+        for name in &self.priority_order {
+            let agent = match self.agents.get(name) {
+                Some(agent) => agent,
+                None => continue,
+            };
+
             let agent_desc_lower = agent.description.to_lowercase();
             let mut score = 0;
 
@@ -540,30 +546,51 @@ impl SubagentRegistry {
                 score += 100;
             }
 
-            // Check for keyword overlap
-            for word in agent_desc_lower.split_whitespace() {
-                if word.len() > 3 && description_lower.contains(word) {
+            // Weighted keyword/phrase matching for built-ins
+            let (phrases, keywords) = built_in_keywords(&agent.name);
+            for phrase in phrases {
+                if description_lower.contains(phrase) {
+                    score += 8;
+                }
+            }
+            for keyword in keywords {
+                if description_tokens.contains(*keyword) {
+                    score += 3;
+                }
+            }
+
+            // Token overlap with agent description
+            let agent_tokens = tokenize_description(&agent_desc_lower);
+            for token in &agent_tokens {
+                if description_tokens.contains(token.as_str()) {
                     score += 1;
                 }
             }
 
-            // Check for "proactively" or "use" hints in agent description
-            if agent_desc_lower.contains("proactively")
-                || agent_desc_lower.contains("use immediately")
-            {
+            // Only apply proactive hints if there is another signal
+            if score > 0 && has_proactive_hint(&agent_desc_lower) {
                 score += 5;
             }
 
-            if score > 0 {
-                match &best_match {
-                    Some((_, best_score)) if score > *best_score => {
-                        best_match = Some((agent, score));
-                    }
-                    None => {
-                        best_match = Some((agent, score));
-                    }
-                    _ => {}
+            if score == 0 {
+                continue;
+            }
+
+            match &best_match {
+                Some((_, best_score)) if score > *best_score => {
+                    best_match = Some((agent, score));
                 }
+                Some((best_agent, best_score)) if score == *best_score => {
+                    let best_priority = source_priority(&best_agent.source);
+                    let candidate_priority = source_priority(&agent.source);
+                    if candidate_priority > best_priority {
+                        best_match = Some((agent, score));
+                    }
+                }
+                None => {
+                    best_match = Some((agent, score));
+                }
+                _ => {}
             }
         }
 
@@ -673,6 +700,155 @@ fn source_priority(source: &SubagentSource) -> u8 {
     }
 }
 
+fn tokenize_description(input: &str) -> HashSet<String> {
+    input
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|token| token.len() >= 3)
+        .filter(|token| !is_stopword(token))
+        .collect()
+}
+
+fn is_stopword(token: &str) -> bool {
+    matches!(
+        token,
+        "the"
+            | "and"
+            | "for"
+            | "with"
+            | "from"
+            | "into"
+            | "than"
+            | "then"
+            | "that"
+            | "this"
+            | "these"
+            | "those"
+            | "when"
+            | "where"
+            | "what"
+            | "how"
+            | "you"
+            | "your"
+            | "our"
+            | "their"
+            | "use"
+            | "using"
+            | "used"
+            | "after"
+            | "before"
+            | "only"
+            | "also"
+            | "more"
+            | "most"
+            | "less"
+            | "least"
+            | "just"
+            | "over"
+            | "under"
+            | "about"
+            | "should"
+            | "could"
+            | "would"
+            | "might"
+            | "must"
+            | "been"
+            | "were"
+            | "have"
+            | "has"
+            | "had"
+            | "will"
+    )
+}
+
+fn built_in_keywords(agent_name: &str) -> (&'static [&'static str], &'static [&'static str]) {
+    match agent_name {
+        "explore" => (
+            &[
+                "search the codebase",
+                "search codebase",
+                "find where",
+                "list files",
+                "project structure",
+            ],
+            &[
+                "search",
+                "find",
+                "locate",
+                "grep",
+                "scan",
+                "explore",
+                "discover",
+                "overview",
+                "structure",
+                "codebase",
+                "files",
+            ],
+        ),
+        "plan" => (
+            &[
+                "write a plan",
+                "implementation plan",
+                "plan mode",
+                "design proposal",
+            ],
+            &[
+                "plan",
+                "planning",
+                "design",
+                "spec",
+                "proposal",
+                "approach",
+                "strategy",
+                "architecture",
+            ],
+        ),
+        "code-reviewer" => (
+            &[
+                "code review",
+                "review changes",
+                "review my changes",
+                "review code",
+            ],
+            &[
+                "review",
+                "reviewer",
+                "audit",
+                "quality",
+                "lint",
+                "style",
+                "security",
+                "maintainability",
+            ],
+        ),
+        "debugger" => (
+            &[
+                "failing tests",
+                "test failure",
+                "runtime error",
+                "stack trace",
+                "crash report",
+            ],
+            &[
+                "debug",
+                "bug",
+                "error",
+                "exception",
+                "failure",
+                "crash",
+                "traceback",
+                "stack",
+                "panic",
+            ],
+        ),
+        _ => (&[], &[]),
+    }
+}
+
+fn has_proactive_hint(description_lower: &str) -> bool {
+    description_lower.contains("proactively") || description_lower.contains("use immediately")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -751,13 +927,21 @@ mod tests {
                 .await
                 .unwrap();
 
-        let match1 = registry.find_best_match("use the code-reviewer to check my changes");
+        let match1 = registry.find_best_match("review my changes for issues");
         assert!(match1.is_some());
         assert_eq!(match1.unwrap().name, "code-reviewer");
 
-        let match2 = registry.find_best_match("search the codebase for authentication");
+        let match2 = registry.find_best_match("debug failing tests in the auth module");
         assert!(match2.is_some());
-        assert_eq!(match2.unwrap().name, "explore");
+        assert_eq!(match2.unwrap().name, "debugger");
+
+        let match3 = registry.find_best_match("search the codebase for authentication");
+        assert!(match3.is_some());
+        assert_eq!(match3.unwrap().name, "explore");
+
+        let match4 = registry.find_best_match("write an implementation plan for this feature");
+        assert!(match4.is_some());
+        assert_eq!(match4.unwrap().name, "plan");
     }
 
     #[test]

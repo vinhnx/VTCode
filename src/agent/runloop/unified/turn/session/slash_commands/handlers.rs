@@ -1491,6 +1491,17 @@ pub async fn handle_manage_teams(
                         task.id, status, task.description, assignee
                     ),
                 )?;
+                if matches!(
+                    task.status,
+                    TeamTaskStatus::Completed | TeamTaskStatus::Failed
+                ) && let Some(summary) = task.result_summary.as_deref()
+                    && !summary.trim().is_empty()
+                {
+                    ctx.renderer.line(
+                        MessageStyle::Output,
+                        &format!("    summary: {}", summary.trim()),
+                    )?;
+                }
             }
             Ok(SlashCommandControl::Continue)
         }
