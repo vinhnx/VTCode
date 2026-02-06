@@ -55,23 +55,7 @@ impl Session {
 
         self.set_input_area(Some(area));
 
-        let queue_lines = self.queue_input_lines(area.width);
-        let queue_height = queue_lines.len() as u16;
-
-        if queue_height > 0 && queue_height < area.height {
-            let queue_area = Rect::new(area.x, area.y, area.width, queue_height);
-            frame.render_widget(Clear, queue_area);
-            let paragraph = Paragraph::new(queue_lines)
-                .style(self.styles.default_style())
-                .wrap(Wrap { trim: true });
-            frame.render_widget(paragraph, queue_area);
-        }
-
         let mut input_area = area;
-        if queue_height > 0 && queue_height < input_area.height {
-            input_area.y = input_area.y.saturating_add(queue_height);
-            input_area.height = input_area.height.saturating_sub(queue_height);
-        }
         let mut status_area = None;
         let mut status_line = None;
 

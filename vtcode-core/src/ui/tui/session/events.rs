@@ -289,7 +289,8 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::ScrollPageDown)
         }
         KeyCode::Up => {
-            if has_alt && !session.queued_inputs.is_empty() {
+            let edit_queue_modifier = has_alt || (raw_meta && !has_super);
+            if edit_queue_modifier && !session.queued_inputs.is_empty() {
                 if let Some(latest) = session.pop_latest_queued_input() {
                     session.input_manager.set_content(latest);
                     session.input_compact_mode = session.input_compact_placeholder().is_some();
@@ -476,6 +477,25 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char(ch) => {
             if !session.input_enabled {
                 return None;
+            }
+
+            if ch == '\t' {
+                let submitted = session.input_manager.content().to_owned();
+                let submitted_entry = session.input_manager.current_history_entry();
+                session.input_manager.clear();
+                session.input_compact_mode = false;
+                session.scroll_manager.set_offset(0);
+                crate::ui::tui::session::slash::update_slash_suggestions(session);
+
+                if submitted.trim().is_empty() {
+                    session.mark_dirty();
+                    return None;
+                }
+
+                session.remember_submitted_input(submitted_entry);
+                session.push_queued_input(submitted.clone());
+                session.mark_dirty();
+                return Some(InlineEvent::QueueSubmit(submitted));
             }
 
             if has_command {

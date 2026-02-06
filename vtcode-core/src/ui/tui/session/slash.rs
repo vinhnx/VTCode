@@ -166,8 +166,14 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
 }
 
 pub(crate) fn slash_navigation_available(session: &Session) -> bool {
+    let has_prefix = command_prefix(
+        session.input_manager.content(),
+        session.input_manager.cursor(),
+    )
+    .is_some();
     session.input_enabled
         && !session.slash_palette.is_empty()
+        && has_prefix
         && session.modal.is_none()
         && !session.file_palette_active
         && !session.prompt_palette_active

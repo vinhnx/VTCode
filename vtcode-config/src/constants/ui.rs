@@ -97,10 +97,9 @@ pub const HEADER_INPUT_LABEL: &str = "Input";
 pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
-pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
-    "Type your message (@files, /commands, ctrl+r search, Shift+Tab mode, 2x escape to cancel)";
+pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type your message (@files, /commands, ctrl+r: search, Shift+Tab: mode, escape: cancel, tab: queue)";
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-    "Continue (@files, /commands, ctrl+r search, Shift+Tab mode, 2x escape to cancel)";
+    "Continue (@files, /commands, ctrl+r: search, Shift+Tab mode, escape: cancel, tab: queue)";
 pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter send • Shift+Enter newline • Esc cancel • Ctrl+C interrupt • @ files • # prompts • / commands";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;

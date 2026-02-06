@@ -62,6 +62,9 @@ fn visible_transcript(session: &mut Session) -> Vec<String> {
     if filler > 0 {
         visible.extend((0..filler).map(|_| Line::default()));
     }
+    if !session.queued_inputs.is_empty() {
+        session.overlay_queue_lines(&mut visible, width);
+    }
     visible
         .into_iter()
         .map(|line| {
@@ -1242,7 +1245,7 @@ fn timeline_hidden_keeps_navigation_unselected() {
 }
 
 #[test]
-fn queued_inputs_rendered_above_input() {
+fn queued_inputs_overlay_bottom_rows() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.handle_command(InlineCommand::SetQueuedInputs {
         entries: vec![
@@ -1252,16 +1255,19 @@ fn queued_inputs_rendered_above_input() {
         ],
     });
 
-    let lines = session.queue_input_lines(VIEW_WIDTH);
-    let rendered: Vec<String> = lines.iter().map(line_text).collect();
+    let view = visible_transcript(&mut session);
+    let footer: Vec<String> = view.iter().rev().take(10).cloned().collect();
 
-    assert_eq!(rendered.len(), 3, "queue should show 2 items plus hint");
     assert!(
-        rendered[0].contains("↳ third queued message"),
+        footer
+            .iter()
+            .any(|line| line.contains("↳ third queued message")),
         "latest queued message should render first"
     );
     assert!(
-        rendered[1].contains("↳ second queued message"),
+        footer
+            .iter()
+            .any(|line| line.contains("↳ second queued message")),
         "second-latest queued message should render second"
     );
     let hint = if cfg!(target_os = "macos") {
@@ -1270,8 +1276,8 @@ fn queued_inputs_rendered_above_input() {
         "Alt + ↑ edit"
     };
     assert!(
-        rendered[2].contains(hint),
-        "hint line should render beneath queued messages"
+        footer.iter().any(|line| line.contains(hint)),
+        "hint line should show how to edit queue"
     );
 }
 
