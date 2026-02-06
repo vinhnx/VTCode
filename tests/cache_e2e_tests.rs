@@ -50,7 +50,8 @@ mod e2e_tests {
         let new_content = "Updated content after caching.";
         let write_args = json!({
             "path": test_file.to_string_lossy(),
-            "content": new_content
+            "content": new_content,
+            "mode": "overwrite"
         });
 
         let write_result = registry.execute_tool("write_file", write_args).await;

@@ -354,11 +354,11 @@ impl ToolOutputSpooler {
             "total_lines": spool_result.total_lines,
             "preview": spool_result.preview,
             "note": format!(
-                "Full output saved to spooled file. Read it with: read_file path=\"{}\"",
+                "Full output saved to spooled file. Read it with: read_file path=\"{}\" (use offset/limit for ranges).",
                 spool_result.file_path.display()
             ),
             "follow_up_prompt": format!(
-                "Output spooled to {}. Read it with read_file path=\"{}\" before rerunning the command.",
+                "Output spooled to {}. Read it with read_file path=\"{}\". If read_file fails, report the error and ask the user whether to re-run.",
                 spool_result.file_path.display(),
                 spool_result.file_path.display()
             ),
